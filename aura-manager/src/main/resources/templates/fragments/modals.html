@@ -8,7 +8,18 @@
         <div class="modal-header" id="modalTitle">Create New Test Case</div>
         <form onsubmit="event.preventDefault(); submitCreateTest();">
             <div class="modal-body">
-                <label class="neo-u-47">Test Case Name</label>
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary, #64748b); margin-bottom: 6px; display: block;">File Type</label>
+                    <div style="display: flex; gap: 16px; font-size: 13px;">
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="radio" name="newFileType" value="yaml" checked onclick="const inp=document.getElementById('newTestName'); if(inp) inp.placeholder='e.g. Add Product to Basket';"/> 🧪 Test Playbook (.yaml)
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="radio" name="newFileType" value="steps" onclick="const inp=document.getElementById('newTestName'); if(inp) inp.placeholder='e.g. fragments/login.steps';"/> 🧩 Step Fragment (.steps)
+                        </label>
+                    </div>
+                </div>
+                <label class="neo-u-47">File Name</label>
                 <input class="modal-input" id="newTestName" name="name" placeholder="e.g. Add Product to Basket" type="text" required autofocus/>
                 <div id="createTestError" class="error-message" style="color: var(--color-danger, #ef4444); margin-top: 8px; font-size: 0.875rem;" th:if="${error != null}" th:text="${error}"></div>
             </div>

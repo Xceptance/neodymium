@@ -85,4 +85,33 @@ public class AuraFileServiceTest
         Assertions.assertEquals(List.of(), sections.get("dataMatrix"));
         Assertions.assertEquals(List.of(), sections.get("varKeys"));
     }
+
+    @Test
+    public void testGetFilteredStepsFilesList() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String stepFileName = "unit_test_fragment_search.steps";
+        try
+        {
+            fileService.createYamlFile(stepFileName);
+            fileService.saveYamlFileContent(stepFileName, "steps:\n  - Click login button\n");
+
+            final List<String> allSteps = fileService.getFilteredStepsFilesList("");
+            Assertions.assertNotNull(allSteps);
+            Assertions.assertTrue(allSteps.stream().anyMatch(s -> s.contains(stepFileName)));
+
+            final List<String> filteredByName = fileService.getFilteredStepsFilesList("unit_test_fragment");
+            Assertions.assertTrue(filteredByName.stream().anyMatch(s -> s.contains(stepFileName)));
+
+            final List<String> filteredByContent = fileService.getFilteredStepsFilesList("Click login button");
+            Assertions.assertTrue(filteredByContent.stream().anyMatch(s -> s.contains(stepFileName)));
+
+            final List<String> filteredNoMatch = fileService.getFilteredStepsFilesList("non_existent_search_query_xyz");
+            Assertions.assertFalse(filteredNoMatch.stream().anyMatch(s -> s.contains(stepFileName)));
+        }
+        finally
+        {
+            fileService.deleteYamlFile(stepFileName);
+        }
+    }
 }

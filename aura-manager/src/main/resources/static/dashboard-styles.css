@@ -3004,6 +3004,87 @@
     color: var(--error-text);
 }
 
+.invalid-include-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(239, 68, 68, 0.12);
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    color: #ef4444;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    user-select: none;
+    cursor: help;
+}
+
+.invalid-include-pill .pill-icon {
+    font-size: 14px;
+    color: #ef4444;
+}
+
+.file-badge-steps {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(168, 85, 247, 0.15);
+    color: #a855f7;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.file-badge-yaml {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 600;
+}
+
+.sidebar-tab-btn {
+    border: 1px solid transparent;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.sidebar-tab-btn.active-tests {
+    background: rgba(37, 99, 235, 0.18) !important;
+    color: #3b82f6 !important;
+    border-color: rgba(37, 99, 235, 0.4) !important;
+}
+
+.sidebar-tab-btn.active-fragments {
+    background: rgba(168, 85, 247, 0.18) !important;
+    color: #a855f7 !important;
+    border-color: rgba(168, 85, 247, 0.4) !important;
+}
+
+#yamlFileList[data-active-tab="fragments"] #sidebarTestsContainer {
+    display: none !important;
+}
+
+#yamlFileList[data-active-tab="fragments"] #sidebarFragmentsContainer {
+    display: block !important;
+}
+
+#yamlFileList[data-active-tab="tests"] #sidebarTestsContainer {
+    display: block !important;
+}
+
+#yamlFileList[data-active-tab="tests"] #sidebarFragmentsContainer {
+    display: none !important;
+}
+
 .include-tree-card {
     margin: 4px 0 6px 44px;
     padding: 10px 12px;

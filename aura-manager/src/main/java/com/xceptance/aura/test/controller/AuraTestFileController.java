@@ -54,6 +54,7 @@ public class AuraTestFileController
     {
         model.addAttribute("files", files);
         model.addAttribute("testFiles", files);
+        model.addAttribute("stepsFiles", fileService.getStepsFilesList());
         model.addAttribute("expandedFiles", fileService.getExpandedFiles());
         model.addAttribute("selectedKeys", queueController.getSelectedQueueKeys());
         model.addAttribute("selectedFileKeys", queueController.getFullySelectedFileKeys(files));
@@ -89,8 +90,10 @@ public class AuraTestFileController
                               final Model model)
     {
         response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        final List<YamlFileDto> filtered = fileService.getFilteredYamlFilesList(query);
-        populateFileModel(model, filtered);
+        final List<YamlFileDto> filteredYaml = fileService.getFilteredYamlFilesList(query);
+        final List<String> filteredSteps = fileService.getFilteredStepsFilesList(query);
+        populateFileModel(model, filteredYaml);
+        model.addAttribute("stepsFiles", filteredSteps);
         return "fragments/test-selection :: yamlFileListContent";
     }
 

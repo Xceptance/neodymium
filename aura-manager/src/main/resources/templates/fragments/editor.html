@@ -31,8 +31,10 @@
 <div class="panel editor-container" id="editorPanel" th:fragment="editorPanelContent">
     <div class="panel-header">
         <div class="neo-u-11">
-            <span class="material-symbols-outlined neo-u-12">description</span>
+            <span class="material-symbols-outlined neo-u-12" th:text="${isFragment != null and isFragment ? 'extension' : 'description'}">description</span>
             <span id="editorFileName" th:data-file="${activeEditingFile}" th:text="${activeEditingFile != null ? activeEditingFile : ''}"></span>
+            <span th:if="${isFragment != null and isFragment}" class="file-badge-steps" style="margin-left: 6px;">🧩 Step Fragment</span>
+            <span th:if="${activeEditingFile != null and !activeEditingFile.isEmpty() and (isFragment == null or !isFragment)}" class="file-badge-yaml" style="margin-left: 6px;">🧪 Test Playbook</span>
             <span id="editorUnsavedBadge" style="display: none;" class="unsaved-badge">
                 <span class="material-symbols-outlined" style="font-size: 12px;">warning</span> Unsaved
             </span>
@@ -356,21 +358,30 @@
                 </div>
             </div>
 
-            <!-- Category 4: Available Included Files -->
+            <!-- Category 4: Available Step Fragments (.steps) -->
             <div>
-                <div class="palette-section-title">
-                    <span class="material-symbols-outlined" style="font-size: 14px;">extension</span>
-                    Available Included Files
+                <div class="palette-section-title" style="display: flex; align-items: center; justify-content: space-between;">
+                    <span style="display: flex; align-items: center; gap: 4px;">
+                        <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">extension</span>
+                        <span>Available Step Fragments (.steps)</span>
+                    </span>
+                    <button class="btn-edit" onclick="openCreateModal('steps')" style="padding: 1px 6px; font-size: 10px; border-color: rgba(168, 85, 247, 0.4); color: #a855f7;" title="Create new step fragment file">
+                        <span class="material-symbols-outlined" style="font-size: 12px;">add</span> New
+                    </button>
                 </div>
                 <div style="display: flex; flex-direction: column; gap: 8px;">
-                    <th:block th:if="${yamlFiles != null}">
-                        <div class="include-card" th:each="f : ${yamlFiles}" th:data-file="${f.file}" onclick="insertIncludePill(this.getAttribute('data-file'))" th:title="${f.file}">
+                    <th:block th:if="${stepsFiles != null and !stepsFiles.isEmpty()}">
+                        <div class="include-card" th:each="stepFile : ${stepsFiles}" th:data-file="${stepFile}" onclick="insertIncludePill(this.getAttribute('data-file'))" th:title="${stepFile}">
                             <div class="include-title">
-                                <span class="material-symbols-outlined" style="font-size: 14px;">extension</span>
-                                <span th:text="${f.fileNameWithoutExtension}">playbook</span>
+                                <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">extension</span>
+                                <span th:text="${stepFile}">fragment.steps</span>
                             </div>
-                            <div class="include-path" th:text="${f.file}">com/xceptance/neodymium/test/playbook.yaml</div>
-                            <div class="include-desc" th:text="${'Datasets: ' + (f.datasets != null ? f.datasets.size() : 0)}">Reusable module</div>
+                            <div class="include-path" th:text="${stepFile}">fragments/login.steps</div>
+                        </div>
+                    </th:block>
+                    <th:block th:if="${stepsFiles == null or stepsFiles.isEmpty()}">
+                        <div style="font-size: 12px; color: var(--text-secondary); padding: 8px; font-style: italic;">
+                            No .steps fragments found in src/test/resources.
                         </div>
                     </th:block>
                 </div>

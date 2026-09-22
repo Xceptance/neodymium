@@ -95,6 +95,28 @@ public class AuraTestEditorControllerTest
     }
 
     @Test
+    public void testCreateStepsFileSuccess()
+    {
+        final ResponseEntity<Map<String, Object>> response = controller.createFile("fragments/login.steps");
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("fragments/login.steps", response.getBody().get("file"));
+    }
+
+    @Test
+    public void testGetStepsFilesSuccess()
+    {
+        Mockito.when(fileService.getStepsFilesList()).thenReturn(List.of("fragments/login.steps"));
+
+        final ResponseEntity<List<String>> response = controller.getStepsFiles();
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals(List.of("fragments/login.steps"), response.getBody());
+    }
+
+    @Test
     public void testCreateFileEmptyNameReturnsBadRequest()
     {
         final ResponseEntity<Map<String, Object>> response = controller.createFile("   ");

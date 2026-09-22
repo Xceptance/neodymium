@@ -210,8 +210,18 @@ window.loadFilesList = loadFilesList;
 async function submitCreateTest() {
     const nameInput = document.getElementById('newTestName');
     if (!nameInput) return;
-    const name = nameInput.value.trim();
+    let name = nameInput.value.trim();
     if (!name) return;
+
+    const fileTypeRadio = document.querySelector('input[name="newFileType"]:checked');
+    const fileType = fileTypeRadio ? fileTypeRadio.value : 'yaml';
+
+    if (fileType === 'steps' && !name.toLowerCase().endsWith('.steps')) {
+        name = name + '.steps';
+    } else if (fileType === 'yaml' && !name.toLowerCase().endsWith('.yaml') && !name.toLowerCase().endsWith('.yml')) {
+        name = name + '.yaml';
+    }
+
     try {
         const res = await fetch('/api/create', {
             method: 'POST',
@@ -224,13 +234,87 @@ async function submitCreateTest() {
             nameInput.value = '';
             const modal = document.getElementById('createTestModal');
             if (modal) modal.style.display = 'none';
+            if (typeof htmx !== 'undefined') {
+                htmx.trigger(document.body, 'refreshFiles');
+            }
             await openYamlEditor(data.file);
         }
     } catch (e) {
-        console.error("Failed to create test", e);
+        console.error("Failed to create file", e);
     }
 }
 window.submitCreateTest = submitCreateTest;
+
+function openCreateModal(type) {
+    const modal = document.getElementById('createTestModal');
+    if (!modal) return;
+    const nameInput = document.getElementById('newTestName');
+    if (nameInput) {
+        nameInput.value = '';
+    }
+    const yamlRadio = document.querySelector('input[name="newFileType"][value="yaml"]');
+    const stepsRadio = document.querySelector('input[name="newFileType"][value="steps"]');
+    if (type === 'steps' && stepsRadio) {
+        stepsRadio.checked = true;
+        if (nameInput) nameInput.placeholder = 'e.g. fragments/login.steps';
+    } else if (yamlRadio) {
+        yamlRadio.checked = true;
+        if (nameInput) nameInput.placeholder = 'e.g. Add Product to Basket';
+    }
+    modal.style.display = 'flex';
+    if (nameInput) nameInput.focus();
+}
+window.openCreateModal = openCreateModal;
+
+let currentSidebarTab = 'tests';
+
+function switchSidebarTab(tab) {
+    currentSidebarTab = tab || 'tests';
+    const fileList = document.getElementById('yamlFileList');
+    if (fileList) {
+        fileList.setAttribute('data-active-tab', currentSidebarTab);
+    }
+    const testsContainer = document.getElementById('sidebarTestsContainer');
+    const fragmentsContainer = document.getElementById('sidebarFragmentsContainer');
+    const tabTestsBtn = document.getElementById('tabTestsBtn');
+    const tabFragmentsBtn = document.getElementById('tabFragmentsBtn');
+    const searchInput = document.getElementById('testSearchInput');
+
+    if (currentSidebarTab === 'fragments') {
+        if (testsContainer) testsContainer.style.display = 'none';
+        if (fragmentsContainer) fragmentsContainer.style.display = 'block';
+        if (tabTestsBtn) {
+            tabTestsBtn.classList.remove('active-tests');
+            tabTestsBtn.style.background = 'transparent';
+            tabTestsBtn.style.color = 'var(--text-secondary, #64748b)';
+        }
+        if (tabFragmentsBtn) {
+            tabFragmentsBtn.classList.add('active-fragments');
+        }
+        if (searchInput) searchInput.placeholder = 'Search step fragments...';
+    } else {
+        if (testsContainer) testsContainer.style.display = 'block';
+        if (fragmentsContainer) fragmentsContainer.style.display = 'none';
+        if (tabTestsBtn) {
+            tabTestsBtn.classList.add('active-tests');
+        }
+        if (tabFragmentsBtn) {
+            tabFragmentsBtn.classList.remove('active-fragments');
+            tabFragmentsBtn.style.background = 'transparent';
+            tabFragmentsBtn.style.color = 'var(--text-secondary, #64748b)';
+        }
+        if (searchInput) searchInput.placeholder = 'Search test cases...';
+    }
+}
+window.switchSidebarTab = switchSidebarTab;
+
+document.addEventListener('DOMContentLoaded', function() {
+    document.body.addEventListener('htmx:afterSwap', function(evt) {
+        if (evt.detail && evt.detail.target && evt.detail.target.id === 'yamlFileList') {
+            switchSidebarTab(currentSidebarTab);
+        }
+    });
+});
 
 var consoleExpanded = false;
 
@@ -1552,6 +1636,9 @@ function formatStepToTokens(lineNumOrElement) {
 
     safeText = safeText.replace(/_include:\s*([a-zA-Z0-9_\/\.\-]+)/g, function(match, path) {
         const filename = path.split('/').pop();
+        if (path.toLowerCase().endsWith('.yaml') || path.toLowerCase().endsWith('.yml')) {
+            return `<span class="invalid-include-pill" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
+        }
         return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${lineNum}', '${path}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
     });
 
@@ -1593,7 +1680,7 @@ function formatIncludeTreeCardTokens(treeCard) {
     if (!treeCard) return;
     const steps = treeCard.querySelectorAll('.nested-editable-step');
     steps.forEach(stepEl => {
-        if (!stepEl.querySelector('.unified-include-pill') && !stepEl.querySelector('.var-pill')) {
+        if (!stepEl.querySelector('.unified-include-pill') && !stepEl.querySelector('.var-pill') && !stepEl.querySelector('.invalid-include-pill')) {
             let text = stepEl.getAttribute('data-original') || stepEl.innerText;
             if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
             if (text && (text.includes('_include:') || text.includes('${'))) {
@@ -1603,6 +1690,9 @@ function formatIncludeTreeCardTokens(treeCard) {
                 let safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 safeText = safeText.replace(/_include:\s*([a-zA-Z0-9_\/\.\-]+)/g, function(match, path) {
                     const filename = path.split('/').pop();
+                    if (path.toLowerCase().endsWith('.yaml') || path.toLowerCase().endsWith('.yml')) {
+                        return `<span class="invalid-include-pill" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
+                    }
                     const cardId = (treeCard.id ? treeCard.id.replace('includeTreeCard_', '') : 'sub') + '_' + Math.floor(Math.random()*1000);
                     return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${cardId}', '${path}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
                 });

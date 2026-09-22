@@ -139,6 +139,86 @@ public final class AuraFileService
         return filtered;
     }
 
+    public List<String> getStepsFilesList()
+    {
+        final List<String> stepsFiles = new ArrayList<>();
+        final File resourcesDir = new File("src/test/resources").getAbsoluteFile();
+        if (resourcesDir.exists() && resourcesDir.isDirectory())
+        {
+            scanDirForStepsStatic(resourcesDir, resourcesDir, stepsFiles);
+            stepsFiles.sort(String::compareTo);
+        }
+        return stepsFiles;
+    }
+
+    public List<String> getFilteredStepsFilesList(final String query)
+    {
+        final List<String> fullList = getStepsFilesList();
+        if (query == null || query.trim().isEmpty())
+        {
+            return fullList;
+        }
+        final String lowerQuery = query.toLowerCase().trim();
+        final List<String> filtered = new ArrayList<>();
+        for (final String file : fullList)
+        {
+            boolean match = file != null && file.toLowerCase().contains(lowerQuery);
+            if (!match && file != null)
+            {
+                try
+                {
+                    final String content = readYamlFileContent(file);
+                    if (content != null && content.toLowerCase().contains(lowerQuery))
+                    {
+                        match = true;
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.debug("Could not read steps file content for filter matching: {}", file, e);
+                }
+            }
+            if (match)
+            {
+                filtered.add(file);
+            }
+        }
+        return filtered;
+    }
+
+    public void scanDirForStepsStatic(final File baseDir, final File currentDir, final List<String> stepsFiles)
+    {
+        final File[] files = currentDir.listFiles();
+        if (files != null)
+        {
+            for (final File file : files)
+            {
+                if (file.isDirectory())
+                {
+                    scanDirForStepsStatic(baseDir, file, stepsFiles);
+                }
+                else
+                {
+                    final String name = file.getName().toLowerCase();
+                    if (name.endsWith(".steps"))
+                    {
+                        final String relativePath = baseDir.toURI().relativize(file.toURI()).getPath();
+                        stepsFiles.add(relativePath);
+                    }
+                }
+            }
+        }
+    }
+
+    public boolean isValidIncludeTarget(final String relativePath)
+    {
+        if (relativePath == null || relativePath.isBlank())
+        {
+            return false;
+        }
+        return relativePath.toLowerCase().endsWith(".steps");
+    }
+
     public void scanDirStatic(final File baseDir, final File currentDir, final List<String> yamlFiles)
     {
         final File[] files = currentDir.listFiles();
@@ -307,7 +387,8 @@ public final class AuraFileService
     private File findFileRecursively(final File dir, final String targetName)
     {
         final String cleanTarget = targetName.contains("/") ? targetName.substring(targetName.lastIndexOf('/') + 1) : targetName;
-        final String baseTarget = (cleanTarget.endsWith(".yaml") || cleanTarget.endsWith(".yml"))
+        final boolean targetHasExt = cleanTarget.contains(".");
+        final String baseTarget = targetHasExt
                 ? cleanTarget.substring(0, cleanTarget.lastIndexOf('.'))
                 : cleanTarget;
 
@@ -327,7 +408,11 @@ public final class AuraFileService
                 else
                 {
                     final String fName = f.getName();
-                    final String fBase = (fName.endsWith(".yaml") || fName.endsWith(".yml"))
+                    if (fName.equalsIgnoreCase(cleanTarget))
+                    {
+                        return f;
+                    }
+                    final String fBase = fName.contains(".")
                             ? fName.substring(0, fName.lastIndexOf('.'))
                             : fName;
                     if (fBase.equalsIgnoreCase(baseTarget))
@@ -362,7 +447,9 @@ public final class AuraFileService
 
     public void createYamlFile(final String name) throws IOException
     {
-        final String sanitizedName = (name.endsWith(".yaml") || name.endsWith(".yml")) ? name : name + ".yaml";
+        final String sanitizedName = (name.endsWith(".yaml") || name.endsWith(".yml") || name.endsWith(".steps"))
+                ? name
+                : name + ".yaml";
         final File yamlFile = resolveCanonicalFile(sanitizedName);
         if (!yamlFile.exists())
         {

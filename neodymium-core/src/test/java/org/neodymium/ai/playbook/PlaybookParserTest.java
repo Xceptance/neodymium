@@ -343,4 +343,60 @@ public final class PlaybookParserTest
         assertEquals("click button", plainPlaybook.getSteps().get(1).getInstruction());
         assertTrue(plainPlaybook.getPromptAddons().isEmpty());
     }
+
+    /**
+     * Verifies that YamlPlaybookParser correctly parses top-level YAML step lists
+     * and included fragment files formatted as step lists.
+     *
+     * @throws IOException if parsing fails
+     */
+    @Test
+    public void testParseTopLevelStepListAndIncludedFragments() throws IOException
+    {
+        final PlaybookResourceManager manager = new InMemoryResourceManager();
+
+        final String fragmentYaml = """
+            - _include: inner_fragment.steps
+            - Select payment method
+            - Submit order
+            """;
+
+        final String innerFragmentYaml = """
+            - Open payment page
+            - Enter credentials
+            """;
+
+        final String mainYaml = """
+            steps: |
+              Navigate to homepage
+              _include: outer_fragment.steps
+              Verify order completion
+            """;
+
+        manager.write("outer_fragment.steps", fragmentYaml);
+        manager.write("inner_fragment.steps", innerFragmentYaml);
+        manager.write("main.yaml", mainYaml);
+
+        final PlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("main.yaml", manager);
+
+        assertNotNull(playbook);
+        final List<PlaybookStep> steps = playbook.getSteps();
+        assertEquals(3, steps.size());
+        assertEquals("Navigate to homepage", steps.get(0).getInstruction());
+        assertEquals("_include: outer_fragment.steps", steps.get(1).getInstruction());
+        assertEquals("Verify order completion", steps.get(2).getInstruction());
+
+        final List<PlaybookStep> outerSubSteps = steps.get(1).getSubSteps();
+        assertEquals(3, outerSubSteps.size());
+        assertEquals("_include: inner_fragment.steps", outerSubSteps.get(0).getInstruction());
+        assertEquals("Select payment method", outerSubSteps.get(1).getInstruction());
+        assertEquals("Submit order", outerSubSteps.get(2).getInstruction());
+
+        final List<PlaybookStep> innerSubSteps = outerSubSteps.get(0).getSubSteps();
+        assertEquals(2, innerSubSteps.size());
+        assertEquals("Open payment page", innerSubSteps.get(0).getInstruction());
+        assertEquals("Enter credentials", innerSubSteps.get(1).getInstruction());
+    }
 }
+
