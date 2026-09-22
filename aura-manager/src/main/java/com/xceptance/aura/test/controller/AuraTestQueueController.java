@@ -57,7 +57,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
-import org.thymeleaf.context.Context;
 
 /**
  * Controller for managing the execution queue, status polling, and running test playbooks and test classes.
@@ -723,10 +722,7 @@ public class AuraTestQueueController
             }
         }
 
-        final Context context = new Context();
-        context.setVariable("queue", selectedQueue);
-        context.setVariable("running", isRunning());
-        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        populateQueueModel(model);
         return "fragments/queue :: queueListContainerContent";
     }
 
@@ -761,10 +757,7 @@ public class AuraTestQueueController
             }
         }
 
-        final Context context = new Context();
-        context.setVariable("queue", selectedQueue);
-        context.setVariable("running", isRunning());
-        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        populateQueueModel(model);
         return "fragments/queue :: queueListContainerContent";
     }
 
@@ -772,10 +765,7 @@ public class AuraTestQueueController
     public String clearQueue(final Model model)
     {
         selectedQueue.clear();
-        final Context context = new Context();
-        context.setVariable("queue", selectedQueue);
-        context.setVariable("running", isRunning());
-        context.setVariable("activeEditingFile", fileService.getActiveEditingFile());
+        populateQueueModel(model);
         return "fragments/queue :: queueListContainerContent";
     }
 
