@@ -116,32 +116,73 @@ public final class InMemoryResourceManager implements PlaybookResourceManager
      * @param relativePath the relative path to resolve
      * @return the normalized relative path string
      */
+    public boolean hasResource(final String identifier)
+    {
+        if (identifier == null || identifier.trim().isEmpty())
+        {
+            return false;
+        }
+        final String norm = Path.of(identifier).normalize().toString().replace('\\', '/');
+        if (this.storage.containsKey(norm) || this.storage.containsKey(identifier))
+        {
+            return true;
+        }
+        if (this.delegate != null)
+        {
+            try (final InputStream in = this.delegate.read(identifier))
+            {
+                return in != null;
+            }
+            catch (final Exception e)
+            {
+                return false;
+            }
+        }
+        return false;
+    }
+
     @Override
     public String resolveInclude(final String parentIdentifier, final String relativePath)
     {
-        if (this.delegate != null)
-        {
-            return this.delegate.resolveInclude(parentIdentifier, relativePath);
-        }
-
-        if (parentIdentifier == null || parentIdentifier.isEmpty())
+        if (relativePath == null || relativePath.trim().isEmpty())
         {
             return relativePath;
         }
-        
-        final Path parent = Path.of(parentIdentifier);
-        final Path parentDir = parent.getParent();
-        
-        final Path resolved;
-        if (parentDir == null)
+        final String cleanRelative = relativePath.trim().replace('\\', '/');
+
+        if (parentIdentifier == null || parentIdentifier.trim().isEmpty() || cleanRelative.startsWith("/"))
         {
-            resolved = Path.of(relativePath).normalize();
+            return Path.of(cleanRelative).normalize().toString().replace('\\', '/');
         }
-        else
+
+        final Path parentPath = Path.of(parentIdentifier.trim().replace('\\', '/'));
+        final Path parentDir = parentPath.getParent();
+
+        if (parentDir != null)
         {
-            resolved = parentDir.resolve(relativePath).normalize();
+            Path currentDir = parentDir;
+            while (currentDir != null)
+            {
+                final String candidate = currentDir.resolve(cleanRelative).normalize().toString().replace('\\', '/');
+                if (hasResource(candidate))
+                {
+                    return candidate;
+                }
+                currentDir = currentDir.getParent();
+            }
         }
-        
-        return resolved.toString().replace('\\', '/');
+
+        final String normalizedRelative = Path.of(cleanRelative).normalize().toString().replace('\\', '/');
+        if (hasResource(normalizedRelative))
+        {
+            return normalizedRelative;
+        }
+
+        if (parentDir != null)
+        {
+            return parentDir.resolve(cleanRelative).normalize().toString().replace('\\', '/');
+        }
+
+        return normalizedRelative;
     }
 }

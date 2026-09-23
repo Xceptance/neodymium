@@ -432,7 +432,17 @@ public final class YamlPlaybookParser implements PlaybookParser
             final String fileName = new File(identifier).getName();
 
             final Yaml yaml = new Yaml();
-            final Object loadedObj = yaml.load(fileContent);
+            final Object loadedObj;
+            try
+            {
+                loadedObj = yaml.load(fileContent);
+            }
+            catch (final Exception e)
+            {
+                LOG.debug("SnakeYAML failed to parse {} as structured YAML (e.g., due to unquoted inline colons), falling back to line-by-line parsing", identifier, e);
+                parseStepBlock(fileContent, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
+                return;
+            }
 
             if (loadedObj == null)
             {
@@ -603,6 +613,15 @@ public final class YamlPlaybookParser implements PlaybookParser
                         }
                         outSteps.add(step);
                     }
+                    else if (mapStep.size() == 1)
+                    {
+                        final Map.Entry<?, ?> singleEntry = mapStep.entrySet().iterator().next();
+                        final String keyStr = String.valueOf(singleEntry.getKey());
+                        final String valStr = String.valueOf(singleEntry.getValue());
+                        final String fullLine = keyStr + ": " + valStr;
+
+                        parseStepBlock(fullLine, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
+                    }
                     else
                     {
                         throw new IllegalArgumentException("Invalid playbook step format in file: " + fileName 
@@ -625,18 +644,36 @@ public final class YamlPlaybookParser implements PlaybookParser
             final String[] lines = ((String) rawSteps).split("\\r?\\n");
             for (final String line : lines)
             {
-                final String trimmed = line.trim();
+                String trimmed = line.trim();
                 if (trimmed.isEmpty() || trimmed.startsWith("#"))
                 {
                     continue;
                 }
-                if (trimmed.startsWith("_include:") || trimmed.startsWith("include:"))
+                if (trimmed.startsWith("- ") || (trimmed.startsWith("-") && trimmed.length() > 1 && !trimmed.startsWith("--")))
                 {
-                    final int colonIdx = trimmed.indexOf(':');
-                    final String includeRelativePath = trimmed.substring(colonIdx + 1).trim();
+                    trimmed = trimmed.substring(1).trim();
+                }
+                if (trimmed.contains("_include:") || trimmed.contains("include:"))
+                {
+                    final int incIdx = trimmed.contains("_include:") ? trimmed.indexOf("_include:") : trimmed.indexOf("include:");
+                    final int colonIdx = trimmed.indexOf(':', incIdx);
+                    String includeRelativePath = trimmed.substring(colonIdx + 1).trim();
+                    if (includeRelativePath.contains(" "))
+                    {
+                        final int spaceIdx = includeRelativePath.indexOf(" ");
+                        String candidate = includeRelativePath.substring(0, spaceIdx).trim();
+                        if (candidate.endsWith(",") || candidate.endsWith(";"))
+                        {
+                            candidate = candidate.substring(0, candidate.length() - 1).trim();
+                        }
+                        if (candidate.endsWith(".steps") || candidate.endsWith(".yaml") || candidate.endsWith(".yml") || candidate.endsWith(".json"))
+                        {
+                            includeRelativePath = candidate;
+                        }
+                    }
                     final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
                     
-                    final PlaybookStep includeStep = new PlaybookStep("_include: " + includeRelativePath);
+                    final PlaybookStep includeStep = new PlaybookStep((trimmed.startsWith("_include:") || trimmed.startsWith("include:")) ? "_include: " + includeRelativePath : trimmed);
                     initStepLocation(includeStep, fileName, fileContent, line);
                     parseRecursive(resolvedIdentifier, manager, activeStack, includeStep.getSubSteps(), outDataSets);
                     outSteps.add(includeStep);
