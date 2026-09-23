@@ -44,6 +44,7 @@ import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
+import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.session.AiSession;
 
 import com.google.gson.JsonObject;
@@ -365,6 +366,26 @@ public class InteractiveConsoleListenerTest
         assertNotNull(afterResponseJson);
         assertFalse(afterResponseJson.contains("\"inFlightLlmCall\""),
             "In-flight indicator must be cleared after LlmResponseReceivedEvent for SUGGEST_FIX");
+    }
+
+    @Test
+    public void testFailedSessionFinishedPushesErrorStateJson()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, false);
+        eventBus.registerListener(listener);
+
+        final Throwable cause = new IllegalArgumentException("Invalid playbook step format in file: proceed-to-payment.steps");
+        final Throwable error = new RuntimeException("Failed to parse playbook: stokkeOrderPayPalTest.yml", cause);
+
+        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, error);
+
+        eventBus.dispatch(new SessionFinishedEvent(0, false, Collections.emptyList()));
+
+        final String stateJson = consoleEngine.getCurrentStateJson();
+        assertNotNull(stateJson, "Pushed state JSON must not be null");
+        assertTrue(stateJson.contains("\"status\":\"failed\""), "State JSON status must be failed");
+        assertTrue(stateJson.contains("Failed to parse playbook: stokkeOrderPayPalTest.yml"), "State JSON error must contain primary exception message");
+        assertTrue(stateJson.contains("Invalid playbook step format in file: proceed-to-payment.steps"), "State JSON error must contain cause message");
     }
 
     private void submitActionAsynchronously(final JsonObject actionObj)

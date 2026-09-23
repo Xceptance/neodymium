@@ -480,7 +480,27 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
             catch (final Exception e)
             {
-                throw new RuntimeException("Failed to parse playbook: " + playbookPath, e);
+                final RuntimeException parseError = new RuntimeException("Failed to parse playbook: " + playbookPath, e);
+                final BrowserMethodData defaultBrowser = browsers.isEmpty() ? null : browsers.get(0);
+                final ExecutionMode defaultMode = modes.isEmpty() ? ExecutionMode.LLM_RECORDING : modes.get(0);
+                invocationContexts.add(new TestTemplateInvocationContext()
+                {
+                    @Override
+                    public String getDisplayName(final int invocationIndex)
+                    {
+                        final String name = (playbookPath != null && playbookPath.contains("/")) ? playbookPath.substring(playbookPath.lastIndexOf('/') + 1) : playbookPath;
+                        return String.format("[%d] playbook=%s [FAILED SETUP]", invocationIndex, name);
+                    }
+
+                    @Override
+                    public List<Extension> getAdditionalExtensions()
+                    {
+                        final List<Extension> extensions = new ArrayList<>();
+                        extensions.add(new AiInvocationExtension(playbookPath, Collections.emptyMap(), defaultMode, null, defaultBrowser, null, null, parseError));
+                        return extensions;
+                    }
+                });
+                continue;
             }
 
             final List<Map<String, SessionData.DataEntry>> allDataSets = playbook.getDataSets();
@@ -651,6 +671,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         private final BrowserMethodData browser;
         private final Boolean judgeEnabled;
         private final Boolean linterEnabled;
+        private final Throwable earlyError;
         private AiSession session;
         private String recordingPath;
         private PlaybookResourceManager resourceManager;
@@ -666,6 +687,20 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final Boolean linterEnabled
         )
         {
+            this(playbookPath, dataset, mode, datasetId, browser, judgeEnabled, linterEnabled, null);
+        }
+
+        public AiInvocationExtension(
+            final String playbookPath,
+            final Map<String, SessionData.DataEntry> dataset,
+            final ExecutionMode mode,
+            final String datasetId,
+            final BrowserMethodData browser,
+            final Boolean judgeEnabled,
+            final Boolean linterEnabled,
+            final Throwable earlyError
+        )
+        {
             this.playbookPath = playbookPath;
             this.dataset = dataset;
             this.mode = mode;
@@ -673,11 +708,29 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.browser = browser;
             this.judgeEnabled = judgeEnabled;
             this.linterEnabled = linterEnabled;
+            this.earlyError = earlyError;
         }
 
         @Override
         public void beforeEach(final ExtensionContext context) throws Exception
         {
+            if (this.earlyError != null)
+            {
+                handleEarlyFailure(context, this.earlyError);
+                if (this.earlyError instanceof Exception e)
+                {
+                    throw e;
+                }
+                else if (this.earlyError instanceof Error err)
+                {
+                    throw err;
+                }
+                else
+                {
+                    throw new RuntimeException(this.earlyError);
+                }
+            }
+
             try
             {
                 executeBeforeEach(context);

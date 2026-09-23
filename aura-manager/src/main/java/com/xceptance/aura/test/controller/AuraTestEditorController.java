@@ -18,7 +18,9 @@
  */
 package com.xceptance.aura.test.controller;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.neodymium.aura.AuraFileService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +46,7 @@ public class AuraTestEditorController
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraTestEditorController.class);
 
     private final AuraFileService fileService;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AuraTestEditorController(final AuraFileService fileService)
     {
@@ -53,8 +56,10 @@ public class AuraTestEditorController
     @GetMapping("/api/editor")
     public String getEditorFragment(@RequestParam(value = "file", required = false) final String relativePath, final Model model)
     {
+        model.addAttribute("stepsFiles", fileService.getStepsFilesList());
         if (relativePath != null && !relativePath.isBlank())
         {
+            fileService.setActiveEditingFile(relativePath);
             String content = "";
             try
             {
@@ -63,10 +68,12 @@ public class AuraTestEditorController
             catch (final Exception ignored)
             {
             }
+            final boolean isFragment = relativePath.toLowerCase().endsWith(".steps");
             model.addAttribute("activeEditingFile", relativePath);
             model.addAttribute("editingFileContent", content);
             model.addAttribute("currentTestFile", relativePath);
             model.addAttribute("fileContent", content);
+            model.addAttribute("isFragment", isFragment);
 
             final Map<String, Object> sections = fileService.parsePlaybookSections(content);
             final boolean hasParseError = Boolean.TRUE.equals(sections.get("hasError"));
@@ -83,10 +90,12 @@ public class AuraTestEditorController
         }
         else
         {
+            fileService.setActiveEditingFile("");
             model.addAttribute("activeEditingFile", "");
             model.addAttribute("editingFileContent", "");
             model.addAttribute("currentTestFile", "");
             model.addAttribute("fileContent", "");
+            model.addAttribute("isFragment", false);
             model.addAttribute("hasParseError", false);
             model.addAttribute("parseErrorMessage", "");
             model.addAttribute("editorMode", "visual");
@@ -98,6 +107,13 @@ public class AuraTestEditorController
             model.addAttribute("yamlFiles", fileService.getYamlFilesList());
         }
         return "fragments/editor :: editorPanelContent";
+    }
+
+    @GetMapping("/api/editor/steps-files")
+    @ResponseBody
+    public ResponseEntity<List<String>> getStepsFiles()
+    {
+        return ResponseEntity.ok(fileService.getStepsFilesList());
     }
 
     @GetMapping("/api/read")
@@ -141,16 +157,6 @@ public class AuraTestEditorController
         return ResponseEntity.ok(response);
     }
 
-    /**
-     * Creates a new YAML test playbook file with the given name.
-     *
-     * <p>Accepts a JSON body containing a {@code name} field. The {@code .yaml} extension
-     * is appended automatically if not already present. Returns the relative filename
-     * of the created file so the UI can open it in the editor immediately.</p>
-     *
-     * @param body JSON object with a {@code name} key
-     * @return JSON response with {@code file} on success, or {@code error} on failure
-     */
     @PostMapping("/api/create")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> createFile(@RequestParam(value = "name", required = false) final String name)
@@ -158,38 +164,84 @@ public class AuraTestEditorController
         final Map<String, Object> response = new HashMap<>();
         if (name == null || name.isBlank())
         {
-            response.put("error", "Test name must not be empty.");
+            response.put("error", "File name must not be empty.");
             return ResponseEntity.badRequest().body(response);
         }
         try
         {
-            final String sanitizedName = name.endsWith(".yaml") ? name : name + ".yaml";
+            final String sanitizedName = (name.endsWith(".yaml") || name.endsWith(".yml") || name.endsWith(".steps"))
+                    ? name
+                    : name + ".yaml";
             fileService.createYamlFile(name);
+            fileService.setActiveEditingFile(sanitizedName);
             response.put("file", sanitizedName);
             return ResponseEntity.ok(response);
         }
         catch (final Exception e)
         {
-            LOGGER.error("Failed to create test file '{}'", name, e);
-            response.put("error", "Failed to create test: " + e.getMessage());
+            LOGGER.error("Failed to create file '{}'", name, e);
+            response.put("error", "Failed to create file: " + e.getMessage());
             return ResponseEntity.internalServerError().body(response);
         }
     }
 
     @PostMapping("/api/delete")
     @ResponseBody
-    public ResponseEntity<Map<String, Object>> deleteFile(@RequestParam("file") final String relativePath)
+    public ResponseEntity<Map<String, Object>> deleteFile(
+            @RequestParam(value = "file", required = false) final String fileParam,
+            final HttpServletRequest request)
     {
-        boolean success = false;
-        try
+        String relativePath = fileParam;
+        if ((relativePath == null || relativePath.isBlank()) && request != null)
         {
-            success = fileService.deleteYamlFile(relativePath);
+            relativePath = request.getParameter("file");
         }
-        catch (final Exception ignored)
+        if ((relativePath == null || relativePath.isBlank()) && request != null && request.getContentType() != null && request.getContentType().contains("application/json"))
         {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> body = objectMapper.readValue(request.getInputStream(), Map.class);
+                if (body != null && body.containsKey("file"))
+                {
+                    relativePath = String.valueOf(body.get("file"));
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not parse JSON payload for deleteFile", e);
+            }
+        }
+
+        boolean success = false;
+        if (relativePath != null && !relativePath.isBlank())
+        {
+            try
+            {
+                success = fileService.deleteYamlFile(relativePath);
+                if (relativePath.equals(fileService.getActiveEditingFile()))
+                {
+                    fileService.setActiveEditingFile("");
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.error("Failed to delete test file '{}'", relativePath, e);
+            }
         }
         final Map<String, Object> response = new HashMap<>();
         response.put("status", success ? "SUCCESS" : "ERROR");
+        response.put("file", relativePath != null ? relativePath : "");
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/api/editor/close")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> closeEditor()
+    {
+        fileService.setActiveEditingFile("");
+        final Map<String, Object> response = new HashMap<>();
+        response.put("status", "SUCCESS");
         return ResponseEntity.ok(response);
     }
 }

@@ -48,10 +48,46 @@ public final class AuraFileService
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraFileService.class);
 
     private final Set<String> expandedFiles = ConcurrentHashMap.newKeySet();
+    private final File customResourcesDir;
     private volatile String activeEditingFile = null;
 
     public AuraFileService()
     {
+        this(null);
+    }
+
+    public AuraFileService(final File customResourcesDir)
+    {
+        this.customResourcesDir = customResourcesDir;
+    }
+
+    /**
+     * Resolves the active test resources base directory.
+     *
+     * @return the resolved test resources directory
+     */
+    public File getResourcesDirectory()
+    {
+        if (customResourcesDir != null && customResourcesDir.exists() && customResourcesDir.isDirectory())
+        {
+            return customResourcesDir.getAbsoluteFile();
+        }
+        final File defaultDir = new File("src/test/resources").getAbsoluteFile();
+        if (defaultDir.exists() && defaultDir.isDirectory())
+        {
+            return defaultDir;
+        }
+        final File coreDir = new File("neodymium-core/src/test/resources").getAbsoluteFile();
+        if (coreDir.exists() && coreDir.isDirectory())
+        {
+            return coreDir;
+        }
+        final File managerDir = new File("aura-manager/src/test/resources").getAbsoluteFile();
+        if (managerDir.exists() && managerDir.isDirectory())
+        {
+            return managerDir;
+        }
+        return defaultDir;
     }
 
     public String getActiveEditingFile()
@@ -89,7 +125,7 @@ public final class AuraFileService
     public List<YamlFileDto> getYamlFilesList()
     {
         final List<String> yamlFiles = new ArrayList<>();
-        final File resourcesDir = new File("src/test/resources").getAbsoluteFile();
+        final File resourcesDir = getResourcesDirectory();
         if (resourcesDir.exists() && resourcesDir.isDirectory())
         {
             scanDirStatic(resourcesDir, resourcesDir, yamlFiles);
@@ -139,6 +175,86 @@ public final class AuraFileService
             }
         }
         return filtered;
+    }
+
+    public List<String> getStepsFilesList()
+    {
+        final List<String> stepsFiles = new ArrayList<>();
+        final File resourcesDir = getResourcesDirectory();
+        if (resourcesDir.exists() && resourcesDir.isDirectory())
+        {
+            scanDirForStepsStatic(resourcesDir, resourcesDir, stepsFiles);
+            stepsFiles.sort(String::compareTo);
+        }
+        return stepsFiles;
+    }
+
+    public List<String> getFilteredStepsFilesList(final String query)
+    {
+        final List<String> fullList = getStepsFilesList();
+        if (query == null || query.trim().isEmpty())
+        {
+            return fullList;
+        }
+        final String lowerQuery = query.toLowerCase().trim();
+        final List<String> filtered = new ArrayList<>();
+        for (final String file : fullList)
+        {
+            boolean match = file != null && file.toLowerCase().contains(lowerQuery);
+            if (!match && file != null)
+            {
+                try
+                {
+                    final String content = readYamlFileContent(file);
+                    if (content != null && content.toLowerCase().contains(lowerQuery))
+                    {
+                        match = true;
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.debug("Could not read steps file content for filter matching: {}", file, e);
+                }
+            }
+            if (match)
+            {
+                filtered.add(file);
+            }
+        }
+        return filtered;
+    }
+
+    public void scanDirForStepsStatic(final File baseDir, final File currentDir, final List<String> stepsFiles)
+    {
+        final File[] files = currentDir.listFiles();
+        if (files != null)
+        {
+            for (final File file : files)
+            {
+                if (file.isDirectory())
+                {
+                    scanDirForStepsStatic(baseDir, file, stepsFiles);
+                }
+                else
+                {
+                    final String name = file.getName().toLowerCase();
+                    if (name.endsWith(".steps"))
+                    {
+                        final String relativePath = baseDir.toURI().relativize(file.toURI()).getPath();
+                        stepsFiles.add(relativePath);
+                    }
+                }
+            }
+        }
+    }
+
+    public boolean isValidIncludeTarget(final String relativePath)
+    {
+        if (relativePath == null || relativePath.isBlank())
+        {
+            return false;
+        }
+        return relativePath.toLowerCase().endsWith(".steps");
     }
 
     public void scanDirStatic(final File baseDir, final File currentDir, final List<String> yamlFiles)
@@ -293,7 +409,7 @@ public final class AuraFileService
 
     public File resolveCanonicalFile(final String file) throws IOException
     {
-        final File resourcesDir = new File("src/test/resources").getCanonicalFile();
+        final File resourcesDir = getResourcesDirectory().getCanonicalFile();
         File yamlFile = new File(resourcesDir, file).getCanonicalFile();
         if (!yamlFile.exists())
         {
@@ -313,6 +429,11 @@ public final class AuraFileService
     private File findFileRecursively(final File dir, final String targetName)
     {
         final String cleanTarget = targetName.contains("/") ? targetName.substring(targetName.lastIndexOf('/') + 1) : targetName;
+        final boolean targetHasExt = cleanTarget.contains(".");
+        final String baseTarget = targetHasExt
+                ? cleanTarget.substring(0, cleanTarget.lastIndexOf('.'))
+                : cleanTarget;
+
         final File[] files = dir.listFiles();
         if (files != null)
         {
@@ -320,15 +441,26 @@ public final class AuraFileService
             {
                 if (f.isDirectory())
                 {
-                    final File found = findFileRecursively(f, cleanTarget);
+                    final File found = findFileRecursively(f, targetName);
                     if (found != null)
                     {
                         return found;
                     }
                 }
-                else if (f.getName().equalsIgnoreCase(cleanTarget) || f.getName().equalsIgnoreCase(cleanTarget + ".yaml") || f.getName().equalsIgnoreCase(cleanTarget + ".yml"))
+                else
                 {
-                    return f;
+                    final String fName = f.getName();
+                    if (fName.equalsIgnoreCase(cleanTarget))
+                    {
+                        return f;
+                    }
+                    final String fBase = fName.contains(".")
+                            ? fName.substring(0, fName.lastIndexOf('.'))
+                            : fName;
+                    if (fBase.equalsIgnoreCase(baseTarget))
+                    {
+                        return f;
+                    }
                 }
             }
         }
@@ -357,11 +489,17 @@ public final class AuraFileService
 
     public void createYamlFile(final String name) throws IOException
     {
-        final String sanitizedName = name.endsWith(".yaml") ? name : name + ".yaml";
+        final String sanitizedName = (name.endsWith(".yaml") || name.endsWith(".yml") || name.endsWith(".steps"))
+                ? name
+                : name + ".yaml";
         final File yamlFile = resolveCanonicalFile(sanitizedName);
         if (!yamlFile.exists())
         {
-            Files.writeString(yamlFile.toPath(), "steps: |\n  # Add your steps here\n", StandardCharsets.UTF_8);
+            if (yamlFile.getParentFile() != null && !yamlFile.getParentFile().exists())
+            {
+                yamlFile.getParentFile().mkdirs();
+            }
+            Files.writeString(yamlFile.toPath(), "", StandardCharsets.UTF_8);
         }
     }
 

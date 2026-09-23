@@ -117,4 +117,69 @@ public final class AuraTestQueueControllerTest
                     "Toggle action=add on unavailable profile must be rejected");
         }
     }
+
+    @Test
+    public final void testRemoveFromQueueRemovesOnlyTargetItemAndPopulatesModel()
+    {
+        final HttpServletRequest addReq1 = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(addReq1.getParameter("file")).thenReturn("Test1.yaml");
+        Mockito.when(addReq1.getParameter("id")).thenReturn("ds1");
+        Mockito.when(addReq1.getParameterNames()).thenReturn(Collections.enumeration(List.of("file", "id")));
+
+        final HttpServletRequest addReq2 = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(addReq2.getParameter("file")).thenReturn("Test2.yaml");
+        Mockito.when(addReq2.getParameter("id")).thenReturn("ds2");
+        Mockito.when(addReq2.getParameterNames()).thenReturn(Collections.enumeration(List.of("file", "id")));
+
+        final Model model = new ConcurrentModel();
+        controller.toggleQueue(addReq1, model);
+        controller.toggleQueue(addReq2, model);
+
+        Assertions.assertEquals(2, controller.getSelectedQueue().size());
+
+        final HttpServletRequest removeReq = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(removeReq.getParameter("index")).thenReturn("0");
+        Mockito.when(removeReq.getParameterNames()).thenReturn(Collections.enumeration(List.of("index")));
+
+        final Model removeModel = new ConcurrentModel();
+        final String viewName = controller.removeFromQueue(removeReq, removeModel);
+
+        Assertions.assertEquals("fragments/queue :: queueListContainerContent", viewName);
+        Assertions.assertEquals(1, controller.getSelectedQueue().size());
+        Assertions.assertEquals("Test2.yaml", controller.getSelectedQueue().get(0).file);
+
+        Assertions.assertTrue(removeModel.containsAttribute("queue"));
+        Assertions.assertEquals(controller.getSelectedQueue(), removeModel.getAttribute("queue"));
+    }
+
+    @Test
+    public final void testMoveQueuePopulatesModel()
+    {
+        final HttpServletRequest addReq1 = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(addReq1.getParameter("file")).thenReturn("Test1.yaml");
+        Mockito.when(addReq1.getParameter("id")).thenReturn("ds1");
+        Mockito.when(addReq1.getParameterNames()).thenReturn(Collections.enumeration(List.of("file", "id")));
+
+        final HttpServletRequest addReq2 = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(addReq2.getParameter("file")).thenReturn("Test2.yaml");
+        Mockito.when(addReq2.getParameter("id")).thenReturn("ds2");
+        Mockito.when(addReq2.getParameterNames()).thenReturn(Collections.enumeration(List.of("file", "id")));
+
+        final Model model = new ConcurrentModel();
+        controller.toggleQueue(addReq1, model);
+        controller.toggleQueue(addReq2, model);
+
+        final HttpServletRequest moveReq = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(moveReq.getParameter("index")).thenReturn("0");
+        Mockito.when(moveReq.getParameter("direction")).thenReturn("down");
+        Mockito.when(moveReq.getParameterNames()).thenReturn(Collections.enumeration(List.of("index", "direction")));
+
+        final Model moveModel = new ConcurrentModel();
+        final String viewName = controller.moveQueue(moveReq, moveModel);
+
+        Assertions.assertEquals("fragments/queue :: queueListContainerContent", viewName);
+        Assertions.assertEquals("Test2.yaml", controller.getSelectedQueue().get(0).file);
+        Assertions.assertTrue(moveModel.containsAttribute("queue"));
+        Assertions.assertEquals(controller.getSelectedQueue(), moveModel.getAttribute("queue"));
+    }
 }

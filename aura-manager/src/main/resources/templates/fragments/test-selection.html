@@ -4,9 +4,18 @@
   Xceptance GmbH 2026
 -->
 <div class="panel" th:fragment="testSelectionContent">
-    <div class="panel-header">
-        <div class="panel-title"><span class="material-symbols-outlined" style="color: var(--accent);">checklist</span> <span>Test Selection</span></div>
-        <button class="btn-edit neo-u-8" hx-get="/api/files/list" hx-target="#yamlFileList" hx-swap="innerHTML" title="Refresh Files"><span class="material-symbols-outlined">sync</span></button>
+    <div class="panel-header" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px;">
+        <div class="sidebar-tabs" style="display: flex; gap: 4px; padding: 2px; background: rgba(0,0,0,0.15); border-radius: 8px;">
+            <button type="button" class="sidebar-tab-btn active-tests" id="tabTestsBtn" onclick="switchSidebarTab('tests')" style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">
+                <span class="material-symbols-outlined" style="font-size: 14px;">checklist</span>
+                <span>Tests (.yaml)</span>
+            </button>
+            <button type="button" class="sidebar-tab-btn" id="tabFragmentsBtn" onclick="switchSidebarTab('fragments')" style="display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer;">
+                <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">extension</span>
+                <span>Fragments (.steps)</span>
+            </button>
+        </div>
+        <button class="btn-edit neo-u-8" id="refreshFilesBtn" hx-get="/api/files/list" hx-target="#yamlFileList" hx-swap="innerHTML" title="Refresh Files"><span class="material-symbols-outlined">sync</span></button>
     </div>
     <div class="search-container">
         <span class="material-symbols-outlined search-icon">search</span>
@@ -15,76 +24,114 @@
                hx-get="/api/files/search" hx-trigger="keyup changed delay:200ms, search"
                hx-target="#yamlFileList" hx-swap="innerHTML"/>
     </div>
-    <div class="content-scroll" id="yamlFileList" th:fragment="yamlFileList">
+    <div class="content-scroll" id="yamlFileList" th:fragment="yamlFileList" hx-get="/api/files/list" hx-trigger="refreshFiles from:body" hx-swap="innerHTML" data-active-tab="tests">
         <div th:replace="~{fragments/test-selection :: yamlFileListContent}"></div>
     </div>
-    <div class="panel-footer" style="padding: 10px 12px; border-top: 1px solid var(--border);">
-        <button class="btn-edit" id="openModalBtn" onclick="document.getElementById('createTestModal').style.display='flex'; document.getElementById('newTestName').focus();" style="width: 100%; justify-content: center; padding: 8px; font-weight: 500;">
-            <span class="material-symbols-outlined">add</span> Create New Test
+    <div class="panel-footer" style="padding: 10px 12px; border-top: 1px solid var(--border); display: flex; gap: 8px;">
+        <button class="btn-edit" id="openModalBtn" onclick="openCreateModal('yaml')" style="flex: 1; justify-content: center; padding: 8px; font-weight: 500;" title="Create new runnable test playbook (.yaml)">
+            <span class="material-symbols-outlined">add</span> + Test (.yaml)
+        </button>
+        <button class="btn-edit" id="openModalFragmentBtn" onclick="openCreateModal('steps')" style="flex: 1; justify-content: center; padding: 8px; font-weight: 500; border-color: rgba(168, 85, 247, 0.4); color: #a855f7;" title="Create new reusable step fragment (.steps)">
+            <span class="material-symbols-outlined" style="color: #a855f7;">extension</span> + Fragment (.steps)
         </button>
     </div>
 </div>
 
 <th:block th:fragment="yamlFileListContent">
-    <!-- If files is null or empty, display a message -->
-    <div th:if="${files == null or files.isEmpty()}" class="empty-state-card">
-        <span class="material-symbols-outlined">folder_open</span>
-        <div class="empty-title">No Test Files Found</div>
-        <div class="empty-desc">No YAML test files were found in src/test/resources.</div>
-    </div>
+    <!-- TAB 1: TESTS (.yaml) CONTAINER -->
+    <div id="sidebarTestsContainer" class="sidebar-tab-content">
+        <!-- If files is null or empty, display a message -->
+        <div th:if="${files == null or files.isEmpty()}" class="empty-state-card">
+            <span class="material-symbols-outlined">folder_open</span>
+            <div class="empty-title">No Test Files Found</div>
+            <div class="empty-desc">No YAML test files were found in src/test/resources.</div>
+        </div>
 
-    <!-- Otherwise, render the list using Thymeleaf loop -->
-    <th:block th:unless="${files == null or files.isEmpty()}">
-        <div class="file-container" th:each="item : ${files}" th:data-file="${item.file}" style="display: flex; flex-direction: column; margin-bottom: 6px;">
-            <div class="list-item" style="position: relative; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" tabindex="0"
-                 th:data-file="${item.file}"
-                 onclick="if(typeof toggleExpandFile==='function') toggleExpandFile(this.getAttribute('data-file'), this);">
-                <div class="item-main" style="min-width: 0; overflow: hidden; display: flex; align-items: center; flex-grow: 1;">
-                    <span class="material-symbols-outlined" 
-                          th:text="${#sets.contains(expandedFiles, item.file) ? 'keyboard_arrow_down' : 'keyboard_arrow_right'}"
-                          style="margin-right: 8px; color: var(--text-secondary); font-size: 16px; width: 16px; text-align: center;"></span>
-                    <label class="custom-checkbox" onclick="event.stopPropagation();" th:if="${!item.hasError}">
-                        <input type="checkbox" class="file-select-cb" th:data-file="${item.file}" 
-                               th:checked="${selectedFileKeys != null and selectedFileKeys.contains(item.file)}"
-                               th:data-indeterminate="${partiallySelectedFileKeys != null and partiallySelectedFileKeys.contains(item.file)}"
-                               onchange="if(typeof toggleFileCheckboxesInstant==='function') toggleFileCheckboxesInstant(this);"
-                               th:hx-post="@{/api/queue/toggleAll(file=${item.file})}"
-                               hx-target="#queueListContainer" hx-swap="innerHTML">
-                    </label>
-                    <span th:if="${item.hasError}" class="material-symbols-outlined" style="color: var(--danger, #ef4444); font-size: 16px; margin-right: 4px;" th:title="${'YAML Parse Error: ' + item.errorMessage}">error</span>
-                    <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px;" th:styleappend="${item.hasError ? 'color: var(--danger, #ef4444);' : ''}" th:text="${item.file}">filename.yaml</span>
-                </div>
-                <button class="edit-icon-btn" th:data-file="${item.file}"
-                        th:hx-get="@{/api/editor(file=${item.file})}"
-                        hx-target="#editorPanel" hx-swap="outerHTML"
-                        onclick="event.stopPropagation(); if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));"
-                        style="padding: 4px 8px;"
-                        th:styleappend="${item.hasError ? 'color: var(--danger, #ef4444);' : 'color: var(--text-secondary);'}"
-                        th:title="${item.hasError ? 'Fix YAML Syntax in Raw Editor: ' + item.file : 'Edit YAML Steps for ' + item.file}" th:alt="'Edit YAML Steps for ' + ${item.file}" th:aria-label="'Edit YAML Steps for ' + ${item.file}">
-                    <span class="material-symbols-outlined" style="font-size: 16px;" aria-hidden="true" th:text="${item.hasError ? 'build' : 'edit'}">edit</span>
-                </button>
-            </div>
-            
-            <div class="dataset-list" th:id="'datasets-' + ${item.file}" th:style="'display: ' + (${#sets.contains(expandedFiles, item.file) ? 'flex' : 'none'}) + '; flex-direction: column; padding-left: 24px; margin-top: 4px; gap: 4px;'">
-                <div th:if="${item.hasError}" class="file-parse-error-box" style="padding: 8px 12px; border-radius: 6px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; font-size: 11px; color: #ef4444; word-break: break-word;">
-                    <div style="font-weight: 600; margin-bottom: 2px;">YAML Syntax Error</div>
-                    <div style="font-family: monospace; white-space: pre-wrap;" th:text="${item.errorMessage}">Parse error details</div>
-                    <div style="margin-top: 6px; color: var(--text-secondary); font-size: 11px;">Click the repair icon to edit the file in Raw YAML mode.</div>
-                </div>
-                <div th:unless="${item.hasError}" class="dataset-item" th:each="dataset : ${item.datasets}" style="display: flex; align-items: center; padding: 4px 8px; border-radius: 6px; font-size: 12px; justify-content: space-between; cursor: pointer;" th:data-file="${item.file}" th:data-id="${dataset.id}" onclick="const cb = this.querySelector('.dataset-select-cb'); if (cb &amp;&amp; event.target !== cb &amp;&amp; !event.target.closest('.custom-checkbox')) { cb.click(); }">
-                    <div style="display: flex; align-items: center; min-width: 0; overflow: hidden;">
-                        <label class="custom-checkbox" onclick="event.stopPropagation();">
-                            <input type="checkbox" class="dataset-select-cb" th:data-file="${item.file}" th:data-id="${dataset.id}" 
-                                   th:checked="${selectedKeys != null and selectedKeys.contains(item.file + '::' + dataset.id)}"
-                                   onchange="if(typeof toggleDatasetCheckboxInstant==='function') toggleDatasetCheckboxInstant(this);"
-                                   th:hx-post="@{/api/queue/toggle(file=${item.file},id=${dataset.id})}"
+        <!-- Otherwise, render the list using Thymeleaf loop -->
+        <th:block th:unless="${files == null or files.isEmpty()}">
+            <div class="file-container" th:each="item : ${files}" th:data-file="${item.file}" style="display: flex; flex-direction: column; margin-bottom: 6px;">
+                <div class="list-item" style="position: relative; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" tabindex="0"
+                     th:data-file="${item.file}"
+                     onclick="if(typeof toggleExpandFile==='function') toggleExpandFile(this.getAttribute('data-file'), this);">
+                    <div class="item-main" style="min-width: 0; overflow: hidden; display: flex; align-items: center; flex-grow: 1;">
+                        <span class="material-symbols-outlined" 
+                              th:text="${#sets.contains(expandedFiles, item.file) ? 'keyboard_arrow_down' : 'keyboard_arrow_right'}"
+                              style="margin-right: 8px; color: var(--text-secondary); font-size: 16px; width: 16px; text-align: center;"></span>
+                        <label class="custom-checkbox" onclick="event.stopPropagation();" th:if="${!item.hasError}">
+                            <input type="checkbox" class="file-select-cb" th:data-file="${item.file}" 
+                                   th:checked="${selectedFileKeys != null and selectedFileKeys.contains(item.file)}"
+                                   th:data-indeterminate="${partiallySelectedFileKeys != null and partiallySelectedFileKeys.contains(item.file)}"
+                                   onchange="if(typeof toggleFileCheckboxesInstant==='function') toggleFileCheckboxesInstant(this);"
+                                   th:hx-post="@{/api/queue/toggleAll(file=${item.file})}"
                                    hx-target="#queueListContainer" hx-swap="innerHTML">
                         </label>
-                        <span class="material-symbols-outlined" style="margin-left: 8px; margin-right: 6px; color: var(--accent); opacity: 0.7; flex-shrink: 0; font-size: 14px;">database</span>
-                        <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 2px;" th:text="${dataset.label}">dataset label</span>
+                        <span th:if="${item.hasError}" class="material-symbols-outlined" style="color: var(--danger, #ef4444); font-size: 16px; margin-right: 4px;" th:title="${'YAML Parse Error: ' + item.errorMessage}">error</span>
+                        <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px;" th:styleappend="${item.hasError ? 'color: var(--danger, #ef4444);' : ''}" th:text="${item.file}">filename.yaml</span>
+                    </div>
+                    <button class="edit-icon-btn" th:data-file="${item.file}"
+                            th:hx-get="@{/api/editor(file=${item.file})}"
+                            hx-target="#editorPanel" hx-swap="outerHTML"
+                            onclick="event.stopPropagation(); if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));"
+                            style="padding: 4px 8px;"
+                            th:styleappend="${item.hasError ? 'color: var(--danger, #ef4444);' : 'color: var(--text-secondary);'}"
+                            th:title="${item.hasError ? 'Fix YAML Syntax in Raw Editor: ' + item.file : 'Edit YAML Steps for ' + item.file}" th:alt="'Edit YAML Steps for ' + ${item.file}" th:aria-label="'Edit YAML Steps for ' + ${item.file}">
+                        <span class="material-symbols-outlined" style="font-size: 16px;" aria-hidden="true" th:text="${item.hasError ? 'build' : 'edit'}">edit</span>
+                    </button>
+                </div>
+                
+                <div class="dataset-list" th:id="'datasets-' + ${item.file}" th:style="'display: ' + (${#sets.contains(expandedFiles, item.file) ? 'flex' : 'none'}) + '; flex-direction: column; padding-left: 24px; margin-top: 4px; gap: 4px;'">
+                    <div th:if="${item.hasError}" class="file-parse-error-box" style="padding: 8px 12px; border-radius: 6px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; font-size: 11px; color: #ef4444; word-break: break-word;">
+                        <div style="font-weight: 600; margin-bottom: 2px;">YAML Syntax Error</div>
+                        <div style="font-family: monospace; white-space: pre-wrap;" th:text="${item.errorMessage}">Parse error details</div>
+                        <div style="margin-top: 6px; color: var(--text-secondary); font-size: 11px;">Click the repair icon to edit the file in Raw YAML mode.</div>
+                    </div>
+                    <div th:unless="${item.hasError}" class="dataset-item" th:each="dataset : ${item.datasets}" style="display: flex; align-items: center; padding: 4px 8px; border-radius: 6px; font-size: 12px; justify-content: space-between; cursor: pointer;" th:data-file="${item.file}" th:data-id="${dataset.id}" onclick="const cb = this.querySelector('.dataset-select-cb'); if (cb &amp;&amp; event.target !== cb &amp;&amp; !event.target.closest('.custom-checkbox')) { cb.click(); }">
+                        <div style="display: flex; align-items: center; min-width: 0; overflow: hidden;">
+                            <label class="custom-checkbox" onclick="event.stopPropagation();">
+                                <input type="checkbox" class="dataset-select-cb" th:data-file="${item.file}" th:data-id="${dataset.id}" 
+                                       th:checked="${selectedKeys != null and selectedKeys.contains(item.file + '::' + dataset.id)}"
+                                       onchange="if(typeof toggleDatasetCheckboxInstant==='function') toggleDatasetCheckboxInstant(this);"
+                                       th:hx-post="@{/api/queue/toggle(file=${item.file},id=${dataset.id})}"
+                                       hx-target="#queueListContainer" hx-swap="innerHTML">
+                            </label>
+                            <span class="material-symbols-outlined" style="margin-left: 8px; margin-right: 6px; color: var(--accent); opacity: 0.7; flex-shrink: 0; font-size: 14px;">database</span>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 2px;" th:text="${dataset.label}">dataset label</span>
+                        </div>
                     </div>
                 </div>
             </div>
+        </th:block>
+    </div>
+
+    <!-- TAB 2: STEP FRAGMENTS (.steps) CONTAINER -->
+    <div id="sidebarFragmentsContainer" class="sidebar-tab-content" style="display: none;">
+        <div th:if="${stepsFiles == null or stepsFiles.isEmpty()}" class="empty-state-card">
+            <span class="material-symbols-outlined" style="color: #a855f7;">extension</span>
+            <div class="empty-title">No Step Fragments Found</div>
+            <div class="empty-desc">No .steps fragment files were found in src/test/resources.</div>
         </div>
-    </th:block>
+
+        <th:block th:unless="${stepsFiles == null or stepsFiles.isEmpty()}">
+            <div class="file-container" th:each="stepFile : ${stepsFiles}" th:data-file="${stepFile}" style="display: flex; flex-direction: column; margin-bottom: 4px;">
+                <div class="list-item" style="padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; cursor: pointer;" tabindex="0"
+                     th:data-file="${stepFile}"
+                     th:hx-get="@{/api/editor(file=${stepFile})}"
+                     hx-target="#editorPanel" hx-swap="outerHTML"
+                     onclick="if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));">
+                    <div class="item-main" style="min-width: 0; overflow: hidden; display: flex; align-items: center; flex-grow: 1;">
+                        <span class="material-symbols-outlined" style="margin-right: 8px; color: #a855f7; font-size: 16px; flex-shrink: 0;">extension</span>
+                        <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" th:text="${stepFile}">fragment.steps</span>
+                    </div>
+                    <button class="edit-icon-btn" th:data-file="${stepFile}"
+                            th:hx-get="@{/api/editor(file=${stepFile})}"
+                            hx-target="#editorPanel" hx-swap="outerHTML"
+                            onclick="event.stopPropagation(); if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));"
+                            style="padding: 4px 8px; color: var(--text-secondary);" 
+                            th:title="'Edit Fragment ' + ${stepFile}" th:alt="'Edit Fragment ' + ${stepFile}" th:aria-label="'Edit Fragment ' + ${stepFile}">
+                        <span class="material-symbols-outlined" style="font-size: 16px;" aria-hidden="true">edit</span>
+                    </button>
+                </div>
+            </div>
+        </th:block>
+    </div>
 </th:block>

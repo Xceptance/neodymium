@@ -21,12 +21,14 @@ package com.xceptance.aura.test.ui;
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
 
+import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.xceptance.aura.AuraManagerApplication;
+import com.xceptance.neodymium.aura.AuraFileService;
 import java.io.File;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -35,6 +37,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.WebElement;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 
@@ -42,7 +45,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
  * Selenide UI test suite to verify the Neodymium Aura Manager's visual YAML Playbook Editor
  * step reordering, visual keyboard navigation, and step deletion safeguards under Spring Boot.
  *
- * @author AI-generated: Gemini 3.8 Flash
+ * @author AI-generated: Antigravity
  * @author Xceptance GmbH 2026
  */
 @Tag("ui")
@@ -52,6 +55,9 @@ public final class AuraManagerEditorUiTest
 {
     @LocalServerPort
     private int port;
+
+    @Autowired
+    private AuraFileService fileService;
 
     @BeforeEach
     public final void setup()
@@ -72,6 +78,11 @@ public final class AuraManagerEditorUiTest
 
     private void cleanupTestFiles()
     {
+        if (fileService != null)
+        {
+            fileService.setActiveEditingFile("");
+        }
+
         final String[] dirPaths = new String[] { "src/test/resources", "target/test-classes" };
         final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml" };
 
@@ -90,6 +101,41 @@ public final class AuraManagerEditorUiTest
     }
 
     @Test
+    public final void testCreateAndDeleteTestFileUpdatesSelectionList()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Verify test file is not listed initially
+        $(".file-container[data-file='New Interactive Aura Test.yaml']").shouldNotBe(Condition.exist);
+
+        // Create new test
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+
+        // Close editor to return to test selection view
+        Selenide.executeJavaScript("closeEditor(true);");
+
+        // Verify newly created test appears in test selection list automatically without page refresh
+        $(".file-container[data-file='New Interactive Aura Test.yaml']").shouldBe(Condition.visible);
+
+        // Open the test in editor to test deletion
+        $(".file-container[data-file='New Interactive Aura Test.yaml'] .list-item").shouldBe(Condition.visible).hover();
+        $(".file-container[data-file='New Interactive Aura Test.yaml'] .edit-icon-btn").shouldBe(Condition.visible).click();
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Delete the test file
+        $("#deleteTestBtn").shouldBe(Condition.visible).click();
+        $("#deleteTestModal").shouldBe(Condition.visible);
+        $(".btn-danger.neo-u-48").shouldBe(Condition.visible).click();
+        $("#deleteTestModal").shouldNotBe(Condition.visible);
+
+        // Verify deleted test disappears from test selection list automatically without page refresh
+        $(".file-container[data-file='New Interactive Aura Test.yaml']").shouldNotBe(Condition.exist);
+    }
+
+    @Test
     public final void testDeleteLastStepClearsContentWithoutRemovingRow()
     {
         Selenide.open("http://localhost:" + this.port + "/");
@@ -100,6 +146,7 @@ public final class AuraManagerEditorUiTest
         $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
         $("#createTestModal").shouldNotBe(Condition.visible);
         $("#editorPanel").shouldBe(Condition.visible);
+        $$("#stepsList .step-row").shouldHave(CollectionCondition.sizeGreaterThan(0));
 
         // Ensure only 1 step exists initially
         final ElementsCollection stepRows = $$("#stepsList .step-row");
@@ -142,6 +189,7 @@ public final class AuraManagerEditorUiTest
         $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
         $("#createTestModal").shouldNotBe(Condition.visible);
         $("#editorPanel").shouldBe(Condition.visible);
+        $$("#stepsList .step-row").shouldHave(CollectionCondition.sizeGreaterThan(0));
 
         // Set up 3 steps: Step 1, Step 2, Step 3
         final SelenideElement step1Content = $$("#stepsList .step-content").get(0);
@@ -195,6 +243,7 @@ public final class AuraManagerEditorUiTest
         $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
         $("#createTestModal").shouldNotBe(Condition.visible);
         $("#editorPanel").shouldBe(Condition.visible);
+        $$("#stepsList .step-row").shouldHave(CollectionCondition.sizeGreaterThan(0));
 
         // Set up 3 steps
         final SelenideElement step1Content = $$("#stepsList .step-content").get(0);
@@ -251,6 +300,7 @@ public final class AuraManagerEditorUiTest
         $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
         $("#createTestModal").shouldNotBe(Condition.visible);
         $("#editorPanel").shouldBe(Condition.visible);
+        $$("#stepsList .step-row").shouldHave(CollectionCondition.sizeGreaterThan(0));
 
         // Set up 3 steps: Step A, Step B, Step C
         final SelenideElement stepAContent = $$("#stepsList .step-content").get(0);

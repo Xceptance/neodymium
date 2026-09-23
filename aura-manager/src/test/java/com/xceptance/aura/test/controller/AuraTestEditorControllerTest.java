@@ -19,6 +19,7 @@
 package com.xceptance.aura.test.controller;
 
 import com.xceptance.neodymium.aura.AuraFileService;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Assertions;
@@ -124,6 +125,28 @@ public class AuraTestEditorControllerTest
     }
 
     @Test
+    public void testCreateStepsFileSuccess()
+    {
+        final ResponseEntity<Map<String, Object>> response = controller.createFile("fragments/login.steps");
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("fragments/login.steps", response.getBody().get("file"));
+    }
+
+    @Test
+    public void testGetStepsFilesSuccess()
+    {
+        Mockito.when(fileService.getStepsFilesList()).thenReturn(List.of("fragments/login.steps"));
+
+        final ResponseEntity<List<String>> response = controller.getStepsFiles();
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals(List.of("fragments/login.steps"), response.getBody());
+    }
+
+    @Test
     public void testCreateFileEmptyNameReturnsBadRequest()
     {
         final ResponseEntity<Map<String, Object>> response = controller.createFile("   ");
@@ -131,5 +154,43 @@ public class AuraTestEditorControllerTest
         Assertions.assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
         Assertions.assertNotNull(response.getBody());
         Assertions.assertTrue(response.getBody().containsKey("error"));
+    }
+
+    @Test
+    public void testDeleteFileWithParamSuccess() throws Exception
+    {
+        Mockito.when(fileService.deleteYamlFile("test.yaml")).thenReturn(true);
+
+        final ResponseEntity<Map<String, Object>> response = controller.deleteFile("test.yaml", null);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("SUCCESS", response.getBody().get("status"));
+        Assertions.assertEquals("test.yaml", response.getBody().get("file"));
+    }
+
+    @Test
+    public void testDeleteFileWithRequestParameterFallback() throws Exception
+    {
+        final HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(request.getParameter("file")).thenReturn("fallback.yaml");
+        Mockito.when(fileService.deleteYamlFile("fallback.yaml")).thenReturn(true);
+
+        final ResponseEntity<Map<String, Object>> response = controller.deleteFile(null, request);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("SUCCESS", response.getBody().get("status"));
+        Assertions.assertEquals("fallback.yaml", response.getBody().get("file"));
+    }
+
+    @Test
+    public void testDeleteFileEmpty()
+    {
+        final ResponseEntity<Map<String, Object>> response = controller.deleteFile(null, null);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("ERROR", response.getBody().get("status"));
     }
 }

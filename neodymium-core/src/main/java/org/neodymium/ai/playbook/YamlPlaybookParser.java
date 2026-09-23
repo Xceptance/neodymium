@@ -240,11 +240,16 @@ public final class YamlPlaybookParser implements PlaybookParser
                     final byte[] bytes = in.readAllBytes();
                     final String fileContent = new String(bytes, StandardCharsets.UTF_8);
                     final Yaml yaml = new Yaml();
-                    final Map<String, Object> loadedMap = yaml.load(fileContent);
-                    promptAddons = parsePromptAddons(loadedMap);
-                    if (loadedMap != null && loadedMap.get("description") instanceof String descStr && !descStr.isBlank())
+                    final Object loadedObj = yaml.load(fileContent);
+                    if (loadedObj instanceof Map<?, ?> loadedMap)
                     {
-                        description = descStr.trim();
+                        @SuppressWarnings("unchecked")
+                        final Map<String, Object> map = (Map<String, Object>) loadedMap;
+                        promptAddons = parsePromptAddons(map);
+                        if (map.get("description") instanceof String descStr && !descStr.isBlank())
+                        {
+                            description = descStr.trim();
+                        }
                     }
                 }
             }
@@ -427,84 +432,93 @@ public final class YamlPlaybookParser implements PlaybookParser
             final String fileName = new File(identifier).getName();
 
             final Yaml yaml = new Yaml();
-            final Map<String, Object> loadedMap = yaml.load(fileContent);
+            final Object loadedObj = yaml.load(fileContent);
 
-            if (loadedMap == null)
+            if (loadedObj == null)
             {
                 return;
             }
 
-            // 2. Parse datasets ('data')
-            final Object rawData = loadedMap.get("data");
-            if (rawData instanceof List)
+            if (loadedObj instanceof List<?> || loadedObj instanceof String)
             {
-                for (final Object entry : (List<?>) rawData)
+                parseStepBlock(loadedObj, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
+                return;
+            }
+
+            if (loadedObj instanceof Map<?, ?> loadedMap)
+            {
+                // 2. Parse datasets ('data')
+                final Object rawData = loadedMap.get("data");
+                if (rawData instanceof List)
                 {
-                    if (entry instanceof Map)
+                    for (final Object entry : (List<?>) rawData)
                     {
-                        final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
-                        for (final Map.Entry<?, ?> mapEntry : ((Map<?, ?>) entry).entrySet())
+                        if (entry instanceof Map)
                         {
-                            final String key = String.valueOf(mapEntry.getKey());
-                            final Object val = mapEntry.getValue();
-                            final boolean sensitive = isSensitiveKey(key);
-                            datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
+                            final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
+                            for (final Map.Entry<?, ?> mapEntry : ((Map<?, ?>) entry).entrySet())
+                            {
+                                final String key = String.valueOf(mapEntry.getKey());
+                                final Object val = mapEntry.getValue();
+                                final boolean sensitive = isSensitiveKey(key);
+                                datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
+                            }
+                            injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
+                            outDataSets.add(datasetMap);
                         }
-                        injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
-                        outDataSets.add(datasetMap);
                     }
                 }
-            }
-            else if (rawData instanceof Map)
-            {
-                final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
-                for (final Map.Entry<?, ?> mapEntry : ((Map<?, ?>) rawData).entrySet())
+                else if (rawData instanceof Map)
                 {
-                    final String key = String.valueOf(mapEntry.getKey());
-                    final Object val = mapEntry.getValue();
-                    final boolean sensitive = isSensitiveKey(key);
-                    datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
+                    final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
+                    for (final Map.Entry<?, ?> mapEntry : ((Map<?, ?>) rawData).entrySet())
+                    {
+                        final String key = String.valueOf(mapEntry.getKey());
+                        final Object val = mapEntry.getValue();
+                        final boolean sensitive = isSensitiveKey(key);
+                        datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
+                    }
+                    injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
+                    outDataSets.add(datasetMap);
                 }
-                injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
-                outDataSets.add(datasetMap);
-            }
-            else if (loadedMap.containsKey("_meta"))
-            {
-                final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
-                injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
-                outDataSets.add(datasetMap);
-            }
+                else if (loadedMap.containsKey("_meta"))
+                {
+                    final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
+                    injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
+                    outDataSets.add(datasetMap);
+                }
 
-            // 3. Parse before, steps, and after blocks
-            final String[] beforeKeys = {"before", "beforeEach", "_beforeEach", "_beforeAll"};
-            for (final String key : beforeKeys)
-            {
-                parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
-            }
+                // 3. Parse before, steps, and after blocks
+                final String[] beforeKeys = {"before", "beforeEach", "_beforeEach", "_beforeAll"};
+                for (final String key : beforeKeys)
+                {
+                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
+                }
 
-            final String[] stepKeys = {"steps", "_steps"};
-            for (final String key : stepKeys)
-            {
-                parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
-            }
+                final String[] stepKeys = {"steps", "_steps"};
+                for (final String key : stepKeys)
+                {
+                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
+                }
 
-            final String[] afterKeys = {"after", "afterEach", "_afterEach", "_afterAll"};
-            for (final String key : afterKeys)
-            {
-                parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
-            }
+                final String[] afterKeys = {"after", "afterEach", "_afterEach", "_afterAll"};
+                for (final String key : afterKeys)
+                {
+                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
+                }
 
-            if (outSteps.isEmpty() && (loadedMap.containsKey("_include") || loadedMap.containsKey("include")))
-            {
-                final String includeRelativePath = loadedMap.containsKey("_include")
-                    ? String.valueOf(loadedMap.get("_include"))
-                    : String.valueOf(loadedMap.get("include"));
-                final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
+                if (outSteps.isEmpty() && (loadedMap.containsKey("_include") || loadedMap.containsKey("include")))
+                {
+                    final String includeRelativePath = loadedMap.containsKey("_include")
+                        ? String.valueOf(loadedMap.get("_include"))
+                        : String.valueOf(loadedMap.get("include"));
+                    final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
 
-                final PlaybookStep includeStep = new PlaybookStep("_include: " + includeRelativePath);
-                initStepLocation(includeStep, fileName, fileContent, "_include: " + includeRelativePath);
-                parseRecursive(resolvedIdentifier, manager, activeStack, includeStep.getSubSteps(), outDataSets);
-                outSteps.add(includeStep);
+                    final PlaybookStep includeStep = new PlaybookStep("_include: " + includeRelativePath);
+                    initStepLocation(includeStep, fileName, fileContent, "_include: " + includeRelativePath);
+                    parseRecursive(resolvedIdentifier, manager, activeStack, includeStep.getSubSteps(), outDataSets);
+                    outSteps.add(includeStep);
+                }
             }
         }
         finally
