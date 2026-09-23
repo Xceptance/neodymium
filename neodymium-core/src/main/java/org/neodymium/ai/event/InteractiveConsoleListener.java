@@ -247,6 +247,21 @@ public final class InteractiveConsoleListener implements ExecutionListener
         else if (event instanceof SessionFinishedEvent sessionFinished)
         {
             final String overallStatus = sessionFinished.isSuccess() ? "passed" : (this.aborted ? "skipped" : "failed");
+            if (!sessionFinished.isSuccess() && !this.aborted)
+            {
+                final Throwable lastErr = context != null
+                    ? (Throwable) context.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR)
+                    : null;
+                if (lastErr != null)
+                {
+                    final String errMsg = lastErr.getMessage() != null ? lastErr.getMessage() : lastErr.toString();
+                    LOG.error("[InteractiveConsoleListener] Test execution failed with error: {}", errMsg, lastErr);
+                }
+                else
+                {
+                    LOG.error("[InteractiveConsoleListener] Test execution failed.");
+                }
+            }
 
             if (this.interactive && !this.aborted)
             {

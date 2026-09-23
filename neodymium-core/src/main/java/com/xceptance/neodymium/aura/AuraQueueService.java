@@ -837,8 +837,12 @@ public final class AuraQueueService
                     completedFiles.add(file);
                     activeProcess.set(null);
 
+                    final String extractedError = extractSubprocessErrorMessage(currentRunLogs);
                     final String primaryBrowser = (!targetProfiles.isEmpty()) ? targetProfiles.get(0) : "Default";
-                    final String statusStr = testWasCancelled ? "skipped" : ((exitCode == 0) ? "passed" : "failed");
+                    final boolean isFailedRun = exitCode != 0 || extractedError != null;
+                    final String statusStr = testWasCancelled ? "skipped" : (isFailedRun ? "failed" : "passed");
+
+                    final ObjectMapper mapper = new ObjectMapper();
 
                     for (final File baseDir : runStorageDirs)
                     {
@@ -856,12 +860,11 @@ public final class AuraQueueService
                             targetCount = existingCount;
                         }
 
-                        if (exitCode != 0 || testWasCancelled)
+                        if (isFailedRun || testWasCancelled)
                         {
                             boolean hasFailureOrCancel = false;
                             if (existingExecs != null)
                             {
-                                final ObjectMapper mapper = new ObjectMapper();
                                 for (final File existingFile : existingExecs)
                                 {
                                     try
@@ -879,13 +882,23 @@ public final class AuraQueueService
                                             {
                                                 objNode.put("status", statusStr);
                                                 objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
+                                                if (extractedError != null && !objNode.has("failureReason"))
+                                                {
+                                                    objNode.put("failureReason", extractedError);
+                                                    objNode.put("error", extractedError);
+                                                }
                                                 AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
                                                 hasFailureOrCancel = true;
                                             }
-                                            else if (isPass && isZeroStep && exitCode != 0)
+                                            else if (isPass && isZeroStep && isFailedRun)
                                             {
                                                 objNode.put("status", statusStr);
                                                 objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
+                                                if (extractedError != null && !objNode.has("failureReason"))
+                                                {
+                                                    objNode.put("failureReason", extractedError);
+                                                    objNode.put("error", extractedError);
+                                                }
                                                 AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
                                                 hasFailureOrCancel = true;
                                             }
@@ -904,7 +917,7 @@ public final class AuraQueueService
                                 }
                             }
 
-                            if (!hasFailureOrCancel && exitCode != 0)
+                            if (!hasFailureOrCancel && isFailedRun)
                             {
                                 targetCount = Math.max(targetCount, existingCount + 1);
                             }
@@ -915,10 +928,21 @@ public final class AuraQueueService
                             final File execJson = new File(classDir, "console-execution-" + k + ".json");
                             if (!execJson.exists())
                             {
-                                final String fallbackReason = exitCode != 0 ? "Test execution failed during setup (exit code " + exitCode + "). Check process logs or API configuration." : "";
+                                final String fallbackReason = extractedError != null
+                                    ? extractedError
+                                    : (exitCode != 0 ? "Test execution failed during setup (exit code " + exitCode + "). Check process logs or API configuration." : "");
+                                String escapedReason = "";
+                                try
+                                {
+                                    escapedReason = mapper.writeValueAsString(fallbackReason);
+                                }
+                                catch (final Exception ignored)
+                                {
+                                    escapedReason = "\"" + fallbackReason.replace("\"", "\\\"") + "\"";
+                                }
                                 final String fallbackJson = String.format(
-                                    "{\"runId\":\"%s\",\"status\":\"%s\",\"runnerStatus\":\"%s\",\"currentStepIndex\":0,\"testName\":\"%s\",\"browser\":\"%s\",\"timestamp\":\"%s\",\"failureReason\":\"%s\",\"error\":\"%s\"}",
-                                    runId, statusStr, testWasCancelled ? "cancelled" : statusStr, className, primaryBrowser, new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").format(new Date()), fallbackReason, fallbackReason
+                                    "{\"runId\":\"%s\",\"status\":\"%s\",\"runnerStatus\":\"%s\",\"currentStepIndex\":0,\"testName\":\"%s\",\"browser\":\"%s\",\"timestamp\":\"%s\",\"failureReason\":%s,\"error\":%s}",
+                                    runId, statusStr, testWasCancelled ? "cancelled" : statusStr, className, primaryBrowser, new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").format(new Date()), escapedReason, escapedReason
                                 );
                                 try
                                 {
@@ -1367,5 +1391,68 @@ public final class AuraQueueService
             }
         }
         return list;
+    }
+
+    /**
+     * Inspects captured subprocess logs for failure/exception indicators and extracts a concise error message.
+     *
+     * @param logs the list of raw subprocess log lines
+     * @return the extracted error message, or null if no exception/error pattern was detected
+     */
+    public static String extractSubprocessErrorMessage(final List<String> logs)
+    {
+        if (logs == null || logs.isEmpty())
+        {
+            return null;
+        }
+
+        final List<String> matchingLines = new ArrayList<>();
+        synchronized (logs)
+        {
+            for (final String rawLine : logs)
+            {
+                if (rawLine == null)
+                {
+                    continue;
+                }
+                final String line = stripAnsi(rawLine).trim();
+                if (line.contains("Failed to parse playbook")
+                        || line.contains("Caused by:")
+                        || line.contains("java.lang.RuntimeException:")
+                        || line.contains("java.lang.IllegalArgumentException:")
+                        || (line.startsWith("[ERROR]") && !line.contains("Spawning Maven Subprocess")))
+                {
+                    matchingLines.add(line);
+                }
+            }
+        }
+
+        if (matchingLines.isEmpty())
+        {
+            return null;
+        }
+
+        final StringBuilder sb = new StringBuilder();
+        for (final String match : matchingLines)
+        {
+            String cleaned = match;
+            if (cleaned.startsWith("[Aura Subprocess] "))
+            {
+                cleaned = cleaned.substring("[Aura Subprocess] ".length()).trim();
+            }
+            if (cleaned.startsWith("[ERROR] "))
+            {
+                cleaned = cleaned.substring("[ERROR] ".length()).trim();
+            }
+
+            if (!sb.isEmpty())
+            {
+                sb.append(" ");
+            }
+            sb.append(cleaned);
+        }
+
+        final String result = sb.toString().trim();
+        return result.isEmpty() ? null : result;
     }
 }

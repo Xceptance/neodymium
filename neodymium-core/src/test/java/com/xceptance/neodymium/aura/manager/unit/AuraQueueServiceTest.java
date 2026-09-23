@@ -359,6 +359,21 @@ public final class AuraQueueServiceTest
         Assertions.assertEquals(List.of("1", "2"), ids, "Combined batch must contain all selected dataset IDs");
     }
 
+    @Test
+    public void testExtractSubprocessErrorMessage()
+    {
+        final List<String> logs = List.of(
+            "[INFO] Spawning Maven Subprocess for YAML test: tests/stokke/stokkeOrderPayPalTest.yml...",
+            "2026-09-23T09:22:17.079+02:00  INFO 7025 --- [aura-manager] [raQueueExecutor] c.x.neodymium.aura.AuraQueueService : [Aura Subprocess] java.lang.RuntimeException: Failed to parse playbook: tests/stokke/stokkeOrderPayPalTest.yml",
+            "2026-09-23T09:22:17.081+02:00  INFO 7025 --- [aura-manager] [raQueueExecutor] c.x.neodymium.aura.AuraQueueService : [Aura Subprocess] Caused by: java.lang.IllegalArgumentException: Invalid playbook step format in file: proceed-to-payment.steps."
+        );
+
+        final String extracted = AuraQueueService.extractSubprocessErrorMessage(logs);
+        Assertions.assertNotNull(extracted, "Extracted error message must not be null");
+        Assertions.assertTrue(extracted.contains("Failed to parse playbook: tests/stokke/stokkeOrderPayPalTest.yml"), "Extracted error must contain main failure");
+        Assertions.assertTrue(extracted.contains("Invalid playbook step format in file: proceed-to-payment.steps"), "Extracted error must contain cause");
+    }
+
     /**
      * Listener recording every execution payload received via {@link #onTestExecutionCompleted(String, Map)}.
      */
