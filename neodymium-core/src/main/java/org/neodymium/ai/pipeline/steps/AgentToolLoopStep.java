@@ -88,6 +88,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 /**
  * Pipeline step driving iterative agent tool execution (Think -&gt; ToolCall -&gt; Observe -&gt; Finish)
@@ -370,7 +371,7 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("### OPERATING RULES:\n");
         systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps.\n");
         systemPrompt.append("2. GROUNDING & EXECUTION: Selectors are evaluated via Selenide (standard CSS, XPath, or text matching). Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Never propose the exact same failing tool call without changing selector or state.\n");
-        systemPrompt.append("3. ACTION STEPS: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, checking checkboxes/radios, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. When interacting with form controls, use 'fill' for text inputs, 'select' for dropdown menus, and 'check' for checkboxes and radio buttons (which is idempotent and sets the target state) rather than 'click'. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps. Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
+        systemPrompt.append("3. ACTION STEPS: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, checking checkboxes/radios, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. When interacting with form controls, use 'fill' for text inputs, 'select' for dropdown menus, and 'check' for checkboxes and radio buttons (which is idempotent and sets the target state) rather than 'click'. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps. If an action fails (e.g., target element is disabled, missing, or non-interactable), DO NOT substitute uncommanded assertions (such as 'assert_element_state') and DO NOT call 'complete_step'; report the failure. Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
         systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
         if (isVisual)
         {
@@ -390,6 +391,9 @@ public final class AgentToolLoopStep implements PipelineStep
         JsonNode lastArguments = null;
         int consecutiveIdenticalCalls = 0;
         boolean lastProposedToolWasCompleteStep = false;
+        boolean hasActionToolFailed = false;
+        String lastFailedActionTarget = null;
+        String lastActionFailureMessage = null;
         List<SutAttachment> pendingVisualAttachments = null;
         String pendingVisualNote = null;
 
@@ -709,6 +713,13 @@ public final class AgentToolLoopStep implements PipelineStep
                 // If complete_step called -> Stop Criterion 1: Goal Accomplished
                 if ("complete_step".equals(currentCall.toolName()))
                 {
+                    if (!isVisual && isInteractiveActionInstruction(rawInstruction, instruction, step)
+                            && hasActionToolFailed)
+                    {
+                        throw new ConclusiveFailureException("Cannot complete step: Action instruction '" + instruction
+                                + "' failed: " + lastActionFailureMessage);
+                    }
+
                     if (milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size())
                     {
                         if (!lastProposedToolWasCompleteStep)
@@ -821,6 +832,36 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
 
                 lastResult = result;
+
+                if (isMutatingTool(effectiveCall.toolName()))
+                {
+                    final String callSelector = effectiveCall.arguments() != null
+                            ? effectiveCall.arguments().path("selector").asText(null)
+                            : null;
+                    if (result != null && result.status() == ToolResult.Status.SUCCESS)
+                    {
+                        if (lastFailedActionTarget == null || matchesTarget(instruction, lastFailedActionTarget, callSelector))
+                        {
+                            hasActionToolFailed = false;
+                            lastActionFailureMessage = null;
+                            lastFailedActionTarget = null;
+                        }
+                        else
+                        {
+                            LOGGER.warn("Mutating tool '{}' on '{}' succeeded, but cannot satisfy step targeting '{}'",
+                                    effectiveCall.toolName(), callSelector, lastFailedActionTarget);
+                        }
+                    }
+                    else
+                    {
+                        hasActionToolFailed = true;
+                        lastActionFailureMessage = result != null ? result.content() : "Action failed";
+                        if (callSelector != null && !callSelector.isBlank())
+                        {
+                            lastFailedActionTarget = callSelector.trim();
+                        }
+                    }
+                }
 
                 if (result != null && result.variables().containsKey("requestedContextLevel"))
                 {
@@ -1728,6 +1769,45 @@ public final class AgentToolLoopStep implements PipelineStep
                 || "clear_cookies".equals(clean)
                 || "clear".equals(clean)
                 || "execute_script".equals(clean);
+    }
+
+    private static final Pattern VERIFICATION_PREFIX_PATTERN = Pattern.compile(
+            "(?i)^(assert|verify|confirm|validate|ensure|check\\s+that)\\b");
+
+    private static boolean isInteractiveActionInstruction(final String rawInstruction, final String instruction, final PlaybookStep step)
+    {
+        if (step != null && step.hasInteractiveSubSteps())
+        {
+            return true;
+        }
+        final String text = instruction != null && !instruction.isBlank() ? instruction : rawInstruction;
+        if (text == null || text.isBlank())
+        {
+            return false;
+        }
+        final String trimmed = text.trim();
+        if (VERIFICATION_PREFIX_PATTERN.matcher(trimmed).find())
+        {
+            return false;
+        }
+        return PlaybookStep.INTERACTIVE_ACTION_PATTERN.matcher(trimmed).find();
+    }
+
+    private static boolean matchesTarget(final String instruction, final String failedTarget, final String callSelector)
+    {
+        if (failedTarget == null || callSelector == null)
+        {
+            return true;
+        }
+        if (failedTarget.equalsIgnoreCase(callSelector))
+        {
+            return true;
+        }
+        if (instruction != null && instruction.contains(failedTarget))
+        {
+            return callSelector.contains(failedTarget) || failedTarget.contains(callSelector);
+        }
+        return true;
     }
 
     private static boolean hasInteractiveMilestones(final ExecutionContext context)

@@ -202,6 +202,17 @@ public class BrowserToolsTest
             Assertions.assertTrue(Selenide.$("#contact-phone").isSelected());
             final JsonNode jsonSelect = mapper.readTree(resSelectRadio.content());
             Assertions.assertTrue(jsonSelect.path("delegatedToCheck").asBoolean());
+
+            // 8. Attempting to check a disabled element returns ERROR
+            final ToolCall callDisabled = new ToolCall("call-dis-1", "check", mapper.createObjectNode().put("selector", "#disabled-box").put("checked", true));
+            final ToolResult resDisabled = checkTool.execute(callDisabled, null);
+            Assertions.assertEquals(ToolResult.Status.ERROR, resDisabled.status());
+            Assertions.assertTrue(resDisabled.content().contains("Element is disabled and cannot be checked"));
+
+            // 9. Attempting to click a disabled element fails
+            final AiTool clickTool = this.registry.getTool("click").orElseThrow();
+            final ToolCall callClickDisabled = new ToolCall("call-dis-2", "click", mapper.createObjectNode().put("selector", "#disabled-box"));
+            Assertions.assertThrows(AssertionError.class, () -> clickTool.execute(callClickDisabled, null));
         }
         finally
         {

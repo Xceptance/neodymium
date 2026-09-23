@@ -373,6 +373,10 @@ public final class BrowserToolProvider
 
                 if (fallbackTargetEl == null)
                 {
+                    if (el.is(Condition.disabled) || !el.is(Condition.enabled))
+                    {
+                        throw e;
+                    }
                     try
                     {
                         SelenideElementFinder.scrollIntoViewIfNeeded(el);
@@ -1049,6 +1053,12 @@ public final class BrowserToolProvider
                 final SelenideElement el = findElement(selector).shouldBe(Condition.exist);
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
 
+                if (el.is(Condition.disabled) || !el.is(Condition.enabled))
+                {
+                    return ToolResult.error(call.callId(),
+                            errorNode("Element is disabled and cannot be checked: " + selector).toString());
+                }
+
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 DomFeatureVector featureVector = null;
                 if (driver != null)
@@ -1078,10 +1088,16 @@ public final class BrowserToolProvider
                     }
                     catch (final Exception | AssertionError e)
                     {
+                        if (el.is(Condition.disabled) || !el.is(Condition.enabled))
+                        {
+                            return ToolResult.error(call.callId(),
+                                    errorNode("Element is disabled and cannot be checked: " + selector).toString());
+                        }
+
                         try
                         {
                             final SelenideElement parentLabel = el.closest("label");
-                            if (parentLabel.exists() && parentLabel.is(Condition.visible))
+                            if (parentLabel.exists() && parentLabel.is(Condition.visible) && parentLabel.is(Condition.enabled))
                             {
                                 parentLabel.click();
                             }
@@ -1095,6 +1111,12 @@ public final class BrowserToolProvider
                             Selenide.executeJavaScript("arguments[0].click();", el);
                         }
                     }
+                }
+
+                if (el.isSelected() != targetChecked)
+                {
+                    return ToolResult.error(call.callId(),
+                            errorNode("Failed to reach desired checked state (" + targetChecked + ") for selector: " + selector).toString());
                 }
 
                 final ObjectNode res = successNode("check");
