@@ -61,6 +61,9 @@ public class AuraGlobalModelAdvice
                 model.addAttribute("hasRunContext", false);
             }
             model.addAttribute("running", running);
+            model.addAttribute("hasParseError", false);
+            model.addAttribute("parseErrorMessage", "");
+            model.addAttribute("editorMode", "visual");
         }
     }
 }

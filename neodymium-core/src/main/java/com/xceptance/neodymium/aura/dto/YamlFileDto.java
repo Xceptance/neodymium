@@ -30,11 +30,30 @@ public final class YamlFileDto
 {
     public final String file;
     public final List<DatasetDto> datasets;
+    public final boolean hasError;
+    public final String errorMessage;
 
     public YamlFileDto(final String file, final List<DatasetDto> datasets)
     {
+        this(file, datasets, false, null);
+    }
+
+    public YamlFileDto(final String file, final List<DatasetDto> datasets, final boolean hasError, final String errorMessage)
+    {
         this.file = file;
         this.datasets = datasets;
+        this.hasError = hasError;
+        this.errorMessage = errorMessage;
+    }
+
+    public boolean isHasError()
+    {
+        return hasError;
+    }
+
+    public String getErrorMessage()
+    {
+        return errorMessage;
     }
 
     public String getFileName()

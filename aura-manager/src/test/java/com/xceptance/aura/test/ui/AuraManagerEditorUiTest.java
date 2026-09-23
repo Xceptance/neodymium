@@ -295,4 +295,47 @@ public final class AuraManagerEditorUiTest
         rows.get(1).shouldHave(Condition.cssClass("active-line"));
         rows.get(1).$(".step-content").shouldHave(Condition.text("Step C"));
     }
+
+    @Test
+    public final void testRemoveDataSetColumnWithConfirmation()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Initially we should have 3 th elements: Key col, Iteration 1, Add Iteration button col
+        final ElementsCollection initialThs = $$("#matrixHeaderRow th");
+        Assertions.assertEquals(3, initialThs.size(), "Should initially have 3 header columns (Key, Iteration 1, Add button).");
+        initialThs.get(1).$(".btn-remove-iteration").shouldBe(Condition.visible);
+
+        // Add a second iteration column
+        $(".add-col-th-btn").shouldBe(Condition.visible).click();
+        final ElementsCollection thsAfterAdd = $$("#matrixHeaderRow th");
+        Assertions.assertEquals(4, thsAfterAdd.size(), "Should have 4 header columns after adding an iteration.");
+        thsAfterAdd.get(2).$(".btn-remove-iteration").shouldBe(Condition.visible);
+
+        // 1. Decline confirmation: column must NOT be removed
+        Selenide.executeJavaScript("window.confirm = function(msg) { return false; };");
+        thsAfterAdd.get(2).$(".btn-remove-iteration").click();
+        final ElementsCollection thsAfterCancel = $$("#matrixHeaderRow th");
+        Assertions.assertEquals(4, thsAfterCancel.size(), "Column should remain when confirmation is cancelled.");
+
+        // 2. Accept confirmation: column MUST be removed
+        Selenide.executeJavaScript("window.confirm = function(msg) { return true; };");
+        thsAfterCancel.get(2).$(".btn-remove-iteration").click();
+
+        final ElementsCollection thsAfterDelete = $$("#matrixHeaderRow th");
+        Assertions.assertEquals(3, thsAfterDelete.size(), "Column should be removed when confirmed.");
+        thsAfterDelete.get(1).shouldHave(Condition.text("Iteration 1"));
+
+        // Verify data rows in tbody have also removed the column
+        final ElementsCollection firstRowTds = $$("#transposedGrid tbody tr").first().$$("td");
+        // Row consists of: variable key td, 1 iteration td, and 1 trailing empty td = 3 tds
+        Assertions.assertEquals(3, firstRowTds.size(), "Tbody row should have 3 cells (Key, Iteration 1, and trailing cell).");
+    }
 }

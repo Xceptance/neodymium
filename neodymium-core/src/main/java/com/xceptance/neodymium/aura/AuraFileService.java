@@ -102,7 +102,9 @@ public final class AuraFileService
             final Map<String, Object> details = getFileDetails(yamlFile);
             @SuppressWarnings("unchecked")
             final List<DatasetDto> datasets = (List<DatasetDto>) details.get("datasets");
-            responseList.add(new YamlFileDto(file, datasets != null ? datasets : new ArrayList<>()));
+            final String error = (String) details.get("error");
+            final boolean hasError = Boolean.TRUE.equals(details.get("hasError")) || (error != null && !error.isBlank());
+            responseList.add(new YamlFileDto(file, datasets != null ? datasets : new ArrayList<>(), hasError, error));
         }
         return responseList;
     }
@@ -279,8 +281,12 @@ public final class AuraFileService
         }
         catch (final Exception e)
         {
-            LOGGER.error("Failed to parse YAML file details for: " + file.getAbsolutePath(), e);
+            final String summary = e.getMessage() != null ? e.getMessage().replace('\n', ' ').replaceAll(" +", " ") : "Unknown syntax error";
+            LOGGER.warn("Defective YAML file detected [{}]: {}", file.getName(), summary);
+            LOGGER.debug("Stack trace for YAML parse failure:", e);
+            details.put("hasError", true);
             details.put("error", e.getMessage());
+            details.put("datasets", new ArrayList<DatasetDto>());
         }
         return details;
     }
@@ -502,13 +508,23 @@ public final class AuraFileService
                         }
                     }
                 }
+                result.put("hasError", false);
+                result.put("error", null);
             }
             catch (final Exception e)
             {
-                LOGGER.error("Failed to parse YAML content sections", e);
+                final String summary = e.getMessage() != null ? e.getMessage().replace('\n', ' ').replaceAll(" +", " ") : "Unknown syntax error";
+                LOGGER.warn("Defective YAML content syntax: {}", summary);
+                LOGGER.debug("Stack trace for YAML content parse failure:", e);
+                result.put("hasError", true);
+                result.put("error", e.getMessage());
             }
         }
-
+        else
+        {
+            result.put("hasError", false);
+            result.put("error", null);
+        }
 
         result.put("beforeSteps", beforeSteps);
         result.put("mainSteps", mainSteps);

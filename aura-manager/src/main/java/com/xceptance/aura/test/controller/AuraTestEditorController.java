@@ -69,6 +69,11 @@ public class AuraTestEditorController
             model.addAttribute("fileContent", content);
 
             final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+            final boolean hasParseError = Boolean.TRUE.equals(sections.get("hasError"));
+            final String parseErrorMessage = (String) sections.get("error");
+            model.addAttribute("hasParseError", hasParseError);
+            model.addAttribute("parseErrorMessage", parseErrorMessage != null ? parseErrorMessage : "");
+            model.addAttribute("editorMode", hasParseError ? "raw" : "visual");
             model.addAttribute("beforeSteps", sections.get("beforeSteps"));
             model.addAttribute("mainSteps", sections.get("mainSteps"));
             model.addAttribute("afterSteps", sections.get("afterSteps"));
@@ -82,6 +87,9 @@ public class AuraTestEditorController
             model.addAttribute("editingFileContent", "");
             model.addAttribute("currentTestFile", "");
             model.addAttribute("fileContent", "");
+            model.addAttribute("hasParseError", false);
+            model.addAttribute("parseErrorMessage", "");
+            model.addAttribute("editorMode", "visual");
             model.addAttribute("beforeSteps", List.of());
             model.addAttribute("mainSteps", List.of());
             model.addAttribute("afterSteps", List.of());

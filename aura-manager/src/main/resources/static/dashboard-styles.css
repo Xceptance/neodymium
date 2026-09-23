@@ -588,10 +588,12 @@
 
         /* Editor */
         .editor-container {
-            flex-grow: 1;
+            flex: 1 1 0%;
             display: flex;
             flex-direction: column;
+            height: 100%;
             min-height: 0;
+            overflow: hidden;
         }
 
         .editor-actions {
@@ -2771,8 +2773,18 @@
     text-overflow: ellipsis;
 }
 
+.visual-editor-container {
+    flex: 1 1 0%;
+    height: 100%;
+    min-height: 0;
+    width: 100%;
+    overflow: hidden;
+    display: flex;
+}
+
 .editor-main-area {
     flex: 1 1 0%;
+    height: 100%;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -2781,6 +2793,42 @@
     overflow-x: hidden;
     padding: 20px 24px;
     gap: 20px;
+}
+
+.editor-raw-panel {
+    flex: 1 1 0%;
+    height: 100%;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-main);
+    overflow: hidden;
+    padding: 20px 24px;
+}
+
+.raw-yaml-textarea {
+    flex: 1;
+    width: 100%;
+    min-height: 400px;
+    box-sizing: border-box;
+    padding: 16px;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 13px;
+    line-height: 1.6;
+    background: var(--bg-sidebar);
+    color: var(--text-primary);
+    border: none;
+    border-radius: 0 0 var(--border-radius) var(--border-radius);
+    resize: none;
+    outline: none;
+    tab-size: 2;
+    -moz-tab-size: 2;
+    overflow-y: auto;
+}
+
+.raw-yaml-textarea:focus {
+    outline: none;
 }
 
 .editor-code-panel {
@@ -3216,6 +3264,40 @@
 
 .transposed-matrix input.cell-val:focus {
     background: var(--sidebar-active);
+}
+
+.iter-header-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    white-space: nowrap;
+}
+
+.btn-remove-iteration {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 2px;
+    margin: 0;
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    opacity: 0.6;
+    transition: var(--transition);
+}
+
+.btn-remove-iteration:hover {
+    color: var(--danger, #ef4444);
+    background: rgba(239, 68, 68, 0.12);
+    opacity: 1;
+}
+
+.btn-remove-iteration .material-symbols-outlined {
+    font-size: 14px;
 }
 
 .add-col-th-btn {

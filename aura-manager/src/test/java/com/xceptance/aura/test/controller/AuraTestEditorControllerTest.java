@@ -68,6 +68,36 @@ public class AuraTestEditorControllerTest
         Assertions.assertEquals("fragments/editor :: editorPanelContent", view);
         Assertions.assertEquals("test.yaml", model.getAttribute("activeEditingFile"));
         Assertions.assertEquals(sampleYaml, model.getAttribute("editingFileContent"));
+        Assertions.assertEquals(false, model.getAttribute("hasParseError"));
+        Assertions.assertEquals("visual", model.getAttribute("editorMode"));
+    }
+
+    @Test
+    public void testGetEditorFragmentWithDefectiveYamlFile() throws Exception
+    {
+        final Model model = new ConcurrentModel();
+        final String brokenYaml = "steps: |\n    Open url\n  Close banner";
+        final String parseError = "expected <block end>, but found '<scalar>'";
+        Mockito.when(fileService.readYamlFileContent("broken.yaml")).thenReturn(brokenYaml);
+        Mockito.when(fileService.parsePlaybookSections(brokenYaml)).thenReturn(Map.of(
+            "hasError", true,
+            "error", parseError,
+            "beforeSteps", List.of(),
+            "mainSteps", List.of(),
+            "afterSteps", List.of(),
+            "dataMatrix", List.of(),
+            "varKeys", List.of()
+        ));
+        Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of());
+
+        final String view = controller.getEditorFragment("broken.yaml", model);
+
+        Assertions.assertEquals("fragments/editor :: editorPanelContent", view);
+        Assertions.assertEquals("broken.yaml", model.getAttribute("activeEditingFile"));
+        Assertions.assertEquals(brokenYaml, model.getAttribute("fileContent"));
+        Assertions.assertEquals(true, model.getAttribute("hasParseError"));
+        Assertions.assertEquals(parseError, model.getAttribute("parseErrorMessage"));
+        Assertions.assertEquals("raw", model.getAttribute("editorMode"));
     }
 
     @Test

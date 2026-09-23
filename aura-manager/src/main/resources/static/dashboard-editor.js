@@ -389,7 +389,16 @@ async function saveYamlFile() {
         }
     }
     if (!activeEditingFile) return;
-    const yamlContent = compilePlaybookToYaml();
+
+    let yamlContent;
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        yamlContent = rawTextarea ? rawTextarea.value : '';
+    } else {
+        yamlContent = compilePlaybookToYaml();
+    }
     initialEditorContent = yamlContent;
     checkEditorDirtyStatus();
 
@@ -401,10 +410,13 @@ async function saveYamlFile() {
         });
         const data = await res.json();
         if (data.status === 'SUCCESS' || data.success) {
-            initialEditorContent = compilePlaybookToYaml();
+            initialEditorContent = yamlContent;
             checkEditorDirtyStatus();
             showToast("💾 Saved playbook file successfully", "success");
             loadFiles();
+            if (isRaw) {
+                openYamlEditor(activeEditingFile);
+            }
         } else {
             showToast("Error saving: " + (data.error || "Unknown error"), "error");
         }
@@ -571,18 +583,126 @@ function moveQueueItem(index, direction) {
 window.moveQueueItem = moveQueueItem;
 
 // ============================================================================
-// Visual Playbook Editor Interactivity Module
+// Visual Playbook Editor Interactivity Module & Raw Mode
 // ============================================================================
 
 let currentLineCount = 10;
 let activeLineNum = 1;
 let lastCaretOffset = 0;
+let currentEditorMode = 'visual';
 
 window.currentLineCount = currentLineCount;
 window.activeLineNum = activeLineNum;
 window.lastCaretOffset = lastCaretOffset;
+window.currentEditorMode = currentEditorMode;
+
+function setEditorMode(mode) {
+    const editorPanel = document.getElementById('editorPanel');
+    const visualContainer = document.getElementById('visualEditorContainer');
+    const rawPanel = document.getElementById('rawEditorPanel');
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    const btnVisual = document.getElementById('btnModeVisual');
+    const btnRaw = document.getElementById('btnModeRaw');
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    const reviewBtn = document.getElementById('reviewStepsBtn');
+
+    if (mode === 'raw') {
+        currentEditorMode = 'raw';
+        window.currentEditorMode = 'raw';
+        if (visualContainer && rawPanel) {
+            if (visualContainer.style.display !== 'none') {
+                const compiled = compilePlaybookToYaml();
+                if (rawTextarea && (!rawTextarea.value || rawTextarea.value.trim() === '')) {
+                    rawTextarea.value = compiled;
+                }
+            }
+            visualContainer.style.display = 'none';
+            rawPanel.style.display = 'flex';
+        }
+        if (btnVisual) {
+            btnVisual.style.background = 'transparent';
+            btnVisual.style.color = 'var(--text-secondary)';
+            btnVisual.style.fontWeight = 'normal';
+            btnVisual.style.opacity = btnVisual.disabled ? '0.5' : '0.8';
+        }
+        if (btnRaw) {
+            btnRaw.style.background = 'var(--accent)';
+            btnRaw.style.color = '#fff';
+            btnRaw.style.fontWeight = '600';
+            btnRaw.style.opacity = '1';
+        }
+        if (undoBtn) undoBtn.disabled = true;
+        if (redoBtn) redoBtn.disabled = true;
+        if (reviewBtn) reviewBtn.disabled = true;
+    } else {
+        if (editorPanel && editorPanel.getAttribute('data-has-error') === 'true') {
+            showToast("Cannot switch to Visual Editor: file contains YAML syntax errors.", "error");
+            return;
+        }
+        currentEditorMode = 'visual';
+        window.currentEditorMode = 'visual';
+        if (visualContainer && rawPanel) {
+            rawPanel.style.display = 'none';
+            visualContainer.style.display = 'flex';
+        }
+        if (btnVisual) {
+            btnVisual.style.background = 'var(--accent)';
+            btnVisual.style.color = '#fff';
+            btnVisual.style.fontWeight = '600';
+            btnVisual.style.opacity = '1';
+        }
+        if (btnRaw) {
+            btnRaw.style.background = 'transparent';
+            btnRaw.style.color = 'var(--text-secondary)';
+            btnRaw.style.fontWeight = 'normal';
+            btnRaw.style.opacity = '0.8';
+        }
+        updateUndoRedoUI();
+        if (reviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
+            reviewBtn.disabled = false;
+        }
+    }
+}
+window.setEditorMode = setEditorMode;
+
+function handleRawYamlInput(textarea) {
+    if (!textarea) return;
+    const hiddenInput = document.getElementById('editorContent');
+    if (hiddenInput) {
+        hiddenInput.value = textarea.value;
+    }
+    checkEditorDirtyStatus();
+}
+window.handleRawYamlInput = handleRawYamlInput;
 
 function initVisualPlaybookEditor() {
+    const editorPanel = document.getElementById('editorPanel');
+    if (!editorPanel) return;
+
+    const hasError = editorPanel.getAttribute('data-has-error') === 'true';
+    const initialMode = editorPanel.getAttribute('data-mode') || (hasError ? 'raw' : 'visual');
+
+    if (hasError || initialMode === 'raw') {
+        currentEditorMode = 'raw';
+        window.currentEditorMode = 'raw';
+        setEditorMode('raw');
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea) {
+            initialEditorContent = rawTextarea.value;
+            const hiddenInput = document.getElementById('editorContent');
+            if (hiddenInput) {
+                hiddenInput.value = rawTextarea.value;
+            }
+        }
+        checkEditorDirtyStatus();
+        return;
+    }
+
+    currentEditorMode = 'visual';
+    window.currentEditorMode = 'visual';
+    setEditorMode('visual');
+
     const stepsList = document.getElementById('stepsList');
     if (!stepsList) return;
 
@@ -1894,7 +2014,15 @@ function addMatrixColumnInline() {
     
     const th = document.createElement('th');
     th.id = `iterHeader_${colCount}`;
-    th.innerHTML = `<span>Iteration ${colCount}</span>`;
+    th.className = 'iter-col-header';
+    th.innerHTML = `
+        <div class="iter-header-content">
+            <span>Iteration ${colCount}</span>
+            <button type="button" class="btn-remove-iteration" title="Remove Data Set" onclick="removeMatrixColumn(this)">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+    `;
     
     headerRow.insertBefore(th, headerRow.cells[headerRow.cells.length - 1]);
 
@@ -1902,15 +2030,59 @@ function addMatrixColumnInline() {
     tbodyRows.forEach((tr, rowIdx) => {
         const td = document.createElement('td');
         if (rowIdx === 0) {
-            td.innerHTML = `<input type="text" class="cell-val" value="custom_${colCount}" oninput="compilePlaybookToYaml()">`;
+            td.innerHTML = `<input type="text" class="cell-val" value="custom_${colCount}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">`;
         } else {
-            td.innerHTML = '<input type="text" class="cell-val" value="" placeholder="empty" oninput="compilePlaybookToYaml()">';
+            td.innerHTML = '<input type="text" class="cell-val" value="" placeholder="empty" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">';
         }
         tr.insertBefore(td, tr.cells[tr.cells.length - 1]);
     });
     compilePlaybookToYaml();
+    if (typeof debouncedPushSnapshot === 'function') {
+        debouncedPushSnapshot();
+    }
+    if (typeof checkEditorDirtyStatus === 'function') {
+        checkEditorDirtyStatus();
+    }
 }
 window.addMatrixColumnInline = addMatrixColumnInline;
+
+function removeMatrixColumn(btn) {
+    if (!btn) return;
+    const th = btn.closest('th');
+    if (!th) return;
+    const headerRow = th.parentElement;
+    if (!headerRow) return;
+
+    const colIndex = th.cellIndex;
+    if (colIndex <= 0 || colIndex >= headerRow.cells.length - 1) {
+        return;
+    }
+
+    const iterSpan = th.querySelector('.iter-header-content span') || th.querySelector('span');
+    const iterName = iterSpan ? iterSpan.innerText.trim() : `Iteration ${colIndex}`;
+    const confirmed = confirm(`Are you sure you want to remove ${iterName}?`);
+    if (!confirmed) {
+        return;
+    }
+
+    headerRow.deleteCell(colIndex);
+
+    const tbodyRows = document.querySelectorAll('#transposedGrid tbody tr');
+    tbodyRows.forEach(tr => {
+        if (tr.cells.length > colIndex) {
+            tr.deleteCell(colIndex);
+        }
+    });
+
+    compilePlaybookToYaml();
+    if (typeof debouncedPushSnapshot === 'function') {
+        debouncedPushSnapshot();
+    }
+    if (typeof checkEditorDirtyStatus === 'function') {
+        checkEditorDirtyStatus();
+    }
+}
+window.removeMatrixColumn = removeMatrixColumn;
 
 /* Undo/Redo & Unsaved State Management */
 let undoStack = [];
@@ -1920,6 +2092,15 @@ let undoDebounceTimer = null;
 
 function isEditorDirty() {
     if (!activeEditingFile) return false;
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea && initialEditorContent != null) {
+            return rawTextarea.value !== initialEditorContent;
+        }
+        return false;
+    }
     const currentYaml = compilePlaybookToYaml();
     if (initialEditorContent && currentYaml !== initialEditorContent) {
         return true;
@@ -1968,7 +2149,13 @@ function getEditorSnapshot() {
 
     const matrixTable = document.querySelector('#transposedGrid');
     const matrixData = [];
+    const matrixHeaders = [];
     if (matrixTable) {
+        const headerCells = matrixTable.querySelectorAll('thead th');
+        for (let i = 1; i < headerCells.length - 1; i++) {
+            const span = headerCells[i].querySelector('.iter-header-content span') || headerCells[i].querySelector('span');
+            matrixHeaders.push(span ? span.innerText.trim() : `Iteration ${i}`);
+        }
         const rows = matrixTable.querySelectorAll('tbody tr');
         rows.forEach(row => {
             const keyInput = row.querySelector('.var-key-input');
@@ -1985,7 +2172,8 @@ function getEditorSnapshot() {
         beforeSteps: captureBlock('beforeStepsList'),
         steps: captureBlock('stepsList'),
         afterSteps: captureBlock('afterStepsList'),
-        matrixData
+        matrixData,
+        matrixHeaders
     };
 }
 window.getEditorSnapshot = getEditorSnapshot;
@@ -2066,6 +2254,27 @@ function restoreEditorSnapshot(snap) {
     rebuildBlock('beforeStepsList', snap.beforeSteps);
     rebuildBlock('stepsList', snap.steps);
     rebuildBlock('afterStepsList', snap.afterSteps);
+
+    const matrixHeaderRow = document.getElementById('matrixHeaderRow');
+    if (matrixHeaderRow && snap.matrixHeaders) {
+        while (matrixHeaderRow.cells.length > 2) {
+            matrixHeaderRow.deleteCell(1);
+        }
+        snap.matrixHeaders.forEach((headerTitle, idx) => {
+            const th = document.createElement('th');
+            th.id = `iterHeader_${idx + 1}`;
+            th.className = 'iter-col-header';
+            th.innerHTML = `
+                <div class="iter-header-content">
+                    <span>${headerTitle}</span>
+                    <button type="button" class="btn-remove-iteration" title="Remove Data Set" onclick="removeMatrixColumn(this)">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+            `;
+            matrixHeaderRow.insertBefore(th, matrixHeaderRow.cells[matrixHeaderRow.cells.length - 1]);
+        });
+    }
 
     const matrixTbody = document.querySelector('#transposedGrid tbody');
     if (matrixTbody && snap.matrixData) {
