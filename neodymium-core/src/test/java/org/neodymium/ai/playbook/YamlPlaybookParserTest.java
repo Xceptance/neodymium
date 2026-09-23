@@ -113,7 +113,8 @@ public class YamlPlaybookParserTest
     {
         final String yamlContent = """
             steps:
-              - invalid_key: "some value"
+              - invalid_key1: "some value"
+                invalid_key2: "another value"
             """;
 
         final InMemoryResourceManager manager = new InMemoryResourceManager();
@@ -124,7 +125,7 @@ public class YamlPlaybookParserTest
             parser.parse("invalid-map-playbook.yaml", manager);
         });
 
-        assertEquals("Invalid playbook step format in file: invalid-map-playbook.yaml. Expected string step, 'include' map, or 'instruction' map, but found map keys: [invalid_key]", ex.getMessage());
+        assertEquals("Invalid playbook step format in file: invalid-map-playbook.yaml. Expected string step, 'include' map, or 'instruction' map, but found map keys: [invalid_key1, invalid_key2]", ex.getMessage());
     }
 
     @Test
@@ -333,20 +334,11 @@ public class YamlPlaybookParserTest
         final Playbook playbook = parser.parse("main.yaml", manager);
 
         assertNotNull(playbook);
-        assertEquals(3, playbook.getSteps().size());
-
-        final PlaybookStep beforeInclude = playbook.getSteps().get(0);
-        assertEquals("_include: setup.yaml", beforeInclude.getInstruction());
-        assertEquals(2, beforeInclude.getSubSteps().size());
-        assertEquals("Setup step 1", beforeInclude.getSubSteps().get(0).getInstruction());
-        assertEquals("Setup step 2", beforeInclude.getSubSteps().get(1).getInstruction());
-
-        assertEquals("Main step", playbook.getSteps().get(1).getInstruction());
-
-        final PlaybookStep afterInclude = playbook.getSteps().get(2);
-        assertEquals("_include: teardown.yaml", afterInclude.getInstruction());
-        assertEquals(1, afterInclude.getSubSteps().size());
-        assertEquals("Teardown step 1", afterInclude.getSubSteps().get(0).getInstruction());
+        assertEquals(4, playbook.getSteps().size(), "Static includes in before/after blocks should flatten steps directly into main steps list.");
+        assertEquals("Setup step 1", playbook.getSteps().get(0).getInstruction());
+        assertEquals("Setup step 2", playbook.getSteps().get(1).getInstruction());
+        assertEquals("Main step", playbook.getSteps().get(2).getInstruction());
+        assertEquals("Teardown step 1", playbook.getSteps().get(3).getInstruction());
     }
 
     @Test
@@ -421,5 +413,26 @@ public class YamlPlaybookParserTest
         assertEquals(27, playbook.getSteps().size());
         assertEquals(3, playbook.getDataSets().size());
         assertEquals("US", playbook.getDataSets().get(0).get("testId").value());
+    }
+
+    @Test
+    public void testParseConditionalIncludePreservesAsDynamicStep() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - "If the product has xpdp configurator features then _include: fragments/configure-xpdp.steps, else _include: fragments/add-simple.steps"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("conditional-include-playbook.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("conditional-include-playbook.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getSteps().size(), "Conditional include step should remain a single dynamic step without pre-parsed substeps.");
+        final PlaybookStep step = playbook.getSteps().get(0);
+        assertEquals("If the product has xpdp configurator features then _include: fragments/configure-xpdp.steps, else _include: fragments/add-simple.steps", step.getInstruction());
+        assertEquals(0, step.getSubSteps().size(), "Substeps should be empty until runtime LLM evaluation.");
     }
 }

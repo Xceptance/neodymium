@@ -1224,6 +1224,19 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 }
 
 /* LLM SUB-SECTION COLLAPSIBLE ACCORDIONS */
+.llm-call-card .llm-call-body {
+    display: none;
+}
+.llm-call-card.expanded .llm-call-body {
+    display: flex;
+}
+.llm-call-card .llm-call-header .llm-subsection-chevron {
+    transition: transform 0.2s ease;
+}
+.llm-call-card.expanded .llm-call-header .llm-subsection-chevron {
+    transform: rotate(90deg);
+}
+
 .llm-subsection-card {
     background: #ffffff;
     border: 1px solid #cbd5e1;

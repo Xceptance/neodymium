@@ -125,25 +125,10 @@ public final class PlaybookParserTest
         assertNotNull(playbook);
         
         final List<PlaybookStep> steps = playbook.getSteps();
-        assertEquals(2, steps.size());
-
-        // First step should be the include step: 'common/setup.yaml'
-        final PlaybookStep setupInclude = steps.get(0);
-        assertEquals("_include: common/setup.yaml", setupInclude.getInstruction());
-        assertTrue(setupInclude.isComposite());
-        assertEquals(2, setupInclude.getSubSteps().size());
-
-        // Sub-steps of setup.yaml
-        assertEquals("Open homepage", setupInclude.getSubSteps().get(0).getInstruction());
-        
-        final PlaybookStep loginInclude = setupInclude.getSubSteps().get(1);
-        assertEquals("_include: login.yaml", loginInclude.getInstruction());
-        assertTrue(loginInclude.isComposite());
-        assertEquals(1, loginInclude.getSubSteps().size());
-        assertEquals("Enter credentials", loginInclude.getSubSteps().get(0).getInstruction());
-
-        // Second step of main.yaml
-        assertEquals("Click continue", steps.get(1).getInstruction());
+        assertEquals(3, steps.size(), "Nested static includes should flatten directly into main steps list.");
+        assertEquals("Open homepage", steps.get(0).getInstruction());
+        assertEquals("Enter credentials", steps.get(1).getInstruction());
+        assertEquals("Click continue", steps.get(2).getInstruction());
     }
 
     /**
@@ -382,21 +367,13 @@ public final class PlaybookParserTest
 
         assertNotNull(playbook);
         final List<PlaybookStep> steps = playbook.getSteps();
-        assertEquals(3, steps.size());
+        assertEquals(6, steps.size(), "Static includes should flatten directly into main steps list.");
         assertEquals("Navigate to homepage", steps.get(0).getInstruction());
-        assertEquals("_include: outer_fragment.steps", steps.get(1).getInstruction());
-        assertEquals("Verify order completion", steps.get(2).getInstruction());
-
-        final List<PlaybookStep> outerSubSteps = steps.get(1).getSubSteps();
-        assertEquals(3, outerSubSteps.size());
-        assertEquals("_include: inner_fragment.steps", outerSubSteps.get(0).getInstruction());
-        assertEquals("Select payment method", outerSubSteps.get(1).getInstruction());
-        assertEquals("Submit order", outerSubSteps.get(2).getInstruction());
-
-        final List<PlaybookStep> innerSubSteps = outerSubSteps.get(0).getSubSteps();
-        assertEquals(2, innerSubSteps.size());
-        assertEquals("Open payment page", innerSubSteps.get(0).getInstruction());
-        assertEquals("Enter credentials", innerSubSteps.get(1).getInstruction());
+        assertEquals("Open payment page", steps.get(1).getInstruction());
+        assertEquals("Enter credentials", steps.get(2).getInstruction());
+        assertEquals("Select payment method", steps.get(3).getInstruction());
+        assertEquals("Submit order", steps.get(4).getInstruction());
+        assertEquals("Verify order completion", steps.get(5).getInstruction());
     }
 
     /**
@@ -436,14 +413,11 @@ public final class PlaybookParserTest
 
         assertNotNull(playbook);
         final List<PlaybookStep> steps = playbook.getSteps();
-        assertEquals(1, steps.size());
-
-        final List<PlaybookStep> subSteps = steps.get(0).getSubSteps();
-        assertEquals(4, subSteps.size());
-        assertEquals("Open search field", subSteps.get(0).getInstruction());
-        assertEquals("Type ${searchTerm} into search field and press enter", subSteps.get(1).getInstruction());
-        assertEquals("If ${isXpdp} is true then _include: fragments/configure-and-add-to-cart-xpdp-product.steps, else _include: fragments/add-simple-product-to-cart.steps", subSteps.get(2).getInstruction());
-        assertEquals("Reset quantityToAdd to 1", subSteps.get(3).getInstruction());
+        assertEquals(4, steps.size(), "Simple static includes should flatten steps directly into main steps list.");
+        assertEquals("Open search field", steps.get(0).getInstruction());
+        assertEquals("Type ${searchTerm} into search field and press enter", steps.get(1).getInstruction());
+        assertEquals("If ${isXpdp} is true then _include: fragments/configure-and-add-to-cart-xpdp-product.steps, else _include: fragments/add-simple-product-to-cart.steps", steps.get(2).getInstruction());
+        assertEquals("Reset quantityToAdd to 1", steps.get(3).getInstruction());
     }
 
     /**
@@ -481,18 +455,14 @@ public final class PlaybookParserTest
 
         assertNotNull(playbook);
         final List<PlaybookStep> steps = playbook.getSteps();
-        assertEquals(1, steps.size());
+        assertEquals(3, steps.size(), "Simple static includes should flatten steps directly into main steps list.");
+        assertEquals("Start checkout.", steps.get(0).getInstruction());
 
-        final List<PlaybookStep> proceedSubSteps = steps.get(0).getSubSteps();
-        assertEquals(3, proceedSubSteps.size());
-        assertEquals("Start checkout.", proceedSubSteps.get(0).getInstruction());
-
-        final PlaybookStep conditionalStep = proceedSubSteps.get(1);
+        final PlaybookStep conditionalStep = steps.get(1);
         assertTrue(conditionalStep.getInstruction().contains("_include: fragments/add-additional-product.steps"));
-        assertEquals(1, conditionalStep.getSubSteps().size());
-        assertEquals("Add additional product to cart", conditionalStep.getSubSteps().get(0).getInstruction());
+        assertEquals(0, conditionalStep.getSubSteps().size(), "Conditional step must not pre-parse substeps statically; it must be evaluated dynamically by the LLM at runtime.");
 
-        assertEquals("Validate checkout page is loaded.", proceedSubSteps.get(2).getInstruction());
+        assertEquals("Validate checkout page is loaded.", steps.get(2).getInstruction());
     }
 
     /**
@@ -524,11 +494,7 @@ public final class PlaybookParserTest
         assertNotNull(playbook);
         final List<PlaybookStep> steps = playbook.getSteps();
         assertEquals(1, steps.size());
-        assertEquals("_include: fragments/configure-xpdp.steps", steps.get(0).getInstruction());
-
-        final List<PlaybookStep> subSteps = steps.get(0).getSubSteps();
-        assertEquals(1, subSteps.size());
-        assertEquals("Configure XPDP product", subSteps.get(0).getInstruction());
+        assertEquals("Configure XPDP product", steps.get(0).getInstruction());
     }
 
     /**
@@ -564,14 +530,8 @@ public final class PlaybookParserTest
 
         assertNotNull(playbook);
         final List<PlaybookStep> steps = playbook.getSteps();
-        assertEquals(1, steps.size());
-
-        final List<PlaybookStep> outerSubSteps = steps.get(0).getSubSteps();
-        assertEquals(1, outerSubSteps.size());
-
-        final List<PlaybookStep> innerSubSteps = outerSubSteps.get(0).getSubSteps();
-        assertEquals(1, innerSubSteps.size());
-        assertEquals("Execute inner action", innerSubSteps.get(0).getInstruction());
+        assertEquals(1, steps.size(), "Multi-level static includes should flatten directly into test steps.");
+        assertEquals("Execute inner action", steps.get(0).getInstruction());
     }
 }
 

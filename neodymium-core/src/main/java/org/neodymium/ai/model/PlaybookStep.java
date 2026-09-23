@@ -729,11 +729,41 @@ public final class PlaybookStep
 
     /**
      * Returns the current execution status of this step.
+     * If this step has sub-steps, its status is derived from its sub-steps (FAILED if any
+     * sub-step failed, or the status of the last executed sub-step).
      *
      * @return the step status
      */
     public PlaybookStepStatus getStatus()
     {
+        if (!this.subSteps.isEmpty())
+        {
+            boolean anyFailed = false;
+            PlaybookStepStatus lastExecutedStatus = null;
+            for (final PlaybookStep sub : this.subSteps)
+            {
+                if (sub != null)
+                {
+                    final PlaybookStepStatus subStatus = sub.getStatus();
+                    if (subStatus == PlaybookStepStatus.FAILED || sub.isFailed())
+                    {
+                        anyFailed = true;
+                    }
+                    if (subStatus != null && subStatus != PlaybookStepStatus.PENDING && subStatus != PlaybookStepStatus.SKIPPED)
+                    {
+                        lastExecutedStatus = subStatus;
+                    }
+                }
+            }
+            if (anyFailed)
+            {
+                return PlaybookStepStatus.FAILED;
+            }
+            if (lastExecutedStatus != null)
+            {
+                return lastExecutedStatus;
+            }
+        }
         return this.status;
     }
 
@@ -764,6 +794,17 @@ public final class PlaybookStep
      */
     public boolean isFailed()
     {
+        if (!this.subSteps.isEmpty())
+        {
+            for (final PlaybookStep sub : this.subSteps)
+            {
+                if (sub != null && (sub.isFailed() || sub.getStatus() == PlaybookStepStatus.FAILED))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
         return this.failed;
     }
 
