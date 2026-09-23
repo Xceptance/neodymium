@@ -1170,7 +1170,7 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "Selector of the input element to clear");
         schema.putArray("required").add("selector");
 
-        final ToolDefinition def = new ToolDefinition("clear", "Clears text in an input or textarea element", schema);
+        final ToolDefinition def = new ToolDefinition("clear", "Clears text in an input or textarea element, or unchecks a checkbox element", schema);
         return new AiTool()
         {
             @Override
@@ -1184,27 +1184,42 @@ public final class BrowserToolProvider
             {
                 final String selector = resolveSelector(call.arguments());
                 final SelenideElement el = findElement(selector).shouldBe(Condition.visible);
-                final boolean isContentEditable = Boolean.TRUE.equals(Selenide.executeJavaScript(
-                    "return !!(arguments[0] && (arguments[0].isContentEditable === true || arguments[0].getAttribute('contenteditable') === 'true' || arguments[0].hasAttribute('contenteditable')));",
-                    el));
-                if (isContentEditable)
+                final String type = el.getAttribute("type");
+                final String role = el.getAttribute("role");
+                final boolean isCheckbox = "checkbox".equalsIgnoreCase(type) || "checkbox".equalsIgnoreCase(role);
+
+                if (isCheckbox)
                 {
-                    Selenide.executeJavaScript(
-                        "var el = arguments[0];"
-                        + "el.focus();"
-                        + "el.innerHTML = '';"
-                        + "var range = document.createRange();"
-                        + "range.selectNodeContents(el);"
-                        + "range.collapse(false);"
-                        + "var sel = window.getSelection();"
-                        + "sel.removeAllRanges();"
-                        + "sel.addRange(range);"
-                        + "el.dispatchEvent(new Event('input', { bubbles: true }));",
-                        el);
+                    el.shouldBe(Condition.editable);
+                    if (el.isSelected())
+                    {
+                        el.click();
+                    }
                 }
                 else
                 {
-                    el.clear();
+                    final boolean isContentEditable = Boolean.TRUE.equals(Selenide.executeJavaScript(
+                        "return !!(arguments[0] && (arguments[0].isContentEditable === true || arguments[0].getAttribute('contenteditable') === 'true' || arguments[0].hasAttribute('contenteditable')));",
+                        el));
+                    if (isContentEditable)
+                    {
+                        Selenide.executeJavaScript(
+                            "var el = arguments[0];"
+                            + "el.focus();"
+                            + "el.innerHTML = '';"
+                            + "var range = document.createRange();"
+                            + "range.selectNodeContents(el);"
+                            + "range.collapse(false);"
+                            + "var sel = window.getSelection();"
+                            + "sel.removeAllRanges();"
+                            + "sel.addRange(range);"
+                            + "el.dispatchEvent(new Event('input', { bubbles: true }));",
+                            el);
+                    }
+                    else
+                    {
+                        el.clear();
+                    }
                 }
                 final ObjectNode res = successNode("clear");
                 res.put("target", selector);

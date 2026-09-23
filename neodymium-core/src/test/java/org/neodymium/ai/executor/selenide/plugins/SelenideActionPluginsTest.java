@@ -95,6 +95,30 @@ public final class SelenideActionPluginsTest extends BaseAiTest
     }
 
     /**
+     * Verifies that CLEAR action unchecks a checked checkbox and is idempotent when already unchecked.
+     */
+    @Test
+    public void testClearActionOnCheckbox() throws Exception
+    {
+        // Assert initial unchecked state
+        assertFalse($("#check-box-1").isSelected());
+
+        // Perform CLEAR action on already unchecked checkbox (idempotent no-op)
+        final Action clearAction = new Action("CLEAR", "#check-box-1", "Clear the checkbox");
+        this.executor.execute(clearAction);
+        assertFalse($("#check-box-1").isSelected());
+
+        // Check the checkbox first
+        final Action checkAction = new Action("CHECK", "#check-box-1", "Check the checkbox");
+        this.executor.execute(checkAction);
+        assertTrue($("#check-box-1").isSelected());
+
+        // Perform CLEAR action to uncheck
+        this.executor.execute(clearAction);
+        assertFalse($("#check-box-1").isSelected());
+    }
+
+    /**
      * Verifies that STORE action extracts page element text, normalizes prices,
      * and handles storing literal values into the session data.
      */
