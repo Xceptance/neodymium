@@ -25,8 +25,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiLinter;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -46,6 +46,7 @@ import org.neodymium.common.browser.Browser;
 @Tag("LiveAPI")
 @NeodymiumAiTest
 @AiPlaybook("programmatic")
+@AiLinter(false)
 public class CheckIntegrationTest extends BaseAiTest
 {
     /**
@@ -65,7 +66,6 @@ public class CheckIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/CheckIntegrationTest_testCheckCheckbox.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testCheckCheckbox(final AiSession session) throws Exception
@@ -89,7 +89,6 @@ public class CheckIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/CheckIntegrationTest_testCheckRadioButton.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testCheckRadioButton(final AiSession session) throws Exception
@@ -114,7 +113,6 @@ public class CheckIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/CheckIntegrationTest_testCheckIdempotency.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testCheckIdempotency(final AiSession session) throws Exception
@@ -139,7 +137,6 @@ public class CheckIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/CheckIntegrationTest_testCheckAndSubmit.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testCheckAndSubmit(final AiSession session) throws Exception
@@ -167,7 +164,6 @@ public class CheckIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/CheckIntegrationTest_testCheckNonExistentElementFailure.yaml")
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testCheckNonExistentElementFailure(final AiSession session)
@@ -187,7 +183,6 @@ public class CheckIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/CheckIntegrationTest_testCheckDisabledElementFailure.yaml")
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testCheckDisabledElementFailure(final AiSession session)

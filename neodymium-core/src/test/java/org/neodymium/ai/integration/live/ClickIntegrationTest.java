@@ -24,7 +24,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
@@ -71,7 +70,6 @@ public class ClickIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickStandardButton.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testClickStandardButton(final AiSession session) throws Exception
@@ -95,7 +93,6 @@ public class ClickIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickAnchorLink.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testClickAnchorLink(final AiSession session) throws Exception
@@ -119,7 +116,6 @@ public class ClickIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickSvgButton.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testClickSvgButton(final AiSession session) throws Exception
@@ -143,7 +139,6 @@ public class ClickIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickNonExistentElementFailure.yaml")
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testClickNonExistentElementFailure(final AiSession session)
@@ -163,7 +158,6 @@ public class ClickIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickDisabledButtonFailure.yaml")
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testClickDisabledButtonFailure(final AiSession session)

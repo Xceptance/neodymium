@@ -25,12 +25,10 @@ import static com.codeborne.selenide.Selenide.$;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
-import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.model.ContextLevel;
 
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
@@ -67,10 +65,8 @@ public class SelectOptionIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/SelectOptionIntegrationTest_testAssertOptionById.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("selectData")
     public void testAssertOptionById(final AiSession session) throws Exception
     {
         session.execute( """
@@ -95,10 +91,8 @@ public class SelectOptionIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/SelectOptionIntegrationTest_testSelectOptionByValue.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("selectData")
     public void testSelectOptionByValue(final AiSession session) throws Exception
     {
         session.execute( """
@@ -125,10 +119,8 @@ public class SelectOptionIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/SelectOptionIntegrationTest_testAssertDisabledOption.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("selectData")
     public void testAssertDisabledOption(final AiSession session) throws Exception
     {
         session.execute( """
@@ -153,10 +145,8 @@ public class SelectOptionIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/SelectOptionIntegrationTest_testMultiSelectOptions.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("selectData")
     public void testMultiSelectOptions(final AiSession session) throws Exception
     {
         session.execute( """

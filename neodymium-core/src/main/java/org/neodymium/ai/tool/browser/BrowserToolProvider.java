@@ -132,6 +132,7 @@ public final class BrowserToolProvider
         registry.register(createTypeTool());
         registry.register(createNavigateTool());
         registry.register(createSelectTool());
+        registry.register(createCheckTool());
         registry.register(createHoverTool());
         registry.register(createClearTool());
         registry.register(createClearCookiesTool());
@@ -917,7 +918,7 @@ public final class BrowserToolProvider
         props.putObject("text").put("type", "string").put("description", "Option visible text to select");
         schema.putArray("required").add("selector");
 
-        final ToolDefinition def = new ToolDefinition("select", "Selects an option from a dropdown element by value or text", schema);
+        final ToolDefinition def = new ToolDefinition("select", "Selects an option from a dropdown element by value or text. (Do not use for checkboxes or radio buttons; use 'check' instead)", schema);
         return new AiTool()
         {
             @Override
@@ -943,6 +944,23 @@ public final class BrowserToolProvider
                     catch (final Throwable ignored)
                     {
                     }
+                }
+
+                final String inputType = el.getAttribute("type");
+                if ("radio".equalsIgnoreCase(inputType) || "checkbox".equalsIgnoreCase(inputType))
+                {
+                    if (!el.isSelected())
+                    {
+                        el.click();
+                    }
+                    final ObjectNode res = successNode("select");
+                    res.put("target", selector);
+                    res.put("delegatedToCheck", true);
+                    if (featureVector != null)
+                    {
+                        res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                    }
+                    return ToolResult.success(call.callId(), res.toString());
                 }
 
                 final ObjectNode res = successNode("select");
@@ -987,6 +1005,102 @@ public final class BrowserToolProvider
                     }
                     res.put("text", txt);
                 }
+                if (featureVector != null)
+                {
+                    res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                }
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
+    }
+
+    private static AiTool createCheckTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("selector").put("type", "string")
+                .put("description", "Selector of the checkbox or radio button element (standard CSS, XPath, or text matching)");
+        props.putObject("checked").put("type", "boolean")
+                .put("description", "Desired checked state (true to check, false to uncheck). Default: true");
+        schema.putArray("required").add("selector");
+
+        final ToolDefinition def = new ToolDefinition(
+                "check",
+                "Checks or unchecks a checkbox or radio button element, ensuring it reaches the desired state. Idempotent: does nothing if the element is already in the target state.",
+                schema);
+
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                DomQuiescenceWatcher.installTracker();
+                final JsonNode args = call.arguments();
+                final String selector = resolveSelector(args);
+                final boolean targetChecked = !args.hasNonNull("checked") || args.path("checked").asBoolean(true);
+
+                final SelenideElement el = findElement(selector).shouldBe(Condition.exist);
+                SelenideElementFinder.scrollIntoViewIfNeeded(el);
+
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                DomFeatureVector featureVector = null;
+                if (driver != null)
+                {
+                    try
+                    {
+                        featureVector = new PageAnalyzer(driver).extractFeatureVector(el);
+                    }
+                    catch (final Throwable ignored)
+                    {
+                    }
+                }
+
+                final String inputType = el.getAttribute("type");
+                if ("radio".equalsIgnoreCase(inputType) && !targetChecked)
+                {
+                    return ToolResult.error(call.callId(),
+                            errorNode("Cannot uncheck an individual radio button in HTML. Select another radio button in the group to change selection.").toString());
+                }
+
+                final boolean currentlySelected = el.isSelected();
+                if (currentlySelected != targetChecked)
+                {
+                    try
+                    {
+                        el.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
+                    }
+                    catch (final Exception | AssertionError e)
+                    {
+                        try
+                        {
+                            final SelenideElement parentLabel = el.closest("label");
+                            if (parentLabel.exists() && parentLabel.is(Condition.visible))
+                            {
+                                parentLabel.click();
+                            }
+                            else
+                            {
+                                Selenide.executeJavaScript("arguments[0].click();", el);
+                            }
+                        }
+                        catch (final Throwable ex)
+                        {
+                            Selenide.executeJavaScript("arguments[0].click();", el);
+                        }
+                    }
+                }
+
+                final ObjectNode res = successNode("check");
+                res.put("target", selector);
+                res.put("checked", targetChecked);
+                res.put("actionPerformed", currentlySelected != targetChecked);
                 if (featureVector != null)
                 {
                     res.set("domFeatureVector", MAPPER.valueToTree(featureVector));

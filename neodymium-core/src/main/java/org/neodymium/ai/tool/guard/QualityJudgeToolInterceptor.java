@@ -770,7 +770,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             final String lowerTool = toolName.toLowerCase();
             final boolean isInteractive = lowerTool.contains("click") || lowerTool.contains("hover")
                     || lowerTool.contains("type") || lowerTool.contains("clear") || lowerTool.contains("press")
-                    || lowerTool.contains("select");
+                    || lowerTool.contains("select") || lowerTool.contains("check");
             if (!isInteractive)
             {
                 return false;

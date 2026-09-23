@@ -813,6 +813,7 @@ public class Action
             case "FILL", "TYPE" -> "fill";
             case "NAVIGATE", "OPEN" -> "navigate";
             case "SELECT" -> "select";
+            case "CHECK" -> "check";
             case "HOVER" -> "hover";
             case "ASSERT_URL" -> "assert_url";
             case "ASSERT_TITLE" -> "assert_title";
@@ -866,6 +867,18 @@ public class Action
             if (this.target != null && !this.target.isBlank() && !"url".equalsIgnoreCase(this.target) && !"title".equalsIgnoreCase(this.target))
             {
                 args.put("selector", this.target);
+            }
+        }
+        else if ("check".equals(toolName) || "browser_check".equals(toolName))
+        {
+            args.put("selector", this.target != null ? this.target : "");
+            if (this.value != null && !this.value.isEmpty())
+            {
+                args.put("checked", Boolean.parseBoolean(this.value.get(0)));
+            }
+            else
+            {
+                args.put("checked", true);
             }
         }
         else if ("assert_count".equals(toolName) || "browser_assert_count".equals(toolName))
@@ -1017,6 +1030,7 @@ public class Action
             case "hover" -> "HOVER";
             case "scroll" -> "SCROLL";
             case "select" -> "SELECT";
+            case "check" -> "CHECK";
             case "clear" -> "CLEAR";
             case "clear_cookies" -> "CLEAR_COOKIES";
             case "back" -> "BACK";
@@ -1286,9 +1300,14 @@ public class Action
             {
                 value = args.path("time").asText();
             }
-            else if (args.hasNonNull("direction") && !args.path("direction").asText().isBlank())
+            else if ("direction".equals(name) || (args.hasNonNull("direction") && !args.path("direction").asText().isBlank()))
             {
-                value = args.path("direction").asText();
+                value = args.hasNonNull("direction") ? args.path("direction").asText() : "";
+            }
+            else if ("check".equals(name))
+            {
+                final boolean chk = !args.hasNonNull("checked") || args.path("checked").asBoolean(true);
+                value = Boolean.toString(chk);
             }
             else if (args.hasNonNull("values") && args.path("values").isArray())
             {

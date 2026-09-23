@@ -24,7 +24,6 @@ import static com.codeborne.selenide.Selenide.$;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
@@ -64,7 +63,6 @@ public class RefreshIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/RefreshIntegrationTest_testRefreshResetsInputState.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testRefreshResetsInputState(final AiSession session) throws Exception
@@ -89,7 +87,6 @@ public class RefreshIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/RefreshIntegrationTest_testRefreshPreservesPageContent.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testRefreshPreservesPageContent(final AiSession session) throws Exception

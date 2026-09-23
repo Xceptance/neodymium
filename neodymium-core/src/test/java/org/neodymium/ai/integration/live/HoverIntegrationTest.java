@@ -25,7 +25,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.Test;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
@@ -65,7 +64,6 @@ public class HoverIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/HoverIntegrationTest_testHoverDropdown.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testHoverDropdown(final AiSession session) throws Exception
@@ -89,7 +87,6 @@ public class HoverIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/HoverIntegrationTest_testHoverAndClickSubmenuItem.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testHoverAndClickSubmenuItem(final AiSession session) throws Exception
@@ -114,7 +111,6 @@ public class HoverIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @Test
     @AiPlaybook("/playbooks/integration/programmatic/HoverIntegrationTest_testHoverNonExistentElementFailure.yaml")
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testHoverNonExistentElementFailure(final AiSession session)

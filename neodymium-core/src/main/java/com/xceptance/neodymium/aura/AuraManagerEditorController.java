@@ -524,7 +524,7 @@ public final class AuraManagerEditorController
                             suggestions.add(sugg);
                         }
                     }
-                    else if (lower.contains("click") || lower.contains("type") || lower.contains("select"))
+                    else if (lower.contains("click") || lower.contains("type") || lower.contains("select") || lower.contains("check"))
                     {
                         if (!lower.contains("#") && !lower.contains(".") && !lower.contains("button") && !lower.contains("input") && !lower.contains("(hint:"))
                         {

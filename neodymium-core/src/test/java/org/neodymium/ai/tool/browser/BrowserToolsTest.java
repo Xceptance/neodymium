@@ -19,6 +19,7 @@
 package org.neodymium.ai.tool.browser;
 
 import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -33,6 +34,7 @@ import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
+import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.openqa.selenium.JavascriptException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.Keys;
@@ -79,6 +81,7 @@ public class BrowserToolsTest
                 "type",
                 "navigate",
                 "select",
+                "check",
                 "hover",
                 "clear",
                 "clear_cookies",
@@ -122,6 +125,88 @@ public class BrowserToolsTest
             // Backward compatibility lookup via ToolRegistry fallback
             Assertions.assertTrue(this.registry.hasTool("browser_" + toolName), "Missing legacy fallback: browser_" + toolName);
             Assertions.assertTrue(this.registry.getTool("browser_" + toolName).isPresent());
+        }
+    }
+
+    @Test
+    public void testBrowserCheckToolSchema()
+    {
+        final AiTool tool = this.registry.getTool("check").orElseThrow();
+        final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
+
+        Assertions.assertTrue(props.has("selector"));
+        Assertions.assertTrue(props.has("checked"));
+
+        final JsonNode req = tool.getDefinition().parametersSchema().path("required");
+        Assertions.assertTrue(req.isArray());
+        Assertions.assertEquals("selector", req.get(0).asText());
+    }
+
+    @Test
+    public void testBrowserCheckToolExecutionAndIdempotency() throws Exception
+    {
+        Configuration.browser = "chrome";
+        Configuration.headless = true;
+        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        server.start();
+        try
+        {
+            Selenide.open("http://localhost:" + server.getPort() + "/CheckActionTest/testCheckHappyPath.html");
+            final AiTool checkTool = this.registry.getTool("check").orElseThrow();
+            final ObjectMapper mapper = new ObjectMapper();
+
+            // 1. Initial state: unchecked
+            final SelenideElement checkbox = Selenide.$("#newsletter");
+            Assertions.assertFalse(checkbox.isSelected());
+
+            // 2. Check the checkbox -> becomes checked
+            final ToolCall call1 = new ToolCall("call-chk-1", "check", mapper.createObjectNode().put("selector", "#newsletter").put("checked", true));
+            final ToolResult res1 = checkTool.execute(call1, null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, res1.status());
+            Assertions.assertTrue(checkbox.isSelected());
+            final JsonNode json1 = mapper.readTree(res1.content());
+            Assertions.assertTrue(json1.path("actionPerformed").asBoolean());
+
+            // 3. Check again -> idempotent! stays checked, actionPerformed is false
+            final ToolCall call2 = new ToolCall("call-chk-2", "check", mapper.createObjectNode().put("selector", "#newsletter").put("checked", true));
+            final ToolResult res2 = checkTool.execute(call2, null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, res2.status());
+            Assertions.assertTrue(checkbox.isSelected(), "Checkbox must remain checked (idempotent)");
+            final JsonNode json2 = mapper.readTree(res2.content());
+            Assertions.assertFalse(json2.path("actionPerformed").asBoolean());
+
+            // 4. Uncheck the checkbox -> becomes unchecked
+            final ToolCall call3 = new ToolCall("call-chk-3", "check", mapper.createObjectNode().put("selector", "#newsletter").put("checked", false));
+            final ToolResult res3 = checkTool.execute(call3, null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, res3.status());
+            Assertions.assertFalse(checkbox.isSelected());
+
+            // 5. Radio button checking
+            final SelenideElement radioEmail = Selenide.$("#contact-email");
+            final ToolCall callRadio = new ToolCall("call-rad-1", "check", mapper.createObjectNode().put("selector", "#contact-email"));
+            final ToolResult resRadio = checkTool.execute(callRadio, null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, resRadio.status());
+            Assertions.assertTrue(radioEmail.isSelected());
+
+            // 6. Attempting to uncheck radio button returns ERROR
+            final ToolCall callRadioUncheck = new ToolCall("call-rad-2", "check", mapper.createObjectNode().put("selector", "#contact-email").put("checked", false));
+            final ToolResult resRadioUncheck = checkTool.execute(callRadioUncheck, null);
+            Assertions.assertEquals(ToolResult.Status.ERROR, resRadioUncheck.status());
+            Assertions.assertTrue(resRadioUncheck.content().contains("Cannot uncheck an individual radio button"));
+
+            // 7. Select tool delegation fallback on checkbox/radio
+            final AiTool selectTool = this.registry.getTool("select").orElseThrow();
+            final ToolCall callSelectRadio = new ToolCall("call-sel-rad", "select", mapper.createObjectNode().put("selector", "#contact-phone"));
+            final ToolResult resSelectRadio = selectTool.execute(callSelectRadio, null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, resSelectRadio.status());
+            Assertions.assertTrue(Selenide.$("#contact-phone").isSelected());
+            final JsonNode jsonSelect = mapper.readTree(resSelectRadio.content());
+            Assertions.assertTrue(jsonSelect.path("delegatedToCheck").asBoolean());
+        }
+        finally
+        {
+            server.stop();
+            Selenide.closeWebDriver();
         }
     }
 

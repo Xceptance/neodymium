@@ -370,7 +370,7 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("### OPERATING RULES:\n");
         systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps.\n");
         systemPrompt.append("2. GROUNDING & EXECUTION: Selectors are evaluated via Selenide (standard CSS, XPath, or text matching). Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Never propose the exact same failing tool call without changing selector or state.\n");
-        systemPrompt.append("3. ACTION STEPS: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps. Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
+        systemPrompt.append("3. ACTION STEPS: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, checking checkboxes/radios, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. When interacting with form controls, use 'fill' for text inputs, 'select' for dropdown menus, and 'check' for checkboxes and radio buttons (which is idempotent and sets the target state) rather than 'click'. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps. Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
         systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
         if (isVisual)
         {
@@ -1517,6 +1517,10 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             return inst.contains("hover") || inst.contains("mouse");
         }
+        if (toolName.contains("check"))
+        {
+            return inst.contains("check") || inst.contains("uncheck") || inst.contains("tick");
+        }
         if (toolName.contains("click") || toolName.contains("select"))
         {
             return inst.contains("click") || inst.contains("press") || inst.contains("select") || inst.contains("choose") || inst.contains("add") || inst.contains("submit");
@@ -1526,9 +1530,9 @@ public final class AgentToolLoopStep implements PipelineStep
             return inst.contains("type") || inst.contains("enter") || inst.contains("fill") || inst.contains("write")
                     || inst.contains("clear") || inst.contains("empty") || inst.contains("reset");
         }
-        if (toolName.contains("assert") || toolName.contains("verify") || toolName.contains("check"))
+        if (toolName.contains("assert") || toolName.contains("verify"))
         {
-            return inst.contains("verify") || inst.contains("assert") || inst.contains("check") || inst.contains("ensure");
+            return inst.contains("verify") || inst.contains("assert") || inst.contains("ensure");
         }
         if (toolName.contains("navigate") || toolName.contains("open"))
         {
@@ -1548,6 +1552,7 @@ public final class AgentToolLoopStep implements PipelineStep
         return "fill".equals(clean)
                 || "type".equals(clean)
                 || "select".equals(clean)
+                || "check".equals(clean)
                 || "clear".equals(clean);
     }
 
@@ -1761,6 +1766,7 @@ public final class AgentToolLoopStep implements PipelineStep
         return "click".equals(clean)
                 || "fill".equals(clean)
                 || "type".equals(clean)
+                || "check".equals(clean)
                 || "upload_file".equals(clean)
                 || "handle_alert".equals(clean)
                 || "switch_window".equals(clean)
@@ -2361,7 +2367,8 @@ public final class AgentToolLoopStep implements PipelineStep
         final String clean = lower.startsWith("browser_") ? lower.substring("browser_".length()) : lower;
         return switch (clean)
         {
-            case "click", "check" -> "click";
+            case "click" -> "click";
+            case "check", "uncheck" -> "check";
             case "fill" -> "fill";
             case "type" -> "type";
             case "upload", "upload_file" -> "upload_file";
@@ -2817,6 +2824,12 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         final String val = node.has("value") ? " \"" + node.path("value").asText() + "\"" : "";
                         LOGGER.info("📥 Result [{}]: {}{} - selected{} in '{}'", toolName, icon, status, val, node.path("target").asText());
+                        return;
+                    }
+                    if ("check".equals(act) && node.has("target"))
+                    {
+                        final boolean chk = !node.has("checked") || node.path("checked").asBoolean(true);
+                        LOGGER.info("📥 Result [{}]: {}{} - {} '{}'", toolName, icon, status, chk ? "checked" : "unchecked", node.path("target").asText());
                         return;
                     }
                     if ("hover".equals(act) && node.has("target"))
