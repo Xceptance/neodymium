@@ -2046,8 +2046,27 @@ function renderStepsForExecution(activeRow) {
         stepsArray.forEach((s, idx) => {
             const stepNum = s.index || s.stepNum || (idx + 1);
             const title = s.instruction || s.name || s.title || `Step ${stepNum}`;
-            const status = s.status || (s.passed === false ? 'failed' : 'passed');
-            const isPassed = status === 'passed' || status === 'passed-clean' || s.passed === true;
+            let rawStatus = (s.status || (s.passed === false ? 'failed' : 'passed')).toLowerCase();
+            const subsList = Array.isArray(s.subSteps) ? s.subSteps : (Array.isArray(s.sub_steps) ? s.sub_steps : []);
+            if (subsList.length > 0) {
+                const executedSubs = subsList.filter(sub => sub.status && String(sub.status).toUpperCase() !== 'PENDING' && String(sub.status).toUpperCase() !== 'SKIPPED');
+                const hasFailedSub = subsList.some(sub => String(sub.status || '').toUpperCase() === 'FAILED' || sub.failureReason || sub.error || sub.failure);
+                if (hasFailedSub) {
+                    rawStatus = 'failed';
+                } else if (executedSubs.length > 0) {
+                    const lastSub = executedSubs[executedSubs.length - 1];
+                    const lastSubStatus = String(lastSub.status || '').toUpperCase();
+                    if (lastSubStatus === 'PASSED' || lastSubStatus === 'SUCCESS' || lastSubStatus === 'HEALED') {
+                        rawStatus = 'passed';
+                    } else if (lastSubStatus === 'FAILED') {
+                        rawStatus = 'failed';
+                    } else {
+                        rawStatus = lastSubStatus.toLowerCase();
+                    }
+                }
+            }
+            const status = rawStatus;
+            const isPassed = status === 'passed' || status === 'passed-clean' || status === 'success' || s.passed === true;
             const isFailed = status === 'failed' || status === 'failed-unknown' || status === 'failed-known' || s.passed === false;
             
             const stepClass = isPassed ? 'step-passed' : (isFailed ? 'step-failed' : 'step-ignored');
@@ -2246,11 +2265,212 @@ function renderStepsForExecution(activeRow) {
                     const subNum = `#${stepNum}.${subIdx + 1}`;
                     const subTitle = sub.instruction || sub.action || `Sub-step ${subIdx + 1}`;
                     const subDur = (sub.durationMs !== undefined && sub.durationMs !== null) ? formatDurationInMinutes(sub.durationMs) : (sub.duration ? formatDurationInMinutes(sub.duration) : '');
+                    const subStatus = (sub.status || 'SUCCESS').toUpperCase();
+                    const subBadgeClass = (subStatus === 'PASSED' || subStatus === 'SUCCESS') ? 'badge-pass'
+                        : subStatus === 'HEALED' ? 'badge-healed'
+                        : subStatus === 'FAILED' ? 'badge-unknown-fail' : 'badge-ignored';
+
+                    // Source line info
+                    const subSource = sub.sourceFile ? `📄 ${sub.sourceFile}${sub.lineNumber > 0 ? ':L' + sub.lineNumber : ''}` : '';
+
+                    // Error Box
+                    let subErrorHtml = '';
+                    if (sub.failureReason || sub.error || sub.failure) {
+                        subErrorHtml = `
+                            <div class="step-error-box-top" style="margin-top: 0.3rem;">
+                                <div class="error-box-top-header">
+                                    <span><span class="material-symbols-outlined">warning</span> Sub-Step Error Details</span>
+                                    <span class="tag-chip" style="background: #fef2f2; color: #dc2626; border-color: #fecaca;">FAILED</span>
+                                </div>
+                                <pre class="error-box-top-text">${escapeHtml(sub.failureReason || sub.error || sub.failure)}</pre>
+                            </div>
+                        `;
+                    }
+
+                    // Reasoning
+                    let subReasoningHtml = '';
+                    if (sub.reasoning || (Array.isArray(sub.reasonings) && sub.reasonings.length > 0)) {
+                        const rText = sub.reasoning || sub.reasonings.join('\n\n');
+                        subReasoningHtml = `
+                            <div class="action-reasoning" style="margin-top: 0.3rem; padding: 0.4rem 0.6rem; background: #fdf4ff; border-left: 3px solid #a855f7; border-radius: 4px;">
+                                <span class="material-symbols-outlined" style="color:#a855f7; font-size: 0.9rem;">psychology</span>
+                                <span style="font-size: 0.78rem; color: var(--text-main); font-weight: 500;">${escapeHtml(rText)}</span>
+                            </div>
+                        `;
+                    }
+
+                    // Screenshots
+                    let subScreenshotsHtml = '';
+                    const subScList = Array.isArray(sub.screenshots) ? sub.screenshots : [];
+                    if (subScList.length > 0) {
+                        subScreenshotsHtml = `
+                            <div style="margin-top: 0.4rem;">
+                                <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.25rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">image</span>
+                                    <span>Sub-Step Screenshots (${subScList.length})</span>
+                                </div>
+                                <div style="display: flex; gap: 0.4rem; flex-wrap: wrap;">
+                        `;
+                        subScList.forEach(sc => {
+                            const scSrc = formatScreenshotSrc(sc.base64Data || sc.data || sc.url || sc.src, sc.mediaType || 'image/png');
+                            const scName = sc.name || sc.label || 'Screenshot';
+                            const safeLabel = scName.replace(/'/g, "\\'");
+                            if (scSrc) {
+                                subScreenshotsHtml += `
+                                    <div style="display: flex; flex-direction: column; align-items: center; background: #ffffff; border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem;">
+                                        <img src="${scSrc}" class="preview-thumb" alt="${scName}" title="Click to enlarge" onclick="event.stopPropagation(); openImageModal(this.src, '${safeLabel}')" style="max-height: 80px;">
+                                        <span style="font-size: 0.68rem; color: var(--text-muted); margin-top: 0.2rem;">${scName}</span>
+                                    </div>
+                                `;
+                            }
+                        });
+                        subScreenshotsHtml += `</div></div>`;
+                    }
+
+                    // Actions
+                    let subActionsHtml = '';
+                    const subActList = Array.isArray(sub.actions) ? sub.actions : [];
+                    if (subActList.length > 0) {
+                        subActionsHtml = `
+                            <div class="actions-performed-box" style="margin-top: 0.4rem;">
+                                <div class="actions-performed-title">
+                                    <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #7e22ce;">terminal</span>
+                                    <span>Actions (${subActList.length})</span>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                        `;
+                        subActList.forEach(act => {
+                            const actName = act.type || act.name || 'ACTION';
+                            const actTarget = act.resolvedTarget || act.target || '';
+                            const actVal = (act.resolvedValue || act.value) ? ` ➔ ${act.resolvedValue || act.value}` : '';
+                            const hasSuccess = typeof act.success === 'boolean';
+                            const successModifier = hasSuccess ? (act.success ? ' action-success' : ' action-failed') : '';
+                            const successBadge = hasSuccess
+                                ? `<span class="action-status-badge ${act.success ? 'action-status-ok' : 'action-status-fail'}" title="${act.success ? 'Action succeeded' : 'Action failed'}"><span class="material-symbols-outlined">${act.success ? 'check_circle' : 'cancel'}</span></span>`
+                                : '';
+                            subActionsHtml += `
+                                <div class="action-item-pill-row${successModifier}">
+                                    ${successBadge}
+                                    <span class="action-type-pill">${actName}</span>
+                                    <span class="action-code-text">${escapeHtml(actTarget)}${escapeHtml(actVal)}</span>
+                                </div>
+                            `;
+                        });
+                        subActionsHtml += `</div></div>`;
+                    }
+
+                    // LLM Calls
+                    let subLlmCallsHtml = '';
+                    const subLlmList = Array.isArray(sub.llmCalls) ? sub.llmCalls : [];
+                    if (subLlmList.length > 0) {
+                        subLlmCallsHtml = `
+                            <div style="margin-top: 0.4rem;">
+                                <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.25rem;">
+                                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">smart_toy</span>
+                                    <span>LLM Invocations (${subLlmList.length})</span>
+                                </div>
+                                <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                        `;
+                        subLlmList.forEach((call, cIdx) => {
+                            const cap = call.capability || 'LLM Call';
+                            const model = call.modelName || call.model || call.llmModel || 'default';
+                            const tokens = extractCallTokens(call);
+                            const rawCost = extractCallCost(call);
+                            let formattedCost = '$0.0000';
+                            if (rawCost > 0) {
+                                const roundedUp = Math.ceil(rawCost * 10000) / 10000;
+                                formattedCost = '$' + roundedUp.toFixed(4);
+                            }
+                            const dur = (call.durationMs !== undefined && call.durationMs !== null) 
+                                ? (call.durationMs + ' ms') 
+                                : (call.duration ? formatDurationInMinutes(call.duration) : '');
+                            
+                            const systemPromptText = call.systemPrompt || call.system_prompt || call.system || '';
+                            const userPromptText = call.userPrompt || call.user_prompt || call.domContext || call.dom_context || call.prompt || '';
+                            const rawResponseText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || call.output || call.completion || '';
+
+                            const metaParts = [];
+                            if (tokens) metaParts.push(`Tokens: ${tokens}`);
+                            if (rawCost > 0) metaParts.push(`Cost: ${formattedCost}`);
+                            if (dur) metaParts.push(dur);
+                            const callMetaStr = metaParts.join(' | ');
+
+                            subLlmCallsHtml += `
+                                <div class="llm-call-card" style="border: 1px solid #cbd5e1; border-radius: 6px; margin-top: 0.3rem; overflow: hidden; background: #ffffff;">
+                                    <div class="llm-call-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');" style="background: #f8fafc; padding: 0.35rem 0.6rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; cursor: pointer; user-select: none;">
+                                        <div style="display: flex; align-items: center; gap: 0.35rem; font-weight: 700; color: #1e293b;">
+                                            <span class="material-symbols-outlined llm-subsection-chevron" style="font-size: 0.8rem;">chevron_right</span>
+                                            <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #a855f7;">smart_toy</span>
+                                            <span><strong>${escapeHtml(cap)}</strong> <span style="color:var(--text-muted); font-weight: 400;">(${escapeHtml(model)})</span></span>
+                                        </div>
+                                        <span style="font-family: var(--font-mono); font-size: 0.7rem; color: #64748b;">${callMetaStr}</span>
+                                    </div>
+                                    <div class="llm-call-body" style="padding: 0.5rem; display: flex; flex-direction: column; gap: 0.4rem;">
+                                        
+                                        <div class="llm-subsection-card">
+                                            <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
+                                                <div class="llm-subsection-title">
+                                                    <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                                                    <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #0284c7;">tune</span>
+                                                    <span>System Prompt</span>
+                                                </div>
+                                                <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">Instruction & Persona</span>
+                                            </div>
+                                            <div class="llm-subsection-body">${systemPromptText ? escapeHtml(systemPromptText) : '<em style="color: var(--text-muted);">No explicit system prompt recorded</em>'}</div>
+                                        </div>
+
+                                        <div class="llm-subsection-card">
+                                            <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
+                                                <div class="llm-subsection-title">
+                                                    <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                                                    <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #d97706;">code</span>
+                                                    <span>User Prompt & DOM Context (Plain Text)</span>
+                                                </div>
+                                                <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">User Query & Page Snapshot</span>
+                                            </div>
+                                            <div class="llm-subsection-body">${userPromptText ? escapeHtml(userPromptText) : '<em style="color: var(--text-muted);">No user prompt/DOM context recorded</em>'}</div>
+                                        </div>
+
+                                        <div class="llm-subsection-card">
+                                            <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
+                                                <div class="llm-subsection-title">
+                                                    <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                                                    <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #16a34a;">terminal</span>
+                                                    <span>Raw Model Response</span>
+                                                </div>
+                                                <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">AI Completion Payload</span>
+                                            </div>
+                                            <div class="llm-subsection-body">${rawResponseText ? escapeHtml(rawResponseText) : '<em style="color: var(--text-muted);">No raw response recorded</em>'}</div>
+                                        </div>
+
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        subLlmCallsHtml += `</div></div>`;
+                    }
+
                     subStepsHtml += `
-                        <div class="sub-step-card">
-                            <span class="sub-step-number">${subNum}</span>
-                            <span class="sub-step-instruction">${subTitle}</span>
-                            ${subDur ? `<span style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">${subDur}</span>` : ''}
+                        <div class="sub-step-card" onclick="toggleSubStepInspector(this, event)">
+                            <div class="sub-step-card-header">
+                                <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                                    <span class="sub-step-number">${subNum}</span>
+                                    <span class="badge-status ${subBadgeClass}" style="font-size: 0.65rem; padding: 0.1rem 0.35rem;">${subStatus}</span>
+                                    <span class="sub-step-instruction">${escapeHtml(subTitle)}</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                                    ${subDur ? `<span style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">${subDur}</span>` : ''}
+                                    <span class="material-symbols-outlined sub-step-chevron">chevron_right</span>
+                                </div>
+                            </div>
+                            <div class="sub-step-inspector">
+                                ${subSource ? `<div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">${subSource}</div>` : ''}
+                                ${subErrorHtml}
+                                ${subReasoningHtml}
+                                ${subScreenshotsHtml}
+                                ${subActionsHtml}
+                                ${subLlmCallsHtml}
+                            </div>
                         </div>
                     `;
                 });

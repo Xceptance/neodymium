@@ -310,7 +310,21 @@ public final class PreliminaryReportListener implements ExecutionListener
                         {
                         }
                     }
-                    parentEntry = new TestExecutionReport.ReportStepEntry(this.report.getSteps().size(), pResolved);
+                    int parentStepIndex = -1;
+                    if (activeCtx != null)
+                    {
+                        @SuppressWarnings("unchecked")
+                        final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) activeCtx.getTransientData().get("playbook.steps");
+                        if (playbookSteps != null && playbookSteps.contains(rootPb))
+                        {
+                            parentStepIndex = playbookSteps.indexOf(rootPb);
+                        }
+                    }
+                    if (parentStepIndex < 0)
+                    {
+                        parentStepIndex = stepStarted.getStepIndex() >= 0 ? stepStarted.getStepIndex() : this.report.getSteps().size();
+                    }
+                    parentEntry = new TestExecutionReport.ReportStepEntry(parentStepIndex, pResolved);
                     parentEntry.setRawInstruction(pRaw);
                     parentEntry.setSourceFile(rootPb.getSourceFile());
                     parentEntry.setLineNumber(rootPb.getLineNumber());
@@ -630,23 +644,29 @@ public final class PreliminaryReportListener implements ExecutionListener
             boolean anySubFailed = false;
             boolean allSubSuccess = true;
             long totalSubDuration = 0;
+            TestExecutionReport.ReportStepEntry lastExecutedSub = null;
 
             for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
             {
                 resolveStep(sub);
                 totalSubDuration += sub.getDurationMs();
-                if ("FAILED".equalsIgnoreCase(sub.getStatus()))
+                final String subSt = sub.getStatus();
+                if (subSt != null && !"PENDING".equalsIgnoreCase(subSt) && !"SKIPPED".equalsIgnoreCase(subSt))
+                {
+                    lastExecutedSub = sub;
+                }
+                if ("FAILED".equalsIgnoreCase(subSt))
                 {
                     anySubFailed = true;
                     allSubSuccess = false;
                 }
-                else if (!"SUCCESS".equalsIgnoreCase(sub.getStatus()) && !"PASSED".equalsIgnoreCase(sub.getStatus()) && !"HEALED".equalsIgnoreCase(sub.getStatus()))
+                else if (!"SUCCESS".equalsIgnoreCase(subSt) && !"PASSED".equalsIgnoreCase(subSt) && !"HEALED".equalsIgnoreCase(subSt))
                 {
                     allSubSuccess = false;
                 }
             }
 
-            if (anySubFailed || (!this.report.isSuccess() && !allSubSuccess))
+            if (anySubFailed)
             {
                 step.setStatus("FAILED");
                 if (step.getFailureReason() == null && this.report.getFailureReason() != null)
@@ -654,13 +674,17 @@ public final class PreliminaryReportListener implements ExecutionListener
                     step.setFailureReason(this.report.getFailureReason());
                 }
             }
+            else if (lastExecutedSub != null)
+            {
+                step.setStatus(lastExecutedSub.getStatus());
+            }
             else if (allSubSuccess)
             {
                 step.setStatus("SUCCESS");
             }
             else
             {
-                step.setStatus(!this.report.isSuccess() ? "FAILED" : "SUCCESS");
+                step.setStatus("SKIPPED");
             }
 
             if (step.getDurationMs() <= 0)

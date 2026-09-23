@@ -388,6 +388,22 @@ public class InteractiveConsoleListenerTest
         assertTrue(stateJson.contains("Invalid playbook step format in file: proceed-to-payment.steps"), "State JSON error must contain cause message");
     }
 
+    @Test
+    public void testFailureHandledCleanlyWhenBrowserNotStarted()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, false);
+        eventBus.registerListener(listener);
+
+        final Throwable error = new RuntimeException("Element not found");
+        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, error);
+
+        eventBus.dispatch(new SessionFinishedEvent(100, false, Collections.emptyList()));
+
+        final String stateJson = consoleEngine.getCurrentStateJson();
+        assertNotNull(stateJson, "Pushed state JSON must not be null");
+        assertTrue(stateJson.contains("\"status\":\"failed\""), "State JSON status must be failed");
+    }
+
     private void submitActionAsynchronously(final JsonObject actionObj)
     {
         final Thread t = new Thread(() -> {

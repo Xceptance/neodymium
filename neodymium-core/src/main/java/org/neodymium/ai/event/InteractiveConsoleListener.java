@@ -42,10 +42,14 @@ import org.neodymium.ai.prompt.PesapPrompt;
 import org.neodymium.ai.report.DiskReportFormat;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.report.TestExecutionReport;
+import org.neodymium.ai.report.TestExecutionReport.ReportScreenshotEntry;
 import org.neodymium.ai.session.AiSession;
+import org.openqa.selenium.OutputType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.WebDriverRunner;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
@@ -194,9 +198,9 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 context.getTransientData().remove(ExecutionContext.KEY_LAST_LLM_RESULT);
                 try
                 {
-                    if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+                    if (WebDriverRunner.hasWebDriverStarted())
                     {
-                        final String base64 = com.codeborne.selenide.Selenide.screenshot(org.openqa.selenium.OutputType.BASE64);
+                        final String base64 = Selenide.screenshot(OutputType.BASE64);
                         if (base64 != null && !base64.isEmpty())
                         {
                             context.getTransientData().put("currentScreenshot", "data:image/png;base64," + base64);
@@ -261,6 +265,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 {
                     LOG.error("[InteractiveConsoleListener] Test execution failed.");
                 }
+                captureAndAppendFailureScreenshot(context);
             }
 
             if (this.interactive && !this.aborted)
@@ -361,6 +366,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
     public String pauseOnStepFailure(final ExecutionContext context, final PlaybookStep step, final Throwable error)
     {
         this.autoRun = false;
+        captureAndAppendFailureScreenshot(context);
         if (!this.interactive || this.consoleEngine == null)
         {
             return "ABORT";
@@ -429,9 +435,9 @@ public final class InteractiveConsoleListener implements ExecutionListener
         {
             try
             {
-                if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+                if (WebDriverRunner.hasWebDriverStarted())
                 {
-                    final String base64 = com.codeborne.selenide.Selenide.screenshot(org.openqa.selenium.OutputType.BASE64);
+                    final String base64 = Selenide.screenshot(OutputType.BASE64);
                     if (base64 != null && !base64.isEmpty())
                     {
                         context.getTransientData().put("currentScreenshot", "data:image/png;base64," + base64);
@@ -636,6 +642,60 @@ public final class InteractiveConsoleListener implements ExecutionListener
         if (this.consoleEngine != null)
         {
             this.consoleEngine.broadcastSseEvent("fixSuggestion", new Gson().toJson(fixEvent));
+        }
+    }
+
+    /**
+     * Captures a base64 screenshot if a WebDriver instance is active and appends it to the test execution report.
+     *
+     * @param context active execution context
+     */
+    private void captureAndAppendFailureScreenshot(final ExecutionContext context)
+    {
+        try
+        {
+            if (WebDriverRunner.hasWebDriverStarted())
+            {
+                final String base64 = Selenide.screenshot(OutputType.BASE64);
+                if (base64 != null && !base64.isEmpty())
+                {
+                    if (context != null)
+                    {
+                        context.getTransientData().put("currentScreenshot", "data:image/png;base64," + base64);
+                    }
+                    final TestExecutionReport report = getReport();
+                    if (report != null)
+                    {
+                        final boolean alreadyHas = report.getScreenshots().stream()
+                            .anyMatch(s -> s != null && s.getBase64Data() != null && s.getBase64Data().equals(base64));
+                        if (!alreadyHas)
+                        {
+                            final int stepIdx = getCurrentStepIndex(context);
+                            final ReportScreenshotEntry screenshotEntry = new ReportScreenshotEntry(
+                                "Failure Screenshot",
+                                stepIdx,
+                                "image/png",
+                                base64,
+                                System.currentTimeMillis()
+                            );
+                            report.addScreenshot(screenshotEntry);
+                            final TestExecutionReport.ReportStepEntry byIdx = report.findStepEntry(stepIdx);
+                            final PlaybookStep pbStep = context != null ? (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP) : null;
+                            final TestExecutionReport.ReportStepEntry stepEntry = byIdx != null
+                                ? byIdx
+                                : (pbStep != null && pbStep.getInstruction() != null ? report.findStepEntryByInstruction(pbStep.getInstruction()) : null);
+                            if (stepEntry != null)
+                            {
+                                stepEntry.addScreenshot(screenshotEntry);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (final Throwable t)
+        {
+            LOG.warn("[InteractiveConsoleListener] Failed to capture failure screenshot: {}", t.getMessage());
         }
     }
 }

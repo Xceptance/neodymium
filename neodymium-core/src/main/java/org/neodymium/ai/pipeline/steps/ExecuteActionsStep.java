@@ -19,6 +19,7 @@
 package org.neodymium.ai.pipeline.steps;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -248,11 +249,21 @@ public final class ExecuteActionsStep implements PipelineStep
                 return;
             }
 
-            // Intercept INCLUDE control actions to perform dynamic runtime inclusion expansion
-            if (action.getType().equalsIgnoreCase("INCLUDE"))
+            // Intercept INCLUDE and BRANCH control actions or conditional include steps for dynamic runtime inclusion expansion
+            final PlaybookStep currentPlaybookStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+            final boolean isIncludeAction = action.getType() != null && action.getType().equalsIgnoreCase("INCLUDE");
+            final boolean isBranchAction = action.getType() != null && action.getType().equalsIgnoreCase("BRANCH");
+            final boolean isConditionalStep = currentPlaybookStep != null && currentPlaybookStep.getInstruction() != null
+                && currentPlaybookStep.getInstruction().toLowerCase().contains("_include:");
+
+            if (isIncludeAction || isBranchAction || isConditionalStep)
             {
-                executeIncludeAction(action, session, context, recordedActions);
-                return;
+                final String resolvedIncludePath = resolveIncludePath(action, context);
+                if (resolvedIncludePath != null && !resolvedIncludePath.trim().isEmpty())
+                {
+                    executeIncludeActionWithPath(resolvedIncludePath, action, session, context, recordedActions);
+                    return;
+                }
             }
 
             // Execution Guard: Block mutating actions when step has assertion intent
@@ -707,14 +718,22 @@ public final class ExecuteActionsStep implements PipelineStep
         final List<Action> recordedActions
     ) throws PipelineException
     {
-        // Extract include path target from SUT action definition
-        final String pathTemp = action.getTarget();
-        final String path = (pathTemp == null || pathTemp.trim().isEmpty()) ? action.getValue() : pathTemp;
+        final String path = resolveIncludePath(action, context);
         if (path == null || path.trim().isEmpty())
         {
             throw new ConclusiveFailureException("INCLUDE action target path is null or empty");
         }
+        executeIncludeActionWithPath(path, action, session, context, recordedActions);
+    }
 
+    private void executeIncludeActionWithPath(
+        final String path,
+        final Action action,
+        final AiSession session,
+        final ExecutionContext context,
+        final List<Action> recordedActions
+    ) throws PipelineException
+    {
         // Retrieve registered PlaybookResourceManager from the context state
         final PlaybookResourceManager manager = (PlaybookResourceManager) context.getTransientData().get(ExecutionContext.KEY_RESOURCE_MANAGER);
         if (manager == null)
@@ -740,8 +759,13 @@ public final class ExecuteActionsStep implements PipelineStep
         }
 
         // Resolve absolute or relative path context based on active parent directory
-        final String currentParent = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_PLAYBOOK_IDENTIFIER, "");
+        final PlaybookStep includeStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        final String stepSource = (includeStep != null && includeStep.getSourceFile() != null) ? includeStep.getSourceFile().trim() : "";
+        final String currentParent = !stepSource.isEmpty()
+            ? stepSource
+            : (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_PLAYBOOK_IDENTIFIER, "");
         final String resolvedIdentifier = manager.resolveInclude(currentParent, path);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_IDENTIFIER, resolvedIdentifier);
 
         // Add to callstack before parsing to cover circular validations
         runtimeStack.add(path);
@@ -751,7 +775,6 @@ public final class ExecuteActionsStep implements PipelineStep
             final Playbook playbook = parser.parse(resolvedIdentifier, manager);
             final List<PlaybookStep> playbookSteps = playbook.getSteps();
 
-            final PlaybookStep includeStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
             // Push included sub-steps onto LIFO stack in reverse order to ensure sequential execution
             for (int i = playbookSteps.size() - 1; i >= 0; i--)
             {
@@ -759,6 +782,10 @@ public final class ExecuteActionsStep implements PipelineStep
                 if (includeStep != null)
                 {
                     step.setParent(includeStep);
+                    if (!includeStep.getSubSteps().contains(step))
+                    {
+                        includeStep.getSubSteps().add(0, step);
+                    }
                 }
                 final PipelineStep stepPipeline = mapPlaybookStepToPipelineStep(step, session, context);
                 context.pushStep(stepPipeline);
@@ -785,6 +812,191 @@ public final class ExecuteActionsStep implements PipelineStep
             // Clean stack isolation frame
             runtimeStack.remove(runtimeStack.size() - 1);
         }
+    }
+
+    private String resolveIncludePath(final Action action, final ExecutionContext context)
+    {
+        final PlaybookStep currentStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        final String instruction = currentStep != null ? currentStep.getInstruction() : null;
+
+        // 1. Evaluate conditional instruction branch decision first
+        if (instruction != null && instruction.toLowerCase().startsWith("if ") && instruction.toLowerCase().contains("_include:"))
+        {
+            final boolean isElseBranch;
+            final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+            if (action != null && action.getCondition() != null && !action.getCondition().isEmpty() && executor != null)
+            {
+                boolean conditionMet = true;
+                final List<String> condLog = new ArrayList<>();
+                for (final Action condAction : action.getCondition())
+                {
+                    try
+                    {
+                        executor.execute(condAction);
+                        condLog.add(condAction.getType() + " " + condAction.getTarget() + " -> PASSED");
+                    }
+                    catch (final Exception | AssertionError e)
+                    {
+                        conditionMet = false;
+                        condLog.add(condAction.getType() + " " + condAction.getTarget() + " -> FAILED (" + e.getMessage() + ")");
+                    }
+                }
+                isElseBranch = !conditionMet;
+                final String logMsg = "🌿 Evaluated BRANCH condition actions for instruction '" + instruction + "': conditionMet=" 
+                    + conditionMet + " (" + String.join(", ", condLog) + ")";
+                LOGGER.info(logMsg);
+                if (currentStep != null)
+                {
+                    final String existingReasoning = currentStep.getReasoning() != null ? currentStep.getReasoning() : "";
+                    currentStep.setReasoning(existingReasoning.isEmpty() ? logMsg : existingReasoning + " | " + logMsg);
+                }
+            }
+            else
+            {
+                final String actionReasoning = action != null ? action.getReasoning() : null;
+                final String stepReasoning = currentStep != null ? currentStep.getReasoning() : null;
+                final String combinedReasoning = (actionReasoning != null ? actionReasoning : "") + " " + (stepReasoning != null ? stepReasoning : "");
+                final String lowerReasoning = combinedReasoning.toLowerCase();
+
+                isElseBranch = lowerReasoning.contains("evaluates to false")
+                    || lowerReasoning.contains("condition is false")
+                    || lowerReasoning.contains("evaluates to 'false'")
+                    || lowerReasoning.contains("evaluates to \"false\"")
+                    || lowerReasoning.contains("condition evaluates to false")
+                    || lowerReasoning.contains("'else' branch")
+                    || lowerReasoning.contains("else branch")
+                    || lowerReasoning.contains("condition is not met")
+                    || lowerReasoning.contains("condition is not true")
+                    || lowerReasoning.contains("no xpdp elements exist")
+                    || lowerReasoning.contains("executes the steps to add the simple product");
+            }
+
+            final String extractedPath = extractIncludePathFromConditionalInstruction(instruction, isElseBranch);
+            if (extractedPath != null && !extractedPath.isEmpty())
+            {
+                // Validate if primary branch resource exists on disk; fallback to alternate branch if primary missing
+                final PlaybookResourceManager manager = (PlaybookResourceManager) context.getTransientData().get(ExecutionContext.KEY_RESOURCE_MANAGER);
+                final String stepSource = (currentStep != null && currentStep.getSourceFile() != null) ? currentStep.getSourceFile().trim() : "";
+                final String currentParent = !stepSource.isEmpty()
+                    ? stepSource
+                    : (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_PLAYBOOK_IDENTIFIER, "");
+                if (manager != null)
+                {
+                    final String primaryResolved = manager.resolveInclude(currentParent, extractedPath);
+                    if (!resourceExists(primaryResolved, manager))
+                    {
+                        final String altPath = extractIncludePathFromConditionalInstruction(instruction, !isElseBranch);
+                        if (altPath != null && !altPath.isEmpty())
+                        {
+                            final String altResolved = manager.resolveInclude(currentParent, altPath);
+                            if (resourceExists(altResolved, manager))
+                            {
+                                LOGGER.info("🔄 Conditional include primary path '{}' not found; switching to existing branch path '{}'.", primaryResolved, altResolved);
+                                return altPath;
+                            }
+                        }
+                    }
+                }
+                return extractedPath;
+            }
+        }
+
+        // 2. Direct action target / value path
+        final String pathTemp = action != null ? action.getTarget() : null;
+        String path = (pathTemp == null || pathTemp.trim().isEmpty()) ? (action != null ? action.getValue() : null) : pathTemp;
+        if (path != null && !path.trim().isEmpty() && (path.endsWith(".steps") || path.endsWith(".yaml") || path.endsWith(".yml") || path.endsWith(".json")))
+        {
+            if (path.contains("_include:"))
+            {
+                path = path.substring(path.indexOf("_include:") + 9).trim();
+            }
+            else if (path.contains("include:"))
+            {
+                path = path.substring(path.indexOf("include:") + 8).trim();
+            }
+            return path;
+        }
+
+        return path;
+    }
+
+    private boolean resourceExists(final String resolvedPath, final PlaybookResourceManager manager)
+    {
+        if (resolvedPath == null || manager == null)
+        {
+            return false;
+        }
+        try (final InputStream in = manager.read(resolvedPath))
+        {
+            return in != null;
+        }
+        catch (final Exception ignored)
+        {
+            return false;
+        }
+    }
+
+    private String extractIncludePathFromConditionalInstruction(final String instruction, final boolean isElseBranch)
+    {
+        final String lower = instruction.toLowerCase();
+        final int thenIdx = lower.indexOf("then ");
+        final int elseIdx = lower.indexOf("else ");
+
+        if (isElseBranch && elseIdx != -1)
+        {
+            String elsePart = instruction.substring(elseIdx + 5).trim();
+            if (elsePart.contains("_include:"))
+            {
+                elsePart = elsePart.substring(elsePart.indexOf("_include:") + 9).trim();
+            }
+            else if (elsePart.contains("include:"))
+            {
+                elsePart = elsePart.substring(elsePart.indexOf("include:") + 8).trim();
+            }
+            return cleanIncludePathCandidate(elsePart);
+        }
+        else if (thenIdx != -1)
+        {
+            String thenPart = (elseIdx != -1 && elseIdx > thenIdx) ? instruction.substring(thenIdx + 5, elseIdx).trim() : instruction.substring(thenIdx + 5).trim();
+            if (thenPart.contains("_include:"))
+            {
+                thenPart = thenPart.substring(thenPart.indexOf("_include:") + 9).trim();
+            }
+            else if (thenPart.contains("include:"))
+            {
+                thenPart = thenPart.substring(thenPart.indexOf("include:") + 8).trim();
+            }
+            return cleanIncludePathCandidate(thenPart);
+        }
+
+        return null;
+    }
+
+    private String cleanIncludePathCandidate(final String rawCandidate)
+    {
+        if (rawCandidate == null)
+        {
+            return null;
+        }
+        String candidate = rawCandidate.trim();
+        if (candidate.startsWith("- "))
+        {
+            candidate = candidate.substring(2).trim();
+        }
+        if (candidate.contains(" "))
+        {
+            final int spaceIdx = candidate.indexOf(" ");
+            final String firstToken = candidate.substring(0, spaceIdx).trim();
+            if (firstToken.endsWith(".steps") || firstToken.endsWith(".yaml") || firstToken.endsWith(".yml") || firstToken.endsWith(".json"))
+            {
+                candidate = firstToken;
+            }
+        }
+        if (candidate.endsWith(",") || candidate.endsWith(";"))
+        {
+            candidate = candidate.substring(0, candidate.length() - 1).trim();
+        }
+        return candidate;
     }
 
     /**
@@ -820,6 +1032,11 @@ public final class ExecuteActionsStep implements PipelineStep
                         {
                             final PlaybookStep fs = flatSteps.get(i);
                             if (fs == step || (fs.getInstruction() != null && fs.getInstruction().equals(step.getInstruction())))
+                            {
+                                stepIndex = i;
+                                break;
+                            }
+                            if (fs.getRootStep() == step || fs.getParent() == step)
                             {
                                 stepIndex = i;
                                 break;
@@ -958,20 +1175,33 @@ public final class ExecuteActionsStep implements PipelineStep
             if (session != null && session.getEventBus() != null)
             {
                 int stepIndex = -1;
-                final PlaybookStep targetForIndex = step.getParent() != null ? step.getParent() : step;
                 if (flatSteps != null)
                 {
                     for (int i = 0; i < flatSteps.size(); i++)
                     {
                         final PlaybookStep fs = flatSteps.get(i);
-                        if (fs == targetForIndex)
+                        if (fs == step)
                         {
                             stepIndex = i;
                             break;
                         }
-                        if (fs.getInstruction() != null && fs.getInstruction().equals(targetForIndex.getInstruction()))
+                        if (fs.getInstruction() != null && fs.getInstruction().equals(step.getInstruction()))
                         {
-                            if (fs.getLineNumber() == targetForIndex.getLineNumber() || fs.getLineNumber() == -1 || targetForIndex.getLineNumber() == -1)
+                            if (fs.getLineNumber() == step.getLineNumber() || fs.getLineNumber() == -1 || step.getLineNumber() == -1)
+                            {
+                                stepIndex = i;
+                                break;
+                            }
+                        }
+                    }
+                    if (stepIndex == -1 && step.getParent() != null)
+                    {
+                        final PlaybookStep targetForIndex = step.getRootStep() != null ? step.getRootStep() : step.getParent();
+                        for (int i = 0; i < flatSteps.size(); i++)
+                        {
+                            final PlaybookStep fs = flatSteps.get(i);
+                            if (fs.getRootStep() == targetForIndex || fs.getParent() == targetForIndex
+                                || (fs.getInstruction() != null && fs.getInstruction().equals(targetForIndex.getInstruction())))
                             {
                                 stepIndex = i;
                                 break;

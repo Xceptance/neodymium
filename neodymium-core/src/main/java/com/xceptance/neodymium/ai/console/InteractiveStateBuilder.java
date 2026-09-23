@@ -413,11 +413,15 @@ public final class InteractiveStateBuilder
                 }
             }
 
-            if (flatSteps != null)
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+            final List<PlaybookStep> stepsToSerialize = playbookSteps != null && !playbookSteps.isEmpty() ? playbookSteps : flatSteps;
+
+            if (stepsToSerialize != null)
             {
-                for (int i = 0; i < flatSteps.size(); i++)
+                for (int i = 0; i < stepsToSerialize.size(); i++)
                 {
-                    final PlaybookStep step = flatSteps.get(i);
+                    final PlaybookStep step = stepsToSerialize.get(i);
                     final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "playbook", stepsActive, stepsPassed, execReport);
                     stepsArray.add(stepObj);
                 }
@@ -835,6 +839,11 @@ public final class InteractiveStateBuilder
             obj.add("actions", actionsArray);
         }
 
+        if (!obj.has("subSteps") && step != null && !step.getSubSteps().isEmpty())
+        {
+            obj.add("subSteps", serializePlaybookSubSteps(step.getSubSteps()));
+        }
+
         if (!obj.has("llmCalls"))
         {
             final List<ReportLlmCallEntry> matchingCalls = new ArrayList<>();
@@ -1156,6 +1165,33 @@ public final class InteractiveStateBuilder
                     if (!sub.getSubSteps().isEmpty())
                     {
                         subObj.add("subSteps", serializeSubSteps(sub.getSubSteps()));
+                    }
+                    arr.add(subObj);
+                }
+            }
+        }
+        return arr;
+    }
+
+    private static JsonArray serializePlaybookSubSteps(final List<PlaybookStep> subSteps)
+    {
+        final JsonArray arr = new JsonArray();
+        if (subSteps != null)
+        {
+            for (final PlaybookStep sub : subSteps)
+            {
+                if (sub != null)
+                {
+                    final JsonObject subObj = new JsonObject();
+                    subObj.addProperty("instruction", sub.getInstruction() != null ? sub.getInstruction() : "");
+                    subObj.addProperty("status", sub.getStatus() != null ? sub.getStatus().name().toLowerCase(Locale.ROOT) : "pending");
+                    if (sub.getFailureReason() != null)
+                    {
+                        subObj.addProperty("failureReason", sub.getFailureReason());
+                    }
+                    if (!sub.getSubSteps().isEmpty())
+                    {
+                        subObj.add("subSteps", serializePlaybookSubSteps(sub.getSubSteps()));
                     }
                     arr.add(subObj);
                 }

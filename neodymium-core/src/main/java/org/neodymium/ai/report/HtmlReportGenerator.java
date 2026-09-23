@@ -620,7 +620,7 @@ public final class HtmlReportGenerator
             }
             if (hasSubSteps)
             {
-                sb.append("            <span class=\"footer-tag highlight\">✂️ Split into ").append(step.getSubSteps().size()).append(" sub-step(s)</span>\n");
+                sb.append("            <span class=\"footer-tag highlight\">📂 Contains ").append(step.getSubSteps().size()).append(" sub-step(s)</span>\n");
             }
             sb.append("          </div>\n");
         }
@@ -674,7 +674,7 @@ public final class HtmlReportGenerator
         if (hasSubSteps)
         {
             sb.append("          <div class=\"sub-steps-container\">\n");
-            sb.append("            <div class=\"sub-steps-header\">✂️ JIT Compound Step Split:</div>\n");
+            sb.append("            <div class=\"sub-steps-header\">📂 Sub-Steps:</div>\n");
             for (int s = 0; s < step.getSubSteps().size(); s++)
             {
                 final TestExecutionReport.ReportStepEntry sub = step.getSubSteps().get(s);

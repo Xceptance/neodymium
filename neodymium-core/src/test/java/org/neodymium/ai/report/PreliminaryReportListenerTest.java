@@ -1803,5 +1803,71 @@ public class PreliminaryReportListenerTest
             ExecutionContext.setActiveContext(null);
         }
     }
+
+    @Test
+    @DisplayName("Verify sub-step parent ordering and recursive screenshot lookup")
+    public void testSubStepOrderingAndScreenshotAttachment()
+    {
+        final Path reportDir = this.tempFolder.resolve("substep-order-test");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep step0 = new PlaybookStep("Navigate to homepage");
+        final PlaybookStep step1 = new PlaybookStep("Accept cookies");
+        final PlaybookStep parentStep = new PlaybookStep("If condition then include fragment");
+        final PlaybookStep subStep1 = new PlaybookStep("Click button in fragment");
+        subStep1.setParent(parentStep);
+
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        context.getTransientData().put("playbook.steps", List.of(step0, step1, parentStep));
+        context.getTransientData().put("playbook.flatSteps", List.of(step0, step1, subStep1));
+        ExecutionContext.setActiveContext(context);
+
+        try
+        {
+            // Step 0 starts
+            bus.dispatch(new StepStartedEvent(step0, 0));
+            bus.dispatch(new StepFinishedEvent(step0, PlaybookStepStatus.SUCCESS));
+
+            // Step 1 starts
+            bus.dispatch(new StepStartedEvent(step1, 1));
+            bus.dispatch(new StepFinishedEvent(step1, PlaybookStepStatus.SUCCESS));
+
+            // SubStep1 (parent step index 2) starts
+            bus.dispatch(new StepStartedEvent(subStep1, 2));
+
+            final TestExecutionReport report = listener.getReport();
+            assertNotNull(report, "Report should not be null");
+            assertEquals(3, report.getSteps().size(), "Report should have 3 top-level steps (step0, step1, parentStep)");
+
+            // Verify order of top-level steps
+            assertEquals("Navigate to homepage", report.getSteps().get(0).getInstruction());
+            assertEquals("Accept cookies", report.getSteps().get(1).getInstruction());
+            assertEquals("If condition then include fragment", report.getSteps().get(2).getInstruction());
+            assertEquals(2, report.getSteps().get(2).getStepIndex(), "Parent step should be at stepIndex 2");
+
+            // Verify sub-step is attached to parentStep at index 2
+            final TestExecutionReport.ReportStepEntry parentEntry = report.getSteps().get(2);
+            assertEquals(1, parentEntry.getSubSteps().size(), "Parent step entry should have 1 sub-step");
+            assertEquals("Click button in fragment", parentEntry.getSubSteps().get(0).getInstruction());
+
+            // Test recursive findStepEntryByInstruction lookup
+            final TestExecutionReport.ReportStepEntry foundSub = report.findStepEntryByInstruction("Click button in fragment");
+            assertNotNull(foundSub, "findStepEntryByInstruction should locate sub-step by instruction");
+            assertEquals("Click button in fragment", foundSub.getInstruction());
+
+            // Add screenshot to found sub-step
+            final TestExecutionReport.ReportScreenshotEntry screenshotEntry = new TestExecutionReport.ReportScreenshotEntry(
+                "Failure Screenshot", 2, "image/png", "base64data", System.currentTimeMillis());
+            foundSub.addScreenshot(screenshotEntry);
+
+            assertEquals(1, parentEntry.getSubSteps().get(0).getScreenshots().size(), "Sub-step should now contain the failure screenshot");
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
 }
 

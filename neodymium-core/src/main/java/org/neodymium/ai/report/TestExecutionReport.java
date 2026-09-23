@@ -23,6 +23,7 @@ import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -245,7 +246,92 @@ public final class TestExecutionReport
         if (step != null)
         {
             this.steps.add(step);
+            this.steps.sort(Comparator.comparingInt(ReportStepEntry::getStepIndex));
         }
+    }
+
+    /**
+     * Recursively searches top-level steps and sub-steps for a {@link ReportStepEntry} matching the given stepIndex.
+     *
+     * @param stepIndex the 0-based step index to search for
+     * @return matching ReportStepEntry, or {@code null} if not found
+     */
+    public ReportStepEntry findStepEntry(final int stepIndex)
+    {
+        for (final ReportStepEntry step : this.steps)
+        {
+            final ReportStepEntry found = findStepEntryRecursive(step, stepIndex);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    private static ReportStepEntry findStepEntryRecursive(final ReportStepEntry entry, final int stepIndex)
+    {
+        if (entry == null)
+        {
+            return null;
+        }
+        if (entry.getStepIndex() == stepIndex)
+        {
+            return entry;
+        }
+        for (final ReportStepEntry sub : entry.getSubSteps())
+        {
+            final ReportStepEntry found = findStepEntryRecursive(sub, stepIndex);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Recursively searches top-level steps and sub-steps for a {@link ReportStepEntry} matching the given instruction or raw instruction.
+     *
+     * @param instruction the instruction or raw instruction string
+     * @return matching ReportStepEntry, or {@code null} if not found
+     */
+    public ReportStepEntry findStepEntryByInstruction(final String instruction)
+    {
+        if (instruction == null)
+        {
+            return null;
+        }
+        for (final ReportStepEntry step : this.steps)
+        {
+            final ReportStepEntry found = findStepEntryByInstructionRecursive(step, instruction);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        return null;
+    }
+
+    private static ReportStepEntry findStepEntryByInstructionRecursive(final ReportStepEntry entry, final String instruction)
+    {
+        if (entry == null)
+        {
+            return null;
+        }
+        if (instruction.equals(entry.getRawInstruction()) || instruction.equals(entry.getInstruction()))
+        {
+            return entry;
+        }
+        for (final ReportStepEntry sub : entry.getSubSteps())
+        {
+            final ReportStepEntry found = findStepEntryByInstructionRecursive(sub, instruction);
+            if (found != null)
+            {
+                return found;
+            }
+        }
+        return null;
     }
 
     public List<ReportLlmCallEntry> getLlmCalls()
@@ -370,6 +456,34 @@ public final class TestExecutionReport
 
         public String getStatus()
         {
+            if (!this.subSteps.isEmpty())
+            {
+                boolean anyFailed = false;
+                String lastExecutedStatus = null;
+                for (final ReportStepEntry sub : this.subSteps)
+                {
+                    if (sub != null)
+                    {
+                        final String subSt = sub.getStatus();
+                        if ("FAILED".equalsIgnoreCase(subSt))
+                        {
+                            anyFailed = true;
+                        }
+                        if (subSt != null && !"PENDING".equalsIgnoreCase(subSt) && !"SKIPPED".equalsIgnoreCase(subSt))
+                        {
+                            lastExecutedStatus = subSt;
+                        }
+                    }
+                }
+                if (anyFailed)
+                {
+                    return "FAILED";
+                }
+                if (lastExecutedStatus != null)
+                {
+                    return lastExecutedStatus;
+                }
+            }
             return this.status;
         }
 
