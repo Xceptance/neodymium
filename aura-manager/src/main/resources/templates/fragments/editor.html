@@ -28,7 +28,7 @@
 }
 </style>
 
-<div class="panel editor-container" id="editorPanel" th:fragment="editorPanelContent">
+<div class="panel editor-container" id="editorPanel" th:fragment="editorPanelContent" th:data-has-error="${hasParseError}" th:data-mode="${editorMode}">
     <div class="panel-header">
         <div class="neo-u-11">
             <span class="material-symbols-outlined neo-u-12" th:text="${isFragment != null and isFragment ? 'extension' : 'description'}">description</span>
@@ -40,13 +40,27 @@
             </span>
         </div>
         <div class="editor-actions">
+            <!-- Mode Switcher -->
+            <div class="editor-mode-toggle" style="display: inline-flex; align-items: center; background: rgba(0,0,0,0.15); border: 1px solid var(--border); border-radius: 6px; padding: 2px; margin-right: 6px;">
+                <button type="button" class="btn-mode-toggle" id="btnModeVisual" onclick="setEditorMode('visual')"
+                        th:disabled="${hasParseError != null and hasParseError}"
+                        th:style="${'raw'.equals(editorMode) ? 'opacity: 0.5; padding: 3px 8px; font-size: 11px; border-radius: 4px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer;' : 'padding: 3px 8px; font-size: 11px; border-radius: 4px; border: none; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;'}"
+                        th:title="${hasParseError != null and hasParseError ? 'Visual editor disabled due to YAML syntax error' : 'Switch to Visual Editor'}">
+                    <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">dashboard</span> Visual
+                </button>
+                <button type="button" class="btn-mode-toggle" id="btnModeRaw" onclick="setEditorMode('raw')"
+                        th:style="${'raw'.equals(editorMode) ? 'padding: 3px 8px; font-size: 11px; border-radius: 4px; border: none; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer;' : 'opacity: 0.8; padding: 3px 8px; font-size: 11px; border-radius: 4px; border: none; background: transparent; color: var(--text-secondary); cursor: pointer;'}"
+                        title="Switch to Raw YAML Editor">
+                    <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">code</span> Raw YAML
+                </button>
+            </div>
             <button class="btn-editor" id="undoBtn" onclick="editorUndo()" title="Undo (Ctrl+Z)" disabled>
                 <span class="material-symbols-outlined">undo</span> Undo
             </button>
             <button class="btn-editor" id="redoBtn" onclick="editorRedo()" title="Redo (Ctrl+Y)" disabled>
                 <span class="material-symbols-outlined">redo</span> Redo
             </button>
-            <button class="btn-editor btn-review" id="reviewStepsBtn" onclick="runReviewSteps()" title="Run PESAP AI Step Review">
+            <button class="btn-editor btn-review" id="reviewStepsBtn" onclick="runReviewSteps()" title="Run PESAP AI Step Review" th:disabled="${hasParseError != null and hasParseError}">
                 <span class="material-symbols-outlined">auto_awesome</span> Review Steps
             </button>
             <button type="button"
@@ -65,11 +79,41 @@
         </div>
     </div>
 
+    <!-- YAML Parse Error Warning Banner -->
+    <div id="editorParseErrorBanner" th:if="${hasParseError != null and hasParseError}" style="margin: 10px 16px 0 16px; padding: 12px 16px; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.4); border-left: 4px solid #ef4444; border-radius: 6px; color: #ef4444; font-size: 12px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 13px;">
+            <span class="material-symbols-outlined" style="font-size: 18px;">error</span>
+            <span>YAML Syntax Error Detected &mdash; Loaded in Raw YAML Mode</span>
+        </div>
+        <div style="font-family: monospace; white-space: pre-wrap; font-size: 11.5px; line-height: 1.4; background: rgba(0,0,0,0.2); padding: 8px 10px; border-radius: 4px; word-break: break-word;" th:text="${parseErrorMessage}">YAML parsing failed</div>
+        <div style="color: var(--text-secondary); font-size: 11px;">
+            Fix the syntax or indentation error directly in the editor below and click <b>Save</b> to restore visual editing mode.
+        </div>
+    </div>
+
+    <!-- Raw YAML Code Editor Panel -->
+    <div class="editor-raw-panel" id="rawEditorPanel" th:style="${'raw'.equals(editorMode) ? 'display: flex;' : 'display: none;'}">
+        <div class="editor-code-panel" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+            <div class="panel-header" style="flex-shrink: 0;">
+                <div class="panel-title">
+                    <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent);">edit_document</span>
+                    Direct YAML Source
+                </div>
+                <div style="font-size: 11px; color: var(--text-secondary);">
+                    UTF-8 &bull; Spaces only (no tabs)
+                </div>
+            </div>
+            <textarea id="rawYamlTextarea" spellcheck="false" class="raw-yaml-textarea"
+                      oninput="handleRawYamlInput(this)"
+                      th:text="${fileContent}"></textarea>
+        </div>
+    </div>
+
     <!-- Hidden input holding compiled YAML payload for HTMX form submission -->
     <input type="hidden" id="editorContent" name="content" th:value="${editorContent != null ? editorContent : ''}" />
 
     <!-- Main Visual Editor Layout Container -->
-    <div style="display: flex; flex: 1; min-height: 0; overflow: hidden; width: 100%;">
+    <div id="visualEditorContainer" class="visual-editor-container" th:style="${'raw'.equals(editorMode) ? 'display: none;' : 'display: flex;'}">
         
         <!-- Central Visual Editor Area -->
         <main class="editor-main-area" id="visualEditorMain">
@@ -231,19 +275,28 @@
                         <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent-purple);">grid_on</span>
                         Test Data Matrix (data:)
                     </div>
-                    <div style="font-size: 12px; color: var(--text-secondary);">
-                        Transposed Data Table
-                    </div>
                 </div>
                 <div style="padding: 16px; overflow-x: auto;">
                     <table class="transposed-matrix" id="transposedGrid">
                         <thead>
                             <tr id="matrixHeaderRow">
                                 <th class="var-key-col">Variable Key \ Iteration</th>
-                                <th th:each="row, iterStat : ${dataMatrix}" th:id="'iterHeader_' + ${iterStat.index + 1}">
-                                    <span th:text="${row.get('testId') != null ? row.get('testId') : 'Iteration ' + (iterStat.index + 1)}">Iteration 1</span>
+                                <th th:each="row, iterStat : ${dataMatrix}" th:id="'iterHeader_' + ${iterStat.index + 1}" class="iter-col-header">
+                                    <div class="iter-header-content">
+                                        <span th:text="${row.get('testId') != null ? row.get('testId') : 'Iteration ' + (iterStat.index + 1)}">Iteration 1</span>
+                                        <button type="button" class="btn-remove-iteration" title="Remove Data Set" onclick="removeMatrixColumn(this)">
+                                            <span class="material-symbols-outlined">close</span>
+                                        </button>
+                                    </div>
                                 </th>
-                                <th th:if="${dataMatrix == null or #lists.isEmpty(dataMatrix)}">Iteration 1</th>
+                                <th th:if="${dataMatrix == null or #lists.isEmpty(dataMatrix)}" id="iterHeader_1" class="iter-col-header">
+                                    <div class="iter-header-content">
+                                        <span>Iteration 1</span>
+                                        <button type="button" class="btn-remove-iteration" title="Remove Data Set" onclick="removeMatrixColumn(this)">
+                                            <span class="material-symbols-outlined">close</span>
+                                        </button>
+                                    </div>
+                                </th>
                                 <th>
                                     <button class="add-col-th-btn" onclick="addMatrixColumnInline()">
                                         <span class="material-symbols-outlined" style="font-size: 14px;">add</span>

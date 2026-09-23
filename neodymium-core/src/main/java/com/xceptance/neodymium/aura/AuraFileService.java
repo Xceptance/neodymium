@@ -48,10 +48,46 @@ public final class AuraFileService
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraFileService.class);
 
     private final Set<String> expandedFiles = ConcurrentHashMap.newKeySet();
+    private final File customResourcesDir;
     private volatile String activeEditingFile = null;
 
     public AuraFileService()
     {
+        this(null);
+    }
+
+    public AuraFileService(final File customResourcesDir)
+    {
+        this.customResourcesDir = customResourcesDir;
+    }
+
+    /**
+     * Resolves the active test resources base directory.
+     *
+     * @return the resolved test resources directory
+     */
+    public File getResourcesDirectory()
+    {
+        if (customResourcesDir != null && customResourcesDir.exists() && customResourcesDir.isDirectory())
+        {
+            return customResourcesDir.getAbsoluteFile();
+        }
+        final File defaultDir = new File("src/test/resources").getAbsoluteFile();
+        if (defaultDir.exists() && defaultDir.isDirectory())
+        {
+            return defaultDir;
+        }
+        final File coreDir = new File("neodymium-core/src/test/resources").getAbsoluteFile();
+        if (coreDir.exists() && coreDir.isDirectory())
+        {
+            return coreDir;
+        }
+        final File managerDir = new File("aura-manager/src/test/resources").getAbsoluteFile();
+        if (managerDir.exists() && managerDir.isDirectory())
+        {
+            return managerDir;
+        }
+        return defaultDir;
     }
 
     public String getActiveEditingFile()
@@ -89,7 +125,7 @@ public final class AuraFileService
     public List<YamlFileDto> getYamlFilesList()
     {
         final List<String> yamlFiles = new ArrayList<>();
-        final File resourcesDir = new File("src/test/resources").getAbsoluteFile();
+        final File resourcesDir = getResourcesDirectory();
         if (resourcesDir.exists() && resourcesDir.isDirectory())
         {
             scanDirStatic(resourcesDir, resourcesDir, yamlFiles);
@@ -102,7 +138,9 @@ public final class AuraFileService
             final Map<String, Object> details = getFileDetails(yamlFile);
             @SuppressWarnings("unchecked")
             final List<DatasetDto> datasets = (List<DatasetDto>) details.get("datasets");
-            responseList.add(new YamlFileDto(file, datasets != null ? datasets : new ArrayList<>()));
+            final String error = (String) details.get("error");
+            final boolean hasError = Boolean.TRUE.equals(details.get("hasError")) || (error != null && !error.isBlank());
+            responseList.add(new YamlFileDto(file, datasets != null ? datasets : new ArrayList<>(), hasError, error));
         }
         return responseList;
     }
@@ -142,7 +180,7 @@ public final class AuraFileService
     public List<String> getStepsFilesList()
     {
         final List<String> stepsFiles = new ArrayList<>();
-        final File resourcesDir = new File("src/test/resources").getAbsoluteFile();
+        final File resourcesDir = getResourcesDirectory();
         if (resourcesDir.exists() && resourcesDir.isDirectory())
         {
             scanDirForStepsStatic(resourcesDir, resourcesDir, stepsFiles);
@@ -359,15 +397,19 @@ public final class AuraFileService
         }
         catch (final Exception e)
         {
-            LOGGER.error("Failed to parse YAML file details for: " + file.getAbsolutePath(), e);
+            final String summary = e.getMessage() != null ? e.getMessage().replace('\n', ' ').replaceAll(" +", " ") : "Unknown syntax error";
+            LOGGER.warn("Defective YAML file detected [{}]: {}", file.getName(), summary);
+            LOGGER.debug("Stack trace for YAML parse failure:", e);
+            details.put("hasError", true);
             details.put("error", e.getMessage());
+            details.put("datasets", new ArrayList<DatasetDto>());
         }
         return details;
     }
 
     public File resolveCanonicalFile(final String file) throws IOException
     {
-        final File resourcesDir = new File("src/test/resources").getCanonicalFile();
+        final File resourcesDir = getResourcesDirectory().getCanonicalFile();
         File yamlFile = new File(resourcesDir, file).getCanonicalFile();
         if (!yamlFile.exists())
         {
@@ -453,6 +495,10 @@ public final class AuraFileService
         final File yamlFile = resolveCanonicalFile(sanitizedName);
         if (!yamlFile.exists())
         {
+            if (yamlFile.getParentFile() != null && !yamlFile.getParentFile().exists())
+            {
+                yamlFile.getParentFile().mkdirs();
+            }
             Files.writeString(yamlFile.toPath(), "", StandardCharsets.UTF_8);
         }
     }
@@ -600,13 +646,23 @@ public final class AuraFileService
                         }
                     }
                 }
+                result.put("hasError", false);
+                result.put("error", null);
             }
             catch (final Exception e)
             {
-                LOGGER.error("Failed to parse YAML content sections", e);
+                final String summary = e.getMessage() != null ? e.getMessage().replace('\n', ' ').replaceAll(" +", " ") : "Unknown syntax error";
+                LOGGER.warn("Defective YAML content syntax: {}", summary);
+                LOGGER.debug("Stack trace for YAML content parse failure:", e);
+                result.put("hasError", true);
+                result.put("error", e.getMessage());
             }
         }
-
+        else
+        {
+            result.put("hasError", false);
+            result.put("error", null);
+        }
 
         result.put("beforeSteps", beforeSteps);
         result.put("mainSteps", mainSteps);

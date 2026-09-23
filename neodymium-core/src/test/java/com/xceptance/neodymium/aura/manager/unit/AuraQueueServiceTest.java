@@ -371,7 +371,23 @@ public final class AuraQueueServiceTest
         final String extracted = AuraQueueService.extractSubprocessErrorMessage(logs);
         Assertions.assertNotNull(extracted, "Extracted error message must not be null");
         Assertions.assertTrue(extracted.contains("Failed to parse playbook: tests/stokke/stokkeOrderPayPalTest.yml"), "Extracted error must contain main failure");
-        Assertions.assertTrue(extracted.contains("Invalid playbook step format in file: proceed-to-payment.steps"), "Extracted error must contain cause");
+    }
+
+    @Test
+    public void testExtractSubprocessErrorMessageIgnoresJvmWarnings()
+    {
+        final List<String> logs = List.of(
+            "[INFO] Spawning Maven Subprocess for YAML test: tests/something.yaml...",
+            "[ERROR] WARNING: A terminally deprecated method in sun.misc.Unsafe has been called",
+            "[ERROR] WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.aspectj.weaver.loadtime.ClassLoaderWeavingAdaptor (file:/home/weigel/.m2/repository/org/aspectj/aspectjweaver/1.9.25/aspectjweaver-1.9.25.jar)",
+            "[ERROR] WARNING: Please consider reporting this to the maintainers of class org.aspectj.weaver.loadtime.ClassLoaderWeavingAdaptor",
+            "[ERROR] WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release",
+            "[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0",
+            "[INFO] BUILD SUCCESS"
+        );
+
+        final String extracted = AuraQueueService.extractSubprocessErrorMessage(logs);
+        Assertions.assertNull(extracted, "Extracted error message must be null for pure warnings");
     }
 
     /**

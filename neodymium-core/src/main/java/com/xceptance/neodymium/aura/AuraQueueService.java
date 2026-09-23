@@ -837,9 +837,9 @@ public final class AuraQueueService
                     completedFiles.add(file);
                     activeProcess.set(null);
 
-                    final String extractedError = extractSubprocessErrorMessage(currentRunLogs);
+                    final boolean isFailedRun = exitCode != 0;
+                    final String extractedError = isFailedRun ? extractSubprocessErrorMessage(currentRunLogs) : null;
                     final String primaryBrowser = (!targetProfiles.isEmpty()) ? targetProfiles.get(0) : "Default";
-                    final boolean isFailedRun = exitCode != 0 || extractedError != null;
                     final String statusStr = testWasCancelled ? "skipped" : (isFailedRun ? "failed" : "passed");
 
                     final ObjectMapper mapper = new ObjectMapper();
@@ -1416,6 +1416,13 @@ public final class AuraQueueService
                     continue;
                 }
                 final String line = stripAnsi(rawLine).trim();
+                if (line.contains("WARNING:")
+                        || line.contains("WARN:")
+                        || line.contains("Picked up _JAVA_OPTIONS")
+                        || line.contains("SLF4J:"))
+                {
+                    continue;
+                }
                 if (line.contains("Failed to parse playbook")
                         || line.contains("Caused by:")
                         || line.contains("java.lang.RuntimeException:")

@@ -57,7 +57,7 @@
                         <span class="material-symbols-outlined" 
                               th:text="${#sets.contains(expandedFiles, item.file) ? 'keyboard_arrow_down' : 'keyboard_arrow_right'}"
                               style="margin-right: 8px; color: var(--text-secondary); font-size: 16px; width: 16px; text-align: center;"></span>
-                        <label class="custom-checkbox" onclick="event.stopPropagation();">
+                        <label class="custom-checkbox" onclick="event.stopPropagation();" th:if="${!item.hasError}">
                             <input type="checkbox" class="file-select-cb" th:data-file="${item.file}" 
                                    th:checked="${selectedFileKeys != null and selectedFileKeys.contains(item.file)}"
                                    th:data-indeterminate="${partiallySelectedFileKeys != null and partiallySelectedFileKeys.contains(item.file)}"
@@ -65,20 +65,27 @@
                                    th:hx-post="@{/api/queue/toggleAll(file=${item.file})}"
                                    hx-target="#queueListContainer" hx-swap="innerHTML">
                         </label>
-                        <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px;" th:text="${item.file}">filename.yaml</span>
+                        <span th:if="${item.hasError}" class="material-symbols-outlined" style="color: var(--danger, #ef4444); font-size: 16px; margin-right: 4px;" th:title="${'YAML Parse Error: ' + item.errorMessage}">error</span>
+                        <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px;" th:styleappend="${item.hasError ? 'color: var(--danger, #ef4444);' : ''}" th:text="${item.file}">filename.yaml</span>
                     </div>
                     <button class="edit-icon-btn" th:data-file="${item.file}"
                             th:hx-get="@{/api/editor(file=${item.file})}"
                             hx-target="#editorPanel" hx-swap="outerHTML"
                             onclick="event.stopPropagation(); if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));"
-                            style="padding: 4px 8px; color: var(--text-secondary);" 
-                            th:title="'Edit YAML Steps for ' + ${item.file}" th:alt="'Edit YAML Steps for ' + ${item.file}" th:aria-label="'Edit YAML Steps for ' + ${item.file}">
-                        <span class="material-symbols-outlined" style="font-size: 16px;" aria-hidden="true">edit</span>
+                            style="padding: 4px 8px;"
+                            th:styleappend="${item.hasError ? 'color: var(--danger, #ef4444);' : 'color: var(--text-secondary);'}"
+                            th:title="${item.hasError ? 'Fix YAML Syntax in Raw Editor: ' + item.file : 'Edit YAML Steps for ' + item.file}" th:alt="'Edit YAML Steps for ' + ${item.file}" th:aria-label="'Edit YAML Steps for ' + ${item.file}">
+                        <span class="material-symbols-outlined" style="font-size: 16px;" aria-hidden="true" th:text="${item.hasError ? 'build' : 'edit'}">edit</span>
                     </button>
                 </div>
                 
                 <div class="dataset-list" th:id="'datasets-' + ${item.file}" th:style="'display: ' + (${#sets.contains(expandedFiles, item.file) ? 'flex' : 'none'}) + '; flex-direction: column; padding-left: 24px; margin-top: 4px; gap: 4px;'">
-                    <div class="dataset-item" th:each="dataset : ${item.datasets}" style="display: flex; align-items: center; padding: 4px 8px; border-radius: 6px; font-size: 12px; justify-content: space-between; cursor: pointer;" th:data-file="${item.file}" th:data-id="${dataset.id}" onclick="const cb = this.querySelector('.dataset-select-cb'); if (cb &amp;&amp; event.target !== cb &amp;&amp; !event.target.closest('.custom-checkbox')) { cb.click(); }">
+                    <div th:if="${item.hasError}" class="file-parse-error-box" style="padding: 8px 12px; border-radius: 6px; background: rgba(239, 68, 68, 0.1); border-left: 3px solid #ef4444; font-size: 11px; color: #ef4444; word-break: break-word;">
+                        <div style="font-weight: 600; margin-bottom: 2px;">YAML Syntax Error</div>
+                        <div style="font-family: monospace; white-space: pre-wrap;" th:text="${item.errorMessage}">Parse error details</div>
+                        <div style="margin-top: 6px; color: var(--text-secondary); font-size: 11px;">Click the repair icon to edit the file in Raw YAML mode.</div>
+                    </div>
+                    <div th:unless="${item.hasError}" class="dataset-item" th:each="dataset : ${item.datasets}" style="display: flex; align-items: center; padding: 4px 8px; border-radius: 6px; font-size: 12px; justify-content: space-between; cursor: pointer;" th:data-file="${item.file}" th:data-id="${dataset.id}" onclick="const cb = this.querySelector('.dataset-select-cb'); if (cb &amp;&amp; event.target !== cb &amp;&amp; !event.target.closest('.custom-checkbox')) { cb.click(); }">
                         <div style="display: flex; align-items: center; min-width: 0; overflow: hidden;">
                             <label class="custom-checkbox" onclick="event.stopPropagation();">
                                 <input type="checkbox" class="dataset-select-cb" th:data-file="${item.file}" th:data-id="${dataset.id}" 

@@ -522,15 +522,21 @@ public class AuraTestQueueController
             if (id.isBlank())
             {
                 final List<YamlFileDto> files = fileService.getYamlFilesList();
-                List<DatasetDto> datasets = null;
+                YamlFileDto targetDto = null;
                 for (final YamlFileDto f : files)
                 {
                     if (file.equals(f.file))
                     {
-                        datasets = f.datasets;
+                        targetDto = f;
                         break;
                     }
                 }
+                if (targetDto != null && targetDto.hasError)
+                {
+                    populateQueueModel(model);
+                    return "fragments/queue :: queueListContainerContent";
+                }
+                final List<DatasetDto> datasets = targetDto != null ? targetDto.datasets : null;
                 if (datasets != null && !datasets.isEmpty())
                 {
                     return toggleAllQueue(request, model);
@@ -580,6 +586,11 @@ public class AuraTestQueueController
             {
                 if (targetFile.equals(f.file))
                 {
+                    if (f.hasError)
+                    {
+                        populateQueueModel(model);
+                        return "fragments/queue :: queueListContainerContent";
+                    }
                     datasets = f.datasets;
                     break;
                 }
