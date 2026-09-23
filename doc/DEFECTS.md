@@ -41,6 +41,16 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20260923-05] AgentToolLoopStep Unconditional Exotic Tool Pruning Breaks Clear Cookies Live & Replay
+- **Date:** 2026-09-23
+- **Component:** `neodymium-core` (`AgentToolLoopStep`, `BrowserToolProvider`)
+- **Scope:** `Framework`
+- **Symptom:** `ClearCookiesIntegrationTest#testClearCookiesWhenEmpty` failed in `REPLAY_STRICT` (`ConclusiveFailureException: No recorded tool calls found for step 'Clear all cookies'`) and `REPLAY_WITH_HEALING` (`AssertionFailedError: Expected 0 LLM calls, but calls were made. ==> expected: <0> but was: <2>`). Additionally, `testClearCookiesWithActiveSession` failed during initial recording (`FORCE_RECORDING`) because browser cookies were not wiped.
+- **Root Cause:** In commit `af748f3b2`, `AgentToolLoopStep#filterTools` introduced an unconditional exclusion of specialized tools (`clear_cookies`, `clear`, `upload_file`, `drag`, `drag_to`, `execute_script`) via `isExoticTool(clean)`. Because `clear_cookies` was unconditionally pruned from `availableTools`, the LLM agent never received the tool definition. In `testClearCookiesWhenEmpty`, the LLM fell back to calling `query_dom("*")` and `complete_step`, recording 0 mutating tool calls in the candidate JSON recording. During replay, `ExecuteActionsStep` threw a `ConclusiveFailureException` on empty tool calls in strict replay, and escalated to LLM healing in healing replay.
+- **Detection Gap ("What did we miss?"):** Existing unit tests in `AgentToolLoopStepTest` only tested execution with custom mock tools and mock LLM calls. No unit tests validated tool catalog pruning against step instructions for specialized tools. Mock integration tests bypassed live LLM tool discovery by stubbing legacy JSON responses directly.
+- **Resolution:** Enhanced `AgentToolLoopStep#filterTools` to check `isExoticToolDemanded` against instruction and context text (`effectiveInstructionText`), ensuring specialized tools (`clear_cookies`, `clear`, `upload_file`, `drag`, `drag_to`, `execute_script`) are retained whenever the instruction references them.
+- **Safety Net Added:** Added unit tests in `AgentToolLoopStepTest` (`testFilterToolsPrunesExoticToolsOnStandardInstruction`, `testFilterToolsPreservesClearCookiesWhenRequested`, `testFilterToolsPreservesUploadFileWhenRequested`, `testFilterToolsPreservesDragWhenRequested`, `testFilterToolsPreservesExecuteScriptWhenRequested`), and validated live integration tests pass across `FORCE_RECORDING`, `REPLAY_STRICT`, and `REPLAY_WITH_HEALING`.
+
 ### [DEF-20260923-04] LLM Action Evasion via Uncommanded Assertions and Substitution on Failed Action Steps
 - **Date:** 2026-09-23
 - **Component:** `neodymium-core` (`AgentToolLoopStep`, `BrowserToolProvider`)

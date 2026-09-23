@@ -1683,7 +1683,7 @@ public final class AgentToolLoopStep implements PipelineStep
         return Action.fromToolCall(call);
     }
 
-    private List<ToolDefinition> filterTools(
+    List<ToolDefinition> filterTools(
         final boolean isVisual,
         final ExecutionContext context
     )
@@ -1712,6 +1712,45 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             hasMultipleTabs = false;
         }
+
+        final String instruction = context != null
+                ? (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "")
+                : "";
+        final String rawInstruction = context != null
+                ? (String) context.getTransientData().get("KEY_CURRENT_STEP_RAW_INSTRUCTION")
+                : null;
+        final Object stepObj = context != null
+                ? context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP)
+                : null;
+        final PlaybookStep step = stepObj instanceof final PlaybookStep ps ? ps : null;
+        final String stepInstruction = step != null && step.getInstruction() != null ? step.getInstruction() : "";
+        final StringBuilder combinedBuilder = new StringBuilder();
+        if (instruction != null)
+        {
+            combinedBuilder.append(instruction).append(" ");
+        }
+        if (rawInstruction != null)
+        {
+            combinedBuilder.append(rawInstruction).append(" ");
+        }
+        combinedBuilder.append(stepInstruction);
+
+        if (context != null)
+        {
+            @SuppressWarnings("unchecked")
+            final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
+            if (milestones != null)
+            {
+                for (final String milestone : milestones)
+                {
+                    if (milestone != null)
+                    {
+                        combinedBuilder.append(" ").append(milestone);
+                    }
+                }
+            }
+        }
+        final String effectiveInstructionText = combinedBuilder.toString().toLowerCase(Locale.ROOT);
 
         for (final ToolDefinition def : this.toolRegistry.getDefinitions())
         {
@@ -1742,8 +1781,8 @@ public final class AgentToolLoopStep implements PipelineStep
                 continue;
             }
 
-            // Omit exotic specialized tools on standard steps
-            if (isExoticTool(clean))
+            // Omit exotic specialized tools on standard steps unless demanded by instruction
+            if (isExoticTool(clean) && !isExoticToolDemanded(clean, effectiveInstructionText))
             {
                 continue;
             }
@@ -1751,6 +1790,19 @@ public final class AgentToolLoopStep implements PipelineStep
             defs.add(def);
         }
         return Collections.unmodifiableList(defs);
+    }
+
+    private static boolean isExoticToolDemanded(final String clean, final String instructionText)
+    {
+        return switch (clean)
+        {
+            case "clear_cookies" -> instructionText.contains("cookie") || instructionText.contains("cookies") || instructionText.contains("session");
+            case "clear" -> instructionText.contains("clear");
+            case "upload_file" -> instructionText.contains("upload") || instructionText.contains("file") || instructionText.contains("attach");
+            case "drag", "drag_to" -> instructionText.contains("drag") || instructionText.contains("drop");
+            case "execute_script" -> instructionText.contains("script") || instructionText.contains("javascript") || instructionText.contains("exec");
+            default -> false;
+        };
     }
 
     private static boolean isTabOrWindowTool(final String clean)

@@ -59,6 +59,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * Unit tests validating {@link AgentToolLoopStep} execution, dynamic intent-based scoping,
@@ -2503,6 +2504,88 @@ public class AgentToolLoopStepTest
         Assertions.assertTrue(thrown.getMessage().contains("Check the checkbox #disabled-box"));
         Assertions.assertTrue(thrown.getMessage().contains("Element is disabled"));
         Assertions.assertEquals(3, turn.get());
+    }
+
+    @Test
+    public void testFilterToolsPrunesExoticToolsOnStandardInstruction()
+    {
+        BrowserToolProvider.registerBrowserTools(this.registry);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click the submit button");
+
+        final AgentLoopLlmCaller dummyCaller = (req, ctx) -> null;
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), dummyCaller, 5L);
+        final List<ToolDefinition> tools = step.filterTools(false, this.context);
+        final Set<String> toolNames = tools.stream().map(ToolDefinition::name).collect(Collectors.toSet());
+
+        Assertions.assertTrue(toolNames.contains("click"));
+        Assertions.assertTrue(toolNames.contains("fill"));
+        Assertions.assertFalse(toolNames.contains("clear_cookies"));
+        Assertions.assertFalse(toolNames.contains("upload_file"));
+        Assertions.assertFalse(toolNames.contains("drag"));
+        Assertions.assertFalse(toolNames.contains("drag_to"));
+        Assertions.assertFalse(toolNames.contains("execute_script"));
+    }
+
+    @Test
+    public void testFilterToolsPreservesClearCookiesWhenRequested()
+    {
+        BrowserToolProvider.registerBrowserTools(this.registry);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Clear all cookies");
+
+        final AgentLoopLlmCaller dummyCaller = (req, ctx) -> null;
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), dummyCaller, 5L);
+        final List<ToolDefinition> tools = step.filterTools(false, this.context);
+        final Set<String> toolNames = tools.stream().map(ToolDefinition::name).collect(Collectors.toSet());
+
+        Assertions.assertTrue(toolNames.contains("clear_cookies"));
+        Assertions.assertFalse(toolNames.contains("upload_file"));
+        Assertions.assertFalse(toolNames.contains("drag"));
+    }
+
+    @Test
+    public void testFilterToolsPreservesUploadFileWhenRequested()
+    {
+        BrowserToolProvider.registerBrowserTools(this.registry);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Upload profile photo to #avatar-input");
+
+        final AgentLoopLlmCaller dummyCaller = (req, ctx) -> null;
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), dummyCaller, 5L);
+        final List<ToolDefinition> tools = step.filterTools(false, this.context);
+        final Set<String> toolNames = tools.stream().map(ToolDefinition::name).collect(Collectors.toSet());
+
+        Assertions.assertTrue(toolNames.contains("upload_file"));
+        Assertions.assertFalse(toolNames.contains("clear_cookies"));
+    }
+
+    @Test
+    public void testFilterToolsPreservesDragWhenRequested()
+    {
+        BrowserToolProvider.registerBrowserTools(this.registry);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Drag draggable-item to dropzone");
+
+        final AgentLoopLlmCaller dummyCaller = (req, ctx) -> null;
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), dummyCaller, 5L);
+        final List<ToolDefinition> tools = step.filterTools(false, this.context);
+        final Set<String> toolNames = tools.stream().map(ToolDefinition::name).collect(Collectors.toSet());
+
+        Assertions.assertTrue(toolNames.contains("drag"));
+        Assertions.assertTrue(toolNames.contains("drag_to"));
+        Assertions.assertFalse(toolNames.contains("clear_cookies"));
+    }
+
+    @Test
+    public void testFilterToolsPreservesExecuteScriptWhenRequested()
+    {
+        BrowserToolProvider.registerBrowserTools(this.registry);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Execute script 'window.scrollTo(0,0)'");
+
+        final AgentLoopLlmCaller dummyCaller = (req, ctx) -> null;
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), dummyCaller, 5L);
+        final List<ToolDefinition> tools = step.filterTools(false, this.context);
+        final Set<String> toolNames = tools.stream().map(ToolDefinition::name).collect(Collectors.toSet());
+
+        Assertions.assertTrue(toolNames.contains("execute_script"));
+        Assertions.assertFalse(toolNames.contains("clear_cookies"));
     }
 }
 
