@@ -119,7 +119,7 @@
         <main class="editor-main-area" id="visualEditorMain">
 
             <!-- Subtle Add 'before:' Button Container -->
-            <div id="addBeforeBtnContainer" th:style="${beforeSteps != null and !#lists.isEmpty(beforeSteps) ? 'display: none;' : 'display: block;'}">
+            <div id="addBeforeBtnContainer" th:style="${(isFragment != null and isFragment) or (beforeSteps != null and !#lists.isEmpty(beforeSteps)) ? 'display: none;' : 'display: block;'}">
                 <button class="btn-add-section-block" onclick="addBeforeBlock()">
                     <span class="material-symbols-outlined">add_circle</span>
                     <span>Add 'before:' Block</span>
@@ -261,7 +261,7 @@
             </div>
 
             <!-- Subtle Add 'after:' Button Container -->
-            <div id="addAfterBtnContainer" th:style="${afterSteps != null and !#lists.isEmpty(afterSteps) ? 'display: none;' : 'display: block;'}">
+            <div id="addAfterBtnContainer" th:style="${(isFragment != null and isFragment) or (afterSteps != null and !#lists.isEmpty(afterSteps)) ? 'display: none;' : 'display: block;'}">
                 <button class="btn-add-section-block" onclick="addAfterBlock()">
                     <span class="material-symbols-outlined">add_circle</span>
                     <span>Add 'after:' Block</span>

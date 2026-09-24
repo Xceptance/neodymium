@@ -1196,11 +1196,13 @@ function addBeforeBlock() {
 window.addBeforeBlock = addBeforeBlock;
 
 function removeBeforeBlock() {
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
     const panel = document.getElementById('beforeCodePanel');
     const btnContainer = document.getElementById('addBeforeBtnContainer');
     const container = document.getElementById('beforeStepsList');
     if (panel) panel.style.display = 'none';
-    if (btnContainer) btnContainer.style.display = 'block';
+    if (btnContainer) btnContainer.style.display = isFragmentFile ? 'none' : 'block';
     if (container) container.innerHTML = '';
     reindexSteps();
 }
@@ -1241,11 +1243,13 @@ function addAfterBlock() {
 window.addAfterBlock = addAfterBlock;
 
 function removeAfterBlock() {
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
     const panel = document.getElementById('afterCodePanel');
     const btnContainer = document.getElementById('addAfterBtnContainer');
     const container = document.getElementById('afterStepsList');
     if (panel) panel.style.display = 'none';
-    if (btnContainer) btnContainer.style.display = 'block';
+    if (btnContainer) btnContainer.style.display = isFragmentFile ? 'none' : 'block';
     if (container) container.innerHTML = '';
     reindexSteps();
 }
@@ -2485,18 +2489,21 @@ window.debouncedPushSnapshot = debouncedPushSnapshot;
 function restoreEditorSnapshot(snap) {
     if (!snap) return;
 
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+
     const beforePanel = document.getElementById('beforeCodePanel');
     const addBeforeBtn = document.getElementById('addBeforeBtnContainer');
     if (beforePanel && addBeforeBtn) {
         beforePanel.style.display = snap.hasBefore ? 'flex' : 'none';
-        addBeforeBtn.style.display = snap.hasBefore ? 'none' : 'block';
+        addBeforeBtn.style.display = (isFragmentFile || snap.hasBefore) ? 'none' : 'block';
     }
 
     const afterPanel = document.getElementById('afterCodePanel');
     const addAfterBtn = document.getElementById('addAfterBtnContainer');
     if (afterPanel && addAfterBtn) {
         afterPanel.style.display = snap.hasAfter ? 'flex' : 'none';
-        addAfterBtn.style.display = snap.hasAfter ? 'none' : 'block';
+        addAfterBtn.style.display = (isFragmentFile || snap.hasAfter) ? 'none' : 'block';
     }
 
     const rebuildBlock = (containerId, stepArray) => {
