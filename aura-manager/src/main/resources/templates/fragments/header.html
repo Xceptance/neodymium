@@ -41,7 +41,7 @@
             </div>
         </div>
 
-        <div class="header-actions">
+        <div class="header-actions d-flex align-items-center gap-2">
             <button class="btn-secondary" style="padding: 0.4rem 0.8rem; font-size: 0.8rem;" 
                     hx-post="/runs/refresh" 
                     hx-target="#mainViewContainer" 
@@ -57,6 +57,11 @@
                     title="Refresh reports and re-sync database">
                 <span class="material-symbols-outlined">refresh</span> Refresh
             </button>
+            <div class="d-flex align-items-center gap-1" id="themeContainer" th:fragment="themeContainer" style="background: var(--bg-main); padding: 2px; border-radius: 6px; border: 1px solid var(--border-color);">
+                <button class="btn-edit" id="themeLight" onclick="changeTheme('light')" title="Light Mode" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">light_mode</span></button>
+                <button class="btn-edit" id="themeDark" onclick="changeTheme('dark')" title="Dark Mode" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">dark_mode</span></button>
+                <button class="btn-edit" id="themeSystem" onclick="changeTheme('system')" title="System Theme" style="padding: 2px 6px; border: none; background: transparent;"><span class="material-symbols-outlined" style="font-size: 1rem;">desktop_windows</span></button>
+            </div>
             <span id="resyncToast" style="font-size: 0.8rem; color: #22c55e; margin-left: 0.5rem; font-weight: 500;"></span>
         </div>
     </th:block>

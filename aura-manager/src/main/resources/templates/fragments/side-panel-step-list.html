@@ -24,11 +24,11 @@
             <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                 <span class="location-highlight-badge" id="tbSideLocaleBadge"><span class="material-symbols-outlined">location_on</span> Unknown</span>
                 <span class="tag-chip" id="tbSideBrowserBadge"><span class="material-symbols-outlined text-accent">language</span> Chrome</span>
-                <span class="badge-status badge-pass" id="tbSideBatchBadge" style="background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe;"><span class="material-symbols-outlined">layers</span> Unknown</span>
+                <span class="badge-status badge-pass" id="tbSideBatchBadge" style="background: var(--status-fixed-bg); color: var(--status-fixed); border-color: var(--status-fixed-border);"><span class="material-symbols-outlined">layers</span> Unknown</span>
             </div>
 
             <!-- SECTION TITLE & BATCH FILTER -->
-            <div style="background: #f8fafc; border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem; display: flex; flex-direction: column; gap: 0.75rem;">
+            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 0.85rem; display: flex; flex-direction: column; gap: 0.75rem;">
                 <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
                     <div style="font-weight: 700; font-size: 0.875rem; color: var(--text-main); display: flex; align-items: center; gap: 0.4rem;">
                         <span class="material-symbols-outlined text-accent">history</span> Execution History Across All Batches
@@ -100,22 +100,22 @@
         <div id="sidePageSingleRunControls" style="display: flex; flex-direction: column; gap: 0.85rem;">
             <!-- SINGLE RUN EXECUTION METRICS GRID -->
             <div class="metrics-grid" id="sidePageMetricsGrid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.6rem; margin-bottom: 0.25rem;">
-                <div class="metric-card" style="padding: 0.6rem 0.8rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px;">
+                <div class="metric-card" style="padding: 0.6rem 0.8rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;">
                     <div class="metric-label" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Duration</div>
                     <div class="metric-value" id="sideMetricDuration" style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono);" th:text="${exec != null ? (exec.durationFormatted ?: '0 min 0 s') : '0 min 0 s'}">0<span class="unit" style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">min</span></div>
                     <div class="metric-sub" id="sideMetricStatus" style="font-size: 0.72rem; color: var(--text-muted);">Status: <strong class="status-pass">PASSED</strong></div>
                 </div>
-                <div class="metric-card" style="padding: 0.6rem 0.8rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px;">
+                <div class="metric-card" style="padding: 0.6rem 0.8rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;">
                     <div class="metric-label" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Playbook Steps</div>
                     <div class="metric-value" id="sideMetricSteps" style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono);">0</div>
                     <div class="metric-sub" id="sideMetricStepHealth" style="font-size: 0.72rem; color: var(--text-muted);">✨ Healed: 0 | ❌ Failed: 0</div>
                 </div>
-                <div class="metric-card" style="padding: 0.6rem 0.8rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px;">
+                <div class="metric-card" style="padding: 0.6rem 0.8rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;">
                     <div class="metric-label" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">LLM Invocations</div>
                     <div class="metric-value" id="sideMetricLlmCalls" style="font-size: 1.15rem; font-weight: 800; color: var(--text-main); font-family: var(--font-mono);">0</div>
                     <div class="metric-sub" id="sideMetricTokens" style="font-size: 0.72rem; color: var(--text-muted);">Tokens: 0 (Cached: 0)</div>
                 </div>
-                <div class="metric-card" style="padding: 0.6rem 0.8rem; background: #f8fafc; border: 1px solid var(--border); border-radius: 8px;">
+                <div class="metric-card" style="padding: 0.6rem 0.8rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px;">
                     <div class="metric-label" style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; text-transform: uppercase;">Est. Cost</div>
                     <div class="metric-value text-accent" id="sideMetricCost" style="font-size: 1.15rem; font-weight: 800; font-family: var(--font-mono);">$0.0000</div>
                     <div class="metric-sub" id="sideMetricTokenInOut" style="font-size: 0.72rem; color: var(--text-muted);">In: 0 | Out: 0</div>
@@ -133,7 +133,7 @@
                 <div id="sidePageLlmTableContainer" style="margin-top: 0.5rem; overflow-x: auto;">
                     <table class="data-params-table" style="width: 100%; font-size: 0.75rem;">
                         <thead>
-                            <tr style="background: #f1f5f9;">
+                            <tr style="background: var(--bg-hover);">
                                 <th style="text-align: left; padding: 0.4rem 0.6rem;">Category</th>
                                 <th style="text-align: center; padding: 0.4rem 0.6rem;">Calls</th>
                                 <th style="text-align: right; padding: 0.4rem 0.6rem;">Total Tokens</th>
@@ -241,7 +241,7 @@
             </div>
 
             <!-- ACTIVE CONCRETE EXECUTION COMMENT CARD -->
-            <div id="activeCommentDisplayCard" class="badge-status badge-fixed" style="display: none; justify-content: space-between; align-items: center; width: 100%; padding: 0.5rem 0.75rem; font-size: 0.8rem; background: #f8fafc; color: var(--text-main); border: 1px solid var(--border); font-family: var(--font-family);">
+            <div id="activeCommentDisplayCard" class="badge-status badge-fixed" style="display: none; justify-content: space-between; align-items: center; width: 100%; padding: 0.5rem 0.75rem; font-size: 0.8rem; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); font-family: var(--font-family);">
                 <span><span class="material-symbols-outlined text-accent">comment</span> Note: <em id="activeCommentVal">""</em></span>
                 <button class="btn-danger-subtle" title="Delete Comment" onclick="removeRunComment()"><span class="material-symbols-outlined">delete</span></button>
             </div>
@@ -250,7 +250,7 @@
             <div id="sidePageErrorDisplayCard" class="step-error-box-top" style="display: none;">
                 <div class="error-box-top-header">
                     <span><span class="material-symbols-outlined">warning</span> Failure / Exception Details</span>
-                    <span class="tag-chip" style="background: #fef2f2; color: #dc2626; border-color: #fecaca;">FAILED</span>
+                    <span class="tag-chip" style="background: var(--status-unknown-fail-bg); color: var(--status-unknown-fail); border-color: var(--status-unknown-fail-border);">FAILED</span>
                 </div>
                 <div class="error-box-top-text" id="sidePageErrorText"></div>
             </div>
@@ -259,7 +259,7 @@
             <div id="sidePageIgnoredDisplayCard" class="step-ignored-box-top" style="display: none;">
                 <div class="ignored-box-top-header">
                     <span><span class="material-symbols-outlined">block</span> Test Ignored / Skipped Reason</span>
-                    <span class="tag-chip" style="background: #f1f5f9; color: #475569; border-color: #cbd5e1;">IGNORED</span>
+                    <span class="tag-chip" style="background: var(--status-ignored-bg); color: var(--status-ignored); border-color: var(--status-ignored-border);">IGNORED</span>
                 </div>
                 <pre class="ignored-box-top-text" id="sidePageIgnoredText"></pre>
             </div>
@@ -276,7 +276,7 @@
                         <span class="attachment-title" style="margin: 0;"><span class="material-symbols-outlined text-accent">attach_file</span> EXECUTION ATTACHMENTS</span>
                     </div>
                     <div class="flex-gap-2">
-                        <span class="tag-chip" style="background: #ffffff; font-size: 0.65rem;">2 FILES</span>
+                        <span class="tag-chip" style="background: var(--bg-card); color: var(--text-main); font-size: 0.65rem;">2 FILES</span>
                         <span class="material-symbols-outlined step-section-chevron">chevron_right</span>
                     </div>
                 </div>

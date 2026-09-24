@@ -14,7 +14,7 @@
             <div>
                 <div class="panel-title">
                     <span class="material-symbols-outlined text-accent">database</span> Comprehensive Test Base
-                    <span class="badge-status badge-pass" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.75rem; margin-left: 0.5rem;" th:text="${totalClassesCount + ' Test Classes, ' + totalVariationsCount + ' Variations'}">0 Test Classes, 0 Variations</span>
+                    <span class="badge-status badge-pass" style="background: var(--bg-hover); color: var(--text-main); font-weight: 700; font-size: 0.75rem; margin-left: 0.5rem;" th:text="${totalClassesCount + ' Test Classes, ' + totalVariationsCount + ' Variations'}">0 Test Classes, 0 Variations</span>
                 </div>
                 <div class="panel-subtitle">Repository of all test classes and dataset/browser execution variations across all known batches. Filtered in real time.</div>
             </div>
@@ -107,7 +107,7 @@
                         <span class="material-symbols-outlined text-accent">folder_open</span>
                         <span th:text="${cls.className}">CheckoutProcessTest</span>
                     </div>
-                    <span class="badge-status badge-pass" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.75rem;" th:text="${cls.variationCount + (cls.variationCount == 1 ? ' Variation' : ' Variations')}">1 Variation</span>
+                    <span class="badge-status badge-pass" style="background: var(--bg-hover); color: var(--text-main); font-weight: 700; font-size: 0.75rem;" th:text="${cls.variationCount + (cls.variationCount == 1 ? ' Variation' : ' Variations')}">1 Variation</span>
                 </div>
                 <div class="test-class-executions">
                     <div class="table-responsive">
@@ -133,7 +133,7 @@
                                     <td>
                                         <div style="display: flex; flex-direction: column; gap: 0.15rem;">
                                             <strong class="text-mono" style="color: var(--text-main);" th:text="${(var.testMethodName != null and !#strings.isEmpty(var.testMethodName)) ? var.testMethodName : ((var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)) ? var.dataSetLabel : 'Default')}">testMethodName</strong>
-                                            <span th:if="${var.testMethodName != null and !#strings.isEmpty(var.testMethodName) and var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)}" class="text-muted font-mono" style="font-size: 0.78rem;" th:text="${'Data Set: ' + var.dataSetLabel}">Data Set: bad</span>
+                                            <span th:if="${var.testMethodName != null and !#strings.isEmpty(var.testMethodName) and var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)}" class="font-mono" style="font-size: 0.78rem; color: var(--status-fixed); font-weight: 600;" th:text="${'Data Set: ' + var.dataSetLabel}">Data Set: bad</span>
                                         </div>
                                     </td>
                                     <td><span class="location-highlight-badge"><span class="material-symbols-outlined">location_on</span> <span th:text="${var.location}">US</span></span></td>
@@ -155,7 +155,7 @@
                                             <span class="badge-status badge-ignored" th:if="${var.lastStatus == 'ignored' or var.lastStatus == 'skipped'}">
                                                 <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED
                                             </span>
-                                            <span class="text-muted font-mono" style="font-size: 0.78rem;" th:text="${'(' + var.totalExecutionsCount + ' runs)'}">(1 runs)</span>
+                                            <span class="font-mono" style="font-size: 0.78rem; color: var(--text-main);" th:text="${'(' + var.totalExecutionsCount + ' runs)'}">(1 runs)</span>
                                         </div>
                                     </td>
                                 </tr>

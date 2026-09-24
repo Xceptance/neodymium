@@ -12,7 +12,7 @@
             <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">dns</span>
             <div>
                 <div class="env-meta-label">Assigned Environment (Single)</div>
-                <div style="color: #2563eb; font-weight: 700;" th:text="${batchEnvironment ?: 'Unknown'}">Unknown</div>
+                <div style="color: var(--status-fixed); font-weight: 700;" th:text="${batchEnvironment ?: 'Unknown'}">Unknown</div>
             </div>
         </div>
         <div class="env-meta-item">
@@ -53,7 +53,7 @@
             <div class="legend-item"><div class="legend-box" style="background: #93c5fd; border: 1px solid #60a5fa;"></div> Succeeded with Known Bug</div>
             <div class="legend-item"><div class="legend-box" style="background: #fdba74; border: 1px solid #fb923c;"></div> Failed due to Known Bug</div>
             <div class="legend-item"><div class="legend-box" style="background: #fca5a5; border: 1px solid #f87171;"></div> Failed without Issue Info</div>
-            <div class="legend-item"><div class="legend-box" style="background: #cbd5e1; border: 1px solid #94a3b8;"></div> Ignored / Skipped</div>
+            <div class="legend-item"><div class="legend-box" style="background: #475569; border: 1px solid #64748b;"></div> Ignored / Skipped</div>
         </div>
 
         <div class="allure-stacked-svg-container" style="position: relative;">
@@ -65,24 +65,24 @@
                 </defs>
 
                 <!-- Y-AXIS GRID LINES & TICKS -->
-                <line x1="50" y1="30" x2="800" y2="30" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="4"/>
-                <text x="42" y="34" fill="#94a3b8" font-size="10" font-family="JetBrains Mono" text-anchor="end">8 Tests</text>
+                <line x1="50" y1="30" x2="800" y2="30" stroke="rgba(255,255,255,0.08)" stroke-width="1" stroke-dasharray="4"/>
+                <text x="42" y="34" fill="var(--text-main)" font-size="10" font-family="JetBrains Mono" text-anchor="end">8 Tests</text>
 
-                <line x1="50" y1="70" x2="800" y2="70" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="4"/>
-                <text x="42" y="74" fill="#94a3b8" font-size="10" font-family="JetBrains Mono" text-anchor="end">6 Tests</text>
+                <line x1="50" y1="70" x2="800" y2="70" stroke="rgba(255,255,255,0.08)" stroke-width="1" stroke-dasharray="4"/>
+                <text x="42" y="74" fill="var(--text-main)" font-size="10" font-family="JetBrains Mono" text-anchor="end">6 Tests</text>
 
-                <line x1="50" y1="110" x2="800" y2="110" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="4"/>
-                <text x="42" y="114" fill="#94a3b8" font-size="10" font-family="JetBrains Mono" text-anchor="end">4 Tests</text>
+                <line x1="50" y1="110" x2="800" y2="110" stroke="rgba(255,255,255,0.08)" stroke-width="1" stroke-dasharray="4"/>
+                <text x="42" y="114" fill="var(--text-main)" font-size="10" font-family="JetBrains Mono" text-anchor="end">4 Tests</text>
 
-                <line x1="50" y1="150" x2="800" y2="150" stroke="#f1f5f9" stroke-width="1" stroke-dasharray="4"/>
-                <text x="42" y="154" fill="#94a3b8" font-size="10" font-family="JetBrains Mono" text-anchor="end">2 Tests</text>
+                <line x1="50" y1="150" x2="800" y2="150" stroke="rgba(255,255,255,0.08)" stroke-width="1" stroke-dasharray="4"/>
+                <text x="42" y="154" fill="var(--text-main)" font-size="10" font-family="JetBrains Mono" text-anchor="end">2 Tests</text>
 
-                <line x1="50" y1="10" x2="50" y2="190" stroke="#cbd5e1" stroke-width="1.5"/>
-                <line x1="45" y1="190" x2="800" y2="190" stroke="#cbd5e1" stroke-width="1.5"/>
-                <text x="42" y="194" fill="#94a3b8" font-size="10" font-family="JetBrains Mono" text-anchor="end">0 Tests</text>
+                <line x1="50" y1="10" x2="50" y2="190" stroke="var(--border)" stroke-width="1.5"/>
+                <line x1="45" y1="190" x2="800" y2="190" stroke="var(--border)" stroke-width="1.5"/>
+                <text x="42" y="194" fill="var(--text-main)" font-size="10" font-family="JetBrains Mono" text-anchor="end">0 Tests</text>
 
                 <!-- STACKED LAYERS -->
-                <path id="trendLayerIgnored" d="" fill="#cbd5e1" />
+                <path id="trendLayerIgnored" d="" fill="#334155" />
                 <path id="trendLayerUnknown" d="" fill="#fca5a5" />
                 <path id="trendLayerKnown" d="" fill="#fdba74" />
                 <path id="trendLayerFixed" d="" fill="#93c5fd" />
@@ -95,22 +95,22 @@
                 <g id="trendSvgDots">
                     <g th:each="r, iterStat : ${runs}" class="trend-click-col" th:id="'trendPoint-' + ${r.id}"
                        th:attr="hx-get=@{/run-report(runId=${r.id})}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
-                        <circle cx="50" cy="70" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                        <circle cx="50" cy="70" r="6" fill="#2563eb" stroke="var(--bg-card)" stroke-width="2" class="trend-node-circle"/>
                     </g>
                 </g>
             </svg>
 
-            <div id="trendHoverTooltip" style="display: none; position: absolute; top: 10px; left: 10px; background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 0.9rem; box-shadow: 0 10px 25px rgba(0,0,0,0.15); pointer-events: none; z-index: 40; font-size: 0.78rem; width: 210px; flex-direction: column; gap: 0.35rem;">
+            <div id="trendHoverTooltip" style="display: none; position: absolute; top: 10px; left: 10px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 0.9rem; box-shadow: 0 10px 25px rgba(0,0,0,0.15); pointer-events: none; z-index: 40; font-size: 0.78rem; width: 210px; flex-direction: column; gap: 0.35rem;">
                 <div class="flex-between" style="border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; margin-bottom: 0.25rem;">
                     <strong style="color: var(--text-main); font-size: 0.85rem;" id="ttRunTitle" th:text="${runs != null and !runs.empty ? 'Run #' + runs[0].id : 'Run #RUN_ID'}">Run #RUN_ID</strong>
-                    <span class="tag-chip" id="ttPassRate" style="background: #ecfdf5; color: var(--status-pass); font-weight: 700;" th:text="${runs != null and !runs.empty ? runs[0].passRate + '% Pass' : '0% Pass'}">0% Pass</span>
+                    <span class="tag-chip" id="ttPassRate" style="background: var(--status-pass-bg); color: var(--status-pass); border: 1px solid var(--status-pass-border); font-weight: 700;" th:text="${runs != null and !runs.empty ? runs[0].passRate + '% Pass' : '0% Pass'}">0% Pass</span>
                 </div>
                 <div class="flex-between"><span><span class="material-symbols-outlined text-accent">fact_check</span> Total Executed:</span><strong class="text-mono" id="ttTotalVal" th:text="${runs != null and !runs.empty ? runs[0].totalTests + ' Tests' : '0 Tests'}">0 Tests</strong></div>
                 <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#6ee7b7;"></div> Passed Clean:</span><strong class="text-mono" style="color:var(--status-pass)" id="ttPassVal" th:text="${runs != null and !runs.empty ? runs[0].passedCount : 0}">0</strong></div>
                 <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#93c5fd;"></div> Succeeded (Bug):</span><strong class="text-mono" style="color:var(--status-fixed)" id="ttFixedVal" th:text="${runs != null and !runs.empty ? runs[0].succeededFixedCount : 0}">0</strong></div>
                 <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#fdba74;"></div> Failed (Bug):</span><strong class="text-mono" style="color:var(--status-known-fail)" id="ttKnownVal" th:text="${runs != null and !runs.empty ? runs[0].failedKnownCount : 0}">0</strong></div>
                 <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#fca5a5;"></div> Failed (Unknown):</span><strong class="text-mono" style="color:var(--status-unknown-fail)" id="ttUnknownVal" th:text="${runs != null and !runs.empty ? runs[0].failedUnknownCount : 0}">0</strong></div>
-                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#cbd5e1;"></div> Ignored / Skipped:</span><strong class="text-mono" style="color:var(--status-ignored)" id="ttIgnoredVal" th:text="${runs != null and !runs.empty ? runs[0].ignoredCount : 0}">0</strong></div>
+                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#475569;"></div> Ignored / Skipped:</span><strong class="text-mono" style="color:var(--status-ignored)" id="ttIgnoredVal" th:text="${runs != null and !runs.empty ? runs[0].ignoredCount : 0}">0</strong></div>
             </div>
         </div>
     </div>
@@ -132,8 +132,8 @@
                 </div>
                 <div class="area-stacked-svg-container">
                     <svg class="area-trend-svg" width="100%" height="100%" viewBox="0 0 300 90" preserveAspectRatio="none" th:data-run-points="${area.runPointsJson}">
-                        <line x1="20" y1="80" x2="280" y2="80" stroke="#cbd5e1" stroke-width="1"/>
-                        <path class="area-layer-ignored" d="" fill="#cbd5e1" />
+                        <line x1="20" y1="80" x2="280" y2="80" stroke="var(--border)" stroke-width="1"/>
+                        <path class="area-layer-ignored" d="" fill="#334155" />
                         <path class="area-layer-unknown" d="" fill="#fca5a5" />
                         <path class="area-layer-known" d="" fill="#fdba74" />
                         <path class="area-layer-fixed" d="" fill="#93c5fd" />
@@ -183,7 +183,7 @@
                         th:data-time="${run.timestampLabel}">
                         <td>
                             <strong class="text-mono text-accent" style="font-size: 0.95rem;" th:text="'#' + ${run.id}">#RUN_ID</strong> 
-                            <span class="tag-chip" style="background: #ecfdf5; color: var(--status-pass); border-color: var(--status-pass-border);" th:if="${iterStat.first}">LATEST</span>
+                            <span class="tag-chip" style="background: var(--status-pass-bg); color: var(--status-pass); border: 1px solid var(--status-pass-border);" th:if="${iterStat.first}">LATEST</span>
                         </td>
                         <td><span class="tag-batch"><span class="material-symbols-outlined">layers</span> <span th:text="${run.batchName}">Unknown</span></span></td>
                         <td class="js-format-timestamp" th:data-timestamp-ms="${run.startTimeMs}" th:text="${run.timestampLabel}">Recently</td>

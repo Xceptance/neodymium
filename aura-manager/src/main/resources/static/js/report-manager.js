@@ -2176,7 +2176,7 @@ function renderStepsForExecution(activeRow) {
                 const dimLabel = s.screenshotHashDim != null ? String(s.screenshotHashDim) : null;
                 const dimSuffix = dimLabel ? ` (${escapeHtml(dimLabel)}x${escapeHtml(dimLabel)})` : '';
                 ssimHtml = `
-                    <div class="step-ssim-card" style="margin-top: 0.5rem; border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc; padding: 0.65rem 0.85rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <div class="step-ssim-card" style="margin-top: 0.5rem; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-card); padding: 0.65rem 0.85rem; display: flex; flex-direction: column; gap: 0.5rem;">
                         <div style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; color: #475569; display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
                             <span class="material-symbols-outlined" style="font-size: 0.95rem;">compare</span>
                             <span>Visual SSIM Compare</span>
@@ -2317,7 +2317,7 @@ function renderStepsForExecution(activeRow) {
                             const safeLabel = scName.replace(/'/g, "\\'");
                             if (scSrc) {
                                 subScreenshotsHtml += `
-                                    <div style="display: flex; flex-direction: column; align-items: center; background: #ffffff; border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem;">
+                                    <div style="display: flex; flex-direction: column; align-items: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem;">
                                         <img src="${scSrc}" class="preview-thumb" alt="${scName}" title="Click to enlarge" onclick="event.stopPropagation(); openImageModal(this.src, '${safeLabel}')" style="max-height: 80px;">
                                         <span style="font-size: 0.68rem; color: var(--text-muted); margin-top: 0.2rem;">${scName}</span>
                                     </div>
@@ -2396,8 +2396,8 @@ function renderStepsForExecution(activeRow) {
                             const callMetaStr = metaParts.join(' | ');
 
                             subLlmCallsHtml += `
-                                <div class="llm-call-card" style="border: 1px solid #cbd5e1; border-radius: 6px; margin-top: 0.3rem; overflow: hidden; background: #ffffff;">
-                                    <div class="llm-call-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');" style="background: #f8fafc; padding: 0.35rem 0.6rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; cursor: pointer; user-select: none;">
+                                <div class="llm-call-card" style="border: 1px solid var(--border); border-radius: 6px; margin-top: 0.3rem; overflow: hidden; background: var(--bg-card);">
+                                    <div class="llm-call-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');" style="background: var(--bg-panel); padding: 0.35rem 0.6rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; cursor: pointer; user-select: none;">
                                         <div style="display: flex; align-items: center; gap: 0.35rem; font-weight: 700; color: #1e293b;">
                                             <span class="material-symbols-outlined llm-subsection-chevron" style="font-size: 0.8rem;">chevron_right</span>
                                             <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #a855f7;">smart_toy</span>
@@ -2501,7 +2501,7 @@ function renderStepsForExecution(activeRow) {
             let statsHtml = '';
             if (s.stats || s.llmCalls) {
                 statsHtml = `
-                    <div class="stats-summary-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; background: #f8fafc; padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                    <div class="stats-summary-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; background: var(--bg-card); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
                         <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Total Tokens Usage</span><br><strong style="font-size: 1.1rem; color: var(--text-main); font-family: var(--font-mono);">${calcTotalTokens}</strong></div>
                         <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Estimated Cost</span><br><strong style="font-size: 1.1rem; color: #0284c7; font-family: var(--font-mono);">${calcTotalCostFormatted}</strong></div>
                     </div>
@@ -2537,7 +2537,7 @@ function renderStepsForExecution(activeRow) {
                     const callMetaStr = metaParts.join(' | ');
 
                     llmCallsHtml += `
-                        <div class="llm-call-card expanded" style="border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 0.6rem; overflow: hidden; background: #ffffff;">
+                        <div class="llm-call-card expanded" style="border: 1px solid var(--border); border-radius: 8px; margin-top: 0.6rem; overflow: hidden; background: var(--bg-card);">
                             <div class="llm-call-header" onclick="this.parentElement.classList.toggle('expanded')" style="background: #f1f5f9; padding: 0.5rem 0.75rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; cursor: pointer; user-select: none;">
                                 <div style="display: flex; align-items: center; gap: 0.4rem; font-weight: 700; color: #1e293b;">
                                     <span class="material-symbols-outlined llm-subsection-chevron" style="font-size: 0.85rem;">chevron_right</span>
@@ -2592,7 +2592,7 @@ function renderStepsForExecution(activeRow) {
                 const promptSnippet = s.prompt || s.llmPrompt || `[System Instruction for Step #${stepNum}]\nExecute: ${title}`;
                 const responseSnippet = s.llmResponse || s.response || JSON.stringify(actions, null, 2);
                 llmCallsHtml = `
-                    <div class="llm-call-card expanded" style="border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 0.6rem; overflow: hidden; background: #ffffff;">
+                    <div class="llm-call-card expanded" style="border: 1px solid var(--border); border-radius: 8px; margin-top: 0.6rem; overflow: hidden; background: var(--bg-card);">
                         <div class="llm-call-header" onclick="this.parentElement.classList.toggle('expanded')" style="background: #f1f5f9; padding: 0.5rem 0.75rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; cursor: pointer; user-select: none;">
                             <div style="display: flex; align-items: center; gap: 0.4rem; font-weight: 700; color: #1e293b;">
                                 <span class="material-symbols-outlined llm-subsection-chevron" style="font-size: 0.85rem;">chevron_right</span>
@@ -2635,9 +2635,9 @@ function renderStepsForExecution(activeRow) {
             const hasSsim = s.baselineMatrixPng || s.replayMatrixPng || s.ssimScore != null || s.ssimMinScore != null || s.screenshotHashDim;
             const countsSummaryHtml = `
                 <div class="step-exec-stats" style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-top: 0.25rem;">
-                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #7e22ce;">terminal</span> ${stepActionsCount} action(s)</span>
-                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #2563eb;">image</span> ${stepScreenshotsCount} screenshot(s)</span>
-                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #a855f7;">smart_toy</span> ${stepLlmCallsCount} LLM call(s)</span>
+                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #7e22ce;">terminal</span> ${stepActionsCount} action(s)</span>
+                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #2563eb;">image</span> ${stepScreenshotsCount} screenshot(s)</span>
+                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #a855f7;">smart_toy</span> ${stepLlmCallsCount} LLM call(s)</span>
                     ${hasSsim ? `<span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #0d9488;">compare</span> Visual SSIM</span>` : ''}
                 </div>
             `;
@@ -2680,7 +2680,7 @@ function renderStepsForExecution(activeRow) {
                             <div class="inspector-content">
                                 <!-- TAB 1: OVERVIEW -->
                                 <div class="tab-panel active" id="${stepId}_tabOverview">
-                                    <div style="display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.8rem; background: #f8fafc; padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 0.5rem;">
+                                    <div style="display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.8rem; background: var(--bg-card); padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); margin-bottom: 0.5rem;">
                                         <div><strong>Instruction:</strong> ${title}</div>
                                         <div><strong>Duration:</strong> ${formattedDuration}</div>
                                         <div><strong>Start Timestamp:</strong> ${formattedStart || 'N/A'}</div>
@@ -2890,7 +2890,7 @@ function parseResponsibilityBuckets(json) {
 
 function renderResponsibilityRow(label, bucket, isTotal) {
     const rowStyle = isTotal
-        ? 'font-weight: 700; background: #ffffff;'
+        ? 'font-weight: 700; background: var(--bg-hover);'
         : '';
     const costText = '$' + (Number(bucket.estimatedCostUsd) || 0).toFixed(4);
     return `
@@ -2910,7 +2910,7 @@ function renderHeuristicLlmRows(fallback) {
     const f = fallback || { totalCalls: 0, totalTokens: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, cost: 0 };
     const cost = Number(f.cost) || 0;
     return `
-        <tr style="font-weight: 700; background: #ffffff;">
+        <tr style="font-weight: 700; background: var(--bg-hover);">
             <td style="padding: 0.35rem 0.6rem;">Total</td>
             <td style="text-align: center; padding: 0.35rem 0.6rem;">${(f.totalCalls || 0).toLocaleString()}</td>
             <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.totalTokens || 0).toLocaleString()}</td>
