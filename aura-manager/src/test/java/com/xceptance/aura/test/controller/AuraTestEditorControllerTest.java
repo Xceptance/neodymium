@@ -71,6 +71,32 @@ public class AuraTestEditorControllerTest
         Assertions.assertEquals(sampleYaml, model.getAttribute("editingFileContent"));
         Assertions.assertEquals(false, model.getAttribute("hasParseError"));
         Assertions.assertEquals("visual", model.getAttribute("editorMode"));
+        Assertions.assertEquals(false, model.getAttribute("isFragment"));
+    }
+
+    @Test
+    public void testGetEditorFragmentWithStepsFile() throws Exception
+    {
+        final Model model = new ConcurrentModel();
+        final String sampleSteps = "steps:\n  - Open ${neodymium.url}\nvariables:\n  neodymium.url: defined";
+        Mockito.when(fileService.readYamlFileContent("fragments/login.steps")).thenReturn(sampleSteps);
+        Mockito.when(fileService.parsePlaybookSections(sampleSteps)).thenReturn(Map.of(
+            "beforeSteps", List.of(),
+            "mainSteps", List.of("Open ${neodymium.url}"),
+            "afterSteps", List.of(),
+            "dataMatrix", List.of(),
+            "varKeys", List.of(),
+            "fragmentVarScopes", Map.of("neodymium.url", "defined")
+        ));
+        Mockito.when(fileService.getStepsFilesList()).thenReturn(List.of("fragments/login.steps"));
+
+        final String view = controller.getEditorFragment("fragments/login.steps", model);
+
+        Assertions.assertEquals("fragments/editor :: editorPanelContent", view);
+        Assertions.assertEquals("fragments/login.steps", model.getAttribute("activeEditingFile"));
+        Assertions.assertEquals(sampleSteps, model.getAttribute("editingFileContent"));
+        Assertions.assertEquals(true, model.getAttribute("isFragment"));
+        Assertions.assertEquals(Map.of("neodymium.url", "defined"), model.getAttribute("fragmentVarScopes"));
     }
 
     @Test
@@ -139,7 +165,19 @@ public class AuraTestEditorControllerTest
     {
         Mockito.when(fileService.getStepsFilesList()).thenReturn(List.of("fragments/login.steps"));
 
-        final ResponseEntity<List<String>> response = controller.getStepsFiles();
+        final ResponseEntity<List<String>> response = controller.getStepsFiles(null);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals(List.of("fragments/login.steps"), response.getBody());
+    }
+
+    @Test
+    public void testGetStepsFilesWithQuerySuccess()
+    {
+        Mockito.when(fileService.getFilteredStepsFilesList("login")).thenReturn(List.of("fragments/login.steps"));
+
+        final ResponseEntity<List<String>> response = controller.getStepsFiles("login");
 
         Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
         Assertions.assertNotNull(response.getBody());
@@ -192,5 +230,24 @@ public class AuraTestEditorControllerTest
         Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
         Assertions.assertNotNull(response.getBody());
         Assertions.assertEquals("ERROR", response.getBody().get("status"));
+    }
+
+    @Test
+    public void testGetIncludeTreeFragmentSuccess() throws Exception
+    {
+        final Model model = new ConcurrentModel();
+        final String nestedContent = "- Nested step 1\n- _include: fragments/child.steps";
+        Mockito.when(fileService.readYamlFileContent("fragments/nested.steps")).thenReturn(nestedContent);
+        Mockito.when(fileService.parsePlaybookSections(nestedContent)).thenReturn(Map.of(
+            "mainSteps", List.of("Nested step 1", "_include: fragments/child.steps")
+        ));
+
+        final String view = controller.getIncludeTreeFragment("fragments/nested.steps", "123", model);
+
+        Assertions.assertEquals("fragments/editor :: includeTreeCardFragment", view);
+        Assertions.assertEquals("123", model.getAttribute("cardId"));
+        Assertions.assertEquals("fragments/nested.steps", model.getAttribute("includeFile"));
+        Assertions.assertEquals(true, model.getAttribute("fileExists"));
+        Assertions.assertEquals(List.of("Nested step 1", "_include: fragments/child.steps"), model.getAttribute("includeSteps"));
     }
 }

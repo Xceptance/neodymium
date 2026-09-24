@@ -523,6 +523,7 @@ public final class AuraFileService
         final List<String> afterSteps = new ArrayList<>();
         final List<Map<String, String>> dataMatrix = new ArrayList<>();
         final List<String> varKeys = new ArrayList<>();
+        final Map<String, String> fragmentVarScopes = new HashMap<>();
 
         if (content != null && !content.trim().isEmpty())
         {
@@ -546,6 +547,15 @@ public final class AuraFileService
                         }
                     }
 
+                    if (!root.containsKey("steps") && !root.containsKey("before") && !root.containsKey("after")
+                            && (root.containsKey("_include") || root.containsKey("include")))
+                    {
+                        final String incPath = root.containsKey("_include")
+                                ? String.valueOf(root.get("_include"))
+                                : String.valueOf(root.get("include"));
+                        mainSteps.add("_include: " + incPath);
+                    }
+
                     if (root.containsKey("steps"))
                     {
                         final Object stepsObj = root.get("steps");
@@ -553,7 +563,34 @@ public final class AuraFileService
                         {
                             for (final Object stepItem : (List<?>) stepsObj)
                             {
-                                if (stepItem != null && !String.valueOf(stepItem).trim().isEmpty())
+                                if (stepItem instanceof Map)
+                                {
+                                    final Map<?, ?> mapStep = (Map<?, ?>) stepItem;
+                                    if (mapStep.containsKey("_include") || mapStep.containsKey("include"))
+                                    {
+                                        final String incPath = mapStep.containsKey("_include")
+                                                ? String.valueOf(mapStep.get("_include"))
+                                                : String.valueOf(mapStep.get("include"));
+                                        mainSteps.add("_include: " + incPath);
+                                    }
+                                    else if (mapStep.containsKey("instruction"))
+                                    {
+                                        final String inst = String.valueOf(mapStep.get("instruction")).trim();
+                                        if (!inst.isEmpty())
+                                        {
+                                            mainSteps.add(inst);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        final String sMap = String.valueOf(mapStep).trim();
+                                        if (!sMap.isEmpty())
+                                        {
+                                            mainSteps.add(sMap);
+                                        }
+                                    }
+                                }
+                                else if (stepItem != null && !String.valueOf(stepItem).trim().isEmpty())
                                 {
                                     mainSteps.add(String.valueOf(stepItem).trim());
                                 }
@@ -581,6 +618,15 @@ public final class AuraFileService
                             {
                                 afterSteps.add(line.trim());
                             }
+                        }
+                    }
+
+                    if (root.containsKey("variables") && root.get("variables") instanceof Map)
+                    {
+                        final Map<?, ?> varMap = (Map<?, ?>) root.get("variables");
+                        for (final Map.Entry<?, ?> entry : varMap.entrySet())
+                        {
+                            fragmentVarScopes.put(String.valueOf(entry.getKey()), String.valueOf(entry.getValue()));
                         }
                     }
 
@@ -612,7 +658,34 @@ public final class AuraFileService
                 {
                     for (final Object stepItem : (List<?>) loaded)
                     {
-                        if (stepItem != null)
+                        if (stepItem instanceof Map)
+                        {
+                            final Map<?, ?> mapStep = (Map<?, ?>) stepItem;
+                            if (mapStep.containsKey("_include") || mapStep.containsKey("include"))
+                            {
+                                final String incPath = mapStep.containsKey("_include")
+                                        ? String.valueOf(mapStep.get("_include"))
+                                        : String.valueOf(mapStep.get("include"));
+                                mainSteps.add("_include: " + incPath);
+                            }
+                            else if (mapStep.containsKey("instruction"))
+                            {
+                                final String inst = String.valueOf(mapStep.get("instruction")).trim();
+                                if (!inst.isEmpty())
+                                {
+                                    mainSteps.add(inst);
+                                }
+                            }
+                            else
+                            {
+                                final String sMap = String.valueOf(mapStep).trim();
+                                if (!sMap.isEmpty())
+                                {
+                                    mainSteps.add(sMap);
+                                }
+                            }
+                        }
+                        else if (stepItem != null)
                         {
                             String s = String.valueOf(stepItem).trim();
                             if (s.startsWith("-"))
@@ -651,11 +724,41 @@ public final class AuraFileService
             }
             catch (final Exception e)
             {
-                final String summary = e.getMessage() != null ? e.getMessage().replace('\n', ' ').replaceAll(" +", " ") : "Unknown syntax error";
-                LOGGER.warn("Defective YAML content syntax: {}", summary);
-                LOGGER.debug("Stack trace for YAML content parse failure:", e);
-                result.put("hasError", true);
-                result.put("error", e.getMessage());
+                boolean parsedAsLines = false;
+                final String trimmedContent = content.trim();
+                if (!trimmedContent.startsWith("steps:") && !trimmedContent.contains("\nsteps:"))
+                {
+                    for (final String line : content.split("\n"))
+                    {
+                        String trimmed = line.trim();
+                        if (!trimmed.isEmpty() && !trimmed.startsWith("#"))
+                        {
+                            if (trimmed.startsWith("-"))
+                            {
+                                trimmed = trimmed.substring(1).trim();
+                            }
+                            if (!trimmed.isEmpty())
+                            {
+                                mainSteps.add(trimmed);
+                            }
+                        }
+                    }
+                    if (!mainSteps.isEmpty())
+                    {
+                        parsedAsLines = true;
+                        result.put("hasError", false);
+                        result.put("error", null);
+                    }
+                }
+
+                if (!parsedAsLines)
+                {
+                    final String summary = e.getMessage() != null ? e.getMessage().replace('\n', ' ').replaceAll(" +", " ") : "Unknown syntax error";
+                    LOGGER.warn("Defective YAML content syntax: {}", summary);
+                    LOGGER.debug("Stack trace for YAML content parse failure:", e);
+                    result.put("hasError", true);
+                    result.put("error", e.getMessage());
+                }
             }
         }
         else
@@ -669,6 +772,7 @@ public final class AuraFileService
         result.put("afterSteps", afterSteps);
         result.put("dataMatrix", dataMatrix);
         result.put("varKeys", varKeys);
+        result.put("fragmentVarScopes", fragmentVarScopes);
         return result;
     }
 }

@@ -119,4 +119,24 @@ public final class AuraFileServiceDefectiveYamlTest
         Assertions.assertFalse(validDto.isHasError());
         Assertions.assertNull(validDto.getErrorMessage());
     }
+
+    @Test
+    public void testParsePlaybookSectionsWithStepsFileContainingIncludes()
+    {
+        final String stepsWithInclude = "- Open home page\n"
+                + "- If the page is an PDP layout then _include: fragments/configure-pdp-product.steps, else _include: fragments/add-simple-product-to-cart.steps\n";
+
+        final Map<String, Object> result = fileService.parsePlaybookSections(stepsWithInclude);
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(Boolean.FALSE, result.get("hasError"));
+        Assertions.assertNull(result.get("error"));
+
+        @SuppressWarnings("unchecked")
+        final List<String> mainSteps = (List<String>) result.get("mainSteps");
+        Assertions.assertNotNull(mainSteps);
+        Assertions.assertEquals(2, mainSteps.size());
+        Assertions.assertEquals("Open home page", mainSteps.get(0));
+        Assertions.assertEquals("If the page is an PDP layout then _include: fragments/configure-pdp-product.steps, else _include: fragments/add-simple-product-to-cart.steps", mainSteps.get(1));
+    }
 }

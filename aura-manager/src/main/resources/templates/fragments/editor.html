@@ -268,8 +268,8 @@
                 </button>
             </div>
 
-            <!-- Transposed Test Data Matrix -->
-            <div class="editor-code-panel">
+            <!-- Transposed Test Data Matrix (Only for Test Playbooks) -->
+            <div class="editor-code-panel" id="dataMatrixCodePanel" th:style="${isFragment != null and isFragment ? 'display: none;' : 'display: flex;'}">
                 <div class="panel-header">
                     <div class="panel-title">
                         <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent-purple);">grid_on</span>
@@ -338,6 +338,24 @@
                         <span class="material-symbols-outlined" style="font-size: 14px;">add</span>
                         <span>Add Variable Row</span>
                     </button>
+                </div>
+            </div>
+
+            <!-- Fragment Variables (Only for .steps Fragment Files) -->
+            <div class="editor-code-panel" id="fragmentVariablesPanel" th:style="${isFragment != null and isFragment ? 'display: flex;' : 'display: none;'}">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: #a855f7;">data_object</span>
+                        Fragment Variables
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-secondary);">
+                        Uneditable list of variables referenced in this fragment and their scope definition
+                    </div>
+                </div>
+                <div style="padding: 16px;">
+                    <div id="fragmentVariablesListContainer" class="fragment-vars-container">
+                        <!-- Populated dynamically via JS -->
+                    </div>
                 </div>
             </div>
 
@@ -422,12 +440,31 @@
                         <span class="material-symbols-outlined" style="font-size: 12px;">add</span> New
                     </button>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div class="search-container" style="margin: 6px 0 8px 0;">
+                    <span class="material-symbols-outlined search-icon" style="font-size: 14px; color: var(--text-secondary);">search</span>
+                    <input type="text" id="editorFragmentSearchInput" placeholder="Search fragments..."
+                           class="search-input" style="font-size: 11px; padding: 4px 6px 4px 26px; width: 100%; box-sizing: border-box;"
+                           oninput="filterFragmentPaletteCards(this.value)" />
+                </div>
+                <div id="fragmentCardsContainer" style="display: flex; flex-direction: column; gap: 8px;">
                     <th:block th:if="${stepsFiles != null and !stepsFiles.isEmpty()}">
                         <div class="include-card" th:each="stepFile : ${stepsFiles}" th:data-file="${stepFile}" onclick="insertIncludePill(this.getAttribute('data-file'))" th:title="${stepFile}">
-                            <div class="include-title">
-                                <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">extension</span>
-                                <span th:text="${stepFile}">fragment.steps</span>
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
+                                <div class="include-title" style="min-width: 0; flex: 1;">
+                                    <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">extension</span>
+                                    <span th:text="${stepFile}">fragment.steps</span>
+                                </div>
+                                <button class="btn-edit-fragment"
+                                        th:data-file="${stepFile}"
+                                        th:hx-get="@{/api/editor(file=${stepFile})}"
+                                        hx-target="#editorPanel"
+                                        hx-swap="outerHTML"
+                                        onclick="event.stopPropagation(); if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));"
+                                        th:title="'Edit fragment ' + ${stepFile}"
+                                        th:aria-label="'Edit fragment ' + ${stepFile}">
+                                    <span class="material-symbols-outlined" style="font-size: 13px;">edit</span>
+                                    <span>Edit</span>
+                                </button>
                             </div>
                             <div class="include-path" th:text="${stepFile}">fragments/login.steps</div>
                         </div>
@@ -437,6 +474,9 @@
                             No .steps fragments found in src/test/resources.
                         </div>
                     </th:block>
+                    <div id="noMatchingFragmentsMsg" style="display: none; font-size: 12px; color: var(--text-secondary); padding: 8px; font-style: italic;">
+                        No matching step fragments found.
+                    </div>
                 </div>
             </div>
 

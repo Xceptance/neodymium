@@ -84,6 +84,20 @@ public class AuraFileServiceTest
         Assertions.assertEquals(List.of(), sections.get("afterSteps"));
         Assertions.assertEquals(List.of(), sections.get("dataMatrix"));
         Assertions.assertEquals(List.of(), sections.get("varKeys"));
+        Assertions.assertEquals(Map.of(), sections.get("fragmentVarScopes"));
+    }
+
+    @Test
+    public void testParsePlaybookSectionsWithFragmentVariables()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = "steps:\n  - Open ${neodymium.url}\nvariables:\n  neodymium.url: defined\n  user: required";
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+
+        Assertions.assertNotNull(sections);
+        Assertions.assertEquals(List.of("Open ${neodymium.url}"), sections.get("mainSteps"));
+        final Map<String, String> expectedScopes = Map.of("neodymium.url", "defined", "user", "required");
+        Assertions.assertEquals(expectedScopes, sections.get("fragmentVarScopes"));
     }
 
     @Test
@@ -114,4 +128,21 @@ public class AuraFileServiceTest
             fileService.deleteYamlFile(stepFileName);
         }
     }
+
+    @Test
+    public void testParsePlaybookSectionsWithFragmentIncludes()
+    {
+        final AuraFileService fileService = new AuraFileService();
+
+        final String listYaml = "- Step 1\n- _include: fragments/child.steps\n- include: fragments/other.steps";
+        final Map<String, Object> listSections = fileService.parsePlaybookSections(listYaml);
+        Assertions.assertNotNull(listSections);
+        Assertions.assertEquals(List.of("Step 1", "_include: fragments/child.steps", "_include: fragments/other.steps"), listSections.get("mainSteps"));
+
+        final String singleIncludeYaml = "_include: fragments/header.steps";
+        final Map<String, Object> singleSections = fileService.parsePlaybookSections(singleIncludeYaml);
+        Assertions.assertNotNull(singleSections);
+        Assertions.assertEquals(List.of("_include: fragments/header.steps"), singleSections.get("mainSteps"));
+    }
 }
+

@@ -123,10 +123,12 @@ public class AuraTestDashboardController
             catch (final Exception ignored)
             {
             }
+            final boolean isFragment = activeFileToUse.toLowerCase().endsWith(".steps");
             model.addAttribute("activeEditingFile", activeFileToUse);
             model.addAttribute("editingFileContent", content);
             model.addAttribute("currentTestFile", activeFileToUse);
             model.addAttribute("fileContent", content);
+            model.addAttribute("isFragment", isFragment);
 
             final Map<String, Object> sections = fileService.parsePlaybookSections(content);
             model.addAttribute("beforeSteps", sections.get("beforeSteps"));
@@ -134,6 +136,7 @@ public class AuraTestDashboardController
             model.addAttribute("afterSteps", sections.get("afterSteps"));
             model.addAttribute("dataMatrix", sections.get("dataMatrix"));
             model.addAttribute("varKeys", sections.get("varKeys"));
+            model.addAttribute("fragmentVarScopes", sections.get("fragmentVarScopes"));
             model.addAttribute("yamlFiles", testFiles);
         }
         else
@@ -142,11 +145,13 @@ public class AuraTestDashboardController
             model.addAttribute("editingFileContent", "");
             model.addAttribute("currentTestFile", "");
             model.addAttribute("fileContent", "");
+            model.addAttribute("isFragment", false);
             model.addAttribute("beforeSteps", List.of());
             model.addAttribute("mainSteps", List.of());
             model.addAttribute("afterSteps", List.of());
             model.addAttribute("dataMatrix", List.of());
             model.addAttribute("varKeys", List.of());
+            model.addAttribute("fragmentVarScopes", Map.of());
             model.addAttribute("yamlFiles", testFiles);
         }
 

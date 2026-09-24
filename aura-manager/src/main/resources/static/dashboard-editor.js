@@ -840,6 +840,7 @@ function initVisualPlaybookEditor() {
         formatStepToTokens(row);
     });
 
+    updateFragmentVariablesList();
     compilePlaybookToYaml();
 
     // Live typing & editing delegation for full Undo/Redo tracking
@@ -853,6 +854,7 @@ function initVisualPlaybookEditor() {
                 if (!hasPills) {
                     stepContent.setAttribute('data-raw', stepContent.innerText);
                 }
+                updateFragmentVariablesList();
                 compilePlaybookToYaml();
                 debouncedPushSnapshot();
             } else if (evt.target.classList.contains('var-key-input') || evt.target.classList.contains('cell-val')) {
@@ -879,6 +881,102 @@ document.addEventListener('htmx:afterSwap', function(evt) {
         initVisualPlaybookEditor();
     }
 });
+
+function getExtractedFragmentVariables() {
+    const varsSet = new Set();
+    const regex = /\$\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\}/g;
+    const containers = ['beforeStepsList', 'stepsList', 'afterStepsList'];
+    containers.forEach(id => {
+        const container = document.getElementById(id);
+        if (container) {
+            const rows = container.querySelectorAll('.step-row');
+            rows.forEach(row => {
+                const contentEl = row.querySelector('.step-content');
+                if (contentEl) {
+                    const text = contentEl.getAttribute('data-raw') || contentEl.innerText.trim();
+                    let match;
+                    regex.lastIndex = 0;
+                    while ((match = regex.exec(text)) !== null) {
+                        if (match[1]) {
+                            varsSet.add(match[1]);
+                        }
+                    }
+                }
+            });
+        }
+    });
+    return Array.from(varsSet);
+}
+window.getExtractedFragmentVariables = getExtractedFragmentVariables;
+
+function updateFragmentVariablesList() {
+    const panel = document.getElementById('fragmentVariablesPanel');
+    const container = document.getElementById('fragmentVariablesListContainer');
+    if (!container) return;
+
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (panel && panel.style.display !== 'none');
+
+    if (!isFragmentFile) return;
+
+    if (!window.fragmentVarScopes) {
+        window.fragmentVarScopes = {};
+    }
+
+    const vars = getExtractedFragmentVariables();
+    if (vars.length === 0) {
+        container.innerHTML = `
+            <div class="empty-vars-msg" style="font-size: 12.5px; color: var(--text-secondary); padding: 14px; font-style: italic; background: rgba(0,0,0,0.03); border: 1px dashed var(--border); border-radius: 6px; text-align: center;">
+                <span class="material-symbols-outlined" style="font-size: 18px; vertical-align: middle; margin-right: 4px; color: #a855f7;">info</span>
+                No variables (\${variableName}) referenced in this fragment's steps.
+            </div>`;
+        return;
+    }
+
+    let html = '<div class="fragment-vars-list" style="display: flex; flex-direction: column; gap: 8px;">';
+    vars.forEach(v => {
+        const scope = window.fragmentVarScopes[v] || 'required';
+        const isDefined = (scope === 'defined');
+        html += `
+            <div class="fragment-var-item" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-main, rgba(255,255,255,0.02)); transition: all 0.15s ease;">
+                <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+                    <span class="material-symbols-outlined" style="font-size: 18px; color: #a855f7;">data_object</span>
+                    <code class="var-badge" style="font-size: 13px; font-family: monospace; font-weight: 600; padding: 3px 8px; background: rgba(168, 85, 247, 0.12); color: #c084fc; border: 1px solid rgba(168, 85, 247, 0.3); border-radius: 6px;">\${${v}}</code>
+                    <span style="font-size: 11px; color: var(--text-secondary); font-style: italic;">(Uneditable - referenced in steps)</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <div class="var-scope-toggle-group" style="display: inline-flex; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 2px;">
+                        <button type="button" class="btn-var-scope ${isDefined ? 'active-defined' : ''}" 
+                                onclick="toggleFragmentVarScope('${v}', 'defined')"
+                                style="${isDefined ? 'background: #059669; color: #ffffff; font-weight: 600;' : 'background: transparent; color: var(--text-secondary);'}"
+                                title="Variable is defined within this fragment">
+                            <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">check_circle</span>
+                            Defined in fragment
+                        </button>
+                        <button type="button" class="btn-var-scope ${!isDefined ? 'active-required' : ''}" 
+                                onclick="toggleFragmentVarScope('${v}', 'required')"
+                                style="${!isDefined ? 'background: #d97706; color: #ffffff; font-weight: 600;' : 'background: transparent; color: var(--text-secondary);'}"
+                                title="Variable requires definition from test or caller fragment">
+                            <span class="material-symbols-outlined" style="font-size: 13px; vertical-align: middle;">input</span>
+                            Requires definition from test / caller
+                        </button>
+                    </div>
+                </div>
+            </div>`;
+    });
+    html += '</div>';
+    container.innerHTML = html;
+}
+window.updateFragmentVariablesList = updateFragmentVariablesList;
+
+function toggleFragmentVarScope(varName, scope) {
+    if (!window.fragmentVarScopes) window.fragmentVarScopes = {};
+    window.fragmentVarScopes[varName] = scope;
+    updateFragmentVariablesList();
+    compilePlaybookToYaml();
+    if (typeof debouncedPushSnapshot === 'function') debouncedPushSnapshot();
+}
+window.toggleFragmentVarScope = toggleFragmentVarScope;
 
 function compilePlaybookToYaml() {
     let yaml = "# Neodymium YAML Test Data File\n\n";
@@ -934,25 +1032,40 @@ function compilePlaybookToYaml() {
         }
     }
 
-    // data matrix
-    const matrixTable = document.querySelector('#transposedGrid');
-    if (matrixTable) {
-        const headerCells = matrixTable.querySelectorAll('thead th');
-        const iterCount = headerCells.length - 2;
-        if (iterCount > 0) {
-            yaml += "data:\n";
-            for (let col = 0; col < iterCount; col++) {
-                yaml += "  -\n";
-                const rows = matrixTable.querySelectorAll('tbody tr');
-                rows.forEach(row => {
-                    const keyInput = row.querySelector('.var-key-input');
-                    const key = keyInput ? keyInput.value.trim() : '';
-                    if (!key) return;
-                    const cellValInput = row.cells[col + 1]?.querySelector('.cell-val');
-                    const val = cellValInput ? cellValInput.value.trim() : '';
-                    yaml += `    ${key}: "${val}"\n`;
-                });
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+
+    if (!isFragmentFile) {
+        // data matrix (Only for test playbooks)
+        const matrixTable = document.querySelector('#transposedGrid');
+        if (matrixTable) {
+            const headerCells = matrixTable.querySelectorAll('thead th');
+            const iterCount = headerCells.length - 2;
+            if (iterCount > 0) {
+                yaml += "data:\n";
+                for (let col = 0; col < iterCount; col++) {
+                    yaml += "  -\n";
+                    const rows = matrixTable.querySelectorAll('tbody tr');
+                    rows.forEach(row => {
+                        const keyInput = row.querySelector('.var-key-input');
+                        const key = keyInput ? keyInput.value.trim() : '';
+                        if (!key) return;
+                        const cellValInput = row.cells[col + 1]?.querySelector('.cell-val');
+                        const val = cellValInput ? cellValInput.value.trim() : '';
+                        yaml += `    ${key}: "${val}"\n`;
+                    });
+                }
             }
+        }
+    } else {
+        // variables scope mapping for fragment files
+        const extractedVars = getExtractedFragmentVariables();
+        if (extractedVars.length > 0) {
+            yaml += "variables:\n";
+            extractedVars.forEach(v => {
+                const scope = (window.fragmentVarScopes && window.fragmentVarScopes[v]) ? window.fragmentVarScopes[v] : 'required';
+                yaml += `  ${v}: ${scope}\n`;
+            });
         }
     }
 
@@ -1750,11 +1863,11 @@ function formatStepToTokens(lineNumOrElement) {
 
     safeText = safeText.replace(/(#[a-zA-Z0-9_\-]+)/g, '<span class="hint-badge">$1</span>');
 
-    safeText = safeText.replace(/_include:\s*([a-zA-Z0-9_\/\.\-]*missing[a-zA-Z0-9_\/\.\-]*)/g, function(match, path) {
+    safeText = safeText.replace(/(?:_include|include):\s*([a-zA-Z0-9_\/\.\-]*missing[a-zA-Z0-9_\/\.\-]*)/g, function(match, path) {
         return `<span class="missing-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">error</span>Missing Include: ${path}</span>`;
     });
 
-    safeText = safeText.replace(/_include:\s*([a-zA-Z0-9_\/\.\-]+)/g, function(match, path) {
+    safeText = safeText.replace(/(?:_include|include):\s*([a-zA-Z0-9_\/\.\-]+)/g, function(match, path) {
         const filename = path.split('/').pop();
         if (path.toLowerCase().endsWith('.yaml') || path.toLowerCase().endsWith('.yml')) {
             return `<span class="invalid-include-pill" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
@@ -1803,12 +1916,12 @@ function formatIncludeTreeCardTokens(treeCard) {
         if (!stepEl.querySelector('.unified-include-pill') && !stepEl.querySelector('.var-pill') && !stepEl.querySelector('.invalid-include-pill')) {
             let text = stepEl.getAttribute('data-original') || stepEl.innerText;
             if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
-            if (text && (text.includes('_include:') || text.includes('${'))) {
+            if (text && (text.includes('_include:') || text.includes('include:') || text.includes('${'))) {
                 const subLineSpan = stepEl.querySelector('.sub-line-num');
                 const lineNumText = subLineSpan ? subLineSpan.innerText : '-';
                 
                 let safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                safeText = safeText.replace(/_include:\s*([a-zA-Z0-9_\/\.\-]+)/g, function(match, path) {
+                safeText = safeText.replace(/(?:_include|include):\s*([a-zA-Z0-9_\/\.\-]+)/g, function(match, path) {
                     const filename = path.split('/').pop();
                     if (path.toLowerCase().endsWith('.yaml') || path.toLowerCase().endsWith('.yml')) {
                         return `<span class="invalid-include-pill" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
@@ -2113,6 +2226,35 @@ function insertIncludePill(filePath) {
     }
 }
 window.insertIncludePill = insertIncludePill;
+
+function filterFragmentPaletteCards(query) {
+    const term = (query || '').toLowerCase().trim();
+    const container = document.getElementById('fragmentCardsContainer') || document.querySelector('.sidebar-palette-right');
+    if (!container) return;
+
+    const cards = container.querySelectorAll('.include-card');
+    let visibleCount = 0;
+
+    cards.forEach(card => {
+        const file = (card.getAttribute('data-file') || card.innerText || '').toLowerCase();
+        if (!term || file.includes(term)) {
+            card.style.display = '';
+            visibleCount++;
+        } else {
+            card.style.display = 'none';
+        }
+    });
+
+    const noMatchMsg = document.getElementById('noMatchingFragmentsMsg');
+    if (noMatchMsg) {
+        if (cards.length > 0 && visibleCount === 0 && term.length > 0) {
+            noMatchMsg.style.display = 'block';
+        } else {
+            noMatchMsg.style.display = 'none';
+        }
+    }
+}
+window.filterFragmentPaletteCards = filterFragmentPaletteCards;
 
 function addMatrixRowInlineEmpty() {
     const tbody = document.querySelector('#transposedGrid tbody');
@@ -2432,6 +2574,7 @@ function restoreEditorSnapshot(snap) {
     }
 
     reindexSteps();
+    updateFragmentVariablesList();
     compilePlaybookToYaml();
     checkEditorDirtyStatus();
     updateUndoRedoUI();

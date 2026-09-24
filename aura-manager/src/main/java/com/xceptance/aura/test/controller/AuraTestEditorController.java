@@ -86,6 +86,7 @@ public class AuraTestEditorController
             model.addAttribute("afterSteps", sections.get("afterSteps"));
             model.addAttribute("dataMatrix", sections.get("dataMatrix"));
             model.addAttribute("varKeys", sections.get("varKeys"));
+            model.addAttribute("fragmentVarScopes", sections.get("fragmentVarScopes"));
             model.addAttribute("yamlFiles", fileService.getYamlFilesList());
         }
         else
@@ -104,6 +105,7 @@ public class AuraTestEditorController
             model.addAttribute("afterSteps", List.of());
             model.addAttribute("dataMatrix", List.of());
             model.addAttribute("varKeys", List.of());
+            model.addAttribute("fragmentVarScopes", Map.of());
             model.addAttribute("yamlFiles", fileService.getYamlFilesList());
         }
         return "fragments/editor :: editorPanelContent";
@@ -111,9 +113,41 @@ public class AuraTestEditorController
 
     @GetMapping("/api/editor/steps-files")
     @ResponseBody
-    public ResponseEntity<List<String>> getStepsFiles()
+    public ResponseEntity<List<String>> getStepsFiles(@RequestParam(value = "q", required = false) final String query)
     {
+        if (query != null && !query.isBlank())
+        {
+            return ResponseEntity.ok(fileService.getFilteredStepsFilesList(query));
+        }
         return ResponseEntity.ok(fileService.getStepsFilesList());
+    }
+
+    @GetMapping("/api/editor/include-tree")
+    public String getIncludeTreeFragment(@RequestParam("file") final String relativePath,
+                                         @RequestParam("cardId") final String cardId,
+                                         final Model model)
+    {
+        String content = "";
+        boolean fileExists = false;
+        try
+        {
+            content = fileService.readYamlFileContent(relativePath);
+            fileExists = true;
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        @SuppressWarnings("unchecked")
+        final List<String> includeSteps = (List<String>) sections.getOrDefault("mainSteps", List.of());
+
+        model.addAttribute("cardId", cardId);
+        model.addAttribute("includeFile", relativePath);
+        model.addAttribute("fileExists", fileExists);
+        model.addAttribute("includeSteps", includeSteps);
+
+        return "fragments/editor :: includeTreeCardFragment";
     }
 
     @GetMapping("/api/read")

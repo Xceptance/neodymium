@@ -412,4 +412,30 @@ public final class AuraManagerEditorUiTest
         $("#createTestModal").shouldNotBe(Condition.visible);
         $("#editorPanel").shouldBe(Condition.visible);
     }
+
+    @Test
+    public final void testEditFragmentFromEditorPalette()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test to open editor panel
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Find the first fragment card in Category 4 palette and click its Edit button
+        final SelenideElement fragmentCard = $("#fragmentCardsContainer .include-card");
+        if (fragmentCard.exists())
+        {
+            final String fragmentFile = fragmentCard.getAttribute("data-file");
+            fragmentCard.$(".btn-edit-fragment").shouldBe(Condition.visible).click();
+
+            // Verify editor panel updates to edit the fragment file
+            $("#editorPanel").shouldBe(Condition.visible);
+            $(".file-badge-steps").shouldBe(Condition.visible);
+            $("#editorFileName").shouldHave(Condition.text(fragmentFile));
+        }
+    }
 }
