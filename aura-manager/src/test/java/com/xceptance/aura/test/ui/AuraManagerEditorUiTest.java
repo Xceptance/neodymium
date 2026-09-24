@@ -388,4 +388,28 @@ public final class AuraManagerEditorUiTest
         // Row consists of: variable key td, 1 iteration td, and 1 trailing empty td = 3 tds
         Assertions.assertEquals(3, firstRowTds.size(), "Tbody row should have 3 cells (Key, Iteration 1, and trailing cell).");
     }
+
+    @Test
+    public final void testPressEscapeWithCreateModalOpenDoesNotCloseEditor()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test to open editor
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Open create modal again while editor is active
+        $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldBe(Condition.visible);
+
+        // Press Escape key while modal is active
+        $("#newTestName").shouldBe(Condition.visible).sendKeys(Keys.ESCAPE);
+
+        // Verify create modal closes while editor remains open
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+    }
 }

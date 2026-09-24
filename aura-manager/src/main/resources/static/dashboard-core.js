@@ -610,6 +610,28 @@ document.addEventListener('click', function(e) {
 });
 
 document.addEventListener('keydown', function(event) {
+    if (event.key === 'Escape') {
+        const visibleModals = Array.from(document.querySelectorAll('.modal-overlay, .image-lightbox-modal'))
+            .filter(function(m) {
+                return m.offsetWidth > 0 || m.offsetHeight > 0 || window.getComputedStyle(m).display !== 'none';
+            });
+        if (visibleModals.length > 0) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            visibleModals.forEach(function(m) {
+                m.style.display = 'none';
+                if (m.classList.contains('active')) {
+                    m.classList.remove('active');
+                }
+            });
+            const newTestInput = document.getElementById('newTestName');
+            if (newTestInput) {
+                newTestInput.value = '';
+            }
+            return;
+        }
+    }
+
     const newTestInput = document.getElementById('newTestName');
     if (newTestInput && event.target === newTestInput && event.key === 'Enter') {
         if (typeof submitCreateTest === 'function') {
