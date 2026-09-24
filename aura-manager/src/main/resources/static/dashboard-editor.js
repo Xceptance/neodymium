@@ -410,7 +410,93 @@ function closeConsole() {
 }
 window.closeConsole = closeConsole;
 
-function openYamlEditor(filename) {
+function showUnsavedChangesPrompt(onConfirm, onCancel, filename, onSaveAndLeave) {
+    const fileToClose = filename || activeEditingFile || 'playbook';
+    let modal = document.getElementById('unsavedChangesModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.id = 'unsavedChangesModal';
+        modal.style.display = 'none';
+        modal.innerHTML = `
+            <div class="modal-card">
+                <div class="modal-header">Unsaved Changes</div>
+                <div class="modal-body">
+                    <p id="unsavedChangesModalMessage" style="margin: 0; font-size: 0.95rem; color: var(--text-color, inherit);">
+                        The file '${fileToClose}' has unsaved changes. What would you like to do?
+                    </p>
+                </div>
+                <div class="modal-footer" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" class="btn-editor" id="unsavedChangesStayBtn">Cancel</button>
+                    <button type="button" class="btn-danger" id="unsavedChangesCloseBtn">Leave without saving</button>
+                    <button type="button" class="btn-primary" id="unsavedChangesSaveBtn">Save changes & leave</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } else {
+        const msgEl = modal.querySelector('#unsavedChangesModalMessage');
+        if (msgEl) {
+            msgEl.textContent = `The file '${fileToClose}' has unsaved changes. What would you like to do?`;
+        }
+    }
+
+    const stayBtn = modal.querySelector('#unsavedChangesStayBtn');
+    const closeBtn = modal.querySelector('#unsavedChangesCloseBtn');
+    const saveBtn = modal.querySelector('#unsavedChangesSaveBtn');
+
+    if (stayBtn) {
+        stayBtn.onclick = function() {
+            modal.style.display = 'none';
+            if (typeof onCancel === 'function') onCancel();
+        };
+    }
+
+    if (closeBtn) {
+        closeBtn.onclick = function() {
+            modal.style.display = 'none';
+            if (typeof onConfirm === 'function') onConfirm();
+        };
+    }
+
+    if (saveBtn) {
+        saveBtn.onclick = async function() {
+            modal.style.display = 'none';
+            if (typeof onSaveAndLeave === 'function') {
+                await onSaveAndLeave();
+            } else {
+                if (typeof saveYamlFile === 'function') {
+                    await saveYamlFile();
+                }
+                if (typeof onConfirm === 'function') onConfirm();
+            }
+        };
+    }
+
+    modal.style.display = 'flex';
+}
+window.showUnsavedChangesPrompt = showUnsavedChangesPrompt;
+
+function openYamlEditor(filename, force = false) {
+    if (!force && activeEditingFile && activeEditingFile !== filename && typeof isEditorDirty === 'function' && isEditorDirty()) {
+        return new Promise((resolve) => {
+            showUnsavedChangesPrompt(
+                function() {
+                    openYamlEditor(filename, true).then(resolve);
+                },
+                function() {
+                    resolve();
+                },
+                activeEditingFile,
+                async function() {
+                    if (typeof saveYamlFile === 'function') {
+                        await saveYamlFile();
+                    }
+                    openYamlEditor(filename, true).then(resolve);
+                }
+            );
+        });
+    }
     if (filename && window.history && window.history.pushState) {
         const searchParams = new URLSearchParams(window.location.search);
         if (searchParams.get('file') !== filename) {
@@ -578,10 +664,22 @@ window.submitDeleteTest = submitDeleteTest;
 
 function closeEditor(force = false) {
     if (!force && typeof isEditorDirty === 'function' && isEditorDirty()) {
-        const confirmClose = confirm(`The file '${activeEditingFile || 'playbook'}' has unsaved changes. Are you sure you want to close without saving?`);
-        if (!confirmClose) {
-            return;
-        }
+        showUnsavedChangesPrompt(
+            function() {
+                closeEditor(true);
+            },
+            function() {
+                // Cancel: stay on page
+            },
+            activeEditingFile,
+            async function() {
+                if (typeof saveYamlFile === 'function') {
+                    await saveYamlFile();
+                }
+                closeEditor(true);
+            }
+        );
+        return;
     }
     if (window.history && window.history.pushState) {
         const searchParams = new URLSearchParams(window.location.search);
@@ -615,6 +713,61 @@ function closeEditor(force = false) {
 }
 window.closeEditor = closeEditor;
 
+/* Global Navigation & Link Click Interceptor for Open File Editing */
+document.addEventListener('click', function(e) {
+    const activeFile = activeEditingFile || window.activeEditingFile;
+    if (!activeFile) return;
+
+    const link = e.target.closest('a[href], [hx-get], [hx-post]');
+    if (!link) return;
+
+    if (e.target.closest('.modal-overlay, .modal-card')) return;
+
+    const href = link.getAttribute('href');
+    const hxGet = link.getAttribute('hx-get');
+    const hxPost = link.getAttribute('hx-post');
+
+    if (href && (href.startsWith('javascript:') || href === '#')) return;
+
+    if (href && href.includes('file=') && href.includes(encodeURIComponent(activeFile))) return;
+
+    const isDirty = (typeof isEditorDirty === 'function' && isEditorDirty());
+
+    if (isDirty) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        const executeRedirect = () => {
+            closeEditor(true);
+            if (href) {
+                window.location.href = href;
+            } else if (hxGet && window.htmx) {
+                htmx.ajax('GET', hxGet, { target: link.getAttribute('hx-target') || '#mainViewContainer', swap: link.getAttribute('hx-swap') || 'innerHTML' });
+            } else if (hxPost && window.htmx) {
+                htmx.ajax('POST', hxPost, { target: link.getAttribute('hx-target') || '#mainViewContainer', swap: link.getAttribute('hx-swap') || 'innerHTML' });
+            }
+        };
+
+        showUnsavedChangesPrompt(
+            function() {
+                executeRedirect();
+            },
+            function() {
+                // Stay on page
+            },
+            activeFile,
+            async function() {
+                if (typeof saveYamlFile === 'function') {
+                    await saveYamlFile();
+                }
+                executeRedirect();
+            }
+        );
+    } else {
+        closeEditor(true);
+    }
+}, true);
+
 window.addEventListener('popstate', function(evt) {
     const params = new URLSearchParams(window.location.search);
     const fileParam = params.get('file');
@@ -647,6 +800,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     }
+    initVisualPlaybookEditor();
 });
 
 function syncStateFromQueueContainer() {
@@ -875,7 +1029,10 @@ function initVisualPlaybookEditor() {
 }
 window.initVisualPlaybookEditor = initVisualPlaybookEditor;
 
-// Automatically init editor when editor fragment is swapped in
+// Automatically init editor on initial DOM load or when editor fragment is swapped in
+document.addEventListener('DOMContentLoaded', function() {
+    initVisualPlaybookEditor();
+});
 document.addEventListener('htmx:afterSwap', function(evt) {
     if (evt.detail.target && evt.detail.target.id === 'editorPanel') {
         initVisualPlaybookEditor();
@@ -966,8 +1123,79 @@ function updateFragmentVariablesList() {
     });
     html += '</div>';
     container.innerHTML = html;
+    updateFragmentListItemInfoIcon();
 }
 window.updateFragmentVariablesList = updateFragmentVariablesList;
+
+function updateFragmentListItemInfoIcon() {
+    if (!window.activeEditingFile || !window.activeEditingFile.toLowerCase().endsWith('.steps')) return;
+    const currentVars = (typeof getExtractedFragmentVariables === 'function') ? getExtractedFragmentVariables() : [];
+    const reqVars = currentVars.filter(v => !(window.fragmentVarScopes && window.fragmentVarScopes[v] === 'defined'));
+    
+    const file = window.activeEditingFile;
+    const listContainers = document.querySelectorAll(`[data-file="${CSS.escape ? CSS.escape(file) : file}"]`);
+    
+    listContainers.forEach(container => {
+        const targetHeader = container.querySelector('.item-main') || container.querySelector('.include-title');
+        if (!targetHeader) return;
+        
+        let icon = targetHeader.querySelector('.fragment-req-vars-icon');
+        if (reqVars.length > 0) {
+            const reqText = reqVars.join(', ');
+            if (!icon) {
+                icon = document.createElement('span');
+                icon.className = 'material-symbols-outlined fragment-req-vars-icon';
+                icon.style.cssText = 'margin-right: 6px; font-size: 15px; color: #d97706; cursor: help; flex-shrink: 0;';
+                icon.innerText = 'info';
+                icon.onclick = function(e) { e.stopPropagation(); };
+
+                const extensionIcon = targetHeader.querySelector('.material-symbols-outlined');
+                if (extensionIcon && extensionIcon.nextSibling) {
+                    targetHeader.insertBefore(icon, extensionIcon.nextSibling);
+                } else {
+                    targetHeader.appendChild(icon);
+                }
+            }
+            icon.setAttribute('data-req-vars', reqText);
+            icon.style.display = 'inline-block';
+        } else if (icon) {
+            icon.remove();
+        }
+    });
+}
+window.updateFragmentListItemInfoIcon = updateFragmentListItemInfoIcon;
+
+document.addEventListener('mouseover', function(e) {
+    const target = e.target ? e.target.closest('.fragment-req-vars-icon') : null;
+    if (target) {
+        const text = target.getAttribute('data-req-vars');
+        if (!text) return;
+        
+        let tooltip = document.getElementById('auraGlobalTooltip');
+        if (!tooltip) {
+            tooltip = document.createElement('div');
+            tooltip.id = 'auraGlobalTooltip';
+            tooltip.className = 'aura-global-tooltip';
+            document.body.appendChild(tooltip);
+        }
+        
+        tooltip.innerText = text.startsWith('Required variables:') ? text : 'Required variables: ' + text;
+        const rect = target.getBoundingClientRect();
+        tooltip.style.left = Math.round(rect.left + rect.width / 2) + 'px';
+        tooltip.style.top = Math.round(rect.top - 6) + 'px';
+        tooltip.style.display = 'block';
+    }
+}, true);
+
+document.addEventListener('mouseout', function(e) {
+    const target = e.target ? e.target.closest('.fragment-req-vars-icon') : null;
+    if (target) {
+        const tooltip = document.getElementById('auraGlobalTooltip');
+        if (tooltip) {
+            tooltip.style.display = 'none';
+        }
+    }
+}, true);
 
 function toggleFragmentVarScope(varName, scope) {
     if (!window.fragmentVarScopes) window.fragmentVarScopes = {};
@@ -1156,7 +1384,12 @@ document.addEventListener('htmx:afterSwap', function(evt) {
         if (swapped.classList && swapped.classList.contains('include-tree-card')) {
             formatIncludeTreeCardTokens(swapped);
         }
+        if (swapped.nextElementSibling && swapped.nextElementSibling.classList && swapped.nextElementSibling.classList.contains('include-tree-card')) {
+            formatIncludeTreeCardTokens(swapped.nextElementSibling);
+        }
     }
+    const allTreeCards = document.querySelectorAll('.include-tree-card');
+    allTreeCards.forEach(card => formatIncludeTreeCardTokens(card));
     updateAllLineNumbers();
 });
 
@@ -1312,8 +1545,14 @@ function setCaretOffset(element, offset) {
 }
 window.setCaretOffset = setCaretOffset;
 
-/* Step Focus & Blur Event Handlers */
+let isClickingIncludeArrow = false;
+window.isClickingIncludeArrow = false;
+
 function handleStepFocus(lineNumOrElement) {
+    if (window.isClickingIncludeArrow) {
+        return;
+    }
+
     let row = null;
     let lineNum = null;
     if (typeof lineNumOrElement === 'object' && lineNumOrElement && lineNumOrElement.nodeType) {
@@ -1871,12 +2110,13 @@ function formatStepToTokens(lineNumOrElement) {
         return `<span class="missing-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">error</span>Missing Include: ${path}</span>`;
     });
 
-    safeText = safeText.replace(/(?:_include|include):\s*([a-zA-Z0-9_\/\.\-]+)/g, function(match, path) {
-        const filename = path.split('/').pop();
-        if (path.toLowerCase().endsWith('.yaml') || path.toLowerCase().endsWith('.yml')) {
+    safeText = safeText.replace(/(?:_include|include):\s*["']?([a-zA-Z0-9_\/\.\-]+)["']?/g, function(match, path) {
+        const cleanPath = path.replace(/^['"]|['"]$/g, '');
+        const filename = cleanPath.split('/').pop();
+        if (cleanPath.toLowerCase().endsWith('.yaml') || cleanPath.toLowerCase().endsWith('.yml')) {
             return `<span class="invalid-include-pill" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
         }
-        return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${lineNum}', '${path}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
+        return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${lineNum}', '${cleanPath}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
     });
 
     safeText = safeText.replace(/\$\{([a-zA-Z0-9_\.]+)\}/g, function(match, name) {
@@ -1887,25 +2127,82 @@ function formatStepToTokens(lineNumOrElement) {
 }
 window.formatStepToTokens = formatStepToTokens;
 
+window.pendingIncludeRequests = window.pendingIncludeRequests || {};
+
 function handleArrowMouseDown(event, cardId, filePath) {
+    window.isClickingIncludeArrow = true;
+    setTimeout(() => { window.isClickingIncludeArrow = false; }, 300);
     if (event) {
         event.preventDefault();
         event.stopPropagation();
     }
     
-    let tree = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    const cleanFilePath = filePath ? filePath.replace(/^['"]|['"]$/g, '').trim() : '';
+    const clickedEl = event ? (event.target ? event.target.closest('.hover-arrow') || event.target : null) : null;
+    let targetEl = null;
+    let effectiveCardId = cardId;
 
-    if (tree && tree.getAttribute('data-include-file') !== filePath) {
+    if (clickedEl) {
+        const stepRow = clickedEl.closest('.step-row');
+        const nestedStep = clickedEl.closest('.nested-editable-step');
+
+        if (stepRow) {
+            targetEl = stepRow;
+            effectiveCardId = stepRow.getAttribute('data-line') || cardId;
+        } else if (nestedStep) {
+            targetEl = nestedStep;
+            if (!nestedStep.getAttribute('data-nested-card-id')) {
+                nestedStep.setAttribute('data-nested-card-id', cardId || ('sub_' + Math.floor(Math.random() * 100000)));
+            }
+            effectiveCardId = nestedStep.getAttribute('data-nested-card-id');
+        }
+    }
+
+    if (!targetEl && effectiveCardId) {
+        targetEl = document.querySelector(`.step-row[data-line="${effectiveCardId}"]`) || document.querySelector(`.nested-editable-step[data-nested-card-id="${effectiveCardId}"]`) || document.getElementById(`includeTreeCard_${effectiveCardId}`);
+    }
+
+    let tree = null;
+    if (targetEl && targetEl.nextElementSibling && targetEl.nextElementSibling.classList && targetEl.nextElementSibling.classList.contains('include-tree-card')) {
+        tree = targetEl.nextElementSibling;
+    }
+    if (!tree && effectiveCardId) {
+        tree = document.getElementById(`includeTreeCard_${effectiveCardId}`) || document.getElementById(`includeTreeCard${effectiveCardId}`);
+    }
+
+    if (tree && tree.getAttribute('data-include-file') !== cleanFilePath) {
         tree.remove();
         tree = null;
     }
 
     if (!tree) {
-        // HTMX fetch or dynamic card fallback
-        htmx.ajax('GET', `/api/editor/include-tree?file=${encodeURIComponent(filePath)}&cardId=${encodeURIComponent(cardId)}`, {
-            target: `.step-row[data-line="${cardId}"]`,
-            swap: 'afterend'
-        });
+        if (window.pendingIncludeRequests[effectiveCardId]) {
+            return;
+        }
+        window.pendingIncludeRequests[effectiveCardId] = true;
+
+        fetch(`/api/editor/include-tree?file=${encodeURIComponent(cleanFilePath)}&cardId=${encodeURIComponent(effectiveCardId)}`)
+            .then(res => res.text())
+            .then(html => {
+                delete window.pendingIncludeRequests[effectiveCardId];
+                
+                let liveTarget = document.querySelector(`.step-row[data-line="${effectiveCardId}"]`)
+                    || document.querySelector(`.nested-editable-step[data-nested-card-id="${effectiveCardId}"]`)
+                    || (targetEl && document.contains(targetEl) ? targetEl : null);
+
+                if (liveTarget && liveTarget.parentElement) {
+                    liveTarget.insertAdjacentHTML('afterend', html);
+                    const newlyInsertedTree = document.getElementById(`includeTreeCard_${effectiveCardId}`) || liveTarget.nextElementSibling;
+                    if (newlyInsertedTree) {
+                        formatIncludeTreeCardTokens(newlyInsertedTree);
+                    }
+                    updateAllLineNumbers();
+                }
+            })
+            .catch(err => {
+                delete window.pendingIncludeRequests[effectiveCardId];
+                if (console && console.error) console.error("Failed to fetch include tree card", err);
+            });
     } else {
         tree.style.display = (tree.style.display === 'none') ? 'flex' : 'none';
         updateAllLineNumbers();
@@ -1913,25 +2210,37 @@ function handleArrowMouseDown(event, cardId, filePath) {
 }
 window.handleArrowMouseDown = handleArrowMouseDown;
 
+document.addEventListener('htmx:targetError', function(evt) {
+    if (console && console.warn) console.warn('HTMX target error caught:', evt.detail);
+});
+document.addEventListener('htmx:swapError', function(evt) {
+    if (console && console.warn) console.warn('HTMX swap error caught:', evt.detail);
+});
+
 function formatIncludeTreeCardTokens(treeCard) {
     if (!treeCard) return;
+    const cardId = treeCard.id ? treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '') : 'sub';
     const steps = treeCard.querySelectorAll('.nested-editable-step');
-    steps.forEach(stepEl => {
+    steps.forEach((stepEl, idx) => {
+        if (!stepEl.getAttribute('data-nested-card-id')) {
+            stepEl.setAttribute('data-nested-card-id', `${cardId}_nested_${idx}_${Math.floor(Math.random() * 1000)}`);
+        }
         if (!stepEl.querySelector('.unified-include-pill') && !stepEl.querySelector('.var-pill') && !stepEl.querySelector('.invalid-include-pill')) {
             let text = stepEl.getAttribute('data-original') || stepEl.innerText;
             if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
             if (text && (text.includes('_include:') || text.includes('include:') || text.includes('${'))) {
                 const subLineSpan = stepEl.querySelector('.sub-line-num');
                 const lineNumText = subLineSpan ? subLineSpan.innerText : '-';
+                const stepCardId = stepEl.getAttribute('data-nested-card-id');
                 
                 let safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                safeText = safeText.replace(/(?:_include|include):\s*([a-zA-Z0-9_\/\.\-]+)/g, function(match, path) {
-                    const filename = path.split('/').pop();
-                    if (path.toLowerCase().endsWith('.yaml') || path.toLowerCase().endsWith('.yml')) {
+                safeText = safeText.replace(/(?:_include|include):\s*["']?([a-zA-Z0-9_\/\.\-]+)["']?/g, function(match, path) {
+                    const cleanPath = path.replace(/^['"]|['"]$/g, '');
+                    const filename = cleanPath.split('/').pop();
+                    if (cleanPath.toLowerCase().endsWith('.yaml') || cleanPath.toLowerCase().endsWith('.yml')) {
                         return `<span class="invalid-include-pill" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
                     }
-                    const cardId = (treeCard.id ? treeCard.id.replace('includeTreeCard_', '') : 'sub') + '_' + Math.floor(Math.random()*1000);
-                    return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${cardId}', '${path}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
+                    return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${stepCardId}', '${cleanPath}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
                 });
                 safeText = safeText.replace(/\$\{([a-zA-Z0-9_\.]+)\}/g, function(match, name) {
                     return `<span class="var-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
@@ -1946,7 +2255,7 @@ window.formatIncludeTreeCardTokens = formatIncludeTreeCardTokens;
 let activeNestedStep = null;
 
 function handleNestedFocus(el) {
-    if (!el) return;
+    if (!el || window.isClickingIncludeArrow) return;
     activeNestedStep = el;
     el.setAttribute('contenteditable', 'true');
     const text = el.getAttribute('data-original') || el.innerText;

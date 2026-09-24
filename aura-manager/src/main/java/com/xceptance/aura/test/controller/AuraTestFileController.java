@@ -55,6 +55,7 @@ public class AuraTestFileController
         model.addAttribute("files", files);
         model.addAttribute("testFiles", files);
         model.addAttribute("stepsFiles", fileService.getStepsFilesList());
+        model.addAttribute("fragmentRequiredVarsMap", fileService.getFragmentRequiredVariablesMap());
         model.addAttribute("expandedFiles", fileService.getExpandedFiles());
         model.addAttribute("selectedKeys", queueController.getSelectedQueueKeys());
         model.addAttribute("selectedFileKeys", queueController.getFullySelectedFileKeys(files));

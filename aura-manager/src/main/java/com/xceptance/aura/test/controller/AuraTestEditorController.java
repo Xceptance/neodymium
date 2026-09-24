@@ -57,6 +57,7 @@ public class AuraTestEditorController
     public String getEditorFragment(@RequestParam(value = "file", required = false) final String relativePath, final Model model)
     {
         model.addAttribute("stepsFiles", fileService.getStepsFilesList());
+        model.addAttribute("fragmentRequiredVarsMap", fileService.getFragmentRequiredVariablesMap());
         if (relativePath != null && !relativePath.isBlank())
         {
             fileService.setActiveEditingFile(relativePath);
@@ -127,23 +128,24 @@ public class AuraTestEditorController
                                          @RequestParam("cardId") final String cardId,
                                          final Model model)
     {
-        String content = "";
+        final String cleanPath = relativePath != null ? relativePath.trim().replaceAll("^[\"']|[\"']$", "") : "";
+        String content = null;
         boolean fileExists = false;
         try
         {
-            content = fileService.readYamlFileContent(relativePath);
-            fileExists = true;
+            content = fileService.readYamlFileContent(cleanPath);
+            fileExists = (content != null);
         }
         catch (final Exception ignored)
         {
         }
 
-        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content != null ? content : "");
         @SuppressWarnings("unchecked")
         final List<String> includeSteps = (List<String>) sections.getOrDefault("mainSteps", List.of());
 
         model.addAttribute("cardId", cardId);
-        model.addAttribute("includeFile", relativePath);
+        model.addAttribute("includeFile", cleanPath);
         model.addAttribute("fileExists", fileExists);
         model.addAttribute("includeSteps", includeSteps);
 

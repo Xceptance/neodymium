@@ -2752,7 +2752,8 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    overflow: hidden;
+    position: relative;
+    overflow: visible;
     max-width: 100%;
 }
 
@@ -3873,6 +3874,39 @@
         transform: scale(1) translateY(0);
     }
 }
+
+/* Global Floating Viewport Tooltip */
+.aura-global-tooltip {
+    position: fixed;
+    transform: translate(-50%, -100%);
+    background: #0f172a;
+    color: #f8fafc;
+    border: 1px solid #334155;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    font-family: var(--font-family, system-ui, sans-serif);
+    white-space: nowrap;
+    z-index: 9999999;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    display: none;
+    transition: opacity 0.1s ease;
+}
+
+.aura-global-tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #0f172a transparent transparent transparent;
+}
+
+
 
 
 

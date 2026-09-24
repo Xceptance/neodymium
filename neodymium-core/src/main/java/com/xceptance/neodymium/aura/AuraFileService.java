@@ -28,10 +28,13 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
@@ -222,6 +225,96 @@ public final class AuraFileService
             }
         }
         return filtered;
+    }
+
+    private static final Pattern VAR_PATTERN = Pattern.compile("\\$\\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\\}");
+
+    /**
+     * Retrieves a map of relative step fragment paths to their formatted string of required variables coming from test/caller.
+     *
+     * @return map of fragment file path to comma-separated required variable names
+     */
+    public Map<String, String> getFragmentRequiredVariablesMap()
+    {
+        final Map<String, String> result = new HashMap<>();
+        final List<String> stepsFiles = getStepsFilesList();
+        for (final String stepFile : stepsFiles)
+        {
+            final List<String> reqVars = getRequiredVariablesForFragment(stepFile);
+            if (!reqVars.isEmpty())
+            {
+                result.put(stepFile, String.join(", ", reqVars));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Extracts required variables for a given step fragment file that are not defined within it.
+     *
+     * @param relativePath relative file path of the step fragment
+     * @return list of required variable names
+     */
+    public List<String> getRequiredVariablesForFragment(final String relativePath)
+    {
+        if (relativePath == null || relativePath.isBlank() || !relativePath.toLowerCase().endsWith(".steps"))
+        {
+            return List.of();
+        }
+        try
+        {
+            final String content = readYamlFileContent(relativePath);
+            if (content == null || content.isBlank())
+            {
+                return List.of();
+            }
+            final Map<String, Object> sections = parsePlaybookSections(content);
+            @SuppressWarnings("unchecked")
+            final Map<String, String> fragmentVarScopes = (Map<String, String>) sections.get("fragmentVarScopes");
+
+            final Set<String> referencedVars = new LinkedHashSet<>();
+            extractVarsFromObject(sections.get("beforeSteps"), referencedVars);
+            extractVarsFromObject(sections.get("mainSteps"), referencedVars);
+            extractVarsFromObject(sections.get("afterSteps"), referencedVars);
+
+            final List<String> requiredVars = new ArrayList<>();
+            for (final String varName : referencedVars)
+            {
+                final String scope = fragmentVarScopes != null ? fragmentVarScopes.get(varName) : null;
+                if (!"defined".equalsIgnoreCase(scope))
+                {
+                    requiredVars.add(varName);
+                }
+            }
+            return requiredVars;
+        }
+        catch (final Exception e)
+        {
+            LOGGER.debug("Could not parse fragment required variables for {}", relativePath, e);
+            return List.of();
+        }
+    }
+
+    private void extractVarsFromObject(final Object stepsObj, final Set<String> targetSet)
+    {
+        if (stepsObj instanceof List)
+        {
+            for (final Object item : (List<?>) stepsObj)
+            {
+                if (item != null)
+                {
+                    final String str = String.valueOf(item);
+                    final Matcher matcher = VAR_PATTERN.matcher(str);
+                    while (matcher.find())
+                    {
+                        if (matcher.group(1) != null)
+                        {
+                            targetSet.add(matcher.group(1));
+                        }
+                    }
+                }
+            }
+        }
     }
 
     public void scanDirForStepsStatic(final File baseDir, final File currentDir, final List<String> stepsFiles)

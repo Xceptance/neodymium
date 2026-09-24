@@ -144,5 +144,31 @@ public class AuraFileServiceTest
         Assertions.assertNotNull(singleSections);
         Assertions.assertEquals(List.of("_include: fragments/header.steps"), singleSections.get("mainSteps"));
     }
+
+    @Test
+    public void testGetRequiredVariablesForFragment() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String stepFileName = "unit_test_req_vars.steps";
+        try
+        {
+            fileService.createYamlFile(stepFileName);
+            final String yamlContent = "steps:\n  - Open ${neodymium.url}\n  - Type \"${username}\" into \"#user\"\n  - Type \"${password}\" into \"#pass\"\nvariables:\n  neodymium.url: defined\n  username: required\n";
+            fileService.saveYamlFileContent(stepFileName, yamlContent);
+
+            final List<String> reqVars = fileService.getRequiredVariablesForFragment(stepFileName);
+            Assertions.assertNotNull(reqVars);
+            Assertions.assertEquals(List.of("username", "password"), reqVars);
+
+            final Map<String, String> reqMap = fileService.getFragmentRequiredVariablesMap();
+            Assertions.assertNotNull(reqMap);
+            Assertions.assertTrue(reqMap.containsKey(stepFileName));
+            Assertions.assertEquals("username, password", reqMap.get(stepFileName));
+        }
+        finally
+        {
+            fileService.deleteYamlFile(stepFileName);
+        }
+    }
 }
 

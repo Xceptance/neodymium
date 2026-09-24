@@ -27,6 +27,7 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
+import com.codeborne.selenide.WebDriverConditions;
 import com.xceptance.aura.AuraManagerApplication;
 import com.xceptance.neodymium.aura.AuraFileService;
 import java.io.File;
@@ -84,7 +85,7 @@ public final class AuraManagerEditorUiTest
         }
 
         final String[] dirPaths = new String[] { "src/test/resources", "target/test-classes" };
-        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml" };
+        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps", "New Step Fragment.steps" };
 
         for (final String dirPath : dirPaths)
         {
@@ -414,7 +415,7 @@ public final class AuraManagerEditorUiTest
     }
 
     @Test
-    public final void testEditFragmentFromEditorPalette()
+    public final void testFragmentPaletteHasNoEditButton()
     {
         Selenide.open("http://localhost:" + this.port + "/");
 
@@ -425,17 +426,72 @@ public final class AuraManagerEditorUiTest
         $("#createTestModal").shouldNotBe(Condition.visible);
         $("#editorPanel").shouldBe(Condition.visible);
 
-        // Find the first fragment card in Category 4 palette and click its Edit button
+        // Verify fragment card in Category 4 palette does not have edit button
         final SelenideElement fragmentCard = $("#fragmentCardsContainer .include-card");
         if (fragmentCard.exists())
         {
-            final String fragmentFile = fragmentCard.getAttribute("data-file");
-            fragmentCard.$(".btn-edit-fragment").shouldBe(Condition.visible).click();
-
-            // Verify editor panel updates to edit the fragment file
-            $("#editorPanel").shouldBe(Condition.visible);
-            $(".file-badge-steps").shouldBe(Condition.visible);
-            $("#editorFileName").shouldHave(Condition.text(fragmentFile));
+            fragmentCard.$(".btn-edit-fragment").shouldNot(Condition.exist);
         }
+    }
+
+    @Test
+    public final void testFragmentEditorHidesAddBeforeAndAddAfterButtons()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new step fragment (.steps file)
+        $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Step Fragment.steps");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Verify editor is editing a fragment
+        $(".file-badge-steps").shouldBe(Condition.visible);
+
+        // Verify Add Before and Add After buttons are hidden for .steps fragment files
+        $("#addBeforeBtnContainer").shouldNotBe(Condition.visible);
+        $("#addAfterBtnContainer").shouldNotBe(Condition.visible);
+    }
+
+    @Test
+    public final void testUnsavedFileRedirectShowsDialogWithThreeChoices()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test file to open editor panel
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Make an edit to mark the file as unsaved/dirty
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        final SelenideElement stepContent = stepRows.first().$(".step-content");
+        stepContent.click();
+        stepContent.sendKeys("Open https://xceptance.com");
+
+        // Click sidebar link to Run History (/report) while file is unsaved
+        $("#navRunsList").shouldBe(Condition.visible).click();
+
+        // Verify overlay modal opens with all 3 choices
+        $("#unsavedChangesModal").shouldBe(Condition.visible);
+        $("#unsavedChangesStayBtn").shouldBe(Condition.visible).shouldHave(Condition.text("Cancel"));
+        $("#unsavedChangesCloseBtn").shouldBe(Condition.visible).shouldHave(Condition.text("Leave without saving"));
+        $("#unsavedChangesSaveBtn").shouldBe(Condition.visible).shouldHave(Condition.text("Save changes & leave"));
+
+        // Click Cancel to remain on page
+        $("#unsavedChangesStayBtn").click();
+        $("#unsavedChangesModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Click sidebar link again and choose Save changes & leave
+        $("#navRunsList").click();
+        $("#unsavedChangesModal").shouldBe(Condition.visible);
+        $("#unsavedChangesSaveBtn").click();
+
+        // Verify redirect to /report completes
+        Selenide.webdriver().shouldHave(WebDriverConditions.urlContaining("/report"));
     }
 }

@@ -448,23 +448,17 @@
                 </div>
                 <div id="fragmentCardsContainer" style="display: flex; flex-direction: column; gap: 8px;">
                     <th:block th:if="${stepsFiles != null and !stepsFiles.isEmpty()}">
-                        <div class="include-card" th:each="stepFile : ${stepsFiles}" th:data-file="${stepFile}" onclick="insertIncludePill(this.getAttribute('data-file'))" th:title="${stepFile}">
+                        <div class="include-card" th:each="stepFile : ${stepsFiles}" th:data-file="${stepFile}" onclick="insertIncludePill(this.getAttribute('data-file'))">
                             <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;">
-                                <div class="include-title" style="min-width: 0; flex: 1;">
-                                    <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">extension</span>
-                                    <span th:text="${stepFile}">fragment.steps</span>
+                                <div class="include-title" style="min-width: 0; flex: 1; display: flex; align-items: center; overflow: visible;">
+                                    <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7; margin-right: 4px; flex-shrink: 0;">extension</span>
+                                    <span th:if="${fragmentRequiredVarsMap != null and fragmentRequiredVarsMap.get(stepFile) != null}"
+                                          class="material-symbols-outlined fragment-req-vars-icon"
+                                          style="margin-right: 6px; font-size: 14px; color: #d97706; cursor: help; flex-shrink: 0;"
+                                          th:data-req-vars="${fragmentRequiredVarsMap.get(stepFile)}"
+                                          onclick="event.stopPropagation();">info</span>
+                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;" th:text="${stepFile}">fragment.steps</span>
                                 </div>
-                                <button class="btn-edit-fragment"
-                                        th:data-file="${stepFile}"
-                                        th:hx-get="@{/api/editor(file=${stepFile})}"
-                                        hx-target="#editorPanel"
-                                        hx-swap="outerHTML"
-                                        onclick="event.stopPropagation(); if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));"
-                                        th:title="'Edit fragment ' + ${stepFile}"
-                                        th:aria-label="'Edit fragment ' + ${stepFile}">
-                                    <span class="material-symbols-outlined" style="font-size: 13px;">edit</span>
-                                    <span>Edit</span>
-                                </button>
                             </div>
                             <div class="include-path" th:text="${stepFile}">fragments/login.steps</div>
                         </div>

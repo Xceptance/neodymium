@@ -118,9 +118,14 @@
                      th:hx-get="@{/api/editor(file=${stepFile})}"
                      hx-target="#editorPanel" hx-swap="outerHTML"
                      onclick="if(typeof openYamlEditor==='function') openYamlEditor(this.getAttribute('data-file'));">
-                    <div class="item-main" style="min-width: 0; overflow: hidden; display: flex; align-items: center; flex-grow: 1;">
-                        <span class="material-symbols-outlined" style="margin-right: 8px; color: #a855f7; font-size: 16px; flex-shrink: 0;">extension</span>
-                        <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" th:text="${stepFile}">fragment.steps</span>
+                    <div class="item-main" style="min-width: 0; display: flex; align-items: center; flex-grow: 1;">
+                        <span class="material-symbols-outlined" style="margin-right: 6px; color: #a855f7; font-size: 16px; flex-shrink: 0;">extension</span>
+                        <span th:if="${fragmentRequiredVarsMap != null and fragmentRequiredVarsMap.get(stepFile) != null}"
+                              class="material-symbols-outlined fragment-req-vars-icon"
+                              style="margin-right: 6px; font-size: 15px; color: #d97706; cursor: help; flex-shrink: 0;"
+                              th:data-req-vars="${fragmentRequiredVarsMap.get(stepFile)}"
+                              onclick="event.stopPropagation();">info</span>
+                        <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0;" th:text="${stepFile}">fragment.steps</span>
                     </div>
                     <button class="edit-icon-btn" th:data-file="${stepFile}"
                             th:hx-get="@{/api/editor(file=${stepFile})}"

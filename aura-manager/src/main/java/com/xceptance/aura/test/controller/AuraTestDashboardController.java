@@ -79,6 +79,7 @@ public class AuraTestDashboardController
         model.addAttribute("files", testFiles);
         model.addAttribute("testFiles", testFiles);
         model.addAttribute("stepsFiles", fileService.getStepsFilesList());
+        model.addAttribute("fragmentRequiredVarsMap", fileService.getFragmentRequiredVariablesMap());
         model.addAttribute("expandedFiles", fileService.getExpandedFiles());
         model.addAttribute("queue", queueController.getSelectedQueue());
         model.addAttribute("runQueue", queueController.getSelectedQueue());
