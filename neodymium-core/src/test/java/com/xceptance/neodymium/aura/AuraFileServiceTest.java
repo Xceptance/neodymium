@@ -170,5 +170,26 @@ public class AuraFileServiceTest
             fileService.deleteYamlFile(stepFileName);
         }
     }
+
+    @Test
+    public void testParsePlaybookSectionsWithInlineColons()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String stepContent = "- Remove all non-numeric characters from ${numberOfAddedProducts} and store the result in numberOfAddedProducts (hint: use java method, no browser needed).\n"
+            + "- Multiply ${numberOfAddedProducts} with ${quantityToAdd} and save the result in numberOfAddedProducts (hint: use java method, no browser needed).\n"
+            + "- If ${addedProducts} is valid JSON, then merge ${productsAddedInTheRound} with ${addedProducts} and store in addedProducts (hint: use java method), else store ${productsAddedInTheRound} as addedProducts variable.";
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(stepContent);
+        Assertions.assertNotNull(sections);
+
+        @SuppressWarnings("unchecked")
+        final List<String> mainSteps = (List<String>) sections.get("mainSteps");
+        Assertions.assertNotNull(mainSteps);
+        Assertions.assertEquals(3, mainSteps.size());
+
+        Assertions.assertEquals("Remove all non-numeric characters from ${numberOfAddedProducts} and store the result in numberOfAddedProducts (hint: use java method, no browser needed).", mainSteps.get(0));
+        Assertions.assertEquals("Multiply ${numberOfAddedProducts} with ${quantityToAdd} and save the result in numberOfAddedProducts (hint: use java method, no browser needed).", mainSteps.get(1));
+        Assertions.assertEquals("If ${addedProducts} is valid JSON, then merge ${productsAddedInTheRound} with ${addedProducts} and store in addedProducts (hint: use java method), else store ${productsAddedInTheRound} as addedProducts variable.", mainSteps.get(2));
+    }
 }
 

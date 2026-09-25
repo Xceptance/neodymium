@@ -3227,6 +3227,10 @@
     gap: 8px;
 }
 
+.include-tree-card[data-editing="true"] .include-tree-card .include-tree-actions {
+    display: none !important;
+}
+
 .nested-level-1 {
     margin-left: 16px;
     border-left: 2px dashed var(--accent-purple);
@@ -3247,6 +3251,16 @@
 .nested-editable-step:focus {
     background: var(--bg-card);
     box-shadow: 0 0 0 1px var(--accent-purple);
+}
+
+.raw-nested-text {
+    flex-grow: 1;
+    min-width: 20px;
+    min-height: 18px;
+    outline: none;
+    caret-color: var(--accent-purple, #a855f7);
+    cursor: text;
+    display: inline-block;
 }
 
 .sub-line-num {

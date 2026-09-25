@@ -85,7 +85,7 @@ public final class AuraManagerEditorUiTest
         }
 
         final String[] dirPaths = new String[] { "src/test/resources", "target/test-classes" };
-        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps", "New Step Fragment.steps" };
+        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps", "New Step Fragment.steps", "child.steps", "Child.steps" };
 
         for (final String dirPath : dirPaths)
         {
@@ -493,5 +493,335 @@ public final class AuraManagerEditorUiTest
 
         // Verify redirect to /report completes
         Selenide.webdriver().shouldHave(WebDriverConditions.urlContaining("/report"));
+    }
+
+    @Test
+    public final void testDiscardIncludeFileRestoresOriginalSteps()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create step fragment file Child.steps
+        $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("Child.steps");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Add initial step to Child.steps
+        final ElementsCollection fragmentStepRows = $$("#stepsList .step-row");
+        final SelenideElement fragmentStepContent = fragmentStepRows.first().$(".step-content");
+        fragmentStepContent.click();
+        fragmentStepContent.sendKeys("Original fragment step text");
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Close editor to return to file list
+        Selenide.executeJavaScript("closeEditor(true);");
+
+        // Create main test file
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Include Child.steps in main test
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        final SelenideElement stepContent = stepRows.first().$(".step-content");
+        stepContent.click();
+        stepContent.sendKeys("_include: Child.steps");
+
+        // Click outside or trigger blur to compile and render include card
+        $("#editorTitle").click();
+
+        // Find the include tree card
+        final SelenideElement includeCard = $(".include-tree-card");
+        includeCard.shouldBe(Condition.visible);
+
+        // Verify original step text inside include card
+        includeCard.$(".nested-editable-step").shouldHave(Condition.text("Original fragment step text"));
+
+        // Click Edit File button on include card
+        includeCard.$("button[id^='btnEditInclude_']").shouldBe(Condition.visible).click();
+
+        // Edit the text inside the raw-nested-text span
+        final SelenideElement rawTextSpan = includeCard.$(".raw-nested-text");
+        rawTextSpan.shouldBe(Condition.visible);
+        rawTextSpan.sendKeys(" - EDITED MODIFICATION");
+
+        // Verify unsaved badge appears
+        includeCard.$(".unsaved-badge").shouldBe(Condition.visible);
+
+        // Click Discard button
+        includeCard.$("button[id^='btnDiscardInclude_']").shouldBe(Condition.visible).click();
+
+        // Verify unsaved badge disappears and original step text is restored
+        includeCard.$(".unsaved-badge").shouldNotBe(Condition.visible);
+        includeCard.$(".nested-editable-step").shouldHave(Condition.exactText("- Original fragment step text"));
+    }
+
+    @Test
+    public final void testDeleteLineInIncludeFileEditorDoesNotRestoreDeletedText()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create step fragment file MultiChild.steps
+        $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("MultiChild.steps");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Add two steps to MultiChild.steps
+        final ElementsCollection fragmentStepRows = $$("#stepsList .step-row");
+        final SelenideElement step1 = fragmentStepRows.first().$(".step-content");
+        step1.click();
+        step1.sendKeys("First step text");
+
+        $("#addStepBtn").shouldBe(Condition.visible).click();
+        final ElementsCollection updatedFragmentRows = $$("#stepsList .step-row");
+        final SelenideElement step2 = updatedFragmentRows.get(1).$(".step-content");
+        step2.click();
+        step2.sendKeys("Second step text to delete");
+
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Close editor to return to file list
+        Selenide.executeJavaScript("closeEditor(true);");
+
+        // Create main test file
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("Delete Line Include Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Include MultiChild.steps in main test
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        final SelenideElement stepContent = stepRows.first().$(".step-content");
+        stepContent.click();
+        stepContent.sendKeys("_include: MultiChild.steps");
+
+        // Click outside to compile include card
+        $("#editorTitle").click();
+
+        // Find the include tree card
+        final SelenideElement includeCard = $(".include-tree-card");
+        includeCard.shouldBe(Condition.visible);
+
+        // Enable editing on include card
+        includeCard.$("button[id^='btnEditInclude_']").shouldBe(Condition.visible).click();
+
+        // Get nested editable step spans
+        final ElementsCollection nestedSteps = includeCard.$$(".nested-editable-step");
+        Assertions.assertEquals(2, nestedSteps.size());
+
+        // Clear second step text and press Backspace to delete line
+        final SelenideElement step2RawText = nestedSteps.get(1).$(".raw-nested-text");
+        step2RawText.shouldBe(Condition.visible).click();
+        step2RawText.sendKeys(Keys.chord(Keys.CONTROL, "a"), Keys.BACK_SPACE, Keys.BACK_SPACE);
+
+        // Verify only 1 step remains and step 1 does not contain deleted text
+        final ElementsCollection remainingSteps = includeCard.$$(".nested-editable-step");
+        Assertions.assertEquals(1, remainingSteps.size());
+        remainingSteps.first().$(".raw-nested-text").shouldHave(Condition.exactText("First step text"));
+    }
+
+    @Test
+    public final void testHighlightVariablesAndIncludesOnIncludeEdit()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create nested step fragment file GrandChild.steps
+        $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("GrandChild.steps");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection grandChildRows = $$("#stepsList .step-row");
+        final SelenideElement grandChildContent = grandChildRows.first().$(".step-content");
+        grandChildContent.click();
+        grandChildContent.sendKeys("Sub step with ${subVar}");
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+        Selenide.executeJavaScript("closeEditor(true);");
+
+        // Create parent step fragment file ParentInclude.steps
+        $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("ParentInclude.steps");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection parentRows = $$("#stepsList .step-row");
+        final SelenideElement parentStep1 = parentRows.first().$(".step-content");
+        parentStep1.click();
+        parentStep1.sendKeys("First step with ${userVar}");
+
+        $("#addStepBtn").shouldBe(Condition.visible).click();
+        final ElementsCollection updatedParentRows = $$("#stepsList .step-row");
+        final SelenideElement parentStep2 = updatedParentRows.get(1).$(".step-content");
+        parentStep2.click();
+        parentStep2.sendKeys("_include: GrandChild.steps");
+
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+        Selenide.executeJavaScript("closeEditor(true);");
+
+        // Create main test file
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("Highlight Include Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Include ParentInclude.steps in main test
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        final SelenideElement stepContent = stepRows.first().$(".step-content");
+        stepContent.click();
+        stepContent.sendKeys("_include: ParentInclude.steps");
+
+        // Click outside to compile include card
+        $("#editorTitle").click();
+
+        // Find the include tree card for ParentInclude.steps
+        final SelenideElement includeCard = $(".include-tree-card");
+        includeCard.shouldBe(Condition.visible);
+
+        // Expand GrandChild.steps while parent include is NOT in edit mode
+        includeCard.$(".hover-arrow").shouldBe(Condition.visible).click();
+
+        // Verify nested child include card appears and its Edit File button IS visible (editable)
+        final SelenideElement nestedCard = includeCard.$(".include-tree-card");
+        nestedCard.shouldBe(Condition.visible);
+        nestedCard.$(".var-pill").shouldBe(Condition.visible).shouldHave(Condition.text("subVar"));
+        nestedCard.$("button[id^='btnEditInclude_']").shouldBe(Condition.visible);
+
+        // Click Edit File button on ParentInclude.steps include card
+        includeCard.$("button[id^='btnEditInclude_']").shouldBe(Condition.visible).click();
+
+        // Verify variables and includes are highlighted as pills on un-focused steps of parent edit
+        includeCard.$(".var-pill").shouldBe(Condition.visible).shouldHave(Condition.text("userVar"));
+        includeCard.$(".unified-include-pill").shouldBe(Condition.visible).shouldHave(Condition.text("include: GrandChild.steps"));
+
+        // Verify the nested child include card's Edit File button is now hidden while parent edit is active
+        nestedCard.$("button[id^='btnEditInclude_']").shouldNotBe(Condition.visible);
+    }
+
+    @Test
+    public final void testNewLineInIncludeFileEditorDisplaysCursorAndFocus()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create step fragment file FragmentStep.steps
+        $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("FragmentStep.steps");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection fragmentStepRows = $$("#stepsList .step-row");
+        final SelenideElement step1 = fragmentStepRows.first().$(".step-content");
+        step1.click();
+        step1.sendKeys("Initial step text");
+
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Close editor to return to file list
+        Selenide.executeJavaScript("closeEditor(true);");
+
+        // Create main test file
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Line Include Cursor Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Include FragmentStep.steps in main test
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        final SelenideElement stepContent = stepRows.first().$(".step-content");
+        stepContent.click();
+        stepContent.sendKeys("_include: FragmentStep.steps");
+
+        // Click outside to compile include card
+        $("#editorTitle").click();
+
+        // Find the include tree card
+        final SelenideElement includeCard = $(".include-tree-card");
+        includeCard.shouldBe(Condition.visible);
+
+        // Enable editing on include card
+        includeCard.$("button[id^='btnEditInclude_']").shouldBe(Condition.visible).click();
+
+        // Focus raw-nested-text and press Enter to create a new line
+        final SelenideElement rawTextSpan = includeCard.$(".raw-nested-text");
+        rawTextSpan.shouldBe(Condition.visible).click();
+        rawTextSpan.sendKeys(Keys.ENTER);
+
+        // Verify a second nested step is created and focused
+        final ElementsCollection nestedSteps = includeCard.$$(".nested-editable-step");
+        Assertions.assertEquals(2, nestedSteps.size());
+
+        final SelenideElement newRawText = nestedSteps.get(1).$(".raw-nested-text");
+        newRawText.shouldBe(Condition.visible);
+        newRawText.sendKeys("Newly typed step content on new line");
+        newRawText.shouldHave(Condition.exactText("Newly typed step content on new line"));
+    }
+
+    @Test
+    public final void testBackspaceOnNewLineInIncludeMovesCursorToEndWithoutLineNumberText()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create fragment step file FragmentStep.steps
+        $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("FragmentStep.steps");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+
+        // Populate fragment step with content
+        final ElementsCollection fragStepRows = $$("#stepsList .step-row");
+        final SelenideElement fragStepContent = fragStepRows.first().$(".step-content");
+        fragStepContent.click();
+        fragStepContent.sendKeys("Original fragment step text");
+        $("#editorTitle").click();
+
+        // Create main test file MainTest.playbook.yaml
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("MainTest.playbook.yaml");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+
+        // Include FragmentStep.steps in main test
+        final ElementsCollection mainStepRows = $$("#stepsList .step-row");
+        final SelenideElement mainStepContent = mainStepRows.first().$(".step-content");
+        mainStepContent.click();
+        mainStepContent.sendKeys("_include: FragmentStep.steps");
+        $("#editorTitle").click();
+
+        // Find the include tree card and enable edit
+        final SelenideElement includeCard = $(".include-tree-card");
+        includeCard.shouldBe(Condition.visible);
+        includeCard.$("button[id^='btnEditInclude_']").shouldBe(Condition.visible).click();
+
+        // Focus step, press Enter to create a new step, then press Backspace
+        final SelenideElement rawTextSpan = includeCard.$(".raw-nested-text");
+        rawTextSpan.shouldBe(Condition.visible).click();
+        rawTextSpan.sendKeys(Keys.ENTER);
+
+        final ElementsCollection nestedSteps = includeCard.$$(".nested-editable-step");
+        Assertions.assertEquals(2, nestedSteps.size());
+
+        final SelenideElement newRawText = nestedSteps.get(1).$(".raw-nested-text");
+        newRawText.shouldBe(Condition.visible);
+        newRawText.sendKeys(Keys.BACK_SPACE);
+
+        // Verify remaining step has no line number text prepended
+        final ElementsCollection remainingSteps = includeCard.$$(".nested-editable-step");
+        Assertions.assertEquals(1, remainingSteps.size());
+        remainingSteps.first().$(".raw-nested-text").shouldHave(Condition.exactText("Original fragment step text"));
     }
 }

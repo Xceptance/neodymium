@@ -674,6 +674,21 @@ public final class AuraFileService
                                             mainSteps.add(inst);
                                         }
                                     }
+                                    else if (mapStep.size() == 1)
+                                    {
+                                        final Map.Entry<?, ?> entry = mapStep.entrySet().iterator().next();
+                                        final String keyStr = String.valueOf(entry.getKey()).trim();
+                                        final Object valObj = entry.getValue();
+                                        if (valObj == null || "null".equals(String.valueOf(valObj).trim()))
+                                        {
+                                            mainSteps.add(keyStr);
+                                        }
+                                        else
+                                        {
+                                            final String valStr = String.valueOf(valObj).trim();
+                                            mainSteps.add(valStr.isEmpty() ? keyStr : keyStr + ": " + valStr);
+                                        }
+                                    }
                                     else
                                     {
                                         final String sMap = String.valueOf(mapStep).trim();
@@ -767,6 +782,21 @@ public final class AuraFileService
                                 if (!inst.isEmpty())
                                 {
                                     mainSteps.add(inst);
+                                }
+                            }
+                            else if (mapStep.size() == 1)
+                            {
+                                final Map.Entry<?, ?> entry = mapStep.entrySet().iterator().next();
+                                final String keyStr = String.valueOf(entry.getKey()).trim();
+                                final Object valObj = entry.getValue();
+                                if (valObj == null || "null".equals(String.valueOf(valObj).trim()))
+                                {
+                                    mainSteps.add(keyStr);
+                                }
+                                else
+                                {
+                                    final String valStr = String.valueOf(valObj).trim();
+                                    mainSteps.add(valStr.isEmpty() ? keyStr : keyStr + ": " + valStr);
                                 }
                             }
                             else

@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Permissions-Policy" content="unload=*">
     <title th:text="${title ?: 'Neodymium Aura Manager'}">Neodymium Aura Manager</title>
 
     <!-- Google Fonts: Outfit, Inter & JetBrains Mono -->
@@ -75,7 +76,7 @@
     <script th:src="@{/js/report-manager.js}" src="js/report-manager.js"></script>
     <script th:src="@{/dashboard-core.js}" src="dashboard-core.js"></script>
     <script th:src="@{/dashboard-chat.js}" src="dashboard-chat.js"></script>
-    <script th:src="@{/dashboard-editor.js}" src="dashboard-editor.js"></script>
+    <script th:src="@{/dashboard-editor.js?v=1.0.7}" src="dashboard-editor.js?v=1.0.7"></script>
     <script th:src="@{/dashboard-runner.js}" src="dashboard-runner.js"></script>
     <script th:src="@{/dashboard-settings.js}" src="dashboard-settings.js"></script>
 </body>

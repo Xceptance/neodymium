@@ -1536,8 +1536,22 @@ function setCaretOffset(element, offset) {
     walkNodes(element);
 
     if (!setSuccess) {
-        range.selectNodeContents(element);
-        range.collapse(false);
+        if (!element.firstChild) {
+            range.selectNodeContents(element);
+            range.collapse(true);
+        } else {
+            let textNode = element.firstChild;
+            while (textNode && textNode.nodeType !== 3) {
+                textNode = textNode.firstChild;
+            }
+            if (!textNode) {
+                range.selectNodeContents(element);
+                range.collapse(true);
+            } else {
+                range.setStart(textNode, Math.min(offset, textNode.nodeValue.length));
+                range.collapse(true);
+            }
+        }
     }
 
     sel.removeAllRanges();
@@ -2217,36 +2231,87 @@ document.addEventListener('htmx:swapError', function(evt) {
     if (console && console.warn) console.warn('HTMX swap error caught:', evt.detail);
 });
 
+function getDirectNestedSteps(treeCard) {
+    if (!treeCard) return [];
+    return Array.from(treeCard.querySelectorAll('.nested-editable-step'))
+        .filter(step => step.closest('.include-tree-card') === treeCard);
+}
+
+function isParentIncludeEditing(treeCard) {
+    if (!treeCard || !treeCard.parentElement) return false;
+    const parentCard = treeCard.parentElement.closest('.include-tree-card');
+    if (!parentCard) return false;
+    if (parentCard.getAttribute('data-editing') === 'true') return true;
+    return isParentIncludeEditing(parentCard);
+}
+window.isParentIncludeEditing = isParentIncludeEditing;
+
 function formatIncludeTreeCardTokens(treeCard) {
     if (!treeCard) return;
     const cardId = treeCard.id ? treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '') : 'sub';
-    const steps = treeCard.querySelectorAll('.nested-editable-step');
+    const isEditing = treeCard.getAttribute('data-editing') === 'true';
+    const parentEditing = isParentIncludeEditing(treeCard);
+
+    const btnEdit = treeCard.querySelector(`[id^="btnEditInclude_"]`);
+    const actions = treeCard.querySelector('.include-tree-actions');
+
+    if (parentEditing) {
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (actions) actions.style.display = 'none';
+    } else if (!isEditing) {
+        if (btnEdit) btnEdit.style.display = 'inline-flex';
+        if (actions) actions.style.display = 'flex';
+    }
+
+    const steps = getDirectNestedSteps(treeCard);
     steps.forEach((stepEl, idx) => {
         if (!stepEl.getAttribute('data-nested-card-id')) {
             stepEl.setAttribute('data-nested-card-id', `${cardId}_nested_${idx}_${Math.floor(Math.random() * 1000)}`);
         }
-        if (!stepEl.querySelector('.unified-include-pill') && !stepEl.querySelector('.var-pill') && !stepEl.querySelector('.invalid-include-pill')) {
-            let text = stepEl.getAttribute('data-original') || stepEl.innerText;
-            if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
-            if (text && (text.includes('_include:') || text.includes('include:') || text.includes('${'))) {
-                const subLineSpan = stepEl.querySelector('.sub-line-num');
-                const lineNumText = subLineSpan ? subLineSpan.innerText : '-';
-                const stepCardId = stepEl.getAttribute('data-nested-card-id');
-                
-                let safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                safeText = safeText.replace(/(?:_include|include):\s*["']?([a-zA-Z0-9_\/\.\-]+)["']?/g, function(match, path) {
-                    const cleanPath = path.replace(/^['"]|['"]$/g, '');
-                    const filename = cleanPath.split('/').pop();
-                    if (cleanPath.toLowerCase().endsWith('.yaml') || cleanPath.toLowerCase().endsWith('.yml')) {
-                        return `<span class="invalid-include-pill" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
-                    }
-                    return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${stepCardId}', '${cleanPath}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
-                });
-                safeText = safeText.replace(/\$\{([a-zA-Z0-9_\.]+)\}/g, function(match, name) {
-                    return `<span class="var-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
-                });
-                stepEl.innerHTML = `<span class="sub-line-num">${lineNumText}</span><span>${safeText}</span>`;
+
+        if (stepEl.contains(document.activeElement)) {
+            return;
+        }
+
+        const rawSpan = stepEl.querySelector('.raw-nested-text');
+        let text = rawSpan ? rawSpan.innerText : (stepEl.getAttribute('data-original') !== null ? stepEl.getAttribute('data-original') : stepEl.innerText);
+        if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+        stepEl.setAttribute('data-original', text || '');
+
+        const subLineSpan = stepEl.querySelector('.sub-line-num');
+        const lineNumText = subLineSpan ? subLineSpan.innerText : '-';
+        const stepCardId = stepEl.getAttribute('data-nested-card-id');
+
+        if (text && (text.includes('_include:') || text.includes('include:') || text.includes('${'))) {
+            let safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            safeText = safeText.replace(/(?:_include|include):\s*["']?([a-zA-Z0-9_\/\.\-]+)["']?/g, function(match, path) {
+                const cleanPath = path.replace(/^['"]|['"]$/g, '');
+                const filename = cleanPath.split('/').pop();
+                if (cleanPath.toLowerCase().endsWith('.yaml') || cleanPath.toLowerCase().endsWith('.yml')) {
+                    return `<span class="invalid-include-pill" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
+                }
+                return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${stepCardId}', '${cleanPath}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
+            });
+            safeText = safeText.replace(/\$\{([a-zA-Z0-9_\.]+)\}/g, function(match, name) {
+                return `<span class="var-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
+            });
+
+            stepEl.innerHTML = `<span class="sub-line-num">${lineNumText}</span><span class="step-token-content">${safeText}</span>`;
+            if (isEditing && !parentEditing) {
+                stepEl.onclick = function(evt) { handleNestedFocus(stepEl, evt); };
             }
+        } else if (isEditing && !parentEditing) {
+            let safeRawText = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            stepEl.innerHTML = `<span class="sub-line-num" contenteditable="false">${lineNumText}</span><span class="raw-nested-text" style="outline: none;" contenteditable="true">${safeRawText}</span>`;
+            const newRawSpan = stepEl.querySelector('.raw-nested-text');
+            if (newRawSpan) {
+                newRawSpan.onkeydown = function(evt) { handleNestedKeyDown(evt, cardId); };
+                newRawSpan.onblur = function() { handleNestedBlur(stepEl, cardId); };
+                newRawSpan.oninput = function() { markIncludeUnsaved(cardId); };
+            }
+        } else {
+            let safeText = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            stepEl.innerHTML = `<span class="sub-line-num">${lineNumText}</span><span>${safeText}</span>`;
         }
     });
 }
@@ -2254,50 +2319,334 @@ window.formatIncludeTreeCardTokens = formatIncludeTreeCardTokens;
 
 let activeNestedStep = null;
 
-function handleNestedFocus(el) {
+function getOffsetFromPoint(containerEl, evt) {
+    if (!evt || typeof evt.clientX !== 'number') return null;
+    let range = null;
+    const doc = containerEl.ownerDocument || document;
+    if (doc.caretRangeFromPoint) {
+        range = doc.caretRangeFromPoint(evt.clientX, evt.clientY);
+    } else if (doc.caretPositionFromPoint) {
+        const pos = doc.caretPositionFromPoint(evt.clientX, evt.clientY);
+        if (pos) {
+            range = doc.createRange();
+            range.setStart(pos.offsetNode, pos.offset);
+            range.collapse(true);
+        }
+    }
+    if (range) {
+        const preRange = doc.createRange();
+        preRange.selectNodeContents(containerEl);
+        try {
+            preRange.setEnd(range.startContainer, range.startOffset);
+            return preRange.toString().length;
+        } catch (e) {
+            // fallback
+        }
+    }
+    return null;
+}
+
+function handleNestedFocus(el, evt, targetOffset) {
     if (!el || window.isClickingIncludeArrow) return;
+    const treeCard = el.closest('.include-tree-card');
+    if (isParentIncludeEditing(treeCard)) {
+        return;
+    }
+
     activeNestedStep = el;
-    el.setAttribute('contenteditable', 'true');
-    const text = el.getAttribute('data-original') || el.innerText;
-    const lineNum = el.querySelector('.sub-line-num') ? el.querySelector('.sub-line-num').innerText : '-';
-    el.innerHTML = `<span class="sub-line-num">${lineNum}</span><span class="raw-nested-text" style="outline: none;">${text}</span>`;
+    const cardId = el.getAttribute('data-card-id') || (treeCard ? treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '') : '');
+
+    const existingRawSpan = el.querySelector('.raw-nested-text');
+    const isAlreadyEditingSpan = !!existingRawSpan;
+
+    if (isAlreadyEditingSpan) {
+        if (document.activeElement === existingRawSpan || existingRawSpan.contains(document.activeElement)) {
+            return;
+        }
+    }
+
+    let computedOffset = null;
+    const eventObj = evt || window.event;
+    if (eventObj && typeof eventObj.clientX === 'number') {
+        const measured = getOffsetFromPoint(el, eventObj);
+        if (measured !== null) {
+            const subLineSpan = el.querySelector('.sub-line-num');
+            const prefixLen = subLineSpan ? subLineSpan.innerText.length : 0;
+            computedOffset = Math.max(0, measured - prefixLen);
+        }
+    }
+
+    let text = el.getAttribute('data-original');
+    if (text === null || text === undefined) {
+        const rawSpan = el.querySelector('.raw-nested-text');
+        const textSpan = el.querySelector('span:last-child');
+        text = rawSpan ? rawSpan.innerText : (textSpan ? textSpan.innerText : el.innerText);
+    }
+    if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+    el.setAttribute('data-original', text || '');
+
+    const lineNumSpan = el.querySelector('.sub-line-num');
+    const lineNum = lineNumSpan ? lineNumSpan.innerText : '-';
+
+    const safeRawText = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    el.innerHTML = `<span class="sub-line-num" contenteditable="false">${lineNum}</span><span class="raw-nested-text" style="outline: none;" contenteditable="true">${safeRawText}</span>`;
+    let rawSpan = el.querySelector('.raw-nested-text');
+
+    el.setAttribute('contenteditable', 'false');
+    if (rawSpan) {
+        rawSpan.onkeydown = function(e) {
+            handleNestedKeyDown(e, cardId);
+        };
+        rawSpan.onblur = function() {
+            handleNestedBlur(el, cardId);
+        };
+        rawSpan.oninput = function() {
+            markIncludeUnsaved(cardId);
+        };
+        if (document.activeElement !== rawSpan) {
+            rawSpan.focus();
+        }
+
+        const maxLen = (rawSpan.innerText || '').length;
+        let finalOffset = 0;
+        if (targetOffset === 'end') {
+            finalOffset = maxLen;
+        } else if (typeof targetOffset === 'number') {
+            finalOffset = Math.min(Math.max(0, targetOffset), maxLen);
+        } else if (computedOffset !== null) {
+            finalOffset = Math.min(Math.max(0, computedOffset), maxLen);
+        } else if (eventObj && (eventObj.type === 'click' || eventObj.type === 'mousedown')) {
+            finalOffset = maxLen;
+        }
+        setCaretOffset(rawSpan, finalOffset);
+    }
 }
 window.handleNestedFocus = handleNestedFocus;
 
 function handleNestedBlur(el, cardId) {
     if (!el) return;
     const effectiveCardId = cardId || el.getAttribute('data-card-id');
-    const rawSpan = el.querySelector('.raw-nested-text') || el;
-    const newText = rawSpan.innerText.trim();
-    el.setAttribute('data-original', newText);
-    el.setAttribute('contenteditable', 'false');
+    const rawSpan = el.querySelector('.raw-nested-text');
+    const newText = rawSpan ? rawSpan.innerText : (el.getAttribute('data-original') || el.innerText);
+    const origText = el.getAttribute('data-original');
+
+    if (rawSpan) {
+        el.setAttribute('data-original', newText);
+    }
+
+    if (origText !== null && origText !== undefined && newText !== origText) {
+        if (effectiveCardId) {
+            markIncludeUnsaved(effectiveCardId);
+        }
+    }
     const treeCard = el.closest('.include-tree-card');
     if (treeCard) {
-        formatIncludeTreeCardTokens(treeCard);
-    }
-    if (effectiveCardId) {
-        markIncludeUnsaved(effectiveCardId);
+        setTimeout(() => {
+            formatIncludeTreeCardTokens(treeCard);
+        }, 50);
     }
     updateAllLineNumbers();
 }
 window.handleNestedBlur = handleNestedBlur;
 
+function getNestedStepText(stepEl) {
+    if (!stepEl) return '';
+    const rawSpan = stepEl.querySelector('.raw-nested-text');
+    if (rawSpan) return rawSpan.innerText || '';
+    let text = stepEl.getAttribute('data-original');
+    if (text === null || text === undefined) {
+        const textSpan = stepEl.querySelector('span:last-child');
+        text = textSpan ? textSpan.innerText : stepEl.innerText;
+    }
+    if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+    return text || '';
+}
+
+function handleNestedKeyDown(event, cardId) {
+    const stepEl = event.target.closest('.nested-editable-step') || activeNestedStep;
+    if (!stepEl) return;
+
+    const rawSpan = stepEl.querySelector('.raw-nested-text') || stepEl;
+    const currentOffset = getCaretOffset(rawSpan);
+    const rawText = rawSpan.innerText || '';
+    const effectiveCardId = cardId || stepEl.getAttribute('data-card-id');
+
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const headText = rawText.substring(0, currentOffset);
+        const tailText = rawText.substring(currentOffset);
+
+        stepEl.setAttribute('data-original', headText);
+        if (rawSpan !== stepEl) {
+            rawSpan.innerText = headText;
+        } else {
+            stepEl.innerText = headText;
+        }
+
+        const newStep = document.createElement('div');
+        newStep.className = 'nested-editable-step';
+        newStep.setAttribute('contenteditable', 'false');
+        newStep.setAttribute('data-original', tailText);
+        if (effectiveCardId) {
+            newStep.setAttribute('data-card-id', effectiveCardId);
+        }
+        newStep.setAttribute('onfocus', 'handleNestedFocus(this, event)');
+        newStep.setAttribute('onblur', `handleNestedBlur(this, '${effectiveCardId || ''}')`);
+        newStep.setAttribute('oninput', `markIncludeUnsaved('${effectiveCardId || ''}')`);
+
+        const lineNumSpan = stepEl.querySelector('.sub-line-num');
+        const lineNumText = lineNumSpan ? lineNumSpan.innerText : '-';
+        newStep.innerHTML = `<span class="sub-line-num" contenteditable="false">${lineNumText}</span><span class="raw-nested-text" style="outline: none;" contenteditable="true">${tailText}</span>`;
+
+        stepEl.insertAdjacentElement('afterend', newStep);
+
+        if (effectiveCardId) {
+            markIncludeUnsaved(effectiveCardId);
+        }
+        updateAllLineNumbers();
+
+        handleNestedFocus(newStep, null, 0);
+        const newRawSpan = newStep.querySelector('.raw-nested-text');
+        if (newRawSpan) {
+            newRawSpan.focus();
+            setCaretOffset(newRawSpan, 0);
+        }
+
+    } else if (event.key === 'Backspace' && currentOffset === 0) {
+        let prevStep = stepEl.previousElementSibling;
+        while (prevStep && prevStep.classList.contains('include-tree-card')) {
+            prevStep = prevStep.previousElementSibling;
+        }
+        if (prevStep && prevStep.classList.contains('nested-editable-step')) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const prevText = getNestedStepText(prevStep);
+            const joinOffset = prevText.length;
+            const combinedText = prevText + rawText;
+
+            prevStep.setAttribute('data-original', combinedText);
+            handleNestedFocus(prevStep, null, joinOffset);
+            const updatedPrevRawSpan = prevStep.querySelector('.raw-nested-text') || prevStep;
+            updatedPrevRawSpan.innerText = combinedText;
+
+            stepEl.remove();
+
+            if (effectiveCardId) {
+                markIncludeUnsaved(effectiveCardId);
+            }
+            updateAllLineNumbers();
+
+            updatedPrevRawSpan.focus();
+            setCaretOffset(updatedPrevRawSpan, joinOffset);
+        }
+    } else if (event.key === 'Delete' && currentOffset >= rawText.length) {
+        let nextStep = stepEl.nextElementSibling;
+        while (nextStep && nextStep.classList.contains('include-tree-card')) {
+            nextStep = nextStep.nextElementSibling;
+        }
+        if (nextStep && nextStep.classList.contains('nested-editable-step')) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const nextText = getNestedStepText(nextStep);
+            const combinedText = rawText + nextText;
+
+            stepEl.setAttribute('data-original', combinedText);
+            if (rawSpan !== stepEl) {
+                rawSpan.innerText = combinedText;
+            }
+            nextStep.remove();
+
+            if (effectiveCardId) {
+                markIncludeUnsaved(effectiveCardId);
+            }
+            updateAllLineNumbers();
+
+            rawSpan.focus();
+            setCaretOffset(rawSpan, currentOffset);
+        }
+    } else if (event.key === 'ArrowUp') {
+        let prevStep = stepEl.previousElementSibling;
+        while (prevStep && prevStep.classList.contains('include-tree-card')) {
+            prevStep = prevStep.previousElementSibling;
+        }
+        if (prevStep && prevStep.classList.contains('nested-editable-step')) {
+            event.preventDefault();
+            const prevText = getNestedStepText(prevStep);
+            const targetPos = Math.min(currentOffset, prevText.length);
+            handleNestedFocus(prevStep, null, targetPos);
+            const prevRawSpan = prevStep.querySelector('.raw-nested-text') || prevStep;
+            prevRawSpan.focus();
+            setCaretOffset(prevRawSpan, targetPos);
+        }
+    } else if (event.key === 'ArrowDown') {
+        let nextStep = stepEl.nextElementSibling;
+        while (nextStep && nextStep.classList.contains('include-tree-card')) {
+            nextStep = nextStep.nextElementSibling;
+        }
+        if (nextStep && nextStep.classList.contains('nested-editable-step')) {
+            event.preventDefault();
+            const nextText = getNestedStepText(nextStep);
+            const targetPos = Math.min(currentOffset, nextText.length);
+            handleNestedFocus(nextStep, null, targetPos);
+            const nextRawSpan = nextStep.querySelector('.raw-nested-text') || nextStep;
+            nextRawSpan.focus();
+            setCaretOffset(nextRawSpan, targetPos);
+        }
+    }
+}
+window.handleNestedKeyDown = handleNestedKeyDown;
+
 function enableIncludeEdit(cardId) {
     const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
     if (!treeCard) return;
+
+    if (isParentIncludeEditing(treeCard)) {
+        return;
+    }
+
+    treeCard.setAttribute('data-editing', 'true');
 
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
     const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
 
-    const steps = treeCard.querySelectorAll('.nested-editable-step');
+    const steps = getDirectNestedSteps(treeCard);
+    if (!treeCard._initialStepsSnapshot) {
+        treeCard._initialStepsSnapshot = steps.map(step => {
+            let text = step.getAttribute('data-original');
+            if (text === null || text === undefined) {
+                const textSpan = step.querySelector('span:last-child');
+                text = textSpan ? textSpan.innerText : step.innerText;
+            }
+            if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+            return text || '';
+        });
+    }
+
     steps.forEach(step => {
-        step.setAttribute('contenteditable', 'true');
+        let text = step.getAttribute('data-original');
+        if (text === null || text === undefined) {
+            const rawSpan = step.querySelector('.raw-nested-text');
+            const textSpan = step.querySelector('span:last-child');
+            text = rawSpan ? rawSpan.innerText : (textSpan ? textSpan.innerText : step.innerText);
+        }
+        if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+        step.setAttribute('data-original', text || '');
     });
 
     if (btnEdit) btnEdit.style.display = 'none';
     if (btnSave) btnSave.style.display = 'inline-flex';
     if (btnDiscard) btnDiscard.style.display = 'inline-flex';
+
+    formatIncludeTreeCardTokens(treeCard);
+
+    if (steps.length > 0) {
+        handleNestedFocus(steps[0], null, 0);
+    }
 }
 window.enableIncludeEdit = enableIncludeEdit;
 
@@ -2314,11 +2663,12 @@ function saveIncludeInline(cardId) {
     if (!treeCard) return;
 
     const filePath = treeCard.getAttribute('data-include-file');
-    const steps = treeCard.querySelectorAll('.nested-editable-step');
+    const steps = getDirectNestedSteps(treeCard);
     let content = '';
     steps.forEach(step => {
+        const rawSpan = step.querySelector('.raw-nested-text');
         const textSpan = step.querySelector('span:last-child');
-        const lineText = textSpan ? textSpan.innerText : step.innerText;
+        const lineText = rawSpan ? rawSpan.innerText : (step.getAttribute('data-original') || (textSpan ? textSpan.innerText : step.innerText));
         content += lineText + '\n';
     });
 
@@ -2335,6 +2685,8 @@ function saveIncludeInline(cardId) {
         });
     }
 
+    treeCard.removeAttribute('data-editing');
+
     const badge = document.getElementById(`unsavedBadge_${cardId}`);
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
@@ -2342,8 +2694,15 @@ function saveIncludeInline(cardId) {
 
     steps.forEach(step => {
         step.setAttribute('contenteditable', 'false');
-        step.setAttribute('data-original', step.innerText);
+        const rawSpan = step.querySelector('.raw-nested-text');
+        const textSpan = step.querySelector('span:last-child');
+        const text = rawSpan ? rawSpan.innerText : (step.getAttribute('data-original') || (textSpan ? textSpan.innerText : step.innerText));
+        step.setAttribute('data-original', text);
     });
+
+    delete treeCard._initialStepsSnapshot;
+
+    formatIncludeTreeCardTokens(treeCard);
 
     treeCard.classList.remove('has-unsaved-changes');
     if (badge) badge.style.display = 'none';
@@ -2357,21 +2716,51 @@ function discardIncludeInline(cardId) {
     const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
     if (!treeCard) return;
 
+    treeCard.removeAttribute('data-editing');
+
     const badge = document.getElementById(`unsavedBadge_${cardId}`);
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
     const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
 
-    const steps = treeCard.querySelectorAll('.nested-editable-step');
-    steps.forEach(step => {
-        step.setAttribute('contenteditable', 'false');
-        const orig = step.getAttribute('data-original');
-        if (orig) {
-            const textSpan = step.querySelector('span:last-child');
-            if (textSpan) textSpan.innerText = orig;
-            else step.innerText = orig;
-        }
-    });
+    const stepsContainer = document.getElementById(`includeInnerSteps_${cardId}`) || treeCard.querySelector('[id^="includeInnerSteps_"]');
+    const snapshot = treeCard._initialStepsSnapshot;
+
+    if (stepsContainer && Array.isArray(snapshot)) {
+        stepsContainer.innerHTML = '';
+        snapshot.forEach(origText => {
+            const stepDiv = document.createElement('div');
+            stepDiv.className = 'nested-editable-step';
+            stepDiv.setAttribute('contenteditable', 'false');
+            stepDiv.setAttribute('data-original', origText);
+            stepDiv.setAttribute('data-card-id', cardId);
+            stepDiv.setAttribute('onfocus', 'handleNestedFocus(this, event)');
+            stepDiv.setAttribute('onblur', `handleNestedBlur(this, '${cardId}')`);
+            stepDiv.setAttribute('onkeydown', `handleNestedKeyDown(event, '${cardId}')`);
+            stepDiv.setAttribute('oninput', `markIncludeUnsaved('${cardId}')`);
+
+            const safeText = origText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            stepDiv.innerHTML = `<span class="sub-line-num">-</span><span>${safeText}</span>`;
+            stepsContainer.appendChild(stepDiv);
+        });
+        delete treeCard._initialStepsSnapshot;
+    } else {
+        const steps = getDirectNestedSteps(treeCard);
+        steps.forEach(step => {
+            step.setAttribute('contenteditable', 'false');
+            const orig = step.getAttribute('data-original');
+            if (orig !== null && orig !== undefined) {
+                const rawSpan = step.querySelector('.raw-nested-text');
+                const textSpan = step.querySelector('span:last-child');
+                if (rawSpan) rawSpan.innerText = orig;
+                else if (textSpan) textSpan.innerText = orig;
+                else step.innerText = orig;
+            }
+        });
+    }
+
+    formatIncludeTreeCardTokens(treeCard);
+    updateAllLineNumbers();
 
     treeCard.classList.remove('has-unsaved-changes');
     if (badge) badge.style.display = 'none';
@@ -2429,7 +2818,6 @@ function insertSnippetWithCaret(templateText, caretOffset = -1) {
         text += (text.length > 0 ? ' ' : '') + templateText;
         if (rawSpan !== nestedStep) rawSpan.innerText = text;
         else nestedStep.innerText = text;
-        nestedStep.setAttribute('data-original', text);
         const card = nestedStep.closest('.include-tree-card');
         if (card) {
             formatIncludeTreeCardTokens(card);
@@ -2493,7 +2881,6 @@ function insertIncludePill(filePath) {
         }
         if (rawSpan !== nestedStep) rawSpan.innerText = text;
         else nestedStep.innerText = text;
-        nestedStep.setAttribute('data-original', text);
 
         if (treeCard) {
             formatIncludeTreeCardTokens(treeCard);

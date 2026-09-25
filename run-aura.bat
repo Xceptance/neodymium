@@ -10,5 +10,5 @@ echo ========================================================================
 if exist aura-manager (
     mvn -U spring-boot:run -pl aura-manager -am
 ) else (
-    mvn -U test-compile exec:java -Dexec.mainClass="com.xceptance.aura.AuraManagerApplication" -Dexec.classpathScope="test"
+    mvn -U test-compile exec:java -Dexec.mainClass="com.xceptance.aura.AuraLauncher" -Dexec.classpathScope="test"
 )

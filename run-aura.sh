@@ -12,5 +12,5 @@ if [ -d "aura-manager" ]; then
     mvn -U spring-boot:run -pl aura-manager -am
 else
     # Running inside external test project with aura-manager dependency
-    mvn -U test-compile exec:java -Dexec.mainClass="com.xceptance.aura.AuraManagerApplication" -Dexec.classpathScope="test"
+    mvn -U test-compile exec:java -Dexec.mainClass="com.xceptance.aura.AuraLauncher" -Dexec.classpathScope="test"
 fi
