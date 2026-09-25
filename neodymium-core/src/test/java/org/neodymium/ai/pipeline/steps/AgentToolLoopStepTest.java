@@ -2587,6 +2587,107 @@ public class AgentToolLoopStepTest
         Assertions.assertTrue(toolNames.contains("execute_script"));
         Assertions.assertFalse(toolNames.contains("clear_cookies"));
     }
+
+    @Test
+    public void testCompleteStepRejectedWhenHoverActionToolFailed() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("hover", "Hovers element", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.error(call.callId(), "Element not found: Add to cart");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Hover over 'Add to cart'");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Hover over 'Add to cart'");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Trying to hover element", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-h1", "hover", MAPPER.createObjectNode().put("text", "Add to cart"))));
+            }
+            if (t == 2)
+            {
+                return new LlmResponse("Trying to complete anyway", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-c1", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+            }
+            throw new IllegalStateException("Should not reach turn " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+
+        final ConclusiveFailureException thrown = Assertions.assertThrows(ConclusiveFailureException.class, () -> step.execute(this.context));
+        Assertions.assertTrue(thrown.getMessage().contains("Hover over 'Add to cart'"));
+        Assertions.assertTrue(thrown.getMessage().contains("Element not found: Add to cart"));
+        Assertions.assertEquals(2, turn.get());
+    }
+
+    @Test
+    public void testActionFailureReportedInPlainTextThrowsConclusiveFailureException() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("hover", "Hovers element", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.error(call.callId(), "Element not found for hover target: text='Place Order'");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Hover over 'Place Order'");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Hover over 'Place Order'");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Trying to hover element", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-h1", "hover", MAPPER.createObjectNode().put("text", "Place Order"))));
+            }
+            if (t == 2)
+            {
+                // Turn 2 reports failure in plain text without proposing tools
+                return new LlmResponse("The requested element 'Place Order' is not present on the page, so the hover action cannot be performed.",
+                        new TokenUsage(10, 10, 20), "mock", Collections.emptyList());
+            }
+            throw new IllegalStateException("Should not reach turn " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+
+        final ConclusiveFailureException thrown = Assertions.assertThrows(ConclusiveFailureException.class, () -> step.execute(this.context));
+        Assertions.assertTrue(thrown.getMessage().contains("Hover over 'Place Order'"));
+        Assertions.assertTrue(thrown.getMessage().contains("Element not found for hover target: text='Place Order'"));
+        Assertions.assertEquals(2, turn.get());
+    }
 }
 
 

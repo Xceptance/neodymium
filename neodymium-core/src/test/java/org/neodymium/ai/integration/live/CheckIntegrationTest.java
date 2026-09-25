@@ -30,6 +30,7 @@ import org.neodymium.ai.junit.AiLinter;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
@@ -168,7 +169,7 @@ public class CheckIntegrationTest extends BaseAiTest
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testCheckNonExistentElementFailure(final AiSession session)
     {
-        assertThrows(Throwable.class, () ->
+        assertThrows(ConclusiveFailureException.class, () ->
         {
             session.execute( """
                 steps: |
@@ -187,7 +188,7 @@ public class CheckIntegrationTest extends BaseAiTest
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testCheckDisabledElementFailure(final AiSession session)
     {
-        assertThrows(Throwable.class, () ->
+        assertThrows(ConclusiveFailureException.class, () ->
         {
             session.execute( """
                 steps: |
@@ -195,5 +196,7 @@ public class CheckIntegrationTest extends BaseAiTest
                   Check the checkbox #disabled-box
                 """);
         });
+
+        $("#disabled-box").shouldNotBe(selected);
     }
 }

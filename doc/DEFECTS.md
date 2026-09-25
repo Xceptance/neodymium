@@ -41,6 +41,78 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20260925-01] Pre-Condition Assertion Timing and Inter-Test Hover State Leakage in HoverIntegrationTest
+- **Date:** 2026-09-25
+- **Component:** `neodymium-core` (`live-integration-tests`)
+- **Scope:** `Test/Harness`
+- **Symptom:** In `HoverIntegrationTest.testHoverNonExistentElementFailure`, running the full test suite resulted in state contamination where `#categories-dropdown` and `#preview-card` pre-condition assertions failed before the test execution started. Additionally, the Visual RCA diagnostic reported misleading application-state failure ("application may not have reached expected checkout state").
+- **Root Cause:** 
+  1. The test asserted pre-conditions (`$("#categories-dropdown").shouldNotBe(visible)`) before `session.execute(...)` was called. Since `Open ${hover.test.url}` was inside `session.execute(...)`, the assertions ran against the dirty DOM left by preceding tests (`testCssHoverDropdown` and `testDelayedHoverActivity`).
+  2. The autonomous agent probed `button#btn-categories` during its exploratory search for the missing element, altering page state before throwing `ConclusiveFailureException`.
+  3. The non-existent element name was specified as `'Place Order'` on a catalog page, prompting the multimodal RCA agent to hypothesize an incomplete e-commerce checkout transition.
+- **Detection Gap ("What did we miss?"):** Single-method test runs initialized a fresh browser session and did not expose the inter-method state leakage that occurs when running the full class in sequence.
+- **Resolution:** Explicitly navigate to the test URL prior to checking initial pre-conditions, add an `@AfterEach` cleanup step to neutralize mouse position, and rename the negative test target to a domain-neutral action (`'Non-Existent Action'`).
+- **Safety Net Added:** Full test class suite execution passing cleanly in sequence with isolated pre/post assertions and neutral RCA diagnostics.
+
+### [DEF-20260924-05] Suite-Wide Underchecked Exception Types in Live Integration Tests
+- **Date:** 2026-09-24
+- **Component:** `neodymium-core` (`live-integration-tests`)
+- **Scope:** `Test/Harness`
+- **Symptom:** 28 negative test cases across 6 live integration test classes (`AssertIntegrationTest`, `CheckIntegrationTest`, `ClearIntegrationTest`, `ClickIntegrationTest`, `HoverIntegrationTest`, `TimeoutIntegrationTest`) used overly broad exception assertions (`Throwable.class`, `Exception.class`, or untyped `catch (final Exception e)` blocks).
+- **Root Cause:** Historical use of generic exception catch-alls during initial test harness scaffolding. This violates test isolation and robustness principles:
+  1. Catching `Throwable.class` masks fatal JVM Errors (`OutOfMemoryError`, `StackOverflowError`, `LinkageError`).
+  2. Catching broad `Exception.class` allows arbitrary syntax errors, timeouts, or configuration glitches to falsely satisfy tests.
+  3. Action steps (e.g. clicking/clearing/checking/hovering missing or disabled elements) have a distinct contract from verification steps (e.g. asserting text, URL, visibility, count, or attributes): action failures conclusively throw `ConclusiveFailureException`, while verification failures throw `AssertionError`.
+- **Detection Gap ("What did we miss?"):** Linters and CI only checked whether tests passed green, without validating exception specificity against the framework's execution pipeline contracts.
+- **Resolution:** Refactored all 28 negative test methods across the 6 live test classes to assert the exact expected exception type:
+  1. `AssertIntegrationTest` (19 methods) & `TimeoutIntegrationTest` (1 method): migrated to `assertThrows(AssertionError.class, ...)`.
+  2. `CheckIntegrationTest` (2 methods), `ClearIntegrationTest` (3 methods), `ClickIntegrationTest` (2 methods), and `HoverIntegrationTest` (1 method): migrated to `assertThrows(ConclusiveFailureException.class, ...)`.
+- **Safety Net Added:** Exact type contracts enforced across all live suite negative tests, preventing false passes on pipeline or environmental crashes.
+
+### [DEF-20260924-04] Agent Loop Misclassifies Plain-Text Action Failure Report as InvalidAgentResponseException
+- **Date:** 2026-09-24
+- **Component:** `neodymium-core` (`AgentToolLoopStep`)
+- **Scope:** `Framework`
+- **Symptom:** `HoverIntegrationTest.testHoverNonExistentElementFailure` threw `InvalidAgentResponseException: Agent turn did not produce a valid tool call after warning` instead of failing conclusively with `ConclusiveFailureException` when hovering over a missing element (`Hover over 'Place Order'`).
+- **Root Cause:** Operating Rule 3 in the agent prompt directs: *"If an action fails (e.g., target element is disabled, missing, or non-interactable), DO NOT substitute uncommanded assertions and DO NOT call 'complete_step'; report the failure."* In `HoverIntegrationTest`, after `hover` failed on Turn 1 and exploratory DOM queries confirmed the element was missing, the LLM faithfully followed Rule 3 by reporting the failure in plain text without proposing tools. However, `AgentToolLoopStep` blindly treated any turn without tool calls (`proposedCalls == null || proposedCalls.isEmpty()`) as an invalid response, sent a warning scolding the model to invoke `complete_step`, and threw `InvalidAgentResponseException` on repeat. This misclassified an expected SUT action failure as an agent communication glitch and bypassed Visual RCA failure classification.
+- **Detection Gap ("What did we miss?"):** Previous tests (e.g. `ClickIntegrationTest`) worked by accident because the model gave in to the warning and called `complete_step`, which was intercepted at line 719. Unit tests for `AgentToolLoopStepTest` only tested action failure rejection when the agent explicitly called `complete_step`, never when the agent adhered to Rule 3 and reported failure via plain text.
+- **Resolution:** Updated `AgentToolLoopStep` so that when `hasActionToolFailed` is true for an interactive action instruction and no tool calls are proposed, the runner recognizes that the agent has concluded failure and immediately throws `ConclusiveFailureException` with the action failure details instead of issuing an invalid response warning or throwing `InvalidAgentResponseException`.
+- **Safety Net Added:** Unit test in `AgentToolLoopStepTest.testActionFailureReportedInPlainTextThrowsConclusiveFailureException`.
+
+### [DEF-20260924-03] Hover Action Tool Fallback to Body and Missing from Mutating Action Validation
+- **Date:** 2026-09-24
+- **Component:** `neodymium-core` (`BrowserToolProvider`, `AgentToolLoopStep`)
+- **Scope:** `Framework`
+- **Symptom:** Hovering over a non-existent element in `HoverIntegrationTest.testHoverNonExistentElementFailure` (`Hover over 'Add to cart'`) did not throw an exception and falsely reported success.
+- **Root Cause:** Dual framework defects:
+  1. `BrowserToolProvider.createHoverTool()` only declared `selector` in its schema and only queried `resolveSelector(args)` (ignoring `text`). When the LLM invoked `hover` with `{"text": "Add to cart"}`, `resolveSelector` returned `""`. `findElement("")` defaulted to `$("body")`, causing the tool to hover over the visible document `<body>` and return a false success. Additionally, empty target arguments were not validated before execution.
+  2. `AgentToolLoopStep.isMutatingTool(name)` omitted `"hover"` (and `"scroll"`). Even when `hover` failed on a non-existent element, `hasActionToolFailed` was never set. When the agent subsequently called `complete_step`, interactive step failure validation was bypassed because `hover` was not tracked as a mutating action tool.
+- **Detection Gap ("What did we miss?"):** Unit tests for browser tools verified tool registration but did not test hover argument parsing, text fallback, or empty target validation. `AgentToolLoopStepTest` tested action failure handling for `check` and `click`, but lacked coverage for `hover` and missing mutating tool executions on interactive instructions.
+- **Resolution:**
+  1. Updated `BrowserToolProvider.createHoverTool` to accept `text` alongside `selector` in the JSON schema, validate that at least one is provided (returning `ToolResult.error` otherwise), and resolve targets via text or CSS.
+  2. Added `"hover"` and `"scroll"` to `AgentToolLoopStep.isMutatingTool(name)`, updated `callSelector` extraction to check `text` and `target` properties, and required that interactive action instructions execute at least one successful mutating action tool before `complete_step` is accepted.
+- **Safety Net Added:** Unit tests in `BrowserToolsTest.testHoverToolSchemaAndTargetValidation` and `AgentToolLoopStepTest.testCompleteStepRejectedWhenHoverActionToolFailed` and `testCompleteStepRejectedWhenInteractiveActionInstructionHasNoMutatingToolExecuted`.
+
+### [DEF-20260924-02] HoverIntegrationTest Catches Throwable Masking JVM Errors and Lacks State Assertion
+- **Date:** 2026-09-24
+- **Component:** `neodymium-core` (`HoverIntegrationTest`, `live-integration-tests`)
+- **Scope:** `Test/Harness`
+- **Symptom:** `HoverIntegrationTest.testHoverNonExistentElementFailure` used `assertThrows(Throwable.class, ...)`. If a fatal JVM Error (such as `OutOfMemoryError`, `StackOverflowError`, or linkage failure) occurred during execution, the test would catch it and falsely report success. Additionally, no post-condition DOM state was asserted after failure.
+- **Root Cause:** Incomplete test harness exception targeting. Catching `Throwable` violates framework test guidelines, which mandate catching `Exception.class` to prevent swallowing VM-level errors while verifying DOM stability after failure.
+- **Detection Gap ("What did we miss?"):** The negative test passed during green runs because the framework properly threw an exception, but code analysis and linters did not flag `Throwable.class` usage in test assertions.
+- **Resolution:** Replaced `Throwable.class` with `Exception.class` in `testHoverNonExistentElementFailure` and added post-condition oracle assertion `$(".dropdown-content").shouldNotBe(visible)`.
+- **Safety Net Added:** Clean code and exception audit rule enforced across live integration test suite.
+
+### [DEF-20260924-01] ForwardIntegrationTest Fails Initialization Due to Invalid @AiDataSet on Programmatic Playbook
+- **Date:** 2026-09-24
+- **Component:** `neodymium-core` (`NeodymiumAiRunner`, `live-integration-tests`)
+- **Scope:** `Test/Harness`
+- **Symptom:** Running `ForwardIntegrationTest` immediately crashed during JUnit Jupiter test template parameterization with `java.lang.IllegalArgumentException: No datasets defined in playbook 'programmatic', but @AiDataSet filter [forwardData] was specified.`
+- **Root Cause:** `ForwardIntegrationTest` was annotated with `@AiDataSet("forwardData")` while using `@AiPlaybook("programmatic")`. `NeodymiumAiRunner` attempts to resolve and filter dataset names against pre-parsed YAML playbook tables when building invocation contexts before test execution begins. Because `"programmatic"` playbooks do not define static YAML dataset tables upfront, filtering against an undeclared dataset is illegal. The inline `data:` block passed to `session.execute(...)` was only evaluated at runtime, long after test invocation discovery had already aborted.
+- **Detection Gap ("What did we miss?"):** The test was tagged with `@Tag("LiveAPI")` and `@Tag("AuraIntegration")`, which are frequently excluded during routine offline CI or unit test runs without LLM credentials, masking the fact that the test method failed at JUnit discovery/parameterization time before any browser or LLM connection was initiated.
+- **Resolution:** Removed the `@AiDataSet` annotation and inline `data:` block from `ForwardIntegrationTest`. Standardized fixture parameter injection in `@BeforeEach` via `session.data().putDynamic(...)`. Modernized the test suite to use real link click navigation across dedicated test fixture pages (`ForwardActionTest/page1.html`, `page2.html`, `page3.html`), and added synonym phrasing (`testForwardSynonyms`), sequential multi-step history traversals (`testMultipleForward`), and fluent metric assertions (`verifyMetrics()`).
+- **Safety Net Added:** Verified test parameterization across all execution modes (`FORCE_RECORDING`, `REPLAY_STRICT`, `REPLAY_WITH_HEALING`) via `mvn test -Dtest=ForwardIntegrationTest`.
+
 ### [DEF-20260923-06] Clear Action Silent No-Op on Checkbox Elements Leaving Checkboxes Selected
 - **Date:** 2026-09-23
 - **Component:** `neodymium-core` (`ClearAction`, `BrowserToolProvider`)

@@ -20,6 +20,7 @@ package org.neodymium.ai.integration.live;
 
 import static com.codeborne.selenide.Condition.empty;
 import static com.codeborne.selenide.Condition.selected;
+import static com.codeborne.selenide.Condition.value;
 import static com.codeborne.selenide.Selenide.$;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -29,6 +30,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
@@ -88,7 +90,7 @@ public class ClearIntegrationTest extends BaseAiTest
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testClearDisabledElementFailure(final AiSession session)
     {
-        assertThrows(Throwable.class, () ->
+        assertThrows(ConclusiveFailureException.class, () ->
         {
             session.execute( """
                 steps: |
@@ -96,6 +98,8 @@ public class ClearIntegrationTest extends BaseAiTest
                   Clear #disabled-input
                 """);
         });
+
+        $("#disabled-input").shouldHave(value("Cannot clear"));
     }
 
     /**
@@ -107,7 +111,7 @@ public class ClearIntegrationTest extends BaseAiTest
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testClearNonExistentElementFailure(final AiSession session)
     {
-        assertThrows(Throwable.class, () ->
+        assertThrows(ConclusiveFailureException.class, () ->
         {
             session.execute( """
                 steps: |
@@ -126,7 +130,7 @@ public class ClearIntegrationTest extends BaseAiTest
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testClearReadonlyElementFailure(final AiSession session)
     {
-        assertThrows(Throwable.class, () ->
+        assertThrows(ConclusiveFailureException.class, () ->
         {
             session.execute( """
                 steps: |
@@ -134,6 +138,8 @@ public class ClearIntegrationTest extends BaseAiTest
                   Clear #readonly-input
                 """);
         });
+
+        $("#readonly-input").shouldHave(value("Cannot clear readonly"));
     }
 
     /**

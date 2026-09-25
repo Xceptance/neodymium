@@ -18,16 +18,18 @@
  */
 package org.neodymium.ai.integration.live;
 
-import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.common.browser.Browser;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataSet;
+import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
-import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.testing.BaseAiTest;
+import org.neodymium.common.browser.Browser;
 
 /**
  * Live integration test verifying that the (timeout:X) tag
@@ -58,8 +60,8 @@ public class TimeoutIntegrationTest extends BaseAiTest
         session.data().putDynamic("timeout.test.url", pageUrl, false);
 
         final long start = System.currentTimeMillis();
-        
-        try
+
+        assertThrows(AssertionError.class, () ->
         {
             session.execute( """
                 data:
@@ -68,15 +70,12 @@ public class TimeoutIntegrationTest extends BaseAiTest
                   Open ${timeout.test.url} in the browser
                   Verify that #non-existent-element is visible (timeout:50ms)
                 """);
-            org.junit.jupiter.api.Assertions.fail("The playbook should have failed due to element not found");
-        }
-        catch (final Exception e)
-        {
-            final long duration = System.currentTimeMillis() - start;
-            // The step should fail quickly due to custom 50ms timeout.
-            // If the timeout tag is ignored, it will wait for Selenide's default timeout (4000ms).
-            org.junit.jupiter.api.Assertions.assertTrue(duration < 2000, 
-                "Test should fail fast (under 2 seconds) due to (timeout:50ms) tag, but took " + duration + " ms");
-        }
+        });
+
+        final long duration = System.currentTimeMillis() - start;
+        // The step should fail quickly due to custom 50ms timeout.
+        // If the timeout tag is ignored, it will wait for Selenide's default timeout (4000ms).
+        assertTrue(duration < 2000, 
+            "Test should fail fast (under 2 seconds) due to (timeout:50ms) tag, but took " + duration + " ms");
     }
 }

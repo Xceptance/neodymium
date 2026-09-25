@@ -1195,6 +1195,34 @@ public class BrowserToolsTest
         Assertions.assertEquals("unfocused", BrowserToolProvider.normalizeElementState("[unfocused]"));
         Assertions.assertEquals("unfocused", BrowserToolProvider.normalizeElementState("UNFOCUSED"));
     }
+
+    @Test
+    public void testHoverToolSchemaAndTargetValidation() throws Exception
+    {
+        final Optional<AiTool> toolOpt = this.registry.getTool("hover");
+        Assertions.assertTrue(toolOpt.isPresent(), "Hover tool must be registered");
+        final AiTool hoverTool = toolOpt.get();
+
+        final JsonNode schema = hoverTool.getDefinition().parametersSchema();
+        final JsonNode props = schema.get("properties");
+        Assertions.assertNotNull(props.get("selector"), "Hover tool schema must include 'selector'");
+        Assertions.assertNotNull(props.get("text"), "Hover tool schema must include 'text'");
+
+        final ObjectMapper mapper = new ObjectMapper();
+
+        // Executing hover with empty arguments should return ToolResult.error
+        final ToolCall emptyCall = new ToolCall("call-h1", "hover", mapper.createObjectNode());
+        final ToolResult errorResult = hoverTool.execute(emptyCall, null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, errorResult.status());
+        Assertions.assertTrue(errorResult.content().contains("Target selector or text must be specified"));
+
+        // Executing hover with blank selector and blank text should return ToolResult.error
+        final ObjectNode blankArgs = mapper.createObjectNode().put("selector", "  ").put("text", "");
+        final ToolCall blankCall = new ToolCall("call-h2", "hover", blankArgs);
+        final ToolResult blankResult = hoverTool.execute(blankCall, null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, blankResult.status());
+        Assertions.assertTrue(blankResult.content().contains("Target selector or text must be specified"));
+    }
 }
 
 

@@ -575,7 +575,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertTitleFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -594,7 +594,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertUrlFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -613,7 +613,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertTextFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -632,7 +632,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertVisibilityFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -651,7 +651,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertInvisibilityFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -670,7 +670,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertExistenceFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -689,7 +689,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertFocusFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -708,7 +708,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertAttributeFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -727,7 +727,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertCheckboxFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -746,7 +746,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertDisabledFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -765,7 +765,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertReadonlyFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -784,7 +784,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertSelectedFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -803,7 +803,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertRegexMismatchFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -822,7 +822,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertRadioButtonFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -841,7 +841,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertValueFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -860,7 +860,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertAbsenceFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -879,7 +879,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertCountFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -898,7 +898,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertUnselectedFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -918,7 +918,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertUnselectedFailureWithNot(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |

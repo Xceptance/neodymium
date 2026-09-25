@@ -507,6 +507,18 @@ public final class AgentToolLoopStep implements PipelineStep
             // If no tool call could be parsed
             if (proposedCalls == null || proposedCalls.isEmpty())
             {
+                if (hasActionToolFailed && !isVisual && isInteractiveActionInstruction(rawInstruction, instruction, step))
+                {
+                    final String detail = (lastActionFailureMessage != null && !lastActionFailureMessage.isBlank())
+                            ? lastActionFailureMessage
+                            : (response != null && response.content() != null && !response.content().isBlank()
+                                    ? response.content().trim()
+                                    : "Action failed");
+                    LOGGER.info("🛑 Action failed and agent concluded failure without tool calls: {}", detail);
+                    throw new ConclusiveFailureException("Cannot complete step: Action instruction '" + instruction
+                            + "' failed: " + detail);
+                }
+
                 LOGGER.warn("LLM turn did not produce a valid tool call: {}", response != null ? response.content() : "empty response");
                 if (response != null && response.tokenUsage() != null)
                 {
@@ -836,7 +848,13 @@ public final class AgentToolLoopStep implements PipelineStep
                 if (isMutatingTool(effectiveCall.toolName()))
                 {
                     final String callSelector = effectiveCall.arguments() != null
-                            ? effectiveCall.arguments().path("selector").asText(null)
+                            ? (effectiveCall.arguments().hasNonNull("selector") && !effectiveCall.arguments().path("selector").asText().isBlank()
+                                    ? effectiveCall.arguments().path("selector").asText()
+                                    : (effectiveCall.arguments().hasNonNull("text") && !effectiveCall.arguments().path("text").asText().isBlank()
+                                            ? effectiveCall.arguments().path("text").asText()
+                                            : (effectiveCall.arguments().hasNonNull("target") && !effectiveCall.arguments().path("target").asText().isBlank()
+                                                    ? effectiveCall.arguments().path("target").asText()
+                                                    : null)))
                             : null;
                     if (result != null && result.status() == ToolResult.Status.SUCCESS)
                     {
@@ -1896,6 +1914,7 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
         return "click".equals(clean)
+                || "hover".equals(clean)
                 || "fill".equals(clean)
                 || "type".equals(clean)
                 || "check".equals(clean)

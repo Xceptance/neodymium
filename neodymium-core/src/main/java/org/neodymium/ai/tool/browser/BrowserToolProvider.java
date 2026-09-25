@@ -1136,8 +1136,9 @@ public final class BrowserToolProvider
     {
         final ObjectNode schema = MAPPER.createObjectNode();
         schema.put("type", "object");
-        schema.putObject("properties").putObject("selector").put("type", "string").put("description", "Selector of the element to hover over");
-        schema.putArray("required").add("selector");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("selector").put("type", "string").put("description", "Selector of the element to hover over");
+        props.putObject("text").put("type", "string").put("description", "Visible text of the element to hover over (alternative to selector)");
 
         final ToolDefinition def = new ToolDefinition("hover", "Hovers the mouse cursor over an element", schema);
         return new AiTool()
@@ -1151,12 +1152,45 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
-                final String selector = resolveSelector(call.arguments());
-                final SelenideElement el = findElement(selector);
+                final JsonNode args = call.arguments();
+                final String selector = resolveSelector(args);
+                final String text = args != null && args.hasNonNull("text") ? args.path("text").asText().trim() : "";
+
+                if (selector.isBlank() && text.isBlank())
+                {
+                    return ToolResult.error(call.callId(), "Target selector or text must be specified for hover action");
+                }
+
+                final SelenideElement el;
+                final String targetDesc;
+                if (!selector.isBlank())
+                {
+                    targetDesc = selector;
+                    if (selector.startsWith("text="))
+                    {
+                        final String rawText = selector.substring("text=".length()).trim();
+                        el = $(Selectors.byText(rawText)).is(Condition.visible)
+                                ? $(Selectors.byText(rawText))
+                                : $(Selectors.withText(rawText));
+                    }
+                    else
+                    {
+                        final SelenideElement found = SelenideElementFinder.findElement(selector);
+                        el = found != null ? found : $(selector);
+                    }
+                }
+                else
+                {
+                    targetDesc = text;
+                    el = $(Selectors.byText(text)).is(Condition.visible)
+                            ? $(Selectors.byText(text))
+                            : $(Selectors.withText(text));
+                }
+
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
                 el.shouldBe(Condition.visible).hover();
                 final ObjectNode res = successNode("hover");
-                res.put("target", selector);
+                res.put("target", targetDesc);
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
