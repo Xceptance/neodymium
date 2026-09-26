@@ -25,9 +25,11 @@ import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.executor.selenide.plugins.IncludeAction;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -162,6 +164,7 @@ public final class BrowserToolProvider
         registry.register(createHandleAlertTool());
         registry.register(createDragTool());
         registry.register(createDragToTool());
+        registry.register(createIncludeTool());
     }
 
     private static int[] performSafeCoordinateClick(final WebDriver driver, final int targetX, final int targetY)
@@ -4468,6 +4471,81 @@ public final class BrowserToolProvider
                 {
                     LOGGER.warn("Failed executing browser_drag_to from '{}' to '{}': {}", source, target, e.getMessage());
                     return ToolResult.error(call.callId(), errorNode("Failed dragging element to target: " + e.getMessage()).toString());
+                }
+            }
+        };
+    }
+
+    private static AiTool createIncludeTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("path")
+                .put("type", "string")
+                .put("description", "Classpath or relative path to the YAML playbook file to include (e.g. 'playbooks/integration/includes/my_include.yaml')");
+        final ArrayNode req = schema.putArray("required");
+        req.add("path");
+
+        final ToolDefinition def = new ToolDefinition("include", "Includes and executes steps from an external playbook file into the current execution flow", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final JsonNode args = call.arguments();
+                String path = null;
+                if (args != null)
+                {
+                    if (args.hasNonNull("path") && !args.path("path").asText().isBlank())
+                    {
+                        path = args.path("path").asText().trim();
+                    }
+                    else if (args.hasNonNull("file") && !args.path("file").asText().isBlank())
+                    {
+                        path = args.path("file").asText().trim();
+                    }
+                    else if (args.hasNonNull("target") && !args.path("target").asText().isBlank())
+                    {
+                        path = args.path("target").asText().trim();
+                    }
+                }
+
+                if (path == null || path.isEmpty())
+                {
+                    return ToolResult.error(call.callId(), errorNode("include requires a non-empty 'path' to the playbook file").toString());
+                }
+
+                ExecutionContext execCtx = ExecutionContext.getActiveContext();
+                if (execCtx == null && context != null)
+                {
+                    execCtx = context.getVariable("neodymium.executionContext", ExecutionContext.class).orElse(null);
+                }
+
+                if (execCtx == null)
+                {
+                    return ToolResult.error(call.callId(), errorNode("No active ExecutionContext found to execute include for: " + path).toString());
+                }
+
+                try
+                {
+                    final IncludeAction includeAction = new IncludeAction(execCtx);
+                    includeAction.execute(new Action("INCLUDE", path, "Include playbook " + path));
+                    final ObjectNode resultNode = successNode("include");
+                    resultNode.put("includedPath", path);
+                    resultNode.put("message", "Successfully included playbook: " + path);
+                    return ToolResult.success(call.callId(), resultNode.toString());
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.error("Failed to include playbook '{}': {}", path, e.getMessage(), e);
+                    return ToolResult.error(call.callId(), errorNode("Failed to include playbook '" + path + "': " + e.getMessage()).toString());
                 }
             }
         };

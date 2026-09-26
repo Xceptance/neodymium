@@ -20,6 +20,7 @@ package org.neodymium.ai.action;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -31,6 +32,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.model.DomFeatureVector;
@@ -988,6 +990,35 @@ public class Action
             }
         }
 
+        if (this.condition != null && !this.condition.isEmpty())
+        {
+            final ArrayNode condArray = args.putArray("condition");
+            for (final Action act : this.condition)
+            {
+                condArray.add(MAPPER.valueToTree(act));
+            }
+        }
+        if (this.then != null && !this.then.isEmpty())
+        {
+            final ArrayNode thenArray = args.putArray("then");
+            for (final Action act : this.then)
+            {
+                thenArray.add(MAPPER.valueToTree(act));
+            }
+        }
+        if (this.elseActions != null && !this.elseActions.isEmpty())
+        {
+            final ArrayNode elseArray = args.putArray("else");
+            for (final Action act : this.elseActions)
+            {
+                elseArray.add(MAPPER.valueToTree(act));
+            }
+        }
+        if (this.hasElse != null)
+        {
+            args.put("hasElse", this.hasElse);
+        }
+
         if (this.domFeatureVector != null)
         {
             args.set("domFeatureVector", MAPPER.valueToTree(this.domFeatureVector));
@@ -1015,7 +1046,7 @@ public class Action
         }
 
         final String rawName = call.toolName() != null ? call.toolName() : "";
-        final String name = rawName.startsWith("browser_") ? rawName.substring("browser_".length()) : rawName;
+        final String name = (rawName.startsWith("browser_") ? rawName.substring("browser_".length()) : rawName).toLowerCase(Locale.ROOT);
         final JsonNode args = call.arguments();
         final boolean negated = args != null && (args.path("negated").asBoolean(false)
                 || args.path("not").asBoolean(false)
@@ -1037,6 +1068,7 @@ public class Action
             case "forward" -> "FORWARD";
             case "refresh" -> "REFRESH";
             case "wait" -> "WAIT";
+            case "assert" -> "ASSERT";
             case "assert_text" -> "ASSERT_TEXT";
             case "assert_count" -> "ASSERT_COUNT";
             case "assert_url" -> "ASSERT_URL";
@@ -1143,6 +1175,14 @@ public class Action
             else if (args.hasNonNull("target") && !args.path("target").asText().isBlank())
             {
                 target = args.path("target").asText();
+            }
+            else if (args.hasNonNull("path") && !args.path("path").asText().isBlank())
+            {
+                target = args.path("path").asText();
+            }
+            else if (args.hasNonNull("file") && !args.path("file").asText().isBlank())
+            {
+                target = args.path("file").asText();
             }
             else if (args.hasNonNull("locator") && !args.path("locator").asText().isBlank())
             {
@@ -1378,6 +1418,96 @@ public class Action
         action.setAdjust(adjust);
         action.setToolCall(call);
 
+        if (args != null && args.isObject())
+        {
+            if (args.hasNonNull("condition"))
+            {
+                final JsonNode condNode = args.path("condition");
+                final List<Action> conditionList = new ArrayList<>();
+                if (condNode.isArray())
+                {
+                    for (final JsonNode item : condNode)
+                    {
+                        final Action parsed = parseNestedAction(item);
+                        if (parsed != null)
+                        {
+                            conditionList.add(parsed);
+                        }
+                    }
+                }
+                else if (condNode.isObject())
+                {
+                    final Action parsed = parseNestedAction(condNode);
+                    if (parsed != null)
+                    {
+                        conditionList.add(parsed);
+                    }
+                }
+                action.setCondition(conditionList);
+            }
+
+            if (args.hasNonNull("then"))
+            {
+                final JsonNode thenNode = args.path("then");
+                final List<Action> thenList = new ArrayList<>();
+                if (thenNode.isArray())
+                {
+                    for (final JsonNode item : thenNode)
+                    {
+                        final Action parsed = parseNestedAction(item);
+                        if (parsed != null)
+                        {
+                            thenList.add(parsed);
+                        }
+                    }
+                }
+                else if (thenNode.isObject())
+                {
+                    final Action parsed = parseNestedAction(thenNode);
+                    if (parsed != null)
+                    {
+                        thenList.add(parsed);
+                    }
+                }
+                action.setThen(thenList);
+            }
+
+            final JsonNode elseNode = args.hasNonNull("else") ? args.path("else") : args.path("elseActions");
+            if (elseNode != null && !elseNode.isNull())
+            {
+                final List<Action> elseList = new ArrayList<>();
+                if (elseNode.isArray())
+                {
+                    for (final JsonNode item : elseNode)
+                    {
+                        final Action parsed = parseNestedAction(item);
+                        if (parsed != null)
+                        {
+                            elseList.add(parsed);
+                        }
+                    }
+                }
+                else if (elseNode.isObject())
+                {
+                    final Action parsed = parseNestedAction(elseNode);
+                    if (parsed != null)
+                    {
+                        elseList.add(parsed);
+                    }
+                }
+                action.setElseActions(elseList);
+            }
+
+            if (args.hasNonNull("hasElse"))
+            {
+                action.setHasElse(args.path("hasElse").asBoolean());
+            }
+            else if (action.getElseActions() != null && !action.getElseActions().isEmpty())
+            {
+                action.setHasElse(true);
+            }
+        }
+
         if (args != null && args.has("domFeatureVector") && !args.path("domFeatureVector").isNull())
         {
             try
@@ -1391,5 +1521,59 @@ public class Action
         }
 
         return action;
+    }
+
+    private static Action parseNestedAction(final JsonNode node)
+    {
+        if (node == null || node.isNull() || !node.isObject())
+        {
+            return null;
+        }
+
+        if (node.hasNonNull("tool_call"))
+        {
+            return parseNestedAction(node.path("tool_call"));
+        }
+
+        final String callId = node.hasNonNull("id") && !node.path("id").asText().isBlank()
+                ? node.path("id").asText()
+                : UUID.randomUUID().toString();
+
+        if (node.hasNonNull("name") || node.hasNonNull("tool") || node.hasNonNull("toolName"))
+        {
+            final String toolName = node.hasNonNull("name") ? node.path("name").asText()
+                    : (node.hasNonNull("tool") ? node.path("tool").asText() : node.path("toolName").asText());
+            final JsonNode args = node.hasNonNull("arguments") ? node.path("arguments")
+                    : (node.hasNonNull("parameters") ? node.path("parameters")
+                    : (node.hasNonNull("args") ? node.path("args") : node));
+            return fromToolCall(new ToolCall(callId, toolName, args));
+        }
+
+        final String actionName = node.hasNonNull("action") ? node.path("action").asText()
+                : (node.hasNonNull("type") ? node.path("type").asText() : "");
+        if (!actionName.isBlank())
+        {
+            return fromToolCall(new ToolCall(callId, actionName, node));
+        }
+
+        final Iterator<String> it = node.fieldNames();
+        while (it.hasNext())
+        {
+            final String field = it.next();
+            final JsonNode child = node.path(field);
+            if (child.isObject())
+            {
+                return fromToolCall(new ToolCall(callId, field, child));
+            }
+        }
+
+        try
+        {
+            return MAPPER.treeToValue(node, Action.class);
+        }
+        catch (final Exception ignored)
+        {
+            return null;
+        }
     }
 }

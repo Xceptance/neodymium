@@ -508,7 +508,7 @@ public final class GeminiLlmProvider implements LlmProvider
                 TokenUsage mappedUsage = null;
                 if (usage != null)
                 {
-                    mappedUsage = new TokenUsage(
+                    mappedUsage = TokenUsage.of(
                         usage.inputTokenCount(),
                         usage.outputTokenCount(),
                         usage.totalTokenCount(),
@@ -558,7 +558,7 @@ public final class GeminiLlmProvider implements LlmProvider
         });
     }
 
-    int extractCachedTokens(final dev.langchain4j.model.output.TokenUsage usage)
+    int extractCachedTokens(final Object usage)
     {
         if (usage == null)
         {

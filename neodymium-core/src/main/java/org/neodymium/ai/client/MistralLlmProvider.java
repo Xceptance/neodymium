@@ -25,7 +25,6 @@ import dev.langchain4j.model.chat.ChatModel;
 import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.mistralai.MistralAiChatModel;
 import dev.langchain4j.model.mistralai.MistralAiChatModel.MistralAiChatModelBuilder;
-import dev.langchain4j.model.output.TokenUsage;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.time.Duration;
@@ -165,12 +164,12 @@ public final class MistralLlmProvider implements LlmProvider
                 );
                 final ChatResponse response = activeModel.chat(messages);
 
-                final TokenUsage usage = response.tokenUsage();
+                final var usage = response.tokenUsage();
 
-                org.neodymium.ai.client.TokenUsage mappedUsage = null;
+                TokenUsage mappedUsage = null;
                 if (usage != null)
                 {
-                    mappedUsage = new org.neodymium.ai.client.TokenUsage(
+                    mappedUsage = TokenUsage.of(
                         usage.inputTokenCount(),
                         usage.outputTokenCount(),
                         usage.totalTokenCount(),
@@ -188,7 +187,7 @@ public final class MistralLlmProvider implements LlmProvider
         });
     }
 
-    private int extractCachedTokens(final TokenUsage usage)
+    private int extractCachedTokens(final Object usage)
     {
         if (usage == null)
         {

@@ -223,7 +223,7 @@ public final class VertexAiLlamaProvider implements LlmProvider
                 TokenUsage mappedUsage = null;
                 if (usage != null)
                 {
-                    mappedUsage = new TokenUsage(
+                    mappedUsage = TokenUsage.of(
                         usage.inputTokenCount(),
                         usage.outputTokenCount(),
                         usage.totalTokenCount(),

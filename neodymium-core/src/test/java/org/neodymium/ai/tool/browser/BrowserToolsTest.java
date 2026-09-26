@@ -29,6 +29,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolDefinition;
@@ -108,7 +111,8 @@ public class BrowserToolsTest
                 "store",
                 "list_tabs",
                 "switch_tab",
-                "close_tab"
+                "close_tab",
+                "include"
         );
 
         for (final String toolName : expectedTools)
@@ -246,6 +250,47 @@ public class BrowserToolsTest
         Assertions.assertTrue(props.has("selector") || props.has("target"));
         Assertions.assertTrue(props.has("x"));
         Assertions.assertTrue(props.has("y"));
+    }
+
+    @Test
+    public void testBrowserIncludeToolSchemaAndExecution() throws Exception
+    {
+        final AiTool includeTool = this.registry.getTool("include").orElseThrow();
+        final JsonNode schema = includeTool.getDefinition().parametersSchema();
+        Assertions.assertEquals("object", schema.path("type").asText());
+        Assertions.assertTrue(schema.path("properties").has("path"));
+        Assertions.assertEquals("path", schema.path("required").get(0).asText());
+
+        final ObjectMapper mapper = new ObjectMapper();
+
+        // 1. Missing path error
+        final ToolCall emptyCall = new ToolCall("call-inc-1", "include", mapper.createObjectNode());
+        final ToolResult resEmpty = includeTool.execute(emptyCall, null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, resEmpty.status());
+        Assertions.assertTrue(resEmpty.content().contains("include requires a non-empty 'path'"));
+
+        // 2. Missing ExecutionContext error
+        final ToolCall validCall = new ToolCall("call-inc-2", "include", mapper.createObjectNode().put("path", "playbooks/integration/includes/accept_cookies.yaml"));
+        final ToolResult resNoCtx = includeTool.execute(validCall, null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, resNoCtx.status());
+        Assertions.assertTrue(resNoCtx.content().contains("No active ExecutionContext found"));
+
+        // 3. Execution with active ExecutionContext and AiSession
+        final ExecutionContext execCtx = new ExecutionContext(new SessionData());
+        final AiSession session = AiSession.mock();
+        execCtx.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        try
+        {
+            ExecutionContext.setActiveContext(execCtx);
+            final ToolResult resSuccess = includeTool.execute(validCall, null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, resSuccess.status());
+            Assertions.assertTrue(resSuccess.content().contains("Successfully included playbook"));
+            Assertions.assertTrue(execCtx.hasSteps(), "ExecutionContext should contain pushed steps from included playbook");
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
     }
 
     @Test

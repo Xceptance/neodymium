@@ -88,6 +88,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -108,6 +109,9 @@ public final class AgentToolLoopStep implements PipelineStep
 
     public static final String KEY_TOOL_LOOP_SUMMARY = "toolLoopSummary";
     public static final String KEY_EXECUTED_TOOL_CALLS = "executedToolCalls";
+
+    private static final Pattern HINT_SELECTOR_PATTERN = Pattern.compile("(?i)\\(\\s*hint\\s*:\\s*([^)]+)\\)");
+    private static final Pattern IF_IS_VISIBLE_PATTERN = Pattern.compile("(?i)\\bif\\s+is\\s+visible\\b");
 
     private final ToolRegistry toolRegistry;
     private final ToolInterceptor interceptor;
@@ -207,6 +211,7 @@ public final class AgentToolLoopStep implements PipelineStep
     {
         final long startTimeMs = System.currentTimeMillis();
         final ToolContext toolContext = new SimpleToolContext(this.toolRegistry);
+        toolContext.setVariable("neodymium.executionContext", context);
         final List<ToolCall> executedCalls = new ArrayList<>();
         context.getTransientData().remove("KEY_STEP_EXECUTION_FINALIZED");
         try
@@ -271,8 +276,24 @@ public final class AgentToolLoopStep implements PipelineStep
             }
         }
 
-        userPrompt.append("### Test Instruction:\n").append(instruction);
-        if (isVisual && !instruction.toLowerCase().contains("(visual)"))
+        String displayInstruction = instruction;
+        if (rawInstruction != null)
+        {
+            final Matcher hintMatcher = HINT_SELECTOR_PATTERN.matcher(rawInstruction);
+            if (hintMatcher.find())
+            {
+                final String selectorHint = hintMatcher.group(1).trim();
+                if (displayInstruction != null && displayInstruction.toLowerCase(Locale.ROOT).contains("if is visible"))
+                {
+                    displayInstruction = IF_IS_VISIBLE_PATTERN.matcher(displayInstruction).replaceAll("If " + selectorHint + " is visible");
+                }
+                userPrompt.append("### Target Selector Hint:\n")
+                        .append("Target element selector: `").append(selectorHint).append("`\n\n");
+            }
+        }
+
+        userPrompt.append("### Test Instruction:\n").append(displayInstruction != null ? displayInstruction : "");
+        if (isVisual && displayInstruction != null && !displayInstruction.toLowerCase().contains("(visual)"))
         {
             userPrompt.append(" (visual)");
         }
@@ -377,6 +398,7 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             systemPrompt.append("5. VISUAL CHECKS: When verifying visual appearance or when a screenshot is provided, inspect the screenshot visually to verify whether the condition is met on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
         }
+        systemPrompt.append("6. CONDITIONAL & INCLUDE STEPS: When instructed to conditionally execute actions or playbooks (e.g. 'If (condition), Include fileA, else Include fileB'): First evaluate the condition using available tools (e.g. 'query_dom' or inspecting element presence). If the condition is satisfied, execute the matching action or invoke 'include' with the target playbook path. If the condition is not satisfied and an 'else' branch is provided, execute the 'else' action or invoke 'include'. If the condition is not satisfied and no 'else' branch is provided, call 'complete_step'. When invoking 'include', you may co-propose 'complete_step' in the same turn [include, complete_step], or call 'complete_step' once include succeeds.\n");
 
         final List<ChatMessage> conversation = new ArrayList<>();
         conversation.add(ChatMessage.system(systemPrompt.toString()));
@@ -1038,6 +1060,25 @@ public final class AgentToolLoopStep implements PipelineStep
                         LOGGER.info(TURN_DIVIDER);
                         break turnLoop;
                     }
+                }
+                // Case 2: Successful include tool execution immediately fulfills the inclusion/branching step
+                else if (lastEffectiveCall != null && "include".equals(lastEffectiveCall.toolName()))
+                {
+                    final String incPath = lastEffectiveCall.arguments() != null && lastEffectiveCall.arguments().hasNonNull("path")
+                            ? lastEffectiveCall.arguments().path("path").asText()
+                            : "playbook";
+                    final String summary = "Included playbook: " + incPath;
+                    context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                    finishLoop(context, executedCalls, summary);
+                    LOGGER.info("🎯 Goal Accomplished via include tool: {} (Turn: #{}, Executed Calls: {})", summary, turn, executedCalls.size());
+                    if (response != null && response.tokenUsage() != null)
+                    {
+                        final TokenUsage tu = response.tokenUsage();
+                        LOGGER.info("📊 Tokens: {} in ({} cached) → {} out (total: {}) | Turn {}",
+                                tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
+                    }
+                    LOGGER.info(TURN_DIVIDER);
+                    break turnLoop;
                 }
             }
 

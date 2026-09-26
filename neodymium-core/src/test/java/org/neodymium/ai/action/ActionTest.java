@@ -20,9 +20,11 @@ package org.neodymium.ai.action;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -375,5 +377,107 @@ public class ActionTest
         assertEquals("ASSERT_COUNT", action.getType());
         assertEquals(".item", action.getTarget());
         assertEquals("!=3", action.getValue());
+    }
+
+    @Test
+    public void testFromToolCallBranchWithConditionThenElse()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        final ArrayNode cond = args.putArray("condition");
+        final ObjectNode cond1 = cond.addObject();
+        cond1.put("action", "ASSERT");
+        cond1.put("locator", "#cookie-banner");
+        cond1.put("value", "visible");
+
+        final ArrayNode then = args.putArray("then");
+        final ObjectNode then1 = then.addObject();
+        then1.put("action", "INCLUDE");
+        then1.put("value", "playbooks/integration/includes/accept_cookies.yaml");
+
+        final ArrayNode elseActions = args.putArray("else");
+        final ObjectNode else1 = elseActions.addObject();
+        else1.put("action", "CLICK");
+        else1.put("locator", "#btn-decline");
+
+        final ToolCall call = new ToolCall("call-branch", "branch", args);
+        final Action action = Action.fromToolCall(call);
+
+        assertNotNull(action);
+        assertEquals("BRANCH", action.getType());
+        assertTrue(action.hasElse());
+
+        assertNotNull(action.getCondition());
+        assertEquals(1, action.getCondition().size());
+        assertEquals("ASSERT", action.getCondition().get(0).getType());
+        assertEquals("#cookie-banner", action.getCondition().get(0).getTarget());
+        assertEquals("visible", action.getCondition().get(0).getValue());
+
+        assertNotNull(action.getThen());
+        assertEquals(1, action.getThen().size());
+        assertEquals("INCLUDE", action.getThen().get(0).getType());
+        assertEquals("playbooks/integration/includes/accept_cookies.yaml", action.getThen().get(0).getValue());
+
+        assertNotNull(action.getElseActions());
+        assertEquals(1, action.getElseActions().size());
+        assertEquals("CLICK", action.getElseActions().get(0).getType());
+        assertEquals("#btn-decline", action.getElseActions().get(0).getTarget());
+    }
+
+    @Test
+    public void testBranchToToolCallRoundTrip()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        final ArrayNode cond = args.putArray("condition");
+        final ObjectNode cond1 = cond.addObject();
+        cond1.put("action", "ASSERT");
+        cond1.put("locator", "#popup");
+        cond1.put("value", "visible");
+
+        final ArrayNode then = args.putArray("then");
+        final ObjectNode then1 = then.addObject();
+        then1.put("action", "CLICK");
+        then1.put("locator", "#btn-close");
+
+        final ToolCall originalCall = new ToolCall("call-branch-rt", "branch", args);
+        final Action parsedAction = Action.fromToolCall(originalCall);
+
+        final ToolCall generatedCall = parsedAction.toToolCall();
+        assertEquals("branch", generatedCall.toolName());
+        assertTrue(generatedCall.arguments().hasNonNull("condition"));
+        assertTrue(generatedCall.arguments().hasNonNull("then"));
+
+        final Action roundTripAction = Action.fromToolCall(generatedCall);
+        assertEquals("BRANCH", roundTripAction.getType());
+        assertEquals(1, roundTripAction.getCondition().size());
+        assertEquals("ASSERT", roundTripAction.getCondition().get(0).getType());
+        assertEquals("#popup", roundTripAction.getCondition().get(0).getTarget());
+        assertEquals(1, roundTripAction.getThen().size());
+        assertEquals("CLICK", roundTripAction.getThen().get(0).getType());
+        assertEquals("#btn-close", roundTripAction.getThen().get(0).getTarget());
+    }
+
+    @Test
+    public void testFromToolCallBranchSingleObjectPayload()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        final ObjectNode cond = args.putObject("condition");
+        cond.put("action", "ASSERT");
+        cond.put("locator", "#banner");
+        cond.put("value", "visible");
+
+        final ObjectNode then = args.putObject("then");
+        then.put("action", "CLICK");
+        then.put("locator", "#accept");
+
+        final ToolCall call = new ToolCall("call-single", "branch", args);
+        final Action action = Action.fromToolCall(call);
+
+        assertNotNull(action);
+        assertEquals(1, action.getCondition().size());
+        assertEquals("ASSERT", action.getCondition().get(0).getType());
+        assertEquals("#banner", action.getCondition().get(0).getTarget());
+        assertEquals(1, action.getThen().size());
+        assertEquals("CLICK", action.getThen().get(0).getType());
+        assertEquals("#accept", action.getThen().get(0).getTarget());
     }
 }
