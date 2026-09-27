@@ -199,7 +199,7 @@ public class PrelinterRuleMatrixLiveTest extends BaseAiTest
         description: "Cloud IAM Role Security Revocation"
         steps: |
           Click "Confirm Revocation" inside the modal dialog.
-          Click the "Configure Role" menu item to open settings.
+          Click "Revoke Role" to open the confirmation modal dialog.
         """)
     @DisplayName("Rule 7: TEMPORAL_FLOW_ANOMALY (English - Cloud IAM)")
     public void testTemporalFlowAnomaly_English_CloudIam(final AiSession session)

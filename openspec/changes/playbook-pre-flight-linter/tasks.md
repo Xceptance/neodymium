@@ -31,5 +31,5 @@
 - [x] 5.1 Add multilingual unit tests for `PlaybookLinterPrompt` (English, German, Japanese, compound step splits, visual scope tagging, explicit description context, incomplete branches)
 - [x] 5.2 Add unit tests for `PlaybookLinter` (enabled/disabled toggles, replay bypass, error recovery, mock LLM provider integration, token accounting)
 - [x] 5.3 Add unit tests for `MarkdownReportGenerator` and `HtmlReportGenerator` linter findings rendering
-- [x] 5.4 Add live challenge integration test suite (`PrelinterChallengeIntegrationTest.java`) exercising all 9 quality rules in `ExecutionMode.LINTER_ONLY`
+- [x] 5.4 Add live challenge integration test suite (`PrelinterRuleMatrixLiveTest.java` superseding initial `PrelinterChallengeIntegrationTest.java`) exercising all 9 quality rules in `ExecutionMode.LINTER_ONLY`
 - [x] 5.5 Execute full test suite and clean code audit

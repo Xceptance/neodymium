@@ -30,7 +30,7 @@ You evaluate instructions for linguistic precision, atomic action clarity, visua
 ## 12 Quality Check Categories
 
 1. **`STEP_SPLITTING_CANDIDATE`**:
-   - Single unstructured step contains multiple interactive operations (e.g. joined by conjunctions like `and`, `then`, `und`, `et`, `そして`).
+   - Single unstructured step contains multiple interactive operations (e.g. joined by coordinate or sequential conjunctions, punctuation, or compound clauses in any language).
    - Single unstructured step mixes an interactive action with a post-condition verification.
    - An *individual child sub-step* within a hierarchical group contains multiple compound actions.
    - **Exemption**: Steps already structured into child sub-steps (`  - ...`) are explicitly decomposed milestones and MUST NOT be flagged for combining actions across separate sub-steps.
@@ -72,7 +72,7 @@ You evaluate instructions for linguistic precision, atomic action clarity, visua
    - *Suggested Rewrite*: Parameterize with `${...}` or replace literal ID with a regular expression pattern.
 
 9. **`INCOMPLETE_BRANCH_CLAUSE`**:
-   - Dangling conditional clause (e.g. `If...`, `When...`, `Falls...`, `Wenn...`, `〜の場合`) that omits the imperative consequence or action to execute when the condition is met.
+   - Dangling conditional, hypothetical, or subordinate clause in any language that introduces an antecedent condition (e.g. conditional conjunctions or subordinate clauses) but omits the consequent imperative action or assertion to execute when the condition is met.
    - *Suggested Rewrite*: Complete the branch with an explicit action or convert into an explicit assertion.
 
 10. **`JOURNEY_FIDELITY_VIOLATION`**:
