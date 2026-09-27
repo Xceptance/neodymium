@@ -372,6 +372,39 @@ public final class StateMachineRunner
                             context.discardStepsUpToTryCatch(tryCatch);
                         }
 
+                        // Mark step status on playbook step as FAILED so recorded playbook preserves the failure
+                        playbookStep.setStatus(PlaybookStepStatus.FAILED);
+                        playbookStep.setFailed(true);
+                        if (playbookStep.getFailureReason() == null)
+                        {
+                            Throwable root = e;
+                            while (root.getCause() != null && root != root.getCause())
+                            {
+                                root = root.getCause();
+                            }
+                            playbookStep.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
+                        }
+
+                        if (playbookStep.hasSubSteps())
+                        {
+                            for (final PlaybookStep sub : playbookStep.getSubSteps())
+                            {
+                                if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING || sub.getStatus() == PlaybookStepStatus.RUNNING)
+                                {
+                                    sub.setStatus(PlaybookStepStatus.FAILED);
+                                    sub.setFailed(true);
+                                    sub.setFailureReason(playbookStep.getFailureReason());
+                                }
+                            }
+                        }
+
+                        if (playbookStep.getParent() != null)
+                        {
+                            playbookStep.getParent().setStatus(PlaybookStepStatus.FAILED);
+                            playbookStep.getParent().setFailed(true);
+                            playbookStep.getParent().setFailureReason(playbookStep.getFailureReason());
+                        }
+
                         context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
                         // Add failure to warnings/reporting list
