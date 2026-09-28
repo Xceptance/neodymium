@@ -109,13 +109,17 @@ public class ForwardIntegrationTest extends BaseAiTest
             steps: |
               Open ${forward.test.url1} in the browser
               Click the 'Go to Page 2' link
-              Go back
               We are on the "Forward Test Page 2"
-              Go forward to the next page
+              Go back
               We are on the "Forward Test Page 1"
+              Forward
+              We are on the "Forward Test Page 2"
+              Go back
+              We are on the "Forward Test Page 1"
+              next page              
             """)
             .verifyMetrics()
-            .hasStepCount(6)
+            .hasStepCount(10)
             .hasNoSoftFailures()
             .onLive(m -> m.hasLlmCalls())
             .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());

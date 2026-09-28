@@ -18,7 +18,9 @@
  */
 package org.neodymium.ai.session;
 
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -50,6 +52,7 @@ import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.telemetry.TokenBudgetGuard;
+import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.util.Neodymium;
 
 /**
@@ -515,13 +518,29 @@ public abstract class AiSession implements AutoCloseable
                 {
                     parsed.setScreenshotHashDim(recorded.getScreenshotHashDim());
                 }
+                if (recorded.getStatus() != null)
+                {
+                    parsed.setStatus(recorded.getStatus());
+                }
+                parsed.setFailed(recorded.isFailed());
+                if (recorded.getFailureReason() != null)
+                {
+                    parsed.setFailureReason(recorded.getFailureReason());
+                }
             }
         }
 
         if (sessionSteps != null && sessionSteps != playbookSteps)
         {
-            sessionSteps.clear();
-            sessionSteps.addAll(playbookSteps);
+            try
+            {
+                sessionSteps.clear();
+                sessionSteps.addAll(playbookSteps);
+            }
+            catch (final UnsupportedOperationException uoe)
+            {
+                this.executionContext.getTransientData().put("playbook.steps", new ArrayList<>(playbookSteps));
+            }
         }
 
         for (int i = playbookSteps.size() - 1; i >= 0; i--)
@@ -824,7 +843,7 @@ public abstract class AiSession implements AutoCloseable
             @Override
             public LlmResponse chat(final LlmRequest request)
             {
-                return new LlmResponse("[]", new TokenUsage(10, 0, 10), "mock-model");
+                return new LlmResponse("[]", new TokenUsage(10, 0, 10), "mock-model", List.of(new ToolCall("mock_call", "complete_step", JsonNodeFactory.instance.objectNode())), null);
             }
 
             @Override

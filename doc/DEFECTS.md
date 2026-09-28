@@ -41,6 +41,26 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20260928-07] AiSession Default Mock LLM Provider Returns Empty Tool Calls Breaking LLM-Mode Unit Tests
+- **Date:** 2026-09-28
+- **Component:** `neodymium-core` (`ai-session` / `mock-testing` / `agent-loop`)
+- **Scope:** `Framework`
+- **Symptom:** `AiSessionTest.testExecuteInlineStepsString`, `testExecutePlaybook`, and `testExecuteInlineYamlAutoSelectsFirstDataSet` fail with `InvalidAgentResponseException: Agent turn did not produce a valid tool call after warning`.
+- **Root Cause:** `AiSession.createMockLlmProvider()` returned `new LlmResponse("[]", ...)` with empty tool calls. Under the tightened agent loop contract (`AgentToolLoopStep`), turns must produce a tool call (such as `complete_step`) or be rejected.
+- **Detection Gap ("What did we miss?"):** When `AgentToolLoopStep` added mandatory tool call enforcement in commit 87651a09a, `createMockLlmProvider()` in `AiSession.java` was not updated to return a default `complete_step` tool call.
+- **Resolution:** Updated `AiSession.createMockLlmProvider()` to return an `LlmResponse` populated with a `complete_step` `ToolCall`.
+- **Safety Net Added:** `AiSessionTest` suite execution verifying all 17 unit tests pass cleanly.
+
+### [DEF-20260928-06] Programmatic AiSession Replay Drops Step Status From Companion JSON Breaking 0-Action Step Replay
+- **Date:** 2026-09-28
+- **Component:** `neodymium-core` (`ai-session` / `playbook-replay` / `programmatic-execution`)
+- **Scope:** `Framework`
+- **Symptom:** Programmatic tests (`session.execute(...)`) containing steps recorded with 0 actions (such as verification steps completed via `complete_step` or conditional branches) passed during `FORCE_RECORDING`, but failed in `REPLAY_STRICT` with `ConclusiveFailureException: No recorded tool calls found for step '...' in REPLAY_STRICT mode`, and in `REPLAY_WITH_HEALING` by triggering unexpected live LLM fallback calls and failing replay metrics.
+- **Root Cause:** In `AiSession.java`, step merging during replay copied `actions`, `toolCalls`, and hashes from `sessionSteps` to parsed inline steps, but omitted `status`, `failed`, and `failureReason`. Consequently, `parsed.getStatus()` remained `PlaybookStepStatus.PENDING`, causing `ExecuteActionsStep`'s `isRecordedCompletedStep` check to evaluate to `false`.
+- **Detection Gap ("What did we miss?"):** File-based playbooks loaded their step status directly from JSON via `YamlPlaybookParser`, satisfying `isRecordedCompletedStep`. Programmatic test suites lacked unit tests verifying step status preservation across inline playbooks with 0-action steps.
+- **Resolution:** Added copying of `status`, `failed`, and `failureReason` in `AiSession.java` step merging, and updated Step 9 of `ForwardIntegrationTest_testForwardSynonyms_Chrome_headless.json` with an explicit `assert_title` call.
+- **Safety Net Added:** Added unit regression assertions in `AiSessionReplayTest` confirming that 0-action recorded steps retain `status` and replay successfully without triggering live LLM execution or `ConclusiveFailureException`.
+
 ### [DEF-20260928-05] Circular Self-Referencing Variable Sanitization in Literal STORE Actions Breaks Playbook Replay
 - **Date:** 2026-09-28
 - **Component:** `neodymium-core` (`action-sanitization` / `tool-loop` / `store-action`)
