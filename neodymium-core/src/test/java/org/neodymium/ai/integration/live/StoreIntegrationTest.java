@@ -133,7 +133,7 @@ public class StoreIntegrationTest extends BaseAiTest
             .onLive(m -> m.hasLlmCalls())
             .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
-        assertEquals("ORD-987654", session.data().getDynamic("orderId"));
-        assertEquals("14,96 €", session.data().getDynamic("orderPrice"));
+        assertEquals("ORD-987654", session.data().get("orderId"));
+        assertEquals("14,96 €", session.data().get("orderPrice"));
     }
 }
