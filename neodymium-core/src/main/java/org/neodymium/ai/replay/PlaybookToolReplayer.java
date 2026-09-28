@@ -339,10 +339,55 @@ public final class PlaybookToolReplayer
                 textKeys.add(fieldName);
             }
         }
+        final boolean isStoreTool = call.toolName() != null && "store".equalsIgnoreCase(call.toolName().trim());
+        final String storeTargetVar;
+        if (isStoreTool)
+        {
+            if (args.hasNonNull("variableName"))
+            {
+                storeTargetVar = args.path("variableName").asText().trim();
+            }
+            else if (args.hasNonNull("variable"))
+            {
+                storeTargetVar = args.path("variable").asText().trim();
+            }
+            else if (args.hasNonNull("name"))
+            {
+                storeTargetVar = args.path("name").asText().trim();
+            }
+            else if (args.hasNonNull("key"))
+            {
+                storeTargetVar = args.path("key").asText().trim();
+            }
+            else
+            {
+                storeTargetVar = null;
+            }
+        }
+        else
+        {
+            storeTargetVar = null;
+        }
+
         boolean changed = false;
         for (final String key : textKeys)
         {
+            if (isStoreTool && ("variableName".equals(key) || "variable".equals(key) || "name".equals(key) || "key".equals(key)))
+            {
+                continue;
+            }
+
             final String original = args.get(key).asText();
+
+            if (isStoreTool && storeTargetVar != null && "value".equals(key) && original.equals("${" + storeTargetVar + "}"))
+            {
+                if (sessionData.get(storeTargetVar) == null)
+                {
+                    LOGGER.warn("Skipping unresolvable self-referential variable placeholder '{}' in store tool value", original);
+                    continue;
+                }
+            }
+
             final String resolved = sessionData.resolveVariables(original);
             if (!resolved.equals(original))
             {

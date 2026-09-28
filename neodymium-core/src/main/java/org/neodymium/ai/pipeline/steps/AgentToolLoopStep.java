@@ -1718,6 +1718,39 @@ public final class AgentToolLoopStep implements PipelineStep
             return call;
         }
 
+        final Set<String> excludedVars;
+        final String variableKeyField;
+        if (call.toolName() != null && "store".equalsIgnoreCase(call.toolName().trim()))
+        {
+            if (args.hasNonNull("variableName") && !args.path("variableName").asText().isBlank())
+            {
+                variableKeyField = "variableName";
+            }
+            else if (args.hasNonNull("variable") && !args.path("variable").asText().isBlank())
+            {
+                variableKeyField = "variable";
+            }
+            else if (args.hasNonNull("name") && !args.path("name").asText().isBlank())
+            {
+                variableKeyField = "name";
+            }
+            else if (args.hasNonNull("key") && !args.path("key").asText().isBlank())
+            {
+                variableKeyField = "key";
+            }
+            else
+            {
+                variableKeyField = null;
+            }
+            final String targetVar = variableKeyField != null ? args.path(variableKeyField).asText().trim() : null;
+            excludedVars = targetVar != null && !targetVar.isEmpty() ? Collections.singleton(targetVar) : Collections.emptySet();
+        }
+        else
+        {
+            variableKeyField = null;
+            excludedVars = Collections.emptySet();
+        }
+
         final ObjectNode sanitizedArgs = MAPPER.createObjectNode();
         final Iterator<Map.Entry<String, JsonNode>> fields = args.fields();
         while (fields.hasNext())
@@ -1725,9 +1758,17 @@ public final class AgentToolLoopStep implements PipelineStep
             final Map.Entry<String, JsonNode> field = fields.next();
             if (field.getValue().isTextual())
             {
-                final String rawText = field.getValue().asText();
-                final String cleanText = sanitizer.sanitizeText(rawText, sessionData);
-                sanitizedArgs.put(field.getKey(), cleanText);
+                final String fieldName = field.getKey();
+                if (variableKeyField != null && variableKeyField.equals(fieldName))
+                {
+                    sanitizedArgs.put(fieldName, field.getValue().asText());
+                }
+                else
+                {
+                    final String rawText = field.getValue().asText();
+                    final String cleanText = sanitizer.sanitizeText(rawText, sessionData, excludedVars);
+                    sanitizedArgs.put(fieldName, cleanText);
+                }
             }
             else
             {
