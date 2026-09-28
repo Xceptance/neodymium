@@ -413,7 +413,7 @@ function onEditorPanelSwapped(evt) {
     const textFile = fileSpan && fileSpan.textContent ? fileSpan.textContent.trim() : null;
     const filename = (dataFile && dataFile.trim() !== '') ? dataFile.trim() : textFile;
 
-    if (filename && filename !== '' && filename !== 'test.yaml') {
+    if (filename && filename !== '') {
         activeEditingFile = filename;
         window.activeEditingFile = activeEditingFile;
         if (window.history && window.history.pushState) {

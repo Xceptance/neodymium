@@ -85,7 +85,7 @@ public final class AuraManagerEditorUiTest
         }
 
         final String[] dirPaths = new String[] { "src/test/resources", "target/test-classes" };
-        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps", "New Step Fragment.steps" };
+        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps", "New Step Fragment.steps", "test.yaml" };
 
         for (final String dirPath : dirPaths)
         {
@@ -494,4 +494,46 @@ public final class AuraManagerEditorUiTest
         // Verify redirect to /report completes
         Selenide.webdriver().shouldHave(WebDriverConditions.urlContaining("/report"));
     }
+
+    @Test
+    public final void testOpenAndEditTestNamedTestYaml()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Ensure test.yaml is not present initially
+        $(".file-container[data-file='test.yaml']").shouldNotBe(Condition.exist);
+
+        // Create new test named 'test.yaml'
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("test.yaml");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+
+        // Verify editor panel opens and displays test.yaml
+        $("#editorPanel").shouldBe(Condition.visible);
+        $("#editorFileName").shouldHave(Condition.text("test.yaml"));
+
+        // Close editor to return to test selection view
+        Selenide.executeJavaScript("closeEditor(true);");
+        $("#editorPanel").shouldNotBe(Condition.visible);
+
+        // Re-open test.yaml from the selection list
+        $(".file-container[data-file='test.yaml']").shouldBe(Condition.visible);
+        $(".file-container[data-file='test.yaml'] .list-item").shouldBe(Condition.visible).hover();
+        $(".file-container[data-file='test.yaml'] .edit-icon-btn").shouldBe(Condition.visible).click();
+
+        // Verify editor stays open and does not revert to selection state
+        $("#editorPanel").shouldBe(Condition.visible);
+        $("#editorFileName").shouldHave(Condition.text("test.yaml"));
+
+        // Delete the test file to leave a clean environment
+        $("#deleteTestBtn").shouldBe(Condition.visible).click();
+        $("#deleteTestModal").shouldBe(Condition.visible);
+        $(".btn-danger.neo-u-48").shouldBe(Condition.visible).click();
+        $("#deleteTestModal").shouldNotBe(Condition.visible);
+
+        // Verify deleted test disappears from test selection list
+        $(".file-container[data-file='test.yaml']").shouldNotBe(Condition.exist);
+    }
 }
+
