@@ -20,6 +20,8 @@ package com.xceptance.aura.test.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.neodymium.aura.AuraFileService;
+import com.xceptance.neodymium.aura.AuraFileService.IssueSeverity;
+import com.xceptance.neodymium.aura.AuraFileService.ValidationIssue;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -480,6 +482,96 @@ public class AuraTestEditorController
         }
     }
 
+
+    /**
+     * Validates the currently-edited file content against YAML syntax, include file existence,
+     * and variable definition rules.
+     *
+     * <p>Accepts a JSON body with two fields:
+     * <ul>
+     *   <li>{@code file}    – the relative path of the file being edited</li>
+     *   <li>{@code content} – the current raw YAML content to validate</li>
+     * </ul>
+     *
+     * <p>Returns a JSON object with an {@code issues} array; each element has:
+     * <ul>
+     *   <li>{@code severity} – {@code "ERROR"}, {@code "WARNING"}, or {@code "INFO"}</li>
+     *   <li>{@code message}  – human-readable description of the finding</li>
+     *   <li>{@code context}  – optional short context string (may be {@code null})</li>
+     * </ul>
+     *
+     * @param request the raw HTTP request carrying the JSON body
+     * @return the validation result as JSON
+     */
+    @PostMapping("/api/editor/validate-file")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> validateFile(final HttpServletRequest request)
+    {
+        String file = null;
+        String content = null;
+
+        // Parse JSON body
+        if (request.getContentType() != null && request.getContentType().contains("application/json"))
+        {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> body = objectMapper.readValue(request.getInputStream(), Map.class);
+                if (body != null)
+                {
+                    file = body.get("file") != null ? String.valueOf(body.get("file")) : null;
+                    content = body.get("content") != null ? String.valueOf(body.get("content")) : null;
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not parse JSON payload for validateFile", e);
+            }
+        }
+
+        // Fallback to form params
+        if (file == null || file.isBlank())
+        {
+            file = request.getParameter("file");
+        }
+        if (content == null)
+        {
+            content = request.getParameter("content");
+        }
+
+        // Run validation
+        final List<ValidationIssue> issues = fileService.validateFileContent(
+                file != null ? file : "",
+                content != null ? content : "");
+
+        // Serialize issues to plain maps for JSON serialisation
+        final List<Map<String, Object>> issueList = new ArrayList<>();
+        boolean hasErrors = false;
+        boolean hasWarnings = false;
+        for (final ValidationIssue issue : issues)
+        {
+            final Map<String, Object> m = new HashMap<>();
+            m.put("severity", issue.severity().name());
+            m.put("message", issue.message());
+            m.put("context", issue.context());
+            issueList.add(m);
+            if (issue.severity() == IssueSeverity.ERROR)
+            {
+                hasErrors = true;
+            }
+            else if (issue.severity() == IssueSeverity.WARNING)
+            {
+                hasWarnings = true;
+            }
+        }
+
+        final Map<String, Object> response = new HashMap<>();
+        response.put("issues", issueList);
+        response.put("hasErrors", hasErrors);
+        response.put("hasWarnings", hasWarnings);
+        response.put("file", file != null ? file : "");
+        return ResponseEntity.ok(response);
+    }
 
     @PostMapping("/api/editor/close")
     @ResponseBody

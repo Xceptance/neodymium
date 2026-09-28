@@ -689,6 +689,25 @@ public final class AuraFileService
     }
 
     /**
+     * Severity of a single file-validation finding.
+     */
+    public enum IssueSeverity
+    {
+        ERROR, WARNING, INFO
+    }
+
+    /**
+     * A single diagnostic finding produced by {@link #validateFileContent}.
+     *
+     * @param severity human-readable severity level
+     * @param message  description of the problem or information
+     * @param context  optional short context (e.g. the offending variable name or include path)
+     */
+    public record ValidationIssue(IssueSeverity severity, String message, String context)
+    {
+    }
+
+    /**
      * Scans all {@code .yaml} and {@code .yml} files under the resources directory and
      * replaces any occurrence of {@code oldFragmentPath} with {@code newFragmentPath}
      * inside their text content (covers both {@code _include:} values and inline
@@ -1098,5 +1117,272 @@ public final class AuraFileService
         result.put("varKeys", varKeys);
         result.put("fragmentVarScopes", fragmentVarScopes);
         return result;
+    }
+
+    /**
+     * Validates the textual content of a test playbook ({@code .yaml}/{@code .yml}) or step fragment
+     * ({@code .steps}) file and returns a list of diagnostic findings.
+     *
+     * <p>Checks performed:
+     * <ol>
+     *   <li><b>YAML syntax</b> – the content must be parseable by SnakeYAML.</li>
+     *   <li><b>Include file existence</b> – every {@code _include:} path in the file
+     *       must resolve to an existing file under the resources directory.</li>
+     *   <li><b>Variable coverage</b> (YAML test files only) – every {@code ${varName}}
+     *       referenced in any step must be defined in the {@code data:} matrix.  Variables
+     *       that begin with {@code neodymium.} are treated as built-in and skipped.</li>
+     *   <li><b>Fragment variable scope</b> ({@code .steps} files only) – variables not
+     *       marked as {@code defined} in the fragment's {@code variables:} section are
+     *       flagged as required from the caller.</li>
+     * </ol>
+     *
+     * @param relativePath relative path of the file being edited (used to detect file type)
+     * @param content      raw YAML content to validate (the current in-editor state,
+     *                     which may differ from the saved file on disk)
+     * @return ordered list of {@link ValidationIssue} records; empty when the file is valid
+     */
+    public List<ValidationIssue> validateFileContent(final String relativePath, final String content)
+    {
+        final List<ValidationIssue> issues = new ArrayList<>();
+
+        if (content == null || content.isBlank())
+        {
+            issues.add(new ValidationIssue(IssueSeverity.WARNING, "File is empty.", null));
+            return issues;
+        }
+
+        // --- 1. YAML syntax check ---
+        final Map<String, Object> sections = parsePlaybookSections(content);
+        final boolean hasParseError = Boolean.TRUE.equals(sections.get("hasError"));
+        final String parseError = (String) sections.get("error");
+        if (hasParseError)
+        {
+            issues.add(new ValidationIssue(IssueSeverity.ERROR,
+                    "YAML syntax error: " + (parseError != null ? parseError : "unknown error"), null));
+            // Further checks are meaningless when the YAML cannot be parsed.
+            return issues;
+        }
+
+        issues.add(new ValidationIssue(IssueSeverity.INFO, "YAML syntax is valid.", null));
+
+        // --- 2. Include file existence check ---
+        final boolean isFragment = relativePath != null && relativePath.toLowerCase().endsWith(".steps");
+        final List<String> availableIncludes = getStepsFilesList();
+        final Pattern includePattern = Pattern.compile("_include:\\s*(.+)");
+        final Set<String> missingIncludes = new LinkedHashSet<>();
+        final Set<String> foundIncludes = new LinkedHashSet<>();
+
+        // Collect all _include references from each step in every section
+        @SuppressWarnings("unchecked")
+        final List<String> allSteps = new ArrayList<>();
+        final Object before = sections.get("beforeSteps");
+        final Object main = sections.get("mainSteps");
+        final Object after = sections.get("afterSteps");
+        if (before instanceof List<?> bl) { for (final Object o : bl) { if (o != null) allSteps.add(o.toString()); } }
+        if (main instanceof List<?> ml)   { for (final Object o : ml) { if (o != null) allSteps.add(o.toString()); } }
+        if (after instanceof List<?> al)  { for (final Object o : al) { if (o != null) allSteps.add(o.toString()); } }
+
+        for (final String step : allSteps)
+        {
+            final Matcher m = includePattern.matcher(step.trim());
+            if (m.matches())
+            {
+                final String includePath = m.group(1).trim();
+                if (availableIncludes.contains(includePath))
+                {
+                    foundIncludes.add(includePath);
+                }
+                else
+                {
+                    // Also try resolving directly on disk for robustness
+                    boolean exists = false;
+                    try
+                    {
+                        final File resolved = resolveCanonicalFile(includePath);
+                        exists = resolved.exists() && resolved.isFile();
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                    if (exists)
+                    {
+                        foundIncludes.add(includePath);
+                    }
+                    else
+                    {
+                        missingIncludes.add(includePath);
+                    }
+                }
+            }
+        }
+
+        if (!missingIncludes.isEmpty())
+        {
+            for (final String missing : missingIncludes)
+            {
+                issues.add(new ValidationIssue(IssueSeverity.ERROR,
+                        "Included file does not exist: \"" + missing + "\"", missing));
+            }
+        }
+        if (!foundIncludes.isEmpty())
+        {
+            issues.add(new ValidationIssue(IssueSeverity.INFO,
+                    foundIncludes.size() + " include(s) resolved successfully.",
+                    String.join(", ", foundIncludes)));
+        }
+
+        // --- 3a. Variable coverage check for test playbook (.yaml/.yml) files ---
+        if (!isFragment)
+        {
+            @SuppressWarnings("unchecked")
+            final List<String> definedVarKeys = sections.get("varKeys") instanceof List
+                    ? (List<String>) sections.get("varKeys")
+                    : List.of();
+
+            // Collect all variables referenced in all steps
+            final Set<String> usedVars = new LinkedHashSet<>();
+            for (final String step : allSteps)
+            {
+                final Matcher vm = VAR_PATTERN.matcher(step);
+                while (vm.find())
+                {
+                    final String varName = vm.group(1);
+                    if (varName != null && !varName.startsWith("neodymium."))
+                    {
+                        usedVars.add(varName);
+                    }
+                }
+            }
+
+            // Collect variables provided by successfully-resolved includes
+            final Set<String> includedDefinedVars = new LinkedHashSet<>();
+            for (final String includePath : foundIncludes)
+            {
+                try
+                {
+                    final String includeContent = readYamlFileContent(includePath);
+                    if (includeContent != null && !includeContent.isBlank())
+                    {
+                        final Map<String, Object> includeSections = parsePlaybookSections(includeContent);
+                        @SuppressWarnings("unchecked")
+                        final Map<String, String> varScopes = includeSections.get("fragmentVarScopes") instanceof Map
+                                ? (Map<String, String>) includeSections.get("fragmentVarScopes")
+                                : Map.of();
+                        for (final Map.Entry<String, String> entry : varScopes.entrySet())
+                        {
+                            if ("defined".equalsIgnoreCase(entry.getValue()))
+                            {
+                                includedDefinedVars.add(entry.getKey());
+                            }
+                        }
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.debug("Could not read include file for variable resolution: {}", includePath, e);
+                }
+            }
+
+            final List<String> undefinedVars = new ArrayList<>();
+            for (final String usedVar : usedVars)
+            {
+                if (!definedVarKeys.contains(usedVar) && !includedDefinedVars.contains(usedVar))
+                {
+                    undefinedVars.add(usedVar);
+                }
+            }
+
+            if (!undefinedVars.isEmpty())
+            {
+                for (final String undef : undefinedVars)
+                {
+                    issues.add(new ValidationIssue(IssueSeverity.WARNING,
+                            "Variable \"${" + undef + "}\" is used in steps but not defined in the data matrix or any included fragment.",
+                            undef));
+                }
+            }
+            else if (!usedVars.isEmpty())
+            {
+                issues.add(new ValidationIssue(IssueSeverity.INFO,
+                        "All " + usedVars.size() + " variable(s) used in steps are properly defined.",
+                        String.join(", ", usedVars)));
+            }
+            else
+            {
+                issues.add(new ValidationIssue(IssueSeverity.INFO, "No variables are used in this file.", null));
+            }
+        }
+
+        // --- 3b. Fragment variable scope check (.steps files) ---
+        if (isFragment)
+        {
+            @SuppressWarnings("unchecked")
+            final Map<String, String> fragmentVarScopes = sections.get("fragmentVarScopes") instanceof Map
+                    ? (Map<String, String>) sections.get("fragmentVarScopes")
+                    : Map.of();
+
+            final Set<String> usedVars = new LinkedHashSet<>();
+            for (final String step : allSteps)
+            {
+                final Matcher vm = VAR_PATTERN.matcher(step);
+                while (vm.find())
+                {
+                    final String varName = vm.group(1);
+                    if (varName != null && !varName.startsWith("neodymium."))
+                    {
+                        usedVars.add(varName);
+                    }
+                }
+            }
+
+            final List<String> requiredVars = new ArrayList<>();
+            final List<String> definedVars = new ArrayList<>();
+            final List<String> undeclaredVars = new ArrayList<>();
+
+            for (final String usedVar : usedVars)
+            {
+                final String scope = fragmentVarScopes.get(usedVar);
+                if (scope == null)
+                {
+                    undeclaredVars.add(usedVar);
+                }
+                else if ("defined".equalsIgnoreCase(scope))
+                {
+                    definedVars.add(usedVar);
+                }
+                else
+                {
+                    requiredVars.add(usedVar);
+                }
+            }
+
+            if (!undeclaredVars.isEmpty())
+            {
+                for (final String undecl : undeclaredVars)
+                {
+                    issues.add(new ValidationIssue(IssueSeverity.WARNING,
+                            "Variable \"${" + undecl + "}\" is used but has no scope declaration in the \"variables:\" section.",
+                            undecl));
+                }
+            }
+            if (!requiredVars.isEmpty())
+            {
+                issues.add(new ValidationIssue(IssueSeverity.INFO,
+                        requiredVars.size() + " variable(s) are required from the calling test: " + String.join(", ", requiredVars),
+                        String.join(", ", requiredVars)));
+            }
+            if (!definedVars.isEmpty())
+            {
+                issues.add(new ValidationIssue(IssueSeverity.INFO,
+                        definedVars.size() + " variable(s) are defined within this fragment: " + String.join(", ", definedVars),
+                        String.join(", ", definedVars)));
+            }
+            if (usedVars.isEmpty())
+            {
+                issues.add(new ValidationIssue(IssueSeverity.INFO, "No variables are used in this fragment.", null));
+            }
+        }
+
+        return issues;
     }
 }

@@ -4077,72 +4077,170 @@ document.addEventListener('paste', function(evt) {
     }
 });
 
-/* PESAP AI Step Review Integration */
-function runReviewSteps() {
+/* File Validation Integration */
+function runValidateFile() {
     const reviewBtn = document.getElementById('reviewStepsBtn');
     if (reviewBtn) {
-        reviewBtn.innerHTML = '<span class="material-symbols-outlined spinner">sync</span> Reviewing...';
+        reviewBtn.innerHTML = '<span class="material-symbols-outlined spinner">sync</span> Validating...';
         reviewBtn.disabled = true;
     }
 
-    const steps = [];
-    document.querySelectorAll('#beforeStepsList .step-row, #stepsList .step-row, #afterStepsList .step-row').forEach(row => {
-        const lineNum = row.getAttribute('data-line');
-        const contentEl = row.querySelector('.step-content');
-        const text = contentEl ? (contentEl.getAttribute('data-raw') || contentEl.innerText) : '';
-        if (lineNum && text) {
-            steps.push({ line: lineNum, text: text });
+    // Gather the current compiled YAML content
+    const hiddenContent = document.getElementById('editorContent');
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    const editorPanel = document.getElementById('editorPanel');
+    const isRawMode = editorPanel && editorPanel.getAttribute('data-mode') === 'raw';
+    let content = '';
+    if (isRawMode && rawTextarea) {
+        content = rawTextarea.value;
+    } else {
+        if (typeof compilePlaybookToYaml === 'function') {
+            content = compilePlaybookToYaml();
         }
-    });
+        if (!content && hiddenContent) {
+            content = hiddenContent.value;
+        }
+    }
 
-    fetch('/api/editor/review-steps', {
+    const file = window.activeEditingFile || '';
+
+    fetch('/api/editor/validate-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: window.activeEditingFile, steps: steps })
+        body: JSON.stringify({ file: file, content: content })
     })
     .then(res => res.json())
     .then(data => {
         if (reviewBtn) {
-            reviewBtn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> Review Steps';
+            reviewBtn.innerHTML = '<span class="material-symbols-outlined">verified</span> Validate File';
             reviewBtn.disabled = false;
         }
 
-        document.querySelectorAll('.review-suggestion-card').forEach(card => card.remove());
-
-        if (data.suggestions && data.suggestions.length > 0) {
-            data.suggestions.forEach(sugg => {
-                const targetRow = document.querySelector(`#stepsList .step-row[data-line="${sugg.targetLine}"]`) ||
-                                  document.querySelector(`.step-row[data-line="${sugg.targetLine}"]`);
-                if (targetRow) {
-                    const card = document.createElement('div');
-                    card.className = `review-suggestion-card ${sugg.type || 'info'}`;
-                    card.innerHTML = `
-                        <div class="suggestion-left">
-                            <span class="material-symbols-outlined" style="font-size: 16px;">${sugg.icon || 'auto_awesome'}</span>
-                            <span><b>PESAP AI Review:</b> ${sugg.message}</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            ${sugg.hintText ? `<button class="btn-apply-suggestion" onclick="applySuggestionHint(${sugg.targetLine}, '${sugg.hintText.replace(/'/g, "\\'")}')">Apply Hint</button>` : ''}
-                            <button class="icon-btn" onclick="dismissSuggestionCard(this)" title="Dismiss"><span class="material-symbols-outlined">close</span></button>
-                        </div>
-                    `;
-                    targetRow.after(card);
-                }
-            });
-            showToast(`✨ PESAP Review complete: ${data.suggestions.length} suggestion(s) found`, "info");
-        } else {
-            showToast("✅ PESAP Review complete: All steps look great! No suggestions needed.", "success");
-        }
+        const issues = data.issues || [];
+        showValidationResultDialog(issues);
     })
     .catch(err => {
-        console.error('Failed to run PESAP review:', err);
+        console.error('Failed to run file validation:', err);
         if (reviewBtn) {
-            reviewBtn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> Review Steps';
+            reviewBtn.innerHTML = '<span class="material-symbols-outlined">verified</span> Validate File';
             reviewBtn.disabled = false;
         }
+        showToast('⚠️ Validation request failed. Check the console for details.', 'error');
     });
 }
-window.runReviewSteps = runReviewSteps;
+window.runValidateFile = runValidateFile;
+
+function showValidationResultDialog(issues) {
+    let container = document.getElementById('varPromptContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'varPromptContainer';
+        container.className = 'var-prompt-container';
+        const panel = document.getElementById('editorPanel') || document.body;
+        panel.appendChild(container);
+    }
+
+    // Filter out INFO severity issues
+    const filteredIssues = (issues || []).filter(i => i.severity !== 'INFO');
+    const errorCount = filteredIssues.filter(i => i.severity === 'ERROR').length;
+    const warningCount = filteredIssues.filter(i => i.severity === 'WARNING').length;
+
+    // Remove any existing validation prompt card first
+    const existingCard = container.querySelector('.var-prompt-card[data-type="validation-report"]');
+    if (existingCard) {
+        existingCard.remove();
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    const card = document.createElement('div');
+    card.className = 'var-prompt-card';
+    card.setAttribute('data-type', 'validation-report');
+
+    let headerIcon = 'verified';
+    let headerTitle = 'File Validation';
+    let borderColor = 'var(--success, #10b981)';
+
+    if (errorCount > 0) {
+        headerIcon = 'error';
+        headerTitle = `Validation Failed (${errorCount} Error${errorCount > 1 ? 's' : ''}${warningCount > 0 ? `, ${warningCount} Warning${warningCount > 1 ? 's' : ''}` : ''})`;
+        borderColor = 'var(--danger, #ef4444)';
+    } else if (warningCount > 0) {
+        headerIcon = 'warning';
+        headerTitle = `Validation Warnings (${warningCount} Warning${warningCount > 1 ? 's' : ''})`;
+        borderColor = '#f59e0b';
+    }
+
+    card.style.borderLeftColor = borderColor;
+
+    let bodyHtml = '';
+    if (filteredIssues.length === 0) {
+        bodyHtml = `
+            <div style="font-size: 12.5px; color: var(--text-primary, #0f172a); display: flex; align-items: center; gap: 6px;">
+                <span class="material-symbols-outlined" style="font-size: 18px; color: var(--success, #10b981);">check_circle</span>
+                <span>File is valid — no issues found.</span>
+            </div>
+        `;
+    } else {
+        const itemsHtml = filteredIssues.map(issue => {
+            const sev = (issue.severity || 'WARNING').toLowerCase();
+            let iconName = issue.severity === 'ERROR' ? 'error' : 'warning';
+            const contextTag = issue.context ? `<span class="validation-issue-context">${escapeHtml(issue.context)}</span>` : '';
+            const lineInfo = issue.line ? `<span class="validation-issue-line">Line ${issue.line}</span>` : '';
+
+            return `
+                <div class="validation-issue-item ${sev}">
+                    <div class="validation-issue-header">
+                        <span class="material-symbols-outlined issue-icon">${iconName}</span>
+                        <span class="validation-issue-badge ${sev}">${escapeHtml(issue.severity)}</span>
+                        ${lineInfo}
+                        ${contextTag}
+                    </div>
+                    <div class="validation-issue-msg">${escapeHtml(issue.message)}</div>
+                </div>
+            `;
+        }).join('');
+
+        bodyHtml = `<div class="validation-issue-list" style="max-height: 250px; overflow-y: auto;">${itemsHtml}</div>`;
+    }
+
+    card.innerHTML = `
+        <div class="var-prompt-header">
+            <span class="material-symbols-outlined" style="color: ${borderColor};">${headerIcon}</span>
+            <span>${headerTitle}</span>
+        </div>
+        <div class="var-prompt-body">
+            ${bodyHtml}
+        </div>
+        <div class="var-prompt-actions">
+            <button type="button" class="btn-prompt-confirm" onclick="closeValidationPromptCard(this)">OK</button>
+        </div>
+    `;
+
+    container.appendChild(card);
+}
+window.showValidationResultDialog = showValidationResultDialog;
+
+function closeValidationPromptCard(btnOrElement) {
+    if (typeof closeVariablePromptCard === 'function') {
+        closeVariablePromptCard(btnOrElement);
+    } else if (btnOrElement) {
+        const card = btnOrElement.closest('.var-prompt-card');
+        if (card) card.remove();
+    }
+}
+window.closeValidationPromptCard = closeValidationPromptCard;
+
+
+
 
 function applySuggestionHint(targetLineNum, hintText) {
     const row = document.querySelector(`.step-row[data-line="${targetLineNum}"]`);

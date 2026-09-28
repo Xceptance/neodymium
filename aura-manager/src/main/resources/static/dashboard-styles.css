@@ -1935,6 +1935,10 @@
             border-left: 4px solid #3b82f6;
         }
 
+        .toast.warning {
+            border-left: 4px solid #f59e0b;
+        }
+
         @keyframes slideIn {
             from {
                 transform: translateX(100%) translateY(-10px);
@@ -4204,6 +4208,132 @@ body[data-bs-theme="dark"] .btn-prompt-cancel:hover {
     background: rgba(255, 255, 255, 0.1);
     color: #ffffff;
 }
+
+/* File Validation Result Dialog */
+.modal-card.validation-dialog-card {
+    width: 540px;
+    max-width: calc(100vw - 32px);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.validation-dialog-body {
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.validation-success-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 24px 16px;
+    text-align: center;
+    color: var(--text-secondary, #64748b);
+}
+
+.validation-success-state .success-icon {
+    font-size: 48px;
+    color: var(--success, #10b981);
+}
+
+.validation-issue-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.validation-issue-item {
+    background: var(--bg-main, #f8fafc);
+    border: 1px solid var(--border, #e2e8f0);
+    border-left: 4px solid var(--accent, #3b82f6);
+    border-radius: 8px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+:root[data-bs-theme="dark"] .validation-issue-item,
+body[data-bs-theme="dark"] .validation-issue-item {
+    background: rgba(15, 23, 42, 0.6);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.validation-issue-item.error {
+    border-left-color: var(--danger, #ef4444);
+    background: rgba(239, 68, 68, 0.04);
+}
+
+.validation-issue-item.warning {
+    border-left-color: #f59e0b;
+    background: rgba(245, 158, 11, 0.04);
+}
+
+.validation-issue-item.info {
+    border-left-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.04);
+}
+
+.validation-issue-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.validation-issue-item.error .issue-icon { color: var(--danger, #ef4444); font-size: 18px; }
+.validation-issue-item.warning .issue-icon { color: #f59e0b; font-size: 18px; }
+.validation-issue-item.info .issue-icon { color: #3b82f6; font-size: 18px; }
+
+.validation-issue-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.validation-issue-badge.error { background: rgba(239, 68, 68, 0.15); color: var(--danger, #ef4444); }
+.validation-issue-badge.warning { background: rgba(245, 158, 11, 0.15); color: #d97706; }
+.validation-issue-badge.info { background: rgba(59, 130, 246, 0.15); color: #2563eb; }
+
+.validation-issue-line {
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    background: var(--bg-card, #ffffff);
+    border: 1px solid var(--border, #cbd5e1);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--text-secondary, #64748b);
+}
+
+.validation-issue-context {
+    font-family: var(--font-mono, monospace);
+    font-size: 11px;
+    color: var(--text-secondary, #64748b);
+    background: rgba(0, 0, 0, 0.05);
+    padding: 1px 5px;
+    border-radius: 4px;
+    margin-left: auto;
+}
+
+:root[data-bs-theme="dark"] .validation-issue-context,
+body[data-bs-theme="dark"] .validation-issue-context {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.validation-issue-msg {
+    font-size: 12.5px;
+    line-height: 1.45;
+    color: var(--text-primary, #0f172a);
+    word-break: break-word;
+}
+
 
 
 

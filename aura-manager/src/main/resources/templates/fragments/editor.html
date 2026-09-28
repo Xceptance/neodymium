@@ -60,8 +60,8 @@
             <button class="btn-editor" id="redoBtn" onclick="editorRedo()" title="Redo (Ctrl+Y)" disabled>
                 <span class="material-symbols-outlined">redo</span> Redo
             </button>
-            <button class="btn-editor btn-review" id="reviewStepsBtn" onclick="runReviewSteps()" title="Run PESAP AI Step Review" th:disabled="${hasParseError != null and hasParseError}">
-                <span class="material-symbols-outlined">auto_awesome</span> Review Steps
+            <button class="btn-editor btn-review" id="reviewStepsBtn" onclick="runValidateFile()" title="Validate file: check YAML syntax, include paths, and variable definitions" th:disabled="${hasParseError != null and hasParseError}">
+                <span class="material-symbols-outlined">verified</span> Validate File
             </button>
             <button type="button"
                     class="btn-editor save"

@@ -96,7 +96,8 @@ function showToast(message, type = 'info') {
     toast.className = `toast ${type}`;
     let iconName = 'info';
     if (type === 'success') iconName = 'check_circle';
-    else if (type === 'error') iconName = 'warning';
+    else if (type === 'error') iconName = 'error';
+    else if (type === 'warning') iconName = 'warning';
     toast.innerHTML = `<span class="material-symbols-outlined">${iconName}</span> <span>${message}</span>`;
     toast.style.cursor = 'pointer';
     toast.onclick = () => toast.remove();
