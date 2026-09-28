@@ -826,9 +826,31 @@ public final class AuraFileService
                 // Fallback for raw text lines
                 if (mainSteps.isEmpty() && beforeSteps.isEmpty() && afterSteps.isEmpty())
                 {
+                    boolean inVarsSection = false;
                     for (final String line : content.split("\n"))
                     {
                         String trimmed = line.trim();
+                        if (trimmed.startsWith("variables:"))
+                        {
+                            inVarsSection = true;
+                            continue;
+                        }
+                        if (inVarsSection)
+                        {
+                            if (trimmed.startsWith("steps:") || trimmed.startsWith("before:") || trimmed.startsWith("after:"))
+                            {
+                                inVarsSection = false;
+                            }
+                            else
+                            {
+                                final String[] parts = trimmed.split(":", 2);
+                                if (parts.length == 2)
+                                {
+                                    fragmentVarScopes.put(parts[0].trim(), parts[1].trim());
+                                }
+                                continue;
+                            }
+                        }
                         if (!trimmed.isEmpty() && !trimmed.startsWith("#"))
                         {
                             if (trimmed.startsWith("-"))
@@ -851,9 +873,31 @@ public final class AuraFileService
                 final String trimmedContent = content.trim();
                 if (!trimmedContent.startsWith("steps:") && !trimmedContent.contains("\nsteps:"))
                 {
+                    boolean inVarsSection = false;
                     for (final String line : content.split("\n"))
                     {
                         String trimmed = line.trim();
+                        if (trimmed.startsWith("variables:"))
+                        {
+                            inVarsSection = true;
+                            continue;
+                        }
+                        if (inVarsSection)
+                        {
+                            if (trimmed.startsWith("steps:") || trimmed.startsWith("before:") || trimmed.startsWith("after:"))
+                            {
+                                inVarsSection = false;
+                            }
+                            else
+                            {
+                                final String[] parts = trimmed.split(":", 2);
+                                if (parts.length == 2)
+                                {
+                                    fragmentVarScopes.put(parts[0].trim(), parts[1].trim());
+                                }
+                                continue;
+                            }
+                        }
                         if (!trimmed.isEmpty() && !trimmed.startsWith("#"))
                         {
                             if (trimmed.startsWith("-"))

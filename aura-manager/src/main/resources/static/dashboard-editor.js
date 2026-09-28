@@ -579,6 +579,14 @@ async function saveYamlFile() {
     }
     if (!activeEditingFile) return;
 
+    const unsavedIncludeCards = document.querySelectorAll('.include-tree-card.has-unsaved-changes');
+    for (const card of unsavedIncludeCards) {
+        const cardId = card.id ? card.id.replace(/^includeTreeCard_?/, '') : null;
+        if (cardId && typeof saveIncludeInline === 'function') {
+            await saveIncludeInline(cardId);
+        }
+    }
+
     let yamlContent;
     const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
         || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
@@ -2653,36 +2661,156 @@ window.enableIncludeEdit = enableIncludeEdit;
 function markIncludeUnsaved(cardId) {
     const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
     const badge = document.getElementById(`unsavedBadge_${cardId}`);
+    const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
+    const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
+    const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
     if (treeCard) treeCard.classList.add('has-unsaved-changes');
     if (badge) badge.style.display = 'inline-flex';
+    if (btnSave) btnSave.style.display = 'inline-flex';
+    if (btnDiscard) btnDiscard.style.display = 'inline-flex';
+    if (btnEdit) btnEdit.style.display = 'none';
 }
 window.markIncludeUnsaved = markIncludeUnsaved;
 
-function saveIncludeInline(cardId) {
+function toggleIncludeVarsDropdown(cardId) {
+    const dropdown = document.getElementById(`varsDropdown_${cardId}`);
+    if (!dropdown) return;
+
+    const isVisible = dropdown.style.display !== 'none';
+    document.querySelectorAll('.include-vars-dropdown').forEach(d => {
+        d.style.display = 'none';
+    });
+
+    if (!isVisible) {
+        dropdown.style.display = 'flex';
+    }
+}
+window.toggleIncludeVarsDropdown = toggleIncludeVarsDropdown;
+
+function toggleIncludeTreeVarScope(cardId, varName, scope) {
     const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
     if (!treeCard) return;
 
+    if (!treeCard._varScopes) {
+        treeCard._varScopes = {};
+    }
+    treeCard._varScopes[varName] = scope;
+
+    const selector = CSS && CSS.escape ? CSS.escape(varName) : varName;
+    const row = treeCard.querySelector(`.include-var-row[data-var="${selector}"]`);
+    if (row) {
+        const defBtn = row.querySelector('.scope-defined');
+        const reqBtn = row.querySelector('.scope-required');
+        if (scope === 'defined') {
+            if (defBtn) defBtn.classList.add('active-defined');
+            if (reqBtn) reqBtn.classList.remove('active-required');
+        } else {
+            if (defBtn) defBtn.classList.remove('active-defined');
+            if (reqBtn) reqBtn.classList.add('active-required');
+        }
+    }
+
+    markIncludeUnsaved(cardId);
+    if (typeof checkEditorDirtyStatus === 'function') {
+        checkEditorDirtyStatus();
+    }
+}
+window.toggleIncludeTreeVarScope = toggleIncludeTreeVarScope;
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.include-vars-dropdown-wrapper')) {
+        document.querySelectorAll('.include-vars-dropdown').forEach(d => {
+            d.style.display = 'none';
+        });
+    }
+});
+
+async function saveIncludeInline(cardId) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    if (!treeCard) return false;
+
     const filePath = treeCard.getAttribute('data-include-file');
     const steps = getDirectNestedSteps(treeCard);
-    let content = '';
+    
+    const stepLines = [];
     steps.forEach(step => {
         const rawSpan = step.querySelector('.raw-nested-text');
         const textSpan = step.querySelector('span:last-child');
-        const lineText = rawSpan ? rawSpan.innerText : (step.getAttribute('data-original') || (textSpan ? textSpan.innerText : step.innerText));
-        content += lineText + '\n';
+        let lineText = rawSpan ? rawSpan.innerText : (step.getAttribute('data-original') || (textSpan ? textSpan.innerText : step.innerText));
+        if (lineText) {
+            lineText = lineText.trim();
+            if (!lineText.startsWith('variables:') && !lineText.match(/^[a-zA-Z0-9_.-]+:\s*(defined|required)$/)) {
+                if (lineText.startsWith('-')) lineText = lineText.substring(1).trim();
+                if (lineText) stepLines.push(lineText);
+            }
+        }
     });
 
-    if (filePath) {
-        fetch('/api/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `file=${encodeURIComponent(filePath)}&content=${encodeURIComponent(content)}`
-        }).then(() => {
-            showToast(`💾 Saved included file ${filePath}`, "success");
-            loadFiles();
-        }).catch(err => {
-            showToast(`Error saving include file: ${err.message}`, "error");
+    let content = 'steps:\n';
+    stepLines.forEach(lineText => {
+        content += `  - ${lineText}\n`;
+    });
+
+    const allVars = new Set();
+    const varRegex = /\$\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\}/g;
+    stepLines.forEach(line => {
+        let match;
+        while ((match = varRegex.exec(line)) !== null) {
+            if (match[1]) allVars.add(match[1]);
+        }
+    });
+    if (treeCard._varScopes) {
+        Object.keys(treeCard._varScopes).forEach(v => allVars.add(v));
+    }
+    const varRows = treeCard.querySelectorAll('.include-var-row');
+    varRows.forEach(row => {
+        const v = row.getAttribute('data-var');
+        if (v) allVars.add(v);
+    });
+
+    if (allVars.size > 0) {
+        content += '\nvariables:\n';
+        allVars.forEach(v => {
+            let scope = 'required';
+            if (treeCard._varScopes && treeCard._varScopes[v]) {
+                scope = treeCard._varScopes[v];
+            } else {
+                const selector = CSS && CSS.escape ? CSS.escape(v) : v;
+                const defBtn = treeCard.querySelector(`.include-var-row[data-var="${selector}"] .scope-defined.active-defined`);
+                if (defBtn) scope = 'defined';
+            }
+            content += `  ${v}: ${scope}\n`;
         });
+    }
+
+    if (filePath) {
+        try {
+            const res = await fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `file=${encodeURIComponent(filePath)}&content=${encodeURIComponent(content)}`
+            });
+            const data = await res.json();
+            if (data.status === 'SUCCESS' || data.success) {
+                showToast(`💾 Saved included file ${filePath}`, "success");
+                loadFiles();
+
+                const cleanFilePath = filePath.replace(/^['"]|['"]$/g, '').trim();
+                const cleanActiveFile = (window.activeEditingFile || '').replace(/^['"]|['"]$/g, '').trim();
+                if (cleanActiveFile && (cleanActiveFile === cleanFilePath || cleanActiveFile.endsWith(cleanFilePath))) {
+                    if (!window.fragmentVarScopes) window.fragmentVarScopes = {};
+                    allVars.forEach(v => {
+                        const scope = (treeCard._varScopes && treeCard._varScopes[v]) ? treeCard._varScopes[v] : (treeCard.querySelector(`.include-var-row[data-var="${CSS.escape ? CSS.escape(v) : v}"] .scope-defined.active-defined`) ? 'defined' : 'required');
+                        window.fragmentVarScopes[v] = scope;
+                    });
+                    if (typeof updateFragmentVariablesList === 'function') updateFragmentVariablesList();
+                }
+            } else {
+                showToast(`Error saving include file ${filePath}: ${data.error || "Unknown error"}`, "error");
+            }
+        } catch (err) {
+            showToast(`Error saving include file: ${err.message}`, "error");
+        }
     }
 
     treeCard.removeAttribute('data-editing');
@@ -2709,6 +2837,7 @@ function saveIncludeInline(cardId) {
     if (btnEdit) btnEdit.style.display = 'inline-flex';
     if (btnSave) btnSave.style.display = 'none';
     if (btnDiscard) btnDiscard.style.display = 'none';
+    return true;
 }
 window.saveIncludeInline = saveIncludeInline;
 

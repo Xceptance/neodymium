@@ -239,7 +239,8 @@ public class AuraTestEditorControllerTest
         final String nestedContent = "- Nested step 1\n- _include: fragments/child.steps";
         Mockito.when(fileService.readYamlFileContent("fragments/nested.steps")).thenReturn(nestedContent);
         Mockito.when(fileService.parsePlaybookSections(nestedContent)).thenReturn(Map.of(
-            "mainSteps", List.of("Nested step 1", "_include: fragments/child.steps")
+            "mainSteps", List.of("Nested step 1", "_include: fragments/child.steps"),
+            "fragmentVarScopes", Map.of()
         ));
 
         final String view = controller.getIncludeTreeFragment("fragments/nested.steps", "123", model);
@@ -249,5 +250,28 @@ public class AuraTestEditorControllerTest
         Assertions.assertEquals("fragments/nested.steps", model.getAttribute("includeFile"));
         Assertions.assertEquals(true, model.getAttribute("fileExists"));
         Assertions.assertEquals(List.of("Nested step 1", "_include: fragments/child.steps"), model.getAttribute("includeSteps"));
+        Assertions.assertEquals(List.of(), model.getAttribute("includeVars"));
+        Assertions.assertEquals(Map.of(), model.getAttribute("includeVarScopes"));
+    }
+
+    @Test
+    public void testGetIncludeTreeFragmentWithVariablesSuccess() throws Exception
+    {
+        final Model model = new ConcurrentModel();
+        final String nestedContent = "steps:\n  - Open ${neodymium.url}\n  - Type ${username}\nvariables:\n  neodymium.url: defined\n  username: required";
+        Mockito.when(fileService.readYamlFileContent("fragments/login.steps")).thenReturn(nestedContent);
+        Mockito.when(fileService.parsePlaybookSections(nestedContent)).thenReturn(Map.of(
+            "mainSteps", List.of("Open ${neodymium.url}", "Type ${username}"),
+            "fragmentVarScopes", Map.of("neodymium.url", "defined", "username", "required")
+        ));
+
+        final String view = controller.getIncludeTreeFragment("fragments/login.steps", "card_99", model);
+
+        Assertions.assertEquals("fragments/editor :: includeTreeCardFragment", view);
+        Assertions.assertEquals("card_99", model.getAttribute("cardId"));
+        Assertions.assertEquals("fragments/login.steps", model.getAttribute("includeFile"));
+        Assertions.assertEquals(true, model.getAttribute("fileExists"));
+        Assertions.assertEquals(List.of("neodymium.url", "username"), model.getAttribute("includeVars"));
+        Assertions.assertEquals(Map.of("neodymium.url", "defined", "username", "required"), model.getAttribute("includeVarScopes"));
     }
 }

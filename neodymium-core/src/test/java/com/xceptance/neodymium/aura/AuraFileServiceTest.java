@@ -101,6 +101,19 @@ public class AuraFileServiceTest
     }
 
     @Test
+    public void testParsePlaybookSectionsWithRawTextAndVariables()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = "- Open ${neodymium.url}\n- Type ${user}\nvariables:\n  neodymium.url: defined\n  user: required";
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+
+        Assertions.assertNotNull(sections);
+        Assertions.assertEquals(List.of("Open ${neodymium.url}", "Type ${user}"), sections.get("mainSteps"));
+        final Map<String, String> expectedScopes = Map.of("neodymium.url", "defined", "user", "required");
+        Assertions.assertEquals(expectedScopes, sections.get("fragmentVarScopes"));
+    }
+
+    @Test
     public void testGetFilteredStepsFilesList() throws IOException
     {
         final AuraFileService fileService = new AuraFileService();

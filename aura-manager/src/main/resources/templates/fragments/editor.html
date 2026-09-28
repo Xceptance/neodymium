@@ -476,6 +476,14 @@
 
         </aside>
     </div>
+    <script th:inline="javascript">
+        /*<![CDATA[*/
+        window.fragmentVarScopes = /*[[${fragmentVarScopes}]]*/ {};
+        if (typeof updateFragmentVariablesList === 'function') {
+            updateFragmentVariablesList();
+        }
+        /*]]>*/
+    </script>
 </div>
 
 <!-- HTMX Fragment for Inline Inclusion Tree Expansion -->
@@ -490,6 +498,45 @@
                 </span>
             </div>
             <div class="include-tree-actions">
+                <div class="include-vars-dropdown-wrapper" style="position: relative; display: inline-block;">
+                    <button class="btn-editor btn-include-vars" type="button" style="font-size: 11px; padding: 3px 8px; gap: 4px;" th:id="'btnVarsInclude_' + ${cardId}" th:data-card-id="${cardId}" onclick="toggleIncludeVarsDropdown(this.getAttribute('data-card-id'))" title="Variables used in this include">
+                        <span class="material-symbols-outlined" style="font-size: 14px; color: #c084fc;">data_object</span>
+                        <span>Variables (<span th:text="${includeVars != null ? includeVars.size() : 0}">0</span>)</span>
+                        <span class="material-symbols-outlined" style="font-size: 14px;">expand_more</span>
+                    </button>
+                    <div class="include-vars-dropdown" th:id="'varsDropdown_' + ${cardId}" style="display: none;">
+                        <div class="include-vars-dropdown-header">
+                            <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">data_object</span>
+                            <span>Variables in Include</span>
+                        </div>
+                        <div class="include-vars-dropdown-body">
+                            <div th:if="${includeVars == null or includeVars.isEmpty()}" class="empty-include-vars">
+                                No variables used in this include.
+                            </div>
+                            <div th:each="v : ${includeVars}" class="include-var-row" th:data-var="${v}">
+                                <code class="var-badge" th:text="'${' + ${v} + '}'">${var}</code>
+                                <div class="var-scope-toggle-group">
+                                    <button type="button" class="btn-var-scope scope-defined"
+                                            th:classappend="${includeVarScopes != null and includeVarScopes.get(v) == 'defined'} ? 'active-defined' : ''"
+                                            th:data-card-id="${cardId}"
+                                            th:data-var="${v}"
+                                            onclick="toggleIncludeTreeVarScope(this.getAttribute('data-card-id'), this.getAttribute('data-var'), 'defined')"
+                                            title="Variable is defined within this fragment">
+                                        Defined in include
+                                    </button>
+                                    <button type="button" class="btn-var-scope scope-required"
+                                            th:classappend="${includeVarScopes == null or includeVarScopes.get(v) != 'defined'} ? 'active-required' : ''"
+                                            th:data-card-id="${cardId}"
+                                            th:data-var="${v}"
+                                            onclick="toggleIncludeTreeVarScope(this.getAttribute('data-card-id'), this.getAttribute('data-var'), 'required')"
+                                            title="Variable requires definition from test">
+                                        Required from test
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <button class="btn-editor" style="font-size: 11px; padding: 3px 8px;" th:id="'btnEditInclude_' + ${cardId}" th:data-card-id="${cardId}" onclick="enableIncludeEdit(this.getAttribute('data-card-id'))">
                     <span class="material-symbols-outlined" style="font-size: 14px;">edit</span> Edit File
                 </button>

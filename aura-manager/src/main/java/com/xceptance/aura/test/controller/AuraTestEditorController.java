@@ -21,9 +21,14 @@ package com.xceptance.aura.test.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.neodymium.aura.AuraFileService;
 import jakarta.servlet.http.HttpServletRequest;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -44,6 +49,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 public class AuraTestEditorController
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraTestEditorController.class);
+    private static final Pattern VAR_PATTERN = Pattern.compile("\\$\\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\\}");
 
     private final AuraFileService fileService;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -87,7 +93,8 @@ public class AuraTestEditorController
             model.addAttribute("afterSteps", sections.get("afterSteps"));
             model.addAttribute("dataMatrix", sections.get("dataMatrix"));
             model.addAttribute("varKeys", sections.get("varKeys"));
-            model.addAttribute("fragmentVarScopes", sections.get("fragmentVarScopes"));
+            final Object scopesObj = sections.get("fragmentVarScopes");
+            model.addAttribute("fragmentVarScopes", scopesObj != null ? scopesObj : Map.of());
             model.addAttribute("yamlFiles", fileService.getYamlFilesList());
         }
         else
@@ -129,25 +136,45 @@ public class AuraTestEditorController
                                          final Model model)
     {
         final String cleanPath = relativePath != null ? relativePath.trim().replaceAll("^[\"']|[\"']$", "") : "";
-        String content = null;
-        boolean fileExists = false;
+        String tempContent = null;
+        boolean tempFileExists = false;
         try
         {
-            content = fileService.readYamlFileContent(cleanPath);
-            fileExists = (content != null);
+            tempContent = fileService.readYamlFileContent(cleanPath);
+            tempFileExists = (tempContent != null);
         }
         catch (final Exception ignored)
         {
         }
+        final String content = tempContent;
+        final boolean fileExists = tempFileExists;
 
         final Map<String, Object> sections = fileService.parsePlaybookSections(content != null ? content : "");
         @SuppressWarnings("unchecked")
         final List<String> includeSteps = (List<String>) sections.getOrDefault("mainSteps", List.of());
+        @SuppressWarnings("unchecked")
+        final Map<String, String> fragmentVarScopes = (Map<String, String>) sections.getOrDefault("fragmentVarScopes", Map.of());
+
+        final Set<String> varSet = new LinkedHashSet<>();
+        if (content != null && !content.isBlank())
+        {
+            final Matcher matcher = VAR_PATTERN.matcher(content);
+            while (matcher.find())
+            {
+                if (matcher.group(1) != null)
+                {
+                    varSet.add(matcher.group(1));
+                }
+            }
+        }
+        final List<String> includeVars = new ArrayList<>(varSet);
 
         model.addAttribute("cardId", cardId);
         model.addAttribute("includeFile", cleanPath);
         model.addAttribute("fileExists", fileExists);
         model.addAttribute("includeSteps", includeSteps);
+        model.addAttribute("includeVars", includeVars);
+        model.addAttribute("includeVarScopes", fragmentVarScopes != null ? fragmentVarScopes : Map.of());
 
         return "fragments/editor :: includeTreeCardFragment";
     }
