@@ -3074,6 +3074,26 @@ function filterFragmentPaletteCards(query) {
         }
     });
 
+    // Handle Tree Folder visibility during search filtering
+    const treeFolders = Array.from(container.querySelectorAll('.tree-folder-group')).reverse();
+    treeFolders.forEach(folder => {
+        const hasVisibleChild = Array.from(folder.querySelectorAll('.include-card, .tree-folder-group')).some(child => {
+            return child.style.display !== 'none';
+        });
+        if (hasVisibleChild) {
+            folder.style.display = '';
+            if (term.length > 0) {
+                folder.classList.remove('is-collapsed');
+                const arrowEl = folder.querySelector('.tree-folder-arrow');
+                const iconEl = folder.querySelector('.tree-folder-icon');
+                if (arrowEl) arrowEl.textContent = 'keyboard_arrow_down';
+                if (iconEl) iconEl.textContent = 'folder_open';
+            }
+        } else {
+            folder.style.display = 'none';
+        }
+    });
+
     const noMatchMsg = document.getElementById('noMatchingFragmentsMsg');
     if (noMatchMsg) {
         if (cards.length > 0 && visibleCount === 0 && term.length > 0) {

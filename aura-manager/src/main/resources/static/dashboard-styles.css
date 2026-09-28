@@ -3992,6 +3992,81 @@
     border-color: #0f172a transparent transparent transparent;
 }
 
+/* Hierarchical Folder Tree Styles */
+.tree-folder-group {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 4px;
+}
+
+.tree-folder-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s ease;
+}
+
+.tree-folder-header:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+:root[data-bs-theme="dark"] .tree-folder-header:hover,
+body[data-bs-theme="dark"] .tree-folder-header:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.tree-folder-arrow {
+    font-size: 16px;
+    color: var(--text-secondary);
+    transition: transform 0.15s ease;
+    flex-shrink: 0;
+}
+
+.tree-folder-icon {
+    font-size: 16px;
+    color: var(--accent, #2563eb);
+    flex-shrink: 0;
+}
+
+.tree-folder-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tree-folder-content {
+    display: flex;
+    flex-direction: column;
+    padding-left: 12px;
+    margin-left: 6px;
+    border-left: 1px solid rgba(0, 0, 0, 0.08);
+    gap: 4px;
+    margin-top: 2px;
+}
+
+:root[data-bs-theme="dark"] .tree-folder-content,
+body[data-bs-theme="dark"] .tree-folder-content {
+    border-left-color: rgba(255, 255, 255, 0.12);
+}
+
+.tree-folder-group.is-collapsed > .tree-folder-content {
+    display: none !important;
+}
+
+.btn-view-mode-active {
+    background: var(--accent) !important;
+    color: #ffffff !important;
+}
+
+
 
 
 

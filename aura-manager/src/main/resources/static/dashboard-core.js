@@ -183,6 +183,7 @@ function initTheme() {
 
     document.addEventListener('DOMContentLoaded', function () {
         updateThemeUI(savedTheme);
+        applyFileViewMode();
         document.querySelectorAll('iframe').forEach(iframe => {
             iframe.addEventListener('load', function () {
                 const currentTheme = localStorage.getItem('aura_theme') || 'system';
@@ -239,6 +240,243 @@ function changeTheme(theme) {
     fetch('/api/theme?theme=' + encodeURIComponent(theme), { method: 'POST' }).catch(() => {});
 }
 window.changeTheme = changeTheme;
+
+// ============================================================================
+// File View Mode Logic (Flat vs Hierarchical) & Tree Builder
+// ============================================================================
+function getFileViewMode() {
+    return localStorage.getItem('aura_file_view_mode') || 'flat';
+}
+window.getFileViewMode = getFileViewMode;
+
+function setFileViewMode(mode) {
+    const validMode = (mode === 'hierarchical' || mode === 'tree') ? 'hierarchical' : 'flat';
+    localStorage.setItem('aura_file_view_mode', validMode);
+    applyFileViewMode();
+}
+window.setFileViewMode = setFileViewMode;
+
+function toggleFileViewMode() {
+    const current = getFileViewMode();
+    const next = (current === 'flat') ? 'hierarchical' : 'flat';
+    setFileViewMode(next);
+}
+window.toggleFileViewMode = toggleFileViewMode;
+
+function getCollapsedFolders() {
+    try {
+        const saved = localStorage.getItem('aura_collapsed_folders');
+        return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function setFolderCollapsed(folderPath, collapsed) {
+    let folders = getCollapsedFolders();
+    if (collapsed) {
+        if (!folders.includes(folderPath)) folders.push(folderPath);
+    } else {
+        folders = folders.filter(p => p !== folderPath);
+    }
+    localStorage.setItem('aura_collapsed_folders', JSON.stringify(folders));
+}
+
+function toggleTreeFolder(headerEl) {
+    if (!headerEl) return;
+    const groupEl = headerEl.closest('.tree-folder-group');
+    if (!groupEl) return;
+
+    const folderPath = groupEl.getAttribute('data-folder-path') || '';
+    const isCollapsed = groupEl.classList.toggle('is-collapsed');
+
+    const arrowEl = headerEl.querySelector('.tree-folder-arrow');
+    const iconEl = headerEl.querySelector('.tree-folder-icon');
+
+    if (arrowEl) arrowEl.textContent = isCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
+    if (iconEl) iconEl.textContent = isCollapsed ? 'folder' : 'folder_open';
+
+    if (folderPath) {
+        setFolderCollapsed(folderPath, isCollapsed);
+    }
+}
+window.toggleTreeFolder = toggleTreeFolder;
+
+function updateViewModeToggleUI(mode) {
+    const dashIcon = document.getElementById('fileViewModeIcon');
+    const dashBtn = document.getElementById('toggleFileViewBtn');
+    const editorIcon = document.getElementById('editorFragmentViewModeIcon');
+    const editorBtn = document.getElementById('toggleEditorFragmentViewBtn');
+
+    const isHierarchical = (mode === 'hierarchical');
+    const iconName = isHierarchical ? 'account_tree' : 'view_list';
+    const tooltipText = isHierarchical ? 'Switch View Mode (Hierarchical -> Flat)' : 'Switch View Mode (Flat -> Hierarchical)';
+
+    if (dashIcon) dashIcon.textContent = iconName;
+    if (dashBtn) {
+        dashBtn.title = tooltipText;
+        if (isHierarchical) dashBtn.classList.add('btn-view-mode-active');
+        else dashBtn.classList.remove('btn-view-mode-active');
+    }
+
+    if (editorIcon) editorIcon.textContent = iconName;
+    if (editorBtn) {
+        editorBtn.title = tooltipText;
+        if (isHierarchical) editorBtn.classList.add('btn-view-mode-active');
+        else editorBtn.classList.remove('btn-view-mode-active');
+    }
+}
+
+function applyFileViewMode() {
+    const mode = getFileViewMode();
+    updateViewModeToggleUI(mode);
+
+    organizeContainerView(document.getElementById('sidebarTestsContainer'), '.file-container', mode);
+    organizeContainerView(document.getElementById('sidebarFragmentsContainer'), '.file-container', mode);
+    organizeContainerView(document.getElementById('fragmentCardsContainer'), '.include-card', mode);
+}
+window.applyFileViewMode = applyFileViewMode;
+
+function organizeContainerView(container, itemSelector, mode) {
+    if (!container) return;
+
+    const items = Array.from(container.querySelectorAll(itemSelector));
+    if (items.length === 0) return;
+
+    // Remove existing tree folder wrappers
+    const treeWrappers = container.querySelectorAll('.tree-folder-group');
+    treeWrappers.forEach(w => w.remove());
+
+    if (mode === 'flat') {
+        // Flat Mode: Append item elements directly back to container
+        items.forEach(item => {
+            const filePath = item.getAttribute('data-file');
+            if (filePath) {
+                const labelSpan = item.querySelector('.item-main > span[style*="font-weight"], .include-path');
+                if (labelSpan && labelSpan.textContent !== filePath) {
+                    labelSpan.textContent = filePath;
+                }
+            }
+            container.appendChild(item);
+        });
+        return;
+    }
+
+    // Hierarchical Mode: Build Directory Tree
+    const rootFolders = [];
+    const rootItems = [];
+    const nodes = {};
+
+    items.forEach(item => {
+        const filePath = item.getAttribute('data-file');
+        if (!filePath) {
+            rootItems.push(item);
+            return;
+        }
+
+        const parts = filePath.split('/');
+        if (parts.length <= 1) {
+            rootItems.push(item);
+            return;
+        }
+
+        const fileName = parts[parts.length - 1];
+        const labelSpan = item.querySelector('.item-main > span[style*="font-weight"]');
+        if (labelSpan) {
+            labelSpan.textContent = fileName;
+        }
+
+        let currentPath = '';
+        for (let i = 0; i < parts.length - 1; i++) {
+            const dirName = parts[i];
+            const parentPath = currentPath;
+            currentPath = currentPath ? (currentPath + '/' + dirName) : dirName;
+
+            if (!nodes[currentPath]) {
+                nodes[currentPath] = {
+                    name: dirName,
+                    fullPath: currentPath,
+                    parentPath: parentPath,
+                    subfolders: [],
+                    items: []
+                };
+                if (parentPath && nodes[parentPath]) {
+                    if (!nodes[parentPath].subfolders.includes(currentPath)) {
+                        nodes[parentPath].subfolders.push(currentPath);
+                    }
+                } else if (!rootFolders.includes(currentPath)) {
+                    rootFolders.push(currentPath);
+                }
+            }
+        }
+
+        nodes[currentPath].items.push(item);
+    });
+
+    const collapsedList = getCollapsedFolders();
+
+    function buildFolderElement(folderPath) {
+        const node = nodes[folderPath];
+        if (!node) return null;
+
+        const isCollapsed = collapsedList.includes(folderPath);
+
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'tree-folder-group' + (isCollapsed ? ' is-collapsed' : '');
+        groupDiv.setAttribute('data-folder-path', folderPath);
+
+        const headerDiv = document.createElement('div');
+        headerDiv.className = 'tree-folder-header';
+        headerDiv.setAttribute('onclick', 'toggleTreeFolder(this)');
+
+        const arrowSpan = document.createElement('span');
+        arrowSpan.className = 'material-symbols-outlined tree-folder-arrow';
+        arrowSpan.textContent = isCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
+
+        const iconSpan = document.createElement('span');
+        iconSpan.className = 'material-symbols-outlined tree-folder-icon';
+        iconSpan.textContent = isCollapsed ? 'folder' : 'folder_open';
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'tree-folder-name';
+        nameSpan.textContent = node.name;
+
+        headerDiv.appendChild(arrowSpan);
+        headerDiv.appendChild(iconSpan);
+        headerDiv.appendChild(nameSpan);
+
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'tree-folder-content';
+
+        node.subfolders.forEach(subPath => {
+            const subFolderEl = buildFolderElement(subPath);
+            if (subFolderEl) contentDiv.appendChild(subFolderEl);
+        });
+
+        node.items.forEach(item => {
+            contentDiv.appendChild(item);
+        });
+
+        groupDiv.appendChild(headerDiv);
+        groupDiv.appendChild(contentDiv);
+
+        return groupDiv;
+    }
+
+    rootFolders.forEach(folderPath => {
+        const folderEl = buildFolderElement(folderPath);
+        if (folderEl) container.appendChild(folderEl);
+    });
+
+    rootItems.forEach(item => {
+        const filePath = item.getAttribute('data-file');
+        if (filePath) {
+            const labelSpan = item.querySelector('.item-main > span[style*="font-weight"]');
+            if (labelSpan) labelSpan.textContent = filePath;
+        }
+        container.appendChild(item);
+    });
+}
 
 // Layout Resizers (Sidebar & Console)
 let isResizingH = false;
@@ -490,6 +728,7 @@ function init() {
                     }
                 });
                 if (typeof syncCheckboxesFromState === 'function') syncCheckboxesFromState();
+                applyFileViewMode();
             } else if (evt.detail.target.id === 'configPanel') {
                 const browserScroll = document.getElementById('browserProfilesScrollContainer');
                 if (browserScroll && savedBrowserScrollTop > 0) {

@@ -15,7 +15,12 @@
                 <span>Fragments (.steps)</span>
             </button>
         </div>
-        <button class="btn-edit neo-u-8" id="refreshFilesBtn" hx-get="/api/files/list" hx-target="#yamlFileList" hx-swap="innerHTML" title="Refresh Files"><span class="material-symbols-outlined">sync</span></button>
+        <div style="display: flex; align-items: center; gap: 4px;">
+            <button type="button" class="btn-edit neo-u-8" id="toggleFileViewBtn" onclick="toggleFileViewMode()" title="Switch View Mode (Flat / Hierarchical)">
+                <span class="material-symbols-outlined" id="fileViewModeIcon" style="font-size: 16px;">view_list</span>
+            </button>
+            <button class="btn-edit neo-u-8" id="refreshFilesBtn" hx-get="/api/files/list" hx-target="#yamlFileList" hx-swap="innerHTML" title="Refresh Files"><span class="material-symbols-outlined">sync</span></button>
+        </div>
     </div>
     <div class="search-container">
         <span class="material-symbols-outlined search-icon">search</span>

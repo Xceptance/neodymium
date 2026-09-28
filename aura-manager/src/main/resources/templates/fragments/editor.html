@@ -436,9 +436,14 @@
                         <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">extension</span>
                         <span>Available Step Fragments (.steps)</span>
                     </span>
-                    <button class="btn-edit" onclick="openCreateModal('steps')" style="padding: 1px 6px; font-size: 10px; border-color: rgba(168, 85, 247, 0.4); color: #a855f7;" title="Create new step fragment file">
-                        <span class="material-symbols-outlined" style="font-size: 12px;">add</span> New
-                    </button>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <button type="button" class="btn-edit" id="toggleEditorFragmentViewBtn" onclick="toggleFileViewMode()" style="padding: 1px 6px; font-size: 10px;" title="Switch View Mode (Flat / Hierarchical)">
+                            <span class="material-symbols-outlined" id="editorFragmentViewModeIcon" style="font-size: 12px;">view_list</span>
+                        </button>
+                        <button class="btn-edit" onclick="openCreateModal('steps')" style="padding: 1px 6px; font-size: 10px; border-color: rgba(168, 85, 247, 0.4); color: #a855f7;" title="Create new step fragment file">
+                            <span class="material-symbols-outlined" style="font-size: 12px;">add</span> New
+                        </button>
+                    </div>
                 </div>
                 <div class="search-container" style="margin: 6px 0 8px 0;">
                     <span class="material-symbols-outlined search-icon" style="font-size: 14px; color: var(--text-secondary);">search</span>
