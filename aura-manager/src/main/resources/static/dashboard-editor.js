@@ -507,6 +507,7 @@ function openYamlEditor(filename, force = false) {
     initialEditorContent = '';
     undoStack = [];
     redoStack = [];
+    if (typeof clearAllVariablePrompts === 'function') clearAllVariablePrompts();
     if (typeof updateUndoRedoUI === 'function') updateUndoRedoUI();
     if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
 
@@ -697,6 +698,7 @@ function closeEditor(force = false) {
     }
     activeEditingFile = null;
     window.activeEditingFile = null;
+    if (typeof clearAllVariablePrompts === 'function') clearAllVariablePrompts();
     if (typeof initialEditorContent !== 'undefined') initialEditorContent = '';
     if (typeof undoStack !== 'undefined') undoStack = [];
     if (typeof redoStack !== 'undefined') redoStack = [];
@@ -958,6 +960,7 @@ function handleRawYamlInput(textarea) {
         hiddenInput.value = textarea.value;
     }
     checkEditorDirtyStatus();
+    checkNewVariablePrompts();
 }
 window.handleRawYamlInput = handleRawYamlInput;
 
@@ -1665,6 +1668,7 @@ function handleStepBlur(lineNumOrElement) {
     }, 120);
 
     compilePlaybookToYaml();
+    checkNewVariablePrompts();
 }
 window.handleStepBlur = handleStepBlur;
 
@@ -3173,6 +3177,60 @@ function addMatrixColumnInline() {
 }
 window.addMatrixColumnInline = addMatrixColumnInline;
 
+function showRemoveConfirmationModal(title, message, onConfirm, onCancel) {
+    let modal = document.getElementById('removeConfirmationModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.id = 'removeConfirmationModal';
+        modal.style.display = 'none';
+        modal.innerHTML = `
+            <div class="modal-card">
+                <div class="modal-header" id="removeConfirmationModalTitle">${title || 'Remove Item'}</div>
+                <div class="modal-body">
+                    <p id="removeConfirmationModalMessage" style="margin: 0; font-size: 0.95rem; color: var(--text-color, inherit);">
+                        ${message || 'Are you sure you want to remove this item?'}
+                    </p>
+                </div>
+                <div class="modal-footer" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" class="btn-editor" id="removeConfirmationCancelBtn">Cancel</button>
+                    <button type="button" class="btn-danger" id="removeConfirmationConfirmBtn">Remove</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } else {
+        const titleEl = modal.querySelector('#removeConfirmationModalTitle');
+        if (titleEl) {
+            titleEl.textContent = title || 'Remove Item';
+        }
+        const msgEl = modal.querySelector('#removeConfirmationModalMessage');
+        if (msgEl) {
+            msgEl.textContent = message || 'Are you sure you want to remove this item?';
+        }
+    }
+
+    const cancelBtn = modal.querySelector('#removeConfirmationCancelBtn');
+    const confirmBtn = modal.querySelector('#removeConfirmationConfirmBtn');
+
+    if (cancelBtn) {
+        cancelBtn.onclick = function() {
+            modal.style.display = 'none';
+            if (typeof onCancel === 'function') onCancel();
+        };
+    }
+
+    if (confirmBtn) {
+        confirmBtn.onclick = function() {
+            modal.style.display = 'none';
+            if (typeof onConfirm === 'function') onConfirm();
+        };
+    }
+
+    modal.style.display = 'flex';
+}
+window.showRemoveConfirmationModal = showRemoveConfirmationModal;
+
 function removeMatrixColumn(btn) {
     if (!btn) return;
     const th = btn.closest('th');
@@ -3187,27 +3245,29 @@ function removeMatrixColumn(btn) {
 
     const iterSpan = th.querySelector('.iter-header-content span') || th.querySelector('span');
     const iterName = iterSpan ? iterSpan.innerText.trim() : `Iteration ${colIndex}`;
-    const confirmed = confirm(`Are you sure you want to remove ${iterName}?`);
-    if (!confirmed) {
-        return;
-    }
 
-    headerRow.deleteCell(colIndex);
+    showRemoveConfirmationModal(
+        'Remove Data Set',
+        `Are you sure you want to remove ${iterName}?`,
+        function() {
+            headerRow.deleteCell(colIndex);
 
-    const tbodyRows = document.querySelectorAll('#transposedGrid tbody tr');
-    tbodyRows.forEach(tr => {
-        if (tr.cells.length > colIndex) {
-            tr.deleteCell(colIndex);
+            const tbodyRows = document.querySelectorAll('#transposedGrid tbody tr');
+            tbodyRows.forEach(tr => {
+                if (tr.cells.length > colIndex) {
+                    tr.deleteCell(colIndex);
+                }
+            });
+
+            compilePlaybookToYaml();
+            if (typeof debouncedPushSnapshot === 'function') {
+                debouncedPushSnapshot();
+            }
+            if (typeof checkEditorDirtyStatus === 'function') {
+                checkEditorDirtyStatus();
+            }
         }
-    });
-
-    compilePlaybookToYaml();
-    if (typeof debouncedPushSnapshot === 'function') {
-        debouncedPushSnapshot();
-    }
-    if (typeof checkEditorDirtyStatus === 'function') {
-        checkEditorDirtyStatus();
-    }
+    );
 }
 window.removeMatrixColumn = removeMatrixColumn;
 
@@ -3218,12 +3278,72 @@ function removeMatrixRow(btn) {
 
     const keyInput = tr.querySelector('.var-key-input');
     const varName = keyInput ? keyInput.value.trim() : 'variable';
-    const confirmed = confirm(`Are you sure you want to remove variable '${varName}'?`);
-    if (!confirmed) {
-        return;
+
+    showRemoveConfirmationModal(
+        'Remove Variable',
+        `Are you sure you want to remove variable '${varName}'?`,
+        function() {
+            tr.remove();
+
+            compilePlaybookToYaml();
+            if (typeof debouncedPushSnapshot === 'function') {
+                debouncedPushSnapshot();
+            }
+            if (typeof checkEditorDirtyStatus === 'function') {
+                checkEditorDirtyStatus();
+            }
+        }
+    );
+}
+window.removeMatrixRow = removeMatrixRow;
+
+/* Variable Prompt & Matrix Management */
+if (!window.promptedVariablesSet) {
+    window.promptedVariablesSet = new Set();
+}
+
+function clearAllVariablePrompts() {
+    window.promptedVariablesSet = new Set();
+    const container = document.getElementById('varPromptContainer');
+    if (container) {
+        container.innerHTML = '';
+    }
+}
+window.clearAllVariablePrompts = clearAllVariablePrompts;
+
+function addMatrixVariableRow(varName, defaultValue = '') {
+    if (!varName) return;
+    const tbody = document.querySelector('#transposedGrid tbody');
+    if (!tbody) return;
+
+    // Check if key already exists
+    const existingInputs = tbody.querySelectorAll('.var-key-input');
+    for (const input of existingInputs) {
+        if (input.value.trim() === varName) {
+            return; // Already present in matrix
+        }
     }
 
-    tr.remove();
+    const colCount = document.querySelectorAll('#transposedGrid thead th').length - 2;
+    const tr = document.createElement('tr');
+    let html = `
+        <td>
+            <div class="var-key-cell">
+                <input type="text" class="var-key-input" value="${varName}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">
+                <button class="btn-insert-var-chip" onclick="insertVariableFromInput('${varName}')">+ Insert</button>
+                <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                </button>
+            </div>
+        </td>
+    `;
+    for (let i = 0; i < colCount; i++) {
+        const val = (i === 0 && defaultValue) ? defaultValue : '';
+        html += `<td><input type="text" class="cell-val" value="${val}" placeholder="empty" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();"></td>`;
+    }
+    html += `<td></td>`;
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
 
     compilePlaybookToYaml();
     if (typeof debouncedPushSnapshot === 'function') {
@@ -3233,7 +3353,128 @@ function removeMatrixRow(btn) {
         checkEditorDirtyStatus();
     }
 }
-window.removeMatrixRow = removeMatrixRow;
+window.addMatrixVariableRow = addMatrixVariableRow;
+
+function checkNewVariablePrompts() {
+    if (!window.activeEditingFile) return;
+    const isFragmentFile = window.activeEditingFile.toLowerCase().endsWith('.steps');
+    if (isFragmentFile) return;
+
+    const foundVars = new Set();
+    const regex = /\$\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\}/g;
+
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea && rawTextarea.value) {
+            let match;
+            regex.lastIndex = 0;
+            while ((match = regex.exec(rawTextarea.value)) !== null) {
+                if (match[1]) foundVars.add(match[1]);
+            }
+        }
+    } else {
+        const containers = ['beforeStepsList', 'stepsList', 'afterStepsList'];
+        containers.forEach(id => {
+            const container = document.getElementById(id);
+            if (container) {
+                const rows = container.querySelectorAll('.step-row');
+                rows.forEach(row => {
+                    const contentEl = row.querySelector('.step-content');
+                    if (contentEl) {
+                        const text = contentEl.getAttribute('data-raw') || contentEl.innerText.trim();
+                        let match;
+                        regex.lastIndex = 0;
+                        while ((match = regex.exec(text)) !== null) {
+                            if (match[1]) foundVars.add(match[1]);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    const existingMatrixKeys = new Set();
+    const tbody = document.querySelector('#transposedGrid tbody');
+    if (tbody) {
+        const keyInputs = tbody.querySelectorAll('.var-key-input');
+        keyInputs.forEach(input => {
+            const val = input.value.trim();
+            if (val) existingMatrixKeys.add(val);
+        });
+    }
+
+    foundVars.forEach(varName => {
+        if (!existingMatrixKeys.has(varName) && !window.promptedVariablesSet.has(varName)) {
+            window.promptedVariablesSet.add(varName);
+            showNewVariablePrompt(varName);
+        }
+    });
+}
+window.checkNewVariablePrompts = checkNewVariablePrompts;
+
+function showNewVariablePrompt(varName) {
+    if (!varName) return;
+    let container = document.getElementById('varPromptContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'varPromptContainer';
+        container.className = 'var-prompt-container';
+        const panel = document.getElementById('editorPanel') || document.body;
+        panel.appendChild(container);
+    }
+
+    const existingCard = container.querySelector(`.var-prompt-card[data-var="${varName}"]`);
+    if (existingCard) return;
+
+    const card = document.createElement('div');
+    card.className = 'var-prompt-card';
+    card.setAttribute('data-var', varName);
+    card.innerHTML = `
+        <div class="var-prompt-header">
+            <span class="material-symbols-outlined">help</span>
+            <span>Add Variable to Test Data?</span>
+        </div>
+        <div class="var-prompt-body">
+            Variable <code class="var-name-chip">\${${varName}}</code> was referenced in test steps. Would you like to define it in the Test Data Matrix?
+        </div>
+        <div class="var-prompt-actions">
+            <button type="button" class="btn-prompt-cancel" onclick="dismissVariablePrompt(this, '${varName}')">No, Skip</button>
+            <button type="button" class="btn-prompt-confirm" onclick="acceptVariablePrompt(this, '${varName}')">
+                <span class="material-symbols-outlined" style="font-size: 14px;">add</span> Yes, Add to Test Data
+            </button>
+        </div>
+    `;
+    container.appendChild(card);
+}
+window.showNewVariablePrompt = showNewVariablePrompt;
+
+function acceptVariablePrompt(btnOrElement, varName) {
+    addMatrixVariableRow(varName);
+    closeVariablePromptCard(btnOrElement);
+}
+window.acceptVariablePrompt = acceptVariablePrompt;
+
+function dismissVariablePrompt(btnOrElement, varName) {
+    closeVariablePromptCard(btnOrElement);
+}
+window.dismissVariablePrompt = dismissVariablePrompt;
+
+function closeVariablePromptCard(btnOrElement) {
+    if (!btnOrElement) return;
+    const card = btnOrElement.closest ? btnOrElement.closest('.var-prompt-card') : null;
+    if (card) {
+        card.classList.add('closing');
+        setTimeout(() => {
+            if (card && card.parentElement) {
+                card.remove();
+            }
+        }, 200);
+    }
+}
+window.closeVariablePromptCard = closeVariablePromptCard;
 
 /* Undo/Redo & Unsaved State Management */
 let undoStack = [];

@@ -861,4 +861,95 @@ public final class AuraManagerEditorUiTest
         Assertions.assertEquals(1, remainingSteps.size());
         remainingSteps.first().$(".raw-nested-text").shouldHave(Condition.exactText("Original fragment step text"));
     }
+
+    @Test
+    public final void testNewVariablePromptDialogsInTestPlaybook()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test playbook
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Edit step 1 to include new variable ${user_login}
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        final SelenideElement step1Content = stepRows.first().$(".step-content");
+        step1Content.click();
+        step1Content.sendKeys("Type \"${user_login}\" into #username");
+        $("#editorTitle").click();
+
+        // Verify floating prompt dialog appears for user_login
+        final SelenideElement loginPromptCard = $(".var-prompt-card[data-var='user_login']");
+        loginPromptCard.shouldBe(Condition.visible);
+        loginPromptCard.shouldHave(Condition.text("user_login"));
+
+        // Verify user_login is NOT yet added to the Test Data Matrix table while unanswered
+        final ElementsCollection initialVarInputs = $$("#transposedGrid tbody .var-key-input");
+        boolean containsLogin = false;
+        for (final SelenideElement input : initialVarInputs)
+        {
+            if ("user_login".equals(input.getValue()))
+            {
+                containsLogin = true;
+                break;
+            }
+        }
+        Assertions.assertFalse(containsLogin, "Variable user_login should not appear in test data matrix until option is selected.");
+
+        // Add step 2 with second new variable ${user_pass}
+        step1Content.click();
+        step1Content.sendKeys(Keys.ENTER);
+
+        final ElementsCollection updatedStepRows = $$("#stepsList .step-row");
+        Assertions.assertEquals(2, updatedStepRows.size());
+        final SelenideElement step2Content = updatedStepRows.get(1).$(".step-content");
+        step2Content.click();
+        step2Content.sendKeys("Type \"${user_pass}\" into #password");
+        $("#editorTitle").click();
+
+        // Verify TWO prompt dialog cards are displayed concurrently in #varPromptContainer
+        final ElementsCollection promptCards = $$("#varPromptContainer .var-prompt-card");
+        Assertions.assertEquals(2, promptCards.size(), "Two prompt dialogs should be displayed simultaneously for unanswered variables.");
+
+        final SelenideElement passPromptCard = $(".var-prompt-card[data-var='user_pass']");
+        passPromptCard.shouldBe(Condition.visible);
+
+        // Click "Yes, Add to Test Data" on user_login prompt dialog
+        loginPromptCard.$(".btn-prompt-confirm").shouldBe(Condition.visible).click();
+        loginPromptCard.shouldNotBe(Condition.visible);
+
+        // Verify user_login is NOW added to the Test Data Matrix
+        final ElementsCollection updatedVarInputs = $$("#transposedGrid tbody .var-key-input");
+        boolean containsLoginAfterConfirm = false;
+        for (final SelenideElement input : updatedVarInputs)
+        {
+            if ("user_login".equals(input.getValue()))
+            {
+                containsLoginAfterConfirm = true;
+                break;
+            }
+        }
+        Assertions.assertTrue(containsLoginAfterConfirm, "Variable user_login should be added to test data matrix after clicking Yes.");
+
+        // Click "No, Skip" on user_pass prompt dialog
+        passPromptCard.$(".btn-prompt-cancel").shouldBe(Condition.visible).click();
+        passPromptCard.shouldNotBe(Condition.visible);
+
+        // Verify user_pass is NOT added to the Test Data Matrix
+        final ElementsCollection finalVarInputs = $$("#transposedGrid tbody .var-key-input");
+        boolean containsPassFinal = false;
+        for (final SelenideElement input : finalVarInputs)
+        {
+            if ("user_pass".equals(input.getValue()))
+            {
+                containsPassFinal = true;
+                break;
+            }
+        }
+        Assertions.assertFalse(containsPassFinal, "Variable user_pass should not be added to test data matrix after clicking No.");
+    }
 }
+

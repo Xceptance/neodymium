@@ -4069,6 +4069,143 @@ body[data-bs-theme="dark"] .tree-folder-content {
     color: #ffffff !important;
 }
 
+/* Non-blocking Variable Prompt Dialog Container & Cards */
+.var-prompt-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 10000;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 12px;
+    max-width: 380px;
+    width: calc(100% - 48px);
+    pointer-events: none;
+}
+
+.var-prompt-card {
+    pointer-events: auto;
+    background: var(--bg-card, #ffffff);
+    color: var(--text-primary, #0f172a);
+    border: 1px solid var(--border, #e2e8f0);
+    border-left: 4px solid var(--accent, #2563eb);
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(8px);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    animation: varPromptSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+:root[data-bs-theme="dark"] .var-prompt-card,
+body[data-bs-theme="dark"] .var-prompt-card {
+    background: rgba(30, 41, 59, 0.95);
+    border-color: rgba(255, 255, 255, 0.12);
+    border-left-color: #3b82f6;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+.var-prompt-card.closing {
+    opacity: 0;
+    transform: translateX(30px) scale(0.95);
+}
+
+@keyframes varPromptSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.var-prompt-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary, #0f172a);
+}
+
+.var-prompt-header .material-symbols-outlined {
+    font-size: 18px;
+    color: var(--accent, #2563eb);
+}
+
+.var-prompt-body {
+    font-size: 12.5px;
+    color: var(--text-secondary, #64748b);
+    line-height: 1.45;
+}
+
+.var-prompt-body code.var-name-chip {
+    font-family: var(--font-mono, monospace);
+    font-weight: 600;
+    font-size: 12px;
+    padding: 2px 6px;
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--accent, #2563eb);
+    border: 1px solid rgba(37, 99, 235, 0.2);
+    border-radius: 4px;
+}
+
+.var-prompt-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.btn-prompt-confirm {
+    background: var(--accent, #2563eb);
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: background 0.15s ease;
+}
+
+.btn-prompt-confirm:hover {
+    background: #1d4ed8;
+}
+
+.btn-prompt-cancel {
+    background: transparent;
+    color: var(--text-secondary, #64748b);
+    border: 1px solid var(--border, #cbd5e1);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-prompt-cancel:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-primary, #0f172a);
+}
+
+:root[data-bs-theme="dark"] .btn-prompt-cancel:hover,
+body[data-bs-theme="dark"] .btn-prompt-cancel:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+}
+
+
 
 
 
