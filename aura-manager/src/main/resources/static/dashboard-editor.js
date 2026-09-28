@@ -3118,6 +3118,9 @@ function addMatrixRowInlineEmpty() {
             <div class="var-key-cell">
                 <input type="text" class="var-key-input" value="${newVarName}">
                 <button class="btn-insert-var-chip" onclick="insertVariableFromInput(this.previousElementSibling.value)">+ Insert</button>
+                <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                </button>
             </div>
         </td>
     `;
@@ -3207,6 +3210,30 @@ function removeMatrixColumn(btn) {
     }
 }
 window.removeMatrixColumn = removeMatrixColumn;
+
+function removeMatrixRow(btn) {
+    if (!btn) return;
+    const tr = btn.closest('tr');
+    if (!tr) return;
+
+    const keyInput = tr.querySelector('.var-key-input');
+    const varName = keyInput ? keyInput.value.trim() : 'variable';
+    const confirmed = confirm(`Are you sure you want to remove variable '${varName}'?`);
+    if (!confirmed) {
+        return;
+    }
+
+    tr.remove();
+
+    compilePlaybookToYaml();
+    if (typeof debouncedPushSnapshot === 'function') {
+        debouncedPushSnapshot();
+    }
+    if (typeof checkEditorDirtyStatus === 'function') {
+        checkEditorDirtyStatus();
+    }
+}
+window.removeMatrixRow = removeMatrixRow;
 
 /* Undo/Redo & Unsaved State Management */
 let undoStack = [];
@@ -3413,6 +3440,9 @@ function restoreEditorSnapshot(snap) {
                     <div class="var-key-cell">
                         <input type="text" class="var-key-input" value="${row.key}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">
                         <button class="btn-insert-var-chip" onclick="insertVariableFromInput(this.previousElementSibling.value)">+ Insert</button>
+                        <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                        </button>
                     </div>
                 </td>
             `;

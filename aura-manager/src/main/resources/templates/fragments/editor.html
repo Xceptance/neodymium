@@ -312,6 +312,9 @@
                                         <div class="var-key-cell">
                                             <input type="text" class="var-key-input" th:value="${key}" oninput="compilePlaybookToYaml()" />
                                             <button class="btn-insert-var-chip" th:data-key="${key}" onclick="insertVariableFromInput(this.getAttribute('data-key'))">+ Insert</button>
+                                            <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                                                <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                                            </button>
                                         </div>
                                     </td>
                                     <td th:each="dataRow : ${dataMatrix}">
@@ -326,6 +329,9 @@
                                         <div class="var-key-cell">
                                             <input type="text" class="var-key-input" value="testId" />
                                             <button class="btn-insert-var-chip" onclick="insertVariableFromInput('testId')">+ Insert</button>
+                                            <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                                                <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                                            </button>
                                         </div>
                                     </td>
                                     <td><input type="text" class="cell-val" value="Default" oninput="compilePlaybookToYaml()" /></td>

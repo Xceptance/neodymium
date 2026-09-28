@@ -391,6 +391,43 @@ public final class AuraManagerEditorUiTest
     }
 
     @Test
+    public final void testRemoveVariableRowFromDataMatrix()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Initially check tbody rows count
+        final ElementsCollection initialRows = $$("#transposedGrid tbody tr");
+        Assertions.assertEquals(1, initialRows.size(), "Should initially have 1 variable row.");
+        initialRows.first().$(".btn-remove-var").shouldBe(Condition.visible);
+
+        // Add a second variable row
+        $(".add-row-bottom-btn").shouldBe(Condition.visible).click();
+        final ElementsCollection rowsAfterAdd = $$("#transposedGrid tbody tr");
+        Assertions.assertEquals(2, rowsAfterAdd.size(), "Should have 2 variable rows after adding a row.");
+        rowsAfterAdd.get(1).$(".btn-remove-var").shouldBe(Condition.visible);
+
+        // 1. Decline confirmation: variable row must NOT be removed
+        Selenide.executeJavaScript("window.confirm = function(msg) { return false; };");
+        rowsAfterAdd.get(1).$(".btn-remove-var").click();
+        final ElementsCollection rowsAfterCancel = $$("#transposedGrid tbody tr");
+        Assertions.assertEquals(2, rowsAfterCancel.size(), "Variable row should remain when confirmation is cancelled.");
+
+        // 2. Accept confirmation: variable row MUST be removed
+        Selenide.executeJavaScript("window.confirm = function(msg) { return true; };");
+        rowsAfterCancel.get(1).$(".btn-remove-var").click();
+
+        final ElementsCollection rowsAfterDelete = $$("#transposedGrid tbody tr");
+        Assertions.assertEquals(1, rowsAfterDelete.size(), "Variable row should be removed when confirmed.");
+    }
+
+    @Test
     public final void testPressEscapeWithCreateModalOpenDoesNotCloseEditor()
     {
         Selenide.open("http://localhost:" + this.port + "/");

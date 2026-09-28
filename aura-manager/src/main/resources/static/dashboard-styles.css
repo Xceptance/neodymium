@@ -3409,7 +3409,8 @@
     white-space: nowrap;
 }
 
-.btn-remove-iteration {
+.btn-remove-iteration,
+.btn-remove-var {
     background: transparent;
     border: none;
     cursor: pointer;
@@ -3423,6 +3424,7 @@
     color: var(--text-secondary);
     opacity: 0.6;
     transition: var(--transition);
+    flex-shrink: 0;
 }
 
 /* Fragment Variables Section Styles */
@@ -3470,7 +3472,8 @@
     opacity: 0.9;
 }
 
-.btn-remove-iteration:hover {
+.btn-remove-iteration:hover,
+.btn-remove-var:hover {
     color: var(--danger, #ef4444);
     background: rgba(239, 68, 68, 0.12);
     opacity: 1;
