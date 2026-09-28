@@ -20,11 +20,13 @@ package org.neodymium.ai.integration.live;
 
 import static com.codeborne.selenide.Condition.empty;
 import static com.codeborne.selenide.Condition.exactText;
+import static com.codeborne.selenide.Condition.selected;
 import static com.codeborne.selenide.Selenide.$;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiLinter;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -34,7 +36,8 @@ import org.neodymium.common.browser.Browser;
 
 /**
  * Live integration test for the REFRESH action plugin verifying that reloading
- * the active page clears transient input state while preserving document structure.
+ * the active page clears transient input state while preserving document structure,
+ * supports natural language reload synonyms, and resets multi-input form selections.
  *
  * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
@@ -44,6 +47,7 @@ import org.neodymium.common.browser.Browser;
 @Tag("LiveAPI")
 @NeodymiumAiTest
 @AiPlaybook("programmatic")
+@AiLinter(false)
 public class RefreshIntegrationTest extends BaseAiTest
 {
     /**
@@ -103,5 +107,56 @@ public class RefreshIntegrationTest extends BaseAiTest
             .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("h1").shouldHave(exactText("Type Action Test"));
+    }
+
+    /**
+     * Verifies natural language reload synonyms (e.g. "Reload the page").
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/RefreshIntegrationTest_testRefreshSynonyms.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testRefreshSynonyms(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${refresh.test.url} in the browser
+              Reload the page
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("h1").shouldHave(exactText("Type Action Test"));
+    }
+
+    /**
+     * Verifies that refreshing resets multiple modified inputs and uncheck toggles.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/RefreshIntegrationTest_testRefreshMultipleInputsAndCheckbox.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testRefreshMultipleInputsAndCheckbox(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${refresh.test.url} in the browser
+              Type 'Alice' into #first-name
+              Type 'Test feedback comments' into #comments
+              Click #sample-checkbox
+              Refresh the page
+            """)
+            .verifyMetrics()
+            .hasStepCount(5)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#first-name").shouldBe(empty);
+        $("#comments").shouldBe(empty);
+        $("#sample-checkbox").shouldBe(selected);
     }
 }

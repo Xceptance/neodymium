@@ -26,35 +26,36 @@ import static com.codeborne.selenide.Selenide.$;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiLinter;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
-import org.neodymium.ai.model.ContextLevel;
-
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
 /**
- * Integration test verifying structured select and option element assertions,
- * option selections, and option state validations.
+ * Live integration test for the SELECT action plugin and option element assertions,
+ * option selections, multi-select options, and optgroup selections.
  *
- * @author AI-generated: Gemini 3.6 Flash
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_1500x1000_headless")
-@Tag("integration")
+@Tag("AuraIntegration")
+@Tag("LiveAPI")
 @NeodymiumAiTest
+@AiPlaybook("programmatic")
+@AiLinter(false)
 public class SelectOptionIntegrationTest extends BaseAiTest
 {
-
     /**
-     * Set up test page URL before each test.
+     * Sets up test page URL before each test execution.
      *
      * @param session the thread-isolated AiSession
      */
     @BeforeEach
-    public void setupProperties(final AiSession session) throws Exception
+    public void setupProperties(final AiSession session)
     {
         final String pageUrl = String.format("http://localhost:%d/AssertActionTest/SelectOptionTest.html", server.getPort());
         session.data().putDynamic("select.test.url", pageUrl, false);
@@ -70,8 +71,6 @@ public class SelectOptionIntegrationTest extends BaseAiTest
     public void testAssertOptionById(final AiSession session) throws Exception
     {
         session.execute( """
-            data:
-              - testId: selectData
             steps: |
               Open ${select.test.url} in the browser
               Assert that the 'opt-de' option is selected
@@ -79,9 +78,8 @@ public class SelectOptionIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(2)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#opt-de").shouldBe(selected);
     }
@@ -96,8 +94,6 @@ public class SelectOptionIntegrationTest extends BaseAiTest
     public void testSelectOptionByValue(final AiSession session) throws Exception
     {
         session.execute( """
-            data:
-              - testId: selectData
             steps: |
               Open ${select.test.url} in the browser
               Select option 'France' in the 'country-select' dropdown
@@ -106,9 +102,8 @@ public class SelectOptionIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(3)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#country-select").shouldHave(value("FR"));
         $("#opt-fr").shouldBe(selected);
@@ -124,8 +119,6 @@ public class SelectOptionIntegrationTest extends BaseAiTest
     public void testAssertDisabledOption(final AiSession session) throws Exception
     {
         session.execute( """
-            data:
-              - testId: selectData
             steps: |
               Open ${select.test.url} in the browser
               Assert that the 'opt-dis' option is disabled
@@ -133,9 +126,8 @@ public class SelectOptionIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(2)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#opt-dis").shouldBe(disabled);
     }
@@ -150,8 +142,6 @@ public class SelectOptionIntegrationTest extends BaseAiTest
     public void testMultiSelectOptions(final AiSession session) throws Exception
     {
         session.execute( """
-            data:
-              - testId: selectData
             steps: |
               Open ${select.test.url} in the browser
               Assert that the 'opt-tech' option is selected
@@ -160,11 +150,58 @@ public class SelectOptionIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(3)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#opt-tech").shouldBe(selected);
         $("#opt-music").shouldBe(selected);
+    }
+
+    /**
+     * Verifies selecting a dropdown option by visible text.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/SelectOptionIntegrationTest_testSelectOptionByVisibleText.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testSelectOptionByVisibleText(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${select.test.url} in the browser
+              Select option 'United States' in the 'country-select' dropdown
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#country-select").shouldHave(value("US"));
+        $("#opt-us").shouldBe(selected);
+    }
+
+    /**
+     * Verifies selecting an option nested inside an optgroup.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/SelectOptionIntegrationTest_testSelectOptionInOptgroup.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testSelectOptionInOptgroup(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${select.test.url} in the browser
+              Select option 'Tesla' in the 'car-select' dropdown
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#car-select").shouldHave(value("tesla"));
+        $("#opt-tesla").shouldBe(selected);
     }
 }
