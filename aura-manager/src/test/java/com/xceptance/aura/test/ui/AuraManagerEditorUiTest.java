@@ -20,6 +20,7 @@ package com.xceptance.aura.test.ui;
 
 import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
+import static com.codeborne.selenide.Selenide.open;
 
 import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
@@ -85,7 +86,7 @@ public final class AuraManagerEditorUiTest
         }
 
         final String[] dirPaths = new String[] { "src/test/resources", "target/test-classes" };
-        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps", "New Step Fragment.steps", "child.steps", "Child.steps" };
+        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps", "New Step Fragment.steps", "child.steps", "Child.steps", "Hierarchical Test.yaml" };
 
         for (final String dirPath : dirPaths)
         {
@@ -950,6 +951,42 @@ public final class AuraManagerEditorUiTest
             }
         }
         Assertions.assertFalse(containsPassFinal, "Variable user_pass should not be added to test data matrix after clicking No.");
+    }
+
+    @Test
+    public final void testHierarchicalStepFragmentsDisplayOnlyFileNames()
+    {
+        open("http://localhost:" + port);
+
+        $("#btnCreateNewYaml").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("Hierarchical Test.yaml");
+        $("#btnModalCreate").shouldBe(Condition.visible).click();
+
+        final SelenideElement toggleBtn = $("#toggleEditorFragmentViewBtn");
+        toggleBtn.shouldBe(Condition.visible);
+
+        Selenide.executeJavaScript("setFileViewMode('hierarchical');");
+
+        final ElementsCollection includeCards = $$("#fragmentCardsContainer .include-card");
+        if (!includeCards.isEmpty())
+        {
+            for (final SelenideElement card : includeCards)
+            {
+                final String dataFile = card.getAttribute("data-file");
+                if (dataFile != null && dataFile.contains("/"))
+                {
+                    final String expectedFileName = dataFile.substring(dataFile.lastIndexOf('/') + 1);
+                    final SelenideElement titleSpan = card.$(".include-title > span:last-child");
+                    Assertions.assertEquals(expectedFileName, titleSpan.getText().trim());
+
+                    final SelenideElement pathDiv = card.$(".include-path");
+                    if (pathDiv.exists())
+                    {
+                        pathDiv.shouldNotBe(Condition.visible);
+                    }
+                }
+            }
+        }
     }
 }
 

@@ -671,6 +671,214 @@ async function submitDeleteTest() {
 }
 window.submitDeleteTest = submitDeleteTest;
 
+function openRenameModal(targetFile) {
+    const fileToRename = targetFile || activeEditingFile;
+    if (!fileToRename) return;
+    const nameDisplay = document.getElementById('renameOldFileNameDisplay');
+    const oldInput = document.getElementById('renameOldFileNameInput');
+    const newInput = document.getElementById('renameNewPathInput');
+    const errDiv = document.getElementById('renameTestError');
+
+    if (nameDisplay) nameDisplay.textContent = fileToRename;
+    if (oldInput) oldInput.value = fileToRename;
+    if (newInput) {
+        newInput.value = fileToRename;
+    }
+    if (errDiv) {
+        errDiv.textContent = '';
+        errDiv.style.display = 'none';
+    }
+    window.pendingRenameFile = fileToRename;
+    const modal = document.getElementById('renameTestModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        if (newInput) {
+            newInput.focus();
+            newInput.select();
+        }
+    }
+}
+window.openRenameModal = openRenameModal;
+
+async function submitRenameTest() {
+    const oldInput = document.getElementById('renameOldFileNameInput');
+    const newInput = document.getElementById('renameNewPathInput');
+    const errDiv = document.getElementById('renameTestError');
+
+    const oldFile = (oldInput && oldInput.value) ? oldInput.value : (window.pendingRenameFile || activeEditingFile);
+    const newPath = (newInput && newInput.value) ? newInput.value.trim() : '';
+
+    if (!oldFile || !newPath) {
+        if (errDiv) {
+            errDiv.textContent = "Please enter a valid target file path.";
+            errDiv.style.display = 'block';
+        }
+        return;
+    }
+
+    if (oldFile === newPath) {
+        const modal = document.getElementById('renameTestModal');
+        if (modal) modal.style.display = 'none';
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `file=${encodeURIComponent(oldFile)}&newPath=${encodeURIComponent(newPath)}`
+        });
+        const data = await res.json();
+        if (data.status === 'SUCCESS') {
+            const actualNewFile = data.newFile || newPath;
+            selectedDatasets.forEach(d => {
+                if (d.file === oldFile) {
+                    d.file = actualNewFile;
+                }
+            });
+
+            const wasActive = (activeEditingFile === oldFile);
+            const modal = document.getElementById('renameTestModal');
+            if (modal) modal.style.display = 'none';
+
+            if (wasActive) {
+                await openYamlEditor(actualNewFile);
+            } else if (typeof loadFiles === 'function') {
+                await loadFiles();
+            }
+
+            const refreshBtn = document.getElementById('refreshFilesBtn');
+            if (refreshBtn) {
+                refreshBtn.click();
+            }
+
+            // For .steps fragment files: always show the "update references" dialog.
+            // For regular YAML test files: just show the rename toast immediately.
+            if (oldFile.toLowerCase().endsWith('.steps')) {
+                openUpdateFragmentRefsModal(oldFile, actualNewFile);
+            } else {
+                showToast(`✏️ Renamed/moved ${oldFile} → ${actualNewFile}`, "success");
+            }
+        } else {
+            if (errDiv) {
+                errDiv.textContent = data.error || "Failed to rename file.";
+                errDiv.style.display = 'block';
+            } else {
+                showToast("Error renaming file: " + (data.error || "Failed to rename file"), "error");
+            }
+        }
+    } catch (e) {
+        if (errDiv) {
+            errDiv.textContent = "Error renaming file: " + e.message;
+            errDiv.style.display = 'block';
+        } else {
+            showToast("Error renaming file: " + e.message, "error");
+        }
+    }
+}
+window.submitRenameTest = submitRenameTest;
+
+/**
+ * Opens the "Update Fragment References" modal after a .steps file was successfully
+ * moved or renamed. Stores the old/new paths for the subsequent API call.
+ *
+ * @param {string} oldPath - old relative fragment path (pre-move)
+ * @param {string} newPath - new relative fragment path (post-move)
+ */
+function openUpdateFragmentRefsModal(oldPath, newPath) {
+    // Persist paths so the submit/skip handlers can read them without DOM coupling.
+    window._pendingFragmentRefUpdate = { oldPath, newPath };
+
+    const oldEl = document.getElementById('fragmentRefOldPath');
+    const newEl = document.getElementById('fragmentRefNewPath');
+    const errEl = document.getElementById('updateFragmentRefsError');
+    const submitBtn = document.getElementById('submitFragmentRefsBtn');
+
+    if (oldEl) oldEl.textContent = oldPath;
+    if (newEl) newEl.textContent = newPath;
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update References'; }
+
+    const modal = document.getElementById('updateFragmentRefsModal');
+    if (modal) modal.style.display = 'flex';
+}
+window.openUpdateFragmentRefsModal = openUpdateFragmentRefsModal;
+
+/**
+ * Closes the "Update Fragment References" modal without calling the backend.
+ * Shows the standard rename success toast so the user still sees the result.
+ */
+function skipFragmentRefsUpdate() {
+    const modal = document.getElementById('updateFragmentRefsModal');
+    if (modal) modal.style.display = 'none';
+
+    const pending = window._pendingFragmentRefUpdate;
+    if (pending) {
+        showToast(`✏️ Renamed/moved ${pending.oldPath} → ${pending.newPath}`, "success");
+        window._pendingFragmentRefUpdate = null;
+    }
+}
+window.skipFragmentRefsUpdate = skipFragmentRefsUpdate;
+
+/**
+ * Calls POST /api/update-fragment-refs with the stored old/new fragment paths.
+ * Shows a spinner on the button while the request is in flight and logs the
+ * list of updated files to the browser console.
+ */
+async function submitUpdateFragmentRefs() {
+    const pending = window._pendingFragmentRefUpdate;
+    if (!pending) return;
+
+    const { oldPath, newPath } = pending;
+    const submitBtn = document.getElementById('submitFragmentRefsBtn');
+    const errEl = document.getElementById('updateFragmentRefsError');
+
+    // Enter loading state.
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '⏳ Updating…'; }
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+
+    try {
+        const res = await fetch('/api/update-fragment-refs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `oldPath=${encodeURIComponent(oldPath)}&newPath=${encodeURIComponent(newPath)}`
+        });
+        const data = await res.json();
+
+        if (data.status === 'SUCCESS') {
+            const count = data.updatedFileCount ?? 0;
+            const files = data.updatedFiles ?? [];
+            console.log('[Fragment Refs] Updated files:', files);
+
+            const modal = document.getElementById('updateFragmentRefsModal');
+            if (modal) modal.style.display = 'none';
+            window._pendingFragmentRefUpdate = null;
+
+            // Show rename toast and update count together.
+            showToast(
+                `✏️ Renamed/moved ${oldPath} → ${newPath}` +
+                (count > 0 ? ` · ✅ ${count} file(s) updated` : ' · ℹ️ No references found'),
+                "success"
+            );
+        } else {
+            // Restore button and show error inline.
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update References'; }
+            if (errEl) {
+                errEl.textContent = data.error || 'Failed to update fragment references.';
+                errEl.style.display = 'block';
+            }
+        }
+    } catch (e) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update References'; }
+        if (errEl) {
+            errEl.textContent = 'Error: ' + e.message;
+            errEl.style.display = 'block';
+        }
+    }
+}
+window.submitUpdateFragmentRefs = submitUpdateFragmentRefs;
+
+
 function closeEditor(force = false) {
     if (!force && typeof isEditorDirty === 'function' && isEditorDirty()) {
         showUnsavedChangesPrompt(

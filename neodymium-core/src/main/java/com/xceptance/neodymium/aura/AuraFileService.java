@@ -26,6 +26,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -35,6 +37,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
@@ -605,6 +608,160 @@ public final class AuraFileService
             return true;
         }
         return false;
+    }
+
+    public boolean renameOrMoveFile(final String oldRelativePath, final String newRelativePath) throws IOException
+    {
+        if (oldRelativePath == null || oldRelativePath.isBlank() || newRelativePath == null || newRelativePath.isBlank())
+        {
+            return false;
+        }
+
+        final File oldFile = resolveCanonicalFile(oldRelativePath);
+        if (!oldFile.exists() || !oldFile.isFile())
+        {
+            return false;
+        }
+
+        final String oldLower = oldRelativePath.toLowerCase();
+        final String rawTarget = newRelativePath.trim().replace('\\', '/');
+        final String targetPath;
+        if (!rawTarget.toLowerCase().endsWith(".yaml") && !rawTarget.toLowerCase().endsWith(".yml") && !rawTarget.toLowerCase().endsWith(".steps"))
+        {
+            if (oldLower.endsWith(".steps"))
+            {
+                targetPath = rawTarget + ".steps";
+            }
+            else if (oldLower.endsWith(".yml"))
+            {
+                targetPath = rawTarget + ".yml";
+            }
+            else
+            {
+                targetPath = rawTarget + ".yaml";
+            }
+        }
+        else
+        {
+            targetPath = rawTarget;
+        }
+
+        final File resourcesDir = getResourcesDirectory().getCanonicalFile();
+        final File newFile = new File(resourcesDir, targetPath).getCanonicalFile();
+        if (!newFile.getPath().startsWith(resourcesDir.getPath()))
+        {
+            throw new SecurityException("Access denied: Directory traversal detected");
+        }
+
+        if (newFile.exists())
+        {
+            throw new IllegalArgumentException("Destination file already exists: " + targetPath);
+        }
+
+        if (newFile.getParentFile() != null && !newFile.getParentFile().exists())
+        {
+            newFile.getParentFile().mkdirs();
+        }
+
+        Files.move(oldFile.toPath(), newFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+
+        if (oldRelativePath.equals(activeEditingFile))
+        {
+            activeEditingFile = targetPath;
+        }
+        if (expandedFiles.contains(oldRelativePath))
+        {
+            expandedFiles.remove(oldRelativePath);
+            expandedFiles.add(targetPath);
+        }
+
+        return true;
+    }
+
+    /**
+     * Immutable result returned by {@link #updateFragmentReferences(String, String)}.
+     *
+     * @param updatedFileCount the number of YAML files whose content was modified
+     * @param updatedFiles     relative paths of every file that was actually updated
+     */
+    public record UpdateFragmentRefsResult(int updatedFileCount, List<String> updatedFiles)
+    {
+    }
+
+    /**
+     * Scans all {@code .yaml} and {@code .yml} files under the resources directory and
+     * replaces any occurrence of {@code oldFragmentPath} with {@code newFragmentPath}
+     * inside their text content (covers both {@code _include:} values and inline
+     * fragment path strings). Each modified file is written back atomically and an
+     * {@code INFO}-level log entry is emitted so operators can trace what was changed.
+     *
+     * <p>The check is a plain case-sensitive string match, intentionally avoiding YAML
+     * parsing so that even malformed or comment-only files are handled gracefully.
+     *
+     * @param oldFragmentPath relative path of the fragment before the move (e.g. {@code fragments/login.steps})
+     * @param newFragmentPath relative path of the fragment after the move  (e.g. {@code auth/login.steps})
+     * @return an {@link UpdateFragmentRefsResult} with the count and list of updated files
+     * @throws IOException if walking the directory or reading/writing a file fails
+     */
+    public UpdateFragmentRefsResult updateFragmentReferences(
+            final String oldFragmentPath,
+            final String newFragmentPath) throws IOException
+    {
+        if (oldFragmentPath == null || oldFragmentPath.isBlank()
+                || newFragmentPath == null || newFragmentPath.isBlank())
+        {
+            LOGGER.warn("[Fragment Refs] updateFragmentReferences called with blank path(s); skipping.");
+            return new UpdateFragmentRefsResult(0, List.of());
+        }
+
+        if (oldFragmentPath.equals(newFragmentPath))
+        {
+            LOGGER.debug("[Fragment Refs] Old and new paths are identical ({}); nothing to update.", oldFragmentPath);
+            return new UpdateFragmentRefsResult(0, List.of());
+        }
+
+        final File resourcesDir = getResourcesDirectory().getCanonicalFile();
+        LOGGER.info("[Fragment Refs] Scanning '{}' for references to '{}' → '{}'",
+                resourcesDir.getPath(), oldFragmentPath, newFragmentPath);
+
+        final List<String> updatedFiles = new ArrayList<>();
+
+        // Walk all YAML / YML files; .steps files are not expected to include each other
+        // but are included in the scan for completeness.
+        try (final Stream<Path> paths = Files.walk(resourcesDir.toPath()))
+        {
+            final List<Path> candidateFiles = paths
+                    .filter(Files::isRegularFile)
+                    .filter(p ->
+                    {
+                        final String name = p.getFileName().toString().toLowerCase();
+                        return name.endsWith(".yaml") || name.endsWith(".yml");
+                    })
+                    .toList();
+
+            for (final Path candidate : candidateFiles)
+            {
+                final String original = Files.readString(candidate, StandardCharsets.UTF_8);
+                if (!original.contains(oldFragmentPath))
+                {
+                    // Fast-path: no reference present — skip without rewriting.
+                    continue;
+                }
+
+                final String updated = original.replace(oldFragmentPath, newFragmentPath);
+                Files.writeString(candidate, updated, StandardCharsets.UTF_8);
+
+                final String relativePath = resourcesDir.toURI()
+                        .relativize(candidate.toUri())
+                        .getPath();
+                updatedFiles.add(relativePath);
+                LOGGER.info("[Fragment Refs] Updated reference in: {}  ('{}' → '{}')",
+                        relativePath, oldFragmentPath, newFragmentPath);
+            }
+        }
+
+        LOGGER.info("[Fragment Refs] Finished. {} file(s) updated.", updatedFiles.size());
+        return new UpdateFragmentRefsResult(updatedFiles.size(), List.copyOf(updatedFiles));
     }
 
     @SuppressWarnings("unchecked")

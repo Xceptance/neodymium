@@ -69,6 +69,7 @@
                     onclick="saveYamlFile()">
                 <span class="material-symbols-outlined">save</span> Save
             </button>
+            <button class="btn-editor" id="renameTestBtn" onclick="openRenameModal()"><span class="material-symbols-outlined">drive_file_rename_outline</span> Rename / Move</button>
             <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><span class="material-symbols-outlined">delete</span> Delete</button>
             <button class="btn-editor" 
                     hx-post="/api/editor/close" 
@@ -494,6 +495,7 @@
             updateFragmentVariablesList();
         }
         /*]]>*/
+    </script>
     <!-- Non-blocking Variable Prompt Dialog Container -->
     <div id="varPromptContainer" class="var-prompt-container"></div>
 </div>

@@ -352,9 +352,25 @@ function organizeContainerView(container, itemSelector, mode) {
         items.forEach(item => {
             const filePath = item.getAttribute('data-file');
             if (filePath) {
-                const labelSpan = item.querySelector('.item-main > span[style*="font-weight"], .include-path');
+                const parts = filePath.split('/');
+                const fileName = parts[parts.length - 1];
+
+                const labelSpan = item.querySelector('.item-main > span[style*="font-weight"]');
                 if (labelSpan && labelSpan.textContent !== filePath) {
                     labelSpan.textContent = filePath;
+                }
+
+                const cardTitleSpan = item.querySelector('.include-title > span:last-child');
+                if (cardTitleSpan && cardTitleSpan.textContent !== fileName) {
+                    cardTitleSpan.textContent = fileName;
+                }
+
+                const pathDiv = item.querySelector('.include-path');
+                if (pathDiv) {
+                    pathDiv.style.display = '';
+                    if (pathDiv.textContent !== filePath) {
+                        pathDiv.textContent = filePath;
+                    }
                 }
             }
             container.appendChild(item);
@@ -375,15 +391,26 @@ function organizeContainerView(container, itemSelector, mode) {
         }
 
         const parts = filePath.split('/');
-        if (parts.length <= 1) {
-            rootItems.push(item);
-            return;
-        }
-
         const fileName = parts[parts.length - 1];
+
         const labelSpan = item.querySelector('.item-main > span[style*="font-weight"]');
         if (labelSpan) {
             labelSpan.textContent = fileName;
+        }
+
+        const cardTitleSpan = item.querySelector('.include-title > span:last-child');
+        if (cardTitleSpan) {
+            cardTitleSpan.textContent = fileName;
+        }
+
+        const pathDiv = item.querySelector('.include-path');
+        if (pathDiv) {
+            pathDiv.style.display = 'none';
+        }
+
+        if (parts.length <= 1) {
+            rootItems.push(item);
+            return;
         }
 
         let currentPath = '';
@@ -719,15 +746,17 @@ function init() {
     document.addEventListener('htmx:afterSwap', function(evt) {
         onEditorPanelSwapped(evt);
         if (evt.detail && evt.detail.target) {
-            if (evt.detail.target.id === 'yamlFileList') {
-                const scrollPos = savedYamlFileListScrollTop;
-                evt.detail.target.scrollTop = scrollPos;
-                requestAnimationFrame(() => {
-                    if (evt.detail.target) {
-                        evt.detail.target.scrollTop = scrollPos;
-                    }
-                });
-                if (typeof syncCheckboxesFromState === 'function') syncCheckboxesFromState();
+            if (evt.detail.target.id === 'yamlFileList' || evt.detail.target.id === 'editorPanel' || evt.detail.target.querySelector('#fragmentCardsContainer')) {
+                if (evt.detail.target.id === 'yamlFileList') {
+                    const scrollPos = savedYamlFileListScrollTop;
+                    evt.detail.target.scrollTop = scrollPos;
+                    requestAnimationFrame(() => {
+                        if (evt.detail.target) {
+                            evt.detail.target.scrollTop = scrollPos;
+                        }
+                    });
+                    if (typeof syncCheckboxesFromState === 'function') syncCheckboxesFromState();
+                }
                 applyFileViewMode();
             } else if (evt.detail.target.id === 'configPanel') {
                 const browserScroll = document.getElementById('browserProfilesScrollContainer');

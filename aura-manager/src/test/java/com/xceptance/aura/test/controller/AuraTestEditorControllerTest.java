@@ -274,4 +274,32 @@ public class AuraTestEditorControllerTest
         Assertions.assertEquals(List.of("neodymium.url", "username"), model.getAttribute("includeVars"));
         Assertions.assertEquals(Map.of("neodymium.url", "defined", "username", "required"), model.getAttribute("includeVarScopes"));
     }
+
+    @Test
+    public void testRenameFileSuccess() throws Exception
+    {
+        Mockito.when(fileService.renameOrMoveFile("old.yaml", "new.yaml")).thenReturn(true);
+        Mockito.when(fileService.getActiveEditingFile()).thenReturn("new.yaml");
+
+        final ResponseEntity<Map<String, Object>> response = controller.renameFile("old.yaml", "new.yaml", null);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("SUCCESS", response.getBody().get("status"));
+        Assertions.assertEquals("old.yaml", response.getBody().get("oldFile"));
+        Assertions.assertEquals("new.yaml", response.getBody().get("newFile"));
+    }
+
+    @Test
+    public void testRenameFileError() throws Exception
+    {
+        Mockito.when(fileService.renameOrMoveFile("old.yaml", "exists.yaml")).thenThrow(new IllegalArgumentException("Destination file already exists: exists.yaml"));
+
+        final ResponseEntity<Map<String, Object>> response = controller.renameFile("old.yaml", "exists.yaml", null);
+
+        Assertions.assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("ERROR", response.getBody().get("status"));
+        Assertions.assertEquals("Destination file already exists: exists.yaml", response.getBody().get("error"));
+    }
 }

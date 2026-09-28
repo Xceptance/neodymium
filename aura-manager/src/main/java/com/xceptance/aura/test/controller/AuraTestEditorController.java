@@ -298,6 +298,189 @@ public class AuraTestEditorController
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/api/rename")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> renameFile(
+            @RequestParam(value = "file", required = false) final String fileParam,
+            @RequestParam(value = "newPath", required = false) final String newPathParam,
+            final HttpServletRequest request)
+    {
+        String oldPath = fileParam;
+        String newPath = newPathParam;
+
+        if ((oldPath == null || oldPath.isBlank()) && request != null)
+        {
+            oldPath = request.getParameter("file");
+        }
+        if ((newPath == null || newPath.isBlank()) && request != null)
+        {
+            newPath = request.getParameter("newPath");
+            if (newPath == null || newPath.isBlank())
+            {
+                newPath = request.getParameter("newName");
+            }
+        }
+
+        if ((oldPath == null || oldPath.isBlank() || newPath == null || newPath.isBlank()) && request != null && request.getContentType() != null && request.getContentType().contains("application/json"))
+        {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> body = objectMapper.readValue(request.getInputStream(), Map.class);
+                if (body != null)
+                {
+                    if (oldPath == null || oldPath.isBlank())
+                    {
+                        oldPath = String.valueOf(body.get("file"));
+                    }
+                    if (newPath == null || newPath.isBlank())
+                    {
+                        newPath = body.containsKey("newPath") ? String.valueOf(body.get("newPath")) : String.valueOf(body.get("newName"));
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not parse JSON payload for renameFile", e);
+            }
+        }
+
+        final Map<String, Object> response = new HashMap<>();
+        if (oldPath == null || oldPath.isBlank() || newPath == null || newPath.isBlank())
+        {
+            response.put("status", "ERROR");
+            response.put("error", "Both source file and target file path must be specified.");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        try
+        {
+            final boolean success = fileService.renameOrMoveFile(oldPath, newPath);
+            if (success)
+            {
+                response.put("status", "SUCCESS");
+                response.put("oldFile", oldPath);
+                response.put("newFile", fileService.getActiveEditingFile() != null && !fileService.getActiveEditingFile().isEmpty() ? fileService.getActiveEditingFile() : newPath);
+                return ResponseEntity.ok(response);
+            }
+            else
+            {
+                response.put("status", "ERROR");
+                response.put("error", "Source file does not exist or could not be renamed.");
+                return ResponseEntity.badRequest().body(response);
+            }
+        }
+        catch (final IllegalArgumentException e)
+        {
+            LOGGER.warn("Rename failed for '{}' -> '{}': {}", oldPath, newPath, e.getMessage());
+            response.put("status", "ERROR");
+            response.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(response);
+        }
+        catch (final SecurityException e)
+        {
+            LOGGER.error("Access denied during rename operation '{}' -> '{}'", oldPath, newPath, e);
+            response.put("status", "ERROR");
+            response.put("error", e.getMessage());
+            return ResponseEntity.status(403).body(response);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to rename file '{}' to '{}'", oldPath, newPath, e);
+            response.put("status", "ERROR");
+            response.put("error", "Failed to rename file: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+    /**
+     * Updates {@code _include:} references (and any other occurrences of the fragment path)
+     * in all YAML test files after a fragment has been moved or renamed.
+     *
+     * <p>The dialog is shown unconditionally on the frontend after every fragment move/rename;
+     * this endpoint is called only when the user chooses to update references.</p>
+     *
+     * @param oldPathParam the old (pre-move) relative fragment path
+     * @param newPathParam the new (post-move) relative fragment path
+     * @param request      raw HTTP request used as fallback for JSON body parsing
+     * @return JSON with {@code status}, {@code updatedFileCount}, and {@code updatedFiles}
+     */
+    @PostMapping("/api/update-fragment-refs")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> updateFragmentRefs(
+            @RequestParam(value = "oldPath", required = false) final String oldPathParam,
+            @RequestParam(value = "newPath", required = false) final String newPathParam,
+            final HttpServletRequest request)
+    {
+        String oldPath = oldPathParam;
+        String newPath = newPathParam;
+
+        // Fallback 1: raw servlet parameters
+        if ((oldPath == null || oldPath.isBlank()) && request != null)
+        {
+            oldPath = request.getParameter("oldPath");
+        }
+        if ((newPath == null || newPath.isBlank()) && request != null)
+        {
+            newPath = request.getParameter("newPath");
+        }
+
+        // Fallback 2: JSON body
+        if ((oldPath == null || oldPath.isBlank() || newPath == null || newPath.isBlank())
+                && request != null
+                && request.getContentType() != null
+                && request.getContentType().contains("application/json"))
+        {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> body = objectMapper.readValue(request.getInputStream(), Map.class);
+                if (body != null)
+                {
+                    if (oldPath == null || oldPath.isBlank())
+                    {
+                        oldPath = String.valueOf(body.get("oldPath"));
+                    }
+                    if (newPath == null || newPath.isBlank())
+                    {
+                        newPath = String.valueOf(body.get("newPath"));
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not parse JSON payload for updateFragmentRefs", e);
+            }
+        }
+
+        final Map<String, Object> response = new HashMap<>();
+        if (oldPath == null || oldPath.isBlank() || newPath == null || newPath.isBlank())
+        {
+            response.put("status", "ERROR");
+            response.put("error", "Both oldPath and newPath must be specified.");
+            return ResponseEntity.badRequest().body(response);
+        }
+
+        try
+        {
+            LOGGER.info("Fragment reference update requested: '{}' -> '{}'", oldPath, newPath);
+            final AuraFileService.UpdateFragmentRefsResult result =
+                    fileService.updateFragmentReferences(oldPath, newPath);
+            response.put("status", "SUCCESS");
+            response.put("updatedFileCount", result.updatedFileCount());
+            response.put("updatedFiles", result.updatedFiles());
+            return ResponseEntity.ok(response);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to update fragment references '{}' -> '{}'", oldPath, newPath, e);
+            response.put("status", "ERROR");
+            response.put("error", "Failed to update fragment references: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(response);
+        }
+    }
+
+
     @PostMapping("/api/editor/close")
     @ResponseBody
     public ResponseEntity<Map<String, Object>> closeEditor()
