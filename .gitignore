@@ -40,7 +40,7 @@ aura-allure-results-temp/
 .gemini/
 .specify/
 .vscode/
-specs/
+/specs/
 
 newTickets.txt
 neodymium.code-workspace
@@ -68,7 +68,6 @@ chat-history/
 # Neodymium Aura Manager sandbox folders
 **/src/test/java/com/xceptance/neodymium/aura/sandbox/
 target/aura-sandbox/
-
 # Neodymium Aura storage and runtime database
 storage/
 data/

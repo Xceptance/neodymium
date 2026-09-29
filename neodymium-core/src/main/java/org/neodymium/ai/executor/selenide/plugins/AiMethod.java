@@ -25,9 +25,11 @@ import java.lang.annotation.Target;
 /**
  * Marks a public method (static or instance) as eligible for AI invocation via the {@code JAVA_METHOD} action plugin.
  *
+ * @deprecated Use {@link org.neodymium.ai.tool.Tool} instead for unified schema-driven tool execution.
  * @author AI-generated: Gemini 2.5 Pro
  * @author Xceptance GmbH 2026
  */
+@Deprecated(since = "5.6.0", forRemoval = true)
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface AiMethod

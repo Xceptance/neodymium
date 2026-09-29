@@ -297,4 +297,27 @@ public class DefaultActionSanitizerTest
         Assertions.assertEquals("${email}", sanitizedEmail.getValues().get(0));
         Assertions.assertEquals("${password}", sanitizedPassword.getValues().get(0));
     }
+
+    @Test
+    public void testSanitizeStoreActionDoesNotSelfReferenceTargetVariable()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("customOrder", "ORD-987654", false);
+
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+        final Action storeAction = new Action(
+            "STORE",
+            "",
+            List.of("customOrder", "ORD-987654"),
+            "Store ORD-987654 into variable customOrder",
+            "Reasoning"
+        );
+
+        final Action sanitized = sanitizer.sanitize(storeAction, sessionData);
+
+        Assertions.assertEquals("customOrder", sanitized.getValues().get(0));
+        Assertions.assertEquals("ORD-987654", sanitized.getValues().get(1),
+            "STORE literal value must not be replaced with self-referential placeholder ${customOrder}");
+    }
 }

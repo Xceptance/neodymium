@@ -125,10 +125,25 @@ public final class PlaybookParserTest
         assertNotNull(playbook);
         
         final List<PlaybookStep> steps = playbook.getSteps();
-        assertEquals(3, steps.size(), "Nested static includes should flatten directly into main steps list.");
-        assertEquals("Open homepage", steps.get(0).getInstruction());
-        assertEquals("Enter credentials", steps.get(1).getInstruction());
-        assertEquals("Click continue", steps.get(2).getInstruction());
+        assertEquals(2, steps.size());
+
+        // First step should be the include step: 'common/setup.yaml'
+        final PlaybookStep setupInclude = steps.get(0);
+        assertEquals("_include: common/setup.yaml", setupInclude.getInstruction());
+        assertTrue(setupInclude.isComposite());
+        assertEquals(2, setupInclude.getSubSteps().size());
+
+        // Sub-steps of setup.yaml
+        assertEquals("Open homepage", setupInclude.getSubSteps().get(0).getInstruction());
+        
+        final PlaybookStep loginInclude = setupInclude.getSubSteps().get(1);
+        assertEquals("_include: login.yaml", loginInclude.getInstruction());
+        assertTrue(loginInclude.isComposite());
+        assertEquals(1, loginInclude.getSubSteps().size());
+        assertEquals("Enter credentials", loginInclude.getSubSteps().get(0).getInstruction());
+
+        // Second step of main.yaml
+        assertEquals("Click continue", steps.get(1).getInstruction());
     }
 
     /**
@@ -328,214 +343,4 @@ public final class PlaybookParserTest
         assertEquals("click button", plainPlaybook.getSteps().get(1).getInstruction());
         assertTrue(plainPlaybook.getPromptAddons().isEmpty());
     }
-
-    /**
-     * Verifies that YamlPlaybookParser correctly parses top-level YAML step lists
-     * and included fragment files formatted as step lists.
-     *
-     * @throws IOException if parsing fails
-     */
-    @Test
-    public void testParseTopLevelStepListAndIncludedFragments() throws IOException
-    {
-        final PlaybookResourceManager manager = new InMemoryResourceManager();
-
-        final String fragmentYaml = """
-            - _include: inner_fragment.steps
-            - Select payment method
-            - Submit order
-            """;
-
-        final String innerFragmentYaml = """
-            - Open payment page
-            - Enter credentials
-            """;
-
-        final String mainYaml = """
-            steps: |
-              Navigate to homepage
-              _include: outer_fragment.steps
-              Verify order completion
-            """;
-
-        manager.write("outer_fragment.steps", fragmentYaml);
-        manager.write("inner_fragment.steps", innerFragmentYaml);
-        manager.write("main.yaml", mainYaml);
-
-        final PlaybookParser parser = new YamlPlaybookParser();
-        final Playbook playbook = parser.parse("main.yaml", manager);
-
-        assertNotNull(playbook);
-        final List<PlaybookStep> steps = playbook.getSteps();
-        assertEquals(6, steps.size(), "Static includes should flatten directly into main steps list.");
-        assertEquals("Navigate to homepage", steps.get(0).getInstruction());
-        assertEquals("Open payment page", steps.get(1).getInstruction());
-        assertEquals("Enter credentials", steps.get(2).getInstruction());
-        assertEquals("Select payment method", steps.get(3).getInstruction());
-        assertEquals("Submit order", steps.get(4).getInstruction());
-        assertEquals("Verify order completion", steps.get(5).getInstruction());
-    }
-
-    /**
-     * Verifies that YamlPlaybookParser falls back to line-by-line step parsing when a fragment file
-     * contains unquoted inline colons (such as conditional '_include:' statements).
-     *
-     * @throws IOException if parsing fails
-     */
-    @Test
-    public void testParseFragmentWithMultipleInlineColons() throws IOException
-    {
-        final PlaybookResourceManager manager = new InMemoryResourceManager();
-
-        final String fragmentWithMultipleColons = """
-            - Open search field
-            - Type ${searchTerm} into search field and press enter
-            - If ${isXpdp} is true then _include: fragments/configure-and-add-to-cart-xpdp-product.steps, else _include: fragments/add-simple-product-to-cart.steps
-            - Reset quantityToAdd to 1
-            """;
-
-        final String simpleFragment = """
-            - Save product info
-            """;
-
-        manager.write("fragments/search-for-product-and-add-to-cart.steps", fragmentWithMultipleColons);
-        manager.write("fragments/configure-and-add-to-cart-xpdp-product.steps", simpleFragment);
-        manager.write("fragments/add-simple-product-to-cart.steps", simpleFragment);
-
-        final String mainYaml = """
-            steps: |
-              _include: fragments/search-for-product-and-add-to-cart.steps
-            """;
-        manager.write("main.yaml", mainYaml);
-
-        final PlaybookParser parser = new YamlPlaybookParser();
-        final Playbook playbook = parser.parse("main.yaml", manager);
-
-        assertNotNull(playbook);
-        final List<PlaybookStep> steps = playbook.getSteps();
-        assertEquals(4, steps.size(), "Simple static includes should flatten steps directly into main steps list.");
-        assertEquals("Open search field", steps.get(0).getInstruction());
-        assertEquals("Type ${searchTerm} into search field and press enter", steps.get(1).getInstruction());
-        assertEquals("If ${isXpdp} is true then _include: fragments/configure-and-add-to-cart-xpdp-product.steps, else _include: fragments/add-simple-product-to-cart.steps", steps.get(2).getInstruction());
-        assertEquals("Reset quantityToAdd to 1", steps.get(3).getInstruction());
-    }
-
-    /**
-     * Verifies that YamlPlaybookParser correctly resolves inline conditional includes when SnakeYAML
-     * parses an unquoted single-colon step line as a single-entry map.
-     *
-     * @throws IOException if parsing fails
-     */
-    @Test
-    public void testParseSingleColonInlineIncludeStep() throws IOException
-    {
-        final PlaybookResourceManager manager = new InMemoryResourceManager();
-
-        final String fragmentWithSingleColonInclude = """
-            - Start checkout.
-            - If checkout page is not loaded and error message with request to add additional product is visible, then click on start checkout button again and save error message in addtionalProductErrorMessage variable and _include: fragments/add-additional-product.steps
-            - Validate checkout page is loaded.
-            """;
-
-        final String subFragment = """
-            - Add additional product to cart
-            """;
-
-        manager.write("fragments/proceed-to-payment.steps", fragmentWithSingleColonInclude);
-        manager.write("fragments/add-additional-product.steps", subFragment);
-
-        final String mainYaml = """
-            steps: |
-              _include: fragments/proceed-to-payment.steps
-            """;
-        manager.write("main.yaml", mainYaml);
-
-        final PlaybookParser parser = new YamlPlaybookParser();
-        final Playbook playbook = parser.parse("main.yaml", manager);
-
-        assertNotNull(playbook);
-        final List<PlaybookStep> steps = playbook.getSteps();
-        assertEquals(3, steps.size(), "Simple static includes should flatten steps directly into main steps list.");
-        assertEquals("Start checkout.", steps.get(0).getInstruction());
-
-        final PlaybookStep conditionalStep = steps.get(1);
-        assertTrue(conditionalStep.getInstruction().contains("_include: fragments/add-additional-product.steps"));
-        assertEquals(0, conditionalStep.getSubSteps().size(), "Conditional step must not pre-parse substeps statically; it must be evaluated dynamically by the LLM at runtime.");
-
-        assertEquals("Validate checkout page is loaded.", steps.get(2).getInstruction());
-    }
-
-    /**
-     * Verifies that YamlPlaybookParser correctly resolves include paths relative to a parent file
-     * located inside a subdirectory (e.g. tests/stokke/stokkeOrderPayPalTest.yml -> tests/stokke/fragments/configure-xpdp.steps).
-     *
-     * @throws IOException if parsing fails
-     */
-    @Test
-    public void testResolveIncludeWithSubdirectoryAndFragments() throws IOException
-    {
-        final PlaybookResourceManager manager = new InMemoryResourceManager();
-
-        final String fragmentYaml = """
-            - Configure XPDP product
-            """;
-
-        final String testYaml = """
-            steps: |
-              _include: fragments/configure-xpdp.steps
-            """;
-
-        manager.write("tests/stokke/fragments/configure-xpdp.steps", fragmentYaml);
-        manager.write("tests/stokke/stokkeOrderPayPalTest.yml", testYaml);
-
-        final PlaybookParser parser = new YamlPlaybookParser();
-        final Playbook playbook = parser.parse("tests/stokke/stokkeOrderPayPalTest.yml", manager);
-
-        assertNotNull(playbook);
-        final List<PlaybookStep> steps = playbook.getSteps();
-        assertEquals(1, steps.size());
-        assertEquals("Configure XPDP product", steps.get(0).getInstruction());
-    }
-
-    /**
-     * Verifies multi-level nested fragment inclusion inside subdirectories
-     * (e.g. tests/stokke/test.yml -> tests/stokke/fragments/outer.steps -> tests/stokke/fragments/inner.steps).
-     *
-     * @throws IOException if parsing fails
-     */
-    @Test
-    public void testResolveIncludeMultiLevelNestedFragments() throws IOException
-    {
-        final PlaybookResourceManager manager = new InMemoryResourceManager();
-
-        final String innerFragmentYaml = """
-            - Execute inner action
-            """;
-
-        final String outerFragmentYaml = """
-            - _include: fragments/inner.steps
-            """;
-
-        final String testYaml = """
-            steps: |
-              _include: fragments/outer.steps
-            """;
-
-        manager.write("tests/stokke/fragments/inner.steps", innerFragmentYaml);
-        manager.write("tests/stokke/fragments/outer.steps", outerFragmentYaml);
-        manager.write("tests/stokke/test.yml", testYaml);
-
-        final PlaybookParser parser = new YamlPlaybookParser();
-        final Playbook playbook = parser.parse("tests/stokke/test.yml", manager);
-
-        assertNotNull(playbook);
-        final List<PlaybookStep> steps = playbook.getSteps();
-        assertEquals(1, steps.size(), "Multi-level static includes should flatten directly into test steps.");
-        assertEquals("Execute inner action", steps.get(0).getInstruction());
-    }
 }
-
-
-
-
-

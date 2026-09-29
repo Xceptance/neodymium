@@ -19,8 +19,10 @@
 package org.neodymium.ai.playbook;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import org.junit.jupiter.api.Test;
@@ -113,8 +115,7 @@ public class YamlPlaybookParserTest
     {
         final String yamlContent = """
             steps:
-              - invalid_key1: "some value"
-                invalid_key2: "another value"
+              - invalid_key: "some value"
             """;
 
         final InMemoryResourceManager manager = new InMemoryResourceManager();
@@ -125,7 +126,7 @@ public class YamlPlaybookParserTest
             parser.parse("invalid-map-playbook.yaml", manager);
         });
 
-        assertEquals("Invalid playbook step format in file: invalid-map-playbook.yaml. Expected string step, 'include' map, or 'instruction' map, but found map keys: [invalid_key1, invalid_key2]", ex.getMessage());
+        assertEquals("Invalid playbook step format in file: invalid-map-playbook.yaml. Expected string step, 'include' map, or 'instruction' map, but found map keys: [invalid_key]", ex.getMessage());
     }
 
     @Test
@@ -334,11 +335,20 @@ public class YamlPlaybookParserTest
         final Playbook playbook = parser.parse("main.yaml", manager);
 
         assertNotNull(playbook);
-        assertEquals(4, playbook.getSteps().size(), "Static includes in before/after blocks should flatten steps directly into main steps list.");
-        assertEquals("Setup step 1", playbook.getSteps().get(0).getInstruction());
-        assertEquals("Setup step 2", playbook.getSteps().get(1).getInstruction());
-        assertEquals("Main step", playbook.getSteps().get(2).getInstruction());
-        assertEquals("Teardown step 1", playbook.getSteps().get(3).getInstruction());
+        assertEquals(3, playbook.getSteps().size());
+
+        final PlaybookStep beforeInclude = playbook.getSteps().get(0);
+        assertEquals("_include: setup.yaml", beforeInclude.getInstruction());
+        assertEquals(2, beforeInclude.getSubSteps().size());
+        assertEquals("Setup step 1", beforeInclude.getSubSteps().get(0).getInstruction());
+        assertEquals("Setup step 2", beforeInclude.getSubSteps().get(1).getInstruction());
+
+        assertEquals("Main step", playbook.getSteps().get(1).getInstruction());
+
+        final PlaybookStep afterInclude = playbook.getSteps().get(2);
+        assertEquals("_include: teardown.yaml", afterInclude.getInstruction());
+        assertEquals(1, afterInclude.getSubSteps().size());
+        assertEquals("Teardown step 1", afterInclude.getSubSteps().get(0).getInstruction());
     }
 
     @Test
@@ -416,23 +426,180 @@ public class YamlPlaybookParserTest
     }
 
     @Test
-    public void testParseConditionalIncludePreservesAsDynamicStep() throws IOException
+    public void testParseGroupedStepsMultilineBlock() throws IOException
     {
         final String yamlContent = """
-            steps:
-              - "If the product has xpdp configurator features then _include: fragments/configure-xpdp.steps, else _include: fragments/add-simple.steps"
+            steps: |
+              1. Open demo store homepage
+              Add first product to cart:
+                - Locate the first product card and hover over it
+                - Click its 'Add to Cart' button
+                - When this string '${testId}' is not equal 'bad', click the size 'S'
+              Verify cart count is '1'
             """;
 
         final InMemoryResourceManager manager = new InMemoryResourceManager();
-        manager.write("conditional-include-playbook.yaml", yamlContent);
+        manager.write("grouped-multiline.yaml", yamlContent);
 
         final YamlPlaybookParser parser = new YamlPlaybookParser();
-        final Playbook playbook = parser.parse("conditional-include-playbook.yaml", manager);
+        final Playbook playbook = parser.parse("grouped-multiline.yaml", manager);
 
         assertNotNull(playbook);
-        assertEquals(1, playbook.getSteps().size(), "Conditional include step should remain a single dynamic step without pre-parsed substeps.");
-        final PlaybookStep step = playbook.getSteps().get(0);
-        assertEquals("If the product has xpdp configurator features then _include: fragments/configure-xpdp.steps, else _include: fragments/add-simple.steps", step.getInstruction());
-        assertEquals(0, step.getSubSteps().size(), "Substeps should be empty until runtime LLM evaluation.");
+        assertEquals(3, playbook.getSteps().size(), "Should parse 3 top-level steps");
+        assertEquals("1. Open demo store homepage", playbook.getSteps().get(0).getInstruction());
+        assertFalse(playbook.getSteps().get(0).hasSubSteps());
+
+        final PlaybookStep groupStep = playbook.getSteps().get(1);
+        assertEquals("Add first product to cart", groupStep.getInstruction(), "Trailing colon should be stripped from goal header");
+        assertTrue(groupStep.hasSubSteps(), "Group step must have sub-steps");
+        assertEquals(3, groupStep.getSubSteps().size(), "Should have 3 child milestones");
+        assertEquals("Locate the first product card and hover over it", groupStep.getSubSteps().get(0).getInstruction());
+        assertEquals("Click its 'Add to Cart' button", groupStep.getSubSteps().get(1).getInstruction());
+        assertEquals("When this string '${testId}' is not equal 'bad', click the size 'S'", groupStep.getSubSteps().get(2).getInstruction());
+        assertEquals(groupStep, groupStep.getSubSteps().get(0).getParent(), "Child step parent reference must point to group step");
+
+        assertEquals("Verify cart count is '1'", playbook.getSteps().get(2).getInstruction());
+        assertFalse(playbook.getSteps().get(2).hasSubSteps());
+    }
+
+    @Test
+    public void testParseGroupedStepsStructuredYaml() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - "Open demo store homepage"
+              - Add first product to cart:
+                  - "Locate the first product card and hover over it"
+                  - "Click its 'Add to Cart' button"
+              - "Verify cart count is '1'"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("grouped-structured.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("grouped-structured.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(3, playbook.getSteps().size());
+        assertEquals("Open demo store homepage", playbook.getSteps().get(0).getInstruction());
+
+        final PlaybookStep groupStep = playbook.getSteps().get(1);
+        assertEquals("Add first product to cart", groupStep.getInstruction());
+        assertTrue(groupStep.hasSubSteps());
+        assertEquals(2, groupStep.getSubSteps().size());
+        assertEquals("Locate the first product card and hover over it", groupStep.getSubSteps().get(0).getInstruction());
+        assertEquals("Click its 'Add to Cart' button", groupStep.getSubSteps().get(1).getInstruction());
+        assertEquals(groupStep, groupStep.getSubSteps().get(0).getParent());
+
+        assertEquals("Verify cart count is '1'", playbook.getSteps().get(2).getInstruction());
+    }
+
+    @Test
+    public void testParseGroupedStepsWithInstructionAndSubSteps() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - instruction: "Select product variant and purchase"
+                subSteps:
+                  - "Select size M"
+                  - "Select color Blue"
+                  - "Click Add to Cart"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("instruction-substeps.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("instruction-substeps.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getSteps().size());
+
+        final PlaybookStep groupStep = playbook.getSteps().get(0);
+        assertEquals("Select product variant and purchase", groupStep.getInstruction());
+        assertTrue(groupStep.hasSubSteps());
+        assertEquals(3, groupStep.getSubSteps().size());
+        assertEquals("Select size M", groupStep.getSubSteps().get(0).getInstruction());
+        assertEquals("Select color Blue", groupStep.getSubSteps().get(1).getInstruction());
+        assertEquals("Click Add to Cart", groupStep.getSubSteps().get(2).getInstruction());
+    }
+
+    @Test
+    public void testDuplicateStepInstructionsResolveDistinctLineNumbers() throws IOException
+    {
+        final String yamlContent = """
+            steps: |
+              Locate the promo code input field:
+                - and type '10p-off' into it.
+                - Submit the form.
+
+              Locate the promo code input field:
+                - clear its content
+                - type 'FREEGIFT' into it
+                - Assert promo line item is shown (bug).
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("duplicate-steps.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("duplicate-steps.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getSteps().size());
+
+        final PlaybookStep firstOccurrence = playbook.getSteps().get(0);
+        final PlaybookStep secondOccurrence = playbook.getSteps().get(1);
+
+        assertEquals("Locate the promo code input field", firstOccurrence.getInstruction());
+        assertEquals("Locate the promo code input field", secondOccurrence.getInstruction());
+
+        assertEquals(2, firstOccurrence.getLineNumber());
+        assertEquals(6, secondOccurrence.getLineNumber());
+
+        assertTrue(secondOccurrence.isBug());
+        assertFalse(firstOccurrence.isBug());
+    }
+
+    @Test
+    public void testLegacyJsonRecordingNormalizationWithParentBugFlag() throws Exception
+    {
+        final String legacyJson = """
+            [
+              {
+                "instruction": "Locate the promo code input field",
+                "bug": true,
+                "subSteps": [
+                  {
+                    "instruction": "clear its content",
+                    "bug": false
+                  },
+                  {
+                    "instruction": "Assert promo line item is shown",
+                    "bug": true
+                  }
+                ]
+              }
+            ]
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("recording.json", legacyJson);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("recording.json", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getSteps().size());
+
+        final PlaybookStep parent = playbook.getSteps().get(0);
+        assertTrue(parent.isBug(), "Parent should still evaluate to true when queried dynamically");
+
+        final PlaybookStep sub0 = parent.getSubSteps().get(0);
+        assertFalse(sub0.isBug(), "sub0 must be normalized to false and not inherit bug from parent");
+
+        final PlaybookStep sub1 = parent.getSubSteps().get(1);
+        assertTrue(sub1.isBug(), "sub1 must preserve its own bug flag");
     }
 }

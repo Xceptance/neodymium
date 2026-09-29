@@ -18,24 +18,26 @@
  */
 package org.neodymium.ai.integration.live;
 
-import static com.codeborne.selenide.Condition.text;
+import static com.codeborne.selenide.Condition.exactText;
 import static com.codeborne.selenide.Selenide.$;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.codeborne.selenide.WebDriverRunner;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
-import org.junit.jupiter.api.Tag;
-import org.neodymium.ai.junit.AiDataSet;
-import org.neodymium.ai.junit.AiPlaybook;
-import org.neodymium.ai.junit.NeodymiumAiTest;
-import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.junit.AiMode;
-import org.neodymium.ai.session.AiSession;
-
 /**
- * Live integration test for the NAVIGATE action plugin.
+ * Live integration test for the NAVIGATE action plugin verifying target URL loading,
+ * natural language synonym phrasings, and sequential page navigation.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
@@ -45,27 +47,88 @@ import org.neodymium.ai.session.AiSession;
 @AiPlaybook("programmatic")
 public class NavigateIntegrationTest extends BaseAiTest
 {
-
     /**
-     * Executes Navigate integration test in both live (recording) and strict replay modes.
+     * Sets up test page URLs before each test execution.
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    @AiDataSet("navigateData")
+    @BeforeEach
+    public void setupProperties(final AiSession session)
+    {
+        final String pageUrl1 = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        final String pageUrl2 = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
+
+        session.data().putDynamic("navigate.test.url1", pageUrl1, false);
+        session.data().putDynamic("navigate.test.url2", pageUrl2, false);
+    }
+
+    /**
+     * Verifies basic Navigate action opening a target URL in the browser.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/NavigateIntegrationTest_testNavigate.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testNavigate(final AiSession session) throws Exception
     {
-        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
-        session.data().putDynamic("navigate.test.url", pageUrl, false);
-
         session.execute( """
-            data:
-              - testId: navigateData
             steps: |
-              Open ${navigate.test.url} in the browser
-            """);
+              Open ${navigate.test.url1} in the browser
+            """)
+            .verifyMetrics()
+            .hasStepCount(1)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
-        $("h1").shouldHave(text("Assert Action Test"));
+        $("h1").shouldHave(exactText("Assert Action Test"));
+        assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
+    }
+
+    /**
+     * Verifies Navigate action using natural language synonym phrasing "Navigate to ...".
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/NavigateIntegrationTest_testNavigateSynonyms.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testNavigateSynonyms(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Navigate to ${navigate.test.url1}
+            """)
+            .verifyMetrics()
+            .hasStepCount(1)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("h1").shouldHave(exactText("Assert Action Test"));
+        assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
+    }
+
+    /**
+     * Verifies sequential Navigate actions transitioning across multiple pages in succession.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/NavigateIntegrationTest_testSequentialNavigate.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testSequentialNavigate(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${navigate.test.url1} in the browser
+              Open ${navigate.test.url2} in the browser
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("h1").shouldHave(exactText("Type Action Test"));
+        assertTrue(WebDriverRunner.url().contains("testTypeHappyPath.html"));
     }
 }

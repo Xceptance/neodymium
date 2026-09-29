@@ -20,8 +20,8 @@ package org.neodymium.ai.executor.selenide.plugins;
 
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
-import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.interactions.Actions;
+import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 
@@ -89,7 +89,34 @@ public final class TypeAction implements BrowserActionPlugin
             }
             else
             {
-                element.val(action.getValue());
+                final boolean isContentEditable = Boolean.TRUE.equals(Selenide.executeJavaScript(
+                    "return !!(arguments[0] && (arguments[0].isContentEditable === true || arguments[0].getAttribute('contenteditable') === 'true' || arguments[0].hasAttribute('contenteditable')));",
+                    element));
+                if (isContentEditable)
+                {
+                    Selenide.executeJavaScript(
+                        "var el = arguments[0];"
+                        + "el.focus();"
+                        + "el.innerHTML = '';"
+                        + "var range = document.createRange();"
+                        + "range.selectNodeContents(el);"
+                        + "range.collapse(false);"
+                        + "var sel = window.getSelection();"
+                        + "sel.removeAllRanges();"
+                        + "sel.addRange(range);",
+                        element);
+                    if (action.getValue() != null && !action.getValue().isEmpty())
+                    {
+                        element.sendKeys(action.getValue());
+                    }
+                    Selenide.executeJavaScript(
+                        "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+                        element);
+                }
+                else
+                {
+                    element.val(action.getValue());
+                }
             }
         }
     }

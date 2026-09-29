@@ -18,6 +18,7 @@
  */
 package org.neodymium.ai.runner;
 
+import com.codeborne.selenide.Configuration;
 import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.client.LlmCapability;
@@ -26,25 +27,39 @@ import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.ExecutionListener;
+import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
 import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
+import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.IncompatibleFrameworkException;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.ExpectedBugNotReproducedException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.pipeline.TokenBudgetExceededException;
+import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
+import org.neodymium.ai.playbook.linter.PlaybookLinterException;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.playbook.linter.PostFlightPlaybookLinter;
 import org.neodymium.ai.prompt.VisualRcaPrompt;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.util.Neodymium;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,11 +100,14 @@ public final class StateMachineRunner
         this.session.runPreHooks();
         final ExecutionContext context = this.session.getExecutionContext();
         context.getTransientData().put(ExecutionContext.KEY_SESSION, this.session);
-        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, this.session.getTargetExecutor());
+        if (this.session.getTargetExecutor() != null)
+        {
+            context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, this.session.getTargetExecutor());
+        }
 
-        final org.neodymium.ai.config.ExecutionMode mode = (org.neodymium.ai.config.ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
+        final ExecutionMode mode = (ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE);
         final String datasetLabel = (String) context.getTransientData().get(ExecutionContext.KEY_ACTIVE_DATASET_LABEL);
-        final String testName = org.neodymium.util.Neodymium.getTestName();
+        final String testName = Neodymium.getTestName();
         final String loadedPlaybook = (String) context.getTransientData().get("playbook.resolvedPath");
 
         LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");
@@ -101,7 +119,7 @@ public final class StateMachineRunner
 
         if (LOGGER.isTraceEnabled())
         {
-            final org.neodymium.ai.config.AiConfiguration config = org.neodymium.ai.config.AiConfiguration.getInstance();
+            final AiConfiguration config = AiConfiguration.getInstance();
             LOGGER.trace("   ┌─ [Configured LLM Capabilities & Providers] ──────────────────────────────");
             for (final LlmCapability cap : LlmCapability.values())
             {
@@ -182,7 +200,36 @@ public final class StateMachineRunner
                 }
 
                 final PlaybookLinter linter = new PlaybookLinter(this.session);
-                linter.lint(sessionSteps, scenarioDesc);
+                final List<PlaybookLinterFinding> findings = linter.lint(sessionSteps, scenarioDesc);
+
+                boolean failOnFindings = AiConfiguration.getInstance().isLinterFailOnFindings();
+                if (context.getTransientData().containsKey("neodymium.ai.linter.failOnFindings"))
+                {
+                    final Object val = context.getTransientData().get("neodymium.ai.linter.failOnFindings");
+                    if (val instanceof Boolean b)
+                    {
+                        failOnFindings = b;
+                    }
+                    else if (val != null)
+                    {
+                        failOnFindings = Boolean.parseBoolean(String.valueOf(val).trim());
+                    }
+                }
+                else if (this.session != null && this.session.data() != null)
+                {
+                    final Object val = this.session.data().get("neodymium.ai.linter.failOnFindings");
+                    if (val != null)
+                    {
+                        failOnFindings = Boolean.parseBoolean(String.valueOf(val).trim());
+                    }
+                }
+
+                if (failOnFindings && findings != null && !findings.isEmpty())
+                {
+                    LOGGER.error("❌ Upfront Playbook Pre-Flight Linter detected {} finding(s) and failOnFindings is enabled! Aborting execution before browser launch.",
+                                 findings.size());
+                    throw new PlaybookLinterException("Playbook pre-flight linting failed with " + findings.size() + " finding(s).", findings);
+                }
             }
 
             if (this.session.getExecutionMode().isLinterOnly())
@@ -202,28 +249,42 @@ public final class StateMachineRunner
                     }
                 catch (final Throwable t)
                 {
-                    if (t instanceof VirtualMachineError || t instanceof LinkageError)
+                    final Long origTimeout = (Long) context.getTransientData().remove("KEY_ORIG_SELENIDE_TIMEOUT");
+                    if (origTimeout != null)
+                    {
+                        Configuration.timeout = origTimeout;
+                    }
+
+                    if (t instanceof VirtualMachineError || t instanceof LinkageError || t instanceof ExpectedBugNotReproducedException)
                     {
                         throw (Error) t;
                     }
+                    if (t.getCause() instanceof ExpectedBugNotReproducedException expectedBugErr)
+                    {
+                        throw expectedBugErr;
+                    }
 
-                    if (t instanceof org.neodymium.ai.pipeline.TokenBudgetExceededException tokenErr)
+                    if (t instanceof TokenBudgetExceededException tokenErr)
                     {
                         throw tokenErr;
                     }
-                    if (t.getCause() instanceof org.neodymium.ai.pipeline.TokenBudgetExceededException tokenCauseErr)
+                    if (t.getCause() instanceof TokenBudgetExceededException tokenCauseErr)
                     {
                         throw tokenCauseErr;
                     }
 
                     final PipelineException e;
-                    if (t instanceof PipelineException)
+                    if (t instanceof PipelineException pe)
                     {
-                        e = (PipelineException) t;
+                        e = pe;
+                    }
+                    else if (t.getCause() instanceof PipelineException pe)
+                    {
+                        e = pe;
                     }
                     else
                     {
-                        e = new org.neodymium.ai.pipeline.ConclusiveFailureException(t.getMessage() != null ? t.getMessage() : t.toString(), t);
+                        e = new ConclusiveFailureException(t.getMessage() != null ? t.getMessage() : t.toString(), t);
                     }
 
                     // Check if an active TryCatch scope can handle this exception
@@ -246,10 +307,8 @@ public final class StateMachineRunner
                     }
 
                     // Check if the current PlaybookStep is marked with a bug
-                    final org.neodymium.ai.model.PlaybookStep playbookStep = (org.neodymium.ai.model.PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-                    if (playbookStep != null && playbookStep.isBug()
-                        && !(e instanceof org.neodymium.ai.pipeline.UnexpectedSuccessException)
-                        && !(e instanceof org.neodymium.ai.pipeline.ToLevelEscalationException))
+                    final PlaybookStep playbookStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                    if (playbookStep != null && playbookStep.isBug())
                     {
                         if (activeScope instanceof TryCatchStep tryCatch)
                         {
@@ -260,16 +319,29 @@ public final class StateMachineRunner
                         }
 
                         // Mark step status on playbook step as FAILED so recorded playbook preserves the failure
-                        playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+                        playbookStep.setStatus(PlaybookStepStatus.FAILED);
                         playbookStep.setFailed(true);
                         playbookStep.setFailureReason(e.getMessage());
+
+                        if (playbookStep.hasSubSteps())
+                        {
+                            for (final PlaybookStep child : playbookStep.getSubSteps())
+                            {
+                                if (child.isBug() || (child.getToolCalls() != null && child.getToolCalls().stream().anyMatch(tc -> tc.toolName() != null && tc.toolName().contains("assert"))))
+                                {
+                                    child.setStatus(PlaybookStepStatus.FAILED);
+                                    child.setFailed(true);
+                                    child.setFailureReason(e.getMessage());
+                                }
+                            }
+                        }
 
                         context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
                         final String bugComment = playbookStep.getBugDetails();
                         final String bugStr = bugComment != null ? " (" + bugComment + ")" : "";
-                        final String resolvedBugInstruction = context.getSessionData() != null
-                            ? context.getSessionData().resolveVariables(playbookStep.getInstruction())
+                        final String resolvedBugInstruction = (context.getSessionData() != null && playbookStep.getInstruction() != null)
+                            ? context.getSessionData().resolveAvailableVariables(playbookStep.getInstruction())
                             : playbookStep.getInstruction();
                         LOGGER.info("   🐞 Expected bug hit{} on step: {}:{} ({}) - Error: {}",
                             bugStr,
@@ -300,6 +372,39 @@ public final class StateMachineRunner
                             context.discardStepsUpToTryCatch(tryCatch);
                         }
 
+                        // Mark step status on playbook step as FAILED so recorded playbook preserves the failure
+                        playbookStep.setStatus(PlaybookStepStatus.FAILED);
+                        playbookStep.setFailed(true);
+                        if (playbookStep.getFailureReason() == null)
+                        {
+                            Throwable root = e;
+                            while (root.getCause() != null && root != root.getCause())
+                            {
+                                root = root.getCause();
+                            }
+                            playbookStep.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
+                        }
+
+                        if (playbookStep.hasSubSteps())
+                        {
+                            for (final PlaybookStep sub : playbookStep.getSubSteps())
+                            {
+                                if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING || sub.getStatus() == PlaybookStepStatus.RUNNING)
+                                {
+                                    sub.setStatus(PlaybookStepStatus.FAILED);
+                                    sub.setFailed(true);
+                                    sub.setFailureReason(playbookStep.getFailureReason());
+                                }
+                            }
+                        }
+
+                        if (playbookStep.getParent() != null)
+                        {
+                            playbookStep.getParent().setStatus(PlaybookStepStatus.FAILED);
+                            playbookStep.getParent().setFailed(true);
+                            playbookStep.getParent().setFailureReason(playbookStep.getFailureReason());
+                        }
+
                         context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
                         // Add failure to warnings/reporting list
@@ -307,8 +412,8 @@ public final class StateMachineRunner
                         final List<String> warnings = (List<String>) context.getTransientData()
                             .computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
 
-                        final String resolvedOptInstruction = context.getSessionData() != null
-                            ? context.getSessionData().resolveVariables(playbookStep.getInstruction())
+                        final String resolvedOptInstruction = (context.getSessionData() != null && playbookStep.getInstruction() != null)
+                            ? context.getSessionData().resolveAvailableVariables(playbookStep.getInstruction())
                             : playbookStep.getInstruction();
                         final String stepStr = String.format("%s:%d (%s)",
                             playbookStep.getSourceFile(),
@@ -324,17 +429,17 @@ public final class StateMachineRunner
 
                     if (playbookStep != null)
                     {
-                        playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+                        playbookStep.setStatus(PlaybookStepStatus.FAILED);
                         playbookStep.setFailed(true);
                         playbookStep.setFailureReason(e.getMessage());
                     }
 
-                    org.neodymium.ai.event.InteractiveConsoleListener interactiveListener = null;
+                    InteractiveConsoleListener interactiveListener = null;
                     if (this.session != null && this.session.getEventBus() != null)
                     {
-                        for (final org.neodymium.ai.event.ExecutionListener listener : this.session.getEventBus().getListeners())
+                        for (final ExecutionListener listener : this.session.getEventBus().getListeners())
                         {
-                            if (listener instanceof org.neodymium.ai.event.InteractiveConsoleListener icl && icl.isInteractive())
+                            if (listener instanceof InteractiveConsoleListener icl && icl.isInteractive())
                             {
                                 interactiveListener = icl;
                                 break;
@@ -356,10 +461,10 @@ public final class StateMachineRunner
                             {
                                 if (playbookStep != null)
                                 {
-                                    playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.PENDING);
+                                    playbookStep.setStatus(PlaybookStepStatus.PENDING);
                                     playbookStep.setFailed(false);
                                     playbookStep.setFailureReason(null);
-                                    context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
+                                    context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
                                 }
                                 continue mainLoop;
                             }
@@ -367,9 +472,9 @@ public final class StateMachineRunner
                             {
                                 if (playbookStep != null)
                                 {
-                                    playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.RUNNING);
-                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.model.ContextLevel.VISUAL_RICH);
-                                    context.pushStep(org.neodymium.ai.pipeline.steps.ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
+                                    playbookStep.setStatus(PlaybookStepStatus.RUNNING);
+                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_RICH);
+                                    context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookStep, this.session, context));
                                 }
                                 continue mainLoop;
                             }
@@ -377,7 +482,7 @@ public final class StateMachineRunner
                             {
                                 if (playbookStep != null)
                                 {
-                                    playbookStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SKIPPED);
+                                    playbookStep.setStatus(PlaybookStepStatus.SKIPPED);
                                 }
                                 continue mainLoop;
                             }
@@ -395,6 +500,10 @@ public final class StateMachineRunner
                     }
 
                     // Bubbling up out of loop
+                    if (t.getCause() instanceof final PipelineException pe)
+                    {
+                        throw pe;
+                    }
                     if (t instanceof RuntimeException)
                     {
                         throw (RuntimeException) t;
@@ -407,65 +516,28 @@ public final class StateMachineRunner
                 }
             }
             }
-            boolean anyStepFailed = false;
-            @SuppressWarnings("unchecked")
-            final List<PlaybookStep> sessionStepsForCheck = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
-            if (sessionStepsForCheck != null)
-            {
-                for (final PlaybookStep s : sessionStepsForCheck)
-                {
-                    if (s.isFailed() || PlaybookStepStatus.FAILED.equals(s.getStatus()))
-                    {
-                        anyStepFailed = true;
-                        break;
-                    }
-                }
-            }
-            final boolean hasExecutionError = context.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
-            success = !hasExecutionError && !anyStepFailed;
-            if (success)
-            {
-                context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
-            }
+            success = true;
+            context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
         }
         catch (final PipelineException e)
         {
             failureCause = e;
-            if (!context.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR))
-            {
-                context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, e);
-            }
             runVisualRca(context, e);
             throw e;
         }
         catch (final Throwable t)
         {
             failureCause = t;
-            if (!context.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR))
-            {
-                context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, t);
-            }
             runVisualRca(context, t);
             throw t;
         }
         finally
         {
-            boolean anyStepFailed = false;
-            @SuppressWarnings("unchecked")
-            final List<PlaybookStep> sessionStepsForCheck = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
-            if (sessionStepsForCheck != null)
+            final Long origTimeout = (Long) context.getTransientData().remove("KEY_ORIG_SELENIDE_TIMEOUT");
+            if (origTimeout != null)
             {
-                for (final PlaybookStep s : sessionStepsForCheck)
-                {
-                    if (s.isFailed() || PlaybookStepStatus.FAILED.equals(s.getStatus()))
-                    {
-                        anyStepFailed = true;
-                        break;
-                    }
-                }
+                Configuration.timeout = origTimeout;
             }
-            final boolean hasExecutionError = context.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR) || failureCause != null;
-            success = !hasExecutionError && !anyStepFailed;
 
             final long durationMs = System.currentTimeMillis() - startTime;
             if (!success && failureCause != null)
@@ -484,6 +556,39 @@ public final class StateMachineRunner
                         }
                         currentStep.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
                     }
+                    if (currentStep.hasSubSteps())
+                    {
+                        for (final PlaybookStep sub : currentStep.getSubSteps())
+                        {
+                            if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING || sub.getStatus() == PlaybookStepStatus.RUNNING)
+                            {
+                                sub.setStatus(PlaybookStepStatus.FAILED);
+                                sub.setFailed(true);
+                                sub.setFailureReason(currentStep.getFailureReason());
+                            }
+                        }
+                    }
+                    if (currentStep.getParent() != null)
+                    {
+                        currentStep.getParent().setStatus(PlaybookStepStatus.FAILED);
+                        currentStep.getParent().setFailed(true);
+                        currentStep.getParent().setFailureReason(currentStep.getFailureReason());
+                    }
+                    final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                    if (executor != null && this.session != null && this.session.getEventBus() != null)
+                    {
+                        try
+                        {
+                            final SutState failureState = executor.captureState(ContextLevel.VISUAL);
+                            if (failureState != null)
+                            {
+                                this.session.getEventBus().dispatch(new StateCapturedEvent(failureState));
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
                     if (this.session != null && this.session.getEventBus() != null)
                     {
                         this.session.getEventBus().dispatch(new StepFinishedEvent(currentStep, PlaybookStepStatus.FAILED));
@@ -491,8 +596,25 @@ public final class StateMachineRunner
                 }
             }
 
+            // Empirical Post-Flight Playbook Linting
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+                if (sessionSteps != null && !sessionSteps.isEmpty())
+                {
+                    final PostFlightPlaybookLinter postLinter = new PostFlightPlaybookLinter(this.session);
+                    postLinter.lint(sessionSteps, context);
+                }
+            }
+            catch (final Throwable t)
+            {
+                LOGGER.warn("⚠️ Post-flight empirical linter encountered an unexpected error: {}", t.getMessage(), t);
+            }
+
             @SuppressWarnings("unchecked")
             final List<String> warningsList = (List<String>) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+
             try
             {
                 context.getTransientData().put("sessionFinishedHandled", true);
@@ -572,19 +694,16 @@ public final class StateMachineRunner
         final Integer stdCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_STANDARD_CALL_COUNT);
         final Integer judgeCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
         final Integer verifCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_CALL_COUNT);
-        final Integer pesapCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
         final Integer rcaCallsObj = (Integer) context.getTransientData().get(ExecutionContext.KEY_RCA_CALL_COUNT);
 
         final TokenUsage standardUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_STANDARD_TOKEN_USAGE);
         final TokenUsage judgeUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_JUDGE_TOKEN_USAGE);
         final TokenUsage verificationUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE);
-        final TokenUsage pesapUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_PESAP_TOKEN_USAGE);
         final TokenUsage rcaUsage = (TokenUsage) context.getTransientData().get(ExecutionContext.KEY_RCA_TOKEN_USAGE);
 
         final int standardCalls = stdCallsObj != null ? stdCallsObj : (standardUsage != null ? 1 : 0);
         final int judgeCalls = judgeCallsObj != null ? judgeCallsObj : (judgeUsage != null ? 1 : 0);
         final int verificationCalls = verifCallsObj != null ? verifCallsObj : (verificationUsage != null ? 1 : 0);
-        final int pesapCalls = pesapCallsObj != null ? pesapCallsObj : (pesapUsage != null ? 1 : 0);
         final int rcaCalls = rcaCallsObj != null ? rcaCallsObj : (rcaUsage != null ? 1 : 0);
 
         final long standardIn = standardUsage != null ? standardUsage.inputTokenCount() : 0;
@@ -602,20 +721,15 @@ public final class StateMachineRunner
         final long verificationCached = verificationUsage != null ? verificationUsage.cachedTokenCount() : 0;
         final long verificationTotal = verificationIn + verificationOut;
 
-        final long pesapIn = pesapUsage != null ? pesapUsage.inputTokenCount() : 0;
-        final long pesapOut = pesapUsage != null ? pesapUsage.outputTokenCount() : 0;
-        final long pesapCached = pesapUsage != null ? pesapUsage.cachedTokenCount() : 0;
-        final long pesapTotal = pesapIn + pesapOut;
-
         final long rcaIn = rcaUsage != null ? rcaUsage.inputTokenCount() : 0;
         final long rcaOut = rcaUsage != null ? rcaUsage.outputTokenCount() : 0;
         final long rcaCached = rcaUsage != null ? rcaUsage.cachedTokenCount() : 0;
         final long rcaTotal = rcaIn + rcaOut;
 
-        final int totalCalls = standardCalls + judgeCalls + verificationCalls + pesapCalls + rcaCalls;
-        final long totalIn = standardIn + judgeIn + verificationIn + pesapIn + rcaIn;
-        final long totalOut = standardOut + judgeOut + verificationOut + pesapOut + rcaOut;
-        final long totalCached = standardCached + judgeCached + verificationCached + pesapCached + rcaCached;
+        final int totalCalls = standardCalls + judgeCalls + verificationCalls + rcaCalls;
+        final long totalIn = standardIn + judgeIn + verificationIn + rcaIn;
+        final long totalOut = standardOut + judgeOut + verificationOut + rcaOut;
+        final long totalCached = standardCached + judgeCached + verificationCached + rcaCached;
         final long totalTokens = totalIn + totalOut;
 
         LOGGER.debug("╔════════════════════════════════════════════════════════════════════════════════════");
@@ -642,8 +756,6 @@ public final class StateMachineRunner
                 String.format("%,d", totalIn),
                 String.format("%,d", totalOut),
                 String.format("%,d", totalCached));
-        LOGGER.debug("║   ├─ PESAP:             {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
-                String.format("%,d", pesapCalls), String.format("%,d", pesapTotal), String.format("%,d", pesapIn), String.format("%,d", pesapOut), String.format("%,d", pesapCached));
         LOGGER.debug("║   ├─ Action:            {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
                 String.format("%,d", standardCalls), String.format("%,d", standardTotal), String.format("%,d", standardIn), String.format("%,d", standardOut), String.format("%,d", standardCached));
         LOGGER.debug("║   ├─ Judge:             {} calls | {} tokens (In: {}, Out: {}, Cached: {})",
@@ -722,7 +834,12 @@ public final class StateMachineRunner
      */
     private void runVisualRca(final ExecutionContext context, final Throwable exception)
     {
-        if (!org.neodymium.ai.config.AiConfiguration.getInstance().isVisualRcaEnabled())
+        if (exception instanceof PlaybookLinterException)
+        {
+            return;
+        }
+
+        if (!AiConfiguration.getInstance().isVisualRcaEnabled())
         {
             LOGGER.debug("Visual RCA is disabled via configuration (neodymium.ai.visualRca.enabled=false). Skipping Visual RCA analysis.");
             return;
@@ -901,15 +1018,6 @@ public final class StateMachineRunner
             LOGGER.debug("{}Actions:        0", indent);
         }
 
-        if (stats.getPesapCalls() > 0)
-        {
-            LOGGER.debug("{}PESAP Calls:        {} (Tokens: {} in ({} cached) → {} out)",
-                indent,
-                stats.getPesapCalls(),
-                stats.getPesapInputTokens(),
-                stats.getPesapCachedTokens(),
-                stats.getPesapOutputTokens());
-        }
         if (stats.getStandardCalls() > 0)
         {
             LOGGER.debug("{}Standard Calls:     {} (Tokens: {} in ({} cached) → {} out)",

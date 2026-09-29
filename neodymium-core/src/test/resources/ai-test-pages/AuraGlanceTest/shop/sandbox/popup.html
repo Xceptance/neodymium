@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Partner Portal Popup - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Popup Portal</span></div>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Partner Authorization Portal</h1>
+                <p class="aura-desc">
+                    Enter the authorization token below and confirm to authorize the session in the parent window.
+                </p>
+
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 1.5rem; margin: 2rem 0;">
+                    <div style="display: flex; gap: 0.5rem; align-items: center; width: 100%; max-width: 400px;">
+                        <input type="text" id="partner-token" placeholder="Enter confirmation token"
+                               style="flex: 1; padding: 10px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.2); color: white; font-size: 14px;">
+                        <button id="confirm-popup-btn" class="aura-btn" style="padding: 10px 20px;">
+                            Authorize
+                        </button>
+                    </div>
+
+                    <button id="close-popup-btn" class="aura-btn aura-btn-secondary" style="padding: 8px 16px; font-size: 13px;" onclick="window.close()">
+                        Close Window
+                    </button>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Popup Status: <span id="popup-status" style="font-weight: bold; color: #ffcc00;">Awaiting confirmation</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        document.getElementById('confirm-popup-btn').addEventListener('click', function() {
+            const input = document.getElementById('partner-token');
+            const token = (input.value && input.value.trim().length > 0) ? input.value.trim() : 'TOKEN-4820';
+            document.getElementById('popup-status').textContent = 'Authorized: ' + token;
+
+            // 1. BroadcastChannel
+            try {
+                const channel = new BroadcastChannel('aura_multi_window');
+                channel.postMessage({ type: 'PARTNER_AUTHORIZED', token: token });
+            } catch (err) {
+                console.warn('BroadcastChannel failed', err);
+            }
+
+            // 2. localStorage
+            try {
+                localStorage.setItem('aura_partner_token', token);
+            } catch (err) {
+                console.warn('localStorage failed', err);
+            }
+
+            // 3. Direct opener access & postMessage
+            if (window.opener && !window.opener.closed) {
+                try {
+                    const parentStatus = window.opener.document.getElementById('parent-status');
+                    if (parentStatus) {
+                        parentStatus.textContent = 'Partner authorized: ' + token;
+                    }
+                } catch (err) {
+                    console.warn('Cross-origin direct access failed', err);
+                }
+                try {
+                    window.opener.postMessage({ type: 'PARTNER_AUTHORIZED', token: token }, '*');
+                } catch (err) {
+                    console.error('postMessage failed', err);
+                }
+            }
+        });
+    </script>
+</body>
+</html>

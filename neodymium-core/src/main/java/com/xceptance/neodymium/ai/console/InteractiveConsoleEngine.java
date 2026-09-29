@@ -42,7 +42,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.neodymium.ai.config.AiConfiguration;
-import org.neodymium.ai.util.AtomicFileUtils;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -325,7 +324,7 @@ public final class InteractiveConsoleEngine {
 
                 // 1. Root file for compatibility in default allure.results.directory
                 final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
-                AtomicFileUtils.writeStringAtomic(executionJson.toPath(), minified);
+                Files.writeString(executionJson.toPath(), minified, StandardCharsets.UTF_8);
 
                 // 2. Structured run and test class folders in configured console logs directory
                 final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
@@ -337,7 +336,7 @@ public final class InteractiveConsoleEngine {
                     structuredDir.mkdirs();
                 }
                 final File structuredJson = new File(structuredDir, "console-execution-" + index + ".json");
-                AtomicFileUtils.writeStringAtomic(structuredJson.toPath(), minified);
+                Files.writeString(structuredJson.toPath(), minified, StandardCharsets.UTF_8);
 
                 // 3. Structured copy in configured target/ai-reports directory
                 final String reportsDirPath = AiConfiguration.getInstance().getDiskReportDirectory();
@@ -348,7 +347,7 @@ public final class InteractiveConsoleEngine {
                     reportsStructuredDir.mkdirs();
                 }
                 final File reportsStructuredJson = new File(reportsStructuredDir, "console-execution-" + index + ".json");
-                AtomicFileUtils.writeStringAtomic(reportsStructuredJson.toPath(), minified);
+                Files.writeString(reportsStructuredJson.toPath(), minified, StandardCharsets.UTF_8);
             }
             catch (final Exception e)
             {

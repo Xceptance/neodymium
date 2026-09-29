@@ -37,7 +37,7 @@ public class ExecutionMetricsTest
     public void testStrictReplayModeHelpers()
     {
         final ExecutionMetrics metrics = new ExecutionMetrics(
-            ExecutionMode.REPLAY_STRICT, 0, 0, 0, 0, 0, 5, 0, 0, 5, 0, new TokenUsage(0, 0, 0)
+            ExecutionMode.REPLAY_STRICT, 0, 0, 0, 0, 5, 0, 0, 5, 0, new TokenUsage(0, 0, 0)
         );
 
         Assertions.assertEquals(ExecutionMode.REPLAY_STRICT, metrics.getExecutionMode());
@@ -57,7 +57,7 @@ public class ExecutionMetricsTest
     public void testReplayWithHealingModeHelpers()
     {
         final ExecutionMetrics metrics = new ExecutionMetrics(
-            ExecutionMode.REPLAY_WITH_HEALING, 2, 1, 1, 0, 0, 4, 1, 0, 3, 0, new TokenUsage(100, 20, 0)
+            ExecutionMode.REPLAY_WITH_HEALING, 2, 1, 1, 0, 4, 1, 0, 3, 0, new TokenUsage(100, 20, 0)
         );
 
         Assertions.assertEquals(ExecutionMode.REPLAY_WITH_HEALING, metrics.getExecutionMode());
@@ -74,7 +74,7 @@ public class ExecutionMetricsTest
     public void testForceRecordingModeHelpers()
     {
         final ExecutionMetrics metrics = new ExecutionMetrics(
-            ExecutionMode.FORCE_RECORDING, 3, 3, 0, 0, 0, 3, 0, 0, 0, 1, new TokenUsage(500, 100, 50)
+            ExecutionMode.FORCE_RECORDING, 3, 3, 0, 0, 3, 0, 0, 0, 1, new TokenUsage(500, 100, 50)
         );
 
         Assertions.assertEquals(ExecutionMode.FORCE_RECORDING, metrics.getExecutionMode());
@@ -92,14 +92,13 @@ public class ExecutionMetricsTest
     public void testRcaCallMetrics()
     {
         final ExecutionMetrics metrics = new ExecutionMetrics(
-            ExecutionMode.LLM_ONLY, 4, 1, 1, 1, 0, 1, 3, 0, 0, 0, 0, 0, null, new TokenUsage(300, 100, 0)
+            ExecutionMode.LLM_ONLY, 3, 1, 1, 0, 1, 3, 0, 0, 0, 0, 0, null, new TokenUsage(300, 100, 0)
         );
 
         Assertions.assertEquals(1, metrics.getRcaCallCount());
-        Assertions.assertEquals(4, metrics.getLlmCallCount());
+        Assertions.assertEquals(3, metrics.getLlmCallCount());
         Assertions.assertEquals(1, metrics.getStandardCallCount());
         Assertions.assertEquals(1, metrics.getVerificationCallCount());
-        Assertions.assertEquals(1, metrics.getPesapCallCount());
         Assertions.assertEquals(0, metrics.getJudgeCallCount());
     }
 }

@@ -21,6 +21,7 @@ package org.neodymium.ai.report;
 import java.text.DecimalFormat;
 import java.text.DecimalFormatSymbols;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -124,7 +125,7 @@ public final class MarkdownReportGenerator
 
         appendCategoryRow(sb, "**Total**", m.getTotal());
         appendCategoryRow(sb, "├─ Linter (Pre-Flight)", m.getLinter());
-        appendCategoryRow(sb, "├─ PESAP", m.getPesap());
+        appendCategoryRow(sb, "├─ Linter (Post-Flight)", m.getPostFlightLinter());
         appendCategoryRow(sb, "├─ Action (Standard)", m.getAction());
         appendCategoryRow(sb, "├─ Judge", m.getJudge());
         appendCategoryRow(sb, "├─ Verification", m.getVerification());
@@ -213,6 +214,43 @@ public final class MarkdownReportGenerator
             sb.append("\n");
         }
 
+        // Empirical Playbook Findings (Post-Flight Telemetry)
+        final List<PlaybookLinterFinding> postFlightFindings = report.getPostFlightFindings();
+        if (!postFlightFindings.isEmpty())
+        {
+            sb.append("## 🔍 Empirical Playbook Findings (Post-Flight Telemetry)\n\n");
+            sb.append("| Step / Line | Category | Severity | Telemetry & Finding |\n");
+            sb.append("| :--- | :--- | :--- | :--- |\n");
+            for (final PlaybookLinterFinding f : postFlightFindings)
+            {
+                final String lineLabel = f.lineNumber() > 0 ? "L" + f.lineNumber() : "Step " + f.stepIndex();
+                final String sevEmoji = f.severity() == LinterSeverity.ERROR ? "🔴 ERROR"
+                    : f.severity() == LinterSeverity.WARNING ? "🟡 WARNING" : "ℹ️ INFO";
+                final String cat = f.category() != null ? f.category().name() : "GENERAL";
+
+                sb.append("| `").append(lineLabel).append("` | `").append(cat).append("` | ").append(sevEmoji).append(" | ")
+                    .append("**").append(escapeMarkdown(f.message())).append("**<br>");
+
+                if (f.rawInstruction() != null && !f.rawInstruction().equals(f.resolvedInstruction()))
+                {
+                    sb.append("<br><sub>**Template Step:**</sub><br>`").append(escapeMarkdown(f.rawInstruction())).append("`<br>");
+                    sb.append("<sub>**Resolved Step:**</sub><br>`").append(escapeMarkdown(f.resolvedInstruction())).append("`<br>");
+                }
+                else if (f.rawInstruction() != null && !f.rawInstruction().isBlank())
+                {
+                    sb.append("<br><sub>**Original Step:**</sub><br>`").append(escapeMarkdown(f.rawInstruction())).append("`<br>");
+                }
+
+                if (f.suggestedRewrite() != null && !f.suggestedRewrite().isBlank())
+                {
+                    sb.append("<br>💡 *Suggested Rewrite:*<br>`").append(escapeMarkdown(f.suggestedRewrite()).replace("\n", "`<br>`")).append("`");
+                }
+
+                sb.append(" |\n");
+            }
+            sb.append("\n");
+        }
+
         // 4. Execution Steps
         final List<TestExecutionReport.ReportStepEntry> steps = report.getSteps();
         if (!steps.isEmpty())
@@ -229,14 +267,72 @@ public final class MarkdownReportGenerator
         final List<TestExecutionReport.ReportLlmCallEntry> llmCalls = report.getLlmCalls();
         if (!llmCalls.isEmpty())
         {
+            final Map<Integer, TestExecutionReport.ReportStepEntry> stepMap = new HashMap<>();
+            for (final TestExecutionReport.ReportStepEntry s : report.getSteps())
+            {
+                stepMap.put(s.getStepIndex(), s);
+            }
+
             sb.append("## LLM Interactions\n\n");
-            sb.append("| # | Capability | Model | Duration | In Tokens | Out Tokens | Cached | Cost |\n");
-            sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+            sb.append("| # | Step | Phase / Role | Model | Duration | In Tokens | Out Tokens | Cached | Cost |\n");
+            sb.append("| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n");
+
+            int currentStepIndex = Integer.MIN_VALUE;
+            int turnInStep = 0;
+
             for (int i = 0; i < llmCalls.size(); i++)
             {
                 final TestExecutionReport.ReportLlmCallEntry call = llmCalls.get(i);
-                sb.append("| ").append(i + 1).append(" | `").append(call.getCapability() != null ? call.getCapability() : "").append("` | ")
-                    .append(call.getModelName() != null ? call.getModelName() : "default").append(" | ")
+                final int stepIdx = call.getStepIndex();
+                final boolean isNewStep = (stepIdx != currentStepIndex);
+
+                if (isNewStep)
+                {
+                    currentStepIndex = stepIdx;
+                    turnInStep = 0;
+                }
+
+                final int subIdx = call.getSubStepIndex();
+                final String stepNum = (stepIdx >= 0)
+                    ? (subIdx >= 0
+                        ? "Step #" + (stepIdx + 1) + "." + (subIdx + 1)
+                        : "Step #" + (stepIdx + 1))
+                    : ("POST_FLIGHT_LINTER".equalsIgnoreCase(call.getCapability()) ? "Post-Flight" : "Pre-Flight");
+                final String stepDisplay = isNewStep ? stepNum : "↳ " + stepNum;
+
+                final String cap = call.getCapability() != null ? call.getCapability().trim() : "";
+                final String phaseRole;
+                if ("VERIFICATION".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Verification";
+                }
+                else if ("JUDGE".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Quality Judge";
+                }
+                else if ("VISUAL_RCA".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Visual RCA";
+                }
+                else if ("LINTER".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Playbook Linter";
+                }
+                else if ("POST_FLIGHT_LINTER".equalsIgnoreCase(cap))
+                {
+                    phaseRole = "Post-Flight Linter";
+                }
+                else
+                {
+                    turnInStep++;
+                    final String modality = "VISION".equalsIgnoreCase(cap) ? "Vision 📸" : "Text";
+                    phaseRole = "Turn " + turnInStep + " (" + modality + ")";
+                }
+
+                sb.append("| ").append(i + 1).append(" | ")
+                    .append(stepDisplay).append(" | ")
+                    .append(phaseRole).append(" | `")
+                    .append(call.getModelName() != null ? call.getModelName() : "default").append("` | ")
                     .append(call.getDurationMs()).append(" ms | ")
                     .append(NUMBER_FORMAT.format(call.getInputTokens())).append(" | ")
                     .append(NUMBER_FORMAT.format(call.getOutputTokens())).append(" | ")
@@ -256,10 +352,16 @@ public final class MarkdownReportGenerator
             for (int i = 0; i < screenshots.size(); i++)
             {
                 final TestExecutionReport.ReportScreenshotEntry sc = screenshots.get(i);
+                final int scSubIdx = sc.getSubStepIndex();
+                final String stepLabel = sc.getStepIndex() >= 0
+                    ? (scSubIdx >= 0
+                        ? "Step #" + (sc.getStepIndex() + 1) + "." + (scSubIdx + 1)
+                        : "Step #" + (sc.getStepIndex() + 1))
+                    : "Pre-Flight";
                 final String widthStr = sc.getWidth() != null ? sc.getWidth() + " px" : "-";
                 final String heightStr = sc.getHeight() != null ? sc.getHeight() + " px" : "-";
                 final String dims = sc.getDimensions() != null ? sc.getDimensions() : "-";
-                sb.append("| ").append(i + 1).append(" | Step #").append(sc.getStepIndex() + 1).append(" | `")
+                sb.append("| ").append(i + 1).append(" | ").append(stepLabel).append(" | `")
                     .append(escapeMarkdown(sc.getName() != null ? sc.getName() : "-")).append("` | `")
                     .append(sc.getMediaType() != null ? sc.getMediaType() : "image/png").append("` | `")
                     .append(widthStr).append("` | `")
@@ -319,10 +421,6 @@ public final class MarkdownReportGenerator
         {
             sb.append("- **Multi-Stage Continuation:** `🔄 true (CONTINUE)`\n");
         }
-        if (step.getSemanticIntent() != null && !step.getSemanticIntent().isBlank())
-        {
-            sb.append("- **Semantic Intent:** `🎯 ").append(escapeMarkdown(step.getSemanticIntent())).append("`\n");
-        }
         if (step.getSsimScore() != null)
         {
             final double score = step.getSsimScore();
@@ -367,14 +465,10 @@ public final class MarkdownReportGenerator
             }
             sb.append("\n");
         }
-        if (step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0)
+        if (step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0)
         {
             sb.append("- **LLM Invocations:** ");
             final List<String> callSummaries = new ArrayList<>();
-            if (step.getPesapCalls() > 0)
-            {
-                callSummaries.add("PESAP: " + step.getPesapCalls() + " calls (" + NUMBER_FORMAT.format(step.getPesapInputTokens() + step.getPesapOutputTokens()) + " tokens)");
-            }
             if (step.getStandardCalls() > 0)
             {
                 callSummaries.add("Action: " + step.getStandardCalls() + " calls (" + NUMBER_FORMAT.format(step.getStandardInputTokens() + step.getStandardOutputTokens()) + " tokens)");

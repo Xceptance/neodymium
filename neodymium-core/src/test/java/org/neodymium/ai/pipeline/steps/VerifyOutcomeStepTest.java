@@ -22,6 +22,7 @@ import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
@@ -41,9 +42,11 @@ import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.VerificationFailureException;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.util.ScreenshotHasher;
 
@@ -176,41 +179,98 @@ public class VerifyOutcomeStepTest
     }
 
     /**
-     * Goal: Verifies that a failing verification rubric response records a structured warning string
-     * in the context's `verificationWarnings` transient list.
+     * Goal: Verifies that a failing verification rubric response throws a VerificationFailureException
+     * when failOnError is true (default), marks the step FAILED, and records structured verification result.
      */
     @Test
-    public void testFailedOutcomeVerificationRecordsWarning() throws Exception
+    public void testFailedOutcomeVerificationThrowsException() throws Exception
     {
         System.setProperty("neodymium.ai.semanticVerificationEnabled", "true");
-        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
-        final PlaybookStep playbookStep = new PlaybookStep("Click sign in");
-        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        System.setProperty("neodymium.ai.semanticVerification.failOnError", "true");
+        try
+        {
+            context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+            final PlaybookStep playbookStep = new PlaybookStep("Click sign in");
+            context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
 
-        final String jsonResponse = """
+            final String jsonResponse = """
+                {
+                  "rubrics": {
+                    "intentMatch": { "analysis": "Sign in button was disabled", "score": "FAIL" },
+                    "visualDelta": { "analysis": "Page state did not change", "score": "FAIL" },
+                    "absenceOfErrors": { "analysis": "Error prompt visible", "score": "FAIL" }
+                  },
+                  "overallVerdict": { "passed": false, "summary": "Sign in button was disabled" }
+                }
+                """;
+            mockLlmProvider.addResponse(new LlmResponse(jsonResponse, new TokenUsage(10, 10, 20), "mock-model"));
+
+            final VerifyOutcomeStep step = new VerifyOutcomeStep();
+            final VerificationFailureException thrown = Assertions.assertThrows(VerificationFailureException.class, () ->
             {
-              "rubrics": {
-                "intentMatch": { "analysis": "Sign in button was disabled", "score": "FAIL" },
-                "visualDelta": { "analysis": "Page state did not change", "score": "FAIL" },
-                "absenceOfErrors": { "analysis": "Error prompt visible", "score": "FAIL" }
-              },
-              "overallVerdict": { "passed": false, "summary": "Sign in button was disabled" }
-            }
-            """;
-        mockLlmProvider.addResponse(new LlmResponse(jsonResponse, new TokenUsage(10, 10, 20), "mock-model"));
+                step.execute(context);
+            });
 
-        final VerifyOutcomeStep step = new VerifyOutcomeStep();
-        step.execute(context);
+            Assertions.assertTrue(thrown.getMessage().contains("Sign in button was disabled"));
+            Assertions.assertEquals(PlaybookStepStatus.FAILED, playbookStep.getStatus());
+            Assertions.assertNotNull(playbookStep.getVerificationResult(), "Verification result must be stored on PlaybookStep");
+            Assertions.assertFalse(playbookStep.getVerificationResult().passed());
+            Assertions.assertEquals("FAIL", playbookStep.getVerificationResult().getRubrics().intentMatch().score());
 
-        @SuppressWarnings("unchecked")
-        final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
-        // Assert exactly 1 warning recorded with specific failing reason
-        Assertions.assertNotNull(warnings);
-        Assertions.assertEquals(1, warnings.size());
-        Assertions.assertTrue(warnings.get(0).toString().contains("Sign in button was disabled"));
-        Assertions.assertNotNull(playbookStep.getVerificationResult(), "Verification result must be stored on PlaybookStep");
-        Assertions.assertFalse(playbookStep.getVerificationResult().passed());
-        Assertions.assertEquals("FAIL", playbookStep.getVerificationResult().getRubrics().intentMatch().score());
+            @SuppressWarnings("unchecked")
+            final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
+            Assertions.assertNotNull(warnings);
+            Assertions.assertEquals(1, warnings.size());
+            Assertions.assertTrue(warnings.get(0).toString().contains("Sign in button was disabled"));
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.semanticVerification.failOnError");
+        }
+    }
+
+    /**
+     * Goal: Verifies that when failOnError is explicitly disabled (false), failing verification
+     * does not throw an exception, but records a diagnostic warning.
+     */
+    @Test
+    public void testFailedOutcomeVerificationDiagnosticWarningMode() throws Exception
+    {
+        System.setProperty("neodymium.ai.semanticVerificationEnabled", "true");
+        System.setProperty("neodymium.ai.semanticVerification.failOnError", "false");
+        try
+        {
+            context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+            final PlaybookStep playbookStep = new PlaybookStep("Click sign in");
+            context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+
+            final String jsonResponse = """
+                {
+                  "rubrics": {
+                    "intentMatch": { "analysis": "Sign in button was disabled", "score": "FAIL" },
+                    "visualDelta": { "analysis": "Page state did not change", "score": "FAIL" },
+                    "absenceOfErrors": { "analysis": "Error prompt visible", "score": "FAIL" }
+                  },
+                  "overallVerdict": { "passed": false, "summary": "Sign in button was disabled" }
+                }
+                """;
+            mockLlmProvider.addResponse(new LlmResponse(jsonResponse, new TokenUsage(10, 10, 20), "mock-model"));
+
+            final VerifyOutcomeStep step = new VerifyOutcomeStep();
+            step.execute(context);
+
+            @SuppressWarnings("unchecked")
+            final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
+            Assertions.assertNotNull(warnings);
+            Assertions.assertEquals(1, warnings.size());
+            Assertions.assertTrue(warnings.get(0).toString().contains("Sign in button was disabled"));
+            Assertions.assertNotNull(playbookStep.getVerificationResult(), "Verification result must be stored on PlaybookStep");
+            Assertions.assertFalse(playbookStep.getVerificationResult().passed());
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.semanticVerification.failOnError");
+        }
     }
 
     /**
@@ -301,7 +361,7 @@ public class VerifyOutcomeStepTest
             "viewport_hash");
 
         context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
-        context.getTransientData().put("KEY_POST_ACTION_STATE", staleState);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, staleState);
         context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, viewportState);
 
         final PlaybookStep pureVisualStep = new PlaybookStep("Verify page header (visual)");
@@ -317,6 +377,118 @@ public class VerifyOutcomeStepTest
         Assertions.assertNotNull(pureVisualStep.getScreenshotHash(), "Screenshot hash should be recorded.");
         Assertions.assertEquals(expectedViewportHash, pureVisualStep.getScreenshotHash(), "Baseline hash MUST match active viewport state, NOT stale full-page action state.");
         Assertions.assertNotEquals(expectedStaleHash, pureVisualStep.getScreenshotHash(), "Baseline hash must NOT match stale action state.");
-        Assertions.assertNull(context.getTransientData().get("KEY_POST_ACTION_STATE"), "KEY_POST_ACTION_STATE must be removed.");
+        Assertions.assertNull(context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE), "KEY_POST_ACTION_STATE must be removed.");
+    }
+
+    /**
+     * Goal: Verifies that semantic outcome verification includes both pre-action and post-action
+     * image attachments when KEY_PRE_ACTION_STATE and KEY_POST_ACTION_STATE are populated.
+     */
+    @Test
+    public void testOutcomeVerificationIncludesPreAndPostActionAttachments() throws Exception
+    {
+        final String preBase64 = Base64.getEncoder().encodeToString("pre_img".getBytes(StandardCharsets.UTF_8));
+        final String postBase64 = Base64.getEncoder().encodeToString("post_img".getBytes(StandardCharsets.UTF_8));
+
+        final MockSutState preState = new MockSutState(
+            "<html>pre</html>",
+            List.of(new SutAttachment("image/png", "pre.png", preBase64)),
+            "pre_hash");
+        final MockSutState postState = new MockSutState(
+            "<html>post</html>",
+            List.of(new SutAttachment("image/png", "post.png", postBase64)),
+            "post_hash");
+
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+        context.getTransientData().put(ExecutionContext.KEY_PRE_ACTION_STATE, preState);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postState);
+        context.getTransientData().put("semanticVerification.enabled", true);
+
+        final PlaybookStep step = new PlaybookStep("Click purchase");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+
+        final String jsonResponse = """
+            {
+              "rubrics": {
+                "intentMatch": { "analysis": "Clicked purchase", "score": "PASS" },
+                "visualDelta": { "analysis": "Confirmation shown", "score": "PASS" },
+                "absenceOfErrors": { "analysis": "No errors", "score": "PASS" }
+              },
+              "overallVerdict": { "passed": true, "summary": "Order placed successfully" }
+            }
+            """;
+        mockLlmProvider.addResponse(new LlmResponse(jsonResponse, new TokenUsage(10, 10, 20), "mock-model"));
+
+        final VerifyOutcomeStep verifyOutcomeStep = new VerifyOutcomeStep();
+        verifyOutcomeStep.execute(context);
+
+        Assertions.assertNotNull(mockLlmProvider.getLastRequest(), "LLM request must have been sent.");
+        Assertions.assertEquals(2, mockLlmProvider.getLastRequest().attachments().size(), "Both pre-action and post-action screenshots must be passed.");
+        Assertions.assertEquals(preBase64, mockLlmProvider.getLastRequest().attachments().get(0).base64Data());
+        Assertions.assertEquals(postBase64, mockLlmProvider.getLastRequest().attachments().get(1).base64Data());
+    }
+
+    /**
+     * Verifies that for a visual step with full-page requirements (visual: full) and empty actions,
+     * KEY_POST_ACTION_STATE is preserved and used to compute the baseline hash rather than being
+     * discarded in favor of an active viewport KEY_LAST_STATE.
+     */
+    @Test
+    public void testVisualStepWithFullPagePreservesPostActionState() throws Exception
+    {
+        final BufferedImage fullPageImg = new BufferedImage(1500, 2117, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = fullPageImg.createGraphics();
+        g1.setColor(Color.RED);
+        g1.fillRect(0, 0, 1500, 2117);
+        g1.dispose();
+
+        final BufferedImage viewportImg = new BufferedImage(1500, 857, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = viewportImg.createGraphics();
+        g2.setColor(Color.GREEN);
+        g2.fillRect(0, 0, 1500, 857);
+        g2.dispose();
+
+        final String fullPageBase64;
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
+        {
+            ImageIO.write(fullPageImg, "png", baos);
+            fullPageBase64 = Base64.getEncoder().encodeToString(baos.toByteArray());
+        }
+
+        final String viewportBase64;
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
+        {
+            ImageIO.write(viewportImg, "png", baos);
+            viewportBase64 = Base64.getEncoder().encodeToString(baos.toByteArray());
+        }
+
+        final MockSutState postActionState = new MockSutState(
+            "<html>fullpage</html>",
+            List.of(new SutAttachment("image/png", "fullpage.png", fullPageBase64)),
+            "fullpage_hash");
+
+        final MockSutState lastState = new MockSutState(
+            "<html>viewport</html>",
+            List.of(new SutAttachment("image/png", "viewport.png", viewportBase64)),
+            "viewport_hash");
+
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postActionState);
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, lastState);
+
+        final PlaybookStep fullPageVisualStep = new PlaybookStep("Verify checkmark on page (visual: full)");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, fullPageVisualStep);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final VerifyOutcomeStep step = new VerifyOutcomeStep();
+        step.execute(context);
+
+        final String expectedFullPageHash = ScreenshotHasher.computeSsimMatrix(fullPageBase64);
+        final String expectedViewportHash = ScreenshotHasher.computeSsimMatrix(viewportBase64);
+
+        Assertions.assertNotNull(fullPageVisualStep.getScreenshotHash(), "Screenshot hash should be recorded.");
+        Assertions.assertEquals(expectedFullPageHash, fullPageVisualStep.getScreenshotHash(), "Baseline hash MUST match full-page state from KEY_POST_ACTION_STATE.");
+        Assertions.assertNotEquals(expectedViewportHash, fullPageVisualStep.getScreenshotHash(), "Baseline hash must NOT match viewport state.");
+        Assertions.assertTrue(fullPageVisualStep.isFullPage(), "Step must be marked as fullPage.");
     }
 }

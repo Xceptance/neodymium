@@ -19,9 +19,11 @@
 package org.neodymium.ai.prompt;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.model.SessionData;
@@ -360,6 +362,16 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             }
         }
 
+        // 6. If action is STORE, exclude the target variable being defined to avoid circular self-references
+        if (rawAction != null && "STORE".equalsIgnoreCase(rawAction.getType()))
+        {
+            final String targetVar = rawAction.getValue();
+            if (targetVar != null && !targetVar.isBlank())
+            {
+                varMap.remove(targetVar.trim());
+            }
+        }
+
         return varMap;
     }
 
@@ -371,6 +383,19 @@ public final class DefaultActionSanitizer implements ActionSanitizer
      * @return the sanitized string with variables replaced
      */
     public String sanitizeText(final String input, final SessionData data)
+    {
+        return sanitizeText(input, data, Collections.emptySet());
+    }
+
+    /**
+     * Sanitizes raw text content against SessionData variables, excluding specified target variable keys.
+     *
+     * @param input the raw input string
+     * @param data the SessionData variable container
+     * @param excludedVars set of variable names that must not be used for replacement
+     * @return the sanitized string with variables replaced
+     */
+    public String sanitizeText(final String input, final SessionData data, final Set<String> excludedVars)
     {
         if (input == null || input.isEmpty() || data == null)
         {
@@ -385,6 +410,10 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         final java.util.Set<String> keys = data.extractVariableNames(input);
         for (final String key : keys)
         {
+            if (excludedVars != null && excludedVars.contains(key))
+            {
+                continue;
+            }
             final String val = allVars.get(key);
             if (val != null && !val.isEmpty())
             {
@@ -397,6 +426,10 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         {
             for (final String key : data.getRawSensitiveData().keySet())
             {
+                if (excludedVars != null && excludedVars.contains(key))
+                {
+                    continue;
+                }
                 final String val = allVars.get(key);
                 if (val != null && !val.isEmpty())
                 {
@@ -410,6 +443,10 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         {
             for (final String key : data.getAllRawDataMap().keySet())
             {
+                if (excludedVars != null && excludedVars.contains(key))
+                {
+                    continue;
+                }
                 final String val = allVars.get(key);
                 if (val != null && !val.isEmpty())
                 {
@@ -425,6 +462,10 @@ public final class DefaultActionSanitizer implements ActionSanitizer
             {
                 for (final String key : Neodymium.getData().keySet())
                 {
+                    if (excludedVars != null && excludedVars.contains(key))
+                    {
+                        continue;
+                    }
                     final String val = allVars.get(key);
                     if (val != null && !val.isEmpty())
                     {
@@ -440,10 +481,19 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         // 5. Fallback
         for (final Map.Entry<String, String> entry : allVars.entrySet())
         {
+            if (excludedVars != null && excludedVars.contains(entry.getKey()))
+            {
+                continue;
+            }
             if (entry.getValue() != null && !entry.getValue().isEmpty() && !varMap.containsKey(entry.getKey()) && isEligibleVariable(entry.getKey(), data))
             {
                 varMap.put(entry.getKey(), entry.getValue());
             }
+        }
+
+        if (excludedVars != null && !excludedVars.isEmpty())
+        {
+            varMap.keySet().removeAll(excludedVars);
         }
 
         if (varMap.isEmpty())

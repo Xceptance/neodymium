@@ -19,9 +19,10 @@
 package org.neodymium.ai.executor.selenide.plugins;
 
 import org.neodymium.ai.action.Action;
-import com.codeborne.selenide.Selenide;
-
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.SelenideElement;
 
 /**
  * Concrete action plugin executing CLEAR browser commands.
@@ -39,7 +40,7 @@ public final class ClearAction implements BrowserActionPlugin
     }
 
     /**
-     * Clears value from the target element.
+     * Clears value from the target element, or unchecks if the element is a checkbox.
      *
      * @param action the clear action
      * @throws Exception if clear fails
@@ -49,7 +50,44 @@ public final class ClearAction implements BrowserActionPlugin
     {
         if (action != null && action.getTarget() != null)
         {
-            SelenideElementFinder.findElement(action).clear();
+            final SelenideElement element = SelenideElementFinder.findElement(action);
+            final String type = element.getAttribute("type");
+            final String role = element.getAttribute("role");
+            final boolean isCheckbox = "checkbox".equalsIgnoreCase(type) || "checkbox".equalsIgnoreCase(role);
+
+            if (isCheckbox)
+            {
+                element.shouldBe(Condition.editable);
+                if (element.isSelected())
+                {
+                    element.click();
+                }
+            }
+            else
+            {
+                final boolean isContentEditable = Boolean.TRUE.equals(Selenide.executeJavaScript(
+                    "return !!(arguments[0] && (arguments[0].isContentEditable === true || arguments[0].getAttribute('contenteditable') === 'true' || arguments[0].hasAttribute('contenteditable')));",
+                    element));
+                if (isContentEditable)
+                {
+                    Selenide.executeJavaScript(
+                        "var el = arguments[0];"
+                        + "el.focus();"
+                        + "el.innerHTML = '';"
+                        + "var range = document.createRange();"
+                        + "range.selectNodeContents(el);"
+                        + "range.collapse(false);"
+                        + "var sel = window.getSelection();"
+                        + "sel.removeAllRanges();"
+                        + "sel.addRange(range);"
+                        + "el.dispatchEvent(new Event('input', { bubbles: true }));",
+                        element);
+                }
+                else
+                {
+                    element.clear();
+                }
+            }
         }
     }
 }

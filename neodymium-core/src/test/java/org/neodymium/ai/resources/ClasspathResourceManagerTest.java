@@ -15,8 +15,6 @@
  */
 package org.neodymium.ai.resources;
 
-// AI-generated: Gemini 3.5 Flash
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -174,6 +172,31 @@ public final class ClasspathResourceManagerTest
         {
             // Clean up created test file
             manager.delete(rootIdentifier);
+        }
+    }
+
+    /**
+     * Verifies that {@link ClasspathResourceManager#getSourceResourcesRoot()} dynamically resolves
+     * the submodule's source resources directory from the active classloader root instead of the
+     * top-level working directory.
+     */
+    @Test
+    public void testSourceResourcesRootResolutionInMultiModule()
+    {
+        final ClasspathResourceManager manager = new ClasspathResourceManager();
+        final Path srcRoot = manager.getSourceResourcesRoot();
+
+        assertNotNull(srcRoot, "Source resources root should be resolved");
+        assertTrue(Files.isDirectory(srcRoot), "Resolved source resources root should exist as a directory: " + srcRoot);
+        assertTrue(srcRoot.endsWith(Path.of("src", "test", "resources")),
+            "Resolved path should end with src/test/resources: " + srcRoot);
+
+        // When running in multi-module build from aggregator root, verify it points into neodymium-core
+        final URL classUrl = getClass().getClassLoader().getResource("");
+        if (classUrl != null && classUrl.getPath().contains("neodymium-core"))
+        {
+            assertTrue(srcRoot.toString().contains("neodymium-core"),
+                "Source resources root should resolve to submodule directory, not aggregator root: " + srcRoot);
         }
     }
 }

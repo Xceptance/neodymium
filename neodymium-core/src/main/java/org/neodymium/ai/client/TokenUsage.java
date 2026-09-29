@@ -47,4 +47,37 @@ public record TokenUsage(
     {
         this(inputTokenCount, outputTokenCount, totalTokenCount, 0);
     }
+
+    /**
+     * Null-safe factory method to construct a TokenUsage instance from potentially null boxed Integer values.
+     * If totalTokenCount is null, it is calculated as (inputTokenCount + outputTokenCount).
+     *
+     * @param inputTokenCount nullable input token count
+     * @param outputTokenCount nullable output token count
+     * @param totalTokenCount nullable total token count
+     * @param cachedTokenCount nullable cached token count
+     * @return a non-null TokenUsage record with defaulted zero values
+     */
+    public static TokenUsage of(final Integer inputTokenCount, final Integer outputTokenCount, final Integer totalTokenCount, final Integer cachedTokenCount)
+    {
+        final int in = inputTokenCount != null ? Math.max(0, inputTokenCount) : 0;
+        final int out = outputTokenCount != null ? Math.max(0, outputTokenCount) : 0;
+        final int cached = cachedTokenCount != null ? Math.max(0, cachedTokenCount) : 0;
+        final int total = totalTokenCount != null ? Math.max(0, totalTokenCount) : (in + out);
+        return new TokenUsage(in, out, total, cached);
+    }
+
+    /**
+     * Null-safe factory method to construct a TokenUsage instance from potentially null boxed Integer values
+     * with cachedTokenCount defaulting to 0.
+     *
+     * @param inputTokenCount nullable input token count
+     * @param outputTokenCount nullable output token count
+     * @param totalTokenCount nullable total token count
+     * @return a non-null TokenUsage record with defaulted zero values
+     */
+    public static TokenUsage of(final Integer inputTokenCount, final Integer outputTokenCount, final Integer totalTokenCount)
+    {
+        return of(inputTokenCount, outputTokenCount, totalTokenCount, 0);
+    }
 }

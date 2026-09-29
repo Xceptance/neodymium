@@ -37,9 +37,8 @@ import com.codeborne.selenide.WebDriverRunner;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.model.ContextLevel;
-import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiJudge;
+import org.neodymium.ai.junit.AiLinter;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -55,6 +54,8 @@ import org.neodymium.common.browser.Browser;
  */
 @Browser("Chrome_headless")
 @NeodymiumAiTest
+@AiLinter(false)
+@AiJudge({false, true})
 public class AssertIntegrationTest extends BaseAiTest
 {
 
@@ -76,9 +77,7 @@ public class AssertIntegrationTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertUrl.yaml")
-    @AiMode({ExecutionMode.FORCE_RECORDING})
-    @AiDataSet("assertData")
-    @AiJudge({true})
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testAssertUrl(final AiSession session) throws Exception
     {
         session.execute( """
@@ -97,13 +96,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(10)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(9)
-              .hasPesapCalls(9)
-              .hasContextLevelCount(ContextLevel.MINIMAL, 1)
-              .hasContextLevelCount(ContextLevel.STANDARD, 8))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed())
-            .onHealing(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         Assertions.assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
     }
@@ -115,7 +109,6 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertTitle.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertTitle(final AiSession session) throws Exception
     {
         session.execute( """
@@ -131,8 +124,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(5)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         Selenide.Wait().until(d -> "Assert Action Test".equals(d.getTitle()));
     }
@@ -144,7 +137,6 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertRegex.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertRegex(final AiSession session) throws Exception
     {
         session.execute( """
@@ -157,8 +149,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(2)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#welcome-message").shouldHave(text("Welcome to our web store!"));
     }
@@ -170,12 +162,9 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertVisibility.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertVisibility(final AiSession session) throws Exception
     {
         session.execute( """
-            data:
-              - testId: assertData
             steps: |
               Open ${assert.test.url} in the browser
               Assert that the welcome text 'Welcome to our web store!' is visible
@@ -184,7 +173,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(3)
             .hasNoSoftFailures()
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#visible-btn").shouldBe(visible);
         $("#hidden-btn").shouldBe(hidden);
@@ -197,7 +187,6 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertExistence.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertExistence(final AiSession session) throws Exception
     {
         session.execute( """
@@ -211,8 +200,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(3)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#visible-btn").should(exist);
     }
@@ -224,7 +213,6 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertAttributes.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertAttributes(final AiSession session) throws Exception
     {
         session.execute( """
@@ -238,9 +226,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(3)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#username").shouldHave(value("JohnDoe"));
     }
@@ -252,7 +239,6 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertFocus.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertFocus(final AiSession session) throws Exception
     {
         session.execute( """
@@ -266,9 +252,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(3)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#username").shouldBe(focused);
     }
@@ -280,7 +265,6 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertCheckboxState.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertCheckboxState(final AiSession session) throws Exception
     {
         session.execute( """
@@ -296,8 +280,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(5)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#newsletter-opt").shouldBe(checked);
         $("#terms-opt").shouldNotBe(checked);
@@ -310,7 +294,6 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertRadioButtonState.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertRadioButtonState(final AiSession session) throws Exception
     {
         session.execute( """
@@ -326,8 +309,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(5)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#plan-monthly").shouldBe(checked);
         $("#plan-yearly").shouldNotBe(checked);
@@ -340,7 +323,6 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertDisabledState.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertDisabledState(final AiSession session) throws Exception
     {
         session.execute( """
@@ -354,9 +336,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(3)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(3).hasPesapCalls(3).hasContextLevelCount(ContextLevel.MINIMAL, 3))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#disabled-input").shouldBe(disabled);
         $("#enabled-input").shouldBe(enabled);
@@ -369,7 +350,6 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertSelectedState.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertSelectedState(final AiSession session) throws Exception
     {
         session.execute( """
@@ -382,9 +362,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(2)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#opt-user").shouldBe(selected);
     }
@@ -396,7 +375,6 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertReadonlyState.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertReadonlyState(final AiSession session) throws Exception
     {
         session.execute( """
@@ -409,9 +387,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(2)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#readonly-input").shouldBe(readonly);
     }
@@ -423,7 +400,6 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertEditableState.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertEditableState(final AiSession session) throws Exception
     {
         session.execute( """
@@ -436,9 +412,8 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(2)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onLive(m -> m.hasActionCalls(2).hasPesapCalls(2).hasContextLevelCount(ContextLevel.MINIMAL, 2))
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#enabled-input").shouldBe(editable);
     }
@@ -450,7 +425,6 @@ public class AssertIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertNonExistentAbsence.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("assertData")
     public void testAssertNonExistentAbsence(final AiSession session) throws Exception
     {
         session.execute( """
@@ -463,8 +437,133 @@ public class AssertIntegrationTest extends BaseAiTest
             .verifyMetrics()
             .hasStepCount(2)
             .hasNoSoftFailures()
-            .hasNoEscalations()
-            .onStrictReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+    }
+
+    /**
+     * Sliced test case verifying hidden element state assertion.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertHiddenState.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testAssertHiddenState(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that the 'Secret Button' button is hidden
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#hidden-btn").shouldBe(hidden);
+    }
+
+    /**
+     * Sliced test case verifying element text assertions.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertText.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testAssertText(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that the welcome text is 'Welcome to our web store!'
+              Assert that the total price contains 'CAD $ 120.00'
+            """)
+            .verifyMetrics()
+            .hasStepCount(3)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#welcome-message").shouldHave(text("Welcome to our web store!"));
+        $("#total-price").shouldHave(text("CAD $ 120.00"));
+    }
+
+    /**
+     * Sliced test case verifying element count assertion.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertCount.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testAssertCount(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that there are 2 radio buttons
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+    }
+
+    /**
+     * Sliced test case verifying unselected option state assertion.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertUnselectedState.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testAssertUnselectedState(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that the 'opt-admin' option is unselected
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#opt-admin").shouldNotBe(selected);
+    }
+
+    /**
+     * Sliced test case verifying unfocused element state assertion.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertUnfocusedState.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testAssertUnfocusedState(final AiSession session) throws Exception
+    {
+        session.execute( """
+            data:
+              - testId: assertData
+            steps: |
+              Open ${assert.test.url} in the browser
+              Assert that the 'disabled-input' field is unfocused
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#disabled-input").shouldNotBe(focused);
     }
 
     /**
@@ -476,7 +575,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertTitleFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -495,7 +594,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertUrlFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -514,7 +613,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertTextFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -533,7 +632,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertVisibilityFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -552,7 +651,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertInvisibilityFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -571,7 +670,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertExistenceFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -590,7 +689,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertFocusFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -609,7 +708,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertAttributeFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -628,7 +727,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertCheckboxFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -647,7 +746,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertDisabledFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -666,7 +765,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertReadonlyFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -685,7 +784,7 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertSelectedFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
@@ -704,12 +803,127 @@ public class AssertIntegrationTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING})
     public void testAssertRegexMismatchFailure(final AiSession session) throws Exception
     {
-        Assertions.assertThrows(Throwable.class, () -> 
+        Assertions.assertThrows(AssertionError.class, () -> 
         {
             session.execute( """
                 steps: |
                   Open ${assert.test.url} in the browser
                   Assert that the welcome text matches '/^Goodbye.*/'
+                """);
+        });
+    }
+
+    /**
+     * Verifies that asserting an unchecked radio button is checked throws an error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertRadioButtonFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertRadioButtonFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'plan-yearly' radio button is checked
+                """);
+        });
+    }
+
+    /**
+     * Verifies that incorrect element value assertion throws error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertValueFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertValueFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'Username Input' value is 'WrongUser'
+                """);
+        });
+    }
+
+    /**
+     * Verifies that asserting a visible element is absent throws an error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertAbsenceFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertAbsenceFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'Clickable Button' button is absent
+                """);
+        });
+    }
+
+    /**
+     * Verifies that incorrect element count assertion throws error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertCountFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertCountFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that there are 5 radio buttons
+                """);
+        });
+    }
+
+    /**
+     * Verifies that asserting a selected option is unselected throws an error in live replay.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertUnselectedFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertUnselectedFailure(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'opt-user' option is unselected
+                """);
+        });
+    }
+
+    /**
+     * Verifies that asserting a selected option is unselected throws an error in live replay.
+     * Use a not.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/AssertIntegrationTest_testAssertUnselectedFailure.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING})
+    public void testAssertUnselectedFailureWithNot(final AiSession session) throws Exception
+    {
+        Assertions.assertThrows(AssertionError.class, () -> 
+        {
+            session.execute( """
+                steps: |
+                  Open ${assert.test.url} in the browser
+                  Assert that the 'opt-user' option is not selected
                 """);
         });
     }

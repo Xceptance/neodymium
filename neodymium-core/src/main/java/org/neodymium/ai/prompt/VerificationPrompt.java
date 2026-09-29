@@ -18,17 +18,24 @@
  */
 package org.neodymium.ai.prompt;
 
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
-import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
+import org.neodymium.ai.tool.ToolCall;
+
+import com.fasterxml.jackson.databind.JsonNode;
 
 /**
  * Prompt implementation that evaluates step execution outcomes and assertions
  * by comparing initial state, executed actions, and resulting final state.
  *
- * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 public final class VerificationPrompt implements AiPrompt<VerificationResult>
@@ -58,10 +65,23 @@ public final class VerificationPrompt implements AiPrompt<VerificationResult>
     public String compileUserMessage(final ExecutionContext context)
     {
         final String instruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        final String agentSummary = (String) context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY);
+        final Object rawCalls = context.getTransientData().get(AgentToolLoopStep.KEY_EXECUTED_TOOL_CALLS);
+        final List<?> toolCalls = rawCalls instanceof List<?> list ? list : null;
         final List<Action> actions = (List<Action>) context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
 
         final StringBuilder actionsStr = new StringBuilder();
-        if (actions != null && !actions.isEmpty())
+        if (toolCalls != null && !toolCalls.isEmpty())
+        {
+            for (final Object obj : toolCalls)
+            {
+                if (obj instanceof final ToolCall call)
+                {
+                    actionsStr.append("- ").append(formatToolCallForVerification(call)).append("\n");
+                }
+            }
+        }
+        else if (actions != null && !actions.isEmpty())
         {
             for (final Action act : actions)
             {
@@ -70,21 +90,107 @@ public final class VerificationPrompt implements AiPrompt<VerificationResult>
         }
         else
         {
-            actionsStr.append("(No actions executed)");
+            actionsStr.append("(No actions executed)\n");
         }
 
-        return String.format("""
-            Instruction:
-            \"\"\"
-            %s
-            \"\"\"
+        final StringBuilder sb = new StringBuilder();
+        sb.append("## Instruction\n").append(instruction != null ? instruction : "").append("\n\n");
+        if (agentSummary != null && !agentSummary.isBlank())
+        {
+            sb.append("## Agent Claimed Summary\n").append(agentSummary).append("\n\n");
+        }
+        sb.append("## Executed Tool Calls / Actions\n").append(actionsStr);
+        return sb.toString();
+    }
 
-            Executed Actions:
-            %s
-            """,
-            instruction != null ? instruction : "",
-            actionsStr.toString()
-        );
+    /**
+     * Formats a tool call for verification by stripping internal playback self-healing metadata
+     * (such as bounding boxes, tile SSIM, dHash, and sibling indexes) and retaining clean,
+     * semantic parameters.
+     *
+     * @param call the executed tool call
+     * @return a clean, human- and LLM-readable representation of the tool call
+     */
+    static String formatToolCallForVerification(final ToolCall call)
+    {
+        if (call == null)
+        {
+            return "";
+        }
+        final String toolName = call.toolName();
+        final JsonNode args = call.arguments();
+        if (args == null || !args.isObject() || args.isEmpty())
+        {
+            return toolName + "()";
+        }
+
+        final Map<String, String> formattedParams = new LinkedHashMap<>();
+
+        // 1. Process explicit top-level arguments
+        final Iterator<Map.Entry<String, JsonNode>> fields = args.fields();
+        while (fields.hasNext())
+        {
+            final Map.Entry<String, JsonNode> entry = fields.next();
+            final String key = entry.getKey();
+            final JsonNode value = entry.getValue();
+
+            // Skip internal runtime noise and chain-of-thought scratchpads
+            if ("domFeatureVector".equals(key) || "thought".equals(key))
+            {
+                continue;
+            }
+
+            if (value.isTextual())
+            {
+                formattedParams.put(key, "\"" + value.asText() + "\"");
+            }
+            else if (value.isNumber() || value.isBoolean())
+            {
+                formattedParams.put(key, value.asText());
+            }
+            else if (!value.isNull())
+            {
+                formattedParams.put(key, value.toString());
+            }
+        }
+
+        // 2. Extract useful semantic information from domFeatureVector if present
+        final JsonNode vectorNode = args.path("domFeatureVector");
+        if (vectorNode.isObject())
+        {
+            // If text is not already present, use vector text if non-blank
+            if (!formattedParams.containsKey("text"))
+            {
+                final String text = vectorNode.path("text").asText().trim();
+                if (!text.isBlank())
+                {
+                    formattedParams.put("text", "\"" + text + "\"");
+                }
+            }
+
+            // Include accessibleName if non-blank and different from text
+            final String accessibleName = vectorNode.path("accessibleName").asText().trim();
+            final String existingText = formattedParams.get("text");
+            if (!accessibleName.isBlank() && (existingText == null || !existingText.replace("\"", "").equalsIgnoreCase(accessibleName)))
+            {
+                formattedParams.put("accessibleName", "\"" + accessibleName + "\"");
+            }
+        }
+
+        final StringBuilder sb = new StringBuilder();
+        sb.append(toolName).append("(");
+        boolean first = true;
+        for (final Map.Entry<String, String> param : formattedParams.entrySet())
+        {
+            if (!first)
+            {
+                sb.append(", ");
+            }
+            sb.append(param.getKey()).append("=").append(param.getValue());
+            first = false;
+        }
+        sb.append(")");
+        return sb.toString();
     }
 
     @Override

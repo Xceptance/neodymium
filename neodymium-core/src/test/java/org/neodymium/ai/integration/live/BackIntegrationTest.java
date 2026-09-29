@@ -26,7 +26,6 @@ import com.codeborne.selenide.WebDriverRunner;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.junit.AiDataSet;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -70,12 +69,9 @@ public class BackIntegrationTest extends BaseAiTest
      */
     @AiPlaybook("/playbooks/integration/programmatic/BackIntegrationTest_testBack.yaml")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
-    @AiDataSet("backData")
     public void testBack(final AiSession session) throws Exception
     {
         session.execute( """
-            data:
-              - testId: backData
             steps: |
               Open ${back.test.url1} in the browser
               Open ${back.test.url2} in the browser

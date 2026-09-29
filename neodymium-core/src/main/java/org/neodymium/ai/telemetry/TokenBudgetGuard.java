@@ -20,6 +20,7 @@ package org.neodymium.ai.telemetry;
 
 import java.util.concurrent.atomic.AtomicInteger;
 import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.event.ExecutionEvent;
 import org.neodymium.ai.event.ExecutionListener;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
@@ -36,6 +37,8 @@ import org.neodymium.ai.pipeline.TokenBudgetExceededException;
  */
 public final class TokenBudgetGuard implements ExecutionListener
 {
+    private static final int UNCONFIGURED = Integer.MIN_VALUE;
+
     private final int inputBudget;
     private final int outputBudget;
 
@@ -48,14 +51,14 @@ public final class TokenBudgetGuard implements ExecutionListener
      */
     public TokenBudgetGuard()
     {
-        this(-1, -1);
+        this(UNCONFIGURED, UNCONFIGURED);
     }
 
     /**
      * Constructs a TokenBudgetGuard with specific input and output token budget limits.
      *
-     * @param inputBudget maximum allowed input/prompt tokens (<= 0 means resolve dynamically)
-     * @param outputBudget maximum allowed output/completion tokens (<= 0 means resolve dynamically)
+     * @param inputBudget maximum allowed input/prompt tokens (must be positive, or UNCONFIGURED to resolve dynamically)
+     * @param outputBudget maximum allowed output/completion tokens (must be positive, or UNCONFIGURED to resolve dynamically)
      */
     public TokenBudgetGuard(final int inputBudget, final int outputBudget)
     {
@@ -81,7 +84,7 @@ public final class TokenBudgetGuard implements ExecutionListener
                 final int currentOutput = this.tokenUsageOutput.addAndGet(usage.outputTokenCount());
 
                 final int effectiveInputBudget = resolveInputBudget();
-                if (effectiveInputBudget > 0 && currentInput > effectiveInputBudget)
+                if (currentInput > effectiveInputBudget)
                 {
                     throw new TokenBudgetExceededException(
                         TokenBudgetExceededException.BudgetType.INPUT,
@@ -91,7 +94,7 @@ public final class TokenBudgetGuard implements ExecutionListener
                 }
 
                 final int effectiveOutputBudget = resolveOutputBudget();
-                if (effectiveOutputBudget > 0 && currentOutput > effectiveOutputBudget)
+                if (currentOutput > effectiveOutputBudget)
                 {
                     throw new TokenBudgetExceededException(
                         TokenBudgetExceededException.BudgetType.OUTPUT,
@@ -118,7 +121,7 @@ public final class TokenBudgetGuard implements ExecutionListener
                 return i;
             }
         }
-        return org.neodymium.ai.config.AiConfiguration.getInstance().getTokenBudgetInput();
+        return AiConfiguration.getInstance().getTokenBudgetInput();
     }
 
     private int resolveOutputBudget()
@@ -136,7 +139,7 @@ public final class TokenBudgetGuard implements ExecutionListener
                 return i;
             }
         }
-        return org.neodymium.ai.config.AiConfiguration.getInstance().getTokenBudgetOutput();
+        return AiConfiguration.getInstance().getTokenBudgetOutput();
     }
 
     /**

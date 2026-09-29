@@ -21,12 +21,17 @@ package org.neodymium.ai.model;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.prompt.VerificationResult;
+import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.util.ScreenshotHasher;
 
 /**
@@ -47,31 +52,37 @@ public final class PlaybookStep
     /**
      * Flag indicating that this step should bypass the replay cache and execute live.
      */
+    @JsonProperty("noReplay")
     private boolean noReplay;
 
     /**
      * Flag indicating that this step is optional, meaning failures do not break the test.
      */
+    @JsonProperty("optional")
     private boolean optional;
 
     /**
      * Flag indicating that this step expects a bug (failing is expected, success is a failure).
      */
+    @JsonProperty("bug")
     private boolean bug;
 
     /**
      * Optional description or ID of the bug.
      */
+    @JsonProperty("bugDetails")
     private String bugDetails;
 
     /**
      * Flag indicating that test execution should continue even if this step fails or has unexpected success.
      */
+    @JsonProperty("continueOnError")
     private boolean continueOnError;
 
     /**
      * Flag indicating that self-healing is disabled for this step.
      */
+    @JsonProperty("noHealing")
     private boolean noHealing;
 
     /**
@@ -82,13 +93,20 @@ public final class PlaybookStep
     /**
      * The parent playbook step in the composite hierarchy, if any.
      */
-    @com.fasterxml.jackson.annotation.JsonIgnore
+    @JsonIgnore
     private transient PlaybookStep parent;
 
     /**
      * The concrete executed actions list associated with this step.
      */
     private final List<Action> actions = new ArrayList<>();
+
+    /**
+     * The executed tool calls associated with this step in the unified tooling architecture.
+     */
+    @JsonProperty("toolCalls")
+    @JsonInclude(JsonInclude.Include.NON_EMPTY)
+    private final List<ToolCall> toolCalls = new ArrayList<>();
 
     /**
      * The current execution state of this step.
@@ -136,6 +154,8 @@ public final class PlaybookStep
     /**
      * Minimum required SSIM score for visual gate pass.
      */
+    @JsonProperty("ssimMinScore")
+    @JsonAlias("threshold")
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Double ssimMinScore;
 
@@ -188,9 +208,14 @@ public final class PlaybookStep
     private DomFeatureVector domFeatureVector;
 
     /**
+     * Current schema version for recorded playbook steps.
+     */
+    public static final String CURRENT_SCHEMA_VERSION = "4.0";
+
+    /**
      * The schema version of the recorded playbook step.
      */
-    private String schemaVersion = "3.0";
+    private String schemaVersion = CURRENT_SCHEMA_VERSION;
 
     /**
      * The context level (e.g. VISUAL_LEAN, LEAN) recorded for this step during execution.
@@ -227,31 +252,6 @@ public final class PlaybookStep
      */
     private Long timeoutMs;
 
-    /**
-     * The classified semantic intent of this step (e.g. ASSERT, CLICK, TYPE, etc.).
-     */
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    private SemanticIntent semanticIntent;
-
-    /**
-     * Returns the classified semantic intent for this step.
-     *
-     * @return the semantic intent, or null if not classified
-     */
-    public SemanticIntent getSemanticIntent()
-    {
-        return this.semanticIntent;
-    }
-
-    /**
-     * Sets the classified semantic intent for this step.
-     *
-     * @param semanticIntent the semantic intent to set
-     */
-    public void setSemanticIntent(final SemanticIntent semanticIntent)
-    {
-        this.semanticIntent = semanticIntent;
-    }
 
     /**
      * Returns the recorded context level for this step.
@@ -351,22 +351,19 @@ public final class PlaybookStep
         {
             String cleaned = instruction;
 
-            final java.util.regex.Pattern noReplayPattern = java.util.regex.Pattern.compile("(?i)\\(\\s*no-replay\\s*\\)");
-            if (noReplayPattern.matcher(cleaned).find())
+            if (NO_REPLAY_PATTERN.matcher(cleaned).find())
             {
                 this.noReplay = true;
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*no-replay\\s*\\)\\s*", " ");
             }
 
-            final java.util.regex.Pattern optionalPattern = java.util.regex.Pattern.compile("(?i)\\(\\s*(optional|soft)\\s*\\)");
-            if (optionalPattern.matcher(cleaned).find())
+            if (OPTIONAL_PATTERN.matcher(cleaned).find())
             {
                 this.optional = true;
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*(optional|soft)\\s*\\)\\s*", " ");
             }
 
-            final java.util.regex.Pattern bugPattern = java.util.regex.Pattern.compile("(?i)\\(\\s*bug(?:\\s*:\\s*([^)]+))?\\s*\\)");
-            final java.util.regex.Matcher bugMatcher = bugPattern.matcher(cleaned);
+            final Matcher bugMatcher = BUG_PATTERN.matcher(cleaned);
             if (bugMatcher.find())
             {
                 this.bug = true;
@@ -374,22 +371,19 @@ public final class PlaybookStep
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*bug(?:\\s*:\\s*[^)]+)?\\s*\\)\\s*", " ");
             }
 
-            final java.util.regex.Pattern continueOnErrorPattern = java.util.regex.Pattern.compile("(?i)\\(\\s*continue-on-error\\s*\\)");
-            if (continueOnErrorPattern.matcher(cleaned).find())
+            if (CONTINUE_ON_ERROR_PATTERN.matcher(cleaned).find())
             {
                 this.continueOnError = true;
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*continue-on-error\\s*\\)\\s*", " ");
             }
 
-            final java.util.regex.Pattern noHealingPattern = java.util.regex.Pattern.compile("(?i)\\(\\s*no-healing\\s*\\)");
-            if (noHealingPattern.matcher(cleaned).find())
+            if (NO_HEALING_PATTERN.matcher(cleaned).find())
             {
                 this.noHealing = true;
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*no-healing\\s*\\)\\s*", " ");
             }
 
-            final java.util.regex.Pattern timeoutPattern = java.util.regex.Pattern.compile("(?i)\\(\\s*timeout\\s*:\\s*(\\d+)(ms|s)?\\s*\\)");
-            final java.util.regex.Matcher timeoutMatcher = timeoutPattern.matcher(cleaned);
+            final Matcher timeoutMatcher = TIMEOUT_PATTERN.matcher(cleaned);
             if (timeoutMatcher.find())
             {
                 final long val = Long.parseLong(timeoutMatcher.group(1));
@@ -403,6 +397,55 @@ public final class PlaybookStep
                     this.timeoutMs = val;
                 }
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\s*\\)\\s*", " ");
+            }
+
+            final Matcher standaloneThreshMatcher = STANDALONE_THRESHOLD_PATTERN.matcher(cleaned);
+            if (standaloneThreshMatcher.find())
+            {
+                final Double parsed = parseThreshold(standaloneThreshMatcher.group(1));
+                if (parsed != null)
+                {
+                    this.ssimMinScore = parsed;
+                }
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*[0-9.]+%?\\s*\\)\\s*", " ");
+            }
+
+            final Matcher visualMatcher = VISUAL_TAG_PARAM_PATTERN.matcher(cleaned);
+            if (visualMatcher.find())
+            {
+                final String paramStr = visualMatcher.group(1);
+                if (paramStr != null && !paramStr.isBlank())
+                {
+                    final String[] tokens = paramStr.split(",");
+                    for (final String rawToken : tokens)
+                    {
+                        final String token = rawToken.trim();
+                        if (token.equalsIgnoreCase("full"))
+                        {
+                            this.fullPage = true;
+                        }
+                        else
+                        {
+                            final Matcher threshMatcher = THRESHOLD_PARAM_PATTERN.matcher(token);
+                            if (threshMatcher.matches())
+                            {
+                                final Double parsed = parseThreshold(threshMatcher.group(1));
+                                if (parsed != null)
+                                {
+                                    this.ssimMinScore = parsed;
+                                }
+                            }
+                            else
+                            {
+                                final Double parsed = parseThreshold(token);
+                                if (parsed != null)
+                                {
+                                    this.ssimMinScore = parsed;
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             this.instruction = cleaned.trim();
@@ -419,15 +462,31 @@ public final class PlaybookStep
      *
      * @return true if no-replay, false otherwise
      */
+    @JsonIgnore
     public boolean isNoReplay()
+    {
+        return hasNoReplayRecursive(true, true);
+    }
+
+    private boolean hasNoReplayRecursive(final boolean checkAncestors, final boolean checkDescendants)
     {
         if (this.noReplay)
         {
             return true;
         }
-        if (this.parent != null)
+        if (checkAncestors && this.parent != null && this.parent.hasNoReplayRecursive(true, false))
         {
-            return this.parent.isNoReplay();
+            return true;
+        }
+        if (checkDescendants && this.subSteps != null)
+        {
+            for (final PlaybookStep sub : this.subSteps)
+            {
+                if (sub.hasNoReplayRecursive(false, true))
+                {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -444,19 +503,35 @@ public final class PlaybookStep
 
     /**
      * Checks if this step is marked as optional.
-     * If this step or any of its parent steps is optional, returns true.
+     * If this step, any of its parent steps, or any child sub-step is optional, returns true.
      *
      * @return true if optional, false otherwise
      */
+    @JsonIgnore
     public boolean isOptional()
+    {
+        return hasOptionalRecursive(true, true);
+    }
+
+    private boolean hasOptionalRecursive(final boolean checkAncestors, final boolean checkDescendants)
     {
         if (this.optional)
         {
             return true;
         }
-        if (this.parent != null)
+        if (checkAncestors && this.parent != null && this.parent.hasOptionalRecursive(true, false))
         {
-            return this.parent.isOptional();
+            return true;
+        }
+        if (checkDescendants && this.subSteps != null)
+        {
+            for (final PlaybookStep sub : this.subSteps)
+            {
+                if (sub.hasOptionalRecursive(false, true))
+                {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -473,19 +548,35 @@ public final class PlaybookStep
 
     /**
      * Checks if this step expects a bug.
-     * If this step or any of its parent steps expects a bug, returns true.
+     * If this step, any of its parent steps, or any child sub-step expects a bug, returns true.
      *
      * @return true if bug expected, false otherwise
      */
+    @JsonIgnore
     public boolean isBug()
+    {
+        return hasBugRecursive(true, true);
+    }
+
+    private boolean hasBugRecursive(final boolean checkAncestors, final boolean checkDescendants)
     {
         if (this.bug)
         {
             return true;
         }
-        if (this.parent != null)
+        if (checkAncestors && this.parent != null && this.parent.hasBugRecursive(true, false))
         {
-            return this.parent.isBug();
+            return true;
+        }
+        if (checkDescendants && this.subSteps != null)
+        {
+            for (final PlaybookStep sub : this.subSteps)
+            {
+                if (sub.hasBugRecursive(false, true))
+                {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -502,19 +593,40 @@ public final class PlaybookStep
 
     /**
      * Gets the bug details.
-     * If this step does not have bug details, it will check the parent chain.
+     * If this step does not have bug details, it will check the parent chain and child sub-steps.
      *
      * @return the bug details, or null
      */
+    @JsonIgnore
     public String getBugDetails()
+    {
+        return getBugDetailsRecursive(true, true);
+    }
+
+    private String getBugDetailsRecursive(final boolean checkAncestors, final boolean checkDescendants)
     {
         if (this.bugDetails != null)
         {
             return this.bugDetails;
         }
-        if (this.parent != null)
+        if (checkAncestors && this.parent != null)
         {
-            return this.parent.getBugDetails();
+            final String parentDetails = this.parent.getBugDetailsRecursive(true, false);
+            if (parentDetails != null)
+            {
+                return parentDetails;
+            }
+        }
+        if (checkDescendants && this.subSteps != null)
+        {
+            for (final PlaybookStep sub : this.subSteps)
+            {
+                final String subDetails = sub.getBugDetailsRecursive(false, true);
+                if (subDetails != null)
+                {
+                    return subDetails;
+                }
+            }
         }
         return null;
     }
@@ -531,19 +643,35 @@ public final class PlaybookStep
 
     /**
      * Checks if this step continues on error.
-     * If this step or any of its parent steps continues on error, returns true.
+     * If this step, any of its parent steps, or any child sub-step continues on error, returns true.
      *
      * @return true if continue on error, false otherwise
      */
+    @JsonIgnore
     public boolean isContinueOnError()
+    {
+        return hasContinueOnErrorRecursive(true, true);
+    }
+
+    private boolean hasContinueOnErrorRecursive(final boolean checkAncestors, final boolean checkDescendants)
     {
         if (this.continueOnError)
         {
             return true;
         }
-        if (this.parent != null)
+        if (checkAncestors && this.parent != null && this.parent.hasContinueOnErrorRecursive(true, false))
         {
-            return this.parent.isContinueOnError();
+            return true;
+        }
+        if (checkDescendants && this.subSteps != null)
+        {
+            for (final PlaybookStep sub : this.subSteps)
+            {
+                if (sub.hasContinueOnErrorRecursive(false, true))
+                {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -560,19 +688,35 @@ public final class PlaybookStep
 
     /**
      * Checks if this step has self-healing disabled.
-     * If this step or any of its parent steps has self-healing disabled, returns true.
+     * If this step, any of its parent steps, or any child sub-step has self-healing disabled, returns true.
      *
      * @return true if self-healing is disabled, false otherwise
      */
+    @JsonIgnore
     public boolean isNoHealing()
+    {
+        return hasNoHealingRecursive(true, true);
+    }
+
+    private boolean hasNoHealingRecursive(final boolean checkAncestors, final boolean checkDescendants)
     {
         if (this.noHealing)
         {
             return true;
         }
-        if (this.parent != null)
+        if (checkAncestors && this.parent != null && this.parent.hasNoHealingRecursive(true, false))
         {
-            return this.parent.isNoHealing();
+            return true;
+        }
+        if (checkDescendants && this.subSteps != null)
+        {
+            for (final PlaybookStep sub : this.subSteps)
+            {
+                if (sub.hasNoHealingRecursive(false, true))
+                {
+                    return true;
+                }
+            }
         }
         return false;
     }
@@ -622,6 +766,19 @@ public final class PlaybookStep
     }
 
     /**
+     * Adds an action to the executed actions list.
+     *
+     * @param action the action to add
+     */
+    public void addAction(final Action action)
+    {
+        if (action != null)
+        {
+            this.actions.add(action);
+        }
+    }
+
+    /**
      * Sets the concrete executed actions list of this step.
      *
      * @param actions the actions list to set
@@ -636,11 +793,61 @@ public final class PlaybookStep
     }
 
     /**
+     * Returns the list of executed tool calls for this step. If no tool calls are explicitly
+     * recorded but legacy recorded actions exist, transparently synthesizes tool calls from them.
+     *
+     * @return the unmodifiable tool calls list
+     */
+    public List<ToolCall> getToolCalls()
+    {
+        if (this.toolCalls.isEmpty() && !this.actions.isEmpty())
+        {
+            final List<ToolCall> synthesized = new ArrayList<>();
+            for (final Action action : this.actions)
+            {
+                if (action != null)
+                {
+                    synthesized.add(action.toToolCall());
+                }
+            }
+            return Collections.unmodifiableList(synthesized);
+        }
+        return Collections.unmodifiableList(this.toolCalls);
+    }
+
+    /**
+     * Sets the executed tool calls for this step.
+     *
+     * @param toolCalls tool calls to set
+     */
+    public void setToolCalls(final List<ToolCall> toolCalls)
+    {
+        this.toolCalls.clear();
+        if (toolCalls != null)
+        {
+            this.toolCalls.addAll(toolCalls);
+        }
+    }
+
+    /**
+     * Adds an executed tool call to this step.
+     *
+     * @param toolCall tool call to add
+     */
+    public void addToolCall(final ToolCall toolCall)
+    {
+        if (toolCall != null)
+        {
+            this.toolCalls.add(toolCall);
+        }
+    }
+
+    /**
      * Returns the parent playbook step, if any.
      *
      * @return the parent playbook step
      */
-    @com.fasterxml.jackson.annotation.JsonIgnore
+    @JsonIgnore
     public PlaybookStep getParent()
     {
         return this.parent;
@@ -651,7 +858,7 @@ public final class PlaybookStep
      *
      * @param parent the parent step to set
      */
-    @com.fasterxml.jackson.annotation.JsonIgnore
+    @JsonIgnore
     public void setParent(final PlaybookStep parent)
     {
         this.parent = parent;
@@ -662,7 +869,7 @@ public final class PlaybookStep
      *
      * @return the top-most root playbook step, or this if this step has no parent
      */
-    @com.fasterxml.jackson.annotation.JsonIgnore
+    @JsonIgnore
     public PlaybookStep getRootStep()
     {
         PlaybookStep current = this;
@@ -673,17 +880,67 @@ public final class PlaybookStep
         return current;
     }
 
-    public static final Pattern VISUAL_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*visual\\s*:\\s*full\\s*\\)");
-    public static final Pattern VISUAL_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)");
+    private static final Pattern NO_REPLAY_PATTERN = Pattern.compile("(?i)\\(\\s*no-replay\\s*\\)");
+    private static final Pattern OPTIONAL_PATTERN = Pattern.compile("(?i)\\(\\s*(optional|soft)\\s*\\)");
+    private static final Pattern BUG_PATTERN = Pattern.compile("(?i)\\(\\s*bug(?:\\s*:\\s*([^)]+))?\\s*\\)");
+    private static final Pattern CONTINUE_ON_ERROR_PATTERN = Pattern.compile("(?i)\\(\\s*continue-on-error\\s*\\)");
+    private static final Pattern NO_HEALING_PATTERN = Pattern.compile("(?i)\\(\\s*no-healing\\s*\\)");
+    private static final Pattern TIMEOUT_PATTERN = Pattern.compile("(?i)\\(\\s*timeout\\s*:\\s*(\\d+)(ms|s)?\\s*\\)");
+
+    public static final Pattern VISUAL_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*visual\\s*:[^)]*\\bfull\\b[^)]*\\)");
+    public static final Pattern VISUAL_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:[^)]+)?\\s*\\)");
+    private static final Pattern VISUAL_TAG_PARAM_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:\\s*([^)]+))?\\s*\\)");
+    private static final Pattern THRESHOLD_PARAM_PATTERN = Pattern.compile("(?i)^(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*([0-9.]+%?)$");
+    private static final Pattern STANDALONE_THRESHOLD_PATTERN = Pattern.compile("(?i)\\(\\s*(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*([0-9.]+%?)\\s*\\)");
     public static final Pattern LAYOUT_PATTERN = Pattern.compile("(?i)\\(\\s*layout\\s*\\)");
     public static final Pattern HINT_PATTERN = Pattern.compile("(?i)\\(\\s*hint\\s*:\\s*[^)]+\\)");
+    public static final Pattern INTERACTIVE_ACTION_PATTERN =
+        Pattern.compile("(?i)\\b(type|click|select|clear|submit|fill|press|enter|hover|drag|drop|scroll|check|uncheck|choose)\\b");
+
+    /**
+     * Parses a threshold value string into a normalized double between 0.0 and 1.0.
+     * Supports percentages (e.g. "98%" -> 0.98) and standard decimals (e.g. "0.98").
+     *
+     * @param text the raw threshold string
+     * @return normalized double threshold, or null if invalid
+     */
+    public static Double parseThreshold(final String text)
+    {
+        if (text == null || text.isBlank())
+        {
+            return null;
+        }
+        String cleaned = text.trim();
+        final boolean isPercent = cleaned.endsWith("%");
+        if (isPercent)
+        {
+            cleaned = cleaned.substring(0, cleaned.length() - 1).trim();
+        }
+        try
+        {
+            double val = Double.parseDouble(cleaned);
+            if (isPercent || val > 1.0)
+            {
+                val = val / 100.0;
+            }
+            if (val < 0.0 || val > 1.0)
+            {
+                return null;
+            }
+            return val;
+        }
+        catch (final NumberFormatException e)
+        {
+            return null;
+        }
+    }
 
     /**
      * Checks if this step provides an explicit selector hint.
      *
      * @return true if the instruction contains (hint: <selector>), false otherwise
      */
-    @com.fasterxml.jackson.annotation.JsonIgnore
+    @JsonIgnore
     public boolean isHintStep()
     {
         if (this.instruction == null)
@@ -698,7 +955,7 @@ public final class PlaybookStep
      *
      * @return true if the instruction indicates a visual verification, false otherwise
      */
-    @com.fasterxml.jackson.annotation.JsonIgnore
+    @JsonIgnore
     public boolean isVisualStep()
     {
         if (this.instruction == null)
@@ -713,7 +970,7 @@ public final class PlaybookStep
      *
      * @return true if the fullPage flag is true, or if the instruction contains (visual: full), (visual:full), false otherwise
      */
-    @com.fasterxml.jackson.annotation.JsonIgnore
+    @JsonIgnore
     public boolean isFullPageVisualStep()
     {
         if (Boolean.TRUE.equals(this.fullPage))
@@ -729,41 +986,11 @@ public final class PlaybookStep
 
     /**
      * Returns the current execution status of this step.
-     * If this step has sub-steps, its status is derived from its sub-steps (FAILED if any
-     * sub-step failed, or the status of the last executed sub-step).
      *
      * @return the step status
      */
     public PlaybookStepStatus getStatus()
     {
-        if (!this.subSteps.isEmpty())
-        {
-            boolean anyFailed = false;
-            PlaybookStepStatus lastExecutedStatus = null;
-            for (final PlaybookStep sub : this.subSteps)
-            {
-                if (sub != null)
-                {
-                    final PlaybookStepStatus subStatus = sub.getStatus();
-                    if (subStatus == PlaybookStepStatus.FAILED || sub.isFailed())
-                    {
-                        anyFailed = true;
-                    }
-                    if (subStatus != null && subStatus != PlaybookStepStatus.PENDING && subStatus != PlaybookStepStatus.SKIPPED)
-                    {
-                        lastExecutedStatus = subStatus;
-                    }
-                }
-            }
-            if (anyFailed)
-            {
-                return PlaybookStepStatus.FAILED;
-            }
-            if (lastExecutedStatus != null)
-            {
-                return lastExecutedStatus;
-            }
-        }
         return this.status;
     }
 
@@ -788,23 +1015,87 @@ public final class PlaybookStep
     }
 
     /**
+     * Checks if this step has child sub-steps (milestones).
+     *
+     * @return true if sub-steps collection is not empty, false otherwise
+     */
+    public boolean hasSubSteps()
+    {
+        return !this.subSteps.isEmpty();
+    }
+
+    /**
+     * Returns the full composite instruction including any nested sub-steps.
+     * If this step has no sub-steps, returns {@link #getInstruction()}.
+     *
+     * @return full composite instruction
+     */
+    @JsonIgnore
+    public String getFullInstruction()
+    {
+        if (!hasSubSteps())
+        {
+            return getInstruction() != null ? getInstruction() : "";
+        }
+
+        final StringBuilder sb = new StringBuilder();
+        if (this.instruction != null && !this.instruction.isBlank())
+        {
+            sb.append(this.instruction.trim());
+            if (!this.instruction.trim().endsWith(":"))
+            {
+                sb.append(":");
+            }
+        }
+        for (final PlaybookStep sub : this.subSteps)
+        {
+            final String subText = sub.getFullInstruction();
+            if (!subText.isBlank())
+            {
+                if (sb.length() > 0)
+                {
+                    sb.append("\n");
+                }
+                sb.append("  - ").append(subText.replace("\n", "\n    "));
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Checks if any child sub-step contains interactive action verbs (e.g. type, click, submit, clear).
+     *
+     * @return true if at least one sub-step contains an interactive operation
+     */
+    @JsonIgnore
+    public boolean hasInteractiveSubSteps()
+    {
+        if (!hasSubSteps())
+        {
+            return false;
+        }
+        for (final PlaybookStep sub : this.subSteps)
+        {
+            final String text = sub.getInstruction();
+            if (text != null && INTERACTIVE_ACTION_PATTERN.matcher(text).find())
+            {
+                return true;
+            }
+            if (sub.hasInteractiveSubSteps())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Checks if this step has failed execution.
      *
      * @return true if failed, false otherwise
      */
     public boolean isFailed()
     {
-        if (!this.subSteps.isEmpty())
-        {
-            for (final PlaybookStep sub : this.subSteps)
-            {
-                if (sub != null && (sub.isFailed() || sub.getStatus() == PlaybookStepStatus.FAILED))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
         return this.failed;
     }
 
@@ -946,6 +1237,17 @@ public final class PlaybookStep
     public void setSsimMinScore(final Double ssimMinScore)
     {
         this.ssimMinScore = ssimMinScore;
+    }
+
+    /**
+     * Sets the visual assertion threshold alias.
+     *
+     * @param threshold the threshold score
+     */
+    @JsonProperty("threshold")
+    public void setThreshold(final Double threshold)
+    {
+        this.ssimMinScore = threshold;
     }
 
     /**

@@ -24,6 +24,7 @@ import java.text.DecimalFormatSymbols;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -110,6 +111,13 @@ public final class HtmlReportGenerator
         {
             sb.append("<span class=\"meta-badge\">").append(TIME_FORMATTER.format(Instant.ofEpochMilli(report.getStartTimeMs()))).append("</span>");
         }
+        if (report.getTags() != null && !report.getTags().isEmpty())
+        {
+            for (final String tag : report.getTags())
+            {
+                sb.append("<span class=\"meta-badge tag\">🏷️ ").append(escapeHtml(tag)).append("</span>");
+            }
+        }
         sb.append("        </div>\n");
         sb.append("      </div>\n");
         sb.append("    </div>\n");
@@ -155,7 +163,7 @@ public final class HtmlReportGenerator
 
         appendHtmlCategoryRow(sb, "<strong>Total</strong>", m.getTotal(), "row-total");
         appendHtmlCategoryRow(sb, "Playbook Pre-Flight Linter", m.getLinter(), "");
-        appendHtmlCategoryRow(sb, "PESAP (Pre-Execution Semantic Anchor)", m.getPesap(), "");
+        appendHtmlCategoryRow(sb, "Playbook Post-Flight Linter", m.getPostFlightLinter(), "");
         appendHtmlCategoryRow(sb, "Action (Standard Generation)", m.getAction(), "");
         appendHtmlCategoryRow(sb, "Self-Judging Validation", m.getJudge(), "");
         appendHtmlCategoryRow(sb, "Semantic Outcome Verification", m.getVerification(), "");
@@ -292,6 +300,69 @@ public final class HtmlReportGenerator
             sb.append("  </details>\n");
         }
 
+        // Post-Flight Empirical Findings Box (if any)
+        final List<PlaybookLinterFinding> postFlightFindings = report.getPostFlightFindings();
+        if (!postFlightFindings.isEmpty())
+        {
+            sb.append("  <details open class=\"diagnostic-box postflight-linter-box\" style=\"border-left: 4px solid #8b5cf6; background: var(--card-bg, #ffffff); margin-bottom: 24px; padding: 18px 24px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);\">\n");
+            sb.append("    <summary class=\"box-header\" style=\"font-size: 1.15rem; font-weight: 700; color: var(--text-primary, #1e293b); cursor: pointer; user-select: none; list-style: none; display: flex; align-items: center; justify-content: space-between;\">\n");
+            sb.append("      <div style=\"display: flex; align-items: center; gap: 8px;\"><span>🔍 Empirical Playbook Findings (Post-Flight Telemetry) (").append(postFlightFindings.size()).append(")</span></div>\n");
+            sb.append("      <span class=\"linter-toggle-icon\" style=\"font-size: 0.85rem; color: var(--text-muted); transition: transform 0.2s ease;\">▼</span>\n");
+            sb.append("    </summary>\n");
+            sb.append("    <div class=\"linter-content\" style=\"margin-top: 14px;\">\n");
+            sb.append("      <div class=\"table-container\">\n");
+            sb.append("        <table class=\"data-table\">\n");
+            sb.append("          <thead><tr><th>Line / Step</th><th>Category</th><th>Severity</th><th>Telemetry & Suggested Rewrite</th></tr></thead>\n");
+            sb.append("          <tbody>\n");
+            for (final PlaybookLinterFinding f : postFlightFindings)
+            {
+                final String lineLabel = f.lineNumber() > 0 ? "L" + f.lineNumber() : "Step " + f.stepIndex();
+                final String sevBadge = f.severity() == LinterSeverity.ERROR
+                    ? "<span class=\"badge badge-error\" style=\"background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;\">ERROR</span>"
+                    : f.severity() == LinterSeverity.WARNING
+                    ? "<span class=\"badge badge-warning\" style=\"background:#f59e0b;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;\">WARNING</span>"
+                    : "<span class=\"badge badge-info\" style=\"background:#3b82f6;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;\">INFO</span>";
+                final String cat = f.category() != null ? f.category().name() : "GENERAL";
+
+                sb.append("        <tr>\n");
+                sb.append("          <td style=\"vertical-align:top;\"><code>").append(escapeHtml(lineLabel)).append("</code></td>\n");
+                sb.append("          <td style=\"vertical-align:top;\"><span style=\"font-weight:600;font-size:0.85rem;\">").append(escapeHtml(cat)).append("</span></td>\n");
+                sb.append("          <td style=\"vertical-align:top;\">").append(sevBadge).append("</td>\n");
+                sb.append("          <td>\n");
+                sb.append("            <div style=\"font-weight:600;margin-bottom:6px;color:var(--text-primary,#1e293b);\">").append(escapeHtml(f.message())).append("</div>\n");
+                if (f.rawInstruction() != null && !f.rawInstruction().equals(f.resolvedInstruction()))
+                {
+                    sb.append("            <div style=\"margin:6px 0;font-size:0.85rem;background:var(--bg-muted,#f1f5f9);padding:6px 10px;border-radius:4px;border-left:3px solid #94a3b8;\">\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">Template Step:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#1e293b;\">").append(escapeHtml(f.rawInstruction())).append("</code>\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;margin-bottom:2px;\">Resolved Step:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#1e293b;\">").append(escapeHtml(f.resolvedInstruction())).append("</code>\n");
+                    sb.append("            </div>\n");
+                }
+                else if (f.rawInstruction() != null && !f.rawInstruction().isBlank())
+                {
+                    sb.append("            <div style=\"margin:6px 0;font-size:0.85rem;background:var(--bg-muted,#f1f5f9);padding:6px 10px;border-radius:4px;border-left:3px solid #94a3b8;\">\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#475569;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">Original Step:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#1e293b;\">").append(escapeHtml(f.rawInstruction())).append("</code>\n");
+                    sb.append("            </div>\n");
+                }
+                if (f.suggestedRewrite() != null && !f.suggestedRewrite().isBlank())
+                {
+                    sb.append("            <div style=\"margin-top:6px;font-size:0.85rem;background:rgba(139,92,246,0.06);padding:6px 10px;border-radius:4px;border-left:3px solid #8b5cf6;\">\n");
+                    sb.append("              <div style=\"font-size:0.72rem;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;\">💡 Suggested Rewrite:</div>\n");
+                    sb.append("              <code style=\"white-space:pre-wrap;font-weight:500;color:#4c1d95;\">").append(escapeHtml(f.suggestedRewrite())).append("</code>\n");
+                    sb.append("            </div>\n");
+                }
+                sb.append("          </td>\n");
+                sb.append("        </tr>\n");
+            }
+            sb.append("          </tbody>\n");
+            sb.append("        </table>\n");
+            sb.append("      </div>\n");
+            sb.append("    </div>\n");
+            sb.append("  </details>\n");
+        }
+
         // 6. Interactive Execution Steps Section with Resizable Split Inspector
         final List<TestExecutionReport.ReportStepEntry> steps = report.getSteps();
         sb.append("  <section class=\"steps-section\">\n");
@@ -334,7 +405,6 @@ public final class HtmlReportGenerator
             sb.append("                <span class=\"context-badge\" id=\"inspContextBadge\" style=\"display:none;\"></span>\n");
             sb.append("                <span class=\"badge-flag visual-badge\" id=\"inspVisualBadge\" style=\"display:none;\">📸 VISUAL</span>\n");
             sb.append("                <span class=\"badge-flag bug-badge\" id=\"inspBugBadge\" style=\"display:none;\">🐛 BUG EXPECTED</span>\n");
-            sb.append("                <span class=\"badge-flag intent-badge\" id=\"inspIntentBadge\" style=\"display:none;\"></span>\n");
             sb.append("                <span class=\"badge-flag verification-badge-pass\" id=\"inspVerificationBadge\" style=\"display:none;\"></span>\n");
             sb.append("              </div>\n");
             sb.append("              <div class=\"inspector-header-controls\">\n");
@@ -348,6 +418,7 @@ public final class HtmlReportGenerator
             sb.append("            </div>\n");
             sb.append("            <div class=\"inspector-instruction\" id=\"inspInstruction\">Select a step</div>\n");
             sb.append("            <div class=\"inspector-raw-template\" id=\"inspRawTemplate\" style=\"display:none;\"></div>\n");
+            sb.append("            <div class=\"inspector-scope-context\" id=\"inspScopeContext\" style=\"display:none;\"></div>\n");
             sb.append("            <div class=\"inspector-sub-meta\" id=\"inspSourceFile\"></div>\n");
             sb.append("            <div class=\"inspector-error-banner\" id=\"inspErrorBanner\" style=\"display:none;\"></div>\n");
             sb.append("          </div>\n");
@@ -381,19 +452,132 @@ public final class HtmlReportGenerator
         final List<TestExecutionReport.ReportLlmCallEntry> llmCalls = report.getLlmCalls();
         if (!llmCalls.isEmpty())
         {
+            final Map<Integer, TestExecutionReport.ReportStepEntry> stepMap = new HashMap<>();
+            for (final TestExecutionReport.ReportStepEntry s : report.getSteps())
+            {
+                stepMap.put(s.getStepIndex(), s);
+            }
+
             sb.append("  <section class=\"card-section\">\n");
             sb.append("    <h2 class=\"section-title\">💬 All LLM Invocations & Prompt Trace (").append(llmCalls.size()).append(")</h2>\n");
             sb.append("    <div class=\"table-container\">\n");
-            sb.append("      <table class=\"data-table\">\n");
-            sb.append("        <thead><tr><th>#</th><th>Step</th><th>Capability</th><th>Model</th><th>Duration</th><th>In Tokens</th><th>Out Tokens</th><th>Cached</th><th>Est. Cost</th></tr></thead>\n");
+            sb.append("      <table class=\"data-table llm-trace-table\">\n");
+            sb.append("        <thead><tr><th>#</th><th>Step</th><th>Phase / Role</th><th>Model</th><th>Duration</th><th>In Tokens</th><th>Out Tokens</th><th>Cached</th><th>Est. Cost</th></tr></thead>\n");
             sb.append("        <tbody>\n");
+
+            int currentStepIndex = Integer.MIN_VALUE;
+            int turnInStep = 0;
+            int clusterColorIndex = 0;
+
             for (int i = 0; i < llmCalls.size(); i++)
             {
                 final TestExecutionReport.ReportLlmCallEntry call = llmCalls.get(i);
-                sb.append("          <tr>\n");
+                final int stepIdx = call.getStepIndex();
+                final boolean isNewStep = (stepIdx != currentStepIndex);
+
+                if (isNewStep)
+                {
+                    currentStepIndex = stepIdx;
+                    turnInStep = 0;
+                    clusterColorIndex++;
+
+                    final TestExecutionReport.ReportStepEntry step = stepMap.get(stepIdx);
+                    final String rawInstruction = step != null && step.getInstruction() != null ? step.getInstruction() : "";
+                    final String instructionSnippet = rawInstruction.length() > 80 ? rawInstruction.substring(0, 77) + "..." : rawInstruction;
+
+                    int clusterCallCount = 0;
+                    long clusterTokens = 0;
+                    double clusterCost = 0.0;
+                    for (int j = i; j < llmCalls.size() && llmCalls.get(j).getStepIndex() == stepIdx; j++)
+                    {
+                        final TestExecutionReport.ReportLlmCallEntry c = llmCalls.get(j);
+                        clusterCallCount++;
+                        clusterTokens += (c.getTotalTokens() > 0 ? c.getTotalTokens() : (c.getInputTokens() + c.getOutputTokens()));
+                        clusterCost += c.getEstimatedCostUsd();
+                    }
+
+                    final String stepLabel = stepIdx >= 0 ? "Step #" + (stepIdx + 1) : "Pre-Flight / Setup";
+                    final String onclick = stepIdx >= 0 ? " onclick=\"openAndSelectStep(" + stepIdx + ", -1, 'llm')\"" : "";
+
+                    sb.append("          <tr class=\"step-group-row\">\n");
+                    sb.append("            <td colspan=\"9\">\n");
+                    sb.append("              <div class=\"step-group-banner\">\n");
+                    sb.append("                <span class=\"step-group-title\"").append(onclick).append(">\n");
+                    sb.append("                  <span class=\"step-group-badge\">").append(escapeHtml(stepLabel)).append("</span>\n");
+                    if (!instructionSnippet.isBlank())
+                    {
+                        sb.append("                  <span class=\"step-group-instruction\" title=\"").append(escapeHtml(rawInstruction)).append("\">").append(escapeHtml(instructionSnippet)).append("</span>\n");
+                    }
+                    sb.append("                </span>\n");
+                    sb.append("                <span class=\"step-group-meta\">").append(clusterCallCount).append(clusterCallCount == 1 ? " call" : " calls")
+                      .append(" &bull; ").append(NUMBER_FORMAT.format(clusterTokens)).append(" tokens &bull; ")
+                      .append(COST_FORMAT.format(clusterCost)).append("</span>\n");
+                    sb.append("              </div>\n");
+                    sb.append("            </td>\n");
+                    sb.append("          </tr>\n");
+                }
+
+                final String clusterRowClass = (clusterColorIndex % 2 == 0) ? "step-cluster-even" : "step-cluster-odd";
+                final String rowFirstClass = isNewStep ? " step-cluster-first" : "";
+
+                sb.append("          <tr class=\"").append(clusterRowClass).append(rowFirstClass).append("\">\n");
                 sb.append("            <td>").append(i + 1).append("</td>\n");
-                sb.append("            <td><span class=\"step-ref\" onclick=\"openAndSelectStep(").append(call.getStepIndex()).append(")\">Step #").append(call.getStepIndex() + 1).append("</span></td>\n");
-                sb.append("            <td><span class=\"badge-role\">").append(escapeHtml(call.getCapability() != null ? call.getCapability() : "-")).append("</span></td>\n");
+
+                final int subIdx = call.getSubStepIndex();
+                final String stepDisplay = stepIdx >= 0
+                    ? (subIdx >= 0
+                        ? "Step #" + (stepIdx + 1) + "." + (subIdx + 1)
+                        : "Step #" + (stepIdx + 1))
+                    : ("POST_FLIGHT_LINTER".equalsIgnoreCase(call.getCapability()) ? "Post-Flight" : "Pre-Flight");
+                if (stepIdx >= 0)
+                {
+                    if (isNewStep)
+                    {
+                        sb.append("            <td><span class=\"step-ref\" onclick=\"openAndSelectStep(").append(stepIdx).append(", ").append(subIdx).append(", 'llm')\">").append(escapeHtml(stepDisplay)).append("</span></td>\n");
+                    }
+                    else
+                    {
+                        sb.append("            <td><span class=\"step-ref subcall\" onclick=\"openAndSelectStep(").append(stepIdx).append(", ").append(subIdx).append(", 'llm')\"><span class=\"step-tree-indicator\">↳</span> ").append(escapeHtml(stepDisplay)).append("</span></td>\n");
+                    }
+                }
+                else
+                {
+                    sb.append("            <td><span class=\"text-muted\">").append(escapeHtml(stepDisplay)).append("</span></td>\n");
+                }
+
+                final String cap = call.getCapability() != null ? call.getCapability().trim() : "";
+                final String phaseRoleHtml;
+                if ("VERIFICATION".equalsIgnoreCase(cap))
+                {
+                    phaseRoleHtml = "<span class=\"badge-phase continuation\" title=\"Post-Execution Outcome Verification\">Verification</span>";
+                }
+                else if ("JUDGE".equalsIgnoreCase(cap))
+                {
+                    phaseRoleHtml = "<span class=\"badge-phase judge\" title=\"Step Quality Judge Evaluation\">Quality Judge</span>";
+                }
+                else if ("VISUAL_RCA".equalsIgnoreCase(cap))
+                {
+                    phaseRoleHtml = "<span class=\"badge-phase prelude\" title=\"Visual Root Cause Analysis (SSIM/Diff Diagnostics)\">Visual RCA</span>";
+                }
+                else if ("LINTER".equalsIgnoreCase(cap))
+                {
+                    phaseRoleHtml = "<span class=\"badge-phase prelude\" title=\"Pre-Flight Playbook Static & Semantic Linter\">Playbook Linter</span>";
+                }
+                else if ("POST_FLIGHT_LINTER".equalsIgnoreCase(cap))
+                {
+                    phaseRoleHtml = "<span class=\"badge-phase prelude\" title=\"Post-Flight Playbook Execution Linter\">Post-Flight Linter</span>";
+                }
+                else
+                {
+                    turnInStep++;
+                    final boolean isVision = "VISION".equalsIgnoreCase(cap);
+                    final String modalityBadge = isVision
+                        ? "<span class=\"badge-modality vision\" title=\"Multimodal LLM Request (DOM Light + Visual Screenshot)\">Vision 📸</span>"
+                        : "<span class=\"badge-modality text\" title=\"Text-Only LLM Request (Pierced DOM Light)\">Text</span>";
+                    phaseRoleHtml = "<span class=\"badge-role\">Turn " + turnInStep + "</span>" + modalityBadge;
+                }
+
+                sb.append("            <td>").append(phaseRoleHtml).append("</td>\n");
                 sb.append("            <td><code>").append(escapeHtml(call.getModelName() != null ? call.getModelName() : "default")).append("</code></td>\n");
                 sb.append("            <td>").append(NUMBER_FORMAT.format(call.getDurationMs())).append(" ms</td>\n");
                 sb.append("            <td>").append(NUMBER_FORMAT.format(call.getInputTokens())).append("</td>\n");
@@ -513,10 +697,6 @@ public final class HtmlReportGenerator
         {
             sb.append("              <span class=\"badge-flag visual-badge\">📸 VISUAL</span>\n");
         }
-        if (step.getSemanticIntent() != null && !step.getSemanticIntent().isBlank())
-        {
-            sb.append("              <span class=\"badge-flag intent-badge\" title=\"Semantic Intent: ").append(escapeHtml(step.getSemanticIntent())).append("\">🎯 ").append(escapeHtml(step.getSemanticIntent())).append("</span>\n");
-        }
         if (step.isOptional())
         {
             sb.append("              <span class=\"badge-flag optional-badge\">OPTIONAL</span>\n");
@@ -585,9 +765,41 @@ public final class HtmlReportGenerator
     {
         final boolean isSub = subIndex >= 0;
         final String footerClass = isSub ? "sub-step-footer" : "step-card-footer";
-        final int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getPesapCalls() + step.getStandardCalls() + step.getVerificationCalls() + step.getRcaCalls());
+        int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getStandardCalls() + step.getVerificationCalls() + step.getRcaCalls());
+        int actionCount = step.getActions().size();
+        int screenshotCount = step.getScreenshots().size();
 
-        if (!step.getActions().isEmpty() || step.getPesapCalls() > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || !step.getScreenshots().isEmpty() || step.getSsimScore() != null || step.getVerificationResult() != null)
+        if (hasSubSteps && !isSub)
+        {
+            if (actionCount == 0)
+            {
+                for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+                {
+                    actionCount += sub.getActions().size();
+                }
+            }
+            if (screenshotCount == 0)
+            {
+                for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+                {
+                    screenshotCount += sub.getScreenshots().size();
+                }
+            }
+            if (step.getLlmCalls().isEmpty())
+            {
+                int aggregatedLlmCount = 0;
+                for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+                {
+                    aggregatedLlmCount += !sub.getLlmCalls().isEmpty() ? sub.getLlmCalls().size() : (sub.getStandardCalls() + sub.getVerificationCalls() + sub.getRcaCalls());
+                }
+                if (aggregatedLlmCount > 0)
+                {
+                    llmCount = aggregatedLlmCount;
+                }
+            }
+        }
+
+        if (actionCount > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || screenshotCount > 0 || step.getSsimScore() != null || step.getVerificationResult() != null)
         {
             sb.append("          <div class=\"").append(footerClass).append("\">\n");
             if (step.getSsimScore() != null)
@@ -604,15 +816,19 @@ public final class HtmlReportGenerator
                 sb.append("            <span class=\"footer-tag ").append(pass ? "verif-pass" : "verif-fail")
                   .append("\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'verification')\">🔍 Verification: ").append(pass ? "PASSED" : "FAILED").append("</span>\n");
             }
-            if (!step.getActions().isEmpty())
+            if (actionCount > 0)
             {
-                sb.append("            <span class=\"footer-tag\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'actions')\">🎯 ").append(step.getActions().size()).append(" action(s)</span>\n");
+                sb.append("            <span class=\"footer-tag\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'actions')\">🎯 ").append(actionCount).append(" action(s)</span>\n");
             }
-            if (!step.getScreenshots().isEmpty())
+            if (screenshotCount > 0)
             {
-                final String firstDims = step.getScreenshots().get(0).getDimensions();
+                final String firstDims = !step.getScreenshots().isEmpty()
+                    ? step.getScreenshots().get(0).getDimensions()
+                    : (hasSubSteps && !step.getSubSteps().isEmpty() && !step.getSubSteps().get(0).getScreenshots().isEmpty()
+                        ? step.getSubSteps().get(0).getScreenshots().get(0).getDimensions()
+                        : null);
                 final String dimText = firstDims != null ? " (" + firstDims + ")" : "";
-                sb.append("            <span class=\"footer-tag highlight\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'visuals')\">📸 ").append(step.getScreenshots().size()).append(" screenshot(s)").append(dimText).append("</span>\n");
+                sb.append("            <span class=\"footer-tag highlight\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'visuals')\">📸 ").append(screenshotCount).append(" screenshot(s)").append(dimText).append("</span>\n");
             }
             if (llmCount > 0)
             {
@@ -620,7 +836,7 @@ public final class HtmlReportGenerator
             }
             if (hasSubSteps)
             {
-                sb.append("            <span class=\"footer-tag highlight\">📂 Contains ").append(step.getSubSteps().size()).append(" sub-step(s)</span>\n");
+                sb.append("            <span class=\"footer-tag highlight\">✂️ ").append(step.getSubSteps().size()).append(" sub-step(s)</span>\n");
             }
             sb.append("          </div>\n");
         }
@@ -644,9 +860,17 @@ public final class HtmlReportGenerator
         appendStepBadges(sb, step);
         sb.append("            </div>\n");
         sb.append("            <div class=\"step-header-right\">\n");
-        if (step.getDurationMs() > 0)
+        long stepDuration = step.getDurationMs();
+        if (stepDuration <= 0 && hasSubSteps)
         {
-            sb.append("              <span class=\"step-duration\">").append(NUMBER_FORMAT.format(step.getDurationMs())).append(" ms</span>\n");
+            for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+            {
+                stepDuration += sub.getDurationMs();
+            }
+        }
+        if (stepDuration > 0)
+        {
+            sb.append("              <span class=\"step-duration\">").append(NUMBER_FORMAT.format(stepDuration)).append(" ms</span>\n");
         }
         sb.append("              <button class=\"btn-inspect-step\" onclick=\"openAndSelectStep(").append(index).append(", -1)\">🔍 Inspect</button>\n");
         sb.append("            </div>\n");
@@ -674,7 +898,7 @@ public final class HtmlReportGenerator
         if (hasSubSteps)
         {
             sb.append("          <div class=\"sub-steps-container\">\n");
-            sb.append("            <div class=\"sub-steps-header\">📂 Sub-Steps:</div>\n");
+            sb.append("            <div class=\"sub-steps-header\">Sub-Steps:</div>\n");
             for (int s = 0; s < step.getSubSteps().size(); s++)
             {
                 final TestExecutionReport.ReportStepEntry sub = step.getSubSteps().get(s);
@@ -892,7 +1116,8 @@ public final class HtmlReportGenerator
             window.copyLlmField = function(callIndex, fieldName, btn) {
                 var step = getActiveStepObject();
                 if (!step || !step.llmCalls || !step.llmCalls[callIndex]) return;
-                var val = step.llmCalls[callIndex][fieldName] || '';
+                var rawVal = step.llmCalls[callIndex][fieldName];
+                var val = Array.isArray(rawVal) ? rawVal.join('\\n') : (rawVal || '');
                 if (navigator.clipboard) {
                     navigator.clipboard.writeText(val).then(function() {
                         var original = btn.textContent;
@@ -969,7 +1194,13 @@ public final class HtmlReportGenerator
                     status === 'SKIPPED' ? 'pill-skip' : 'pill-pending'
                 );
 
-                document.getElementById('inspDuration').textContent = formatNumber(step.durationMs || 0) + ' ms';
+                var duration = step.durationMs || 0;
+                if (currentSubIdx < 0 && step.subSteps && step.subSteps.length > 0 && duration <= 0) {
+                    step.subSteps.forEach(function(sub) {
+                        duration += (sub.durationMs || 0);
+                    });
+                }
+                document.getElementById('inspDuration').textContent = formatNumber(duration) + ' ms';
                 document.getElementById('inspInstruction').textContent = step.instruction || 'No instruction';
 
                 var rawTpl = document.getElementById('inspRawTemplate');
@@ -978,6 +1209,16 @@ public final class HtmlReportGenerator
                     rawTpl.style.display = 'block';
                 } else {
                     rawTpl.style.display = 'none';
+                }
+
+                var scopeEl = document.getElementById('inspScopeContext');
+                if (scopeEl) {
+                    if (currentSubIdx >= 0 && steps[currentParentIdx] && steps[currentParentIdx].instruction) {
+                        scopeEl.textContent = '📍 Scope: ' + steps[currentParentIdx].instruction;
+                        scopeEl.style.display = 'block';
+                    } else {
+                        scopeEl.style.display = 'none';
+                    }
                 }
 
                 var bugBadge = document.getElementById('inspBugBadge');
@@ -993,15 +1234,6 @@ public final class HtmlReportGenerator
                     visBadge.style.display = 'inline-block';
                 } else {
                     visBadge.style.display = 'none';
-                }
-
-                var intentBadge = document.getElementById('inspIntentBadge');
-                if (step.semanticIntent) {
-                    intentBadge.style.display = 'inline-block';
-                    intentBadge.textContent = '🎯 ' + step.semanticIntent;
-                    intentBadge.title = 'Semantic Intent: ' + step.semanticIntent;
-                } else {
-                    intentBadge.style.display = 'none';
                 }
 
                 var verifBadge = document.getElementById('inspVerificationBadge');
@@ -1050,9 +1282,33 @@ public final class HtmlReportGenerator
                 }
 
                 // Update Tab Counts
-                var llmCalls = step.llmCalls || [];
-                var actions = step.actions || [];
-                var visuals = step.screenshots || [];
+                var llmCalls = (step.llmCalls && step.llmCalls.length > 0) ? step.llmCalls : [];
+                var actions = (step.actions && step.actions.length > 0) ? step.actions : [];
+                var visuals = (step.screenshots && step.screenshots.length > 0) ? step.screenshots : [];
+
+                if (currentSubIdx < 0 && step.subSteps && step.subSteps.length > 0) {
+                    if (llmCalls.length === 0) {
+                        step.subSteps.forEach(function(sub) {
+                            if (sub.llmCalls) {
+                                llmCalls = llmCalls.concat(sub.llmCalls);
+                            }
+                        });
+                    }
+                    if (actions.length === 0) {
+                        step.subSteps.forEach(function(sub) {
+                            if (sub.actions) {
+                                actions = actions.concat(sub.actions);
+                            }
+                        });
+                    }
+                    if (visuals.length === 0) {
+                        step.subSteps.forEach(function(sub) {
+                            if (sub.screenshots) {
+                                visuals = visuals.concat(sub.screenshots);
+                            }
+                        });
+                    }
+                }
 
                 document.getElementById('tabLlmCount').textContent = llmCalls.length;
                 document.getElementById('tabActionsCount').textContent = actions.length;
@@ -1088,22 +1344,97 @@ public final class HtmlReportGenerator
 
                         var header = document.createElement('div');
                         header.className = 'llm-call-header';
-                        header.innerHTML = '<div class="llm-call-title">Call #' + (ci + 1) + ' &bull; <code>' + (call.modelName || 'default') + '</code> (' + (call.capability || 'TEXT') + ')</div>' +
+
+                        var cap = (call.capability || 'TEXT').toUpperCase();
+                        var callTitle;
+                        if (cap === 'VERIFICATION') {
+                            callTitle = '<span class="badge-phase continuation">Verification</span>';
+                        } else if (cap === 'JUDGE') {
+                            callTitle = '<span class="badge-phase judge">Quality Judge</span>';
+                        } else if (cap === 'VISUAL_RCA') {
+                            callTitle = '<span class="badge-phase prelude">Visual RCA</span>';
+                        } else if (cap === 'LINTER') {
+                            callTitle = '<span class="badge-phase prelude">Playbook Linter</span>';
+                        } else if (cap === 'POST_FLIGHT_LINTER') {
+                            callTitle = '<span class="badge-phase prelude">Post-Flight Linter</span>';
+                        } else if (cap === 'VISION') {
+                            callTitle = '<span class="badge-role">Call #' + (ci + 1) + '</span><span class="badge-modality vision">Vision 📸</span>';
+                        } else {
+                            callTitle = '<span class="badge-role">Call #' + (ci + 1) + '</span><span class="badge-modality text">Text</span>';
+                        }
+
+                        header.innerHTML = '<div class="llm-call-title">' + callTitle + ' &bull; <code>' + (call.modelName || 'default') + '</code></div>' +
                                            '<div class="llm-call-meta">' + formatNumber(call.durationMs || 0) + ' ms | ' + formatNumber(call.totalTokens || 0) + ' tokens (' + formatCost(call.estimatedCostUsd) + ')</div>';
                         card.appendChild(header);
 
+                        var promptItems = [];
                         if (call.systemPrompt) {
-                            var sec = createPromptSection('System Prompt:', call.systemPrompt, ci, 'systemPrompt');
-                            card.appendChild(sec);
+                            promptItems.push({ label: 'System Prompt:', text: call.systemPrompt, field: 'systemPrompt', name: 'System' });
+                        }
+                        if (call.availableTools && call.availableTools.length > 0) {
+                            var toolsText = call.availableTools.join('\\n');
+                            promptItems.push({ label: 'Available Native Tools (' + call.availableTools.length + '):', text: toolsText, field: 'availableTools', name: 'Tools' });
+                        }
+                        if (call.userPrompt) {
+                            promptItems.push({ label: 'User Prompt & DOM Context (Plain Text):', text: call.userPrompt, field: 'userPrompt', name: 'User Prompt & DOM' });
                         }
 
-                        if (call.userPrompt) {
-                            var sec = createPromptSection('User Prompt & DOM Context (Plain Text):', call.userPrompt, ci, 'userPrompt');
-                            card.appendChild(sec);
+                        if (promptItems.length > 0) {
+                            var promptsWrapper = document.createElement('div');
+                            promptsWrapper.className = 'llm-prompts-wrapper collapsed';
+
+                            var promptNames = promptItems.map(function(p) { return p.name; }).join(', ');
+
+                            var toggleBar = document.createElement('div');
+                            toggleBar.className = 'llm-prompts-toggle';
+                            toggleBar.title = 'Click to expand/collapse prompt details (' + promptNames + ')';
+
+                            var toggleTitle = document.createElement('div');
+                            toggleTitle.className = 'llm-prompts-toggle-title';
+
+                            var chevron = document.createElement('span');
+                            chevron.className = 'prompts-chevron';
+                            chevron.textContent = '▶';
+                            toggleTitle.appendChild(chevron);
+
+                            var toggleLabel = document.createElement('span');
+                            toggleLabel.className = 'prompts-toggle-label';
+                            toggleLabel.textContent = 'Prompts & Context (' + promptItems.length + ')';
+                            toggleTitle.appendChild(toggleLabel);
+
+                            var toggleSummary = document.createElement('span');
+                            toggleSummary.className = 'prompts-toggle-summary';
+                            toggleSummary.textContent = '• ' + promptNames;
+                            toggleTitle.appendChild(toggleSummary);
+
+                            toggleBar.appendChild(toggleTitle);
+
+                            var toggleHint = document.createElement('span');
+                            toggleHint.className = 'prompts-toggle-hint';
+                            toggleHint.textContent = 'Click to expand';
+                            toggleBar.appendChild(toggleHint);
+
+                            var promptsBody = document.createElement('div');
+                            promptsBody.className = 'llm-prompts-body';
+
+                            promptItems.forEach(function(p) {
+                                var sec = createPromptSection(p.label, p.text, ci, p.field, true);
+                                promptsBody.appendChild(sec);
+                            });
+
+                            toggleBar.onclick = function() {
+                                var isNowCollapsed = promptsWrapper.classList.toggle('collapsed');
+                                chevron.textContent = isNowCollapsed ? '▶' : '▼';
+                                toggleHint.textContent = isNowCollapsed ? 'Click to expand' : 'Click to collapse';
+                            };
+
+                            promptsWrapper.appendChild(toggleBar);
+                            promptsWrapper.appendChild(promptsBody);
+                            card.appendChild(promptsWrapper);
                         }
 
                         if (call.responseContent) {
-                            var sec = createPromptSection('Raw Model Response:', call.responseContent, ci, 'responseContent');
+                            var sec = createPromptSection('Raw Model Response:', call.responseContent, ci, 'responseContent', false);
                             sec.classList.add('response-section');
                             card.appendChild(sec);
                         }
@@ -1134,16 +1465,26 @@ public final class HtmlReportGenerator
 
                         var displayTarget = a.resolvedTarget || a.target || '-';
                         var hasTargetTpl = a.target && a.resolvedTarget && a.target !== a.resolvedTarget;
-                        var targetHtml = '<code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + escapeHtml(displayTarget) + '</code>';
-                        if (hasTargetTpl) {
-                            targetHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.target) + '</code></div>';
+                        var targetHtml;
+                        if (displayTarget === '-') {
+                            targetHtml = '<span class="text-muted">-</span>';
+                        } else {
+                            targetHtml = '<code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + escapeHtml(displayTarget) + '</code>';
+                            if (hasTargetTpl) {
+                                targetHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.target) + '</code></div>';
+                            }
                         }
 
                         var displayValue = a.resolvedValue || a.value || '-';
                         var hasValueTpl = a.value && a.resolvedValue && a.value !== a.resolvedValue;
-                        var valueHtml = '<code>' + escapeHtml(displayValue) + '</code>';
-                        if (hasValueTpl) {
-                            valueHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.value) + '</code></div>';
+                        var valueHtml;
+                        if (displayValue === '-') {
+                            valueHtml = '<span class="text-muted">-</span>';
+                        } else {
+                            valueHtml = '<code>' + escapeHtml(displayValue) + '</code>';
+                            if (hasValueTpl) {
+                                valueHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.value) + '</code></div>';
+                            }
                         }
 
                         var phaseHtml = '';
@@ -1320,28 +1661,7 @@ public final class HtmlReportGenerator
                     var actionCallIdx = 0;
                     llmCalls.forEach(function(call, ci) {
                         var callNum = ci + 1;
-                        if (call.capability === 'PESAP') {
-                            var pesapIntent = step.semanticIntent || '-';
-                            var pesapContext = 'LEAN';
-                            var pesapFast = true;
-                            if (call.responseContent) {
-                                var pData = parseJsonResponse(call.responseContent);
-                                if (pData) {
-                                    if (pData.i) pesapIntent = pData.i;
-                                    if (pData.c) pesapContext = pData.c;
-                                    if (pData.jm !== undefined) pesapFast = !pData.jm;
-                                }
-                            }
-                            var pCard = document.createElement('div');
-                            pCard.className = 'reasoning-card';
-                            pCard.innerHTML = '<div class="reasoning-title">⚡ Call #' + callNum + ' &bull; PESAP Planning Intent <span class="badge-phase pesap">PESAP</span></div>';
-                            var pBody = document.createElement('div');
-                            pBody.className = 'reasoning-body';
-                            pBody.textContent = 'Intent: ' + pesapIntent + ' | Selected Context: ' + pesapContext + ' | Routing: ' + (pesapFast ? 'Direct Action Generation' : 'Quality Judge Required');
-                            pCard.appendChild(pBody);
-                            reasPanel.appendChild(pCard);
-                            notesCount++;
-                        } else if (call.capability === 'JUDGE') {
+                        if (call.capability === 'JUDGE') {
                             var jTitle = '⚖️ Call #' + callNum + ' &bull; Quality Judge Evaluation <span class="badge-phase judge">JUDGE</span>';
                             var jResp = parseJsonResponse(call.responseContent);
                             var jText = (jResp && jResp.reasoning) ? jResp.reasoning : (call.responseContent || '');
@@ -1506,7 +1826,7 @@ public final class HtmlReportGenerator
                 }
             });
 
-            function createPromptSection(label, text, callIdx, fieldName) {
+            function createPromptSection(label, text, callIdx, fieldName, isCollapsible) {
                 var sec = document.createElement('div');
                 sec.className = 'prompt-section';
 
@@ -1514,13 +1834,17 @@ public final class HtmlReportGenerator
                 row.className = 'prompt-label-row';
 
                 var labelSpan = document.createElement('span');
+                labelSpan.className = 'prompt-label-title';
                 labelSpan.textContent = label;
                 row.appendChild(labelSpan);
 
                 var copyBtn = document.createElement('button');
                 copyBtn.className = 'btn-copy';
                 copyBtn.textContent = 'Copy';
-                copyBtn.onclick = function() { window.copyLlmField(callIdx, fieldName, copyBtn); };
+                copyBtn.onclick = function(e) {
+                    if (e && e.stopPropagation) e.stopPropagation();
+                    window.copyLlmField(callIdx, fieldName, copyBtn);
+                };
                 row.appendChild(copyBtn);
 
                 sec.appendChild(row);
@@ -1529,6 +1853,14 @@ public final class HtmlReportGenerator
                 pre.className = 'prompt-text';
                 pre.textContent = text;
                 sec.appendChild(pre);
+
+                if (isCollapsible) {
+                    row.classList.add('clickable');
+                    row.title = 'Click to toggle section';
+                    row.onclick = function() {
+                        sec.classList.toggle('prompt-collapsed');
+                    };
+                }
 
                 return sec;
             }
@@ -1626,6 +1958,12 @@ public final class HtmlReportGenerator
                 color: var(--accent-primary);
                 border-color: var(--accent-primary);
                 background: var(--accent-primary-light);
+                font-weight: 600;
+            }
+            .meta-badge.tag {
+                color: var(--accent-purple);
+                border-color: #d8b4fe;
+                background: var(--accent-purple-light);
                 font-weight: 600;
             }
             .status-pill {
@@ -1907,11 +2245,6 @@ public final class HtmlReportGenerator
                 color: var(--accent-purple);
                 border-color: rgba(124, 58, 237, 0.4);
             }
-            .badge-flag.intent-badge {
-                background: #e0f2fe;
-                color: #0369a1;
-                border-color: rgba(3, 105, 161, 0.35);
-            }
             .badge-flag.verification-badge-pass {
                 background: var(--accent-success-light);
                 color: var(--accent-success);
@@ -1926,6 +2259,23 @@ public final class HtmlReportGenerator
                 background: #e0e7ff;
                 color: #4338ca;
                 border-color: rgba(67, 56, 202, 0.35);
+            }
+            .badge-flag.scope-badge {
+                background: #fdf4ff;
+                color: #a21caf;
+                border-color: rgba(162, 28, 175, 0.35);
+                max-width: 280px;
+                text-overflow: ellipsis;
+                overflow: hidden;
+                white-space: nowrap;
+                display: inline-block;
+                vertical-align: middle;
+            }
+            .inspector-scope-context {
+                font-size: 0.82rem;
+                font-weight: 600;
+                color: #a21caf;
+                margin-top: 0.25rem;
             }
             .step-header-right {
                 display: flex;
@@ -2330,6 +2680,78 @@ public final class HtmlReportGenerator
                 white-space: pre-wrap;
                 word-break: break-word;
             }
+            .prompt-section.prompt-collapsed .prompt-text {
+                display: none;
+            }
+            .prompt-section.prompt-collapsed .prompt-label-row {
+                margin-bottom: 0;
+            }
+            .prompt-label-row.clickable {
+                cursor: pointer;
+                user-select: none;
+            }
+            .prompt-label-row.clickable:hover {
+                color: var(--text);
+            }
+            .llm-prompts-wrapper {
+                border-bottom: 1px solid var(--border);
+            }
+            .llm-prompts-wrapper:last-child {
+                border-bottom: none;
+            }
+            .llm-prompts-toggle {
+                background: #ffffff;
+                padding: 0.45rem 1rem;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                cursor: pointer;
+                user-select: none;
+                font-size: 0.78rem;
+                transition: background 0.15s ease;
+                border-bottom: 1px solid transparent;
+            }
+            .llm-prompts-toggle:hover {
+                background: #f1f5f9;
+            }
+            .llm-prompts-wrapper:not(.collapsed) .llm-prompts-toggle {
+                border-bottom: 1px solid var(--border);
+                background: #f8fafc;
+            }
+            .llm-prompts-toggle-title {
+                display: flex;
+                align-items: center;
+                gap: 0.45rem;
+                font-weight: 600;
+                color: var(--text-sub);
+            }
+            .prompts-chevron {
+                font-size: 0.7rem;
+                color: var(--text-muted);
+                display: inline-block;
+                width: 0.85rem;
+            }
+            .prompts-toggle-label {
+                color: var(--text);
+                font-weight: 600;
+            }
+            .prompts-toggle-summary {
+                font-size: 0.72rem;
+                color: var(--text-muted);
+                font-weight: 400;
+            }
+            .prompts-toggle-hint {
+                font-size: 0.72rem;
+                color: var(--accent-primary);
+                font-weight: 500;
+            }
+            .llm-prompts-body {
+                display: block;
+                background: #f8fafc;
+            }
+            .llm-prompts-wrapper.collapsed .llm-prompts-body {
+                display: none;
+            }
             .response-section {
                 background: #ffffff;
             }
@@ -2544,11 +2966,6 @@ public final class HtmlReportGenerator
                 color: #065f46;
                 border: 1px solid rgba(6, 95, 70, 0.3);
             }
-            .badge-phase.pesap {
-                background: #e0e7ff;
-                color: #4338ca;
-                border: 1px solid rgba(67, 56, 202, 0.3);
-            }
             .badge-phase.judge {
                 background: #fdf2f8;
                 color: #9d174d;
@@ -2570,6 +2987,92 @@ public final class HtmlReportGenerator
                 font-family: var(--font-mono);
             }
             .step-ref:hover { text-decoration: underline; }
+            .step-ref.subcall {
+                color: var(--text-sub);
+                font-weight: 500;
+            }
+            .step-ref.subcall:hover {
+                color: var(--accent-primary);
+            }
+            .step-tree-indicator {
+                color: var(--text-muted);
+                font-family: var(--font-mono);
+                margin-right: 0.25rem;
+                font-weight: 700;
+            }
+            .step-group-row td {
+                padding: 0 !important;
+                background: #f8fafc;
+                border-top: 2px solid #cbd5e1 !important;
+                border-bottom: 1px solid var(--border) !important;
+            }
+            .step-group-banner {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 0.45rem 0.85rem;
+                font-size: 0.82rem;
+            }
+            .step-group-title {
+                display: flex;
+                align-items: center;
+                gap: 0.6rem;
+                cursor: pointer;
+            }
+            .step-group-title:hover .step-group-badge {
+                text-decoration: underline;
+                color: var(--accent-primary);
+            }
+            .step-group-badge {
+                font-weight: 700;
+                color: var(--text-primary);
+                font-family: var(--font-mono);
+            }
+            .step-group-instruction {
+                font-weight: 500;
+                color: var(--text-sub);
+                max-width: 620px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .step-group-meta {
+                font-size: 0.75rem;
+                font-family: var(--font-mono);
+                color: var(--text-sub);
+                font-weight: 600;
+                background: rgba(255, 255, 255, 0.8);
+                padding: 0.15rem 0.5rem;
+                border-radius: 4px;
+                border: 1px solid var(--border);
+            }
+            .step-cluster-even {
+                background: #ffffff;
+            }
+            .step-cluster-odd {
+                background: #fafbfc;
+            }
+            .badge-modality {
+                display: inline-block;
+                font-size: 0.68rem;
+                font-weight: 700;
+                padding: 0.1rem 0.35rem;
+                border-radius: 4px;
+                text-transform: uppercase;
+                font-family: var(--font-mono);
+                margin-left: 0.35rem;
+                vertical-align: middle;
+            }
+            .badge-modality.text {
+                background: #f1f5f9;
+                color: #475569;
+                border: 1px solid #cbd5e1;
+            }
+            .badge-modality.vision {
+                background: #fef3c7;
+                color: #92400e;
+                border: 1px solid rgba(146, 64, 14, 0.3);
+            }
             .stats-sub-row {
                 display: flex;
                 flex-wrap: wrap;

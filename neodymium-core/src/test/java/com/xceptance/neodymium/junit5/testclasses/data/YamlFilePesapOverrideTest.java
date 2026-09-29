@@ -44,11 +44,11 @@ import org.neodymium.common.testdata.util.YamlFileReader;
 public class YamlFilePesapOverrideTest
 {
     @Test
-    @DisplayName("Verify parsing of global neodymium.ai.pesap.linter.enabled at the root level")
+    @DisplayName("Verify parsing of global neodymium.ai.linter.enabled at the root level")
     public void testYamlPesapEnabledGlobal()
     {
         final String yamlContent = 
-            "neodymium.ai.pesap.linter.enabled: false\n" +
+            "neodymium.ai.linter.enabled: false\n" +
             "steps: |\n" +
             "  Verify login\n" +
             "data:\n" +
@@ -58,12 +58,12 @@ public class YamlFilePesapOverrideTest
         final List<Map<String, String>> data = YamlFileReader.readFile(new ByteArrayInputStream(yamlContent.getBytes(StandardCharsets.UTF_8)));
  
         assertEquals(2, data.size());
-        assertEquals("false", data.get(0).get("neodymium.ai.pesap.linter.enabled"));
-        assertEquals("false", data.get(1).get("neodymium.ai.pesap.linter.enabled"));
+        assertEquals("false", data.get(0).get("neodymium.ai.linter.enabled"));
+        assertEquals("false", data.get(1).get("neodymium.ai.linter.enabled"));
     }
  
     @Test
-    @DisplayName("Verify parsing of local neodymium.ai.pesap.linter.enabled at the dataset level")
+    @DisplayName("Verify parsing of local neodymium.ai.linter.enabled at the dataset level")
     public void testYamlPesapEnabledLocal()
     {
         final String yamlContent = 
@@ -72,13 +72,13 @@ public class YamlFilePesapOverrideTest
             "data:\n" +
             "  - testId: case1\n" +
             "  - testId: case2\n" +
-            "    neodymium.ai.pesap.linter.enabled: false\n";
+            "    neodymium.ai.linter.enabled: false\n";
  
         final List<Map<String, String>> data = YamlFileReader.readFile(new ByteArrayInputStream(yamlContent.getBytes(StandardCharsets.UTF_8)));
  
         assertEquals(2, data.size());
-        assertNull(data.get(0).get("neodymium.ai.pesap.linter.enabled"));
-        assertEquals("false", data.get(1).get("neodymium.ai.pesap.linter.enabled"));
+        assertNull(data.get(0).get("neodymium.ai.linter.enabled"));
+        assertEquals("false", data.get(1).get("neodymium.ai.linter.enabled"));
     }
  
     @Test
@@ -86,18 +86,18 @@ public class YamlFilePesapOverrideTest
     public void testYamlPesapEnabledLocalOverridePrecedence()
     {
         final String yamlContent = 
-            "neodymium.ai.pesap.linter.enabled: true\n" +
+            "neodymium.ai.linter.enabled: true\n" +
             "steps: |\n" +
             "  Verify login\n" +
             "data:\n" +
             "  - testId: case1\n" +
-            "    neodymium.ai.pesap.linter.enabled: false\n" +
+            "    neodymium.ai.linter.enabled: false\n" +
             "  - testId: case2\n";
  
         final List<Map<String, String>> data = YamlFileReader.readFile(new ByteArrayInputStream(yamlContent.getBytes(StandardCharsets.UTF_8)));
  
         assertEquals(2, data.size());
-        assertEquals("false", data.get(0).get("neodymium.ai.pesap.linter.enabled"));
-        assertEquals("true", data.get(1).get("neodymium.ai.pesap.linter.enabled"));
+        assertEquals("false", data.get(0).get("neodymium.ai.linter.enabled"));
+        assertEquals("true", data.get(1).get("neodymium.ai.linter.enabled"));
     }
 }

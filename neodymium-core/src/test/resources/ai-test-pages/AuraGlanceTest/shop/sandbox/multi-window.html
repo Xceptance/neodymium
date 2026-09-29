@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Multi-Window Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>Multi-Window &amp; Tab Management Challenge</h1>
+                <p class="aura-desc">
+                    This challenge tests the agent's ability to discover, switch between, and manage multiple browser tabs and windows.
+                    Clicking either action below launches a partner confirmation portal in a separate tab or popup window.
+                </p>
+
+                <div style="display: flex; justify-content: center; gap: 1.5rem; margin: 2.5rem 0;">
+                    <!-- Target blank link opening new tab with rel="opener" -->
+                    <a href="popup.html" id="open-tab-link" target="_blank" rel="opener" class="aura-btn" style="text-decoration: none; padding: 12px 24px;">
+                        Open Partner Portal (New Tab)
+                    </a>
+
+                    <!-- Button opening popup window via JavaScript window.open -->
+                    <button id="open-popup-btn" class="aura-btn aura-btn-secondary" style="padding: 12px 24px;">
+                        Open Support Popup (Window)
+                    </button>
+                </div>
+
+                <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
+                    Parent Status: <span id="parent-status" style="font-weight: bold; color: #00ffcc;">Parent window ready</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        document.getElementById('open-popup-btn').addEventListener('click', function() {
+            window.open('popup.html', 'SupportPopupWindow', 'width=700,height=600,resizable=yes,scrollbars=yes');
+        });
+
+        // 1. BroadcastChannel across all tabs on same origin
+        try {
+            const channel = new BroadcastChannel('aura_multi_window');
+            channel.onmessage = function(event) {
+                if (event.data && event.data.type === 'PARTNER_AUTHORIZED') {
+                    document.getElementById('parent-status').textContent = 'Partner authorized: ' + event.data.token;
+                }
+            };
+        } catch (e) {
+            console.warn('BroadcastChannel not available', e);
+        }
+
+        // 2. Storage event for cross-tab communication
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'aura_partner_token' && e.newValue) {
+                document.getElementById('parent-status').textContent = 'Partner authorized: ' + e.newValue;
+            }
+        });
+
+        // 3. postMessage listener from child window/opener
+        window.addEventListener('message', function(event) {
+            if (event.data && event.data.type === 'PARTNER_AUTHORIZED') {
+                document.getElementById('parent-status').textContent = 'Partner authorized: ' + event.data.token;
+            }
+        });
+    </script>
+</body>
+</html>

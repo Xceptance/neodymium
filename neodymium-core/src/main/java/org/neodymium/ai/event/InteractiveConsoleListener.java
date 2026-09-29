@@ -20,7 +20,6 @@ package org.neodymium.ai.event;
 
 import java.nio.file.Paths;
 import java.util.Collections;
-import java.util.List;
 import java.util.Set;
 
 import org.neodymium.ai.client.LlmCapability;
@@ -29,8 +28,6 @@ import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
-import org.neodymium.ai.event.llm.LlmRequestSentEvent;
-import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
@@ -38,18 +35,13 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
-import org.neodymium.ai.prompt.PesapPrompt;
 import org.neodymium.ai.report.DiskReportFormat;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.report.TestExecutionReport;
-import org.neodymium.ai.report.TestExecutionReport.ReportScreenshotEntry;
 import org.neodymium.ai.session.AiSession;
-import org.openqa.selenium.OutputType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.codeborne.selenide.Selenide;
-import com.codeborne.selenide.WebDriverRunner;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
@@ -72,7 +64,6 @@ public final class InteractiveConsoleListener implements ExecutionListener
     private final boolean interactive;
     private final PreliminaryReportListener reportListener;
     private volatile boolean autoRun;
-    private volatile boolean aborted;
 
     /**
      * Constructs an InteractiveConsoleListener.
@@ -91,12 +82,11 @@ public final class InteractiveConsoleListener implements ExecutionListener
         this.session = session;
         this.interactive = interactive;
         this.autoRun = false;
-        this.aborted = false;
         final AiConfiguration config = AiConfiguration.getInstance();
         this.reportListener = new PreliminaryReportListener(
             Paths.get(config.getDiskReportDirectory()),
             DiskReportFormat.parseFormats(config.getDiskReportFormat()),
-            true
+            config.isDiskReportEnabled()
         );
     }
 
@@ -128,16 +118,6 @@ public final class InteractiveConsoleListener implements ExecutionListener
     public boolean isInteractive()
     {
         return this.interactive;
-    }
-
-    /**
-     * Returns whether execution was aborted by user.
-     *
-     * @return true if run was aborted
-     */
-    public boolean isAborted()
-    {
-        return this.aborted;
     }
 
     /**
@@ -195,12 +175,11 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
             if (context != null)
             {
-                context.getTransientData().remove(ExecutionContext.KEY_LAST_LLM_RESULT);
                 try
                 {
-                    if (WebDriverRunner.hasWebDriverStarted())
+                    if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
                     {
-                        final String base64 = Selenide.screenshot(OutputType.BASE64);
+                        final String base64 = com.codeborne.selenide.Selenide.screenshot(org.openqa.selenium.OutputType.BASE64);
                         if (base64 != null && !base64.isEmpty())
                         {
                             context.getTransientData().put("currentScreenshot", "data:image/png;base64," + base64);
@@ -250,25 +229,9 @@ public final class InteractiveConsoleListener implements ExecutionListener
         }
         else if (event instanceof SessionFinishedEvent sessionFinished)
         {
-            final String overallStatus = sessionFinished.isSuccess() ? "passed" : (this.aborted ? "skipped" : "failed");
-            if (!sessionFinished.isSuccess() && !this.aborted)
-            {
-                final Throwable lastErr = context != null
-                    ? (Throwable) context.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR)
-                    : null;
-                if (lastErr != null)
-                {
-                    final String errMsg = lastErr.getMessage() != null ? lastErr.getMessage() : lastErr.toString();
-                    LOG.error("[InteractiveConsoleListener] Test execution failed with error: {}", errMsg, lastErr);
-                }
-                else
-                {
-                    LOG.error("[InteractiveConsoleListener] Test execution failed.");
-                }
-                captureAndAppendFailureScreenshot(context);
-            }
+            final String overallStatus = sessionFinished.isSuccess() ? "passed" : "failed";
 
-            if (this.interactive && !this.aborted)
+            if (this.interactive)
             {
                 final String pauseId = "pause-final-" + java.util.UUID.randomUUID().toString();
                 this.consoleEngine.registerPauseId(pauseId);
@@ -306,52 +269,6 @@ public final class InteractiveConsoleListener implements ExecutionListener
         {
             LOG.warn("[InteractiveConsoleListener] Execution diagnostic error reported: {}", errorEvent.getMessage());
         }
-        else if (event instanceof LlmRequestSentEvent sent)
-        {
-            if (context != null)
-            {
-                final JsonObject inFlight = new JsonObject();
-                inFlight.addProperty("capability", sent.getCapability() != null ? sent.getCapability() : "LLM");
-                inFlight.addProperty("startTimeMs", System.currentTimeMillis());
-                if (sent.getRequest() != null)
-                {
-                    inFlight.addProperty("systemPrompt", sent.getRequest().systemMessage());
-                    inFlight.addProperty("userPrompt", sent.getRequest().userMessage());
-                }
-                context.getTransientData().put("KEY_IN_FLIGHT_LLM_CALL", inFlight);
-            }
-            final String stateJson = InteractiveStateBuilder.buildStateJson(
-                this.session, context, this.consoleEngine.getRunId(), getCurrentStepIndex(context), "running", null, getReport());
-            this.consoleEngine.pushState(stateJson);
-        }
-        else if (event instanceof LlmResponseReceivedEvent received)
-        {
-            if (context != null)
-            {
-                context.getTransientData().remove("KEY_IN_FLIGHT_LLM_CALL");
-            }
-            final String stateJson = InteractiveStateBuilder.buildStateJson(
-                this.session, context, this.consoleEngine.getRunId(), getCurrentStepIndex(context), "running", null, getReport());
-            this.consoleEngine.pushState(stateJson);
-        }
-    }
-
-    private int getCurrentStepIndex(final ExecutionContext context)
-    {
-        if (context != null)
-        {
-            final PlaybookStep step = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-            if (step != null)
-            {
-                @SuppressWarnings("unchecked")
-                final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
-                if (flatSteps != null && flatSteps.contains(step))
-                {
-                    return flatSteps.indexOf(step);
-                }
-            }
-        }
-        return 0;
     }
 
     /**
@@ -366,7 +283,6 @@ public final class InteractiveConsoleListener implements ExecutionListener
     public String pauseOnStepFailure(final ExecutionContext context, final PlaybookStep step, final Throwable error)
     {
         this.autoRun = false;
-        captureAndAppendFailureScreenshot(context);
         if (!this.interactive || this.consoleEngine == null)
         {
             return "ABORT";
@@ -435,9 +351,9 @@ public final class InteractiveConsoleListener implements ExecutionListener
         {
             try
             {
-                if (WebDriverRunner.hasWebDriverStarted())
+                if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
                 {
-                    final String base64 = Selenide.screenshot(OutputType.BASE64);
+                    final String base64 = com.codeborne.selenide.Selenide.screenshot(org.openqa.selenium.OutputType.BASE64);
                     if (base64 != null && !base64.isEmpty())
                     {
                         context.getTransientData().put("currentScreenshot", "data:image/png;base64," + base64);
@@ -526,16 +442,6 @@ public final class InteractiveConsoleListener implements ExecutionListener
                             context.getTransientData().put("KEY_STEP_EDITED", true);
                         }
                         LOG.info("[InteractiveConsoleListener] Step instruction updated to: \"{}\"", newInst);
-
-                        // Immediately push the updated state so the UI reflects the new instruction
-                        // before the re-execution pipeline starts (fixes stale UI after EDIT action).
-                        if (this.consoleEngine != null && context != null)
-                        {
-                            final String updatedStateJson = InteractiveStateBuilder.buildStateJson(
-                                this.session, context, this.consoleEngine.getRunId(),
-                                getCurrentStepIndex(context), "paused", null, getReport());
-                            this.consoleEngine.pushState(updatedStateJson);
-                        }
                     }
                 }
                 break;
@@ -559,14 +465,6 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
             case "ABORT":
             case "STOP":
-                this.aborted = true;
-                if (this.consoleEngine != null && context != null)
-                {
-                    final String abortedStateJson = InteractiveStateBuilder.buildStateJson(
-                        this.session, context, this.consoleEngine.getRunId(),
-                        getCurrentStepIndex(context), "skipped", null, getReport());
-                    this.consoleEngine.pushState(abortedStateJson);
-                }
                 throw new RuntimeException(new ConclusiveFailureException("Interactive test execution aborted by user via Aura Manager"));
 
             case "SAVE_EXIT":
@@ -596,8 +494,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
         {
             if (this.session != null && instruction != null && !instruction.isBlank())
             {
-                final PesapPrompt pesapPrompt = new PesapPrompt(instruction, null, null);
-                final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.PESAP);
+                final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
                 if (provider != null)
                 {
                     final AiConfiguration config = AiConfiguration.getInstance();
@@ -605,35 +502,25 @@ public final class InteractiveConsoleListener implements ExecutionListener
                     final int timeoutSeconds = config.getTimeoutSeconds("action");
 
                     final LlmRequest request = new LlmRequest(
-                        pesapPrompt.compileSystemMessage(context),
-                        pesapPrompt.compileUserMessage(context),
+                        "You are an expert test automation assistant. Suggest a clear, atomic instruction for a web test step.",
+                        "Please suggest a clear, atomic phrasing for this test step: \"" + instruction + "\"",
                         Collections.emptyList(),
-                        pesapPrompt.getResponseSchema(),
+                        null,
                         temp,
                         timeoutSeconds
                     );
 
-                    // Dispatch LLM events so the in-flight UI spinner is shown and the call
-                    // is recorded by PreliminaryReportListener in the on-disk execution report.
-                    this.session.getEventBus().dispatch(new LlmRequestSentEvent(request, "SUGGEST_FIX"));
-                    final long suggestStartMs = System.currentTimeMillis();
                     final LlmResponse response = provider.chat(request);
-                    final long suggestDurationMs = System.currentTimeMillis() - suggestStartMs;
-                    this.session.getEventBus().dispatch(new LlmResponseReceivedEvent(request, response, suggestDurationMs, "SUGGEST_FIX"));
-                    if (response != null && response.content() != null)
+                    if (response != null && response.content() != null && !response.content().isBlank())
                     {
-                        final PesapPrompt.PesapResult result = pesapPrompt.parseResponse(response.content(), context);
-                        if (result != null && result.splitSteps() != null && !result.splitSteps().isEmpty())
-                        {
-                            suggestion = String.join(" and ", result.splitSteps());
-                        }
+                        suggestion = response.content().trim();
                     }
                 }
             }
         }
         catch (final Throwable t)
         {
-            LOG.warn("[InteractiveConsoleListener] Failed to generate PESAP suggestion for step: {}", t.getMessage());
+            LOG.warn("[InteractiveConsoleListener] Failed to generate suggestion for step: {}", t.getMessage());
         }
 
         final JsonObject fixEvent = new JsonObject();
@@ -642,60 +529,6 @@ public final class InteractiveConsoleListener implements ExecutionListener
         if (this.consoleEngine != null)
         {
             this.consoleEngine.broadcastSseEvent("fixSuggestion", new Gson().toJson(fixEvent));
-        }
-    }
-
-    /**
-     * Captures a base64 screenshot if a WebDriver instance is active and appends it to the test execution report.
-     *
-     * @param context active execution context
-     */
-    private void captureAndAppendFailureScreenshot(final ExecutionContext context)
-    {
-        try
-        {
-            if (WebDriverRunner.hasWebDriverStarted())
-            {
-                final String base64 = Selenide.screenshot(OutputType.BASE64);
-                if (base64 != null && !base64.isEmpty())
-                {
-                    if (context != null)
-                    {
-                        context.getTransientData().put("currentScreenshot", "data:image/png;base64," + base64);
-                    }
-                    final TestExecutionReport report = getReport();
-                    if (report != null)
-                    {
-                        final boolean alreadyHas = report.getScreenshots().stream()
-                            .anyMatch(s -> s != null && s.getBase64Data() != null && s.getBase64Data().equals(base64));
-                        if (!alreadyHas)
-                        {
-                            final int stepIdx = getCurrentStepIndex(context);
-                            final ReportScreenshotEntry screenshotEntry = new ReportScreenshotEntry(
-                                "Failure Screenshot",
-                                stepIdx,
-                                "image/png",
-                                base64,
-                                System.currentTimeMillis()
-                            );
-                            report.addScreenshot(screenshotEntry);
-                            final TestExecutionReport.ReportStepEntry byIdx = report.findStepEntry(stepIdx);
-                            final PlaybookStep pbStep = context != null ? (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP) : null;
-                            final TestExecutionReport.ReportStepEntry stepEntry = byIdx != null
-                                ? byIdx
-                                : (pbStep != null && pbStep.getInstruction() != null ? report.findStepEntryByInstruction(pbStep.getInstruction()) : null);
-                            if (stepEntry != null)
-                            {
-                                stepEntry.addScreenshot(screenshotEntry);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        catch (final Throwable t)
-        {
-            LOG.warn("[InteractiveConsoleListener] Failed to capture failure screenshot: {}", t.getMessage());
         }
     }
 }

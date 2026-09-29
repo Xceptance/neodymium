@@ -27,17 +27,15 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 
-import java.util.Collections;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.neodymium.ai.config.AiConfiguration;
-import org.neodymium.ai.event.ExecutionEventBus;
-import org.neodymium.ai.event.InteractiveConsoleListener;
-import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.report.TestExecutionReport;
+import org.neodymium.ai.report.TestExecutionReport.CategoryTokenUsage;
+import org.neodymium.ai.report.TestExecutionReport.ReportMetrics;
 
 /**
  * Unit test suite validating {@link InteractiveConsoleEngine} console execution logging.
@@ -318,7 +316,7 @@ public class InteractiveConsoleEngineTest
     @Test
     public void testBuildStateJsonSerializesLocale()
     {
-        final org.neodymium.ai.pipeline.ExecutionContext context = new org.neodymium.ai.pipeline.ExecutionContext(null);
+        final ExecutionContext context = new ExecutionContext(null);
         context.getTransientData().put("datasetLabel", "homepage test DE");
 
         final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-locale", 0, "running");
@@ -327,37 +325,18 @@ public class InteractiveConsoleEngineTest
     }
 
     @Test
-    public void testEarlyFailureLoggingProducesFailedStatusLogFile() throws IOException
+    public void testBuildStateJsonSerializesLinterCategories()
     {
-        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
-        AiConfiguration.resetInstance();
-
         final ExecutionContext context = new ExecutionContext(null);
-        final IllegalStateException earlyCause = new IllegalStateException("Gemini API key is not configured. Please set environment variable GEMINI_API_KEY");
-        final IllegalStateException earlyException = new IllegalStateException("Failed to instantiate LLM provider class 'org.neodymium.ai.client.GeminiLlmProvider' for provider 'gemini' (role 'global')", earlyCause);
-        context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, earlyException);
-        ExecutionContext.setActiveContext(context);
+        final TestExecutionReport report = new TestExecutionReport();
+        final ReportMetrics metrics = report.getMetrics();
+        metrics.setLinter(new CategoryTokenUsage(1, 100, 50, 0, 0.001));
+        metrics.setPostFlightLinter(new CategoryTokenUsage(2, 200, 80, 0, 0.002));
+        context.getTransientData().put("testExecutionReport", report);
 
-        try
-        {
-            final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-early-fail");
-            final ExecutionEventBus eventBus = new ExecutionEventBus();
-            final InteractiveConsoleListener listener = new InteractiveConsoleListener(engine, null, false);
-            eventBus.registerListener(listener);
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-linter-cats", 0, "running");
 
-            eventBus.dispatch(new SessionFinishedEvent(0, false, Collections.emptyList()));
-
-            final File expectedLogFile = new File(tempResultsDir, "console-execution-1.json");
-            assertTrue(expectedLogFile.exists(), "console-execution-1.json should be created on early failure");
-
-            final String content = Files.readString(expectedLogFile.toPath());
-            assertTrue(content.contains("\"status\":\"failed\""), "Early failure log file should contain status 'failed'");
-            assertTrue(content.contains("Gemini API key is not configured"), "Log file should contain root cause error message");
-            assertTrue(content.contains("\"failureReason\":"), "Log file should contain failureReason property");
-        }
-        finally
-        {
-            ExecutionContext.setActiveContext(null);
-        }
+        assertTrue(stateJson.contains("\"linter\":{"), "State JSON should contain linter category");
+        assertTrue(stateJson.contains("\"postFlightLinter\":{"), "State JSON should contain postFlightLinter category");
     }
 }

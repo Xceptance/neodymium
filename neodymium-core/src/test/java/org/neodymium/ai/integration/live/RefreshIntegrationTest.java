@@ -18,24 +18,28 @@
  */
 package org.neodymium.ai.integration.live;
 
-import static com.codeborne.selenide.Condition.text;
+import static com.codeborne.selenide.Condition.empty;
+import static com.codeborne.selenide.Condition.exactText;
+import static com.codeborne.selenide.Condition.selected;
 import static com.codeborne.selenide.Selenide.$;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiLinter;
+import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
-import org.junit.jupiter.api.Tag;
-import org.neodymium.ai.junit.AiDataSet;
-import org.neodymium.ai.junit.AiPlaybook;
-import org.neodymium.ai.junit.NeodymiumAiTest;
-import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.junit.AiMode;
-import org.neodymium.ai.session.AiSession;
-
 /**
- * Live integration test for the REFRESH action plugin.
+ * Live integration test for the REFRESH action plugin verifying that reloading
+ * the active page clears transient input state while preserving document structure,
+ * supports natural language reload synonyms, and resets multi-input form selections.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
@@ -43,30 +47,116 @@ import org.neodymium.ai.session.AiSession;
 @Tag("LiveAPI")
 @NeodymiumAiTest
 @AiPlaybook("programmatic")
+@AiLinter(false)
 public class RefreshIntegrationTest extends BaseAiTest
 {
-
     /**
-     * Executes Refresh integration test in both live and strict replay modes.
+     * Sets up test page URL before each test execution.
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    @AiDataSet("refreshData")
-    public void testRefresh(final AiSession session) throws Exception
+    @BeforeEach
+    public void setupProperties(final AiSession session)
     {
-        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        final String pageUrl = String.format("http://localhost:%d/TypeActionTest/testTypeHappyPath.html", server.getPort());
         session.data().putDynamic("refresh.test.url", pageUrl, false);
+    }
 
+    /**
+     * Verifies that refreshing the page resets dirtied transient form input back to empty state.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/RefreshIntegrationTest_testRefreshResetsInputState.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testRefreshResetsInputState(final AiSession session) throws Exception
+    {
         session.execute( """
-            data:
-              - testId: refreshData
+            steps: |
+              Open ${refresh.test.url} in the browser
+              Type 'Unsaved input text' into #first-name
+              Refresh the page
+            """)
+            .verifyMetrics()
+            .hasStepCount(3)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#first-name").shouldBe(empty);
+    }
+
+    /**
+     * Verifies that refreshing the page maintains page integrity and structure.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/RefreshIntegrationTest_testRefreshPreservesPageContent.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testRefreshPreservesPageContent(final AiSession session) throws Exception
+    {
+        session.execute( """
             steps: |
               Open ${refresh.test.url} in the browser
               Refresh the page
-            """);
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
-        $("h1").shouldHave(text("Assert Action Test"));
+        $("h1").shouldHave(exactText("Type Action Test"));
+    }
+
+    /**
+     * Verifies natural language reload synonyms (e.g. "Reload the page").
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/RefreshIntegrationTest_testRefreshSynonyms.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testRefreshSynonyms(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${refresh.test.url} in the browser
+              Reload the page
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("h1").shouldHave(exactText("Type Action Test"));
+    }
+
+    /**
+     * Verifies that refreshing resets multiple modified inputs and uncheck toggles.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/RefreshIntegrationTest_testRefreshMultipleInputsAndCheckbox.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testRefreshMultipleInputsAndCheckbox(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${refresh.test.url} in the browser
+              Type 'Alice' into #first-name
+              Type 'Test feedback comments' into #comments
+              Click #sample-checkbox
+              Refresh the page
+            """)
+            .verifyMetrics()
+            .hasStepCount(5)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#first-name").shouldBe(empty);
+        $("#comments").shouldBe(empty);
+        $("#sample-checkbox").shouldBe(selected);
     }
 }

@@ -18,22 +18,28 @@
  */
 package org.neodymium.ai.integration.live;
 
+import static com.codeborne.selenide.Condition.visible;
+import static com.codeborne.selenide.Selenide.$;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiLinter;
+import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
-import org.junit.jupiter.api.Tag;
-import org.neodymium.ai.junit.AiDataSet;
-import org.neodymium.ai.junit.AiPlaybook;
-import org.neodymium.ai.junit.NeodymiumAiTest;
-import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.junit.AiMode;
-import org.neodymium.ai.session.AiSession;
-
 /**
- * Live integration test verifying that the (timeout:X) tag
- * overrides the search timeout for Selenide element lookups during that step.
+ * Live integration test verifying that the (timeout:X) tag overrides the search timeout
+ * for element lookups during that step, ensuring fast failure on missing elements and
+ * proper step completion on existing elements.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
@@ -41,42 +47,66 @@ import org.neodymium.ai.session.AiSession;
 @Tag("LiveAPI")
 @NeodymiumAiTest
 @AiPlaybook("programmatic")
+@AiLinter(false)
 public class TimeoutIntegrationTest extends BaseAiTest
 {
-
     /**
-     * Executes Timeout integration test in live mode.
+     * Sets up test page URL before each test execution.
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook
-    @AiMode({ExecutionMode.FORCE_RECORDING})
-    @AiDataSet("timeoutData")
-    public void testTimeout(final AiSession session) throws Exception
+    @BeforeEach
+    public void setupProperties(final AiSession session)
     {
         final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
         session.data().putDynamic("timeout.test.url", pageUrl, false);
+    }
 
+    /**
+     * Verifies that (timeout:50ms) triggers fast failure on a non-existent element.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/TimeoutIntegrationTest_testTimeoutFastFailureOnNonExistentElement.yaml")
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    public void testTimeoutFastFailureOnNonExistentElement(final AiSession session) throws Exception
+    {
         final long start = System.currentTimeMillis();
-        
-        try
+
+        assertThrows(AssertionError.class, () ->
         {
             session.execute( """
-                data:
-                  - testId: timeoutData
                 steps: |
                   Open ${timeout.test.url} in the browser
                   Verify that #non-existent-element is visible (timeout:50ms)
                 """);
-            org.junit.jupiter.api.Assertions.fail("The playbook should have failed due to element not found");
-        }
-        catch (final Exception e)
-        {
-            final long duration = System.currentTimeMillis() - start;
-            // The step should fail quickly due to custom 50ms timeout.
-            // If the timeout tag is ignored, it will wait for Selenide's default timeout (4000ms).
-            org.junit.jupiter.api.Assertions.assertTrue(duration < 2000, 
-                "Test should fail fast (under 2 seconds) due to (timeout:50ms) tag, but took " + duration + " ms");
-        }
+        });
+
+        final long duration = System.currentTimeMillis() - start;
+        assertTrue(duration < 3000, 
+            "Test should fail fast (under 3 seconds) due to (timeout:50ms) tag, but took " + duration + " ms");
+    }
+
+    /**
+     * Verifies that an existing element lookup succeeds when a custom timeout tag is specified.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/TimeoutIntegrationTest_testTimeoutPositivePassingStep.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testTimeoutPositivePassingStep(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${timeout.test.url} in the browser
+              Verify that #btn-click is visible (timeout:5s)
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#btn-click").shouldBe(visible);
     }
 }

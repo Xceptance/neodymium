@@ -29,11 +29,12 @@ public class TokenBudgetExceededException extends RuntimeException
 {
     private static final long serialVersionUID = 1L;
 
-    /** The token budget category (INPUT or OUTPUT) */
+    /** The token budget category (INPUT, OUTPUT, or TOTAL) */
     public enum BudgetType
     {
         INPUT,
-        OUTPUT
+        OUTPUT,
+        TOTAL
     }
 
     private final BudgetType budgetType;
@@ -43,7 +44,7 @@ public class TokenBudgetExceededException extends RuntimeException
     /**
      * Constructs a TokenBudgetExceededException with specific budget violation metrics.
      *
-     * @param budgetType the direction of token budget exceeded (INPUT or OUTPUT)
+     * @param budgetType the direction of token budget exceeded (INPUT, OUTPUT, or TOTAL)
      * @param consumedTokens cumulative tokens consumed in the active session
      * @param budgetLimit configured maximum token budget limit
      */
@@ -64,8 +65,8 @@ public class TokenBudgetExceededException extends RuntimeException
      */
     private static String formatMessage(final BudgetType type, final int consumed, final int limit)
     {
-        final String direction = type == BudgetType.INPUT ? "Input tokens consumed" : "Output tokens generated";
-        final String target = type == BudgetType.INPUT ? "input token budget" : "output token budget";
+        final String direction = type == BudgetType.INPUT ? "Input tokens consumed" : (type == BudgetType.OUTPUT ? "Output tokens generated" : "Total tokens consumed");
+        final String target = type == BudgetType.INPUT ? "input token budget" : (type == BudgetType.OUTPUT ? "output token budget" : "step token budget");
         return String.format("Token budget exceeded for test run: %s (%d) exceeded configured %s (%d). Test run aborted.",
             direction, consumed, target, limit);
     }
@@ -98,6 +99,16 @@ public class TokenBudgetExceededException extends RuntimeException
     public boolean isOutputBudget()
     {
         return this.budgetType == BudgetType.OUTPUT;
+    }
+
+    /**
+     * Checks if the exceeded budget was a total token budget (e.g. step-level budget).
+     *
+     * @return true if total token budget exceeded, false otherwise
+     */
+    public boolean isTotalBudget()
+    {
+        return this.budgetType == BudgetType.TOTAL;
     }
 
     /**

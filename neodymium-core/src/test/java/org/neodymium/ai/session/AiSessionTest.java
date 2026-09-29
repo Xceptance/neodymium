@@ -32,6 +32,7 @@ import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookRecording;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 
 /**
@@ -291,4 +292,25 @@ public class AiSessionTest
             Assertions.assertEquals("ds_primary", session.getExecutionContext().getTransientData().get(ExecutionContext.KEY_ACTIVE_DATASET_LABEL));
         }
     }
+
+    @Test
+    @DisplayName("execute(String) in REPLAY_STRICT preserves SUCCESS status of recorded 0-action steps from sessionSteps")
+    public void testExecutePreservesStatusOfRecordedZeroActionSteps() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
+        {
+            final PlaybookStep recordedStep = new PlaybookStep("Verify state");
+            recordedStep.setStatus(PlaybookStepStatus.SUCCESS);
+            session.getExecutionContext().getTransientData().put("playbook.steps", List.of(recordedStep));
+
+            final PlaybookRecording recording = session.execute("""
+                steps: |
+                  Verify state
+                """);
+            Assertions.assertNotNull(recording);
+            Assertions.assertEquals(1, recording.getStepCount());
+            Assertions.assertEquals(PlaybookStepStatus.SUCCESS, recording.getRecordedSteps().get(0).getStatus());
+        }
+    }
 }
+

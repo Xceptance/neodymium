@@ -41,6 +41,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -61,7 +62,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public final class YamlPlaybookParser implements PlaybookParser
 {
     private static final Logger LOG = LoggerFactory.getLogger(YamlPlaybookParser.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+        .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     /**
      * Pattern matching standard top-level YAML section keys at the start of lines.
@@ -168,7 +170,55 @@ public final class YamlPlaybookParser implements PlaybookParser
             for (final PlaybookStep step : steps)
             {
                 step.setParent(parent);
-                setParentReferences(step.getSubSteps(), step);
+                if (step.hasSubSteps())
+                {
+                    normalizeCompositeModifiers(step);
+                    setParentReferences(step.getSubSteps(), step);
+                }
+            }
+        }
+    }
+
+    private void normalizeCompositeModifiers(final PlaybookStep step)
+    {
+        if (step.hasSubSteps())
+        {
+            final List<PlaybookStep> children = step.getSubSteps();
+
+            final boolean hasBugChild = children.stream().anyMatch(PlaybookStep::isBug);
+            final boolean hasNonBugChild = children.stream().anyMatch(sub -> !sub.isBug());
+            if (hasBugChild && hasNonBugChild && step.isBug())
+            {
+                step.setBug(false);
+                step.setBugDetails(null);
+            }
+
+            final boolean hasNoReplayChild = children.stream().anyMatch(PlaybookStep::isNoReplay);
+            final boolean hasReplayChild = children.stream().anyMatch(sub -> !sub.isNoReplay());
+            if (hasNoReplayChild && hasReplayChild && step.isNoReplay())
+            {
+                step.setNoReplay(false);
+            }
+
+            final boolean hasOptionalChild = children.stream().anyMatch(PlaybookStep::isOptional);
+            final boolean hasNonOptionalChild = children.stream().anyMatch(sub -> !sub.isOptional());
+            if (hasOptionalChild && hasNonOptionalChild && step.isOptional())
+            {
+                step.setOptional(false);
+            }
+
+            final boolean hasContinueChild = children.stream().anyMatch(PlaybookStep::isContinueOnError);
+            final boolean hasNonContinueChild = children.stream().anyMatch(sub -> !sub.isContinueOnError());
+            if (hasContinueChild && hasNonContinueChild && step.isContinueOnError())
+            {
+                step.setContinueOnError(false);
+            }
+
+            final boolean hasNoHealingChild = children.stream().anyMatch(PlaybookStep::isNoHealing);
+            final boolean hasHealingChild = children.stream().anyMatch(sub -> !sub.isNoHealing());
+            if (hasNoHealingChild && hasHealingChild && step.isNoHealing())
+            {
+                step.setNoHealing(false);
             }
         }
     }
@@ -240,16 +290,11 @@ public final class YamlPlaybookParser implements PlaybookParser
                     final byte[] bytes = in.readAllBytes();
                     final String fileContent = new String(bytes, StandardCharsets.UTF_8);
                     final Yaml yaml = new Yaml();
-                    final Object loadedObj = yaml.load(fileContent);
-                    if (loadedObj instanceof Map<?, ?> loadedMap)
+                    final Map<String, Object> loadedMap = yaml.load(fileContent);
+                    promptAddons = parsePromptAddons(loadedMap);
+                    if (loadedMap != null && loadedMap.get("description") instanceof String descStr && !descStr.isBlank())
                     {
-                        @SuppressWarnings("unchecked")
-                        final Map<String, Object> map = (Map<String, Object>) loadedMap;
-                        promptAddons = parsePromptAddons(map);
-                        if (map.get("description") instanceof String descStr && !descStr.isBlank())
-                        {
-                            description = descStr.trim();
-                        }
+                        description = descStr.trim();
                     }
                 }
             }
@@ -432,100 +477,86 @@ public final class YamlPlaybookParser implements PlaybookParser
             final String fileName = new File(identifier).getName();
 
             final Yaml yaml = new Yaml();
-            final Object loadedObj;
-            try
-            {
-                loadedObj = yaml.load(fileContent);
-            }
-            catch (final Exception e)
-            {
-                LOG.debug("SnakeYAML failed to parse {} as structured YAML (e.g., due to unquoted inline colons), falling back to line-by-line parsing", identifier, e);
-                parseStepBlock(fileContent, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
-                return;
-            }
+            final Map<String, Object> loadedMap = yaml.load(fileContent);
 
-            if (loadedObj == null)
+            if (loadedMap == null)
             {
                 return;
             }
 
-            if (loadedObj instanceof List<?> || loadedObj instanceof String)
+            // 2. Parse datasets ('data')
+            final Object rawData = loadedMap.get("data");
+            if (rawData instanceof List)
             {
-                parseStepBlock(loadedObj, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
-                return;
-            }
-
-            if (loadedObj instanceof Map<?, ?> loadedMap)
-            {
-                // 2. Parse datasets ('data')
-                final Object rawData = loadedMap.get("data");
-                if (rawData instanceof List)
+                for (final Object entry : (List<?>) rawData)
                 {
-                    for (final Object entry : (List<?>) rawData)
+                    if (entry instanceof Map)
                     {
-                        if (entry instanceof Map)
+                        final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
+                        for (final Map.Entry<?, ?> mapEntry : ((Map<?, ?>) entry).entrySet())
                         {
-                            final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
-                            for (final Map.Entry<?, ?> mapEntry : ((Map<?, ?>) entry).entrySet())
-                            {
-                                final String key = String.valueOf(mapEntry.getKey());
-                                final Object val = mapEntry.getValue();
-                                final boolean sensitive = isSensitiveKey(key);
-                                datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
-                            }
-                            injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
-                            outDataSets.add(datasetMap);
+                            final String key = String.valueOf(mapEntry.getKey());
+                            final Object val = mapEntry.getValue();
+                            final boolean sensitive = isSensitiveKey(key);
+                            datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
                         }
+                        injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
+                        outDataSets.add(datasetMap);
                     }
                 }
-                else if (rawData instanceof Map)
+            }
+            else if (rawData instanceof Map)
+            {
+                final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
+                for (final Map.Entry<?, ?> mapEntry : ((Map<?, ?>) rawData).entrySet())
                 {
-                    final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
-                    for (final Map.Entry<?, ?> mapEntry : ((Map<?, ?>) rawData).entrySet())
-                    {
-                        final String key = String.valueOf(mapEntry.getKey());
-                        final Object val = mapEntry.getValue();
-                        final boolean sensitive = isSensitiveKey(key);
-                        datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
-                    }
-                    injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
-                    outDataSets.add(datasetMap);
+                    final String key = String.valueOf(mapEntry.getKey());
+                    final Object val = mapEntry.getValue();
+                    final boolean sensitive = isSensitiveKey(key);
+                    datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
                 }
-                else if (loadedMap.containsKey("_meta"))
-                {
-                    final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
-                    injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
-                    outDataSets.add(datasetMap);
-                }
+                injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
+                outDataSets.add(datasetMap);
+            }
+            else if (loadedMap.containsKey("_meta"))
+            {
+                final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
+                injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
+                outDataSets.add(datasetMap);
+            }
 
-                // 3. Parse before, steps, and after blocks
-                final String[] beforeKeys = {"before", "beforeEach", "_beforeEach", "_beforeAll"};
-                for (final String key : beforeKeys)
-                {
-                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
-                }
+            final int[] searchOffset = new int[]{0};
 
-                final String[] stepKeys = {"steps", "_steps"};
-                for (final String key : stepKeys)
-                {
-                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
-                }
+            // 3. Parse before, steps, and after blocks
+            final String[] beforeKeys = {"before", "beforeEach", "_beforeEach", "_beforeAll"};
+            for (final String key : beforeKeys)
+            {
+                parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+            }
 
-                final String[] afterKeys = {"after", "afterEach", "_afterEach", "_afterAll"};
-                for (final String key : afterKeys)
-                {
-                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
-                }
+            final String[] stepKeys = {"steps", "_steps"};
+            for (final String key : stepKeys)
+            {
+                parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+            }
 
-                if (outSteps.isEmpty() && (loadedMap.containsKey("_include") || loadedMap.containsKey("include")))
-                {
-                    final String includeRelativePath = loadedMap.containsKey("_include")
-                        ? String.valueOf(loadedMap.get("_include"))
-                        : String.valueOf(loadedMap.get("include"));
-                    final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
+            final String[] afterKeys = {"after", "afterEach", "_afterEach", "_afterAll"};
+            for (final String key : afterKeys)
+            {
+                parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+            }
 
-                    parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
-                }
+            if (outSteps.isEmpty() && (loadedMap.containsKey("_include") || loadedMap.containsKey("include")))
+            {
+                final String includeRelativePath = loadedMap.containsKey("_include")
+                    ? String.valueOf(loadedMap.get("_include"))
+                    : String.valueOf(loadedMap.get("include"));
+                final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
+
+                final PlaybookStep includeStep = new PlaybookStep("_include: " + includeRelativePath);
+                initStepLocation(includeStep, fileName, fileContent, "_include: " + includeRelativePath, searchOffset);
+                parseRecursive(resolvedIdentifier, manager, activeStack, includeStep.getSubSteps(), outDataSets);
+                outSteps.add(includeStep);
             }
         }
         finally
@@ -544,7 +575,8 @@ public final class YamlPlaybookParser implements PlaybookParser
         final PlaybookResourceManager manager,
         final LinkedHashSet<String> activeStack,
         final List<PlaybookStep> outSteps,
-        final List<Map<String, SessionData.DataEntry>> outDataSets) throws IOException
+        final List<Map<String, SessionData.DataEntry>> outDataSets,
+        final int[] searchOffset) throws IOException
     {
         if (rawSteps instanceof List)
         {
@@ -555,12 +587,12 @@ public final class YamlPlaybookParser implements PlaybookParser
                     final String str = (String) stepItem;
                     if (str.contains("\n"))
                     {
-                        parseStepBlock(str, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
+                        parseStepBlock(str, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
                     }
                     else
                     {
                         final PlaybookStep step = new PlaybookStep(str);
-                        initStepLocation(step, identifier, fileContent, str);
+                        initStepLocation(step, fileName, fileContent, str, searchOffset);
                         outSteps.add(step);
                     }
                 }
@@ -574,7 +606,12 @@ public final class YamlPlaybookParser implements PlaybookParser
                             : String.valueOf(mapStep.get("include"));
                         final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
 
-                        parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
+                        final PlaybookStep includeStep = new PlaybookStep("_include: " + includeRelativePath);
+                        initStepLocation(includeStep, fileName, fileContent, "_include: " + includeRelativePath, searchOffset);
+                        
+                        parseRecursive(resolvedIdentifier, manager, activeStack, includeStep.getSubSteps(), outDataSets);
+
+                        outSteps.add(includeStep);
                     }
                     else if (mapStep.containsKey("instruction") || mapStep.containsKey("promptLine") || mapStep.containsKey("step"))
                     {
@@ -582,7 +619,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                             ? String.valueOf(mapStep.get("instruction"))
                             : (mapStep.containsKey("promptLine") ? String.valueOf(mapStep.get("promptLine")) : String.valueOf(mapStep.get("step")));
                         final PlaybookStep step = new PlaybookStep(instruction);
-                        initStepLocation(step, identifier, fileContent, instruction);
+                        initStepLocation(step, fileName, fileContent, instruction, searchOffset);
 
                         final Object rawActions = mapStep.get("actions");
                         if (rawActions instanceof List)
@@ -603,16 +640,32 @@ public final class YamlPlaybookParser implements PlaybookParser
                                 }
                             }
                         }
+
+                        final Object rawSubSteps = mapStep.containsKey("subSteps") ? mapStep.get("subSteps") : mapStep.get("steps");
+                        if (rawSubSteps != null)
+                        {
+                            parseStepBlock(rawSubSteps, identifier, fileName, fileContent, manager, activeStack, step.getSubSteps(), outDataSets, searchOffset);
+                        }
+
                         outSteps.add(step);
                     }
-                    else if (mapStep.size() == 1)
+                    else if (mapStep.size() == 1 && (mapStep.values().iterator().next() instanceof List || mapStep.values().iterator().next() instanceof Map))
                     {
-                        final Map.Entry<?, ?> singleEntry = mapStep.entrySet().iterator().next();
-                        final String keyStr = String.valueOf(singleEntry.getKey());
-                        final String valStr = String.valueOf(singleEntry.getValue());
-                        final String fullLine = keyStr + ": " + valStr;
+                        final Map.Entry<?, ?> entry = mapStep.entrySet().iterator().next();
+                        String parentInstruction = String.valueOf(entry.getKey()).trim();
+                        if (parentInstruction.endsWith(":") && !parentInstruction.startsWith("http:") && !parentInstruction.startsWith("https:"))
+                        {
+                            parentInstruction = parentInstruction.substring(0, parentInstruction.length() - 1).trim();
+                        }
+                        final PlaybookStep step = new PlaybookStep(parentInstruction);
+                        initStepLocation(step, fileName, fileContent, String.valueOf(entry.getKey()), searchOffset);
 
-                        parseStepBlock(fullLine, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
+                        final Object childItems = entry.getValue();
+                        if (childItems != null)
+                        {
+                            parseStepBlock(childItems, identifier, fileName, fileContent, manager, activeStack, step.getSubSteps(), outDataSets, searchOffset);
+                        }
+                        outSteps.add(step);
                     }
                     else
                     {
@@ -622,7 +675,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                 }
                 else if (stepItem instanceof List)
                 {
-                    parseStepBlock(stepItem, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets);
+                    parseStepBlock(stepItem, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
                 }
                 else
                 {
@@ -634,47 +687,62 @@ public final class YamlPlaybookParser implements PlaybookParser
         else if (rawSteps instanceof String)
         {
             final String[] lines = ((String) rawSteps).split("\\r?\\n");
+            PlaybookStep currentParentStep = null;
+            int parentIndent = -1;
+
             for (final String line : lines)
             {
-                String trimmed = line.trim();
+                final String trimmed = line.trim();
                 if (trimmed.isEmpty() || trimmed.startsWith("#"))
                 {
                     continue;
                 }
-                if (trimmed.startsWith("- ") || (trimmed.startsWith("-") && trimmed.length() > 1 && !trimmed.startsWith("--")))
+
+                int indent = 0;
+                while (indent < line.length() && (line.charAt(indent) == ' ' || line.charAt(indent) == '\t'))
                 {
-                    trimmed = trimmed.substring(1).trim();
+                    indent++;
                 }
-                final String lowerTrimmed = trimmed.toLowerCase();
-                final boolean isConditional = lowerTrimmed.startsWith("if ") || lowerTrimmed.startsWith("if(");
-                final boolean isDirectInclude = (trimmed.startsWith("_include:") || trimmed.startsWith("include:")) && !isConditional;
-                if (isDirectInclude)
+
+                if (trimmed.startsWith("_include:") || trimmed.startsWith("include:"))
                 {
-                    final int incIdx = trimmed.contains("_include:") ? trimmed.indexOf("_include:") : trimmed.indexOf("include:");
-                    final int colonIdx = trimmed.indexOf(':', incIdx);
-                    String includeRelativePath = trimmed.substring(colonIdx + 1).trim();
-                    if (includeRelativePath.contains(" "))
-                    {
-                        final int spaceIdx = includeRelativePath.indexOf(" ");
-                        String candidate = includeRelativePath.substring(0, spaceIdx).trim();
-                        if (candidate.endsWith(",") || candidate.endsWith(";"))
-                        {
-                            candidate = candidate.substring(0, candidate.length() - 1).trim();
-                        }
-                        if (candidate.endsWith(".steps") || candidate.endsWith(".yaml") || candidate.endsWith(".yml") || candidate.endsWith(".json"))
-                        {
-                            includeRelativePath = candidate;
-                        }
-                    }
+                    final int colonIdx = trimmed.indexOf(':');
+                    final String includeRelativePath = trimmed.substring(colonIdx + 1).trim();
                     final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
                     
-                    parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
+                    final PlaybookStep includeStep = new PlaybookStep("_include: " + includeRelativePath);
+                    initStepLocation(includeStep, fileName, fileContent, line, searchOffset);
+                    parseRecursive(resolvedIdentifier, manager, activeStack, includeStep.getSubSteps(), outDataSets);
+                    outSteps.add(includeStep);
+                    currentParentStep = null;
+                    parentIndent = -1;
                 }
                 else
                 {
-                    final PlaybookStep step = new PlaybookStep(trimmed);
-                    initStepLocation(step, identifier, fileContent, line);
-                    outSteps.add(step);
+                    if (currentParentStep != null && indent > parentIndent)
+                    {
+                        String childInstruction = trimmed;
+                        if (childInstruction.startsWith("- ") || childInstruction.startsWith("* "))
+                        {
+                            childInstruction = childInstruction.substring(2).trim();
+                        }
+                        final PlaybookStep childStep = new PlaybookStep(childInstruction);
+                        initStepLocation(childStep, fileName, fileContent, line, searchOffset);
+                        currentParentStep.getSubSteps().add(childStep);
+                    }
+                    else
+                    {
+                        String parentInstruction = trimmed;
+                        if (parentInstruction.endsWith(":") && !parentInstruction.startsWith("http:") && !parentInstruction.startsWith("https:"))
+                        {
+                            parentInstruction = parentInstruction.substring(0, parentInstruction.length() - 1).trim();
+                        }
+                        final PlaybookStep step = new PlaybookStep(parentInstruction);
+                        initStepLocation(step, fileName, fileContent, line, searchOffset);
+                        outSteps.add(step);
+                        currentParentStep = step;
+                        parentIndent = indent;
+                    }
                 }
             }
         }
@@ -683,14 +751,24 @@ public final class YamlPlaybookParser implements PlaybookParser
     /**
      * Helper to initialize the step's source file and approximate line number.
      */
-    private void initStepLocation(final PlaybookStep step, final String sourceFile, final String fileContent, final String searchStr)
+    private void initStepLocation(final PlaybookStep step, final String fileName, final String fileContent, final String searchStr, final int[] searchOffset)
     {
-        step.setSourceFile(sourceFile);
+        step.setSourceFile(fileName);
         if (fileContent != null && searchStr != null && !searchStr.isEmpty())
         {
-            final int idx = fileContent.indexOf(searchStr);
+            final int fromIndex = (searchOffset != null && searchOffset.length > 0) ? searchOffset[0] : 0;
+            int idx = fileContent.indexOf(searchStr, fromIndex);
+            if (idx == -1 && fromIndex > 0)
+            {
+                // Fall back to searching from start if not found after offset
+                idx = fileContent.indexOf(searchStr);
+            }
             if (idx != -1)
             {
+                if (searchOffset != null && searchOffset.length > 0)
+                {
+                    searchOffset[0] = idx + searchStr.length();
+                }
                 int lineCount = 1;
                 for (int i = 0; i < idx; i++)
                 {
@@ -749,6 +827,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                 try
                 {
                     final List<PlaybookStep> jsonSteps = mapper.readValue(content, new TypeReference<List<PlaybookStep>>(){});
+                    setParentReferences(jsonSteps, null);
                     return new Playbook(jsonSteps, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons());
                 }
                 catch (final Exception e)

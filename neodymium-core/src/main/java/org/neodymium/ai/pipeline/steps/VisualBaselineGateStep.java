@@ -26,6 +26,7 @@ import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -72,6 +73,46 @@ public final class VisualBaselineGateStep implements PipelineStep
     }
 
     /**
+     * Determines whether the current step is a pure verification step containing no interactive or mutating actions.
+     * Pure verification steps only contain assertions, NO-OPs, or no recorded actions/tool calls at all.
+     *
+     * @return true if the step has no recorded mutating actions or tool calls
+     */
+    public boolean isPureVerification()
+    {
+        if (this.step == null)
+        {
+            return true;
+        }
+
+        final boolean hasMutatingAction = this.step.getActions() != null && this.step.getActions().stream()
+            .anyMatch(a -> a != null && a.getType() != null
+                && !a.getType().toUpperCase().startsWith("ASSERT")
+                && !"NONE".equalsIgnoreCase(a.getType())
+                && !"VERIFY".equalsIgnoreCase(a.getType()));
+
+        if (hasMutatingAction)
+        {
+            return false;
+        }
+
+        if (this.step.getToolCalls() != null && !this.step.getToolCalls().isEmpty())
+        {
+            final boolean hasMutatingToolCall = this.step.getToolCalls().stream()
+                .anyMatch(tc -> tc != null && tc.toolName() != null
+                    && !tc.toolName().toLowerCase().startsWith("assert")
+                    && !"none".equalsIgnoreCase(tc.toolName())
+                    && !"verify".equalsIgnoreCase(tc.toolName()));
+            if (hasMutatingToolCall)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Executes the visual baseline gating check.
      *
      * @param context the execution context
@@ -85,7 +126,10 @@ public final class VisualBaselineGateStep implements PipelineStep
             return false;
         }
 
-        final String resolvedInstruction = context.getSessionData().resolveVariables(this.step.getInstruction());
+        final String rawInstruction = this.step.getInstruction();
+        final String resolvedInstruction = (context.getSessionData() != null && rawInstruction != null)
+            ? context.getSessionData().resolveAvailableVariables(rawInstruction)
+            : rawInstruction;
         final ExecutionMode mode = (ExecutionMode) context.getTransientData()
             .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
 
@@ -134,8 +178,18 @@ public final class VisualBaselineGateStep implements PipelineStep
                         }
                     }
 
+                    final boolean pureVerification = isPureVerification();
+                    if (!pureVerification && coordinateTarget == null)
+                    {
+                        LOGGER.debug("   Visual step contains recorded mutating actions; deferring visual baseline check to post-action for: \"{}\"",
+                            resolvedInstruction);
+                        return false;
+                    }
+
                     final String recordedHash = this.step.getScreenshotHash();
-                    final double minScore = coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore();
+                    final double minScore = this.step.getSsimMinScore() != null
+                        ? this.step.getSsimMinScore()
+                        : (coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore());
 
                     final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
                         || (this.step != null && this.step.isFullPageVisualStep());
@@ -181,7 +235,10 @@ public final class VisualBaselineGateStep implements PipelineStep
                             final double ssimScore = ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
                             currentSsimScore = ssimScore;
                             this.step.setSsimScore(ssimScore);
-                            this.step.setSsimMinScore(minScore);
+                            if (this.step.getSsimMinScore() != null)
+                            {
+                                this.step.setSsimMinScore(minScore);
+                            }
                             this.step.setBaselineMatrixPng(ScreenshotHasher.matrixToDataUri(recordedHash));
                             this.step.setReplayMatrixPng(ScreenshotHasher.matrixToDataUri(currentSsimMatrix));
                             this.step.setScreenshotHashDim(coordinateTarget != null ? ScreenshotHasher.TILE_SSIM_MATRIX_DIM : (this.step.getScreenshotHashDim() != null ? this.step.getScreenshotHashDim() : ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM));
@@ -217,19 +274,13 @@ public final class VisualBaselineGateStep implements PipelineStep
                             }
                         }
 
-                        final boolean hasActualActions = this.step.getActions() != null && !this.step.getActions().isEmpty()
-                            && this.step.getActions().stream().anyMatch(a -> !"NONE".equalsIgnoreCase(a.getType()));
-
-                        final boolean isPureVerification = !hasActualActions
-                            || (this.step.isVisualStep() && this.step.getActions().stream().allMatch(a -> a.getType() != null && (a.getType().toUpperCase().startsWith("ASSERT") || "NONE".equalsIgnoreCase(a.getType()))));
-
-                        if (isVisualMatch && isPureVerification)
+                        if (isVisualMatch && pureVerification)
                         {
                             return true;
                         }
                         else
                         {
-                            if (this.step.isVisualStep() && !isVisualMatch)
+                            if (pureVerification && !isVisualMatch)
                             {
                                 final String msg = String.format("Visual SSIM score below threshold (score: %s < %.2f) for visual instruction: \"%s\".",
                                     currentSsimScore != null ? String.format("%.4f", currentSsimScore) : "N/A", minScore, resolvedInstruction);
@@ -245,7 +296,7 @@ public final class VisualBaselineGateStep implements PipelineStep
                                 }
                             }
 
-                            if (hasActualActions)
+                            if (!pureVerification)
                             {
                                 if (coordinateTarget != null && !isVisualMatch)
                                 {
@@ -302,5 +353,133 @@ public final class VisualBaselineGateStep implements PipelineStep
             }
         }
         return false;
+    }
+
+    /**
+     * Evaluates the post-action visual baseline check during replay for steps containing recorded actions.
+     * Compares the captured post-action browser state against the recorded SSIM baseline.
+     *
+     * @param context the execution context containing post-action state
+     * @throws PipelineException if post-action visual baseline comparison fails in strict or healing mode
+     */
+    public void executePostActionCheck(final ExecutionContext context) throws PipelineException
+    {
+        if (this.step == null || context == null)
+        {
+            return;
+        }
+
+        final String recordedHash = this.step.getScreenshotHash();
+        if (recordedHash == null || recordedHash.isEmpty())
+        {
+            return;
+        }
+
+        final ExecutionMode mode = (ExecutionMode) context.getTransientData()
+            .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
+
+        if (!mode.isReplay() || this.step.isNoReplay())
+        {
+            return;
+        }
+
+        SutState postState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+        if (postState == null || postState.getAttachments() == null || postState.getAttachments().isEmpty())
+        {
+            final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+            if (executor != null)
+            {
+                final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                    || this.step.isFullPageVisualStep();
+                final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
+                try
+                {
+                    postState = executor.captureState(cl, isFullPageReq);
+                    if (postState != null)
+                    {
+                        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postState);
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("Failed to capture post-action state for visual check: {}", e.getMessage());
+                }
+            }
+        }
+
+        if (postState == null)
+        {
+            LOGGER.debug("No post-action state captured for visual verification of: \"{}\"", this.step.getInstruction());
+            return;
+        }
+
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, postState);
+
+        final String currentSsimMatrix = VisualStabilityDetector.extractSsimMatrix(postState);
+        if (currentSsimMatrix == null)
+        {
+            LOGGER.warn("Failed to extract SSIM matrix from post-action state for: \"{}\"", this.step.getInstruction());
+            return;
+        }
+
+        final double minScore = this.step.getSsimMinScore() != null
+            ? this.step.getSsimMinScore()
+            : AiConfiguration.getInstance().getVisualSsimMinScore();
+        final double ssimScore = ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
+        this.step.setSsimScore(ssimScore);
+        if (this.step.getSsimMinScore() != null)
+        {
+            this.step.setSsimMinScore(minScore);
+        }
+        this.step.setBaselineMatrixPng(ScreenshotHasher.matrixToDataUri(recordedHash));
+        this.step.setReplayMatrixPng(ScreenshotHasher.matrixToDataUri(currentSsimMatrix));
+        if (this.step.getScreenshotHashDim() == null)
+        {
+            this.step.setScreenshotHashDim(ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM);
+        }
+
+        final String rawInstruction = this.step.getInstruction();
+        final String resolvedInstruction = (context.getSessionData() != null && rawInstruction != null)
+            ? context.getSessionData().resolveAvailableVariables(rawInstruction)
+            : rawInstruction;
+
+        String replayDims = null;
+        if (postState.getAttachments() != null)
+        {
+            for (final SutAttachment attachment : postState.getAttachments())
+            {
+                if (attachment != null && attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                {
+                    final TestExecutionReport.ReportScreenshotEntry tempEntry = new TestExecutionReport.ReportScreenshotEntry(
+                        "temp", 0, attachment.mediaType(), attachment.base64Data(), 0L);
+                    replayDims = tempEntry.getDimensions();
+                    break;
+                }
+            }
+        }
+
+        LOGGER.debug("   🖼️ [Post-Action Visual SSIM Check] Instruction: \"{}\" | Dimensions: {} | SSIM Score: {} | Required Min Score: {}",
+            resolvedInstruction, replayDims != null ? replayDims : "unknown", String.format("%.4f", ssimScore), minScore);
+
+        if (ssimScore >= minScore)
+        {
+            LOGGER.info("   ✅ Post-action visual SSIM match (score: {} >= {}) for instruction: \"{}\" (Dimensions: {}).",
+                String.format("%.4f", ssimScore), minScore, resolvedInstruction, replayDims != null ? replayDims : "unknown");
+        }
+        else
+        {
+            final String msg = String.format("Visual SSIM score below threshold (score: %s < %.2f) for visual instruction: \"%s\".",
+                String.format("%.4f", ssimScore), minScore, resolvedInstruction);
+            LOGGER.warn("   ❌ " + msg);
+
+            if (mode.supportsHealing())
+            {
+                throw new HealingRequiredException(msg);
+            }
+            else
+            {
+                throw new DivergenceException(msg);
+            }
+        }
     }
 }

@@ -18,24 +18,27 @@
  */
 package org.neodymium.ai.integration.live;
 
-import static com.codeborne.selenide.Condition.text;
+import static com.codeborne.selenide.Condition.exactText;
 import static com.codeborne.selenide.Selenide.$;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
+import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
-import org.junit.jupiter.api.Tag;
-import org.neodymium.ai.junit.AiDataSet;
-import org.neodymium.ai.junit.AiPlaybook;
-import org.neodymium.ai.junit.NeodymiumAiTest;
-import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.junit.AiMode;
-import org.neodymium.ai.session.AiSession;
-
 /**
- * Live integration test for the CLICK action plugin.
+ * Live integration test for the CLICK action plugin verifying buttons, anchor links,
+ * SVG icons, clickable table rows, custom-styled checkboxes, hidden element fallback,
+ * and error handling for missing and disabled elements.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
@@ -45,28 +48,230 @@ import org.neodymium.ai.session.AiSession;
 @AiPlaybook("programmatic")
 public class ClickIntegrationTest extends BaseAiTest
 {
-
     /**
-     * Executes Click integration test in both live and strict replay modes.
+     * Sets up test page URLs before each test execution.
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    @AiDataSet("clickData")
-    public void testClick(final AiSession session) throws Exception
+    @BeforeEach
+    public void setupProperties(final AiSession session)
     {
-        final String pageUrl = String.format("http://localhost:%d/AllActionsTest/test.html", server.getPort());
-        session.data().putDynamic("click.test.url", pageUrl, false);
+        final String standardUrl = String.format("http://localhost:%d/ClickActionTest/testClickStandardButton.html", server.getPort());
+        final String anchorUrl = String.format("http://localhost:%d/ClickActionTest/testClickAnchorLink.html", server.getPort());
+        final String svgUrl = String.format("http://localhost:%d/ClickActionTest/testClickSvgIcon.html", server.getPort());
+        final String disabledUrl = String.format("http://localhost:%d/ClickActionTest/testClickDisabledButton.html", server.getPort());
+        final String tableUrl = String.format("http://localhost:%d/ClickActionTest/testClickTableRow.html", server.getPort());
+        final String hiddenUrl = String.format("http://localhost:%d/ClickActionTest/testClickHiddenElement.html", server.getPort());
+        final String checkboxUrl = String.format("http://localhost:%d/ClickActionTest/testClickInvisibleCheckbox.html", server.getPort());
 
+        session.data().putDynamic("click.test.standard.url", standardUrl, false);
+        session.data().putDynamic("click.test.anchor.url", anchorUrl, false);
+        session.data().putDynamic("click.test.svg.url", svgUrl, false);
+        session.data().putDynamic("click.test.disabled.url", disabledUrl, false);
+        session.data().putDynamic("click.test.table.url", tableUrl, false);
+        session.data().putDynamic("click.test.hidden.url", hiddenUrl, false);
+        session.data().putDynamic("click.test.checkbox.url", checkboxUrl, false);
+    }
+
+    /**
+     * Verifies clicking a standard button targeted by natural language visible text.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickStandardButton.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testClickStandardButton(final AiSession session) throws Exception
+    {
         session.execute( """
-            data:
-              - testId: clickData
             steps: |
-              Open ${click.test.url} in the browser
-              Click the button #btn-click
-            """);
+              Open ${click.test.standard.url} in the browser
+              Click the 'Submit Order' button
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
-        $("#click-status").shouldHave(text("Clicked"));
+        $("#result").shouldHave(exactText("Order Submitted!"));
+    }
+
+    /**
+     * Verifies clicking an anchor navigation link targeted by natural language link text.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickAnchorLink.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testClickAnchorLink(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${click.test.anchor.url} in the browser
+              Click the 'Go to Target Destination' link
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#result").shouldHave(exactText("Link Clicked!"));
+    }
+
+    /**
+     * Verifies clicking a button that contains an embedded SVG icon.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickSvgButton.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testClickSvgButton(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${click.test.svg.url} in the browser
+              Click the 'Add Item' button
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#result").shouldHave(exactText("SVG Button Clicked!"));
+    }
+
+    /**
+     * Verifies clicking a bare SVG icon directly by its element ID.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickBareSvgIcon.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testClickBareSvgIcon(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${click.test.svg.url} in the browser
+              Click #svg-icon
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#result").shouldHave(exactText("SVG Button Clicked!"));
+    }
+
+    /**
+     * Verifies clicking a table row to select an item.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickTableRow.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testClickTableRow(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${click.test.table.url} in the browser
+              Click the table row for 'Alice Smith'
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#result").shouldHave(exactText("Selected #1001"));
+    }
+
+    /**
+     * Verifies clicking a custom-styled checkbox whose underlying input is visually hidden.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickInvisibleCheckbox.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testClickInvisibleCheckbox(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${click.test.checkbox.url} in the browser
+              Click 'Accept Terms'
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#result").shouldHave(exactText("Checked"));
+    }
+
+    /**
+     * Verifies that clicking an element with display:none gracefully falls back to JavaScript click.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickHiddenElementFallback.yaml")
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    public void testClickHiddenElementFallback(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${click.test.hidden.url} in the browser
+              Click button #btn-hidden
+            """)
+            .verifyMetrics()
+            .hasStepCount(2)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls());
+
+        $("#result").shouldHave(exactText("Hidden button clicked!"));
+    }
+
+    /**
+     * Verifies that attempting to click a non-existent element raises an exception.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickNonExistentElementFailure.yaml")
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    public void testClickNonExistentElementFailure(final AiSession session)
+    {
+        assertThrows(ConclusiveFailureException.class, () ->
+        {
+            session.execute( """
+                steps: |
+                  Open ${click.test.standard.url} in the browser
+                  Click the button #missing-button
+                """);
+        });
+
+        $("#result").shouldHave(exactText(""));
+    }
+
+    /**
+     * Verifies that attempting to click a disabled button raises an exception and leaves page state intact.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/ClickIntegrationTest_testClickDisabledButtonFailure.yaml")
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    public void testClickDisabledButtonFailure(final AiSession session)
+    {
+        assertThrows(ConclusiveFailureException.class, () ->
+        {
+            session.execute( """
+                steps: |
+                  Open ${click.test.disabled.url} in the browser
+                  Click the 'Disabled Order Button' button
+                """);
+        });
+
+        $("#result").shouldHave(exactText("Initial State"));
     }
 }

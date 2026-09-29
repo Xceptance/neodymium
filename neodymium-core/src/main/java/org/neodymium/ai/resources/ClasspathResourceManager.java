@@ -18,7 +18,6 @@
  */
 package org.neodymium.ai.resources;
 
-import org.neodymium.util.Neodymium;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -26,6 +25,9 @@ import java.io.InputStream;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import org.neodymium.util.Neodymium;
 
 /**
  * PlaybookResourceManager implementation that reads resources from the Java Classpath.
@@ -97,7 +99,7 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
             try
             {
                 final Path rootPath = Path.of(rootUrl.toURI());
-                final java.util.List<Path> candidatePaths = new java.util.ArrayList<>();
+                final List<Path> candidatePaths = new ArrayList<>();
                 candidatePaths.add(rootPath.resolve(normalized));
                 candidatePaths.add(rootPath.resolve("ai-playbooks/" + normalized));
 
@@ -229,105 +231,120 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
     }
 
     /**
-     * Resolves the project's source test resources root directory dynamically using
-     * the 'playbook.directory.global' configuration property.
+     * Resolves the project's source test resources root directory dynamically.
+     * In multi-module environments, derives the submodule source path from the active classloader root.
      *
      * @return the source resources root path, or null if it cannot be resolved or does not exist
      */
-    private Path getSourceResourcesRoot()
+    Path getSourceResourcesRoot()
     {
-        try
+        // 1. Try deriving from active classLoader output root (target/test-classes, build/classes, bin)
+        final URL rootUrl = this.classLoader.getResource("");
+        if (rootUrl != null && "file".equals(rootUrl.getProtocol()))
         {
-            final String globalDir = Neodymium.aiConfiguration().getProperty("playbook.directory.global", "src/test/resources/ai-playbooks/");
-            if (globalDir != null && !globalDir.trim().isEmpty())
+            try
             {
-                final String normalized = globalDir.replace('\\', '/');
-                for (final String indicator : new String[]{"src/test/resources", "src/main/resources"})
+                final Path rootPath = Path.of(rootUrl.toURI());
+                final String rootPathStr = rootPath.toString();
+
+                if (rootPathStr.contains("target" + File.separator + "test-classes"))
                 {
-                    final int idx = normalized.indexOf(indicator);
-                    if (idx != -1)
+                    final Path candidate = Path.of(rootPathStr.replace(
+                        "target" + File.separator + "test-classes",
+                        "src" + File.separator + "test" + File.separator + "resources"
+                    ));
+                    if (Files.isDirectory(candidate))
                     {
-                        return Path.of(normalized.substring(0, idx + indicator.length()));
+                        return candidate;
                     }
                 }
-                if (normalized.endsWith("ai-playbooks/"))
+                if (rootPathStr.contains("target" + File.separator + "classes"))
                 {
-                    return Path.of(normalized.substring(0, normalized.length() - 13));
+                    final Path candidate = Path.of(rootPathStr.replace(
+                        "target" + File.separator + "classes",
+                        "src" + File.separator + "main" + File.separator + "resources"
+                    ));
+                    if (Files.isDirectory(candidate))
+                    {
+                        return candidate;
+                    }
                 }
-                else if (normalized.endsWith("ai-playbooks"))
+                if (rootPathStr.contains("build" + File.separator + "classes" + File.separator + "java" + File.separator + "test"))
                 {
-                    return Path.of(normalized.substring(0, normalized.length() - 12));
+                    final Path candidate = Path.of(rootPathStr.replace(
+                        "build" + File.separator + "classes" + File.separator + "java" + File.separator + "test",
+                        "src" + File.separator + "test" + File.separator + "resources"
+                    ));
+                    if (Files.isDirectory(candidate))
+                    {
+                        return candidate;
+                    }
+                }
+                // Traverse ancestor directories to locate submodule src/test/resources (e.g. under Eclipse /bin)
+                Path current = rootPath;
+                while (current != null && current.getParent() != null)
+                {
+                    final Path candidate = current.resolve("src" + File.separator + "test" + File.separator + "resources");
+                    if (Files.isDirectory(candidate))
+                    {
+                        return candidate;
+                    }
+                    current = current.getParent();
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        // 2. Explicit configured directory if present and existing on disk
+        try
+        {
+            final String globalDir = Neodymium.aiConfiguration().getProperty("playbook.directory.global", null);
+            if (globalDir != null && !globalDir.trim().isEmpty())
+            {
+                final Path configuredPath = Path.of(globalDir.trim());
+                if (Files.isDirectory(configuredPath))
+                {
+                    return configuredPath;
                 }
             }
         }
         catch (final Throwable ignored)
         {
         }
-        if (Files.isDirectory(Path.of("src/test/resources")))
-        {
-            return Path.of("src/test/resources");
-        }
-        return null;
-    }
 
-    public boolean hasResource(final String identifier)
-    {
-        if (identifier == null || identifier.trim().isEmpty())
+        // 3. Fallback to current working directory src/test/resources if it exists
+        final Path localSrc = Path.of("src/test/resources");
+        if (Files.isDirectory(localSrc))
         {
-            return false;
+            return localSrc;
         }
-        try (final InputStream in = read(identifier))
-        {
-            return in != null;
-        }
-        catch (final Exception e)
-        {
-            return false;
-        }
+
+        return null;
     }
 
     @Override
     public String resolveInclude(final String parentIdentifier, final String relativePath)
     {
-        if (relativePath == null || relativePath.trim().isEmpty())
+        if (parentIdentifier == null || parentIdentifier.trim().isEmpty()
+            || relativePath.startsWith("playbooks/") || relativePath.startsWith("ai-playbooks/") || relativePath.startsWith("src/") || relativePath.startsWith("/"))
         {
-            return relativePath;
+            return Path.of(relativePath).normalize().toString().replace('\\', '/');
         }
-        final String cleanRelative = relativePath.trim().replace('\\', '/');
-
-        if (parentIdentifier == null || parentIdentifier.trim().isEmpty() || cleanRelative.startsWith("/"))
-        {
-            return Path.of(cleanRelative).normalize().toString().replace('\\', '/');
-        }
-
-        final Path parentPath = Path.of(parentIdentifier.trim().replace('\\', '/'));
+        
+        final Path parentPath = Path.of(parentIdentifier);
         final Path parentDir = parentPath.getParent();
-
-        if (parentDir != null)
+        
+        final Path resolved;
+        if (parentDir == null)
         {
-            Path currentDir = parentDir;
-            while (currentDir != null)
-            {
-                final String candidate = currentDir.resolve(cleanRelative).normalize().toString().replace('\\', '/');
-                if (hasResource(candidate))
-                {
-                    return candidate;
-                }
-                currentDir = currentDir.getParent();
-            }
+            resolved = Path.of(relativePath).normalize();
         }
-
-        final String normalizedRelative = Path.of(cleanRelative).normalize().toString().replace('\\', '/');
-        if (hasResource(normalizedRelative))
+        else
         {
-            return normalizedRelative;
+            resolved = parentDir.resolve(relativePath).normalize();
         }
-
-        if (parentDir != null)
-        {
-            return parentDir.resolve(cleanRelative).normalize().toString().replace('\\', '/');
-        }
-
-        return normalizedRelative;
+        return resolved.toString().replace('\\', '/');
     }
 }
