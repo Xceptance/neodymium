@@ -1,4 +1,5 @@
-[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:%22com.xceptance%22%20AND%20a:%22neodymium%22) [![Join the chat at https://gitter.im/neodymium/community](https://badges.gitter.im/neodymium/community.svg)](https://gitter.im/neodymium/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Maven Central](https://img.shields.io/maven-central/v/com.xceptance/neodymium-library
+)](https://mvnrepository.com/artifact/com.xceptance/neodymium-library) 
 
 # Neodymium
 
@@ -165,9 +166,8 @@ public class ClassicTest
 ## 🏗️ Building Neodymium
 
 Neodymium is organized as a standard Maven multi-module monorepo:
-* **`neodymium-library`**: The core automation framework (Classic + Aura AI).
-* **`aura-report-manager`**: The Spring Boot reporting dashboard & test management web application.
-* **`aura-test-manager`**: Standalone playbook & queue manager hub.
+* **`neodymium-core`**: The core automation framework (Classic + Aura AI).
+* **`aura-manager`**: The unified Spring Boot Neodymium Aura Manager (Execution Hub, Visual Playbook Editor, and Reporting Dashboard).
 
 ### Prerequisites
 * **Java**: JDK 21 or higher
@@ -197,27 +197,28 @@ Thanks to Maven's reactor, you can target individual modules using `-pl` (projec
 
 * **Run core library tests:**
   ```bash
-  mvn test -pl neodymium-library
+  mvn test -pl neodymium-core
   ```
 * **Run a single test in core library:**
   ```bash
-  mvn test -pl neodymium-library -Dtest=TestDataTest
+  mvn test -pl neodymium-core -Dtest=TestDataTest
   ```
-* **Compile Aura Report Manager (resolves core in-memory):**
+* **Compile Aura Manager (resolves core in-memory):**
   ```bash
-  mvn compile -pl aura-report-manager -am
+  mvn compile -pl aura-manager -am
   ```
-* **Launch Aura Report Manager locally (`http://localhost:8080`):**
+* **Launch Aura Manager locally (`http://localhost:8080`):**
   ```bash
-  mvn spring-boot:run -pl aura-report-manager -am
+  mvn spring-boot:run -pl aura-manager -am
   ```
-* **Launch Aura Test Manager locally:**
+* **Launch standalone interactive test execution (without manager):**
   ```bash
-  mvn spring-boot:run -pl aura-test-manager -am
+  mvn test -Dneodymium.ai.interactive=true
   ```
 
 #### 5. Convenience Scripts
-* Run Aura Test Manager: `./run-aura.sh` (or `run-aura.bat` on Windows)
+* Run Aura Manager: `./run-aura.sh` (or `run-aura.bat` on Windows).
+  * Automatically detects whether running inside the Neodymium aggregator repo (`mvn spring-boot:run -pl aura-manager`) or in an external project with `aura-manager` imported as a dependency (`exec:java -Dexec.mainClass="com.xceptance.aura.AuraManagerApplication"`).
 * Run a single test with a data file: `./run-neo-test.sh <path_to_yaml>`
 
 ---

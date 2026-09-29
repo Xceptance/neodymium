@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- CREATE TEST MODAL FRAGMENT -->
+<div class="modal-overlay" id="createTestModal" th:fragment="createTestModal" style="display: none;" th:style="${error != null} ? 'display: flex;' : null">
+    <div class="modal-card">
+        <div class="modal-header" id="modalTitle">Create New Test Case</div>
+        <form onsubmit="event.preventDefault(); submitCreateTest();">
+            <div class="modal-body">
+                <div style="margin-bottom: 12px;">
+                    <label style="font-size: 12px; font-weight: 600; color: var(--text-secondary, #64748b); margin-bottom: 6px; display: block;">File Type</label>
+                    <div style="display: flex; gap: 16px; font-size: 13px;">
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="radio" name="newFileType" value="yaml" checked onclick="const inp=document.getElementById('newTestName'); if(inp) inp.placeholder='e.g. Add Product to Basket';"/> 🧪 Test Playbook (.yaml)
+                        </label>
+                        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                            <input type="radio" name="newFileType" value="steps" onclick="const inp=document.getElementById('newTestName'); if(inp) inp.placeholder='e.g. fragments/login.steps';"/> 🧩 Step Fragment (.steps)
+                        </label>
+                    </div>
+                </div>
+                <label class="neo-u-47">File Name</label>
+                <input class="modal-input" id="newTestName" name="name" placeholder="e.g. Add Product to Basket" type="text" required autofocus/>
+                <div id="createTestError" class="error-message" style="color: var(--color-danger, #ef4444); margin-top: 8px; font-size: 0.875rem;" th:if="${error != null}" th:text="${error}"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-editor" id="closeModalBtn" onclick="document.getElementById('createTestModal').style.display='none'; const inp = document.getElementById('newTestName'); if (inp) inp.value = '';">Cancel</button>
+                <button type="button" class="btn-primary neo-u-48" id="submitCreateTestBtn" onclick="submitCreateTest()">Create Test</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- DELETE CONFIRMATION MODAL FRAGMENT -->
+<div class="modal-overlay" id="deleteTestModal" th:fragment="deleteTestModal" style="display: none;" th:style="${fileToDelete != null} ? 'display: flex;' : null">
+    <div class="modal-card">
+        <div class="modal-header">Delete Test Case</div>
+        <form onsubmit="event.preventDefault(); submitDeleteTest();">
+            <input type="hidden" name="file" id="deleteFileNameInput" th:value="${fileToDelete}"/>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <span class="neo-u-44" id="deleteFileNameDisplay" th:text="${fileToDelete}"></span>?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-editor" onclick="document.getElementById('deleteTestModal').style.display='none'">Cancel</button>
+                <button type="button" class="btn-danger neo-u-48" onclick="submitDeleteTest()">Confirm Delete</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- RENAME / MOVE TEST OR FRAGMENT MODAL FRAGMENT -->
+<div class="modal-overlay" id="renameTestModal" th:fragment="renameTestModal" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">Rename / Move File</div>
+        <form onsubmit="event.preventDefault(); submitRenameTest();">
+            <input type="hidden" name="file" id="renameOldFileNameInput"/>
+            <div class="modal-body">
+                <p style="margin-top: 0; margin-bottom: 8px; font-size: 13px; color: var(--text-secondary, #64748b);">
+                    Current file: <strong id="renameOldFileNameDisplay" style="color: var(--text-primary, #1e293b);"></strong>
+                </p>
+                <label class="neo-u-47" style="margin-top: 8px;">New File Name / Relative Path</label>
+                <input class="modal-input" id="renameNewPathInput" name="newPath" placeholder="e.g. auth/login.yaml" type="text" required autofocus/>
+                <div style="font-size: 11.5px; color: var(--text-secondary, #64748b); margin-top: 4px; line-height: 1.4;">
+                    💡 Tip: Include a folder path to move the file (e.g. <code>subfolder/filename.yaml</code> or <code>fragments/login.steps</code>).
+                </div>
+                <div id="renameTestError" class="error-message" style="color: var(--color-danger, #ef4444); margin-top: 8px; font-size: 0.875rem; display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-editor" id="closeRenameModalBtn" onclick="document.getElementById('renameTestModal').style.display='none';">Cancel</button>
+                <button type="button" class="btn-primary neo-u-48" id="submitRenameTestBtn" onclick="submitRenameTest()">Rename / Move</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- UPDATE FRAGMENT REFERENCES MODAL FRAGMENT -->
+<!-- Shown immediately after a .steps fragment file is successfully moved or renamed. -->
+<!-- The user can choose to update all _include: references or skip. -->
+<div class="modal-overlay" id="updateFragmentRefsModal" th:fragment="updateFragmentRefsModal" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">🧩 Update Fragment References</div>
+        <div class="modal-body">
+            <p style="margin-top: 0; margin-bottom: 12px; font-size: 0.95rem; color: var(--text-color, inherit);">
+                The fragment was moved. Would you like to update all
+                <code>_include:</code> references in test files to point to the new location?
+            </p>
+            <div style="background: var(--bg-secondary, #f1f5f9); border-radius: 6px; padding: 10px 12px; font-size: 12.5px; margin-bottom: 4px; line-height: 1.7;">
+                <div><span style="color: var(--text-secondary, #64748b);">Old path:</span>
+                    <code id="fragmentRefOldPath" style="color: var(--color-danger, #ef4444); word-break: break-all;"></code></div>
+                <div><span style="color: var(--text-secondary, #64748b);">New path:</span>
+                    <code id="fragmentRefNewPath" style="color: var(--color-success, #22c55e); word-break: break-all;"></code></div>
+            </div>
+            <div id="updateFragmentRefsError" class="error-message"
+                 style="color: var(--color-danger, #ef4444); margin-top: 10px; font-size: 0.875rem; display: none;"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-editor" id="skipFragmentRefsBtn"
+                    onclick="skipFragmentRefsUpdate()">Skip</button>
+            <button type="button" class="btn-primary" id="submitFragmentRefsBtn"
+                    onclick="submitUpdateFragmentRefs()">Update References</button>
+        </div>
+    </div>
+</div>
+
+<!-- RUN FINISHED CONFIRMATION MODAL FRAGMENT -->
+<div class="modal-overlay" id="runFinishedModal" th:fragment="runFinishedModal" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">Run Finished</div>
+        <div class="modal-body">
+            <p style="margin: 0; font-size: 0.95rem; color: var(--text-color, inherit);">Run is finished. Would you like to open the report?</p>
+        </div>
+        <div class="modal-footer" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <button type="button" class="btn-editor" id="runFinishedStayBtn">No, stay on the page</button>
+            <button type="button" class="btn-primary" id="runFinishedOpenBtn">Open the report</button>
+        </div>
+    </div>
+</div>
+
+<!-- UNSAVED CHANGES CONFIRMATION MODAL FRAGMENT -->
+<div class="modal-overlay" id="unsavedChangesModal" th:fragment="unsavedChangesModal" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">Unsaved Changes</div>
+        <div class="modal-body">
+            <p id="unsavedChangesModalMessage" style="margin: 0; font-size: 0.95rem; color: var(--text-color, inherit);">The file has unsaved changes. Are you sure you want to close without saving?</p>
+        </div>
+        <div class="modal-footer" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+            <button type="button" class="btn-editor" id="unsavedChangesStayBtn">Cancel</button>
+            <button type="button" class="btn-danger" id="unsavedChangesCloseBtn">Leave without saving</button>
+            <button type="button" class="btn-primary" id="unsavedChangesSaveBtn">Save changes & leave</button>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
+
+

@@ -31,6 +31,8 @@ public final class BrowserProfileDto
     public String browser;
     public String res;
     public boolean headless;
+    public boolean available = true;
+    public String unavailableReason;
 
     public BrowserProfileDto()
     {
@@ -38,10 +40,54 @@ public final class BrowserProfileDto
 
     public BrowserProfileDto(final String id, final String name, final String browser, final String res, final boolean headless)
     {
+        this(id, name, browser, res, headless, true, null);
+    }
+
+    public BrowserProfileDto(final String id, final String name, final String browser, final String res, final boolean headless,
+                             final boolean available, final String unavailableReason)
+    {
         this.id = id;
         this.name = name;
         this.browser = browser;
         this.res = res;
         this.headless = headless;
+        this.available = available;
+        this.unavailableReason = unavailableReason;
+    }
+
+    public String getId()
+    {
+        return this.id;
+    }
+
+    public String getName()
+    {
+        return this.name;
+    }
+
+    public String getBrowser()
+    {
+        return this.browser;
+    }
+
+    public String getRes()
+    {
+        return this.res;
+    }
+
+    public boolean isHeadless()
+    {
+        return this.headless;
+    }
+
+    public boolean isAvailable()
+    {
+        return this.available;
+    }
+
+    public String getUnavailableReason()
+    {
+        return this.unavailableReason;
     }
 }
+
