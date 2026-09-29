@@ -60,8 +60,8 @@
             <button class="btn-editor" id="redoBtn" onclick="editorRedo()" title="Redo (Ctrl+Y)" disabled>
                 <span class="material-symbols-outlined">redo</span> Redo
             </button>
-            <button class="btn-editor btn-review" id="reviewStepsBtn" onclick="runReviewSteps()" title="Run PESAP AI Step Review" th:disabled="${hasParseError != null and hasParseError}">
-                <span class="material-symbols-outlined">auto_awesome</span> Review Steps
+            <button class="btn-editor btn-review" id="reviewStepsBtn" onclick="runValidateFile()" title="Validate file: check YAML syntax, include paths, and variable definitions" th:disabled="${hasParseError != null and hasParseError}">
+                <span class="material-symbols-outlined">verified</span> Validate File
             </button>
             <button type="button"
                     class="btn-editor save"
@@ -69,6 +69,7 @@
                     onclick="saveYamlFile()">
                 <span class="material-symbols-outlined">save</span> Save
             </button>
+            <button class="btn-editor" id="renameTestBtn" onclick="openRenameModal()"><span class="material-symbols-outlined">drive_file_rename_outline</span> Rename / Move</button>
             <button class="btn-editor delete" id="deleteTestBtn" onclick="deleteYamlFile()"><span class="material-symbols-outlined">delete</span> Delete</button>
             <button class="btn-editor" 
                     hx-post="/api/editor/close" 
@@ -312,6 +313,9 @@
                                         <div class="var-key-cell">
                                             <input type="text" class="var-key-input" th:value="${key}" oninput="compilePlaybookToYaml()" />
                                             <button class="btn-insert-var-chip" th:data-key="${key}" onclick="insertVariableFromInput(this.getAttribute('data-key'))">+ Insert</button>
+                                            <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                                                <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                                            </button>
                                         </div>
                                     </td>
                                     <td th:each="dataRow : ${dataMatrix}">
@@ -326,6 +330,9 @@
                                         <div class="var-key-cell">
                                             <input type="text" class="var-key-input" value="testId" />
                                             <button class="btn-insert-var-chip" onclick="insertVariableFromInput('testId')">+ Insert</button>
+                                            <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                                                <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                                            </button>
                                         </div>
                                     </td>
                                     <td><input type="text" class="cell-val" value="Default" oninput="compilePlaybookToYaml()" /></td>
@@ -436,9 +443,14 @@
                         <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">extension</span>
                         <span>Available Step Fragments (.steps)</span>
                     </span>
-                    <button class="btn-edit" onclick="openCreateModal('steps')" style="padding: 1px 6px; font-size: 10px; border-color: rgba(168, 85, 247, 0.4); color: #a855f7;" title="Create new step fragment file">
-                        <span class="material-symbols-outlined" style="font-size: 12px;">add</span> New
-                    </button>
+                    <div style="display: flex; align-items: center; gap: 4px;">
+                        <button type="button" class="btn-edit" id="toggleEditorFragmentViewBtn" onclick="toggleFileViewMode()" style="padding: 1px 6px; font-size: 10px;" title="Switch View Mode (Flat / Hierarchical)">
+                            <span class="material-symbols-outlined" id="editorFragmentViewModeIcon" style="font-size: 12px;">view_list</span>
+                        </button>
+                        <button class="btn-edit" onclick="openCreateModal('steps')" style="padding: 1px 6px; font-size: 10px; border-color: rgba(168, 85, 247, 0.4); color: #a855f7;" title="Create new step fragment file">
+                            <span class="material-symbols-outlined" style="font-size: 12px;">add</span> New
+                        </button>
+                    </div>
                 </div>
                 <div class="search-container" style="margin: 6px 0 8px 0;">
                     <span class="material-symbols-outlined search-icon" style="font-size: 14px; color: var(--text-secondary);">search</span>
@@ -476,6 +488,16 @@
 
         </aside>
     </div>
+    <script th:inline="javascript">
+        /*<![CDATA[*/
+        window.fragmentVarScopes = /*[[${fragmentVarScopes}]]*/ {};
+        if (typeof updateFragmentVariablesList === 'function') {
+            updateFragmentVariablesList();
+        }
+        /*]]>*/
+    </script>
+    <!-- Non-blocking Variable Prompt Dialog Container -->
+    <div id="varPromptContainer" class="var-prompt-container"></div>
 </div>
 
 <!-- HTMX Fragment for Inline Inclusion Tree Expansion -->
@@ -490,6 +512,45 @@
                 </span>
             </div>
             <div class="include-tree-actions">
+                <div class="include-vars-dropdown-wrapper" style="position: relative; display: inline-block;">
+                    <button class="btn-editor btn-include-vars" type="button" style="font-size: 11px; padding: 3px 8px; gap: 4px;" th:id="'btnVarsInclude_' + ${cardId}" th:data-card-id="${cardId}" onclick="toggleIncludeVarsDropdown(this.getAttribute('data-card-id'))" title="Variables used in this include">
+                        <span class="material-symbols-outlined" style="font-size: 14px; color: #c084fc;">data_object</span>
+                        <span>Variables (<span th:text="${includeVars != null ? includeVars.size() : 0}">0</span>)</span>
+                        <span class="material-symbols-outlined" style="font-size: 14px;">expand_more</span>
+                    </button>
+                    <div class="include-vars-dropdown" th:id="'varsDropdown_' + ${cardId}" style="display: none;">
+                        <div class="include-vars-dropdown-header">
+                            <span class="material-symbols-outlined" style="font-size: 14px; color: #a855f7;">data_object</span>
+                            <span>Variables in Include</span>
+                        </div>
+                        <div class="include-vars-dropdown-body">
+                            <div th:if="${includeVars == null or includeVars.isEmpty()}" class="empty-include-vars">
+                                No variables used in this include.
+                            </div>
+                            <div th:each="v : ${includeVars}" class="include-var-row" th:data-var="${v}">
+                                <code class="var-badge" th:text="'${' + ${v} + '}'">${var}</code>
+                                <div class="var-scope-toggle-group">
+                                    <button type="button" class="btn-var-scope scope-defined"
+                                            th:classappend="${includeVarScopes != null and includeVarScopes.get(v) == 'defined'} ? 'active-defined' : ''"
+                                            th:data-card-id="${cardId}"
+                                            th:data-var="${v}"
+                                            onclick="toggleIncludeTreeVarScope(this.getAttribute('data-card-id'), this.getAttribute('data-var'), 'defined')"
+                                            title="Variable is defined within this fragment">
+                                        Defined in include
+                                    </button>
+                                    <button type="button" class="btn-var-scope scope-required"
+                                            th:classappend="${includeVarScopes == null or includeVarScopes.get(v) != 'defined'} ? 'active-required' : ''"
+                                            th:data-card-id="${cardId}"
+                                            th:data-var="${v}"
+                                            onclick="toggleIncludeTreeVarScope(this.getAttribute('data-card-id'), this.getAttribute('data-var'), 'required')"
+                                            title="Variable requires definition from test">
+                                        Required from test
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 <button class="btn-editor" style="font-size: 11px; padding: 3px 8px;" th:id="'btnEditInclude_' + ${cardId}" th:data-card-id="${cardId}" onclick="enableIncludeEdit(this.getAttribute('data-card-id'))">
                     <span class="material-symbols-outlined" style="font-size: 14px;">edit</span> Edit File
                 </button>
@@ -506,7 +567,7 @@
             <span>Included file does not exist on disk. Edit steps below and save to create it.</span>
         </div>
         <div th:id="'includeInnerSteps_' + ${cardId}" style="display: flex; flex-direction: column; gap: 4px;">
-            <div class="nested-editable-step" contenteditable="false" th:each="step : ${includeSteps}" th:data-original="${step}" th:data-card-id="${cardId}" onfocus="handleNestedFocus(this)" onblur="handleNestedBlur(this)" oninput="markIncludeUnsaved(this.getAttribute('data-card-id'))">
+            <div class="nested-editable-step" contenteditable="false" th:each="step : ${includeSteps}" th:data-original="${step}" th:data-card-id="${cardId}" onfocus="handleNestedFocus(this, event)" onblur="handleNestedBlur(this)" onkeydown="handleNestedKeyDown(event, this.getAttribute('data-card-id'))" oninput="markIncludeUnsaved(this.getAttribute('data-card-id'))">
                 <span class="sub-line-num">-</span>
                 <span th:text="${step}">Step text</span>
             </div>

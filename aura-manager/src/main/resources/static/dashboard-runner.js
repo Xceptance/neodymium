@@ -764,7 +764,6 @@ window.addEventListener('message', (event) => {
 });
 
 window.addEventListener('pagehide', sendDisconnect);
-window.addEventListener('unload', sendDisconnect);
 
 // ============================================================================
 // Per-Queue-Item Browser Selection Modal Handler

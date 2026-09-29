@@ -101,6 +101,19 @@ public class AuraFileServiceTest
     }
 
     @Test
+    public void testParsePlaybookSectionsWithRawTextAndVariables()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = "- Open ${neodymium.url}\n- Type ${user}\nvariables:\n  neodymium.url: defined\n  user: required";
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+
+        Assertions.assertNotNull(sections);
+        Assertions.assertEquals(List.of("Open ${neodymium.url}", "Type ${user}"), sections.get("mainSteps"));
+        final Map<String, String> expectedScopes = Map.of("neodymium.url", "defined", "user", "required");
+        Assertions.assertEquals(expectedScopes, sections.get("fragmentVarScopes"));
+    }
+
+    @Test
     public void testGetFilteredStepsFilesList() throws IOException
     {
         final AuraFileService fileService = new AuraFileService();
@@ -170,5 +183,189 @@ public class AuraFileServiceTest
             fileService.deleteYamlFile(stepFileName);
         }
     }
-}
 
+    @Test
+    public void testParsePlaybookSectionsWithInlineColons()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String stepContent = "- Remove all non-numeric characters from ${numberOfAddedProducts} and store the result in numberOfAddedProducts (hint: use java method, no browser needed).\n"
+            + "- Multiply ${numberOfAddedProducts} with ${quantityToAdd} and save the result in numberOfAddedProducts (hint: use java method, no browser needed).\n"
+            + "- If ${addedProducts} is valid JSON, then merge ${productsAddedInTheRound} with ${addedProducts} and store in addedProducts (hint: use java method), else store ${productsAddedInTheRound} as addedProducts variable.";
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(stepContent);
+        Assertions.assertNotNull(sections);
+
+        @SuppressWarnings("unchecked")
+        final List<String> mainSteps = (List<String>) sections.get("mainSteps");
+        Assertions.assertNotNull(mainSteps);
+        Assertions.assertEquals(3, mainSteps.size());
+
+        Assertions.assertEquals("Remove all non-numeric characters from ${numberOfAddedProducts} and store the result in numberOfAddedProducts (hint: use java method, no browser needed).", mainSteps.get(0));
+        Assertions.assertEquals("Multiply ${numberOfAddedProducts} with ${quantityToAdd} and save the result in numberOfAddedProducts (hint: use java method, no browser needed).", mainSteps.get(1));
+        Assertions.assertEquals("If ${addedProducts} is valid JSON, then merge ${productsAddedInTheRound} with ${addedProducts} and store in addedProducts (hint: use java method), else store ${productsAddedInTheRound} as addedProducts variable.", mainSteps.get(2));
+    }
+
+    @Test
+    public void testRenameOrMoveYamlFile() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String oldName = "test_rename_source.yaml";
+        final String newName = "test_rename_target.yaml";
+
+        try
+        {
+            fileService.createYamlFile(oldName);
+            fileService.saveYamlFileContent(oldName, "steps:\n  - Open ${url}\n");
+            fileService.setActiveEditingFile(oldName);
+
+            final boolean success = fileService.renameOrMoveFile(oldName, newName);
+            Assertions.assertTrue(success);
+            Assertions.assertNull(fileService.readYamlFileContent(oldName));
+            Assertions.assertNotNull(fileService.readYamlFileContent(newName));
+            Assertions.assertEquals(newName, fileService.getActiveEditingFile());
+        }
+        finally
+        {
+            fileService.deleteYamlFile(oldName);
+            fileService.deleteYamlFile(newName);
+        }
+    }
+
+    @Test
+    public void testRenameOrMoveStepsFileToSubfolder() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String oldName = "test_move_fragment.steps";
+        final String newName = "subfolder_test/moved_fragment.steps";
+
+        try
+        {
+            fileService.createYamlFile(oldName);
+            fileService.saveYamlFileContent(oldName, "steps:\n  - Click button\n");
+
+            final boolean success = fileService.renameOrMoveFile(oldName, newName);
+            Assertions.assertTrue(success);
+            Assertions.assertNull(fileService.readYamlFileContent(oldName));
+            Assertions.assertNotNull(fileService.readYamlFileContent(newName));
+        }
+        finally
+        {
+            fileService.deleteYamlFile(oldName);
+            fileService.deleteYamlFile(newName);
+        }
+    }
+
+    @Test
+    public void testRenameOrMoveFileDestinationExistsThrowsException() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String file1 = "test_exists_1.yaml";
+        final String file2 = "test_exists_2.yaml";
+
+        try
+        {
+            fileService.createYamlFile(file1);
+            fileService.createYamlFile(file2);
+
+            Assertions.assertThrows(IllegalArgumentException.class, () -> {
+                fileService.renameOrMoveFile(file1, file2);
+            });
+        }
+        finally
+        {
+            fileService.deleteYamlFile(file1);
+            fileService.deleteYamlFile(file2);
+        }
+    }
+
+    @Test
+    public void testRenameOrMoveFileDirectoryTraversalThrowsException() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String source = "test_traversal.yaml";
+
+        try
+        {
+            fileService.createYamlFile(source);
+
+            Assertions.assertThrows(SecurityException.class, () -> {
+                fileService.renameOrMoveFile(source, "../../forbidden.yaml");
+            });
+        }
+        finally
+        {
+            fileService.deleteYamlFile(source);
+        }
+    }
+
+    @Test
+    public void testUpdateFragmentReferences_updatesMatchingFiles() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String fragmentOld = "fragments/login.steps";
+        final String fragmentNew = "auth/login.steps";
+        final String testFile = "test_ref_update_host.yaml";
+
+        try
+        {
+            // Create a YAML test file that includes the fragment via _include:.
+            fileService.createYamlFile(testFile);
+            fileService.saveYamlFileContent(testFile,
+                    "steps:\n  - _include: fragments/login.steps\n  - Open ${url}\n");
+
+            final AuraFileService.UpdateFragmentRefsResult result =
+                    fileService.updateFragmentReferences(fragmentOld, fragmentNew);
+
+            Assertions.assertEquals(1, result.updatedFileCount());
+            Assertions.assertEquals(1, result.updatedFiles().size());
+
+            // The actual file content must contain the new path, not the old one.
+            final String updated = fileService.readYamlFileContent(testFile);
+            Assertions.assertNotNull(updated);
+            Assertions.assertTrue(updated.contains(fragmentNew),
+                    "Expected new fragment path in content");
+            Assertions.assertFalse(updated.contains(fragmentOld),
+                    "Expected old fragment path to be replaced");
+        }
+        finally
+        {
+            fileService.deleteYamlFile(testFile);
+        }
+    }
+
+    @Test
+    public void testUpdateFragmentReferences_noMatchingFiles_returnsZero() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String testFile = "test_ref_update_nomatch.yaml";
+
+        try
+        {
+            // Create a YAML file that does NOT reference the fragment.
+            fileService.createYamlFile(testFile);
+            fileService.saveYamlFileContent(testFile, "steps:\n  - Open ${url}\n");
+
+            final AuraFileService.UpdateFragmentRefsResult result =
+                    fileService.updateFragmentReferences("fragments/nonexistent.steps", "auth/nonexistent.steps");
+
+            Assertions.assertEquals(0, result.updatedFileCount());
+            Assertions.assertTrue(result.updatedFiles().isEmpty());
+        }
+        finally
+        {
+            fileService.deleteYamlFile(testFile);
+        }
+    }
+
+    @Test
+    public void testUpdateFragmentReferences_blankPaths_returnsZero() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+
+        final AuraFileService.UpdateFragmentRefsResult result =
+                fileService.updateFragmentReferences("", null);
+
+        Assertions.assertEquals(0, result.updatedFileCount());
+        Assertions.assertTrue(result.updatedFiles().isEmpty());
+    }
+}

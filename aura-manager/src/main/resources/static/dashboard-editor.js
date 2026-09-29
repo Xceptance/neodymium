@@ -507,6 +507,7 @@ function openYamlEditor(filename, force = false) {
     initialEditorContent = '';
     undoStack = [];
     redoStack = [];
+    if (typeof clearAllVariablePrompts === 'function') clearAllVariablePrompts();
     if (typeof updateUndoRedoUI === 'function') updateUndoRedoUI();
     if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
 
@@ -578,6 +579,14 @@ async function saveYamlFile() {
         }
     }
     if (!activeEditingFile) return;
+
+    const unsavedIncludeCards = document.querySelectorAll('.include-tree-card.has-unsaved-changes');
+    for (const card of unsavedIncludeCards) {
+        const cardId = card.id ? card.id.replace(/^includeTreeCard_?/, '') : null;
+        if (cardId && typeof saveIncludeInline === 'function') {
+            await saveIncludeInline(cardId);
+        }
+    }
 
     let yamlContent;
     const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
@@ -662,6 +671,214 @@ async function submitDeleteTest() {
 }
 window.submitDeleteTest = submitDeleteTest;
 
+function openRenameModal(targetFile) {
+    const fileToRename = targetFile || activeEditingFile;
+    if (!fileToRename) return;
+    const nameDisplay = document.getElementById('renameOldFileNameDisplay');
+    const oldInput = document.getElementById('renameOldFileNameInput');
+    const newInput = document.getElementById('renameNewPathInput');
+    const errDiv = document.getElementById('renameTestError');
+
+    if (nameDisplay) nameDisplay.textContent = fileToRename;
+    if (oldInput) oldInput.value = fileToRename;
+    if (newInput) {
+        newInput.value = fileToRename;
+    }
+    if (errDiv) {
+        errDiv.textContent = '';
+        errDiv.style.display = 'none';
+    }
+    window.pendingRenameFile = fileToRename;
+    const modal = document.getElementById('renameTestModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        if (newInput) {
+            newInput.focus();
+            newInput.select();
+        }
+    }
+}
+window.openRenameModal = openRenameModal;
+
+async function submitRenameTest() {
+    const oldInput = document.getElementById('renameOldFileNameInput');
+    const newInput = document.getElementById('renameNewPathInput');
+    const errDiv = document.getElementById('renameTestError');
+
+    const oldFile = (oldInput && oldInput.value) ? oldInput.value : (window.pendingRenameFile || activeEditingFile);
+    const newPath = (newInput && newInput.value) ? newInput.value.trim() : '';
+
+    if (!oldFile || !newPath) {
+        if (errDiv) {
+            errDiv.textContent = "Please enter a valid target file path.";
+            errDiv.style.display = 'block';
+        }
+        return;
+    }
+
+    if (oldFile === newPath) {
+        const modal = document.getElementById('renameTestModal');
+        if (modal) modal.style.display = 'none';
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/rename', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `file=${encodeURIComponent(oldFile)}&newPath=${encodeURIComponent(newPath)}`
+        });
+        const data = await res.json();
+        if (data.status === 'SUCCESS') {
+            const actualNewFile = data.newFile || newPath;
+            selectedDatasets.forEach(d => {
+                if (d.file === oldFile) {
+                    d.file = actualNewFile;
+                }
+            });
+
+            const wasActive = (activeEditingFile === oldFile);
+            const modal = document.getElementById('renameTestModal');
+            if (modal) modal.style.display = 'none';
+
+            if (wasActive) {
+                await openYamlEditor(actualNewFile);
+            } else if (typeof loadFiles === 'function') {
+                await loadFiles();
+            }
+
+            const refreshBtn = document.getElementById('refreshFilesBtn');
+            if (refreshBtn) {
+                refreshBtn.click();
+            }
+
+            // For .steps fragment files: always show the "update references" dialog.
+            // For regular YAML test files: just show the rename toast immediately.
+            if (oldFile.toLowerCase().endsWith('.steps')) {
+                openUpdateFragmentRefsModal(oldFile, actualNewFile);
+            } else {
+                showToast(`✏️ Renamed/moved ${oldFile} → ${actualNewFile}`, "success");
+            }
+        } else {
+            if (errDiv) {
+                errDiv.textContent = data.error || "Failed to rename file.";
+                errDiv.style.display = 'block';
+            } else {
+                showToast("Error renaming file: " + (data.error || "Failed to rename file"), "error");
+            }
+        }
+    } catch (e) {
+        if (errDiv) {
+            errDiv.textContent = "Error renaming file: " + e.message;
+            errDiv.style.display = 'block';
+        } else {
+            showToast("Error renaming file: " + e.message, "error");
+        }
+    }
+}
+window.submitRenameTest = submitRenameTest;
+
+/**
+ * Opens the "Update Fragment References" modal after a .steps file was successfully
+ * moved or renamed. Stores the old/new paths for the subsequent API call.
+ *
+ * @param {string} oldPath - old relative fragment path (pre-move)
+ * @param {string} newPath - new relative fragment path (post-move)
+ */
+function openUpdateFragmentRefsModal(oldPath, newPath) {
+    // Persist paths so the submit/skip handlers can read them without DOM coupling.
+    window._pendingFragmentRefUpdate = { oldPath, newPath };
+
+    const oldEl = document.getElementById('fragmentRefOldPath');
+    const newEl = document.getElementById('fragmentRefNewPath');
+    const errEl = document.getElementById('updateFragmentRefsError');
+    const submitBtn = document.getElementById('submitFragmentRefsBtn');
+
+    if (oldEl) oldEl.textContent = oldPath;
+    if (newEl) newEl.textContent = newPath;
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update References'; }
+
+    const modal = document.getElementById('updateFragmentRefsModal');
+    if (modal) modal.style.display = 'flex';
+}
+window.openUpdateFragmentRefsModal = openUpdateFragmentRefsModal;
+
+/**
+ * Closes the "Update Fragment References" modal without calling the backend.
+ * Shows the standard rename success toast so the user still sees the result.
+ */
+function skipFragmentRefsUpdate() {
+    const modal = document.getElementById('updateFragmentRefsModal');
+    if (modal) modal.style.display = 'none';
+
+    const pending = window._pendingFragmentRefUpdate;
+    if (pending) {
+        showToast(`✏️ Renamed/moved ${pending.oldPath} → ${pending.newPath}`, "success");
+        window._pendingFragmentRefUpdate = null;
+    }
+}
+window.skipFragmentRefsUpdate = skipFragmentRefsUpdate;
+
+/**
+ * Calls POST /api/update-fragment-refs with the stored old/new fragment paths.
+ * Shows a spinner on the button while the request is in flight and logs the
+ * list of updated files to the browser console.
+ */
+async function submitUpdateFragmentRefs() {
+    const pending = window._pendingFragmentRefUpdate;
+    if (!pending) return;
+
+    const { oldPath, newPath } = pending;
+    const submitBtn = document.getElementById('submitFragmentRefsBtn');
+    const errEl = document.getElementById('updateFragmentRefsError');
+
+    // Enter loading state.
+    if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = '⏳ Updating…'; }
+    if (errEl) { errEl.textContent = ''; errEl.style.display = 'none'; }
+
+    try {
+        const res = await fetch('/api/update-fragment-refs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `oldPath=${encodeURIComponent(oldPath)}&newPath=${encodeURIComponent(newPath)}`
+        });
+        const data = await res.json();
+
+        if (data.status === 'SUCCESS') {
+            const count = data.updatedFileCount ?? 0;
+            const files = data.updatedFiles ?? [];
+            console.log('[Fragment Refs] Updated files:', files);
+
+            const modal = document.getElementById('updateFragmentRefsModal');
+            if (modal) modal.style.display = 'none';
+            window._pendingFragmentRefUpdate = null;
+
+            // Show rename toast and update count together.
+            showToast(
+                `✏️ Renamed/moved ${oldPath} → ${newPath}` +
+                (count > 0 ? ` · ✅ ${count} file(s) updated` : ' · ℹ️ No references found'),
+                "success"
+            );
+        } else {
+            // Restore button and show error inline.
+            if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update References'; }
+            if (errEl) {
+                errEl.textContent = data.error || 'Failed to update fragment references.';
+                errEl.style.display = 'block';
+            }
+        }
+    } catch (e) {
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = 'Update References'; }
+        if (errEl) {
+            errEl.textContent = 'Error: ' + e.message;
+            errEl.style.display = 'block';
+        }
+    }
+}
+window.submitUpdateFragmentRefs = submitUpdateFragmentRefs;
+
+
 function closeEditor(force = false) {
     if (!force && typeof isEditorDirty === 'function' && isEditorDirty()) {
         showUnsavedChangesPrompt(
@@ -689,6 +906,7 @@ function closeEditor(force = false) {
     }
     activeEditingFile = null;
     window.activeEditingFile = null;
+    if (typeof clearAllVariablePrompts === 'function') clearAllVariablePrompts();
     if (typeof initialEditorContent !== 'undefined') initialEditorContent = '';
     if (typeof undoStack !== 'undefined') undoStack = [];
     if (typeof redoStack !== 'undefined') redoStack = [];
@@ -950,6 +1168,7 @@ function handleRawYamlInput(textarea) {
         hiddenInput.value = textarea.value;
     }
     checkEditorDirtyStatus();
+    checkNewVariablePrompts();
 }
 window.handleRawYamlInput = handleRawYamlInput;
 
@@ -1536,8 +1755,22 @@ function setCaretOffset(element, offset) {
     walkNodes(element);
 
     if (!setSuccess) {
-        range.selectNodeContents(element);
-        range.collapse(false);
+        if (!element.firstChild) {
+            range.selectNodeContents(element);
+            range.collapse(true);
+        } else {
+            let textNode = element.firstChild;
+            while (textNode && textNode.nodeType !== 3) {
+                textNode = textNode.firstChild;
+            }
+            if (!textNode) {
+                range.selectNodeContents(element);
+                range.collapse(true);
+            } else {
+                range.setStart(textNode, Math.min(offset, textNode.nodeValue.length));
+                range.collapse(true);
+            }
+        }
     }
 
     sel.removeAllRanges();
@@ -1643,6 +1876,7 @@ function handleStepBlur(lineNumOrElement) {
     }, 120);
 
     compilePlaybookToYaml();
+    checkNewVariablePrompts();
 }
 window.handleStepBlur = handleStepBlur;
 
@@ -2217,36 +2451,87 @@ document.addEventListener('htmx:swapError', function(evt) {
     if (console && console.warn) console.warn('HTMX swap error caught:', evt.detail);
 });
 
+function getDirectNestedSteps(treeCard) {
+    if (!treeCard) return [];
+    return Array.from(treeCard.querySelectorAll('.nested-editable-step'))
+        .filter(step => step.closest('.include-tree-card') === treeCard);
+}
+
+function isParentIncludeEditing(treeCard) {
+    if (!treeCard || !treeCard.parentElement) return false;
+    const parentCard = treeCard.parentElement.closest('.include-tree-card');
+    if (!parentCard) return false;
+    if (parentCard.getAttribute('data-editing') === 'true') return true;
+    return isParentIncludeEditing(parentCard);
+}
+window.isParentIncludeEditing = isParentIncludeEditing;
+
 function formatIncludeTreeCardTokens(treeCard) {
     if (!treeCard) return;
     const cardId = treeCard.id ? treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '') : 'sub';
-    const steps = treeCard.querySelectorAll('.nested-editable-step');
+    const isEditing = treeCard.getAttribute('data-editing') === 'true';
+    const parentEditing = isParentIncludeEditing(treeCard);
+
+    const btnEdit = treeCard.querySelector(`[id^="btnEditInclude_"]`);
+    const actions = treeCard.querySelector('.include-tree-actions');
+
+    if (parentEditing) {
+        if (btnEdit) btnEdit.style.display = 'none';
+        if (actions) actions.style.display = 'none';
+    } else if (!isEditing) {
+        if (btnEdit) btnEdit.style.display = 'inline-flex';
+        if (actions) actions.style.display = 'flex';
+    }
+
+    const steps = getDirectNestedSteps(treeCard);
     steps.forEach((stepEl, idx) => {
         if (!stepEl.getAttribute('data-nested-card-id')) {
             stepEl.setAttribute('data-nested-card-id', `${cardId}_nested_${idx}_${Math.floor(Math.random() * 1000)}`);
         }
-        if (!stepEl.querySelector('.unified-include-pill') && !stepEl.querySelector('.var-pill') && !stepEl.querySelector('.invalid-include-pill')) {
-            let text = stepEl.getAttribute('data-original') || stepEl.innerText;
-            if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
-            if (text && (text.includes('_include:') || text.includes('include:') || text.includes('${'))) {
-                const subLineSpan = stepEl.querySelector('.sub-line-num');
-                const lineNumText = subLineSpan ? subLineSpan.innerText : '-';
-                const stepCardId = stepEl.getAttribute('data-nested-card-id');
-                
-                let safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                safeText = safeText.replace(/(?:_include|include):\s*["']?([a-zA-Z0-9_\/\.\-]+)["']?/g, function(match, path) {
-                    const cleanPath = path.replace(/^['"]|['"]$/g, '');
-                    const filename = cleanPath.split('/').pop();
-                    if (cleanPath.toLowerCase().endsWith('.yaml') || cleanPath.toLowerCase().endsWith('.yml')) {
-                        return `<span class="invalid-include-pill" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
-                    }
-                    return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${stepCardId}', '${cleanPath}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
-                });
-                safeText = safeText.replace(/\$\{([a-zA-Z0-9_\.]+)\}/g, function(match, name) {
-                    return `<span class="var-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
-                });
-                stepEl.innerHTML = `<span class="sub-line-num">${lineNumText}</span><span>${safeText}</span>`;
+
+        if (stepEl.contains(document.activeElement)) {
+            return;
+        }
+
+        const rawSpan = stepEl.querySelector('.raw-nested-text');
+        let text = rawSpan ? rawSpan.innerText : (stepEl.getAttribute('data-original') !== null ? stepEl.getAttribute('data-original') : stepEl.innerText);
+        if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+        stepEl.setAttribute('data-original', text || '');
+
+        const subLineSpan = stepEl.querySelector('.sub-line-num');
+        const lineNumText = subLineSpan ? subLineSpan.innerText : '-';
+        const stepCardId = stepEl.getAttribute('data-nested-card-id');
+
+        if (text && (text.includes('_include:') || text.includes('include:') || text.includes('${'))) {
+            let safeText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            safeText = safeText.replace(/(?:_include|include):\s*["']?([a-zA-Z0-9_\/\.\-]+)["']?/g, function(match, path) {
+                const cleanPath = path.replace(/^['"]|['"]$/g, '');
+                const filename = cleanPath.split('/').pop();
+                if (cleanPath.toLowerCase().endsWith('.yaml') || cleanPath.toLowerCase().endsWith('.yml')) {
+                    return `<span class="invalid-include-pill" contenteditable="false" title="Invalid Include: Only .steps fragment files can be included in playbooks"><span class="material-symbols-outlined pill-icon">warning</span><span>Invalid Include: ${filename}</span></span>`;
+                }
+                return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${stepCardId}', '${cleanPath}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
+            });
+            safeText = safeText.replace(/\$\{([a-zA-Z0-9_\.]+)\}/g, function(match, name) {
+                return `<span class="var-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
+            });
+
+            stepEl.innerHTML = `<span class="sub-line-num">${lineNumText}</span><span class="step-token-content">${safeText}</span>`;
+            if (isEditing && !parentEditing) {
+                stepEl.onclick = function(evt) { handleNestedFocus(stepEl, evt); };
             }
+        } else if (isEditing && !parentEditing) {
+            let safeRawText = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            stepEl.innerHTML = `<span class="sub-line-num" contenteditable="false">${lineNumText}</span><span class="raw-nested-text" style="outline: none;" contenteditable="true">${safeRawText}</span>`;
+            const newRawSpan = stepEl.querySelector('.raw-nested-text');
+            if (newRawSpan) {
+                newRawSpan.onkeydown = function(evt) { handleNestedKeyDown(evt, cardId); };
+                newRawSpan.onblur = function() { handleNestedBlur(stepEl, cardId); };
+                newRawSpan.oninput = function() { markIncludeUnsaved(cardId); };
+            }
+        } else {
+            let safeText = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            stepEl.innerHTML = `<span class="sub-line-num">${lineNumText}</span><span>${safeText}</span>`;
         }
     });
 }
@@ -2254,86 +2539,493 @@ window.formatIncludeTreeCardTokens = formatIncludeTreeCardTokens;
 
 let activeNestedStep = null;
 
-function handleNestedFocus(el) {
+function getOffsetFromPoint(containerEl, evt) {
+    if (!evt || typeof evt.clientX !== 'number') return null;
+    let range = null;
+    const doc = containerEl.ownerDocument || document;
+    if (doc.caretRangeFromPoint) {
+        range = doc.caretRangeFromPoint(evt.clientX, evt.clientY);
+    } else if (doc.caretPositionFromPoint) {
+        const pos = doc.caretPositionFromPoint(evt.clientX, evt.clientY);
+        if (pos) {
+            range = doc.createRange();
+            range.setStart(pos.offsetNode, pos.offset);
+            range.collapse(true);
+        }
+    }
+    if (range) {
+        const preRange = doc.createRange();
+        preRange.selectNodeContents(containerEl);
+        try {
+            preRange.setEnd(range.startContainer, range.startOffset);
+            return preRange.toString().length;
+        } catch (e) {
+            // fallback
+        }
+    }
+    return null;
+}
+
+function handleNestedFocus(el, evt, targetOffset) {
     if (!el || window.isClickingIncludeArrow) return;
+    const treeCard = el.closest('.include-tree-card');
+    if (isParentIncludeEditing(treeCard)) {
+        return;
+    }
+
     activeNestedStep = el;
-    el.setAttribute('contenteditable', 'true');
-    const text = el.getAttribute('data-original') || el.innerText;
-    const lineNum = el.querySelector('.sub-line-num') ? el.querySelector('.sub-line-num').innerText : '-';
-    el.innerHTML = `<span class="sub-line-num">${lineNum}</span><span class="raw-nested-text" style="outline: none;">${text}</span>`;
+    const cardId = el.getAttribute('data-card-id') || (treeCard ? treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '') : '');
+
+    const existingRawSpan = el.querySelector('.raw-nested-text');
+    const isAlreadyEditingSpan = !!existingRawSpan;
+
+    if (isAlreadyEditingSpan) {
+        if (document.activeElement === existingRawSpan || existingRawSpan.contains(document.activeElement)) {
+            return;
+        }
+    }
+
+    let computedOffset = null;
+    const eventObj = evt || window.event;
+    if (eventObj && typeof eventObj.clientX === 'number') {
+        const measured = getOffsetFromPoint(el, eventObj);
+        if (measured !== null) {
+            const subLineSpan = el.querySelector('.sub-line-num');
+            const prefixLen = subLineSpan ? subLineSpan.innerText.length : 0;
+            computedOffset = Math.max(0, measured - prefixLen);
+        }
+    }
+
+    let text = el.getAttribute('data-original');
+    if (text === null || text === undefined) {
+        const rawSpan = el.querySelector('.raw-nested-text');
+        const textSpan = el.querySelector('span:last-child');
+        text = rawSpan ? rawSpan.innerText : (textSpan ? textSpan.innerText : el.innerText);
+    }
+    if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+    el.setAttribute('data-original', text || '');
+
+    const lineNumSpan = el.querySelector('.sub-line-num');
+    const lineNum = lineNumSpan ? lineNumSpan.innerText : '-';
+
+    const safeRawText = (text || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    el.innerHTML = `<span class="sub-line-num" contenteditable="false">${lineNum}</span><span class="raw-nested-text" style="outline: none;" contenteditable="true">${safeRawText}</span>`;
+    let rawSpan = el.querySelector('.raw-nested-text');
+
+    el.setAttribute('contenteditable', 'false');
+    if (rawSpan) {
+        rawSpan.onkeydown = function(e) {
+            handleNestedKeyDown(e, cardId);
+        };
+        rawSpan.onblur = function() {
+            handleNestedBlur(el, cardId);
+        };
+        rawSpan.oninput = function() {
+            markIncludeUnsaved(cardId);
+        };
+        if (document.activeElement !== rawSpan) {
+            rawSpan.focus();
+        }
+
+        const maxLen = (rawSpan.innerText || '').length;
+        let finalOffset = 0;
+        if (targetOffset === 'end') {
+            finalOffset = maxLen;
+        } else if (typeof targetOffset === 'number') {
+            finalOffset = Math.min(Math.max(0, targetOffset), maxLen);
+        } else if (computedOffset !== null) {
+            finalOffset = Math.min(Math.max(0, computedOffset), maxLen);
+        } else if (eventObj && (eventObj.type === 'click' || eventObj.type === 'mousedown')) {
+            finalOffset = maxLen;
+        }
+        setCaretOffset(rawSpan, finalOffset);
+    }
 }
 window.handleNestedFocus = handleNestedFocus;
 
 function handleNestedBlur(el, cardId) {
     if (!el) return;
     const effectiveCardId = cardId || el.getAttribute('data-card-id');
-    const rawSpan = el.querySelector('.raw-nested-text') || el;
-    const newText = rawSpan.innerText.trim();
-    el.setAttribute('data-original', newText);
-    el.setAttribute('contenteditable', 'false');
+    const rawSpan = el.querySelector('.raw-nested-text');
+    const newText = rawSpan ? rawSpan.innerText : (el.getAttribute('data-original') || el.innerText);
+    const origText = el.getAttribute('data-original');
+
+    if (rawSpan) {
+        el.setAttribute('data-original', newText);
+    }
+
+    if (origText !== null && origText !== undefined && newText !== origText) {
+        if (effectiveCardId) {
+            markIncludeUnsaved(effectiveCardId);
+        }
+    }
     const treeCard = el.closest('.include-tree-card');
     if (treeCard) {
-        formatIncludeTreeCardTokens(treeCard);
-    }
-    if (effectiveCardId) {
-        markIncludeUnsaved(effectiveCardId);
+        setTimeout(() => {
+            formatIncludeTreeCardTokens(treeCard);
+        }, 50);
     }
     updateAllLineNumbers();
 }
 window.handleNestedBlur = handleNestedBlur;
 
+function getNestedStepText(stepEl) {
+    if (!stepEl) return '';
+    const rawSpan = stepEl.querySelector('.raw-nested-text');
+    if (rawSpan) return rawSpan.innerText || '';
+    let text = stepEl.getAttribute('data-original');
+    if (text === null || text === undefined) {
+        const textSpan = stepEl.querySelector('span:last-child');
+        text = textSpan ? textSpan.innerText : stepEl.innerText;
+    }
+    if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+    return text || '';
+}
+
+function handleNestedKeyDown(event, cardId) {
+    const stepEl = event.target.closest('.nested-editable-step') || activeNestedStep;
+    if (!stepEl) return;
+
+    const rawSpan = stepEl.querySelector('.raw-nested-text') || stepEl;
+    const currentOffset = getCaretOffset(rawSpan);
+    const rawText = rawSpan.innerText || '';
+    const effectiveCardId = cardId || stepEl.getAttribute('data-card-id');
+
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const headText = rawText.substring(0, currentOffset);
+        const tailText = rawText.substring(currentOffset);
+
+        stepEl.setAttribute('data-original', headText);
+        if (rawSpan !== stepEl) {
+            rawSpan.innerText = headText;
+        } else {
+            stepEl.innerText = headText;
+        }
+
+        const newStep = document.createElement('div');
+        newStep.className = 'nested-editable-step';
+        newStep.setAttribute('contenteditable', 'false');
+        newStep.setAttribute('data-original', tailText);
+        if (effectiveCardId) {
+            newStep.setAttribute('data-card-id', effectiveCardId);
+        }
+        newStep.setAttribute('onfocus', 'handleNestedFocus(this, event)');
+        newStep.setAttribute('onblur', `handleNestedBlur(this, '${effectiveCardId || ''}')`);
+        newStep.setAttribute('oninput', `markIncludeUnsaved('${effectiveCardId || ''}')`);
+
+        const lineNumSpan = stepEl.querySelector('.sub-line-num');
+        const lineNumText = lineNumSpan ? lineNumSpan.innerText : '-';
+        newStep.innerHTML = `<span class="sub-line-num" contenteditable="false">${lineNumText}</span><span class="raw-nested-text" style="outline: none;" contenteditable="true">${tailText}</span>`;
+
+        stepEl.insertAdjacentElement('afterend', newStep);
+
+        if (effectiveCardId) {
+            markIncludeUnsaved(effectiveCardId);
+        }
+        updateAllLineNumbers();
+
+        handleNestedFocus(newStep, null, 0);
+        const newRawSpan = newStep.querySelector('.raw-nested-text');
+        if (newRawSpan) {
+            newRawSpan.focus();
+            setCaretOffset(newRawSpan, 0);
+        }
+
+    } else if (event.key === 'Backspace' && currentOffset === 0) {
+        let prevStep = stepEl.previousElementSibling;
+        while (prevStep && prevStep.classList.contains('include-tree-card')) {
+            prevStep = prevStep.previousElementSibling;
+        }
+        if (prevStep && prevStep.classList.contains('nested-editable-step')) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const prevText = getNestedStepText(prevStep);
+            const joinOffset = prevText.length;
+            const combinedText = prevText + rawText;
+
+            prevStep.setAttribute('data-original', combinedText);
+            handleNestedFocus(prevStep, null, joinOffset);
+            const updatedPrevRawSpan = prevStep.querySelector('.raw-nested-text') || prevStep;
+            updatedPrevRawSpan.innerText = combinedText;
+
+            stepEl.remove();
+
+            if (effectiveCardId) {
+                markIncludeUnsaved(effectiveCardId);
+            }
+            updateAllLineNumbers();
+
+            updatedPrevRawSpan.focus();
+            setCaretOffset(updatedPrevRawSpan, joinOffset);
+        }
+    } else if (event.key === 'Delete' && currentOffset >= rawText.length) {
+        let nextStep = stepEl.nextElementSibling;
+        while (nextStep && nextStep.classList.contains('include-tree-card')) {
+            nextStep = nextStep.nextElementSibling;
+        }
+        if (nextStep && nextStep.classList.contains('nested-editable-step')) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            const nextText = getNestedStepText(nextStep);
+            const combinedText = rawText + nextText;
+
+            stepEl.setAttribute('data-original', combinedText);
+            if (rawSpan !== stepEl) {
+                rawSpan.innerText = combinedText;
+            }
+            nextStep.remove();
+
+            if (effectiveCardId) {
+                markIncludeUnsaved(effectiveCardId);
+            }
+            updateAllLineNumbers();
+
+            rawSpan.focus();
+            setCaretOffset(rawSpan, currentOffset);
+        }
+    } else if (event.key === 'ArrowUp') {
+        let prevStep = stepEl.previousElementSibling;
+        while (prevStep && prevStep.classList.contains('include-tree-card')) {
+            prevStep = prevStep.previousElementSibling;
+        }
+        if (prevStep && prevStep.classList.contains('nested-editable-step')) {
+            event.preventDefault();
+            const prevText = getNestedStepText(prevStep);
+            const targetPos = Math.min(currentOffset, prevText.length);
+            handleNestedFocus(prevStep, null, targetPos);
+            const prevRawSpan = prevStep.querySelector('.raw-nested-text') || prevStep;
+            prevRawSpan.focus();
+            setCaretOffset(prevRawSpan, targetPos);
+        }
+    } else if (event.key === 'ArrowDown') {
+        let nextStep = stepEl.nextElementSibling;
+        while (nextStep && nextStep.classList.contains('include-tree-card')) {
+            nextStep = nextStep.nextElementSibling;
+        }
+        if (nextStep && nextStep.classList.contains('nested-editable-step')) {
+            event.preventDefault();
+            const nextText = getNestedStepText(nextStep);
+            const targetPos = Math.min(currentOffset, nextText.length);
+            handleNestedFocus(nextStep, null, targetPos);
+            const nextRawSpan = nextStep.querySelector('.raw-nested-text') || nextStep;
+            nextRawSpan.focus();
+            setCaretOffset(nextRawSpan, targetPos);
+        }
+    }
+}
+window.handleNestedKeyDown = handleNestedKeyDown;
+
 function enableIncludeEdit(cardId) {
     const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
     if (!treeCard) return;
+
+    if (isParentIncludeEditing(treeCard)) {
+        return;
+    }
+
+    treeCard.setAttribute('data-editing', 'true');
 
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
     const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
 
-    const steps = treeCard.querySelectorAll('.nested-editable-step');
+    const steps = getDirectNestedSteps(treeCard);
+    if (!treeCard._initialStepsSnapshot) {
+        treeCard._initialStepsSnapshot = steps.map(step => {
+            let text = step.getAttribute('data-original');
+            if (text === null || text === undefined) {
+                const textSpan = step.querySelector('span:last-child');
+                text = textSpan ? textSpan.innerText : step.innerText;
+            }
+            if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+            return text || '';
+        });
+    }
+
     steps.forEach(step => {
-        step.setAttribute('contenteditable', 'true');
+        let text = step.getAttribute('data-original');
+        if (text === null || text === undefined) {
+            const rawSpan = step.querySelector('.raw-nested-text');
+            const textSpan = step.querySelector('span:last-child');
+            text = rawSpan ? rawSpan.innerText : (textSpan ? textSpan.innerText : step.innerText);
+        }
+        if (text && text.startsWith('-')) text = text.replace(/^-\s*/, '');
+        step.setAttribute('data-original', text || '');
     });
 
     if (btnEdit) btnEdit.style.display = 'none';
     if (btnSave) btnSave.style.display = 'inline-flex';
     if (btnDiscard) btnDiscard.style.display = 'inline-flex';
+
+    formatIncludeTreeCardTokens(treeCard);
+
+    if (steps.length > 0) {
+        handleNestedFocus(steps[0], null, 0);
+    }
 }
 window.enableIncludeEdit = enableIncludeEdit;
 
 function markIncludeUnsaved(cardId) {
     const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
     const badge = document.getElementById(`unsavedBadge_${cardId}`);
+    const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
+    const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
+    const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
     if (treeCard) treeCard.classList.add('has-unsaved-changes');
     if (badge) badge.style.display = 'inline-flex';
+    if (btnSave) btnSave.style.display = 'inline-flex';
+    if (btnDiscard) btnDiscard.style.display = 'inline-flex';
+    if (btnEdit) btnEdit.style.display = 'none';
 }
 window.markIncludeUnsaved = markIncludeUnsaved;
 
-function saveIncludeInline(cardId) {
+function toggleIncludeVarsDropdown(cardId) {
+    const dropdown = document.getElementById(`varsDropdown_${cardId}`);
+    if (!dropdown) return;
+
+    const isVisible = dropdown.style.display !== 'none';
+    document.querySelectorAll('.include-vars-dropdown').forEach(d => {
+        d.style.display = 'none';
+    });
+
+    if (!isVisible) {
+        dropdown.style.display = 'flex';
+    }
+}
+window.toggleIncludeVarsDropdown = toggleIncludeVarsDropdown;
+
+function toggleIncludeTreeVarScope(cardId, varName, scope) {
     const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
     if (!treeCard) return;
 
-    const filePath = treeCard.getAttribute('data-include-file');
-    const steps = treeCard.querySelectorAll('.nested-editable-step');
-    let content = '';
-    steps.forEach(step => {
-        const textSpan = step.querySelector('span:last-child');
-        const lineText = textSpan ? textSpan.innerText : step.innerText;
-        content += lineText + '\n';
-    });
+    if (!treeCard._varScopes) {
+        treeCard._varScopes = {};
+    }
+    treeCard._varScopes[varName] = scope;
 
-    if (filePath) {
-        fetch('/api/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: `file=${encodeURIComponent(filePath)}&content=${encodeURIComponent(content)}`
-        }).then(() => {
-            showToast(`💾 Saved included file ${filePath}`, "success");
-            loadFiles();
-        }).catch(err => {
-            showToast(`Error saving include file: ${err.message}`, "error");
+    const selector = CSS && CSS.escape ? CSS.escape(varName) : varName;
+    const row = treeCard.querySelector(`.include-var-row[data-var="${selector}"]`);
+    if (row) {
+        const defBtn = row.querySelector('.scope-defined');
+        const reqBtn = row.querySelector('.scope-required');
+        if (scope === 'defined') {
+            if (defBtn) defBtn.classList.add('active-defined');
+            if (reqBtn) reqBtn.classList.remove('active-required');
+        } else {
+            if (defBtn) defBtn.classList.remove('active-defined');
+            if (reqBtn) reqBtn.classList.add('active-required');
+        }
+    }
+
+    markIncludeUnsaved(cardId);
+    if (typeof checkEditorDirtyStatus === 'function') {
+        checkEditorDirtyStatus();
+    }
+}
+window.toggleIncludeTreeVarScope = toggleIncludeTreeVarScope;
+
+document.addEventListener('click', function(e) {
+    if (!e.target.closest('.include-vars-dropdown-wrapper')) {
+        document.querySelectorAll('.include-vars-dropdown').forEach(d => {
+            d.style.display = 'none';
         });
     }
+});
+
+async function saveIncludeInline(cardId) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    if (!treeCard) return false;
+
+    const filePath = treeCard.getAttribute('data-include-file');
+    const steps = getDirectNestedSteps(treeCard);
+    
+    const stepLines = [];
+    steps.forEach(step => {
+        const rawSpan = step.querySelector('.raw-nested-text');
+        const textSpan = step.querySelector('span:last-child');
+        let lineText = rawSpan ? rawSpan.innerText : (step.getAttribute('data-original') || (textSpan ? textSpan.innerText : step.innerText));
+        if (lineText) {
+            lineText = lineText.trim();
+            if (!lineText.startsWith('variables:') && !lineText.match(/^[a-zA-Z0-9_.-]+:\s*(defined|required)$/)) {
+                if (lineText.startsWith('-')) lineText = lineText.substring(1).trim();
+                if (lineText) stepLines.push(lineText);
+            }
+        }
+    });
+
+    let content = 'steps:\n';
+    stepLines.forEach(lineText => {
+        content += `  - ${lineText}\n`;
+    });
+
+    const allVars = new Set();
+    const varRegex = /\$\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\}/g;
+    stepLines.forEach(line => {
+        let match;
+        while ((match = varRegex.exec(line)) !== null) {
+            if (match[1]) allVars.add(match[1]);
+        }
+    });
+    if (treeCard._varScopes) {
+        Object.keys(treeCard._varScopes).forEach(v => allVars.add(v));
+    }
+    const varRows = treeCard.querySelectorAll('.include-var-row');
+    varRows.forEach(row => {
+        const v = row.getAttribute('data-var');
+        if (v) allVars.add(v);
+    });
+
+    if (allVars.size > 0) {
+        content += '\nvariables:\n';
+        allVars.forEach(v => {
+            let scope = 'required';
+            if (treeCard._varScopes && treeCard._varScopes[v]) {
+                scope = treeCard._varScopes[v];
+            } else {
+                const selector = CSS && CSS.escape ? CSS.escape(v) : v;
+                const defBtn = treeCard.querySelector(`.include-var-row[data-var="${selector}"] .scope-defined.active-defined`);
+                if (defBtn) scope = 'defined';
+            }
+            content += `  ${v}: ${scope}\n`;
+        });
+    }
+
+    if (filePath) {
+        try {
+            const res = await fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `file=${encodeURIComponent(filePath)}&content=${encodeURIComponent(content)}`
+            });
+            const data = await res.json();
+            if (data.status === 'SUCCESS' || data.success) {
+                showToast(`💾 Saved included file ${filePath}`, "success");
+                loadFiles();
+
+                const cleanFilePath = filePath.replace(/^['"]|['"]$/g, '').trim();
+                const cleanActiveFile = (window.activeEditingFile || '').replace(/^['"]|['"]$/g, '').trim();
+                if (cleanActiveFile && (cleanActiveFile === cleanFilePath || cleanActiveFile.endsWith(cleanFilePath))) {
+                    if (!window.fragmentVarScopes) window.fragmentVarScopes = {};
+                    allVars.forEach(v => {
+                        const scope = (treeCard._varScopes && treeCard._varScopes[v]) ? treeCard._varScopes[v] : (treeCard.querySelector(`.include-var-row[data-var="${CSS.escape ? CSS.escape(v) : v}"] .scope-defined.active-defined`) ? 'defined' : 'required');
+                        window.fragmentVarScopes[v] = scope;
+                    });
+                    if (typeof updateFragmentVariablesList === 'function') updateFragmentVariablesList();
+                }
+            } else {
+                showToast(`Error saving include file ${filePath}: ${data.error || "Unknown error"}`, "error");
+            }
+        } catch (err) {
+            showToast(`Error saving include file: ${err.message}`, "error");
+        }
+    }
+
+    treeCard.removeAttribute('data-editing');
 
     const badge = document.getElementById(`unsavedBadge_${cardId}`);
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
@@ -2342,14 +3034,22 @@ function saveIncludeInline(cardId) {
 
     steps.forEach(step => {
         step.setAttribute('contenteditable', 'false');
-        step.setAttribute('data-original', step.innerText);
+        const rawSpan = step.querySelector('.raw-nested-text');
+        const textSpan = step.querySelector('span:last-child');
+        const text = rawSpan ? rawSpan.innerText : (step.getAttribute('data-original') || (textSpan ? textSpan.innerText : step.innerText));
+        step.setAttribute('data-original', text);
     });
+
+    delete treeCard._initialStepsSnapshot;
+
+    formatIncludeTreeCardTokens(treeCard);
 
     treeCard.classList.remove('has-unsaved-changes');
     if (badge) badge.style.display = 'none';
     if (btnEdit) btnEdit.style.display = 'inline-flex';
     if (btnSave) btnSave.style.display = 'none';
     if (btnDiscard) btnDiscard.style.display = 'none';
+    return true;
 }
 window.saveIncludeInline = saveIncludeInline;
 
@@ -2357,21 +3057,51 @@ function discardIncludeInline(cardId) {
     const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
     if (!treeCard) return;
 
+    treeCard.removeAttribute('data-editing');
+
     const badge = document.getElementById(`unsavedBadge_${cardId}`);
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
     const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
 
-    const steps = treeCard.querySelectorAll('.nested-editable-step');
-    steps.forEach(step => {
-        step.setAttribute('contenteditable', 'false');
-        const orig = step.getAttribute('data-original');
-        if (orig) {
-            const textSpan = step.querySelector('span:last-child');
-            if (textSpan) textSpan.innerText = orig;
-            else step.innerText = orig;
-        }
-    });
+    const stepsContainer = document.getElementById(`includeInnerSteps_${cardId}`) || treeCard.querySelector('[id^="includeInnerSteps_"]');
+    const snapshot = treeCard._initialStepsSnapshot;
+
+    if (stepsContainer && Array.isArray(snapshot)) {
+        stepsContainer.innerHTML = '';
+        snapshot.forEach(origText => {
+            const stepDiv = document.createElement('div');
+            stepDiv.className = 'nested-editable-step';
+            stepDiv.setAttribute('contenteditable', 'false');
+            stepDiv.setAttribute('data-original', origText);
+            stepDiv.setAttribute('data-card-id', cardId);
+            stepDiv.setAttribute('onfocus', 'handleNestedFocus(this, event)');
+            stepDiv.setAttribute('onblur', `handleNestedBlur(this, '${cardId}')`);
+            stepDiv.setAttribute('onkeydown', `handleNestedKeyDown(event, '${cardId}')`);
+            stepDiv.setAttribute('oninput', `markIncludeUnsaved('${cardId}')`);
+
+            const safeText = origText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            stepDiv.innerHTML = `<span class="sub-line-num">-</span><span>${safeText}</span>`;
+            stepsContainer.appendChild(stepDiv);
+        });
+        delete treeCard._initialStepsSnapshot;
+    } else {
+        const steps = getDirectNestedSteps(treeCard);
+        steps.forEach(step => {
+            step.setAttribute('contenteditable', 'false');
+            const orig = step.getAttribute('data-original');
+            if (orig !== null && orig !== undefined) {
+                const rawSpan = step.querySelector('.raw-nested-text');
+                const textSpan = step.querySelector('span:last-child');
+                if (rawSpan) rawSpan.innerText = orig;
+                else if (textSpan) textSpan.innerText = orig;
+                else step.innerText = orig;
+            }
+        });
+    }
+
+    formatIncludeTreeCardTokens(treeCard);
+    updateAllLineNumbers();
 
     treeCard.classList.remove('has-unsaved-changes');
     if (badge) badge.style.display = 'none';
@@ -2429,7 +3159,6 @@ function insertSnippetWithCaret(templateText, caretOffset = -1) {
         text += (text.length > 0 ? ' ' : '') + templateText;
         if (rawSpan !== nestedStep) rawSpan.innerText = text;
         else nestedStep.innerText = text;
-        nestedStep.setAttribute('data-original', text);
         const card = nestedStep.closest('.include-tree-card');
         if (card) {
             formatIncludeTreeCardTokens(card);
@@ -2493,7 +3222,6 @@ function insertIncludePill(filePath) {
         }
         if (rawSpan !== nestedStep) rawSpan.innerText = text;
         else nestedStep.innerText = text;
-        nestedStep.setAttribute('data-original', text);
 
         if (treeCard) {
             formatIncludeTreeCardTokens(treeCard);
@@ -2558,6 +3286,26 @@ function filterFragmentPaletteCards(query) {
         }
     });
 
+    // Handle Tree Folder visibility during search filtering
+    const treeFolders = Array.from(container.querySelectorAll('.tree-folder-group')).reverse();
+    treeFolders.forEach(folder => {
+        const hasVisibleChild = Array.from(folder.querySelectorAll('.include-card, .tree-folder-group')).some(child => {
+            return child.style.display !== 'none';
+        });
+        if (hasVisibleChild) {
+            folder.style.display = '';
+            if (term.length > 0) {
+                folder.classList.remove('is-collapsed');
+                const arrowEl = folder.querySelector('.tree-folder-arrow');
+                const iconEl = folder.querySelector('.tree-folder-icon');
+                if (arrowEl) arrowEl.textContent = 'keyboard_arrow_down';
+                if (iconEl) iconEl.textContent = 'folder_open';
+            }
+        } else {
+            folder.style.display = 'none';
+        }
+    });
+
     const noMatchMsg = document.getElementById('noMatchingFragmentsMsg');
     if (noMatchMsg) {
         if (cards.length > 0 && visibleCount === 0 && term.length > 0) {
@@ -2582,6 +3330,9 @@ function addMatrixRowInlineEmpty() {
             <div class="var-key-cell">
                 <input type="text" class="var-key-input" value="${newVarName}">
                 <button class="btn-insert-var-chip" onclick="insertVariableFromInput(this.previousElementSibling.value)">+ Insert</button>
+                <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                </button>
             </div>
         </td>
     `;
@@ -2634,6 +3385,60 @@ function addMatrixColumnInline() {
 }
 window.addMatrixColumnInline = addMatrixColumnInline;
 
+function showRemoveConfirmationModal(title, message, onConfirm, onCancel) {
+    let modal = document.getElementById('removeConfirmationModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal-overlay';
+        modal.id = 'removeConfirmationModal';
+        modal.style.display = 'none';
+        modal.innerHTML = `
+            <div class="modal-card">
+                <div class="modal-header" id="removeConfirmationModalTitle">${title || 'Remove Item'}</div>
+                <div class="modal-body">
+                    <p id="removeConfirmationModalMessage" style="margin: 0; font-size: 0.95rem; color: var(--text-color, inherit);">
+                        ${message || 'Are you sure you want to remove this item?'}
+                    </p>
+                </div>
+                <div class="modal-footer" style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: flex-end;">
+                    <button type="button" class="btn-editor" id="removeConfirmationCancelBtn">Cancel</button>
+                    <button type="button" class="btn-danger" id="removeConfirmationConfirmBtn">Remove</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    } else {
+        const titleEl = modal.querySelector('#removeConfirmationModalTitle');
+        if (titleEl) {
+            titleEl.textContent = title || 'Remove Item';
+        }
+        const msgEl = modal.querySelector('#removeConfirmationModalMessage');
+        if (msgEl) {
+            msgEl.textContent = message || 'Are you sure you want to remove this item?';
+        }
+    }
+
+    const cancelBtn = modal.querySelector('#removeConfirmationCancelBtn');
+    const confirmBtn = modal.querySelector('#removeConfirmationConfirmBtn');
+
+    if (cancelBtn) {
+        cancelBtn.onclick = function() {
+            modal.style.display = 'none';
+            if (typeof onCancel === 'function') onCancel();
+        };
+    }
+
+    if (confirmBtn) {
+        confirmBtn.onclick = function() {
+            modal.style.display = 'none';
+            if (typeof onConfirm === 'function') onConfirm();
+        };
+    }
+
+    modal.style.display = 'flex';
+}
+window.showRemoveConfirmationModal = showRemoveConfirmationModal;
+
 function removeMatrixColumn(btn) {
     if (!btn) return;
     const th = btn.closest('th');
@@ -2648,19 +3453,105 @@ function removeMatrixColumn(btn) {
 
     const iterSpan = th.querySelector('.iter-header-content span') || th.querySelector('span');
     const iterName = iterSpan ? iterSpan.innerText.trim() : `Iteration ${colIndex}`;
-    const confirmed = confirm(`Are you sure you want to remove ${iterName}?`);
-    if (!confirmed) {
-        return;
+
+    showRemoveConfirmationModal(
+        'Remove Data Set',
+        `Are you sure you want to remove ${iterName}?`,
+        function() {
+            headerRow.deleteCell(colIndex);
+
+            const tbodyRows = document.querySelectorAll('#transposedGrid tbody tr');
+            tbodyRows.forEach(tr => {
+                if (tr.cells.length > colIndex) {
+                    tr.deleteCell(colIndex);
+                }
+            });
+
+            compilePlaybookToYaml();
+            if (typeof debouncedPushSnapshot === 'function') {
+                debouncedPushSnapshot();
+            }
+            if (typeof checkEditorDirtyStatus === 'function') {
+                checkEditorDirtyStatus();
+            }
+        }
+    );
+}
+window.removeMatrixColumn = removeMatrixColumn;
+
+function removeMatrixRow(btn) {
+    if (!btn) return;
+    const tr = btn.closest('tr');
+    if (!tr) return;
+
+    const keyInput = tr.querySelector('.var-key-input');
+    const varName = keyInput ? keyInput.value.trim() : 'variable';
+
+    showRemoveConfirmationModal(
+        'Remove Variable',
+        `Are you sure you want to remove variable '${varName}'?`,
+        function() {
+            tr.remove();
+
+            compilePlaybookToYaml();
+            if (typeof debouncedPushSnapshot === 'function') {
+                debouncedPushSnapshot();
+            }
+            if (typeof checkEditorDirtyStatus === 'function') {
+                checkEditorDirtyStatus();
+            }
+        }
+    );
+}
+window.removeMatrixRow = removeMatrixRow;
+
+/* Variable Prompt & Matrix Management */
+if (!window.promptedVariablesSet) {
+    window.promptedVariablesSet = new Set();
+}
+
+function clearAllVariablePrompts() {
+    window.promptedVariablesSet = new Set();
+    const container = document.getElementById('varPromptContainer');
+    if (container) {
+        container.innerHTML = '';
+    }
+}
+window.clearAllVariablePrompts = clearAllVariablePrompts;
+
+function addMatrixVariableRow(varName, defaultValue = '') {
+    if (!varName) return;
+    const tbody = document.querySelector('#transposedGrid tbody');
+    if (!tbody) return;
+
+    // Check if key already exists
+    const existingInputs = tbody.querySelectorAll('.var-key-input');
+    for (const input of existingInputs) {
+        if (input.value.trim() === varName) {
+            return; // Already present in matrix
+        }
     }
 
-    headerRow.deleteCell(colIndex);
-
-    const tbodyRows = document.querySelectorAll('#transposedGrid tbody tr');
-    tbodyRows.forEach(tr => {
-        if (tr.cells.length > colIndex) {
-            tr.deleteCell(colIndex);
-        }
-    });
+    const colCount = document.querySelectorAll('#transposedGrid thead th').length - 2;
+    const tr = document.createElement('tr');
+    let html = `
+        <td>
+            <div class="var-key-cell">
+                <input type="text" class="var-key-input" value="${varName}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">
+                <button class="btn-insert-var-chip" onclick="insertVariableFromInput('${varName}')">+ Insert</button>
+                <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                </button>
+            </div>
+        </td>
+    `;
+    for (let i = 0; i < colCount; i++) {
+        const val = (i === 0 && defaultValue) ? defaultValue : '';
+        html += `<td><input type="text" class="cell-val" value="${val}" placeholder="empty" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();"></td>`;
+    }
+    html += `<td></td>`;
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
 
     compilePlaybookToYaml();
     if (typeof debouncedPushSnapshot === 'function') {
@@ -2670,7 +3561,128 @@ function removeMatrixColumn(btn) {
         checkEditorDirtyStatus();
     }
 }
-window.removeMatrixColumn = removeMatrixColumn;
+window.addMatrixVariableRow = addMatrixVariableRow;
+
+function checkNewVariablePrompts() {
+    if (!window.activeEditingFile) return;
+    const isFragmentFile = window.activeEditingFile.toLowerCase().endsWith('.steps');
+    if (isFragmentFile) return;
+
+    const foundVars = new Set();
+    const regex = /\$\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\}/g;
+
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea && rawTextarea.value) {
+            let match;
+            regex.lastIndex = 0;
+            while ((match = regex.exec(rawTextarea.value)) !== null) {
+                if (match[1]) foundVars.add(match[1]);
+            }
+        }
+    } else {
+        const containers = ['beforeStepsList', 'stepsList', 'afterStepsList'];
+        containers.forEach(id => {
+            const container = document.getElementById(id);
+            if (container) {
+                const rows = container.querySelectorAll('.step-row');
+                rows.forEach(row => {
+                    const contentEl = row.querySelector('.step-content');
+                    if (contentEl) {
+                        const text = contentEl.getAttribute('data-raw') || contentEl.innerText.trim();
+                        let match;
+                        regex.lastIndex = 0;
+                        while ((match = regex.exec(text)) !== null) {
+                            if (match[1]) foundVars.add(match[1]);
+                        }
+                    }
+                });
+            }
+        });
+    }
+
+    const existingMatrixKeys = new Set();
+    const tbody = document.querySelector('#transposedGrid tbody');
+    if (tbody) {
+        const keyInputs = tbody.querySelectorAll('.var-key-input');
+        keyInputs.forEach(input => {
+            const val = input.value.trim();
+            if (val) existingMatrixKeys.add(val);
+        });
+    }
+
+    foundVars.forEach(varName => {
+        if (!existingMatrixKeys.has(varName) && !window.promptedVariablesSet.has(varName)) {
+            window.promptedVariablesSet.add(varName);
+            showNewVariablePrompt(varName);
+        }
+    });
+}
+window.checkNewVariablePrompts = checkNewVariablePrompts;
+
+function showNewVariablePrompt(varName) {
+    if (!varName) return;
+    let container = document.getElementById('varPromptContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'varPromptContainer';
+        container.className = 'var-prompt-container';
+        const panel = document.getElementById('editorPanel') || document.body;
+        panel.appendChild(container);
+    }
+
+    const existingCard = container.querySelector(`.var-prompt-card[data-var="${varName}"]`);
+    if (existingCard) return;
+
+    const card = document.createElement('div');
+    card.className = 'var-prompt-card';
+    card.setAttribute('data-var', varName);
+    card.innerHTML = `
+        <div class="var-prompt-header">
+            <span class="material-symbols-outlined">help</span>
+            <span>Add Variable to Test Data?</span>
+        </div>
+        <div class="var-prompt-body">
+            Variable <code class="var-name-chip">\${${varName}}</code> was referenced in test steps. Would you like to define it in the Test Data Matrix?
+        </div>
+        <div class="var-prompt-actions">
+            <button type="button" class="btn-prompt-cancel" onclick="dismissVariablePrompt(this, '${varName}')">No, Skip</button>
+            <button type="button" class="btn-prompt-confirm" onclick="acceptVariablePrompt(this, '${varName}')">
+                <span class="material-symbols-outlined" style="font-size: 14px;">add</span> Yes, Add to Test Data
+            </button>
+        </div>
+    `;
+    container.appendChild(card);
+}
+window.showNewVariablePrompt = showNewVariablePrompt;
+
+function acceptVariablePrompt(btnOrElement, varName) {
+    addMatrixVariableRow(varName);
+    closeVariablePromptCard(btnOrElement);
+}
+window.acceptVariablePrompt = acceptVariablePrompt;
+
+function dismissVariablePrompt(btnOrElement, varName) {
+    closeVariablePromptCard(btnOrElement);
+}
+window.dismissVariablePrompt = dismissVariablePrompt;
+
+function closeVariablePromptCard(btnOrElement) {
+    if (!btnOrElement) return;
+    const card = btnOrElement.closest ? btnOrElement.closest('.var-prompt-card') : null;
+    if (card) {
+        card.classList.add('closing');
+        setTimeout(() => {
+            if (card && card.parentElement) {
+                card.remove();
+            }
+        }, 200);
+    }
+}
+window.closeVariablePromptCard = closeVariablePromptCard;
 
 /* Undo/Redo & Unsaved State Management */
 let undoStack = [];
@@ -2877,6 +3889,9 @@ function restoreEditorSnapshot(snap) {
                     <div class="var-key-cell">
                         <input type="text" class="var-key-input" value="${row.key}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">
                         <button class="btn-insert-var-chip" onclick="insertVariableFromInput(this.previousElementSibling.value)">+ Insert</button>
+                        <button type="button" class="btn-remove-var" title="Remove Variable" onclick="removeMatrixRow(this)">
+                            <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+                        </button>
                     </div>
                 </td>
             `;
@@ -3062,72 +4077,170 @@ document.addEventListener('paste', function(evt) {
     }
 });
 
-/* PESAP AI Step Review Integration */
-function runReviewSteps() {
+/* File Validation Integration */
+function runValidateFile() {
     const reviewBtn = document.getElementById('reviewStepsBtn');
     if (reviewBtn) {
-        reviewBtn.innerHTML = '<span class="material-symbols-outlined spinner">sync</span> Reviewing...';
+        reviewBtn.innerHTML = '<span class="material-symbols-outlined spinner">sync</span> Validating...';
         reviewBtn.disabled = true;
     }
 
-    const steps = [];
-    document.querySelectorAll('#beforeStepsList .step-row, #stepsList .step-row, #afterStepsList .step-row').forEach(row => {
-        const lineNum = row.getAttribute('data-line');
-        const contentEl = row.querySelector('.step-content');
-        const text = contentEl ? (contentEl.getAttribute('data-raw') || contentEl.innerText) : '';
-        if (lineNum && text) {
-            steps.push({ line: lineNum, text: text });
+    // Gather the current compiled YAML content
+    const hiddenContent = document.getElementById('editorContent');
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    const editorPanel = document.getElementById('editorPanel');
+    const isRawMode = editorPanel && editorPanel.getAttribute('data-mode') === 'raw';
+    let content = '';
+    if (isRawMode && rawTextarea) {
+        content = rawTextarea.value;
+    } else {
+        if (typeof compilePlaybookToYaml === 'function') {
+            content = compilePlaybookToYaml();
         }
-    });
+        if (!content && hiddenContent) {
+            content = hiddenContent.value;
+        }
+    }
 
-    fetch('/api/editor/review-steps', {
+    const file = window.activeEditingFile || '';
+
+    fetch('/api/editor/validate-file', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: window.activeEditingFile, steps: steps })
+        body: JSON.stringify({ file: file, content: content })
     })
     .then(res => res.json())
     .then(data => {
         if (reviewBtn) {
-            reviewBtn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> Review Steps';
+            reviewBtn.innerHTML = '<span class="material-symbols-outlined">verified</span> Validate File';
             reviewBtn.disabled = false;
         }
 
-        document.querySelectorAll('.review-suggestion-card').forEach(card => card.remove());
-
-        if (data.suggestions && data.suggestions.length > 0) {
-            data.suggestions.forEach(sugg => {
-                const targetRow = document.querySelector(`#stepsList .step-row[data-line="${sugg.targetLine}"]`) ||
-                                  document.querySelector(`.step-row[data-line="${sugg.targetLine}"]`);
-                if (targetRow) {
-                    const card = document.createElement('div');
-                    card.className = `review-suggestion-card ${sugg.type || 'info'}`;
-                    card.innerHTML = `
-                        <div class="suggestion-left">
-                            <span class="material-symbols-outlined" style="font-size: 16px;">${sugg.icon || 'auto_awesome'}</span>
-                            <span><b>PESAP AI Review:</b> ${sugg.message}</span>
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
-                            ${sugg.hintText ? `<button class="btn-apply-suggestion" onclick="applySuggestionHint(${sugg.targetLine}, '${sugg.hintText.replace(/'/g, "\\'")}')">Apply Hint</button>` : ''}
-                            <button class="icon-btn" onclick="dismissSuggestionCard(this)" title="Dismiss"><span class="material-symbols-outlined">close</span></button>
-                        </div>
-                    `;
-                    targetRow.after(card);
-                }
-            });
-            showToast(`✨ PESAP Review complete: ${data.suggestions.length} suggestion(s) found`, "info");
-        } else {
-            showToast("✅ PESAP Review complete: All steps look great! No suggestions needed.", "success");
-        }
+        const issues = data.issues || [];
+        showValidationResultDialog(issues);
     })
     .catch(err => {
-        console.error('Failed to run PESAP review:', err);
+        console.error('Failed to run file validation:', err);
         if (reviewBtn) {
-            reviewBtn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> Review Steps';
+            reviewBtn.innerHTML = '<span class="material-symbols-outlined">verified</span> Validate File';
             reviewBtn.disabled = false;
         }
+        showToast('⚠️ Validation request failed. Check the console for details.', 'error');
     });
 }
-window.runReviewSteps = runReviewSteps;
+window.runValidateFile = runValidateFile;
+
+function showValidationResultDialog(issues) {
+    let container = document.getElementById('varPromptContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'varPromptContainer';
+        container.className = 'var-prompt-container';
+        const panel = document.getElementById('editorPanel') || document.body;
+        panel.appendChild(container);
+    }
+
+    // Filter out INFO severity issues
+    const filteredIssues = (issues || []).filter(i => i.severity !== 'INFO');
+    const errorCount = filteredIssues.filter(i => i.severity === 'ERROR').length;
+    const warningCount = filteredIssues.filter(i => i.severity === 'WARNING').length;
+
+    // Remove any existing validation prompt card first
+    const existingCard = container.querySelector('.var-prompt-card[data-type="validation-report"]');
+    if (existingCard) {
+        existingCard.remove();
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    const card = document.createElement('div');
+    card.className = 'var-prompt-card';
+    card.setAttribute('data-type', 'validation-report');
+
+    let headerIcon = 'verified';
+    let headerTitle = 'File Validation';
+    let borderColor = 'var(--success, #10b981)';
+
+    if (errorCount > 0) {
+        headerIcon = 'error';
+        headerTitle = `Validation Failed (${errorCount} Error${errorCount > 1 ? 's' : ''}${warningCount > 0 ? `, ${warningCount} Warning${warningCount > 1 ? 's' : ''}` : ''})`;
+        borderColor = 'var(--danger, #ef4444)';
+    } else if (warningCount > 0) {
+        headerIcon = 'warning';
+        headerTitle = `Validation Warnings (${warningCount} Warning${warningCount > 1 ? 's' : ''})`;
+        borderColor = '#f59e0b';
+    }
+
+    card.style.borderLeftColor = borderColor;
+
+    let bodyHtml = '';
+    if (filteredIssues.length === 0) {
+        bodyHtml = `
+            <div style="font-size: 12.5px; color: var(--text-primary, #0f172a); display: flex; align-items: center; gap: 6px;">
+                <span class="material-symbols-outlined" style="font-size: 18px; color: var(--success, #10b981);">check_circle</span>
+                <span>File is valid — no issues found.</span>
+            </div>
+        `;
+    } else {
+        const itemsHtml = filteredIssues.map(issue => {
+            const sev = (issue.severity || 'WARNING').toLowerCase();
+            let iconName = issue.severity === 'ERROR' ? 'error' : 'warning';
+            const contextTag = issue.context ? `<span class="validation-issue-context">${escapeHtml(issue.context)}</span>` : '';
+            const lineInfo = issue.line ? `<span class="validation-issue-line">Line ${issue.line}</span>` : '';
+
+            return `
+                <div class="validation-issue-item ${sev}">
+                    <div class="validation-issue-header">
+                        <span class="material-symbols-outlined issue-icon">${iconName}</span>
+                        <span class="validation-issue-badge ${sev}">${escapeHtml(issue.severity)}</span>
+                        ${lineInfo}
+                        ${contextTag}
+                    </div>
+                    <div class="validation-issue-msg">${escapeHtml(issue.message)}</div>
+                </div>
+            `;
+        }).join('');
+
+        bodyHtml = `<div class="validation-issue-list" style="max-height: 250px; overflow-y: auto;">${itemsHtml}</div>`;
+    }
+
+    card.innerHTML = `
+        <div class="var-prompt-header">
+            <span class="material-symbols-outlined" style="color: ${borderColor};">${headerIcon}</span>
+            <span>${headerTitle}</span>
+        </div>
+        <div class="var-prompt-body">
+            ${bodyHtml}
+        </div>
+        <div class="var-prompt-actions">
+            <button type="button" class="btn-prompt-confirm" onclick="closeValidationPromptCard(this)">OK</button>
+        </div>
+    `;
+
+    container.appendChild(card);
+}
+window.showValidationResultDialog = showValidationResultDialog;
+
+function closeValidationPromptCard(btnOrElement) {
+    if (typeof closeVariablePromptCard === 'function') {
+        closeVariablePromptCard(btnOrElement);
+    } else if (btnOrElement) {
+        const card = btnOrElement.closest('.var-prompt-card');
+        if (card) card.remove();
+    }
+}
+window.closeValidationPromptCard = closeValidationPromptCard;
+
+
+
 
 function applySuggestionHint(targetLineNum, hintText) {
     const row = document.querySelector(`.step-row[data-line="${targetLineNum}"]`);
