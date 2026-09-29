@@ -45,7 +45,7 @@ import org.neodymium.ai.session.AiSession;
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
 @NeodymiumAiTest
-@AiPlaybook(value = "programmatic", name = "custom_timeout_playbook")
+@AiPlaybook(value = "programmatic", recordingFileName = "custom_timeout_playbook")
 public class TimeoutIntegrationTest extends BaseAiTest
 {
 

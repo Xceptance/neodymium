@@ -28,6 +28,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.action.Action;
@@ -40,6 +41,7 @@ import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.pipeline.UnpopulatedBranchAssertionError;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.util.Neodymium;
 
 /**
  * Mock programmatic integration test for the BRANCH action plugin.
@@ -50,7 +52,7 @@ import org.neodymium.ai.session.AiSession;
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
 @NeodymiumAiTest
-@AiPlaybook(value = "programmatic", name = "custom_branch_playbook")
+@AiPlaybook(value = "programmatic", recordingFileName = "custom_branch_playbook")
 public class BranchIntegrationTest extends BaseAiTest
 {
 
@@ -117,7 +119,7 @@ public class BranchIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook(value = "programmatic", name = "custom_branch_playbook")
+    @AiPlaybook(value = "programmatic", recordingFileName = "custom_branch_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     public void testBranchMock(final AiSession session) throws Exception
     {
@@ -132,15 +134,15 @@ public class BranchIntegrationTest extends BaseAiTest
         $("#result").shouldHave(text("Cookies Accepted!"));
 
         // Verify parameterization
-        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_branch_playbook_" + browserProfile + ".json");
-        org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
+        final String browserProfile = Neodymium.getBrowserProfileName();
+        final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_branch_playbook_" + browserProfile + ".json");
+        Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk: " + recordingFile.getPath());
         try
         {
             final String content = Files.readString(recordingFile.toPath(), StandardCharsets.UTF_8);
-            org.junit.jupiter.api.Assertions.assertTrue(content.contains("\"target\" : \"${branch.test.url}\""), 
+            Assertions.assertTrue(content.contains("\"target\" : \"${branch.test.url}\""), 
                 "Recorded target should be parameterized");
-            org.junit.jupiter.api.Assertions.assertFalse(content.contains("http://localhost:"), 
+            Assertions.assertFalse(content.contains("http://localhost:"), 
                 "Recorded playbook should not contain any hardcoded localhost URLs");
         }
         catch (final IOException e)
@@ -154,7 +156,7 @@ public class BranchIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook(value = "programmatic", name = "oneway_false_noop_playbook")
+    @AiPlaybook(value = "programmatic", recordingFileName = "oneway_false_noop_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     public void testBranchOneWayFalseNoOpStrictMock(final AiSession session) throws Exception
     {
@@ -229,7 +231,7 @@ public class BranchIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook(value = "programmatic", name = "oneway_empty_else_noop_playbook")
+    @AiPlaybook(value = "programmatic", recordingFileName = "oneway_empty_else_noop_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     public void testBranchOneWayWithEmptyElseArrayFalseNoOpStrictMock(final AiSession session) throws Exception
     {
@@ -305,7 +307,7 @@ public class BranchIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook(value = "programmatic", name = "unpopulated_else_branch_playbook")
+    @AiPlaybook(value = "programmatic", recordingFileName = "unpopulated_else_branch_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     public void testBranchUnpopulatedElseStrictMock(final AiSession session) throws Exception
     {
@@ -399,7 +401,7 @@ public class BranchIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook(value = "programmatic", name = "unpopulated_then_branch_playbook")
+    @AiPlaybook(value = "programmatic", recordingFileName = "unpopulated_then_branch_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     public void testBranchUnpopulatedThenStrictMock(final AiSession session) throws Exception
     {
@@ -484,7 +486,7 @@ public class BranchIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook(value = "programmatic", name = "unpopulated_branch_healing_playbook")
+    @AiPlaybook(value = "programmatic", recordingFileName = "unpopulated_branch_healing_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     public void testBranchUnpopulatedHealingMock(final AiSession session) throws Exception
     {
@@ -589,7 +591,7 @@ public class BranchIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook(value = "programmatic", name = "ifelse_then_branch_playbook")
+    @AiPlaybook(value = "programmatic", recordingFileName = "ifelse_then_branch_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     public void testBranchIfElseThenMock(final AiSession session) throws Exception
     {
@@ -675,7 +677,7 @@ public class BranchIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook(value = "programmatic", name = "ifelse_else_branch_playbook")
+    @AiPlaybook(value = "programmatic", recordingFileName = "ifelse_else_branch_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     public void testBranchIfElseElseMock(final AiSession session) throws Exception
     {
@@ -761,7 +763,7 @@ public class BranchIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook(value = "programmatic", name = "branch_assert_exists_met_playbook")
+    @AiPlaybook(value = "programmatic", recordingFileName = "branch_assert_exists_met_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     public void testBranchWithAssertExistsConditionMet(final AiSession session) throws Exception
     {
@@ -837,7 +839,7 @@ public class BranchIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook(value = "programmatic", name = "branch_assert_exists_absent_noop_playbook")
+    @AiPlaybook(value = "programmatic", recordingFileName = "branch_assert_exists_absent_noop_playbook")
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
     public void testBranchWithAssertExistsConditionFalseNoOp(final AiSession session) throws Exception
     {

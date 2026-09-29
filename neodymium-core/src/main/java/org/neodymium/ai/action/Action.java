@@ -965,6 +965,23 @@ public class Action
         {
             args.put("script", this.target != null ? this.target : "");
         }
+        else if ("store".equals(toolName) || "browser_store".equals(toolName))
+        {
+            if (this.value != null && !this.value.isEmpty())
+            {
+                final String varName = this.value.get(0);
+                args.put("variableName", varName);
+                if (this.value.size() >= 2)
+                {
+                    args.put("value", this.value.get(1));
+                }
+            }
+            if (this.target != null && !this.target.isBlank())
+            {
+                args.put("selector", this.target);
+                args.put("target", this.target);
+            }
+        }
         else
         {
             args.put("target", this.target != null ? this.target : "");

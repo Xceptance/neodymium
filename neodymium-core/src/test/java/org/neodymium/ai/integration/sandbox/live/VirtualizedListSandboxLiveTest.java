@@ -63,6 +63,7 @@ public class VirtualizedListSandboxLiveTest extends BaseAiTest
     {
         final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/virtualized-list.html", server.getPort());
         session.data().putDynamic("virtual.list.test.url", pageUrl, false);
+        session.data().putDynamic("neodymium.ai.step.maxTokens", 250_000, false);
     }
 
     /**

@@ -3503,25 +3503,37 @@ public final class BrowserToolProvider
             {
                 final JsonNode args = call.arguments();
                 final String variableName;
+                final boolean valueUsedAsVarName;
                 if (args.hasNonNull("variableName") && !args.path("variableName").asText().isBlank())
                 {
                     variableName = args.path("variableName").asText().trim();
+                    valueUsedAsVarName = false;
                 }
                 else if (args.hasNonNull("variable") && !args.path("variable").asText().isBlank())
                 {
                     variableName = args.path("variable").asText().trim();
+                    valueUsedAsVarName = false;
                 }
                 else if (args.hasNonNull("name") && !args.path("name").asText().isBlank())
                 {
                     variableName = args.path("name").asText().trim();
+                    valueUsedAsVarName = false;
                 }
                 else if (args.hasNonNull("key") && !args.path("key").asText().isBlank())
                 {
                     variableName = args.path("key").asText().trim();
+                    valueUsedAsVarName = false;
+                }
+                else if (args.hasNonNull("value") && !args.path("value").asText().isBlank()
+                        && resolveSelector(args) != null && !resolveSelector(args).isBlank())
+                {
+                    variableName = args.path("value").asText().trim();
+                    valueUsedAsVarName = true;
                 }
                 else
                 {
                     variableName = "";
+                    valueUsedAsVarName = false;
                 }
 
                 if (variableName.isEmpty())
@@ -3532,7 +3544,7 @@ public final class BrowserToolProvider
                 final boolean adjust = args.path("adjust").asBoolean(false);
                 final String valueToStore;
 
-                if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+                if (args.hasNonNull("value") && !args.path("value").asText().isBlank() && !valueUsedAsVarName)
                 {
                     final String literalVal = args.path("value").asText();
                     valueToStore = adjust ? AiAssertions.normalizeNumericOrPrice(literalVal) : literalVal;

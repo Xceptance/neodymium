@@ -1,11 +1,5 @@
 [ {
   "instruction" : "Click the '${buttonName}' button",
-  "noReplay" : false,
-  "optional" : false,
-  "bug" : false,
-  "bugDetails" : null,
-  "continueOnError" : false,
-  "noHealing" : false,
   "subSteps" : [ ],
   "actions" : [ {
     "type" : "CLICK",
@@ -14,6 +8,7 @@
     "description" : "Click #btn-click",
     "reasoning" : "",
     "isRegex" : false,
+    "negated" : false,
     "condition" : null,
     "then" : null,
     "adjust" : false,
@@ -26,11 +21,28 @@
     "parameters" : { },
     "bestCandidateLocator" : "#btn-click",
     "allCandidateLocators" : [ "#btn-click" ],
-    "else" : null,
+    "else" : [ ],
     "hasElse" : null,
     "selfCritique" : "",
     "candidateLocators" : [ ],
-    "domFeatureVector" : null,
+    "domFeatureVector" : {
+      "tag" : "button",
+      "text" : "Click Me",
+      "classes" : [ ],
+      "attributes" : {
+        "id" : "btn-click"
+      },
+      "role" : "",
+      "accessibleName" : "Click Me",
+      "parentTag" : "div",
+      "siblingIndex" : 0,
+      "x" : 8,
+      "y" : 101,
+      "width" : 67,
+      "height" : 21,
+      "visualHash" : "",
+      "tileSsim" : ""
+    },
     "values" : [ ]
   } ],
   "status" : "SUCCESS",
@@ -43,24 +55,65 @@
   "sourceYamlHash" : null,
   "targetFramework" : "SELENIUM_SELENIDE",
   "semanticContext" : null,
-  "domFeatureVector" : null,
+  "domFeatureVector" : {
+    "tag" : "button",
+    "text" : "Click Me",
+    "classes" : [ ],
+    "attributes" : {
+      "id" : "btn-click"
+    },
+    "role" : "",
+    "accessibleName" : "Click Me",
+    "parentTag" : "div",
+    "siblingIndex" : 0,
+    "x" : 8,
+    "y" : 101,
+    "width" : 67,
+    "height" : 21,
+    "visualHash" : "",
+    "tileSsim" : ""
+  },
   "schemaVersion" : "4.0",
-  "contextLevel" : "MINIMAL",
+  "contextLevel" : "LEAN",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 1759,
-  "startTimeMs" : 1789248598789,
+  "durationMs" : 1868,
+  "startTimeMs" : 1790695835227,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
+  "noReplay" : false,
+  "optional" : false,
+  "bug" : false,
+  "bugDetails" : null,
+  "continueOnError" : false,
+  "noHealing" : false,
   "toolCalls" : [ {
-    "callId" : "eb35ee3e-7f39-4982-b74f-d3282d2e3c05",
-    "toolName" : "browser_click",
+    "callId" : "6865482e-3131-43db-95ca-4fae931a2137",
+    "toolName" : "click",
     "arguments" : {
       "locator" : "#btn-click",
       "value" : "",
       "selector" : "#btn-click",
-      "target" : "#btn-click"
+      "target" : "#btn-click",
+      "domFeatureVector" : {
+        "tag" : "button",
+        "text" : "Click Me",
+        "classes" : [ ],
+        "attributes" : {
+          "id" : "btn-click"
+        },
+        "role" : "",
+        "accessibleName" : "Click Me",
+        "parentTag" : "div",
+        "siblingIndex" : 0,
+        "x" : 8,
+        "y" : 101,
+        "width" : 67,
+        "height" : 21,
+        "visualHash" : "",
+        "tileSsim" : ""
+      }
     }
   } ]
 } ]

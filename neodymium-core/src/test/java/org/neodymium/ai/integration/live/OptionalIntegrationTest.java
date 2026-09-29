@@ -78,7 +78,7 @@ public class OptionalIntegrationTest extends BaseAiTest
             .hasSoftFailedStepCount(1)
             .onLive(m -> m.hasLlmCalls())
             .onStrictReplay(m -> m.hasNoLlmCalls())
-            .onHealing(m -> m.hasLlmCalls());
+            .onHealing(m -> m.hasNoLlmCalls());
 
         $("h1").shouldHave(exactText("All Actions Test Page"));
     }

@@ -29,7 +29,7 @@ import org.neodymium.ai.session.AiSession;
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
 @NeodymiumAiTest
-@AiPlaybook(value = "programmatic", name = "custom_bug_playbook")
+@AiPlaybook(value = "programmatic", recordingFileName = "custom_bug_playbook")
 public class BugIntegrationTest extends BaseAiTest
 {
 

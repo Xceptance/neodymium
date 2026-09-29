@@ -2427,6 +2427,36 @@ public final class AgentToolLoopStep implements PipelineStep
                         }
                     }
                 }
+                if ("browser_store".equals(toolName) || "store".equalsIgnoreCase(toolName))
+                {
+                    if (!obj.hasNonNull("variableName") || obj.path("variableName").asText().isBlank())
+                    {
+                        if (obj.hasNonNull("variable") && !obj.path("variable").asText().isBlank())
+                        {
+                            obj.put("variableName", obj.path("variable").asText().trim());
+                        }
+                        else if (obj.hasNonNull("name") && !obj.path("name").asText().isBlank())
+                        {
+                            obj.put("variableName", obj.path("name").asText().trim());
+                        }
+                        else if (obj.hasNonNull("key") && !obj.path("key").asText().isBlank())
+                        {
+                            obj.put("variableName", obj.path("key").asText().trim());
+                        }
+                        else if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank())
+                        {
+                            final boolean hasSelector = (obj.hasNonNull("selector") && !obj.path("selector").asText().isBlank())
+                                    || (obj.hasNonNull("locator") && !obj.path("locator").asText().isBlank())
+                                    || (obj.hasNonNull("target") && !obj.path("target").asText().isBlank());
+                            if (hasSelector)
+                            {
+                                obj.put("variableName", obj.path("value").asText().trim());
+                                obj.remove("value");
+                                obj.remove("text");
+                            }
+                        }
+                    }
+                }
                 args = obj;
             }
             else

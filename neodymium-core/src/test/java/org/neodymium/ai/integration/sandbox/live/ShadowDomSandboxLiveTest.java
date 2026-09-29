@@ -73,7 +73,7 @@ public class ShadowDomSandboxLiveTest extends BaseAiTest
               Type admin into the username field inside the login form
               Type secret into the password field inside the login form
               Click the login submit button
-              Verify that #shadow-status shows "Login successful for: admin"
+              Verify that the page status #shadow-status shows "Login successful for: admin"
             """);
 
         $("#shadow-status").shouldHave(text("Login successful for: admin"));

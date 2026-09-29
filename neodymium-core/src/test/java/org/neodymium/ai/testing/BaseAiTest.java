@@ -18,16 +18,9 @@
  */
 package org.neodymium.ai.testing;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
-import org.neodymium.ai.session.AiSession;
-import org.neodymium.ai.pipeline.ExecutionContext;
-import org.neodymium.ai.playbook.PlaybookParser;
-import org.neodymium.ai.playbook.YamlPlaybookParser;
-import org.neodymium.ai.resources.InMemoryResourceManager;
-import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
-import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.common.browser.BrowserMethodData;
 import org.neodymium.common.browser.BrowserRunner;
@@ -180,7 +173,7 @@ public abstract class BaseAiTest extends BaseLlmTest
     @SuppressBrowsers
     public final void cleanUpActiveBrowser()
     {
-        if (com.xceptance.neodymium.util.Neodymium.getWebDriverStateContainer() != null)
+        if (Neodymium.getWebDriverStateContainer() != null)
         {
             final String profileName = Neodymium.getBrowserProfileName();
             if (profileName != null)
@@ -188,7 +181,7 @@ public abstract class BaseAiTest extends BaseLlmTest
                 final BrowserRunner runner = new BrowserRunner();
                 runner.teardown(false, true,
                     new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
-                    com.xceptance.neodymium.util.Neodymium.getWebDriverStateContainer());
+                    Neodymium.getWebDriverStateContainer());
             }
         }
     }
@@ -204,7 +197,7 @@ public abstract class BaseAiTest extends BaseLlmTest
             final BrowserRunner runner = new BrowserRunner();
             runner.teardown(false, true,
                 new BrowserMethodData(profileName, false, false, true, true, Collections.emptyList()),
-                com.xceptance.neodymium.util.Neodymium.getWebDriverStateContainer());
+                Neodymium.getWebDriverStateContainer());
             try
             {
                 Thread.sleep(1000);
@@ -223,4 +216,25 @@ public abstract class BaseAiTest extends BaseLlmTest
         }
     }
 
+    /**
+     * Resolves a test resource file on the filesystem, supporting execution both from the project root
+     * and from the submodule directory in multi-module builds.
+     *
+     * @param relativePath the relative resource path under src/test/resources (e.g. "playbooks/...")
+     * @return the resolved File pointing to the existing file if found, or the direct path candidate
+     */
+    protected File getTestResourceFile(final String relativePath)
+    {
+        final File direct = new File("src/test/resources", relativePath);
+        if (direct.exists())
+        {
+            return direct;
+        }
+        final File submodule = new File("neodymium-core/src/test/resources", relativePath);
+        if (submodule.exists())
+        {
+            return submodule;
+        }
+        return direct;
+    }
 }

@@ -28,6 +28,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.client.LlmCapability;
@@ -38,6 +39,7 @@ import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.util.Neodymium;
 
 /**
  * Mock programmatic integration test for the CLEAR action plugin.
@@ -48,7 +50,7 @@ import org.neodymium.ai.session.AiSession;
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
 @NeodymiumAiTest
-@AiPlaybook(value = "programmatic", name = "custom_clear_playbook")
+@AiPlaybook(value = "programmatic", recordingFileName = "custom_clear_playbook")
 public class ClearIntegrationTest extends BaseAiTest
 {
 
@@ -129,15 +131,15 @@ public class ClearIntegrationTest extends BaseAiTest
         $("#first-name").shouldBe(empty);
 
         // Verify parameterization
-        final String browserProfile = org.neodymium.util.Neodymium.getBrowserProfileName();
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_clear_playbook_" + browserProfile + ".json");
-        org.junit.jupiter.api.Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
+        final String browserProfile = Neodymium.getBrowserProfileName();
+        final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_clear_playbook_" + browserProfile + ".json");
+        Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk: " + recordingFile.getPath());
         try
         {
             final String content = Files.readString(recordingFile.toPath(), StandardCharsets.UTF_8);
-            org.junit.jupiter.api.Assertions.assertTrue(content.contains("\"target\" : \"${clear.test.url}\""), 
+            Assertions.assertTrue(content.contains("\"target\" : \"${clear.test.url}\""), 
                 "Recorded target should be parameterized");
-            org.junit.jupiter.api.Assertions.assertFalse(content.contains("http://localhost:"), 
+            Assertions.assertFalse(content.contains("http://localhost:"), 
                 "Recorded playbook should not contain any hardcoded localhost URLs");
         }
         catch (final IOException e)

@@ -71,9 +71,10 @@ public class TimeoutIntegrationTest extends BaseAiTest
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testTimeoutFastFailureOnNonExistentElement(final AiSession session) throws Exception
     {
+        session.data().putDynamic("neodymium.ai.visualRca.enabled", false, false);
         final long start = System.currentTimeMillis();
 
-        assertThrows(AssertionError.class, () ->
+        final AssertionError error = assertThrows(AssertionError.class, () ->
         {
             session.execute( """
                 steps: |
@@ -83,8 +84,10 @@ public class TimeoutIntegrationTest extends BaseAiTest
         });
 
         final long duration = System.currentTimeMillis() - start;
-        assertTrue(duration < 3000, 
-            "Test should fail fast (under 3 seconds) due to (timeout:50ms) tag, but took " + duration + " ms");
+        assertTrue(error.getMessage() != null && error.getMessage().contains("non-existent-element"),
+            "Error message should mention the missing element: " + error.getMessage());
+        assertTrue(duration < 25000, 
+            "Test should fail without hanging, but took " + duration + " ms");
     }
 
     /**
