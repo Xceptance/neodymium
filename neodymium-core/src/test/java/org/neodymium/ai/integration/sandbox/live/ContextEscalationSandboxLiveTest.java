@@ -77,9 +77,11 @@ public class ContextEscalationSandboxLiveTest extends BaseAiTest
             steps: |
               Open ${escalation.test.url} in the browser
               Click the span element with text "Click Link Challenge"
+              Verify that #escalation-status shows "Status: Link Clicked"
               Verify that the page body contains "AURA-9921-SECURE"
             """);
 
+        $("#escalation-status").shouldHave(text("Status: Link Clicked"));
         $("#secret-text").shouldHave(text("AURA-9921-SECURE"));
     }
 }

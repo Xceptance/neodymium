@@ -69,7 +69,47 @@ public enum LinterCategory
     /**
      * Dangling or incomplete conditional clause ("If...", "When...", "Falls...") lacking a consequence or action.
      */
-    INCOMPLETE_BRANCH_CLAUSE;
+    INCOMPLETE_BRANCH_CLAUSE,
+
+    /**
+     * Mid-scenario direct URL navigation or mutation skipping interactive user journeys.
+     */
+    JOURNEY_FIDELITY_VIOLATION,
+
+    /**
+     * Unsupported, misspelled, or non-standard parenthetical modality tags (e.g. {@code (screenshot)}, {@code (fullpage)}).
+     */
+    UNRECOGNIZED_MODALITY_TAG,
+
+    /**
+     * Instructions explicitly commanding raw script or code execution (e.g. "Run JS to click...") instead of standard user interactions.
+     */
+    EXPLICIT_SCRIPT_INTERACTION,
+
+    /**
+     * Empirical runtime detection of a flat step executing multiple interactive mutating actions.
+     */
+    EMPIRICAL_MULTI_ACTION,
+
+    /**
+     * Empirical runtime divergence where instruction text did not match the clicked element's accessible name or DOM text.
+     */
+    LABEL_DIVERGENCE,
+
+    /**
+     * Empirical agent execution thrashing requiring excessive turns or retries.
+     */
+    HIGH_AGENT_FRICTION,
+
+    /**
+     * Empirical step resolution that required visual perception at runtime but lacks the (visual) tag.
+     */
+    UNTAGGED_VISUAL_DEPENDENCY,
+
+    /**
+     * Empirical step resolution that was tagged (visual) but was fully resolved via standard DOM elements without visual comparison.
+     */
+    REDUNDANT_VISUAL_TAG;
 
     /**
      * Resolves an enum constant from a string code safely, case-insensitively.

@@ -9,7 +9,7 @@ This document provides a comprehensive overview of the lifecycle of an AI test e
 The AI engine in Neodymium relies on several key components coordinating closely:
 
 - **`AiBrowser`**: The user-facing entry point, managing the execution lifecycle (`AutoCloseable`). It binds configuration data (`steps`, `before`, `after`, `systemContext`), handles test data resolution, and instantiates the orchestrator.
-- **`AiAgent`**: The core orchestration engine. It splits instructions, manages the main execution loop, extracts step tags, initiates pre-step analysis (PESAP), coordinates replay vs. recording mode, handles context escalation, enforces retry budgets, orchestrates HUD interaction, and manages playbook persistence.
+- **`AiAgent`**: The core orchestration engine. It manages the main execution loop, extracts step tags, coordinates replay vs. recording mode, handles context escalation, enforces retry budgets, orchestrates HUD interaction, and manages playbook persistence.
 - **`PageAnalyzer`**: Responsible for capturing the DOM state at the specified `ContextLevel` (ranging from zero-element hints to visual screenshots). It uses JS extraction and CDP Accessibility Trees (AXTree), including recursive iframe crawling and Shadow DOM traversal.
 - **`ActionExecutor`**: Translates structured AI actions into physical browser interactions. It resolves target elements using a robust multi-strategy pipeline (Strategies 0–5), handles frame and window context switching, interpolates dynamic variables, and delegates physical interactions to plugins.
 - **`ActionParser`**: Parses JSON outputs from the LLM, extracting structured action definitions, reading reasoning logs, and inspecting flags like `success`, `done`, and `escalate`.
@@ -68,7 +68,7 @@ These tags dictate engine logic and are removed (stripped) from the text via `st
 - `(bug)` or `(bug: <id>)`: Marks an **Expected Failure**. The engine verifies that the step fails.
 - `(optional)` or `(soft)`: Bypasses execution errors gracefully. The step failure is logged as a warning, and execution continues.
 - `(timeout: <value><unit>)`: Dynamically overrides the `Configuration.timeout` for element searches within this step (e.g., `(timeout: 5s)`).
-- `(no-replay)`: Instructs the engine to completely bypass the playbook cache for this specific step. The step is always evaluated live via Direct Plugins or the LLM. **Inheritance**: If a step is split (by PESAP or LLM), the `(no-replay)` tag is also checked against the `originalUnsplitInstruction`, meaning all child sub-steps inherit the no-replay behavior from their parent compound step.
+- `(no-replay)`: Instructs the engine to completely bypass the playbook cache for this specific step. The step is always evaluated live via Direct Plugins or the LLM. **Inheritance**: If a step has child milestones or sub-steps, the `(no-replay)` tag is also checked against the parent instruction, meaning child sub-steps inherit the no-replay behavior from their parent compound step.
 
 ### 4.2 Non-Stripped Tags
 These tags are passed through directly to the LLM because they either require LLM interpretation or only affect pre-flight settings:
@@ -101,10 +101,7 @@ flowchart TD
     DirectCheck -- "No" --> OfflineCheck{Offline Mode?}
     OfflineCheck -- "Yes" --> FailOffline[Throw ActionExecutionException]
     
-    OfflineCheck -- "No" --> PesapCheck{Needs JIT PESAP?}
-    PesapCheck -- "Yes" --> RunPesap[Run PESAP Classify / Split]
-    RunPesap --> RunLLM[Query LLM & Execute Actions]
-    PesapCheck -- "No" --> RunLLM
+    OfflineCheck -- "No" --> RunLLM[Query LLM & Execute Actions]
     
     PlaybookActions --> EndStep([Step Completed])
     DirectActions --> EndStep
@@ -128,28 +125,15 @@ If replay is skipped, the engine attempts to bypass the LLM entirely using Direc
 If neither replay nor direct parsing succeeds, the engine triggers an LLM query, packaging the instruction alongside the current DOM Context and optionally a screenshot.
 
 ### Offline Mode (`neodymium.ai.offline`)
-When the JVM property `neodymium.ai.offline=true` is set, any attempt to query the LLM (Phase 3) or run PESAP pre-analysis throws an `ActionExecutionException`. This forces all steps to resolve through Playbook Replay (Phase 1) or Direct Plugins (Phase 2) only. Useful for CI environments where deterministic, API-free execution is required.
+When the JVM property `neodymium.ai.offline=true` is set, any attempt to query the LLM (Phase 3) throws an `ActionExecutionException`. This forces all steps to resolve through Playbook Replay (Phase 1) or Direct Plugins (Phase 2) only. Useful for CI environments where deterministic, API-free execution is required.
 
 ---
 
-## 6. JIT PESAP & Semantic Linter
+## 6. Playbook Quality Linter
 
-To optimize LLM usage and prevent ambiguous prompts, two analysis phases occur prior to execution.
+To optimize LLM usage and prevent ambiguous prompts, playbook instructions are audited for clarity.
 
-### 6.1 JIT Pre-Step PESAP (Pre-Execution Static Analysis Phase)
-When the playbook is recording a non-direct step, it is sent to a secondary, lightweight LLM prompt (`LlmMode.PESAP`).
-- **Context Window**: Evaluates a rolling window of 4 steps (1 previous, current, 2 future).
-- **Classification**: Determines the minimum required `ContextLevel` (`AXTREE`, `LEAN`, `STANDARD`, etc.).
-- **Java Detection**: Identifies if the step likely requires a custom Java validation method.
-- **Step Splitting**: If a single instruction represents a complex multi-stage interaction (e.g., "fill the form and submit it"), PESAP suggests splitting it. The engine breaks the step into a sequence of smaller steps, storing the `originalUnsplitInstruction` for traceability.
-
-**PESAP Bypass Rules**: PESAP is only triggered for steps whose initial `baseLevel` is `AXTREE` (the default). Steps tagged with `(hint:)` (base level `HINT`) or `(visual)` (base level `VISUAL_LEAN`) skip PESAP entirely because their context is already explicitly determined by the tag. Additionally, recovery attempts (retries after failure) do not re-trigger PESAP.
-
-**Deduplication**: The engine tracks an `alreadySplitSteps` set and a `needsPesap` flag to prevent re-running PESAP on steps that were themselves produced by a prior PESAP split. This avoids infinite split loops.
-
-PESAP custom rules are injected via `CustomRulesLoader`, which respects thread-local overrides, config properties, and filesystem/classpath fallbacks (`pesap-custom-rules.md`).
-
-### 6.2 Offline Semantic Linter (`StepLinter`)
+### Offline Semantic Linter (`StepLinter`)
 An offline, regex-based linter that warns users of ambiguous instructions without calling an API. It checks for:
 1. **Lacking Element Targeting**: Generic commands like "click the button" without specifying a label. Steps with `(hint:)` or `(selector:)` tags are exempt from this check.
 2. **Missing Input Values**: "Type into the email field" without providing the quoted string to type.
@@ -340,7 +324,6 @@ Two independent retry counters exist:
 The API interacts with models using distinct operational modes (`LlmMode`):
 - `AGENT`: Standard deterministic test execution.
 - `GENERATOR`: Used for `@NeodymiumTestGenerator`. Sets higher temperatures for exploratory prompt generation based on SUT context.
-- `PESAP`: Low-latency classification mode for pre-step analysis.
 - `ASSERT`: Isolated verification mode.
 
 When using `@NeodymiumTestGenerator`, `AiBrowser.generatePrompt` automatically resolves the target application URL, computes the test package output path, and outputs a complete YAML prompt file.

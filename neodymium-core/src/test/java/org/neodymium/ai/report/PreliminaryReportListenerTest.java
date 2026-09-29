@@ -21,12 +21,12 @@ package org.neodymium.ai.report;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
@@ -39,8 +39,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.client.ChatMessage;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.ReasoningEffort;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
@@ -57,9 +59,6 @@ import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.model.PlaybookStep;
-import org.neodymium.ai.client.LlmRegistry;
-import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -67,8 +66,6 @@ import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.playbook.linter.LinterCategory;
 import org.neodymium.ai.playbook.linter.LinterSeverity;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
-import org.neodymium.ai.runner.StateMachineRunner;
-import org.neodymium.ai.session.AiSession;
 
 /**
  * Unit test suite for {@link PreliminaryReportListener}, {@link HtmlReportGenerator},
@@ -246,8 +243,8 @@ public class PreliminaryReportListenerTest
             ctx.getTransientData().put(ExecutionContext.KEY_STANDARD_CALL_COUNT, 18);
             ctx.getTransientData().put(ExecutionContext.KEY_STANDARD_TOKEN_USAGE, new TokenUsage(62374, 2208, 64582, 0));
 
-            ctx.getTransientData().put(ExecutionContext.KEY_PESAP_CALL_COUNT, 16);
-            ctx.getTransientData().put(ExecutionContext.KEY_PESAP_TOKEN_USAGE, new TokenUsage(10809, 181, 10990, 0));
+            ctx.getTransientData().put(ExecutionContext.KEY_VERIFICATION_CALL_COUNT, 16);
+            ctx.getTransientData().put(ExecutionContext.KEY_VERIFICATION_TOKEN_USAGE, new TokenUsage(10809, 181, 10990, 0));
 
             ctx.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, 2);
             ctx.getTransientData().put(ExecutionContext.KEY_INTERNAL_CACHE_HITS, 5);
@@ -257,7 +254,7 @@ public class PreliminaryReportListenerTest
             stats1.setDurationMs(8412);
             stats1.addContextLevel("LEAN");
             stats1.addContextLevel("STANDARD");
-            stats1.addPesapCall(662, 10, 0);
+            stats1.addVerificationCall(662, 10, 0);
             stats1.addStandardCall(9136, 247, 0);
 
             ctx.getTransientData().put("execution.stepStatsList", List.of(stats1));
@@ -284,16 +281,16 @@ public class PreliminaryReportListenerTest
             final String md = Files.readString(mdPath);
             assertTrue(md.contains("34")); // 18 + 16 total calls
             assertTrue(md.contains("75,572")); // 64582 + 10990 total tokens
-            assertTrue(md.contains("PESAP"));
+            assertFalse(md.contains("PESAP"));
             assertTrue(md.contains("Action (Standard)"));
-            assertTrue(md.indexOf("├─ PESAP") < md.indexOf("├─ Action (Standard)"), "PESAP must precede Action in Markdown table");
+            assertTrue(md.contains("Verification"));
             assertTrue(md.contains("Context Escalations"));
             assertTrue(md.contains("LEAN → STANDARD"));
 
             final String html = Files.readString(htmlPath);
             assertTrue(html.contains("75,572"));
-            assertTrue(html.contains("PESAP (Pre-Execution Semantic Anchor)"));
-            assertTrue(html.indexOf("PESAP (Pre-Execution Semantic Anchor)") < html.indexOf("Action (Standard Generation)"), "PESAP must precede Action in HTML table");
+            assertFalse(html.contains("PESAP (Pre-Execution Semantic Anchor)"));
+            assertFalse(html.contains("PESAP"));
             assertTrue(html.contains("LEAN → STANDARD"));
             assertTrue(html.contains("⚡ 1 esc"));
 
@@ -301,7 +298,8 @@ public class PreliminaryReportListenerTest
             final JsonNode root = new ObjectMapper().readTree(json);
             assertEquals(34, root.get("metrics").get("totalLlmCalls").asInt());
             assertEquals(75572, root.get("metrics").get("totalTokens").asLong());
-            assertEquals(16, root.get("metrics").get("pesap").get("calls").asInt());
+            assertFalse(root.get("metrics").has("pesap"));
+            assertEquals(16, root.get("metrics").get("verification").get("calls").asInt());
             assertEquals(18, root.get("metrics").get("action").get("calls").asInt());
             assertEquals(1, root.get("steps").get(0).get("escalations").asInt());
         }
@@ -455,8 +453,8 @@ public class PreliminaryReportListenerTest
     }
 
     @Test
-    @DisplayName("Verify PESAP LLM call capture and sub-step hierarchy rendering")
-    public void testPesapAndSubStepsHierarchy() throws Exception
+    @DisplayName("Verify planning LLM call capture and sub-step hierarchy rendering")
+    public void testPlanningAndSubStepsHierarchy() throws Exception
     {
         final Path reportDir = this.tempFolder.resolve("ai-reports-substeps");
         final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON, DiskReportFormat.MARKDOWN), true);
@@ -471,10 +469,10 @@ public class PreliminaryReportListenerTest
         final PlaybookStep parentStep = new PlaybookStep("Locate promo input, clear content, and type FREEGIFT");
         bus.dispatch(new StepStartedEvent(parentStep, 0));
 
-        // PESAP call on parent step
-        final LlmRequest pesapReq = new LlmRequest("PESAP System", "Analyze step: Locate promo input...", Collections.emptyList(), null, 0.0, 30);
-        final LlmResponse pesapResp = new LlmResponse("{\"splitSteps\":[\"Locate promo input and clear content\",\"Type FREEGIFT into promo input\"]}", new TokenUsage(650, 45, 695, 100), "gemini-3.5-flash");
-        bus.dispatch(new LlmResponseReceivedEvent(pesapReq, pesapResp, 180, "PESAP"));
+        // Planning call on parent step
+        final LlmRequest planReq = new LlmRequest("Planning System", "Analyze step: Locate promo input...", Collections.emptyList(), null, 0.0, 30);
+        final LlmResponse planResp = new LlmResponse("{\"splitSteps\":[\"Locate promo input and clear content\",\"Type FREEGIFT into promo input\"]}", new TokenUsage(650, 45, 695, 100), "gemini-3.5-flash");
+        bus.dispatch(new LlmResponseReceivedEvent(planReq, planResp, 180, "Planning"));
 
         // Sub-step 1
         final PlaybookStep subStep1 = new PlaybookStep("Locate promo input and clear content");
@@ -525,8 +523,8 @@ public class PreliminaryReportListenerTest
         assertEquals(1, root.get("steps").size(), "Root steps must contain 1 parent step");
         final JsonNode parentNode = root.get("steps").get(0);
         assertEquals(2, parentNode.get("subSteps").size(), "Parent step must contain exactly 2 deduplicated sub-steps");
-        assertEquals(1, parentNode.get("llmCalls").size(), "Parent step must have 1 PESAP LLM call attached");
-        assertEquals("PESAP", parentNode.get("llmCalls").get(0).get("capability").asText());
+        assertEquals(1, parentNode.get("llmCalls").size(), "Parent step must have 1 LLM call attached");
+        assertEquals("Planning", parentNode.get("llmCalls").get(0).get("capability").asText());
     }
 
     @Test
@@ -805,6 +803,137 @@ public class PreliminaryReportListenerTest
         final String md = Files.readString(mdPath);
         assertTrue(md.contains("Expected Bug"));
         assertFalse(md.contains("## 🚨 Failure Diagnostics"));
+    }
+
+    @Test
+    @DisplayName("Verify expected bug on sub-step propagates to compound parent in report and badges")
+    public void testExpectedBugOnSubStepPropagatesToParentReportEntry() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-substep-bug");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON, DiskReportFormat.MARKDOWN), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("AddToCartTest");
+        listener.getReport().setTestMethod("testCompoundBug");
+
+        final PlaybookStep parentStep = new PlaybookStep("Locate promo field:");
+        final PlaybookStep subAction = new PlaybookStep("type 'FREEGIFT' into it");
+        final PlaybookStep subBug = new PlaybookStep("Assert cart has Free Gift (bug: Gift missing).");
+
+        parentStep.getSubSteps().add(subAction);
+        parentStep.getSubSteps().add(subBug);
+        subAction.setParent(parentStep);
+        subBug.setParent(parentStep);
+
+        bus.dispatch(new StepStartedEvent(parentStep, 0));
+        bus.dispatch(new DiagnosticErrorEvent("Free Gift not found", new AssertionError("Item absent")));
+        bus.dispatch(new StepFinishedEvent(parentStep, PlaybookStepStatus.FAILED));
+
+        // Test passes overall because bug was expected on sub-step
+        bus.dispatch(new SessionFinishedEvent(1500, true));
+
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+
+        assertTrue(Files.exists(jsonPath));
+        assertTrue(Files.exists(htmlPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        final JsonNode parentNode = root.get("steps").get(0);
+        assertTrue(parentNode.get("bug").asBoolean(), "Parent step must have bug=true in JSON");
+        assertEquals("Gift missing", parentNode.get("bugDetails").asText(), "Parent step must inherit bugDetails");
+
+        final JsonNode subStepsNode = parentNode.get("subSteps");
+        assertNotNull(subStepsNode, "subSteps array must be present in JSON report");
+        assertEquals(2, subStepsNode.size(), "Compound step must contain both sub-steps");
+        assertEquals("type 'FREEGIFT' into it", subStepsNode.get(0).get("instruction").asText());
+        assertEquals("SUCCESS", subStepsNode.get(0).get("status").asText());
+        assertEquals("Assert cart has Free Gift .", subStepsNode.get(1).get("instruction").asText());
+        assertEquals("FAILED", subStepsNode.get(1).get("status").asText());
+        assertTrue(subStepsNode.get(1).get("bug").asBoolean());
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("bug-badge") || html.contains("BUG EXPECTED"), "HTML report must display bug badge on compound step");
+        assertTrue(html.contains("Gift missing"), "HTML report must include bug details tooltip");
+        assertTrue(html.contains("sub-steps-container"), "HTML report must render sub-steps container");
+        assertTrue(html.contains("sub-step-card"), "HTML report must render sub-step cards");
+        assertTrue(html.contains("type 'FREEGIFT' into it"), "Sub-step action must be visible in HTML");
+        assertTrue(html.contains("Assert cart has Free Gift"), "Sub-step assertion must be visible in HTML");
+        assertTrue(html.contains("Sub-Steps:"), "Header must show Sub-Steps:");
+    }
+
+    @Test
+    @DisplayName("Verify successful compound step renders all nested sub-steps in report and inspector")
+    public void testCompoundStepWithSubStepsRenderedInReport() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-compound-success");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("AddToCartTest");
+        listener.getReport().setTestMethod("testAddToCartNormal");
+
+        final PlaybookStep parentStep = new PlaybookStep("Locate the first product card");
+        parentStep.setSourceFile("AddToCartTest.yaml");
+        parentStep.setLineNumber(9);
+
+        final PlaybookStep sub1 = new PlaybookStep("Hover over it");
+        sub1.setSourceFile("AddToCartTest.yaml");
+        sub1.setLineNumber(10);
+
+        final PlaybookStep sub2 = new PlaybookStep("Click its 'Add to Cart' button");
+        sub2.setSourceFile("AddToCartTest.yaml");
+        sub2.setLineNumber(11);
+
+        final PlaybookStep sub3 = new PlaybookStep("When this string '${testId}' is not equal 'bad', click the size 'S'");
+        sub3.setSourceFile("AddToCartTest.yaml");
+        sub3.setLineNumber(13);
+
+        parentStep.getSubSteps().add(sub1);
+        parentStep.getSubSteps().add(sub2);
+        parentStep.getSubSteps().add(sub3);
+        sub1.setParent(parentStep);
+        sub2.setParent(parentStep);
+        sub3.setParent(parentStep);
+
+        bus.dispatch(new StepStartedEvent(parentStep, 2));
+        bus.dispatch(new StepFinishedEvent(parentStep, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(2500, true));
+
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+
+        assertTrue(Files.exists(jsonPath));
+        assertTrue(Files.exists(htmlPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        final JsonNode parentNode = root.get("steps").get(0);
+        assertEquals("SUCCESS", parentNode.get("status").asText());
+
+        final JsonNode subStepsNode = parentNode.get("subSteps");
+        assertNotNull(subStepsNode);
+        assertEquals(3, subStepsNode.size());
+        assertEquals("Hover over it", subStepsNode.get(0).get("instruction").asText());
+        assertEquals("SUCCESS", subStepsNode.get(0).get("status").asText());
+        assertEquals(10, subStepsNode.get(0).get("lineNumber").asInt());
+        assertEquals("Click its 'Add to Cart' button", subStepsNode.get(1).get("instruction").asText());
+        assertEquals("SUCCESS", subStepsNode.get(1).get("status").asText());
+        assertEquals(11, subStepsNode.get(1).get("lineNumber").asInt());
+        assertEquals("When this string '${testId}' is not equal 'bad', click the size 'S'", subStepsNode.get(2).get("instruction").asText());
+        assertEquals("SUCCESS", subStepsNode.get(2).get("status").asText());
+        assertEquals(13, subStepsNode.get(2).get("lineNumber").asInt());
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("sub-steps-container"));
+        assertTrue(html.contains("sub-step-card"));
+        assertTrue(html.contains("Hover over it"));
+        assertTrue(html.contains("Click its &#39;Add to Cart&#39; button") || html.contains("Click its 'Add to Cart' button"));
+        assertTrue(html.contains("Sub-Steps:"));
+        assertTrue(html.contains("3 sub-step(s)"));
     }
 
     @Test
@@ -1143,8 +1272,8 @@ public class PreliminaryReportListenerTest
             bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
             bus.dispatch(new SessionFinishedEvent(100, true));
 
-            final Path rootJsonPath = customDir.resolve(listener.getLastBaseFileName() + ".json");
-            assertTrue(Files.exists(rootJsonPath), "Root report file must land in configured disk report directory");
+            final Path rootJsonPath = Path.of("target/ai-results").resolve(listener.getLastBaseFileName() + ".json");
+            assertTrue(Files.exists(rootJsonPath), "Root report file must always land in target/ai-results directory");
 
             final String runFolder = com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.getRunFolder();
             final Path structuredJsonPath = customDir.resolve(runFolder).resolve("CustomReportDirTest").resolve(listener.getLastBaseFileName() + ".json");
@@ -1468,6 +1597,83 @@ public class PreliminaryReportListenerTest
     }
 
     @Test
+    @DisplayName("Verify that empirical post-flight playbook findings are rendered in HTML, Markdown, and JSON")
+    public void testEmpiricalPostFlightLinterReporting() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("postflight-linter-reports");
+        Files.createDirectories(reportDir);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        try
+        {
+            final PlaybookLinterFinding finding = new PlaybookLinterFinding(
+                1,
+                18,
+                "cart.yaml",
+                "Hover over mini cart and checkout",
+                "Hover over mini cart and checkout",
+                LinterCategory.EMPIRICAL_MULTI_ACTION,
+                LinterSeverity.WARNING,
+                "Step executed 2 mutating actions in a single flat step.",
+                "Hover over the mini cart\nClick the 'View Cart & Checkout' button",
+                null
+            );
+            ctx.getTransientData().put(ExecutionContext.KEY_POST_FLIGHT_LINTER_FINDINGS, List.of(finding));
+            ctx.getTransientData().put(ExecutionContext.KEY_POST_FLIGHT_LINTER_CALL_COUNT, 1);
+            ctx.getTransientData().put(ExecutionContext.KEY_POST_FLIGHT_LINTER_TOKEN_USAGE, new TokenUsage(120, 60, 180, 0));
+
+            final PreliminaryReportListener listener = new PreliminaryReportListener(
+                reportDir,
+                EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON)
+            );
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            bus.registerListener(listener);
+
+            final PlaybookStep step = new PlaybookStep("Hover over mini cart and checkout");
+            bus.dispatch(new StepStartedEvent(step, 0));
+            bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+
+            final LlmRequest postReq = new LlmRequest("linter sys", "linter user", Collections.emptyList(), null, 0.0, 30);
+            final LlmResponse postRes = new LlmResponse("{}", new TokenUsage(120, 60, 180, 0), "mock-linter-model");
+            bus.dispatch(new LlmResponseReceivedEvent(postReq, postRes, 200L, "POST_FLIGHT_LINTER"));
+
+            bus.dispatch(new SessionFinishedEvent(1200, true));
+
+            assertEquals(1, listener.getReport().getMetrics().getPostFlightLinter().getCalls());
+            assertEquals(120, listener.getReport().getMetrics().getPostFlightLinter().getInputTokens());
+            assertEquals(60, listener.getReport().getMetrics().getPostFlightLinter().getOutputTokens());
+
+            final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+            final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
+
+            assertTrue(Files.exists(htmlPath), "HTML report must be generated");
+            assertTrue(Files.exists(mdPath), "Markdown report must be generated");
+
+            final String html = Files.readString(htmlPath);
+            assertTrue(html.contains("Empirical Playbook Findings (Post-Flight Telemetry)"), "HTML must contain post-flight findings section");
+            assertTrue(html.contains("EMPIRICAL_MULTI_ACTION"), "HTML must show category");
+            assertTrue(html.contains("Hover over the mini cart"), "HTML must show suggested rewrite");
+            assertTrue(html.contains("Playbook Post-Flight Linter"), "HTML metrics table must include post-flight linter row");
+            assertTrue(html.contains("Post-Flight Linter"), "HTML LLM log must show Post-Flight Linter badge");
+            assertTrue(html.contains("Post-Flight"), "HTML LLM log must show Post-Flight step reference");
+
+            final String md = Files.readString(mdPath);
+            assertTrue(md.contains("## 🔍 Empirical Playbook Findings (Post-Flight Telemetry)"), "Markdown must contain post-flight findings section");
+            assertTrue(md.contains("EMPIRICAL_MULTI_ACTION"), "Markdown must show category");
+            assertTrue(md.contains("Hover over the mini cart"), "Markdown must show suggested rewrite");
+            assertTrue(md.contains("├─ Linter (Post-Flight)"), "Markdown metrics table must include post-flight linter row");
+            assertTrue(md.contains("Post-Flight Linter"), "Markdown LLM log must show Post-Flight Linter badge");
+            assertTrue(md.contains("Post-Flight"), "Markdown LLM log must show Post-Flight step reference");
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
+
+    @Test
     @DisplayName("Verify that multi-stage continuation actions and step badges are reported in HTML, Markdown, and JSON")
     public void testMultiStageContinuationReporting() throws Exception
     {
@@ -1489,11 +1695,7 @@ public class PreliminaryReportListenerTest
             final PlaybookStep step = new PlaybookStep("Search for 'Neodymium'");
             bus.dispatch(new StepStartedEvent(step, 0));
 
-            // Dispatch LLM calls (PESAP, Prelude, Continuation with markdown fence)
-            final LlmRequest pesapReq = new LlmRequest("PESAP System", "Classify", Collections.emptyList(), null, 0.0, 30);
-            final LlmResponse pesapResp = new LlmResponse("{\"c\":\"LEAN\",\"jm\":false,\"i\":\"TYPE\"}", new TokenUsage(100, 10, 110, 0), "mock-model");
-            bus.dispatch(new LlmRequestSentEvent(pesapReq, "PESAP"));
-            bus.dispatch(new LlmResponseReceivedEvent(pesapReq, pesapResp, 120, "PESAP"));
+            // Dispatch LLM calls (Prelude, Continuation with markdown fence)
 
             final LlmRequest preludeReq = new LlmRequest("Action System", "Prelude round", Collections.emptyList(), null, 0.0, 30);
             final LlmResponse preludeResp = new LlmResponse("{\"reasoning\":\"The search input field is hidden initially. We must click the search toggle button first to reveal the search container and input field before typing 'Neodymium'.\",\"status\":\"CONTINUE\",\"actions\":[]}", new TokenUsage(200, 20, 220, 0), "mock-model");
@@ -1546,6 +1748,7 @@ public class PreliminaryReportListenerTest
             assertTrue(html.contains(".badge-phase.prelude"), "HTML must style prelude phase badge in CSS");
             assertTrue(html.contains(".badge-phase.continuation"), "HTML must style continuation phase badge in CSS");
             assertTrue(html.contains(".badge-phase.judge"), "HTML must style judge phase badge in CSS");
+            assertFalse(html.contains(".badge-phase.pesap"), "HTML must not contain pesap phase badge CSS");
             assertTrue(html.contains("PRELUDE"), "HTML must contain PRELUDE action in embedded dataset");
             assertTrue(html.contains("CONTINUATION"), "HTML must contain CONTINUATION action in embedded dataset");
             assertTrue(html.contains("tabNotesCount"), "HTML must contain tabNotesCount badge");
@@ -1604,124 +1807,174 @@ public class PreliminaryReportListenerTest
     }
 
     @Test
-    @DisplayName("Verify only highest context level per step is counted in statistics")
-    public void testHighestContextLevelOnlyInStatistics() throws Exception
+    @DisplayName("Verify that multi-turn LLM calls do not duplicate the system prompt in the userPrompt section")
+    public void testMultiTurnLlmCallDoesNotDuplicateSystemPromptInUserPrompt()
     {
-        final Path reportDir = this.tempFolder.resolve("ai-reports-highest-level");
-        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final Path reportDir = this.tempFolder.resolve("multi-turn-report");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Submit payment form");
+        bus.dispatch(new StepStartedEvent(step, 0));
+
+        final ChatMessage sysMsg = ChatMessage.system("YOU ARE A PLAYBOOK EXECUTION AGENT.");
+        final ChatMessage userMsg = ChatMessage.user("Perform step #1 now.");
+        final ChatMessage asstMsg = ChatMessage.assistant("Clicking submit button");
+        final ChatMessage toolMsg = ChatMessage.tool("call_1", "browser_click", "{\"status\":\"SUCCESS\"}");
+
+        final LlmRequest multiTurnReq = new LlmRequest(
+            List.of(sysMsg, userMsg, asstMsg, toolMsg),
+            Collections.emptyList(),
+            0.0,
+            30,
+            ReasoningEffort.LOW
+        );
+        final LlmResponse resp = new LlmResponse("Complete", new TokenUsage(100, 20, 120, 0), "gemini-flash");
+
+        bus.dispatch(new LlmRequestSentEvent(multiTurnReq, "ACTION"));
+        bus.dispatch(new LlmResponseReceivedEvent(multiTurnReq, resp, 150, "ACTION"));
+        bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report, "Report should be generated.");
+        assertFalse(report.getLlmCalls().isEmpty(), "LLM call should be captured.");
+
+        final TestExecutionReport.ReportLlmCallEntry callEntry = report.getLlmCalls().get(0);
+        assertEquals("YOU ARE A PLAYBOOK EXECUTION AGENT.", callEntry.getSystemPrompt(),
+            "System prompt should be captured in systemPrompt field.");
+        assertFalse(callEntry.getUserPrompt().contains("ChatMessage[SYSTEM]"),
+            "User prompt section must NOT contain ChatMessage[SYSTEM].");
+        assertFalse(callEntry.getUserPrompt().contains("YOU ARE A PLAYBOOK EXECUTION AGENT."),
+            "User prompt section must NOT contain duplicate system prompt.");
+        assertTrue(callEntry.getUserPrompt().contains("ChatMessage[USER]:\nPerform step #1 now."),
+            "User prompt section must contain user turn.");
+        assertTrue(callEntry.getUserPrompt().contains("ChatMessage[ASSISTANT]:\nClicking submit button"),
+            "User prompt section must contain assistant turn.");
+        assertTrue(callEntry.getUserPrompt().contains("ChatMessage[TOOL (tool=browser_click, id=call_1)]:\n{\"status\":\"SUCCESS\"}"),
+            "User prompt section must contain tool turn.");
+    }
+
+    @Test
+    @DisplayName("Verify Visual RCA explanation is stored once and not propagated as step error across previous or subsequent steps")
+    public void testVisualRcaSingleRenderingAndStepStatusResolution(@TempDir final Path reportDir) throws Exception
+    {
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        final PreliminaryReportListener listener = new PreliminaryReportListener(
+            reportDir,
+            EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON),
+            true
+        );
+        bus.registerListener(listener);
+
+        final PlaybookStep step0 = new PlaybookStep("Open homepage");
+        final PlaybookStep step1 = new PlaybookStep("Click product");
+        final PlaybookStep step2 = new PlaybookStep("Check cart total");
+
+        // Step 0 starts and finishes
+        bus.dispatch(new StepStartedEvent(step0, 0));
+        bus.dispatch(new StepFinishedEvent(step0, PlaybookStepStatus.SUCCESS));
+
+        // Step 1 starts (not explicitly finished with StepFinishedEvent, simulating live execution before next step starts)
+        bus.dispatch(new StepStartedEvent(step1, 1));
+
+        // Step 2 starts (StepStartedEvent auto-advances step 1 to SUCCESS)
+        bus.dispatch(new StepStartedEvent(step2, 2));
+
+        // Error occurs during Step 2 without StepFinishedEvent
+        final String visualRcaMessage = "Visual RCA analysis: The test failed because the expected dollar symbol ($) was not found.";
+        bus.dispatch(new DiagnosticErrorEvent(visualRcaMessage, new AssertionError("Element not found: cart total")));
+
+        // Session finishes
+        bus.dispatch(new SessionFinishedEvent(2000, false, List.of()));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertFalse(report.isSuccess());
+        assertEquals("The test failed because the expected dollar symbol ($) was not found.", report.getVisualRcaExplanation());
+        assertEquals("Element not found: cart total", report.getFailureReason());
+
+        final List<TestExecutionReport.ReportStepEntry> steps = report.getSteps();
+        assertEquals(3, steps.size());
+        assertEquals("SUCCESS", steps.get(0).getStatus());
+        assertEquals(null, steps.get(0).getFailureReason());
+
+        assertEquals("SUCCESS", steps.get(1).getStatus());
+        assertEquals(null, steps.get(1).getFailureReason());
+
+        assertEquals("FAILED", steps.get(2).getStatus());
+        assertEquals("Element not found: cart total", steps.get(2).getFailureReason());
+
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        assertTrue(Files.exists(htmlPath));
+        final String html = Files.readString(htmlPath);
+
+        // Visual RCA explanation should appear in the visual RCA section
+        assertTrue(html.contains("Visual Root Cause Analysis (RCA)"), "HTML must contain Visual RCA section");
+        assertTrue(html.contains("visual-rca-box"), "HTML must contain visual-rca-box");
+
+        // Check that visual RCA message does not appear as a step card error banner
+        assertFalse(html.contains("Visual RCA analysis: The test failed"), "Prefix should be stripped and not in step card error");
+
+        // Ensure the explanation text appears exactly once in the document
+        final String needle = "The test failed because the expected dollar symbol ($) was not found.";
+        final int firstPos = html.indexOf(needle);
+        final int lastPos = html.lastIndexOf(needle);
+        assertTrue(firstPos >= 0, "HTML must contain Visual RCA explanation text");
+        assertEquals(firstPos, lastPos, "Visual RCA explanation text must appear exactly ONCE in HTML report");
+    }
+
+    @Test
+    public void testVisualRcaTokensAreNotDoubleCountedAsStandardActionTokens(@TempDir final Path reportDir) throws Exception
+    {
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        final PreliminaryReportListener listener = new PreliminaryReportListener(
+            reportDir,
+            EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON),
+            true
+        );
+        bus.registerListener(listener);
 
         final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ctx.getTransientData().put(ExecutionContext.KEY_RCA_TOKEN_USAGE, new TokenUsage(517, 53, 570, 0));
+        ctx.getTransientData().put(ExecutionContext.KEY_RCA_CALL_COUNT, 1);
+        ctx.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_SUMMARY, "Flag was US instead of DE");
         ExecutionContext.setActiveContext(ctx);
 
         try
         {
-            final StepStats stats1 = new StepStats("Escalating Step", 1000);
-            stats1.addContextLevel("MINIMAL");
-            stats1.addContextLevel("LEAN");
-            stats1.addContextLevel("STANDARD");
+            final PlaybookStep step = new PlaybookStep("Check flag");
+            bus.dispatch(new StepStartedEvent(step, 0));
 
-            ctx.getTransientData().put("execution.stepStatsList", List.of(stats1));
+            // Only a single VISUAL_RCA LLM call is recorded
+            final LlmRequest rcaReq = new LlmRequest("Visual RCA", "Analyze screenshot", Collections.emptyList(), null, 0.0, 30);
+            final LlmResponse rcaResp = new LlmResponse("{\"explanation\":\"Flag was US instead of DE\"}", new TokenUsage(517, 53, 570, 0), "gemini-3.5-flash-lite");
+            bus.dispatch(new LlmRequestSentEvent(rcaReq, "VISUAL_RCA"));
+            bus.dispatch(new LlmResponseReceivedEvent(rcaReq, rcaResp, 300, "VISUAL_RCA"));
 
-            final ExecutionEventBus bus = new ExecutionEventBus();
-            bus.registerListener(listener);
-
-            listener.getReport().setTestClass("com.example.EscalationTest");
-            listener.getReport().setTestMethod("testHighestLevel");
-
-            final PlaybookStep pbStep = new PlaybookStep("Escalating Step");
-            bus.dispatch(new StepStartedEvent(pbStep, 0));
-            bus.dispatch(new StepFinishedEvent(pbStep, PlaybookStepStatus.SUCCESS));
-            bus.dispatch(new SessionFinishedEvent(1000, true));
-
-            final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
-            assertTrue(Files.exists(jsonPath));
-
-            final String json = Files.readString(jsonPath);
-            final JsonNode root = new ObjectMapper().readTree(json);
-            final JsonNode counts = root.get("metrics").get("contextLevelCounts");
-
-            assertNotNull(counts);
-            assertEquals(1, counts.get("STANDARD").asInt(), "STANDARD (highest level) must have count 1");
-            assertNull(counts.get("MINIMAL"));
-            assertNull(counts.get("LEAN"));
-        }
-        finally
-        {
-            ExecutionContext.setActiveContext(null);
-            System.clearProperty("neodymium.ai.report.disk.directory");
-            AiConfiguration.resetInstance();
-        }
-    }
-
-    @Test
-    @DisplayName("Verify that step re-execution resets existing step entry in-place instead of appending duplicate entry")
-    public void testStepReExecutionResetsExistingEntryInPlace()
-    {
-        final Path reportDir = this.tempFolder.resolve("ai-reports-reexecution");
-        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
-
-        final ExecutionEventBus bus = new ExecutionEventBus();
-        bus.registerListener(listener);
-
-        final PlaybookStep step0Initial = new PlaybookStep("Initial instruction");
-        bus.dispatch(new StepStartedEvent(step0Initial, 0));
-
-        final LlmRequest req1 = new LlmRequest("system prompt 1", "user prompt 1", Collections.emptyList(), null, 0.0, 30);
-        final LlmResponse resp1 = new LlmResponse("response text 1", new TokenUsage(10, 20, 30, 0), "mock-model");
-        bus.dispatch(new LlmRequestSentEvent(req1, "ACTION"));
-        bus.dispatch(new LlmResponseReceivedEvent(req1, resp1, 100, "ACTION"));
-
-        assertEquals(1, listener.getReport().getSteps().size(), "First execution should create 1 step entry");
-        assertEquals("Initial instruction", listener.getReport().getSteps().get(0).getInstruction());
-        assertEquals(1, listener.getReport().getSteps().get(0).getLlmCalls().size(), "Should have 1 LLM call from initial execution");
-
-        // Re-execute step 0 (e.g. after interactive edit) with updated instruction
-        final PlaybookStep step0Edited = new PlaybookStep("Updated instruction after edit");
-        bus.dispatch(new StepStartedEvent(step0Edited, 0));
-
-        final LlmRequest req2 = new LlmRequest("system prompt 2", "user prompt 2", Collections.emptyList(), null, 0.0, 30);
-        final LlmResponse resp2 = new LlmResponse("response text 2", new TokenUsage(15, 25, 40, 0), "mock-model");
-        bus.dispatch(new LlmRequestSentEvent(req2, "ACTION"));
-        bus.dispatch(new LlmResponseReceivedEvent(req2, resp2, 150, "ACTION"));
-
-        bus.dispatch(new StepFinishedEvent(step0Edited, PlaybookStepStatus.SUCCESS));
-
-        final List<TestExecutionReport.ReportStepEntry> steps = listener.getReport().getSteps();
-        assertEquals(1, steps.size(), "Re-execution must NOT create a duplicate step entry in report");
-
-        final TestExecutionReport.ReportStepEntry stepEntry = steps.get(0);
-        assertEquals(0, stepEntry.getStepIndex());
-        assertEquals("Updated instruction after edit", stepEntry.getInstruction());
-        assertEquals("SUCCESS", stepEntry.getStatus());
-        assertEquals(2, stepEntry.getLlmCalls().size(), "Should preserve both pre-edit and post-edit LLM calls");
-        assertEquals("user prompt 1", stepEntry.getLlmCalls().get(0).getUserPrompt());
-        assertEquals("user prompt 2", stepEntry.getLlmCalls().get(1).getUserPrompt());
-    }
-
-    @Test
-    @DisplayName("Verify that report status is FAILED when transient execution error is present even if SessionFinishedEvent carries success true")
-    public void testReportStatusFailedWhenExecutionErrorPresent()
-    {
-        final Path reportDir = this.tempFolder.resolve("ai-reports-early-error");
-        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.HTML), true);
-
-        final ExecutionContext context = new ExecutionContext(new SessionData());
-        final Throwable missingKeyError = new IllegalArgumentException("Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.");
-        context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, missingKeyError);
-        ExecutionContext.setActiveContext(context);
-
-        try
-        {
-            final ExecutionEventBus bus = new ExecutionEventBus();
-            bus.registerListener(listener);
-
-            bus.dispatch(new SessionFinishedEvent(100, true));
+            bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.FAILED));
+            bus.dispatch(new SessionFinishedEvent(1000, false, List.of()));
 
             final TestExecutionReport report = listener.getReport();
-            assertFalse(report.isSuccess(), "Report must be marked as failed when execution error is present");
-            assertEquals("FAILED", report.getStatus(), "Report status must be FAILED");
-            assertNotNull(report.getFailureReason(), "Failure reason must be set from the execution error");
-            assertTrue(report.getFailureReason().contains("Gemini API key is missing"), "Failure reason must contain missing API key details");
+            assertNotNull(report);
+            final TestExecutionReport.ReportMetrics metrics = report.getMetrics();
+            assertNotNull(metrics);
+
+            // Action usage must be 0 calls and 0 tokens!
+            assertNotNull(metrics.getAction());
+            assertEquals(0, metrics.getAction().getCalls(), "Action calls must be 0 when only VISUAL_RCA executed");
+            assertEquals(0, metrics.getAction().getInputTokens(), "Action input tokens must be 0");
+            assertEquals(0, metrics.getAction().getOutputTokens(), "Action output tokens must be 0");
+
+            // Visual RCA usage must be 1 call with 517 in and 53 out
+            assertNotNull(metrics.getVisualRca());
+            assertEquals(1, metrics.getVisualRca().getCalls(), "Visual RCA calls must be 1");
+            assertEquals(517, metrics.getVisualRca().getInputTokens());
+            assertEquals(53, metrics.getVisualRca().getOutputTokens());
+
+            // Total must be 1 call, 570 tokens (not 2 calls, 1140 tokens!)
+            assertEquals(1, metrics.getTotalLlmCalls(), "Total LLM calls must be exactly 1");
+            assertEquals(570, metrics.getTotalTokens(), "Total tokens must be exactly 570");
         }
         finally
         {
@@ -1730,144 +1983,166 @@ public class PreliminaryReportListenerTest
     }
 
     @Test
-    @DisplayName("Verify that report status is FAILED when StateMachineRunner fails due to missing API key error")
-    public void testReportStatusFailedWhenStateMachineRunnerFailsWithExecutionError()
+    @DisplayName("Verify PreliminaryReportListener populates test tags from execution context transient data")
+    public void testPopulateContextMetadataExtractsTestTags(@TempDir final Path tempDir)
     {
-        final Path reportDir = this.tempFolder.resolve("ai-reports-runner-error");
-        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.HTML), true);
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ctx.getTransientData().put("testClass", "org.neodymium.ai.integration.verla.search.judge.SearchJudgeTest");
+        ctx.getTransientData().put("testMethod", "liveAllDataSets");
+        ctx.getTransientData().put("testTags", List.of("integration", "verla", "mode:judge"));
+        ExecutionContext.setActiveContext(ctx);
+
+        try
+        {
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+            bus.registerListener(listener);
+
+            bus.dispatch(new SessionFinishedEvent(500, true, Collections.emptyList()));
+
+            final TestExecutionReport report = listener.getReport();
+            assertNotNull(report);
+            assertEquals("org.neodymium.ai.integration.verla.search.judge.SearchJudgeTest", report.getTestClass());
+            assertEquals("liveAllDataSets", report.getTestMethod());
+            assertEquals(List.of("integration", "verla", "mode:judge"), report.getTags());
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
+
+    @Test
+    @DisplayName("Verify HtmlIndexReportGenerator omits tag pills from table rows for compact layout while keeping them in search attribute")
+    public void testHtmlIndexReportGeneratorRendersTags(@TempDir final Path testDir) throws Exception
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("org.neodymium.ai.integration.verla.search.judge.SearchJudgeTest");
+        report.setTestMethod("liveAllDataSets");
+        report.setTestName("Search Test");
+        report.setStatus("PASSED");
+        report.setSuccess(true);
+        report.setStartTimeMs(System.currentTimeMillis());
+        report.addTag("integration");
+        report.addTag("mode:judge");
+
+        final HtmlIndexReportGenerator generator = new HtmlIndexReportGenerator();
+        generator.updateIndex(testDir, report, "SearchJudgeTest_liveAllDataSets_20260916-184607");
+
+        final Path indexPath = testDir.resolve("index.html");
+        assertTrue(Files.exists(indexPath), "index.html must be generated");
+        final String indexHtml = Files.readString(indexPath, StandardCharsets.UTF_8);
+        assertFalse(indexHtml.contains("tag-pill"),
+            "Index must not contain visible tag pills in table row for compact overview");
+        assertTrue(indexHtml.contains("data-search=\"") && indexHtml.contains("mode:judge"),
+            "Index table row data-search attribute must include tags for client filtering");
+        assertTrue(indexHtml.contains("<div class=\"test-meta-line\" title=\"org.neodymium.ai.integration.verla.search.judge.SearchJudgeTest#liveAllDataSets\">org.neodymium.ai.integration.verla.search.judge</div>"),
+            "Index table row subtitle must display package path instead of duplicate simple class/method");
+        assertFalse(indexHtml.contains(">SearchJudgeTest#liveAllDataSets<"),
+            "Index table row subtitle must not redundantly duplicate simple class name and method");
+    }
+
+    @Test
+    public void testSubStepActionsAndScreenshotsPopulatedInReport() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-substep-actions");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
 
         final ExecutionEventBus bus = new ExecutionEventBus();
         bus.registerListener(listener);
 
-        final SessionData sessionData = new SessionData();
-        final LlmRegistry registry = new LlmRegistry();
-        final MockTargetExecutor executor = new MockTargetExecutor();
-        final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY, sessionData, registry, bus, executor);
+        final PlaybookStep parent = new PlaybookStep("Locate product card:");
+        final PlaybookStep sub1 = new PlaybookStep("Hover over it");
+        final Action act1 = new Action("HOVER", "article[data-ai=\"xc1\"]", Collections.emptyList(), "Hover product", "Hover");
+        sub1.setActions(List.of(act1));
+        sub1.setParent(parent);
 
-        final ExecutionContext context = session.getExecutionContext();
-        final Throwable missingKeyError = new IllegalStateException("Gemini API key is missing. Please configure neodymium.ai.gemini.apiKey or set GEMINI_API_KEY.");
-        context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, missingKeyError);
+        final PlaybookStep sub2 = new PlaybookStep("Click it");
+        final Action act2 = new Action("CLICK", "button[data-ai=\"xc2\"]", Collections.emptyList(), "Click button", "Click");
+        sub2.setActions(List.of(act2));
+        sub2.setParent(parent);
 
-        final StateMachineRunner runner = new StateMachineRunner(session);
-        try
-        {
-            runner.run();
-        }
-        catch (final Throwable ignored)
-        {
-        }
+        parent.setSubSteps(List.of(sub1, sub2));
+
+        bus.dispatch(new StepStartedEvent(parent, 0));
+        bus.dispatch(new StepStartedEvent(sub1, 0));
+        bus.dispatch(new ActionExecutedEvent(act1, true));
+        bus.dispatch(new StepFinishedEvent(sub1, PlaybookStepStatus.SUCCESS));
+
+        bus.dispatch(new StepStartedEvent(sub2, 1));
+        bus.dispatch(new ActionExecutedEvent(act2, true));
+        bus.dispatch(new StepFinishedEvent(sub2, PlaybookStepStatus.SUCCESS));
+
+        bus.dispatch(new StepFinishedEvent(parent, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(1000, true));
 
         final TestExecutionReport report = listener.getReport();
-        assertFalse(report.isSuccess(), "Report must be marked as failed when StateMachineRunner fails");
-        assertEquals("FAILED", report.getStatus(), "Report status must be FAILED");
-        assertNotNull(report.getFailureReason(), "Failure reason must be set from the execution error");
-        assertTrue(report.getFailureReason().contains("Gemini API key is missing"), "Failure reason must state missing API key error");
+        assertNotNull(report);
+        assertEquals(1, report.getSteps().size());
+        final TestExecutionReport.ReportStepEntry parentEntry = report.getSteps().get(0);
+        assertEquals(2, parentEntry.getSubSteps().size());
+
+        final TestExecutionReport.ReportStepEntry subEntry1 = parentEntry.getSubSteps().get(0);
+        assertEquals(1, subEntry1.getActions().size());
+        assertEquals("HOVER", subEntry1.getActions().get(0).getType());
+
+        final TestExecutionReport.ReportStepEntry subEntry2 = parentEntry.getSubSteps().get(1);
+        assertEquals(1, subEntry2.getActions().size());
+        assertEquals("CLICK", subEntry2.getActions().get(0).getType());
     }
 
     @Test
-    @DisplayName("Verify that early pre-step failures (e.g. invalid browser settings) result in FAILED report status and index entry")
-    public void testReportStatusFailedForPreStepBrowserSetupFailure()
+    public void testAbortiveFailurePreservesSubStepStatusWithoutFabricatedSuccess() throws Exception
     {
-        final Path reportDir = this.tempFolder.resolve("ai-reports-browser-error");
-        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.HTML), true);
+        final Path reportDir = this.tempFolder.resolve("ai-reports-abortive-failure");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
 
-        final ExecutionContext context = new ExecutionContext(new SessionData());
-        final Throwable browserError = new IllegalArgumentException("Unknown browser tag: InvalidBrowserTag_12345");
-        context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, browserError);
-        context.getTransientData().put("browser", "InvalidBrowserTag_12345");
-        ExecutionContext.setActiveContext(context);
-
-        try
-        {
-            final ExecutionEventBus bus = new ExecutionEventBus();
-            bus.registerListener(listener);
-
-            // Session finishes early before step 1 due to browser setup failure
-            bus.dispatch(new SessionFinishedEvent(0, false));
-
-            final TestExecutionReport report = listener.getReport();
-            assertFalse(report.isSuccess(), "Report must be marked as failed when browser setup fails before step 1");
-            assertEquals("FAILED", report.getStatus(), "Report status must be FAILED");
-            assertNotNull(report.getFailureReason(), "Failure reason must be set from the browser setup exception");
-            assertTrue(report.getFailureReason().contains("Unknown browser tag"), "Failure reason must describe the browser error");
-
-            // Verify index.html generation reflects FAILED status
-            final HtmlIndexReportGenerator indexGen = new HtmlIndexReportGenerator();
-            final String indexHtml = indexGen.generateIndexHtml(List.of(HtmlIndexReportGenerator.IndexEntry.fromReport(report, "test_run")));
-            assertTrue(indexHtml.contains("FAILED"), "Index HTML must record status as FAILED");
-            assertTrue(indexHtml.contains("pill-fail"), "Index HTML must contain failing status pill");
-            assertFalse(indexHtml.contains("pill-pass\">"), "Index HTML must not render passing status pill for test row");
-        }
-        finally
-        {
-            ExecutionContext.setActiveContext(null);
-        }
-    }
-
-    @Test
-    @DisplayName("Verify sub-step parent ordering and recursive screenshot lookup")
-    public void testSubStepOrderingAndScreenshotAttachment()
-    {
-        final Path reportDir = this.tempFolder.resolve("substep-order-test");
-        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
         final ExecutionEventBus bus = new ExecutionEventBus();
         bus.registerListener(listener);
 
-        final PlaybookStep step0 = new PlaybookStep("Navigate to homepage");
-        final PlaybookStep step1 = new PlaybookStep("Accept cookies");
-        final PlaybookStep parentStep = new PlaybookStep("If condition then include fragment");
-        final PlaybookStep subStep1 = new PlaybookStep("Click button in fragment");
-        subStep1.setParent(parentStep);
+        final PlaybookStep parent = new PlaybookStep("Locate the promo code input field:");
+        parent.setFailureReason("Token budget exceeded: TOTAL budget breached (consumed: 100142, limit: 100000)");
 
-        final ExecutionContext context = new ExecutionContext(new SessionData());
-        context.getTransientData().put("playbook.steps", List.of(step0, step1, parentStep));
-        context.getTransientData().put("playbook.flatSteps", List.of(step0, step1, subStep1));
-        ExecutionContext.setActiveContext(context);
+        final PlaybookStep sub1 = new PlaybookStep("Clear content");
+        final Action act1 = new Action("CLEAR", "#promo", Collections.emptyList(), "Clear input", "Clear");
+        sub1.setActions(List.of(act1));
+        sub1.setParent(parent);
 
-        try
-        {
-            // Step 0 starts
-            bus.dispatch(new StepStartedEvent(step0, 0));
-            bus.dispatch(new StepFinishedEvent(step0, PlaybookStepStatus.SUCCESS));
+        final PlaybookStep sub2 = new PlaybookStep("Type FREEGIFT");
+        final Action act2 = new Action("FILL", "#promo", List.of("FREEGIFT"), "Type promo", "Type");
+        sub2.setActions(List.of(act2));
+        sub2.setParent(parent);
 
-            // Step 1 starts
-            bus.dispatch(new StepStartedEvent(step1, 1));
-            bus.dispatch(new StepFinishedEvent(step1, PlaybookStepStatus.SUCCESS));
+        final PlaybookStep sub3 = new PlaybookStep("Submit the promo code form");
+        final Action act3 = new Action("CLICK", "#apply-promo", Collections.emptyList(), "Click apply", "Click");
+        sub3.setActions(List.of(act3));
+        sub3.setParent(parent);
 
-            // SubStep1 (parent step index 2) starts
-            bus.dispatch(new StepStartedEvent(subStep1, 2));
+        final PlaybookStep sub4 = new PlaybookStep("Assert that a line item 'Free Bonus Gift' (bug) is added to the cart");
+        sub4.setBug(true);
+        sub4.setActions(Collections.emptyList());
+        sub4.setParent(parent);
 
-            final TestExecutionReport report = listener.getReport();
-            assertNotNull(report, "Report should not be null");
-            assertEquals(3, report.getSteps().size(), "Report should have 3 top-level steps (step0, step1, parentStep)");
+        parent.setSubSteps(List.of(sub1, sub2, sub3, sub4));
 
-            // Verify order of top-level steps
-            assertEquals("Navigate to homepage", report.getSteps().get(0).getInstruction());
-            assertEquals("Accept cookies", report.getSteps().get(1).getInstruction());
-            assertEquals("If condition then include fragment", report.getSteps().get(2).getInstruction());
-            assertEquals(2, report.getSteps().get(2).getStepIndex(), "Parent step should be at stepIndex 2");
+        bus.dispatch(new StepStartedEvent(parent, 0));
+        bus.dispatch(new StepFinishedEvent(parent, PlaybookStepStatus.FAILED));
+        bus.dispatch(new SessionFinishedEvent(5000, false));
 
-            // Verify sub-step is attached to parentStep at index 2
-            final TestExecutionReport.ReportStepEntry parentEntry = report.getSteps().get(2);
-            assertEquals(1, parentEntry.getSubSteps().size(), "Parent step entry should have 1 sub-step");
-            assertEquals("Click button in fragment", parentEntry.getSubSteps().get(0).getInstruction());
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getSteps().size());
+        final TestExecutionReport.ReportStepEntry parentEntry = report.getSteps().get(0);
+        assertEquals("FAILED", parentEntry.getStatus());
+        assertEquals(4, parentEntry.getSubSteps().size());
 
-            // Test recursive findStepEntryByInstruction lookup
-            final TestExecutionReport.ReportStepEntry foundSub = report.findStepEntryByInstruction("Click button in fragment");
-            assertNotNull(foundSub, "findStepEntryByInstruction should locate sub-step by instruction");
-            assertEquals("Click button in fragment", foundSub.getInstruction());
+        assertEquals("SUCCESS", parentEntry.getSubSteps().get(0).getStatus());
+        assertEquals("SUCCESS", parentEntry.getSubSteps().get(1).getStatus());
+        assertEquals("SUCCESS", parentEntry.getSubSteps().get(2).getStatus());
 
-            // Add screenshot to found sub-step
-            final TestExecutionReport.ReportScreenshotEntry screenshotEntry = new TestExecutionReport.ReportScreenshotEntry(
-                "Failure Screenshot", 2, "image/png", "base64data", System.currentTimeMillis());
-            foundSub.addScreenshot(screenshotEntry);
-
-            assertEquals(1, parentEntry.getSubSteps().get(0).getScreenshots().size(), "Sub-step should now contain the failure screenshot");
-        }
-        finally
-        {
-            ExecutionContext.setActiveContext(null);
-        }
+        final TestExecutionReport.ReportStepEntry subEntry4 = parentEntry.getSubSteps().get(3);
+        assertEquals("FAILED", subEntry4.getStatus());
+        assertNotNull(subEntry4.getFailureReason());
+        assertTrue(subEntry4.getFailureReason().contains("Token budget exceeded"));
     }
 }
-

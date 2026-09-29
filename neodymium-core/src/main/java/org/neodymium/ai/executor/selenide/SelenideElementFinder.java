@@ -28,6 +28,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
 import org.neodymium.ai.model.ContextLevel;
@@ -174,7 +176,9 @@ public final class SelenideElementFinder
                 }
 
                 // A. Automation ID resolution (data-ai / xc_...)
-                var aiMatch = clean.match(/(xc[a-zA-Z0-9_\\-]+)/);
+                clean = clean.replace(/#(xc[a-zA-Z0-9_\\-]+)/g, '[data-ai="$1"]');
+                var isSimple = clean.indexOf(' ') === -1 && clean.indexOf('>') === -1 && clean.indexOf('+') === -1 && clean.indexOf('~') === -1 && clean.indexOf(',') === -1;
+                var aiMatch = isSimple ? clean.match(/(xc[a-zA-Z0-9_\\-]+)/) : null;
                 if (aiMatch) {
                     var neoId = aiMatch[1];
                     for (var i = 0; i < allRoots.length; i++) {
@@ -387,7 +391,7 @@ public final class SelenideElementFinder
                         return visible;
                     }
                 }
-                catch (final Exception ignored)
+                catch (final AssertionError | Exception ignored)
                 {
                 }
             }
@@ -506,7 +510,7 @@ public final class SelenideElementFinder
                         return Selenide.$(matchedWebElement);
                     }
                 }
-                catch (final Exception ignored)
+                catch (final AssertionError | Exception ignored)
                 {
                 }
             }
@@ -546,6 +550,29 @@ public final class SelenideElementFinder
         return Selenide.$(resolveLocator(firstCandidate));
     }
 
+    /**
+     * Checks whether the given target locator is directly present and visible on the active page
+     * without blocking or waiting for timeouts.
+     *
+     * @param target the target locator (CSS, XPath, Playwright pseudo, etc.)
+     * @return true if the element is currently attached and visible in the DOM
+     */
+    public static boolean isDirectlyPresent(final String target)
+    {
+        if (target == null || target.isBlank() || !WebDriverRunner.hasWebDriverStarted())
+        {
+            return false;
+        }
+        try
+        {
+            return findDirect(target) != null;
+        }
+        catch (final AssertionError | Exception ignored)
+        {
+            return false;
+        }
+    }
+
     private static SelenideElement findDirect(final String rawCandidate)
     {
         if (rawCandidate == null || rawCandidate.isBlank())
@@ -553,28 +580,9 @@ public final class SelenideElementFinder
             return null;
         }
 
-        String clean = rawCandidate.trim();
-        boolean forceXpath = false;
-        boolean forceCss = false;
-        boolean forceText = false;
+        final String clean = rawCandidate.trim();
 
-        final String lower = clean.toLowerCase();
-        if (lower.startsWith("xpath="))
-        {
-            clean = clean.substring(6).trim();
-            forceXpath = true;
-        }
-        else if (lower.startsWith("css="))
-        {
-            clean = clean.substring(4).trim();
-            forceCss = true;
-        }
-        else if (lower.startsWith("text=") || lower.startsWith("has-text="))
-        {
-            forceText = true;
-        }
-
-        if (!forceXpath && !forceText && (clean.contains("data-ai=") || clean.startsWith("[data-ai=") || clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*")))
+        if (clean.contains("data-ai=") || clean.startsWith("[data-ai=") || clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*"))
         {
             final SelenideElement el = tryResolveAutomationId(clean);
             if (el != null)
@@ -583,48 +591,20 @@ public final class SelenideElementFinder
             }
         }
 
-        if (!forceXpath && !forceCss && (forceText || clean.contains(":") || clean.contains("=")))
+        try
         {
-            final SelenideElement el = tryResolvePlaywrightPseudo(clean);
-            if (el != null)
+            final ElementsCollection els = Selenide.$$(LocatorResolver.resolveLocator(clean));
+            final SelenideElement visible = findFirstVisible(els, clean);
+            if (visible != null)
             {
-                return el;
+                return visible;
             }
         }
-
-        if (!forceCss && !forceText && (forceXpath || clean.startsWith("/") || clean.startsWith("./") || clean.startsWith("(")))
+        catch (final AssertionError | Exception ignored)
         {
-            try
-            {
-                final ElementsCollection els = Selenide.$$x(clean);
-                final SelenideElement visible = findFirstVisible(els, clean);
-                if (visible != null)
-                {
-                    return visible;
-                }
-            }
-            catch (final Exception ignored)
-            {
-            }
         }
 
-        if (!forceXpath && !forceText)
-        {
-            try
-            {
-                final ElementsCollection els = Selenide.$$(LocatorResolver.resolveLocator(clean));
-                final SelenideElement visible = findFirstVisible(els, clean);
-                if (visible != null)
-                {
-                    return visible;
-                }
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-
-        if (!forceCss && !forceXpath)
+        if (!SelectorSyntaxChecker.isXpathExpression(clean))
         {
             try
             {
@@ -635,12 +615,12 @@ public final class SelenideElementFinder
                     return visible;
                 }
             }
-            catch (final Exception ignored)
+            catch (final AssertionError | Exception ignored)
             {
             }
         }
 
-        if (!forceCss && !forceXpath && !SelectorSyntaxChecker.isCssSelector(clean) && !SelectorSyntaxChecker.isXpathExpression(clean) && !clean.contains("<") && !clean.contains(">"))
+        if (!SelectorSyntaxChecker.isCssSelector(clean) && !SelectorSyntaxChecker.isXpathExpression(clean) && !clean.contains("<") && !clean.contains(">"))
         {
             try
             {
@@ -656,12 +636,12 @@ public final class SelenideElementFinder
                     return visible;
                 }
             }
-            catch (final Exception ignored)
+            catch (final AssertionError | Exception ignored)
             {
             }
         }
 
-        if (!forceXpath && clean.matches("^[a-zA-Z0-9_-]+$"))
+        if (clean.matches("^[a-zA-Z0-9_-]+$"))
         {
             try
             {
@@ -672,7 +652,7 @@ public final class SelenideElementFinder
                     return visible;
                 }
             }
-            catch (final Exception ignored)
+            catch (final AssertionError | Exception ignored)
             {
             }
         }
@@ -682,7 +662,7 @@ public final class SelenideElementFinder
 
     private static SelenideElement tryResolveAutomationId(final String clean)
     {
-        final java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("(xc[a-zA-Z0-9_\\-]+)").matcher(clean);
+        final Matcher matcher = Pattern.compile("(xc[a-zA-Z0-9_\\-]+)").matcher(clean);
         if (!matcher.find())
         {
             return null;
@@ -690,7 +670,7 @@ public final class SelenideElementFinder
         final String neoId = matcher.group(1);
         try
         {
-            final String transformedCss = clean.replaceAll("#" + java.util.regex.Pattern.quote(neoId), "[data-ai='" + neoId + "']");
+            final String transformedCss = clean.replaceAll("#(xc[a-zA-Z0-9_\\-]+)", "[data-ai='$1']");
             ElementsCollection els = Selenide.$$(By.cssSelector(transformedCss));
             SelenideElement visible = findFirstVisible(els, clean);
             if (visible != null)
@@ -698,182 +678,101 @@ public final class SelenideElementFinder
                 return visible;
             }
 
-            els = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
-            visible = findFirstVisible(els, clean);
-            if (visible != null)
-            {
-                return visible;
-            }
-
-            final WebDriver driver = WebDriverRunner.getWebDriver();
+            final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
             if (driver != null)
             {
                 try
                 {
-                    new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.LEAN);
+                    new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.STANDARD);
                     els = Selenide.$$(By.cssSelector(transformedCss));
                     visible = findFirstVisible(els, clean);
                     if (visible != null)
                     {
                         return visible;
                     }
-                    els = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
-                    visible = findFirstVisible(els, clean);
-                    if (visible != null)
-                    {
-                        return visible;
-                    }
                 }
-                catch (final Exception ignored)
+                catch (final AssertionError | Exception ignored)
                 {
                 }
             }
+
+            final boolean isSimple = !clean.contains(" ") && !clean.contains(">") && !clean.contains("+") && !clean.contains("~") && !clean.contains(",");
+            if (isSimple)
+            {
+                els = Selenide.$$(By.cssSelector("[data-ai='" + neoId + "']"));
+                visible = findFirstVisible(els, clean);
+                if (visible != null)
+                {
+                    return visible;
+                }
+            }
         }
-        catch (final Exception ignored)
+        catch (final AssertionError | Exception ignored)
         {
         }
-        return null;
-    }
-
-    private static SelenideElement tryResolvePlaywrightPseudo(final String clean)
-    {
-        final String lower = clean.toLowerCase();
-        if (lower.startsWith("text=") || lower.startsWith("text*=") || lower.startsWith("has-text=") || lower.startsWith("has-text*="))
-        {
-            final int eqIdx = clean.indexOf('=');
-            String text = clean.substring(eqIdx + 1).trim();
-            if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("'") && text.endsWith("'")))
-            {
-                if (text.length() >= 2)
-                {
-                    text = text.substring(1, text.length() - 1);
-                }
-            }
-            if (!text.isEmpty())
-            {
-                try
-                {
-                    final String escaped = LocatorResolver.escapeXpath(text);
-                    final String xpath = String.format(
-                        "//*[not(ancestor-or-self::*[@id='neo-ai-hud']) and (contains(normalize-space(text()), %s) or contains(normalize-space(.), %s) or contains(@value, %s) or contains(@aria-label, %s))]",
-                        escaped, escaped, escaped, escaped
-                    );
-                    final ElementsCollection els = Selenide.$$x(xpath);
-                    final SelenideElement visible = findFirstVisible(els, clean);
-                    if (visible != null)
-                    {
-                        return visible;
-                    }
-                }
-                catch (final Exception ignored)
-                {
-                }
-            }
-        }
-
-        final java.util.regex.Matcher pwMatcher = java.util.regex.Pattern.compile("^(.*?):(has-text|has-text\\*|text|text\\*|contains)\\(['\"]?(.*?)['\"]?\\)$", java.util.regex.Pattern.CASE_INSENSITIVE).matcher(clean);
-        if (pwMatcher.find())
-        {
-            String tag = pwMatcher.group(1).trim();
-            if (tag.isEmpty())
-            {
-                tag = "*";
-            }
-            final String text = pwMatcher.group(3).trim();
-            if (!text.isEmpty())
-            {
-                try
-                {
-                    final String xpath = String.format("//%s[contains(normalize-space(.), %s)]", tag, LocatorResolver.escapeXpath(text));
-                    final ElementsCollection els = Selenide.$$x(xpath);
-                    final SelenideElement visible = findFirstVisible(els, clean);
-                    if (visible != null)
-                    {
-                        return visible;
-                    }
-                }
-                catch (final Exception ignored)
-                {
-                }
-            }
-        }
-
         return null;
     }
 
     public static SelenideElement findFirstVisible(final ElementsCollection els, final String originalTarget)
     {
-        if (els == null || els.isEmpty())
+        if (els == null)
         {
             return null;
         }
 
-        final List<SelenideElement> visibleEls = new ArrayList<>();
-        for (final SelenideElement el : els)
+        try
         {
-            try
+            final ElementsCollection visibleEls = els.filter(Condition.visible);
+            if (visibleEls.isEmpty())
             {
-                if (el.isDisplayed())
+                return null;
+            }
+
+            final String cleanTarget = originalTarget != null ? originalTarget.trim() : "";
+            final boolean targetIsRoot = "body".equalsIgnoreCase(cleanTarget) || "html".equalsIgnoreCase(cleanTarget);
+            final ElementsCollection candidates = targetIsRoot
+                    ? visibleEls
+                    : visibleEls.filter(Condition.not(Condition.match("root container", el -> {
+                        final String tag = el.getTagName();
+                        return "html".equalsIgnoreCase(tag) || "body".equalsIgnoreCase(tag) || "head".equalsIgnoreCase(tag);
+                    })));
+
+            if (candidates.isEmpty())
+            {
+                return null;
+            }
+
+            if (candidates.size() == 1)
+            {
+                final SelenideElement single = candidates.first();
+                return single.is(Condition.visible) ? single : null;
+            }
+
+            if (!cleanTarget.isBlank())
+            {
+                final SelenideElement matched = candidates.find(Condition.or("target match",
+                    Condition.exactText(cleanTarget),
+                    Condition.value(cleanTarget),
+                    Condition.attribute("aria-label", cleanTarget)));
+                if (matched.is(Condition.visible))
                 {
-                    visibleEls.add(el);
+                    return matched;
                 }
             }
-            catch (final Exception ignored)
-            {
-            }
-        }
 
-        if (visibleEls.isEmpty())
+            final SelenideElement focused = candidates.find(Condition.focused);
+            if (focused.is(Condition.visible))
+            {
+                return focused;
+            }
+
+            final SelenideElement first = candidates.first();
+            return first.is(Condition.visible) ? first : null;
+        }
+        catch (final AssertionError | Exception ignored)
         {
             return null;
         }
-
-        if (visibleEls.size() == 1)
-        {
-            return visibleEls.get(0);
-        }
-
-        final String cleanTarget = originalTarget != null ? originalTarget.trim().toLowerCase() : "";
-        for (final SelenideElement el : visibleEls)
-        {
-            try
-            {
-                final String text = el.getText();
-                if (text != null && text.trim().equalsIgnoreCase(cleanTarget))
-                {
-                    return el;
-                }
-                final String val = el.getValue();
-                if (val != null && val.trim().equalsIgnoreCase(cleanTarget))
-                {
-                    return el;
-                }
-                final String aria = el.getAttribute("aria-label");
-                if (aria != null && aria.trim().equalsIgnoreCase(cleanTarget))
-                {
-                    return el;
-                }
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-
-        for (final SelenideElement el : visibleEls)
-        {
-            try
-            {
-                if (el.is(Condition.focused))
-                {
-                    return el;
-                }
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-
-        return visibleEls.get(0);
     }
 
     private static SelenideElement findInShadowRoots(final String rawCandidate)
@@ -892,7 +791,7 @@ public final class SelenideElementFinder
                 return Selenide.$(webElement);
             }
         }
-        catch (final Exception e)
+        catch (final AssertionError | Exception e)
         {
             LOG.trace("Shadow DOM element lookup failed for '{}': {}", rawCandidate, e.getMessage());
         }
@@ -923,7 +822,7 @@ public final class SelenideElementFinder
                 return Selenide.$$(elements);
             }
         }
-        catch (final Exception e)
+        catch (final AssertionError | Exception e)
         {
             LOG.trace("Shadow DOM elements lookup failed for '{}': {}", rawCandidate, e.getMessage());
         }
@@ -933,5 +832,46 @@ public final class SelenideElementFinder
     public static By resolveLocator(final String target)
     {
         return LocatorResolver.resolveLocator(target);
+    }
+
+    /**
+     * Scrolls the given element into view using centered block alignment if any part of the element
+     * lies outside the current browser viewport boundaries.
+     * <p>
+     * Uses centered alignment ({@code block: 'center', inline: 'nearest'}) to prevent sticky headers
+     * or footers from occluding the target element.
+     * </p>
+     *
+     * @param element the Selenide element to inspect and scroll if needed
+     */
+    public static void scrollIntoViewIfNeeded(final SelenideElement element)
+    {
+        if (element == null)
+        {
+            return;
+        }
+        try
+        {
+            Selenide.executeJavaScript(
+                "(function(el) {" +
+                "  if (!el || typeof el.getBoundingClientRect !== 'function') return;" +
+                "  var target = el;" +
+                "  var rect = target.getBoundingClientRect();" +
+                "  if (rect.width === 0 && rect.height === 0 && target.parentElement) {" +
+                "    target = target.parentElement;" +
+                "    rect = target.getBoundingClientRect();" +
+                "  }" +
+                "  var vh = window.innerHeight || document.documentElement.clientHeight;" +
+                "  var vw = window.innerWidth || document.documentElement.clientWidth;" +
+                "  var outOfView = rect.top < 0 || rect.bottom > vh || rect.left < 0 || rect.right > vw;" +
+                "  if (outOfView) {" +
+                "    target.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });" +
+                "  }" +
+                "})(arguments[0]);",
+                element);
+        }
+        catch (final Throwable ignored)
+        {
+        }
     }
 }

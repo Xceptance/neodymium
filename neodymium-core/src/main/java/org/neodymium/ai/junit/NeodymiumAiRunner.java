@@ -30,8 +30,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.extension.AfterAllCallback;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeAllCallback;
@@ -60,7 +63,6 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.playbook.PlaybookParser;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
-import org.neodymium.ai.prompt.ActionExtractionPrompt;
 import org.neodymium.ai.resources.ClasspathResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.runner.StateMachineRunner;
@@ -319,6 +321,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         // 2c. Resolve Linter variations
         final List<Boolean> linterVariants = new ArrayList<>();
         final AiLinter methodLinter = method.getAnnotation(AiLinter.class);
+        final AiLinter classLinter = testClass.getAnnotation(AiLinter.class);
         if (methodLinter != null)
         {
             for (final boolean l : methodLinter.value())
@@ -326,20 +329,107 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 linterVariants.add(l);
             }
         }
-        else
+        else if (classLinter != null)
         {
-            final AiLinter classLinter = testClass.getAnnotation(AiLinter.class);
-            if (classLinter != null)
+            for (final boolean l : classLinter.value())
             {
-                for (final boolean l : classLinter.value())
-                {
-                    linterVariants.add(l);
-                }
+                linterVariants.add(l);
             }
         }
         if (linterVariants.isEmpty())
         {
             linterVariants.add(null);
+        }
+
+        final Boolean linterFailOnFindings;
+        if (methodLinter != null && methodLinter.failOnFindings())
+        {
+            linterFailOnFindings = true;
+        }
+        else if (classLinter != null && classLinter.failOnFindings())
+        {
+            linterFailOnFindings = true;
+        }
+        else
+        {
+            linterFailOnFindings = false;
+        }
+
+        final Boolean linterPostFlight;
+        if (methodLinter != null && methodLinter.postFlight())
+        {
+            linterPostFlight = true;
+        }
+        else if (classLinter != null && classLinter.postFlight())
+        {
+            linterPostFlight = true;
+        }
+        else
+        {
+            linterPostFlight = null;
+        }
+
+        // 2d. Resolve Outcome Verification variations
+        final List<Boolean> outcomeVariants = new ArrayList<>();
+        final AiOutcomeVerification methodOutcome = method.getAnnotation(AiOutcomeVerification.class);
+        final AiOutcomeVerification classOutcome = testClass.getAnnotation(AiOutcomeVerification.class);
+        if (methodOutcome != null)
+        {
+            if (methodOutcome.value().length > 0)
+            {
+                for (final boolean o : methodOutcome.value())
+                {
+                    outcomeVariants.add(o);
+                }
+            }
+            else
+            {
+                // Bare @AiOutcomeVerification on method enables outcome verification
+                outcomeVariants.add(true);
+            }
+        }
+        else if (classOutcome != null && classOutcome.value().length > 0)
+        {
+            for (final boolean o : classOutcome.value())
+            {
+                outcomeVariants.add(o);
+            }
+        }
+        if (outcomeVariants.isEmpty())
+        {
+            outcomeVariants.add(null);
+        }
+
+        // Resolve failOnError: method level overrides class level, fallback to config
+        final Boolean outcomeFailOnError;
+        if (methodOutcome != null && (methodOutcome.failOnError() || methodOutcome.onError()))
+        {
+            outcomeFailOnError = true;
+        }
+        else if (classOutcome != null && (classOutcome.failOnError() || classOutcome.onError()))
+        {
+            outcomeFailOnError = true;
+        }
+        else
+        {
+            outcomeFailOnError = false;
+        }
+
+        // 2e. Resolve Visual Assertion Threshold override
+        final Double visualThreshold;
+        final AiVisual methodVisual = method.getAnnotation(AiVisual.class);
+        final AiVisual classVisual = testClass.getAnnotation(AiVisual.class);
+        if (methodVisual != null)
+        {
+            visualThreshold = methodVisual.threshold() != 0.99 ? methodVisual.threshold() : methodVisual.value();
+        }
+        else if (classVisual != null)
+        {
+            visualThreshold = classVisual.threshold() != 0.99 ? classVisual.threshold() : classVisual.value();
+        }
+        else
+        {
+            visualThreshold = null;
         }
 
         // 3. Resolve dataset filters
@@ -480,27 +570,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
             catch (final Exception e)
             {
-                final RuntimeException parseError = new RuntimeException("Failed to parse playbook: " + playbookPath, e);
-                final BrowserMethodData defaultBrowser = browsers.isEmpty() ? null : browsers.get(0);
-                final ExecutionMode defaultMode = modes.isEmpty() ? ExecutionMode.LLM_RECORDING : modes.get(0);
-                invocationContexts.add(new TestTemplateInvocationContext()
-                {
-                    @Override
-                    public String getDisplayName(final int invocationIndex)
-                    {
-                        final String name = (playbookPath != null && playbookPath.contains("/")) ? playbookPath.substring(playbookPath.lastIndexOf('/') + 1) : playbookPath;
-                        return String.format("[%d] playbook=%s [FAILED SETUP]", invocationIndex, name);
-                    }
-
-                    @Override
-                    public List<Extension> getAdditionalExtensions()
-                    {
-                        final List<Extension> extensions = new ArrayList<>();
-                        extensions.add(new AiInvocationExtension(playbookPath, Collections.emptyMap(), defaultMode, null, defaultBrowser, null, null, parseError));
-                        return extensions;
-                    }
-                });
-                continue;
+                throw new RuntimeException("Failed to parse playbook: " + playbookPath, e);
             }
 
             final List<Map<String, SessionData.DataEntry>> allDataSets = playbook.getDataSets();
@@ -508,14 +578,65 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             if (allDataSets.isEmpty())
             {
+                if (!datasetFilters.isEmpty())
+                {
+                    final List<String> filterValues = new ArrayList<>();
+                    for (final AiDataSet ads : datasetFilters)
+                    {
+                        Collections.addAll(filterValues, ads.value());
+                        Collections.addAll(filterValues, ads.include());
+                        if (ads.exclude().length > 0)
+                        {
+                            filterValues.add("exclude=" + Arrays.toString(ads.exclude()));
+                        }
+                    }
+                    throw new IllegalArgumentException(String.format(
+                            "No datasets defined in playbook '%s', but @AiDataSet filter %s was specified.",
+                            playbookPath, filterValues));
+                }
                 // Run once with empty dataset
                 filteredDataSets.add(Collections.emptyMap());
             }
             else
             {
-                final String globalTestIdFilter = com.xceptance.neodymium.util.Neodymium.configuration().getTestIdFilter();
-                final java.util.regex.Pattern globalTestIdPattern = org.apache.commons.lang3.StringUtils.isNotBlank(globalTestIdFilter)
-                        ? java.util.regex.Pattern.compile(globalTestIdFilter)
+                if (!datasetFilters.isEmpty())
+                {
+                    boolean anyMatched = false;
+                    int checkIndex = 1;
+                    final List<String> availableIds = new ArrayList<>();
+                    for (final Map<String, SessionData.DataEntry> ds : allDataSets)
+                    {
+                        final String dsId = getDataSetId(ds);
+                        final String indexStr = String.valueOf(checkIndex);
+                        availableIds.add(dsId != null ? dsId : indexStr);
+                        if (shouldIncludeDataSet(dsId, datasetFilters) || shouldIncludeDataSet(indexStr, datasetFilters))
+                        {
+                            anyMatched = true;
+                        }
+                        checkIndex++;
+                    }
+
+                    if (!anyMatched)
+                    {
+                        final List<String> filterValues = new ArrayList<>();
+                        for (final AiDataSet ads : datasetFilters)
+                        {
+                            Collections.addAll(filterValues, ads.value());
+                            Collections.addAll(filterValues, ads.include());
+                            if (ads.exclude().length > 0)
+                            {
+                                filterValues.add("exclude=" + Arrays.toString(ads.exclude()));
+                            }
+                        }
+                        throw new IllegalArgumentException(String.format(
+                                "No datasets in playbook '%s' matched @AiDataSet filter %s. Available dataset IDs: %s",
+                                playbookPath, filterValues, availableIds));
+                    }
+                }
+
+                final String globalTestIdFilter = Neodymium.configuration().getTestIdFilter();
+                final Pattern globalTestIdPattern = StringUtils.isNotBlank(globalTestIdFilter)
+                        ? Pattern.compile(globalTestIdFilter)
                         : null;
 
                 int dsIndex = 1;
@@ -547,34 +668,38 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     {
                         for (final Boolean linterEnabled : linterVariants)
                         {
-                            for (final Map<String, SessionData.DataEntry> dataset : filteredDataSets)
+                            for (final Boolean outcomeEnabled : outcomeVariants)
                             {
-                                final String dsId = getDataSetId(dataset);
-                                invocationContexts.add(new TestTemplateInvocationContext()
+                                for (final Map<String, SessionData.DataEntry> dataset : filteredDataSets)
                                 {
-                                    @Override
-                                    public String getDisplayName(final int invocationIndex)
+                                    final String dsId = getDataSetId(dataset);
+                                    invocationContexts.add(new TestTemplateInvocationContext()
                                     {
-                                        final String name = playbookPath.substring(playbookPath.lastIndexOf('/') + 1);
-                                        final String datasetLabel = dsId != null ? dsId : "default";
-                                        final String browserLabel = browser != null ? " :: Browser " + browser.getBrowserTag() : "";
-                                        final String judgeLabel = judgeEnabled != null ? (judgeEnabled ? " [Judge: ON]" : " [Judge: OFF]") : "";
-                                        final String linterLabel = linterEnabled != null ? (linterEnabled ? " [Linter: ON]" : " [Linter: OFF]") : "";
-                                        return String.format("[%d] playbook=%s, dataset=%s, mode=%s%s%s%s", invocationIndex, name, datasetLabel, mode, judgeLabel, linterLabel, browserLabel);
-                                    }
-
-                                    @Override
-                                    public List<Extension> getAdditionalExtensions()
-                                    {
-                                        final List<Extension> extensions = new ArrayList<>();
-                                        extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled));
-                                        if (browser != null)
+                                        @Override
+                                        public String getDisplayName(final int invocationIndex)
                                         {
-                                            extensions.add(new BrowserExecutionCallback(browser, method.getName()));
+                                            final String name = playbookPath.substring(playbookPath.lastIndexOf('/') + 1);
+                                            final String datasetLabel = dsId != null ? dsId : "default";
+                                            final String browserLabel = browser != null ? " :: Browser " + browser.getBrowserTag() : "";
+                                            final String judgeLabel = judgeEnabled != null ? (judgeEnabled ? " [Judge: ON]" : " [Judge: OFF]") : "";
+                                            final String linterLabel = linterEnabled != null ? (linterEnabled ? " [Linter: ON]" : " [Linter: OFF]") : "";
+                                            final String outcomeLabel = outcomeEnabled != null ? (outcomeEnabled ? " [Outcome: ON]" : " [Outcome: OFF]") : "";
+                                            return String.format("[%d] playbook=%s, dataset=%s, mode=%s%s%s%s%s", invocationIndex, name, datasetLabel, mode, judgeLabel, linterLabel, outcomeLabel, browserLabel);
                                         }
-                                        return extensions;
-                                    }
-                                });
+
+                                        @Override
+                                        public List<Extension> getAdditionalExtensions()
+                                        {
+                                            final List<Extension> extensions = new ArrayList<>();
+                                            if (browser != null)
+                                            {
+                                                extensions.add(new BrowserExecutionCallback(browser, method.getName()));
+                                            }
+                                            extensions.add(new AiInvocationExtension(playbookPath, dataset, mode, dsId, browser, judgeEnabled, linterEnabled, linterFailOnFindings, linterPostFlight, outcomeEnabled, outcomeFailOnError, visualThreshold));
+                                            return extensions;
+                                        }
+                                    });
+                                }
                             }
                         }
                     }
@@ -671,7 +796,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         private final BrowserMethodData browser;
         private final Boolean judgeEnabled;
         private final Boolean linterEnabled;
-        private final Throwable earlyError;
+        private final Boolean linterFailOnFindings;
+        private final Boolean linterPostFlight;
+        private final Boolean outcomeEnabled;
+        private final Boolean outcomeFailOnError;
+        private final Double visualThreshold;
         private AiSession session;
         private String recordingPath;
         private PlaybookResourceManager resourceManager;
@@ -684,21 +813,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final String datasetId,
             final BrowserMethodData browser,
             final Boolean judgeEnabled,
-            final Boolean linterEnabled
-        )
-        {
-            this(playbookPath, dataset, mode, datasetId, browser, judgeEnabled, linterEnabled, null);
-        }
-
-        public AiInvocationExtension(
-            final String playbookPath,
-            final Map<String, SessionData.DataEntry> dataset,
-            final ExecutionMode mode,
-            final String datasetId,
-            final BrowserMethodData browser,
-            final Boolean judgeEnabled,
             final Boolean linterEnabled,
-            final Throwable earlyError
+            final Boolean linterFailOnFindings,
+            final Boolean linterPostFlight,
+            final Boolean outcomeEnabled,
+            final Boolean outcomeFailOnError,
+            final Double visualThreshold
         )
         {
             this.playbookPath = playbookPath;
@@ -708,29 +828,16 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.browser = browser;
             this.judgeEnabled = judgeEnabled;
             this.linterEnabled = linterEnabled;
-            this.earlyError = earlyError;
+            this.linterFailOnFindings = linterFailOnFindings;
+            this.linterPostFlight = linterPostFlight;
+            this.outcomeEnabled = outcomeEnabled;
+            this.outcomeFailOnError = outcomeFailOnError;
+            this.visualThreshold = visualThreshold;
         }
 
         @Override
         public void beforeEach(final ExtensionContext context) throws Exception
         {
-            if (this.earlyError != null)
-            {
-                handleEarlyFailure(context, this.earlyError);
-                if (this.earlyError instanceof Exception e)
-                {
-                    throw e;
-                }
-                else if (this.earlyError instanceof Error err)
-                {
-                    throw err;
-                }
-                else
-                {
-                    throw new RuntimeException(this.earlyError);
-                }
-            }
-
             try
             {
                 executeBeforeEach(context);
@@ -777,7 +884,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 if (fqcn.contains(".integration.mock.") || fqcn.contains(".sandbox.mock."))
                 {
                     Neodymium.getData().put("neodymium.ai.global.provider", "mock");
-                    Neodymium.getData().put("neodymium.ai.pesap.enabled", "false");
                 }
             }
 
@@ -804,12 +910,41 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 com.xceptance.neodymium.util.Neodymium.getData().put("neodymium.ai.linter.enabled", String.valueOf(this.linterEnabled));
             }
 
+            if (this.linterFailOnFindings != null)
+            {
+                Neodymium.getData().put("neodymium.ai.linter.failOnFindings", String.valueOf(this.linterFailOnFindings));
+            }
+
+            if (this.linterPostFlight != null)
+            {
+                Neodymium.getData().put("neodymium.ai.linter.postFlight.enabled", String.valueOf(this.linterPostFlight));
+            }
+
+            if (this.outcomeEnabled != null)
+            {
+                Neodymium.getData().put("neodymium.ai.semanticVerification.enabled", String.valueOf(this.outcomeEnabled));
+            }
+
+            if (this.outcomeFailOnError != null)
+            {
+                Neodymium.getData().put("neodymium.ai.semanticVerification.failOnError", String.valueOf(this.outcomeFailOnError));
+            }
+
+            if (this.visualThreshold != null)
+            {
+                Neodymium.getData().put("neodymium.ai.ssim.minScore", String.valueOf(this.visualThreshold));
+                com.xceptance.neodymium.util.Neodymium.getData().put("neodymium.ai.ssim.minScore", String.valueOf(this.visualThreshold));
+            }
+
             final SessionData sessionData = new SessionData(this.dataset != null ? new HashMap<>(this.dataset) : new HashMap<>());
             
-            final ExecutionEventBus eventBus = new ExecutionEventBus();
-            final SelenideTargetExecutor executor = new SelenideTargetExecutor();
             final LlmRegistry registry = new LlmRegistry();
             final AiConfiguration config = AiConfiguration.getInstance();
+            LlmRegistry.bootstrap(registry, config);
+            LlmCacheHelper.wrapRegistryIfActive(registry);
+
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final SelenideTargetExecutor executor = new SelenideTargetExecutor();
 
             this.session = AiSession.mock(this.mode, sessionData, registry, eventBus, executor);
             if (this.judgeEnabled != null)
@@ -820,7 +955,39 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 this.session.data().putDynamic("neodymium.ai.linter.enabled", String.valueOf(this.linterEnabled), false);
             }
+            if (this.linterFailOnFindings != null)
+            {
+                this.session.data().putDynamic("neodymium.ai.linter.failOnFindings", String.valueOf(this.linterFailOnFindings), false);
+            }
+            if (this.linterPostFlight != null)
+            {
+                this.session.data().putDynamic("neodymium.ai.linter.postFlight.enabled", String.valueOf(this.linterPostFlight), false);
+            }
+            if (this.outcomeEnabled != null)
+            {
+                this.session.data().putDynamic("neodymium.ai.semanticVerification.enabled", String.valueOf(this.outcomeEnabled), false);
+            }
+            if (this.outcomeFailOnError != null)
+            {
+                this.session.data().putDynamic("neodymium.ai.semanticVerification.failOnError", String.valueOf(this.outcomeFailOnError), false);
+            }
+            if (this.visualThreshold != null)
+            {
+                this.session.data().putDynamic("neodymium.ai.ssim.minScore", String.valueOf(this.visualThreshold), false);
+            }
             final ExecutionContext executionContext = this.session.getExecutionContext();
+            if (this.linterFailOnFindings != null)
+            {
+                executionContext.getTransientData().put("neodymium.ai.linter.failOnFindings", this.linterFailOnFindings);
+            }
+            if (this.linterPostFlight != null)
+            {
+                executionContext.getTransientData().put("neodymium.ai.linter.postFlight.enabled", this.linterPostFlight);
+            }
+            if (this.outcomeFailOnError != null)
+            {
+                executionContext.getTransientData().put("neodymium.ai.semanticVerification.failOnError", this.outcomeFailOnError);
+            }
             executor.setExecutionContext(executionContext);
 
             final boolean isInteractive = config.isInteractive();
@@ -829,7 +996,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             if (isInteractive || isManagerActive || isConsoleExecutionLogsEnabled)
             {
-                final String runId = config.getProperty("neodymium.managerRunId", InteractiveConsoleEngine.getRunFolder());
+                final String runId = config.getProperty("neodymium.managerRunId", "run_" + System.currentTimeMillis());
                 final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine(runId);
 
                 if (isInteractive && !isManagerActive)
@@ -849,9 +1016,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 final InteractiveConsoleListener interactiveListener = new InteractiveConsoleListener(consoleEngine, this.session, isInteractive);
                 eventBus.registerListener(interactiveListener);
             }
-
-            LlmRegistry.bootstrap(registry, config);
-            LlmCacheHelper.wrapRegistryIfActive(registry);
             
             final PlaybookParser parser = new YamlPlaybookParser();
             final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
@@ -868,6 +1032,13 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (method != null)
             {
                 executionContext.getTransientData().put("testMethod", method.getName());
+            }
+            final Set<String> tags = context.getTags();
+            if (tags != null && !tags.isEmpty())
+            {
+                final List<String> sortedTags = new ArrayList<>(tags);
+                Collections.sort(sortedTags);
+                executionContext.getTransientData().put("testTags", sortedTags);
             }
             if (playbookPath != null)
             {
@@ -1008,7 +1179,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     final String msg = String.format(
                         "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s\n"
-                        + "Please run the test in recording mode ('LLM_RECORDING' or 'FORCE_RECORDING') first to generate the recording.",
+                        + "Please run the live recording test first to generate the recording.",
                         this.mode,
                         testClass != null ? testClass.getSimpleName() : "UnknownClass",
                         method != null ? method.getName() : "unknownMethod",
@@ -1191,7 +1362,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
 
             executionContext.getTransientData().put("playbook.resolvedPath", resolvedPlaybookPath);
-            executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new ActionExtractionPrompt());
             executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_MODEL, Neodymium.aiConfiguration().aiModel());
             executionContext.getTransientData().put(ExecutionContext.KEY_RESOURCE_MANAGER, manager);
             executionContext.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_PARSER, parser);
@@ -1452,6 +1622,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     InMemoryLlmCache.clear();
                 }
+
+                if (this.visualThreshold != null)
+                {
+                    Neodymium.getData().remove("neodymium.ai.ssim.minScore");
+                    com.xceptance.neodymium.util.Neodymium.getData().remove("neodymium.ai.ssim.minScore");
+                }
             }
         }
 
@@ -1493,6 +1669,13 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     execCtx.getTransientData().put("testMethod", method.getName());
                 }
+                final Set<String> tags = context.getTags();
+                if (tags != null && !tags.isEmpty())
+                {
+                    final List<String> sortedTags = new ArrayList<>(tags);
+                    Collections.sort(sortedTags);
+                    execCtx.getTransientData().put("testTags", sortedTags);
+                }
                 if (this.playbookPath != null)
                 {
                     execCtx.getTransientData().put("playbookFile", this.playbookPath);
@@ -1501,31 +1684,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     execCtx.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId);
                 }
-                if (this.browser != null && this.browser.getBrowserTag() != null)
-                {
-                    execCtx.getTransientData().put("browser", this.browser.getBrowserTag());
-                }
                 execCtx.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, this.mode);
                 execCtx.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, t);
-
-                final AiConfiguration config = AiConfiguration.getInstance();
-                final boolean isInteractive = config.isInteractive();
-                final boolean isManagerActive = config.isManagerActive();
-                final boolean isConsoleExecutionLogsEnabled = config.isConsoleExecutionLogsEnabled();
-
-                if (isInteractive || isManagerActive || isConsoleExecutionLogsEnabled)
-                {
-                    final boolean hasInteractiveListener = this.session.getEventBus().getListeners().stream()
-                        .anyMatch(l -> l instanceof InteractiveConsoleListener);
-
-                    if (!hasInteractiveListener)
-                    {
-                        final String runId = config.getProperty("neodymium.managerRunId", InteractiveConsoleEngine.getRunFolder());
-                        final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine(runId);
-                        final InteractiveConsoleListener interactiveListener = new InteractiveConsoleListener(consoleEngine, this.session, isInteractive);
-                        this.session.getEventBus().registerListener(interactiveListener);
-                    }
-                }
 
                 final ExecutionContext prev = ExecutionContext.getActiveContext();
                 try

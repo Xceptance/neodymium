@@ -29,6 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import com.codeborne.selenide.SelenideElement;
+import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,6 +40,7 @@ import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.NoSuchWindowException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
+import org.openqa.selenium.WrapsElement;
 import org.openqa.selenium.chromium.HasCdp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -106,6 +109,10 @@ public class PageAnalyzer
         if (this.providedDriver != null)
         {
             return this.providedDriver;
+        }
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            return WebDriverRunner.getWebDriver();
         }
         LOG.warn("No WebDriver provided to PageAnalyzer instance.");
         return null;
@@ -482,14 +489,14 @@ public class PageAnalyzer
                     var tag = el.tagName.toLowerCase();
                     if (['a', 'button', 'input', 'select', 'textarea', 'option', 'label', 'summary'].indexOf(tag) !== -1) return true;
                     if (el.hasAttribute('onclick') || typeof el.onclick === 'function') return true;
-                    if (el.hasAttribute('tabindex') || el.hasAttribute('contenteditable')) return true;
+                    if (el.hasAttribute('tabindex') || el.hasAttribute('contenteditable') || el.isContentEditable) return true;
                     var role = (el.getAttribute('role') || '').toLowerCase();
                     if (['button', 'link', 'checkbox', 'radio', 'tab', 'menuitem', 'option', 'switch', 'combobox', 'searchbox', 'textbox', 'spinbutton', 'slider', 'listbox', 'treeitem', 'menuitemcheckbox', 'menuitemradio'].indexOf(role) !== -1) return true;
                     if (el.hasAttribute('data-action') || el.hasAttribute('data-click') || el.hasAttribute('data-toggle') || el.hasAttribute('hx-get') || el.hasAttribute('hx-post')) return true;
                     var id = el.id ? el.id.toLowerCase() : '';
                     var cls = (typeof el.className === 'string' ? el.className : '').toLowerCase();
-                    if (id.includes('btn') || id.includes('button') || id.includes('click') || id.includes('nav') || id.includes('cart') || id.includes('trigger') ||
-                        cls.includes('btn') || cls.includes('button') || cls.includes('click') || cls.includes('nav') || cls.includes('cart') || cls.includes('trigger')) return true;
+                    if (id.includes('btn') || id.includes('button') || id.includes('click') || id.includes('nav') || id.includes('cart') || id.includes('trigger') || id.includes('suggestion') ||
+                        cls.includes('btn') || cls.includes('button') || cls.includes('click') || cls.includes('nav') || cls.includes('cart') || cls.includes('trigger') || cls.includes('suggestion') || cls.includes('dropdown-item')) return true;
                     var style = window.getComputedStyle(el);
                     if (style.cursor === 'pointer' && !el.closest('a')) return true;
                     return false;
@@ -504,7 +511,8 @@ public class PageAnalyzer
 
                     var vis = isVisible(el);
                     var inForm = !!(el.closest && el.closest('form'));
-                    var isFormContainer = inForm && ['fieldset','div','span','p','table','tbody','tr','td'].indexOf(tag) !== -1;
+                    var isContentEditable = (el.isContentEditable === true) || el.getAttribute('contenteditable') === 'true' || el.hasAttribute('contenteditable');
+                    var isFormContainer = (inForm && ['fieldset','div','span','p','table','tbody','tr','td'].indexOf(tag) !== -1) || isContentEditable;
                     var isFormInput = inForm && ['input','select','textarea','button'].indexOf(tag) !== -1;
                     if (!vis && !isFormInput && !isFormContainer) return null;
 
@@ -549,6 +557,7 @@ public class PageAnalyzer
                             href: truncate(el.getAttribute('href'), MAX_HREF),
                             type: el.getAttribute('type'),
                             role: el.getAttribute('role'),
+                            contenteditable: isContentEditable ? 'true' : null,
                             checked: isChecked(el) ? 'true' : null,
                             selected: (tag === 'option' ? (el.selected || el.hasAttribute('selected') ? 'true' : null) : null),
                             disabled: (el.disabled || el.hasAttribute('disabled')) ? 'true' : null,
@@ -582,7 +591,9 @@ public class PageAnalyzer
                     }
 
                     // 2. Container node with extracted children
-                    var isFormContainer = tag === 'form' || tag === 'fieldset' || tag === 'select' || tag === 'optgroup' || isCustomElement;
+                    var elRole = (el.getAttribute('role') || '').toLowerCase();
+                    var isPortalOrModal = tag === 'dialog' || ['dialog', 'listbox', 'menu', 'combobox'].indexOf(elRole) !== -1 || (el.id && el.id.indexOf('portal') !== -1) || (typeof el.className === 'string' && el.className.indexOf('portal') !== -1);
+                    var isFormContainer = tag === 'form' || tag === 'fieldset' || tag === 'select' || tag === 'optgroup' || isCustomElement || isPortalOrModal || isContentEditable;
                     var allowContainer = !isMinimal || isFormContainer;
                     if (allowContainer && (isContainerTag || isDivContainer) && children.length > 0) {
                         // Flatten single-child anonymous layout wrappers (but never custom elements)
@@ -598,6 +609,7 @@ public class PageAnalyzer
                             className: (typeof el.className === 'string' && el.className.trim().length > 0) ? el.className.trim() : null,
                             name: el.getAttribute('name'),
                             role: el.getAttribute('role'),
+                            contenteditable: isContentEditable ? 'true' : null,
                             ariaLabel: el.getAttribute('aria-label'),
                             dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa'),
                             parentText: el.getAttribute('data-parent-text') || null,
@@ -628,6 +640,7 @@ public class PageAnalyzer
                             name: el.getAttribute('name'),
                             type: el.getAttribute('type'),
                             role: el.getAttribute('role'),
+                            contenteditable: isContentEditable ? 'true' : null,
                             checked: isChecked(el) ? 'true' : null,
                             disabled: (el.disabled || el.hasAttribute('disabled')) ? 'true' : null,
                             ariaLabel: el.getAttribute('aria-label'),
@@ -1060,7 +1073,7 @@ public class PageAnalyzer
                     dom.append("=== Structural DOM Tree ===\n");
                 }
                 for (final Map<String, Object> node : tree) {
-                    elementCount += formatElementNode(dom, node, 0, showFrameId, frameId);
+                    elementCount += formatElementNode(dom, node, 0, showFrameId, frameId, level);
                 }
             }
             LOG.debug("   ⚡ [Stage 2: JS Execution] Frame '{}' extracted {} nodes in {} ms", frameId, elementCount, scriptMs);
@@ -1192,7 +1205,7 @@ public class PageAnalyzer
      * maintaining 2-space indentation depth and container tags (<header>, <main>, <article>, etc.).
      */
     @SuppressWarnings("unchecked")
-    private int formatElementNode(final StringBuilder dom, final Map<String, Object> node, final int depth, final boolean showFrameId, final String frameId)
+    private int formatElementNode(final StringBuilder dom, final Map<String, Object> node, final int depth, final boolean showFrameId, final String frameId, final ContextLevel level)
     {
         if (node == null)
         {
@@ -1209,16 +1222,29 @@ public class PageAnalyzer
             final String tag = (String) node.get("tagName");
             dom.append(indent).append("<").append(tag);
             final Object rawId = node.get("id");
-            if (rawId != null && !this.volatileIdDetector.isVolatile(rawId.toString()))
+            final boolean hasId = rawId != null && !this.volatileIdDetector.isVolatile(rawId.toString());
+            if (hasId)
             {
                 appendAttribute(dom, "id", rawId);
             }
-            appendAttribute(dom, "class", node.get("className"));
-            appendAttribute(dom, "name", node.get("name"));
-            appendAttribute(dom, "role", node.get("role"));
-            appendAttribute(dom, "aria-label", node.get("ariaLabel"));
-            appendAttribute(dom, "data-testid", node.get("dataTestId"));
-            appendAttribute(dom, "data-ai", node.get("automationId"));
+            final Object name = node.get("name");
+            final Object role = node.get("role");
+            final Object dataTestId = node.get("dataTestId");
+            final Object autoId = node.get("automationId");
+            final Object ariaLabel = node.get("ariaLabel");
+
+            // Omit class on containers if semantic locators exist (unless in RICH mode)
+            final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || autoId != null || ariaLabel != null || role != null;
+            if (level != null && level.includesRichMetadata() || !hasSemanticLocator)
+            {
+                appendSanitizedClassAttribute(dom, node.get("className"));
+            }
+            appendAttribute(dom, "name", name);
+            appendAttribute(dom, "role", role);
+            appendAttribute(dom, "contenteditable", node.get("contenteditable"));
+            appendAttribute(dom, "aria-label", ariaLabel);
+            appendAttribute(dom, "data-testid", dataTestId);
+            appendAttribute(dom, "data-ai", autoId);
             dom.append(">\n");
 
             final List<Map<String, Object>> children = (List<Map<String, Object>>) node.get("children");
@@ -1226,7 +1252,7 @@ public class PageAnalyzer
             {
                 for (final Map<String, Object> child : children)
                 {
-                    count += formatElementNode(dom, child, depth + 1, showFrameId, frameId);
+                    count += formatElementNode(dom, child, depth + 1, showFrameId, frameId, level);
                 }
             }
 
@@ -1240,7 +1266,7 @@ public class PageAnalyzer
                 node.put("frameId", frameId);
             }
             dom.append(indent);
-            formatElement(dom, node);
+            formatElement(dom, node, level);
         }
         return count;
     }
@@ -1250,24 +1276,38 @@ public class PageAnalyzer
      * same text format as the original
      * per-element approach.
      */
-    private void formatElement(final StringBuilder dom, final Map<String, Object> el) {
+    private void formatElement(final StringBuilder dom, final Map<String, Object> el, final ContextLevel level) {
         final Object tagObj = el.get("tagName");
         final String label = (tagObj != null && !tagObj.toString().isEmpty()) ? tagObj.toString() : (el.get("label") != null ? el.get("label").toString() : "element");
         dom.append("<").append(label);
 
         final Object rawId = el.get("id");
-        if (rawId != null && !this.volatileIdDetector.isVolatile(rawId.toString()))
+        final boolean hasId = rawId != null && !this.volatileIdDetector.isVolatile(rawId.toString());
+        if (hasId)
         {
             appendAttribute(dom, "id", rawId);
         }
-        appendAttribute(dom, "class", el.get("className"));
-        appendAttribute(dom, "name", el.get("name"));
+        final Object name = el.get("name");
+        final Object dataTestId = el.get("dataTestId");
+        final Object autoId = el.get("automationId");
+        final Object ariaLabel = el.get("ariaLabel");
+        final Object placeholder = el.get("placeholder");
+        final Object role = el.get("role");
+        final String text = (String) el.get("text");
+        final boolean hasDistinctText = text != null && !text.isBlank() && text.length() <= 80;
+
+        // Omit presentation class in MINIMAL/LEAN if element already has strong semantic identification
+        final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || autoId != null || ariaLabel != null || placeholder != null || hasDistinctText;
+        if (level != null && level.includesRichMetadata() || !hasSemanticLocator)
+        {
+            appendSanitizedClassAttribute(dom, el.get("className"));
+        }
+        appendAttribute(dom, "name", name);
         appendAttribute(dom, "type", el.get("type"));
-        appendAttribute(dom, "role", el.get("role"));
+        appendAttribute(dom, "role", role);
+        appendAttribute(dom, "contenteditable", el.get("contenteditable"));
         appendAttribute(dom, "checked", el.get("checked"));
         appendAttribute(dom, "selected", el.get("selected"));
-
-        final String text = (String) el.get("text");
 
         appendAttribute(dom, "href", el.get("href"));
         appendAttribute(dom, "placeholder", el.get("placeholder"));
@@ -1307,6 +1347,21 @@ public class PageAnalyzer
     private void appendAttribute(final StringBuilder dom, final String key, final Object value) {
         if (value != null && !value.toString().isEmpty()) {
             dom.append(" ").append(key).append("=\"").append(escapeAttributeValue(value.toString())).append("\"");
+        }
+    }
+
+    /**
+     * Appends a class attribute with normalized whitespace, ensuring empty classes are omitted.
+     */
+    private void appendSanitizedClassAttribute(final StringBuilder dom, final Object value)
+    {
+        if (value != null)
+        {
+            final String raw = value.toString().trim().replaceAll("\\s+", " ");
+            if (!raw.isEmpty())
+            {
+                appendAttribute(dom, "class", raw);
+            }
         }
     }
 
@@ -1402,7 +1457,7 @@ public class PageAnalyzer
                 var results = [];
                 for (var r = 0; r < roots.length; r++) {
                     try {
-                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [data-testid], [data-test], [data-qa]');
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [contenteditable], [data-testid], [data-test], [data-qa]');
                         for (var i = 0; i < els.length; i++) {
                             var el = els[i];
                             if (el.closest && el.closest('.neodymium-ai-hud')) continue;
@@ -1530,9 +1585,31 @@ public class PageAnalyzer
             })(arguments[0]);
             """;
 
+        WebElement targetEl = element;
+        if (targetEl instanceof SelenideElement se)
+        {
+            try
+            {
+                targetEl = se.toWebElement();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        if (targetEl instanceof WrapsElement we)
+        {
+            try
+            {
+                targetEl = we.getWrappedElement();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
         try
         {
-            final Object response = ((JavascriptExecutor) driver).executeScript(script, element);
+            final Object response = ((JavascriptExecutor) driver).executeScript(script, targetEl);
             if (response instanceof String jsonStr && !jsonStr.isBlank())
             {
                 return MAPPER.readValue(jsonStr, DomFeatureVector.class);
@@ -1588,7 +1665,7 @@ public class PageAnalyzer
                 var vectorData = [];
                 for (var r = 0; r < roots.length; r++) {
                     try {
-                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [data-testid], [data-test], [data-qa]');
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [contenteditable], [data-testid], [data-test], [data-qa]');
                         for (var i = 0; i < els.length; i++) {
                             var el = els[i];
                             if (el.closest && el.closest('.neodymium-ai-hud')) continue;

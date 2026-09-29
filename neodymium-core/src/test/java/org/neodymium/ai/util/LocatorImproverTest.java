@@ -112,6 +112,8 @@ public final class LocatorImproverTest
     {
         assertEquals(2, LocatorImprover.scoreLocator("header > div > form > input:nth-child(2)"));
         assertEquals(2, LocatorImprover.scoreLocator("//html/body/div[1]/input"));
+        assertFalse(LocatorImprover.scoreLocator("#prod-info div") == 10, "Descendant selector must not score 10");
+        assertFalse(LocatorImprover.scoreLocator("#prod-info > div") == 10, "Child combinator with ID must not score 10");
     }
 
     @Test

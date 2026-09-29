@@ -37,7 +37,7 @@ public final class LlmProviderFactory
     /**
      * Creates an {@link LlmProvider} instance for a specific role based on the configuration.
      *
-     * @param role the execution role (e.g., "pesap", "execution", "vision", "audit")
+     * @param role the execution role (e.g., "execution", "vision", "audit")
      * @param config the configuration provider
      * @return the instantiated provider
      * @throws IllegalStateException if provider is not configured, unknown, or cannot be instantiated
@@ -50,7 +50,7 @@ public final class LlmProviderFactory
             throw new IllegalStateException(String.format(
                 "LLM provider is not configured for role '%s'. "
                 + "Please set 'neodymium.ai.%s.provider' or 'neodymium.ai.provider' "
-                + "(e.g. 'gemini', 'mistral', 'vertexaillama', 'mock').",
+                + "(e.g. 'gemini', 'openai', 'mistral', 'vertexaillama', 'mock').",
                 role, role
             ));
         }
@@ -58,8 +58,9 @@ public final class LlmProviderFactory
         final String defaultClass = switch (providerType.trim().toLowerCase())
         {
             case "gemini" -> "org.neodymium.ai.client.GeminiLlmProvider";
+            case "openai" -> "org.neodymium.ai.client.OpenAiLlmProvider";
             case "mistral" -> "org.neodymium.ai.client.MistralLlmProvider";
-            case "vertexaillama", "vertexai" -> "org.neodymium.ai.client.VertexAiLlamaProvider";
+            case "vertexaillama", "vertexai", "vertex", "llama" -> "org.neodymium.ai.client.VertexAiLlamaProvider";
             case "mock" -> "org.neodymium.ai.client.MockLlmProvider";
             default -> null;
         };
@@ -71,7 +72,7 @@ public final class LlmProviderFactory
                 "Unknown LLM provider '%s' configured for role '%s'. "
                 + "No provider class is configured for 'neodymium.ai.provider.%s.class'. "
                 + "Please configure 'neodymium.ai.provider.%s.class' with a fully qualified class name implementing %s, "
-                + "or use one of the standard providers ('gemini', 'mistral', 'vertexaillama', 'mock').",
+                + "or use one of the standard providers ('gemini', 'openai', 'mistral', 'vertexaillama', 'mock').",
                 providerType, role, providerType, providerType, LlmProvider.class.getName()
             ));
         }

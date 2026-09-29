@@ -229,4 +229,102 @@ public class IncludeIntegrationTest extends BaseAiTest
 
         $("#result").shouldHave(exactText("Cookies Accepted!"));
     }
+
+    /**
+     * Test case 4: Included playbook contains compound substeps.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    public void testIncludeWithCompoundSubsteps(final AiSession session) throws Exception
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+
+        // Step 1: Open SUT (NAVIGATE)
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        // Step 2: Included compound step leaf (CLICK #btn-accept)
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "CLICK",
+                  "locator": "#btn-accept",
+                  "value": "",
+                  "reasoning": "Click accept cookies button from included compound substep"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        session.execute( """
+            steps: |
+              Open ${include.test.url} in the browser
+              include: playbooks/integration/includes/compound_accept_cookies.yaml
+            """);
+
+        $("#result").shouldHave(exactText("Cookies Accepted!"));
+    }
+
+    /**
+     * Test case 5: Cross-boundary session variable resolution in included playbook.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    public void testIncludeCrossBoundaryVariables(final AiSession session) throws Exception
+    {
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+
+        session.data().putDynamic("cookie.btn.selector", "#btn-accept", false);
+
+        // Step 1: Open SUT (NAVIGATE)
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        // Step 2: Included parameterized step (CLICK #btn-accept)
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "CLICK",
+                  "locator": "#btn-accept",
+                  "value": "",
+                  "reasoning": "Click accept cookies button with substituted selector"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        session.execute( """
+            steps: |
+              Open ${include.test.url} in the browser
+              include: playbooks/integration/includes/parameterized_accept_cookies.yaml
+            """);
+
+        $("#result").shouldHave(exactText("Cookies Accepted!"));
+    }
 }

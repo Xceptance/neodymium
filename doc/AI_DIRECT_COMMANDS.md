@@ -1,6 +1,6 @@
 # Neodymium AI Direct Commands Reference Guide
 
-Neodymium Aura AI supports **Direct Commands**, which bypass LLM reasoning and PESAP semantic analysis entirely. Direct commands execute 100% locally on the browser, offering extreme execution speed, cost-effectiveness (0 token usage), and complete determinism.
+Neodymium Aura AI supports **Direct Commands**, which bypass LLM reasoning entirely. Direct commands execute 100% locally on the browser, offering extreme execution speed, cost-effectiveness (0 token usage), and complete determinism.
 
 ---
 
@@ -10,13 +10,13 @@ The Neodymium AI engine routes steps based on the **case-sensitivity of the firs
 
 *   **Direct Command Route (All-Uppercase First Word)**
     *   **Rule**: The first word of the instruction contains only uppercase letters, digits, and underscores, and must contain at least one letter (matches regex `^[A-Z0-9_]+$` containing `.*[A-Z].*`).
-    *   **Behavior**: Bypasses JIT PESAP analysis, bypasses the LLM, resolves the instruction locally using action plugins, and executes the actions directly.
+    *   **Behavior**: Bypasses the LLM, resolves the instruction locally using action plugins, and executes the actions directly.
     *   **Fail-Fast**: If the syntax is malformed or an element is missing, it fails immediately without self-healing.
     *   **Example**: `OPEN http://localhost:8080`, `CLICK #btn-submit`, `BACK`
 
 *   **Natural Language Route (Mixed/Lowercase First Word)**
     *   **Rule**: The first word contains lowercase characters or does not meet the uppercase criteria.
-    *   **Behavior**: Evaluates JIT PESAP classification, calls the LLM to understand and map the step, and uses semantic fallback/self-healing.
+    *   **Behavior**: Dispatches to the autonomous AI agent loop with context escalation and semantic self-healing.
     *   **Example**: `Open http://localhost:8080`, `Click the submit button`, `back`
 
 ---
@@ -63,7 +63,6 @@ Direct commands prioritize immediate feedback over self-healing:
 | Policy | Direct Commands (`CLICK`, `OPEN`, etc.) | Natural Language (`Click`, `Open`, etc.) |
 | :--- | :--- | :--- |
 | **LLM Call Required?** | **No** (unless offline is false and api key is absent) | **Yes** (calls remote LLM for reasoning) |
-| **PESAP Run?** | **No** (completely bypassed) | **Yes** (classifies step and predicts tags/splitting) |
 | **On Parser Failure** | Throws immediate `AssertionError` with `(direct shortcut):` | Falls back to LLM to interpret instruction |
 | **On Execution Failure** | Throws original error immediately (e.g., `ElementNotFound`) | Escalates context level, heals DOM selectors, retries |
 

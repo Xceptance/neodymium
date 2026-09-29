@@ -25,6 +25,7 @@ import static com.codeborne.selenide.Selenide.$;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiLinter;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -33,15 +34,18 @@ import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
 /**
- * Live integration test for playbook inclusion (standalone steps, positional includes, and conditional includes inside IF-THEN / IF-ELSE branches).
+ * Live integration test for playbook inclusion (standalone steps, positional includes,
+ * compound substeps, variable scoping, and conditional includes inside IF-THEN / IF-ELSE branches).
  *
- * @author AI-generated: Gemini 3.6 Flash
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
 @Tag("LiveAPI")
 @NeodymiumAiTest
+@AiPlaybook("programmatic")
+@AiLinter(false)
 public class IncludeIntegrationTest extends BaseAiTest
 {
 
@@ -64,7 +68,7 @@ public class IncludeIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook("/playbooks/integration/programmatic/IncludeIntegrationTest_testIncludeStandaloneStep.yaml")
+    @AiPlaybook
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testIncludeStandaloneStep(final AiSession session) throws Exception
     {
@@ -73,9 +77,77 @@ public class IncludeIntegrationTest extends BaseAiTest
               Open ${include.test.url} in the browser
               include: playbooks/integration/includes/accept_cookies.yaml
               include: playbooks/integration/includes/trigger_main_action.yaml
-            """);
+            """)
+            .verifyMetrics()
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls());
 
         $("#result").shouldHave(exactText("Cookies Accepted! -> Main Action Triggered!"));
+    }
+
+    /**
+     * Verifies include using the '_include:' syntax variant.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    public void testUnderscoreIncludeSyntax(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${include.test.url} in the browser
+              _include: playbooks/integration/includes/accept_cookies.yaml
+            """)
+            .verifyMetrics()
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls());
+
+        $("#result").shouldHave(exactText("Cookies Accepted!"));
+    }
+
+    /**
+     * Verifies including an external playbook that itself contains compound substeps.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    public void testIncludeWithCompoundSubsteps(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${include.test.url} in the browser
+              include: playbooks/integration/includes/compound_accept_cookies.yaml
+            """)
+            .verifyMetrics()
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls());
+
+        $("#result").shouldHave(exactText("Cookies Accepted!"));
+    }
+
+    /**
+     * Verifies that parent session variables properly propagate across inclusion boundaries.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    public void testIncludeCrossBoundaryVariables(final AiSession session) throws Exception
+    {
+        session.data().putDynamic("cookie.btn.selector", "#btn-accept", false);
+
+        session.execute( """
+            steps: |
+              Open ${include.test.url} in the browser
+              include: playbooks/integration/includes/parameterized_accept_cookies.yaml
+            """)
+            .verifyMetrics()
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls());
+
+        $("#result").shouldHave(exactText("Cookies Accepted!"));
     }
 
     /**
@@ -83,7 +155,7 @@ public class IncludeIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook("/playbooks/integration/programmatic/IncludeIntegrationTest_testIncludeConditionalIfThenTrue.yaml")
+    @AiPlaybook
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testIncludeConditionalIfThenTrue(final AiSession session) throws Exception
     {
@@ -91,7 +163,10 @@ public class IncludeIntegrationTest extends BaseAiTest
             steps: |
               Open ${include.test.url} in the browser
               If (hint: #cookie-banner) is visible, Include playbooks/integration/includes/accept_cookies.yaml
-            """);
+            """)
+            .verifyMetrics()
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls());
 
         $("#result").shouldHave(exactText("Cookies Accepted!"));
     }
@@ -101,7 +176,7 @@ public class IncludeIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook("/playbooks/integration/programmatic/IncludeIntegrationTest_testIncludeConditionalIfThenFalse.yaml")
+    @AiPlaybook
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testIncludeConditionalIfThenFalse(final AiSession session) throws Exception
     {
@@ -109,7 +184,10 @@ public class IncludeIntegrationTest extends BaseAiTest
             steps: |
               Open ${include.test.nocookies.url} in the browser
               If (hint: #cookie-banner) is visible, Include playbooks/integration/includes/accept_cookies.yaml
-            """);
+            """)
+            .verifyMetrics()
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls());
 
         $("#result").shouldBe(empty);
     }
@@ -119,7 +197,7 @@ public class IncludeIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook("/playbooks/integration/programmatic/IncludeIntegrationTest_testIncludeConditionalIfElseFallback.yaml")
+    @AiPlaybook
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testIncludeConditionalIfElseFallback(final AiSession session) throws Exception
     {
@@ -127,7 +205,10 @@ public class IncludeIntegrationTest extends BaseAiTest
             steps: |
               Open ${include.test.nocookies.url} in the browser
               If (hint: #cookie-banner) is visible, Include playbooks/integration/includes/accept_cookies.yaml, else Include playbooks/integration/includes/trigger_main_action.yaml
-            """);
+            """)
+            .verifyMetrics()
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls());
 
         $("#result").shouldHave(exactText("Main Action Triggered!"));
     }
@@ -137,7 +218,7 @@ public class IncludeIntegrationTest extends BaseAiTest
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook("/playbooks/integration/programmatic/IncludeIntegrationTest_testNestedInclude.yaml")
+    @AiPlaybook
     @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testNestedInclude(final AiSession session) throws Exception
     {
@@ -145,7 +226,10 @@ public class IncludeIntegrationTest extends BaseAiTest
             steps: |
               Open ${include.test.url} in the browser
               include: playbooks/integration/includes/nested_parent.yaml
-            """);
+            """)
+            .verifyMetrics()
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls());
 
         $("#result").shouldHave(exactText("Cookies Accepted!"));
     }

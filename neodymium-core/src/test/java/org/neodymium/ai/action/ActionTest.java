@@ -20,11 +20,15 @@ package org.neodymium.ai.action;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.tool.ToolCall;
 
 /**
  * Unit tests for {@link Action} model serialization, getters, and pattern properties.
@@ -156,5 +160,324 @@ public class ActionTest
         assertEquals("button[data-testid='order-submit']", all.get(1));
         assertEquals("button.fallback-btn", all.get(2));
         assertEquals("button.low-score", all.get(3));
+    }
+
+    @Test
+    public void testFromToolCallBrowserClick()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "[data-ai='xcz0f8a5']");
+        final ToolCall call = new ToolCall("call-1", "browser_click", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("CLICK", action.getType());
+        assertEquals("[data-ai='xcz0f8a5']", action.getTarget());
+        assertEquals("Click [data-ai='xcz0f8a5']", action.getDescription());
+    }
+
+    @Test
+    public void testFromToolCallBrowserType()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#couponCode");
+        args.put("text", "10p-off");
+        final ToolCall call = new ToolCall("call-2", "browser_type", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("TYPE", action.getType());
+        assertEquals("#couponCode", action.getTarget());
+        assertEquals("10p-off", action.getValue());
+        assertEquals("Type '10p-off' into #couponCode", action.getDescription());
+    }
+
+    @Test
+    public void testFromToolCallBrowserNavigate()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("url", "https://localhost:8543/verla-normal/index.html");
+        final ToolCall call = new ToolCall("call-3", "browser_navigate", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("NAVIGATE", action.getType());
+        assertEquals("https://localhost:8543/verla-normal/index.html", action.getTarget());
+        assertEquals("Navigate to https://localhost:8543/verla-normal/index.html", action.getDescription());
+    }
+
+    @Test
+    public void testFromToolCallBrowserAssertText()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", ".order-summary");
+        args.put("expectedText", "Discount (10P-OFF)");
+        final ToolCall call = new ToolCall("call-4", "browser_assert_text", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_TEXT", action.getType());
+        assertEquals(".order-summary", action.getTarget());
+        assertEquals("Discount (10P-OFF)", action.getValue());
+        assertEquals("Assert text 'Discount (10P-OFF)' on .order-summary", action.getDescription());
+    }
+
+    @Test
+    public void testFromToolCallCoordinateClick()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("x", 150);
+        args.put("y", 300);
+        final ToolCall call = new ToolCall("call-5", "browser_click", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("CLICK", action.getType());
+        assertEquals("coord: 150,300", action.getTarget());
+    }
+
+    @Test
+    public void testDeserializationWithAliases() throws Exception
+    {
+        final String json = """
+            {
+              "type": "CLICK",
+              "selector": "#submit-order",
+              "thought": "Submit customer order"
+            }
+            """;
+
+        final Action action = this.mapper.readValue(json, Action.class);
+        assertEquals("CLICK", action.getType());
+        assertEquals("#submit-order", action.getTarget());
+        assertEquals("Submit customer order", action.getReasoning());
+    }
+
+    @Test
+    public void testFromToolCallBrowserAssertCount()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", ".search-suggestion-item");
+        args.put("minCount", 6);
+        final ToolCall call = new ToolCall("call-cnt", "browser_assert_count", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_COUNT", action.getType());
+        assertEquals(".search-suggestion-item", action.getTarget());
+        assertEquals(">=6", action.getValue());
+    }
+
+    @Test
+    public void testFromToolCallCleanAssertCount()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", ".search-suggestion-item");
+        args.put("count", 6);
+        args.put("operator", "MIN");
+        final ToolCall call = new ToolCall("call-cnt-clean", "assert_count", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_COUNT", action.getType());
+        assertEquals(".search-suggestion-item", action.getTarget());
+        assertEquals(">=6", action.getValue());
+    }
+
+    @Test
+    public void testToToolCallBrowserAssertCount()
+    {
+        final Action action = new Action("ASSERT_COUNT", ".search-suggestion-item", List.of(">=6"), "Assert count", "Verify at least 6 items", false);
+        final ToolCall call = action.toToolCall();
+
+        assertEquals("assert_count", call.toolName());
+        assertEquals(".search-suggestion-item", call.arguments().path("selector").asText());
+        assertEquals(6, call.arguments().path("minCount").asInt());
+        assertEquals(6, call.arguments().path("count").asInt());
+        assertEquals("MIN", call.arguments().path("operator").asText());
+    }
+
+    @Test
+    public void testNegatedDefaultAndSetter()
+    {
+        final Action action = new Action("ASSERT_URL", "url", "Check URL");
+        assertFalse(action.isNegated());
+
+        final Action negatedAction = action.withNegated(true);
+        assertTrue(negatedAction.isNegated());
+        assertEquals("ASSERT_URL", negatedAction.getType());
+        assertEquals("url", negatedAction.getTarget());
+    }
+
+    @Test
+    public void testNegatedJsonRoundTrip() throws Exception
+    {
+        final Action original = new Action("ASSERT_URL", "url", List.of("#"), "Verify URL does not contain #", "Negative assertion", false, true);
+
+        final String serializedJson = this.mapper.writeValueAsString(original);
+        assertTrue(serializedJson.contains("\"negated\":true") || serializedJson.contains("\"negated\" : true"),
+                "Serialized JSON must contain 'negated': true, but was: " + serializedJson);
+
+        final Action deserialized = this.mapper.readValue(serializedJson, Action.class);
+        assertEquals("ASSERT_URL", deserialized.getType());
+        assertEquals("url", deserialized.getTarget());
+        assertEquals("#", deserialized.getValue());
+        assertTrue(deserialized.isNegated());
+    }
+
+    @Test
+    public void testFromToolCallWithNegatedFlag()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("expectedUrl", "#");
+        args.put("negated", true);
+        final ToolCall call = new ToolCall("call-neg", "assert_url", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_URL", action.getType());
+        assertEquals("url", action.getTarget());
+        assertEquals("#", action.getValue());
+        assertTrue(action.isNegated());
+
+        final ToolCall roundTripCall = action.toToolCall();
+        assertEquals("assert_url", roundTripCall.toolName());
+        assertTrue(roundTripCall.arguments().path("negated").asBoolean());
+    }
+
+    @Test
+    public void testFromToolCallAssertElementStateInversion()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#btn");
+        args.put("state", "visible");
+        args.put("negated", true);
+        final ToolCall call = new ToolCall("call-state-inv", "assert_element_state", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_HIDDEN", action.getType());
+        assertEquals("#btn", action.getTarget());
+    }
+
+    @Test
+    public void testFromToolCallAssertElementStateUnfocused()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#input");
+        args.put("state", "unfocused");
+        final ToolCall call = new ToolCall("call-unfocused", "assert_element_state", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_UNFOCUSED", action.getType());
+        assertEquals("#input", action.getTarget());
+    }
+
+    @Test
+    public void testFromToolCallAssertCountNotEquals()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", ".item");
+        args.put("count", 3);
+        args.put("operator", "NOT_EQUALS");
+        final ToolCall call = new ToolCall("call-cnt-neq", "assert_count", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_COUNT", action.getType());
+        assertEquals(".item", action.getTarget());
+        assertEquals("!=3", action.getValue());
+    }
+
+    @Test
+    public void testFromToolCallBranchWithConditionThenElse()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        final ArrayNode cond = args.putArray("condition");
+        final ObjectNode cond1 = cond.addObject();
+        cond1.put("action", "ASSERT");
+        cond1.put("locator", "#cookie-banner");
+        cond1.put("value", "visible");
+
+        final ArrayNode then = args.putArray("then");
+        final ObjectNode then1 = then.addObject();
+        then1.put("action", "INCLUDE");
+        then1.put("value", "playbooks/integration/includes/accept_cookies.yaml");
+
+        final ArrayNode elseActions = args.putArray("else");
+        final ObjectNode else1 = elseActions.addObject();
+        else1.put("action", "CLICK");
+        else1.put("locator", "#btn-decline");
+
+        final ToolCall call = new ToolCall("call-branch", "branch", args);
+        final Action action = Action.fromToolCall(call);
+
+        assertNotNull(action);
+        assertEquals("BRANCH", action.getType());
+        assertTrue(action.hasElse());
+
+        assertNotNull(action.getCondition());
+        assertEquals(1, action.getCondition().size());
+        assertEquals("ASSERT", action.getCondition().get(0).getType());
+        assertEquals("#cookie-banner", action.getCondition().get(0).getTarget());
+        assertEquals("visible", action.getCondition().get(0).getValue());
+
+        assertNotNull(action.getThen());
+        assertEquals(1, action.getThen().size());
+        assertEquals("INCLUDE", action.getThen().get(0).getType());
+        assertEquals("playbooks/integration/includes/accept_cookies.yaml", action.getThen().get(0).getValue());
+
+        assertNotNull(action.getElseActions());
+        assertEquals(1, action.getElseActions().size());
+        assertEquals("CLICK", action.getElseActions().get(0).getType());
+        assertEquals("#btn-decline", action.getElseActions().get(0).getTarget());
+    }
+
+    @Test
+    public void testBranchToToolCallRoundTrip()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        final ArrayNode cond = args.putArray("condition");
+        final ObjectNode cond1 = cond.addObject();
+        cond1.put("action", "ASSERT");
+        cond1.put("locator", "#popup");
+        cond1.put("value", "visible");
+
+        final ArrayNode then = args.putArray("then");
+        final ObjectNode then1 = then.addObject();
+        then1.put("action", "CLICK");
+        then1.put("locator", "#btn-close");
+
+        final ToolCall originalCall = new ToolCall("call-branch-rt", "branch", args);
+        final Action parsedAction = Action.fromToolCall(originalCall);
+
+        final ToolCall generatedCall = parsedAction.toToolCall();
+        assertEquals("branch", generatedCall.toolName());
+        assertTrue(generatedCall.arguments().hasNonNull("condition"));
+        assertTrue(generatedCall.arguments().hasNonNull("then"));
+
+        final Action roundTripAction = Action.fromToolCall(generatedCall);
+        assertEquals("BRANCH", roundTripAction.getType());
+        assertEquals(1, roundTripAction.getCondition().size());
+        assertEquals("ASSERT", roundTripAction.getCondition().get(0).getType());
+        assertEquals("#popup", roundTripAction.getCondition().get(0).getTarget());
+        assertEquals(1, roundTripAction.getThen().size());
+        assertEquals("CLICK", roundTripAction.getThen().get(0).getType());
+        assertEquals("#btn-close", roundTripAction.getThen().get(0).getTarget());
+    }
+
+    @Test
+    public void testFromToolCallBranchSingleObjectPayload()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        final ObjectNode cond = args.putObject("condition");
+        cond.put("action", "ASSERT");
+        cond.put("locator", "#banner");
+        cond.put("value", "visible");
+
+        final ObjectNode then = args.putObject("then");
+        then.put("action", "CLICK");
+        then.put("locator", "#accept");
+
+        final ToolCall call = new ToolCall("call-single", "branch", args);
+        final Action action = Action.fromToolCall(call);
+
+        assertNotNull(action);
+        assertEquals(1, action.getCondition().size());
+        assertEquals("ASSERT", action.getCondition().get(0).getType());
+        assertEquals("#banner", action.getCondition().get(0).getTarget());
+        assertEquals(1, action.getThen().size());
+        assertEquals("CLICK", action.getThen().get(0).getType());
+        assertEquals("#accept", action.getThen().get(0).getTarget());
     }
 }

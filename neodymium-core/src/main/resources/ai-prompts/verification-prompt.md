@@ -7,7 +7,7 @@ Your task is to evaluate if:
 You are provided with:
 1. The natural language instruction.
 2. The executed actions.
-3. Two screenshots: The page state BEFORE the actions ("Initial State Screenshot"), and the page state AFTER the actions ("Final State Screenshot").
+3. Screenshots of the SUT: Two screenshots representing the page state BEFORE the actions ("Initial State Screenshot") and AFTER the actions ("Final State Screenshot"), or a single screenshot ("Final State Screenshot") if no prior state was captured.
 
 You MUST perform a rubric-based evaluation. Evaluate each of the following criteria step-by-step before determining the final verdict:
 
@@ -17,8 +17,10 @@ You MUST perform a rubric-based evaluation. Evaluate each of the following crite
    - Provide a detailed analysis and a score: "PASS" (actions correctly implement intent) or "FAIL" (actions did not match or did not target correct elements).
 
 2. Visual State Delta ("visualDelta"):
-   - Compare the "Initial State Screenshot" and "Final State Screenshot".
+   - Compare the "Initial State Screenshot" and "Final State Screenshot" (or evaluate the "Final State Screenshot" if only one is provided).
    - Does the final page state visually confirm that the instruction was completed (e.g., successful page transition, values updated, search results shown, size selector or modal opened)?
+   - For assertions or non-mutating checks (e.g., verifying text, headers, flags, or elements): If the expected content is visible on the page, the absence of a visual delta between initial and final states is expected and MUST score "PASS".
+   - For interactive actions (e.g., clicking a button or submitting a form) that initiate asynchronous operations or are followed by wait steps: If the action was executed on the correct target and no errors occurred, element state changes (e.g., button active/pressed, spinner, disabled state) or the resulting page transition confirm the action and MUST score "PASS".
    - Provide a detailed analysis and a score: "PASS" (visual confirmation of state transition) or "FAIL" (no change or unexpected state).
 
 3. Absence of Errors ("absenceOfErrors"):

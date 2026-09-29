@@ -28,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import org.neodymium.ai.client.ReasoningEffort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.neodymium.util.Neodymium;
@@ -124,21 +125,7 @@ public final class AiConfiguration
             }
         });
 
-        // 7. Register framework default properties if not explicitly configured
-        loadDefaultProperties();
-        rebuildNormalizedCache();
-    }
 
-    /**
-     * Registers framework-level default properties for Neodymium AI if not already defined.
-     */
-    private void loadDefaultProperties()
-    {
-        this.properties.putIfAbsent("neodymium.ai.provider", "gemini");
-        this.properties.putIfAbsent("neodymium.ai.provider.gemini.class", "org.neodymium.ai.client.GeminiLlmProvider");
-        this.properties.putIfAbsent("neodymium.ai.provider.mistral.class", "org.neodymium.ai.client.MistralLlmProvider");
-        this.properties.putIfAbsent("neodymium.ai.provider.vertexaillama.class", "org.neodymium.ai.client.VertexAiLlamaProvider");
-        this.properties.putIfAbsent("neodymium.ai.provider.mock.class", "org.neodymium.ai.client.MockLlmProvider");
     }
 
     /**
@@ -406,7 +393,7 @@ public final class AiConfiguration
     /**
      * Resolves model name for a specific role, falling back to global default.
      *
-     * @param role the execution role (e.g., "pesap", "execution", "vision", "audit")
+     * @param role the execution role (e.g., "execution", "vision", "audit")
      * @return the resolved model name
      */
     public String getModel(final String role)
@@ -520,7 +507,17 @@ public final class AiConfiguration
      */
     public boolean isSemanticVerificationEnabled()
     {
-        return getBoolean("neodymium.ai.semanticVerification.enabled", true);
+        return getBoolean("neodymium.ai.semanticVerification.enabled", false);
+    }
+
+    /**
+     * Checks if semantic outcome verification failures should abort execution.
+     *
+     * @return true if verification failure throws VerificationFailureException (default: false), false for report-only warning
+     */
+    public boolean isSemanticVerificationFailOnError()
+    {
+        return getBoolean("neodymium.ai.semanticVerification.failOnError", false);
     }
 
     /**
@@ -543,15 +540,6 @@ public final class AiConfiguration
         return getBoolean("neodymium.ai.judge.enabled", false);
     }
 
-    /**
-     * Checks if multilingual prompt guidance is enabled.
-     *
-     * @return true if neodymium.ai.multilingual is set to true (default: false)
-     */
-    public boolean isMultilingual()
-    {
-        return getBoolean("neodymium.ai.multilingual", false);
-    }
 
     /**
      * Checks if replay execution should respect recorded delays and pacing.
@@ -597,7 +585,57 @@ public final class AiConfiguration
      */
     public double getVisualSsimMinScore()
     {
-        return getDouble("neodymium.ai.ssim.minScore", 0.99);
+        final String[] keys = new String[]{"neodymium.ai.ssim.minScore", "neodymium.ai.visual.threshold", "neodymium.ai.visual.minScore"};
+
+        // 1. Thread data / dynamic test overrides
+        for (final String key : keys)
+        {
+            try
+            {
+                final Object threadVal = Neodymium.getData().get(key);
+                if (threadVal != null)
+                {
+                    return Double.parseDouble(String.valueOf(threadVal).trim());
+                }
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+
+        // 2. System property overrides
+        for (final String key : keys)
+        {
+            final String sysVal = System.getProperty(key);
+            if (sysVal != null && !sysVal.isBlank())
+            {
+                try
+                {
+                    return Double.parseDouble(sysVal.trim());
+                }
+                catch (final NumberFormatException ignored)
+                {
+                }
+            }
+        }
+
+        // 3. Properties files / configured defaults
+        for (final String key : keys)
+        {
+            final String fileVal = this.properties.getProperty(key);
+            if (fileVal != null && !fileVal.isBlank())
+            {
+                try
+                {
+                    return Double.parseDouble(fileVal.trim());
+                }
+                catch (final NumberFormatException ignored)
+                {
+                }
+            }
+        }
+
+        return 0.99;
     }
 
     /**
@@ -632,14 +670,44 @@ public final class AiConfiguration
 
     /**
      * Resolves the execution mode for the LLM Quality Judge.
-     * Valid options: "ON_AMBIGUITY" (default), "ALWAYS", "ON_FAIL".
+     * Valid options: "DISCUSSION" (default), "ON_AMBIGUITY", "ALWAYS", "ON_FAIL".
      *
      * @return the resolved judge mode string (uppercase)
      */
     public String getJudgeMode()
     {
-        final String mode = getProperty("neodymium.ai.judge.mode", "ON_AMBIGUITY");
-        return mode != null ? mode.trim().toUpperCase() : "ON_AMBIGUITY";
+        final String mode = getProperty("neodymium.ai.judge.mode", "DISCUSSION");
+        return mode != null ? mode.trim().toUpperCase() : "DISCUSSION";
+    }
+
+    /**
+     * Maximum interactive deliberation discussion turns between Judge and live SUT prober.
+     *
+     * @return max discussion turns (default: 3)
+     */
+    public int getJudgeDiscussionMaxTurns()
+    {
+        return getInt("neodymium.ai.judge.discussion.maxTurns", 3);
+    }
+
+    /**
+     * Maximum matching elements summarized per candidate during live SUT probing.
+     *
+     * @return probe depth (default: 3)
+     */
+    public int getJudgeDiscussionProbeDepth()
+    {
+        return getInt("neodymium.ai.judge.discussion.probeDepth", 3);
+    }
+
+    /**
+     * Whether fast-path auto-approval is enabled for decisive score-10 unique matches.
+     *
+     * @return true if fast-path is enabled (default: true)
+     */
+    public boolean isJudgeDiscussionFastPathEnabled()
+    {
+        return getBoolean("neodymium.ai.judge.discussion.fastPath", true);
     }
 
     /**
@@ -665,16 +733,6 @@ public final class AiConfiguration
     }
 
     /**
-     * Checks if PESAP (Pre-Execution Step Analysis & Partitioning) is enabled.
-     *
-     * @return true if PESAP is enabled (default: true), false otherwise
-     */
-    public boolean isPesapEnabled()
-    {
-        return getBoolean("neodymium.ai.pesap.enabled", true);
-    }
-
-    /**
      * Checks if the upfront playbook pre-flight linter is enabled.
      *
      * @return true if pre-flight linter is enabled (default: true), false otherwise
@@ -697,6 +755,41 @@ public final class AiConfiguration
             return Boolean.parseBoolean(prelintShort.trim());
         }
         return true;
+    }
+
+    /**
+     * Checks if the upfront playbook pre-flight linter is configured to fail on findings.
+     *
+     * @return true if linter findings should fail test execution (default: false), false otherwise
+     */
+    public boolean isLinterFailOnFindings()
+    {
+        final String val = getProperty("neodymium.ai.linter.failOnFindings", null);
+        if (val != null)
+        {
+            return Boolean.parseBoolean(val.trim());
+        }
+        return false;
+    }
+
+    /**
+     * Checks if the empirical post-flight playbook linter is enabled.
+     *
+     * @return true if post-flight linter is enabled (default: false), false otherwise
+     */
+    public boolean isPostFlightLinterEnabled()
+    {
+        final String val = getProperty("neodymium.ai.linter.postFlight.enabled", null);
+        if (val != null)
+        {
+            return Boolean.parseBoolean(val.trim());
+        }
+        final String postVal = getProperty("neodymium.ai.postflight.linter.enabled", null);
+        if (postVal != null)
+        {
+            return Boolean.parseBoolean(postVal.trim());
+        }
+        return false;
     }
 
     /**
@@ -731,6 +824,41 @@ public final class AiConfiguration
             return explicit.trim();
         }
         return getModel("linter");
+    }
+
+    /**
+     * Resolves the configured reasoning effort tier for the pre-flight linter,
+     * checking {@code neodymium.ai.linter.reasoningEffort} before falling back
+     * to {@code neodymium.ai.reasoningEffort}, defaulting to {@link ReasoningEffort#MEDIUM}.
+     *
+     * @return the resolved linter reasoning effort tier
+     */
+    public ReasoningEffort getLinterReasoningEffort()
+    {
+        final String explicit = getProperty("neodymium.ai.linter.reasoningEffort", null);
+        if (explicit != null && !explicit.isBlank())
+        {
+            try
+            {
+                return ReasoningEffort.valueOf(explicit.trim().toUpperCase());
+            }
+            catch (final IllegalArgumentException e)
+            {
+                LOG.warn("⚠️ Invalid neodymium.ai.linter.reasoningEffort value '{}', falling back to default", explicit);
+            }
+        }
+        final String global = getProperty("neodymium.ai.reasoningEffort", null);
+        if (global != null && !global.isBlank())
+        {
+            try
+            {
+                return ReasoningEffort.valueOf(global.trim().toUpperCase());
+            }
+            catch (final IllegalArgumentException ignored)
+            {
+            }
+        }
+        return ReasoningEffort.MEDIUM;
     }
 
     /**
@@ -775,6 +903,43 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks whether raw LLM communication wire logging (target/neodymium-ai-communication.log) is enabled.
+     * Disabled by default.
+     *
+     * @return true if LLM communication wire logging is enabled
+     */
+    public boolean isCommunicationLogEnabled()
+    {
+        for (final String key : new String[] {
+            "neodymium.ai.communicationLog.enabled",
+            "neodymium.ai.communicationLog",
+            "neodymium.ai.communication.log"
+        })
+        {
+            final String sysVal = System.getProperty(key);
+            if (sysVal != null)
+            {
+                return Boolean.parseBoolean(sysVal.trim());
+            }
+        }
+
+        for (final String key : new String[] {
+            "neodymium.ai.communicationLog.enabled",
+            "neodymium.ai.communicationLog",
+            "neodymium.ai.communication.log"
+        })
+        {
+            final String val = getProperty(key, null);
+            if (val != null)
+            {
+                return Boolean.parseBoolean(val.trim());
+            }
+        }
+
+        return false;
+    }
+
+    /**
      * Resolves the target directory path where console execution log files are stored.
      * Defaults to System.getProperty("allure.results.directory", "target/aura-sandbox/allure-results").
      *
@@ -789,20 +954,20 @@ public final class AiConfiguration
 
     /**
      * Gets the active execution mode for the AI pipeline.
-     * Defaults to LLM_RECORDING.
+     * Defaults to REPLAY_WITH_HEALING.
      *
      * @return the execution mode enum
      */
     public ExecutionMode getExecutionMode()
     {
-        final String modeStr = getProperty("neodymium.ai.executionMode", "LLM_RECORDING");
+        final String modeStr = getProperty("neodymium.ai.executionMode", "REPLAY_WITH_HEALING");
         try
         {
             return ExecutionMode.valueOf(modeStr.trim().toUpperCase());
         }
         catch (final IllegalArgumentException e)
         {
-            return ExecutionMode.LLM_RECORDING;
+            return ExecutionMode.REPLAY_WITH_HEALING;
         }
     }
 
@@ -865,24 +1030,62 @@ public final class AiConfiguration
 
     /**
      * Resolves the maximum input (prompt) token budget limit per test run.
-     * Default fallback is -1 (unlimited).
+     * Default fallback is 500,000.
      *
      * @return maximum input token limit
      */
     public int getTokenBudgetInput()
     {
-        return getInt("neodymium.ai.tokenBudget.input", -1);
+        final int val = getInt("neodymium.ai.tokenBudget.input", 500_000);
+        return val > 0 ? val : 500_000;
     }
 
     /**
      * Resolves the maximum output (completion) token budget limit per test run.
-     * Default fallback is -1 (unlimited).
+     * Default fallback is 50,000.
      *
      * @return maximum output token limit
      */
     public int getTokenBudgetOutput()
     {
-        return getInt("neodymium.ai.tokenBudget.output", -1);
+        final int val = getInt("neodymium.ai.tokenBudget.output", 50_000);
+        return val > 0 ? val : 50_000;
+    }
+
+    /**
+     * Resolves the maximum number of tool-execution turns allowed per individual step.
+     * Default fallback is 15 turns.
+     *
+     * @return maximum turns allowed per step
+     */
+    public int getStepMaxTurns()
+    {
+        final int val = getInt("neodymium.ai.step.maxTurns", 15);
+        return val > 0 ? val : 15;
+    }
+
+    /**
+     * Resolves the maximum cumulative token budget allowed per individual step.
+     * Default fallback is 100,000 tokens.
+     *
+     * @return maximum cumulative token budget per step
+     */
+    public int getStepTokenBudget()
+    {
+        final int val = getInt("neodymium.ai.step.maxTokens", 100_000);
+        return val > 0 ? val : 100_000;
+    }
+
+    /**
+     * Resolves the wall-clock timeout in seconds for an individual agent step execution loop.
+     * Default fallback is 60 seconds (or global timeout if configured).
+     *
+     * @return step timeout in seconds
+     */
+    public int getStepTimeoutSeconds()
+    {
+        final int val = getInt("neodymium.ai.step.timeoutSeconds", getInt("neodymium.ai.timeoutSeconds", 60));
+        return val > 0 ? val : 60;
     }
 
     /**
@@ -958,5 +1161,39 @@ public final class AiConfiguration
     public long getLlmInitialRetryDelayMs()
     {
         return Math.max(10L, getLong("neodymium.ai.llm.initialRetryDelayMs", 100L));
+    }
+
+    /**
+     * Checks whether outbound LLM wire image optimization (JPEG compression & downscaling) is enabled.
+     * Default is true.
+     *
+     * @return true if wire image optimization is enabled, false otherwise
+     */
+    public boolean isWireImageOptimizationEnabled()
+    {
+        return getBoolean("neodymium.ai.wireImageOptimization.enabled", true);
+    }
+
+    /**
+     * Gets the JPEG compression quality for outbound LLM wire images (clamped between 0.1 and 1.0).
+     * Default is 0.85f.
+     *
+     * @return JPEG compression quality float
+     */
+    public float getWireImageOptimizationJpegQuality()
+    {
+        final double q = getDouble("neodymium.ai.wireImageOptimization.jpegQuality", 0.85);
+        return (float) Math.max(0.1, Math.min(1.0, q));
+    }
+
+    /**
+     * Gets the maximum resolution dimension (width or height) for outbound LLM wire images.
+     * Default is 1280 pixels.
+     *
+     * @return max dimension in pixels
+     */
+    public int getWireImageOptimizationMaxDimension()
+    {
+        return Math.max(320, getInt("neodymium.ai.wireImageOptimization.maxDimension", 1280));
     }
 }

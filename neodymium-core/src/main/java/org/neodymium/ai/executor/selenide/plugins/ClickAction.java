@@ -22,6 +22,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
@@ -120,6 +121,7 @@ public final class ClickAction implements BrowserActionPlugin
             }
 
             final SelenideElement element = SelenideElementFinder.findElement(action);
+            SelenideElementFinder.scrollIntoViewIfNeeded(element);
             
             // Safety net: If the element is an anchor and is visually hidden for accessibility, 
             // native clicking it directly often bypasses the parent container's event listeners or navigates away.
@@ -141,30 +143,34 @@ public final class ClickAction implements BrowserActionPlugin
 
             try
             {
-                element.click();
+                element.shouldBe(Condition.visible).click();
             }
             catch (final Exception | AssertionError e)
             {
                 try
                 {
+                    SelenideElementFinder.scrollIntoViewIfNeeded(element);
                     Selenide.executeJavaScript("arguments[0].click();", element);
                 }
                 catch (final Throwable ignored)
                 {
                 }
             }
-            try
+            if (WebDriverRunner.hasWebDriverStarted() && !BrowserToolProvider.isAlertPresent(WebDriverRunner.getWebDriver()))
             {
-                final String tagName = element.getTagName();
-                if ("input".equalsIgnoreCase(tagName) || "textarea".equalsIgnoreCase(tagName) || "select".equalsIgnoreCase(tagName))
+                try
                 {
-                    Selenide.executeJavaScript(
-                        "if (arguments[0] && typeof arguments[0].focus === 'function') { arguments[0].focus(); }",
-                        element);
+                    final String tagName = element.getTagName();
+                    if ("input".equalsIgnoreCase(tagName) || "textarea".equalsIgnoreCase(tagName) || "select".equalsIgnoreCase(tagName))
+                    {
+                        Selenide.executeJavaScript(
+                            "if (arguments[0] && typeof arguments[0].focus === 'function') { arguments[0].focus(); }",
+                            element);
+                    }
                 }
-            }
-            catch (final Throwable ignored)
-            {
+                catch (final Throwable ignored)
+                {
+                }
             }
         }
     }

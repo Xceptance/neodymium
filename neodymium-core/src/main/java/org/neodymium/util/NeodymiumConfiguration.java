@@ -305,6 +305,18 @@ public interface NeodymiumConfiguration extends Mutable, Accessible
     @DefaultValue("false")
     public boolean keepBrowserOpenOnFailure();
 
+    @Key("neodymium.webDriver.sessionRetry.maxRetries")
+    @DefaultValue("1")
+    public int sessionRetryMaxRetries();
+
+    @Key("neodymium.webDriver.sessionRetry.pause.min")
+    @DefaultValue("2000")
+    public long sessionRetryPauseMin();
+
+    @Key("neodymium.webDriver.sessionRetry.pause.max")
+    @DefaultValue("10000")
+    public long sessionRetryPauseMax();
+
     @Key("neodymium.webDriver.chrome.pathToDriverServer")
     public String getChromeDriverPath();
 

@@ -379,5 +379,110 @@ public final class ScreenshotHasher
             return 0.0;
         }
     }
+
+    /**
+     * Computes a 64-bit difference hash (dHash) for an image, represented as a 16-character hex string.
+     *
+     * @param image source image
+     * @return 16-character hex dHash string, or {@code null} if input is null
+     */
+    public static String computeDHash(final BufferedImage image)
+    {
+        if (image == null)
+        {
+            return null;
+        }
+
+        final BufferedImage resized = new BufferedImage(9, 8, BufferedImage.TYPE_BYTE_GRAY);
+        final Graphics2D g = resized.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(image, 0, 0, 9, 8, null);
+        g.dispose();
+
+        long hash = 0L;
+        for (int y = 0; y < 8; y++)
+        {
+            for (int x = 0; x < 8; x++)
+            {
+                final int left = resized.getRaster().getSample(x, y, 0);
+                final int right = resized.getRaster().getSample(x + 1, y, 0);
+                if (left > right)
+                {
+                    hash |= (1L << (y * 8 + x));
+                }
+            }
+        }
+        return String.format("%016x", hash);
+    }
+
+    /**
+     * Computes a 64-bit perceptual dHash for a Base64-encoded PNG image.
+     *
+     * @param base64Png Base64-encoded PNG image
+     * @return 16-character hex dHash string, or {@code null} if invalid
+     */
+    public static String computeDHash(final String base64Png)
+    {
+        if (base64Png == null || base64Png.isBlank())
+        {
+            return null;
+        }
+        try
+        {
+            final byte[] bytes = Base64.getDecoder().decode(base64Png);
+            try (final ByteArrayInputStream bais = new ByteArrayInputStream(bytes))
+            {
+                final BufferedImage img = ImageIO.read(bais);
+                return computeDHash(img);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to compute dHash from Base64 PNG: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Computes the Hamming distance between two 16-hex-digit 64-bit dHash strings.
+     *
+     * @param hash1 first hex dHash
+     * @param hash2 second hex dHash
+     * @return Hamming bit distance (0 to 64), or -1 if invalid
+     */
+    public static int hammingDistance(final String hash1, final String hash2)
+    {
+        if (hash1 == null || hash2 == null || hash1.isBlank() || hash2.isBlank())
+        {
+            return -1;
+        }
+        try
+        {
+            final long h1 = Long.parseUnsignedLong(hash1.trim(), 16);
+            final long h2 = Long.parseUnsignedLong(hash2.trim(), 16);
+            return Long.bitCount(h1 ^ h2);
+        }
+        catch (final Exception e)
+        {
+            return -1;
+        }
+    }
+
+    /**
+     * Calculates the perceptual similarity score (0.0 to 1.0) between two 64-bit dHash hex strings.
+     *
+     * @param hash1 first hex dHash
+     * @param hash2 second hex dHash
+     * @return similarity score between 0.0 and 1.0 (1.0 = identical), or -1.0 if invalid
+     */
+    public static double calculateDHashSimilarity(final String hash1, final String hash2)
+    {
+        final int dist = hammingDistance(hash1, hash2);
+        if (dist < 0)
+        {
+            return -1.0;
+        }
+        return Math.max(0.0, 1.0 - ((double) dist / 64.0));
+    }
 }
 

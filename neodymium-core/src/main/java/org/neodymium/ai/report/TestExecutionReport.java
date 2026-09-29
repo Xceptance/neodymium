@@ -22,13 +22,14 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
 import javax.imageio.ImageIO;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.prompt.VerificationResult;
@@ -58,8 +59,10 @@ public final class TestExecutionReport
     private String failureStackTrace;
     private String visualRcaExplanation;
 
+    private final List<String> tags = new ArrayList<>();
     private final List<String> warnings = new ArrayList<>();
     private final List<PlaybookLinterFinding> linterFindings = new ArrayList<>();
+    private final List<PlaybookLinterFinding> postFlightFindings = new ArrayList<>();
     private final List<ReportStepEntry> steps = new ArrayList<>();
     private final List<ReportLlmCallEntry> llmCalls = new ArrayList<>();
     private final List<ReportScreenshotEntry> screenshots = new ArrayList<>();
@@ -236,6 +239,39 @@ public final class TestExecutionReport
         }
     }
 
+    public List<String> getTags()
+    {
+        return Collections.unmodifiableList(this.tags);
+    }
+
+    public void addTag(final String tag)
+    {
+        if (tag != null && !tag.isBlank() && !this.tags.contains(tag.trim()))
+        {
+            this.tags.add(tag.trim());
+        }
+    }
+
+    public void addTags(final Collection<String> tags)
+    {
+        if (tags != null)
+        {
+            for (final String t : tags)
+            {
+                addTag(t);
+            }
+        }
+    }
+
+    public void setTags(final List<String> tags)
+    {
+        this.tags.clear();
+        if (tags != null)
+        {
+            addTags(tags);
+        }
+    }
+
     public List<ReportStepEntry> getSteps()
     {
         return Collections.unmodifiableList(this.steps);
@@ -246,92 +282,7 @@ public final class TestExecutionReport
         if (step != null)
         {
             this.steps.add(step);
-            this.steps.sort(Comparator.comparingInt(ReportStepEntry::getStepIndex));
         }
-    }
-
-    /**
-     * Recursively searches top-level steps and sub-steps for a {@link ReportStepEntry} matching the given stepIndex.
-     *
-     * @param stepIndex the 0-based step index to search for
-     * @return matching ReportStepEntry, or {@code null} if not found
-     */
-    public ReportStepEntry findStepEntry(final int stepIndex)
-    {
-        for (final ReportStepEntry step : this.steps)
-        {
-            final ReportStepEntry found = findStepEntryRecursive(step, stepIndex);
-            if (found != null)
-            {
-                return found;
-            }
-        }
-        return null;
-    }
-
-    private static ReportStepEntry findStepEntryRecursive(final ReportStepEntry entry, final int stepIndex)
-    {
-        if (entry == null)
-        {
-            return null;
-        }
-        if (entry.getStepIndex() == stepIndex)
-        {
-            return entry;
-        }
-        for (final ReportStepEntry sub : entry.getSubSteps())
-        {
-            final ReportStepEntry found = findStepEntryRecursive(sub, stepIndex);
-            if (found != null)
-            {
-                return found;
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Recursively searches top-level steps and sub-steps for a {@link ReportStepEntry} matching the given instruction or raw instruction.
-     *
-     * @param instruction the instruction or raw instruction string
-     * @return matching ReportStepEntry, or {@code null} if not found
-     */
-    public ReportStepEntry findStepEntryByInstruction(final String instruction)
-    {
-        if (instruction == null)
-        {
-            return null;
-        }
-        for (final ReportStepEntry step : this.steps)
-        {
-            final ReportStepEntry found = findStepEntryByInstructionRecursive(step, instruction);
-            if (found != null)
-            {
-                return found;
-            }
-        }
-        return null;
-    }
-
-    private static ReportStepEntry findStepEntryByInstructionRecursive(final ReportStepEntry entry, final String instruction)
-    {
-        if (entry == null)
-        {
-            return null;
-        }
-        if (instruction.equals(entry.getRawInstruction()) || instruction.equals(entry.getInstruction()))
-        {
-            return entry;
-        }
-        for (final ReportStepEntry sub : entry.getSubSteps())
-        {
-            final ReportStepEntry found = findStepEntryByInstructionRecursive(sub, instruction);
-            if (found != null)
-            {
-                return found;
-            }
-        }
-        return null;
     }
 
     public List<ReportLlmCallEntry> getLlmCalls()
@@ -388,10 +339,6 @@ public final class TestExecutionReport
         private String failureReason;
         private int escalations;
         private String contextLevels;
-        private int pesapCalls;
-        private long pesapInputTokens;
-        private long pesapOutputTokens;
-        private long pesapCachedTokens;
         private int standardCalls;
         private long standardInputTokens;
         private long standardOutputTokens;
@@ -422,7 +369,6 @@ public final class TestExecutionReport
         private String baselineMatrixPng;
         private String replayMatrixPng;
         private Integer screenshotHashDim;
-        private String semanticIntent;
 
         public ReportStepEntry()
         {
@@ -456,34 +402,6 @@ public final class TestExecutionReport
 
         public String getStatus()
         {
-            if (!this.subSteps.isEmpty())
-            {
-                boolean anyFailed = false;
-                String lastExecutedStatus = null;
-                for (final ReportStepEntry sub : this.subSteps)
-                {
-                    if (sub != null)
-                    {
-                        final String subSt = sub.getStatus();
-                        if ("FAILED".equalsIgnoreCase(subSt))
-                        {
-                            anyFailed = true;
-                        }
-                        if (subSt != null && !"PENDING".equalsIgnoreCase(subSt) && !"SKIPPED".equalsIgnoreCase(subSt))
-                        {
-                            lastExecutedStatus = subSt;
-                        }
-                    }
-                }
-                if (anyFailed)
-                {
-                    return "FAILED";
-                }
-                if (lastExecutedStatus != null)
-                {
-                    return lastExecutedStatus;
-                }
-            }
             return this.status;
         }
 
@@ -592,46 +510,6 @@ public final class TestExecutionReport
         public void setContextLevels(final String contextLevels)
         {
             this.contextLevels = contextLevels;
-        }
-
-        public int getPesapCalls()
-        {
-            return this.pesapCalls;
-        }
-
-        public void setPesapCalls(final int pesapCalls)
-        {
-            this.pesapCalls = pesapCalls;
-        }
-
-        public long getPesapInputTokens()
-        {
-            return this.pesapInputTokens;
-        }
-
-        public void setPesapInputTokens(final long pesapInputTokens)
-        {
-            this.pesapInputTokens = pesapInputTokens;
-        }
-
-        public long getPesapOutputTokens()
-        {
-            return this.pesapOutputTokens;
-        }
-
-        public void setPesapOutputTokens(final long pesapOutputTokens)
-        {
-            this.pesapOutputTokens = pesapOutputTokens;
-        }
-
-        public long getPesapCachedTokens()
-        {
-            return this.pesapCachedTokens;
-        }
-
-        public void setPesapCachedTokens(final long pesapCachedTokens)
-        {
-            this.pesapCachedTokens = pesapCachedTokens;
         }
 
         public int getStandardCalls()
@@ -746,7 +624,21 @@ public final class TestExecutionReport
 
         public boolean isBug()
         {
-            return this.bug;
+            if (this.bug)
+            {
+                return true;
+            }
+            if (this.subSteps != null)
+            {
+                for (final ReportStepEntry sub : this.subSteps)
+                {
+                    if (sub.isBug())
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         public void setBug(final boolean bug)
@@ -756,7 +648,22 @@ public final class TestExecutionReport
 
         public String getBugDetails()
         {
-            return this.bugDetails;
+            if (this.bugDetails != null)
+            {
+                return this.bugDetails;
+            }
+            if (this.subSteps != null)
+            {
+                for (final ReportStepEntry sub : this.subSteps)
+                {
+                    final String subDetails = sub.getBugDetails();
+                    if (subDetails != null)
+                    {
+                        return subDetails;
+                    }
+                }
+            }
+            return null;
         }
 
         public void setBugDetails(final String bugDetails)
@@ -766,7 +673,21 @@ public final class TestExecutionReport
 
         public boolean isOptional()
         {
-            return this.optional;
+            if (this.optional)
+            {
+                return true;
+            }
+            if (this.subSteps != null)
+            {
+                for (final ReportStepEntry sub : this.subSteps)
+                {
+                    if (sub.isOptional())
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
         }
 
         public void setOptional(final boolean optional)
@@ -864,15 +785,6 @@ public final class TestExecutionReport
             this.screenshotHashDim = screenshotHashDim;
         }
 
-        public String getSemanticIntent()
-        {
-            return this.semanticIntent;
-        }
-
-        public void setSemanticIntent(final String semanticIntent)
-        {
-            this.semanticIntent = semanticIntent;
-        }
 
         public int getVerificationCalls()
         {
@@ -962,56 +874,6 @@ public final class TestExecutionReport
         public void setVerificationResult(final VerificationResult verificationResult)
         {
             this.verificationResult = verificationResult;
-        }
-
-        /**
-         * Resets mutable execution state accumulated during a previous execution attempt,
-         * preparing this entry for a fresh re-execution of the same step (e.g., after an
-         * interactive EDIT action). The step index and accumulated LLM call communications are
-         * preserved across edits so that the full prompt trace history remains accessible. Actions,
-         * screenshots, sub-steps, token counters, reasoning, failure details, and timing fields are cleared.
-         * The status is reset to {@code "RUNNING"} and the instruction fields are updated.
-         *
-         * @param newInstruction    the resolved (variable-substituted) instruction for the re-execution
-         * @param newRawInstruction the raw (pre-substitution) instruction for the re-execution
-         */
-        public void reset(final String newInstruction, final String newRawInstruction)
-        {
-            this.instruction = newInstruction;
-            this.rawInstruction = newRawInstruction;
-            this.status = "RUNNING";
-            this.startTimeMs = System.currentTimeMillis();
-            this.durationMs = 0L;
-            this.reasoning = null;
-            this.failureReason = null;
-            this.escalations = 0;
-            this.contextLevels = null;
-            this.semanticIntent = null;
-            this.verificationResult = null;
-
-            // Reset all token usage counters accumulated from the prior attempt
-            this.pesapCalls = 0;
-            this.pesapInputTokens = 0L;
-            this.pesapOutputTokens = 0L;
-            this.pesapCachedTokens = 0L;
-            this.standardCalls = 0;
-            this.standardInputTokens = 0L;
-            this.standardOutputTokens = 0L;
-            this.standardCachedTokens = 0L;
-            this.verificationCalls = 0;
-            this.verificationInputTokens = 0L;
-            this.verificationOutputTokens = 0L;
-            this.verificationCachedTokens = 0L;
-            this.rcaCalls = 0;
-            this.rcaInputTokens = 0L;
-            this.rcaOutputTokens = 0L;
-            this.rcaCachedTokens = 0L;
-
-            // Clear execution artifacts from the prior attempt (llmCalls is preserved to maintain pre-edit prompt trace history)
-            this.actions.clear();
-            this.screenshots.clear();
-            this.subSteps.clear();
-            this.reasonings.clear();
         }
     }
 
@@ -1164,6 +1026,7 @@ public final class TestExecutionReport
     public static final class ReportLlmCallEntry
     {
         private int stepIndex;
+        private int subStepIndex = -1;
         private String capability;
         private String modelName;
         private long durationMs;
@@ -1175,6 +1038,7 @@ public final class TestExecutionReport
         private String systemPrompt;
         private String userPrompt;
         private String responseContent;
+        private List<String> availableTools = new ArrayList<>();
 
         public ReportLlmCallEntry()
         {
@@ -1188,6 +1052,16 @@ public final class TestExecutionReport
         public void setStepIndex(final int stepIndex)
         {
             this.stepIndex = stepIndex;
+        }
+
+        public int getSubStepIndex()
+        {
+            return this.subStepIndex;
+        }
+
+        public void setSubStepIndex(final int subStepIndex)
+        {
+            this.subStepIndex = subStepIndex;
         }
 
         public String getCapability()
@@ -1299,6 +1173,16 @@ public final class TestExecutionReport
         {
             this.responseContent = responseContent;
         }
+
+        public List<String> getAvailableTools()
+        {
+            return this.availableTools != null ? this.availableTools : Collections.emptyList();
+        }
+
+        public void setAvailableTools(final List<String> availableTools)
+        {
+            this.availableTools = availableTools != null ? new ArrayList<>(availableTools) : new ArrayList<>();
+        }
     }
 
     /**
@@ -1309,6 +1193,7 @@ public final class TestExecutionReport
     {
         private String name;
         private int stepIndex;
+        private int subStepIndex = -1;
         private String mediaType;
         private String base64Data;
         private long timestamp;
@@ -1372,6 +1257,16 @@ public final class TestExecutionReport
         public void setStepIndex(final int stepIndex)
         {
             this.stepIndex = stepIndex;
+        }
+
+        public int getSubStepIndex()
+        {
+            return this.subStepIndex;
+        }
+
+        public void setSubStepIndex(final int subStepIndex)
+        {
+            this.subStepIndex = subStepIndex;
         }
 
         public String getMediaType()
@@ -1600,11 +1495,11 @@ public final class TestExecutionReport
 
         private CategoryTokenUsage total = new CategoryTokenUsage();
         private CategoryTokenUsage action = new CategoryTokenUsage();
-        private CategoryTokenUsage pesap = new CategoryTokenUsage();
         private CategoryTokenUsage judge = new CategoryTokenUsage();
         private CategoryTokenUsage verification = new CategoryTokenUsage();
         private CategoryTokenUsage visualRca = new CategoryTokenUsage();
         private CategoryTokenUsage linter = new CategoryTokenUsage();
+        private CategoryTokenUsage postFlightLinter = new CategoryTokenUsage();
 
         public ReportMetrics()
         {
@@ -1776,16 +1671,6 @@ public final class TestExecutionReport
             this.action = action != null ? action : new CategoryTokenUsage();
         }
 
-        public CategoryTokenUsage getPesap()
-        {
-            return this.pesap;
-        }
-
-        public void setPesap(final CategoryTokenUsage pesap)
-        {
-            this.pesap = pesap != null ? pesap : new CategoryTokenUsage();
-        }
-
         public CategoryTokenUsage getJudge()
         {
             return this.judge;
@@ -1825,6 +1710,16 @@ public final class TestExecutionReport
         {
             this.linter = linter != null ? linter : new CategoryTokenUsage();
         }
+
+        public CategoryTokenUsage getPostFlightLinter()
+        {
+            return this.postFlightLinter;
+        }
+
+        public void setPostFlightLinter(final CategoryTokenUsage postFlightLinter)
+        {
+            this.postFlightLinter = postFlightLinter != null ? postFlightLinter : new CategoryTokenUsage();
+        }
     }
 
     public List<PlaybookLinterFinding> getLinterFindings()
@@ -1845,6 +1740,27 @@ public final class TestExecutionReport
         if (findings != null)
         {
             this.linterFindings.addAll(findings);
+        }
+    }
+
+    public List<PlaybookLinterFinding> getPostFlightFindings()
+    {
+        return Collections.unmodifiableList(this.postFlightFindings);
+    }
+
+    public void addPostFlightFinding(final PlaybookLinterFinding finding)
+    {
+        if (finding != null)
+        {
+            this.postFlightFindings.add(finding);
+        }
+    }
+
+    public void addPostFlightFindings(final List<PlaybookLinterFinding> findings)
+    {
+        if (findings != null)
+        {
+            this.postFlightFindings.addAll(findings);
         }
     }
 }

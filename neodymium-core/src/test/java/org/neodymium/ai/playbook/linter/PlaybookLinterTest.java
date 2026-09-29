@@ -18,10 +18,12 @@
  */
 package org.neodymium.ai.playbook.linter;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -36,6 +38,7 @@ import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.client.ReasoningEffort;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
@@ -43,6 +46,7 @@ import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
 
 /**
@@ -54,11 +58,13 @@ import org.neodymium.ai.session.AiSession;
 public final class PlaybookLinterTest
 {
     private String originalEnabled;
+    private String originalFailOnFindings;
 
     @BeforeEach
     public void setUp()
     {
         this.originalEnabled = System.getProperty("neodymium.ai.linter.enabled");
+        this.originalFailOnFindings = System.getProperty("neodymium.ai.linter.failOnFindings");
     }
 
     @AfterEach
@@ -72,6 +78,16 @@ public final class PlaybookLinterTest
         {
             System.clearProperty("neodymium.ai.linter.enabled");
         }
+        if (this.originalFailOnFindings != null)
+        {
+            System.setProperty("neodymium.ai.linter.failOnFindings", this.originalFailOnFindings);
+        }
+        else
+        {
+            System.clearProperty("neodymium.ai.linter.failOnFindings");
+        }
+        System.clearProperty("neodymium.ai.linter.reasoningEffort");
+        System.clearProperty("neodymium.ai.reasoningEffort");
         AiConfiguration.resetInstance();
         ExecutionContext.setActiveContext(null);
     }
@@ -247,5 +263,107 @@ public final class PlaybookLinterTest
 
         // Graceful return of empty findings
         assertTrue(findings.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Verify StateMachineRunner throws PlaybookLinterException when findings exist and failOnFindings is true")
+    public void testStateMachineRunnerThrowsWhenFailOnFindingsEnabled()
+    {
+        System.setProperty("neodymium.ai.linter.enabled", "true");
+        System.setProperty("neodymium.ai.linter.failOnFindings", "true");
+        AiConfiguration.resetInstance();
+
+        final String cannedJson = """
+            {
+              "findings": [
+                {
+                  "stepIndex": 1,
+                  "category": "DANGLING_ANAPHORA",
+                  "severity": "WARNING",
+                  "message": "Step references 'its button' without context.",
+                  "suggestedRewrite": "Group with previous step.",
+                  "scope": null
+                }
+              ]
+            }
+            """;
+
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        mockProvider.addResponse(new LlmResponse(cannedJson, new TokenUsage(100, 50, 150, 20), "mock-linter-model"));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.registerProvider(LlmCapability.LINTER, mockProvider);
+
+        final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), null);
+        final ExecutionContext context = session.getExecutionContext();
+        ExecutionContext.setActiveContext(context);
+
+        final PlaybookStep s1 = new PlaybookStep("Click its button");
+        context.getTransientData().put("playbook.steps", List.of(s1));
+
+        final StateMachineRunner runner = new StateMachineRunner(session);
+        final PlaybookLinterException thrown = assertThrows(PlaybookLinterException.class, runner::run);
+
+        assertEquals(1, thrown.getFindings().size());
+        assertEquals(LinterCategory.DANGLING_ANAPHORA, thrown.getFindings().get(0).category());
+    }
+
+    @Test
+    @DisplayName("Verify StateMachineRunner proceeds without exception when failOnFindings is false")
+    public void testStateMachineRunnerContinuesWhenFailOnFindingsDisabled()
+    {
+        System.setProperty("neodymium.ai.linter.enabled", "true");
+        System.setProperty("neodymium.ai.linter.failOnFindings", "false");
+        AiConfiguration.resetInstance();
+
+        final String cannedJson = """
+            {
+              "findings": [
+                {
+                  "stepIndex": 1,
+                  "category": "DANGLING_ANAPHORA",
+                  "severity": "WARNING",
+                  "message": "Step references 'its button' without context.",
+                  "suggestedRewrite": null,
+                  "scope": null
+                }
+              ]
+            }
+            """;
+
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        mockProvider.addResponse(new LlmResponse(cannedJson, new TokenUsage(100, 50, 150, 20), "mock-linter-model"));
+
+        final LlmRegistry registry = new LlmRegistry();
+        registry.registerProvider(LlmCapability.LINTER, mockProvider);
+
+        final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), null);
+        final ExecutionContext context = session.getExecutionContext();
+        ExecutionContext.setActiveContext(context);
+
+        final PlaybookStep s1 = new PlaybookStep("Click its button");
+        context.getTransientData().put("playbook.steps", List.of(s1));
+
+        final StateMachineRunner runner = new StateMachineRunner(session);
+        assertDoesNotThrow(runner::run);
+    }
+
+    @Test
+    @DisplayName("Verify linter reasoning effort defaults to MEDIUM and honors configuration override")
+    public void testLinterReasoningEffortConfiguration()
+    {
+        System.clearProperty("neodymium.ai.linter.reasoningEffort");
+        System.clearProperty("neodymium.ai.reasoningEffort");
+        AiConfiguration.resetInstance();
+
+        assertEquals(ReasoningEffort.MEDIUM, AiConfiguration.getInstance().getLinterReasoningEffort());
+
+        System.setProperty("neodymium.ai.linter.reasoningEffort", "HIGH");
+        AiConfiguration.resetInstance();
+        assertEquals(ReasoningEffort.HIGH, AiConfiguration.getInstance().getLinterReasoningEffort());
+
+        System.setProperty("neodymium.ai.linter.reasoningEffort", "invalid");
+        AiConfiguration.resetInstance();
+        assertEquals(ReasoningEffort.MEDIUM, AiConfiguration.getInstance().getLinterReasoningEffort());
     }
 }

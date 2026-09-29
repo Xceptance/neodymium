@@ -71,25 +71,6 @@ public final class AiAgentPrompts
         }
     }
 
-    /**
-     * Loads the JIT pre-step PESAP prompt template.
-     *
-     * @return the fully prepared pre-step PESAP system prompt
-     */
-    public static String getPesapPreStepPrompt()
-    {
-        return getPrompt("pesap-pre-step-prompt.md");
-    }
-
-    /**
-     * Loads the action extraction system prompt template.
-     *
-     * @return the action extraction system prompt
-     */
-    public static String getActionExtractionPrompt()
-    {
-        return getPrompt("action-extraction-prompt.md");
-    }
 
     /**
      * Loads the verification system prompt template.
@@ -122,16 +103,6 @@ public final class AiAgentPrompts
     }
 
     /**
-     * Loads the candidate locators rule template for Quality Judge evaluations.
-     *
-     * @return the candidate locators rule markdown
-     */
-    public static String getCandidateLocatorsRule()
-    {
-        return getPrompt("candidate-locators-rule.md");
-    }
-
-    /**
      * Loads the Quality Judge system prompt template.
      *
      * @return the quality judge system prompt
@@ -142,13 +113,13 @@ public final class AiAgentPrompts
     }
 
     /**
-     * Loads the lightweight visual-only system prompt template.
+     * Loads the Quality Judge multi-turn discussion system prompt template.
      *
-     * @return the visual-only system prompt
+     * @return the quality judge discussion system prompt
      */
-    public static String getVisualOnlyPrompt()
+    public static String getQualityJudgeDiscussionPrompt()
     {
-        return getPrompt("visual-only-prompt.md");
+        return getPrompt("quality-judge-discussion-prompt.md");
     }
 
     /**
@@ -159,5 +130,15 @@ public final class AiAgentPrompts
     public static String getPlaybookLinterPrompt()
     {
         return getPrompt("playbook-linter-prompt.md");
+    }
+
+    /**
+     * Loads the empirical post-flight playbook linter system prompt template.
+     *
+     * @return the post-flight playbook linter system prompt
+     */
+    public static String getPostFlightLinterPrompt()
+    {
+        return getPrompt("post-flight-linter-prompt.md");
     }
 }

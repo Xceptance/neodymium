@@ -33,10 +33,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.Executors;
-
-import com.xceptance.neodymium.aura.AuraInteractiveService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -131,45 +128,6 @@ public final class InteractiveConsoleServer
         LOG.info("  (Also accessible on your local network via your machine's IP)");
         LOG.info("========================================================================");
 
-        // Fast native system browser launch (< 100ms)
-        if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE))
-        {
-            try
-            {
-                Desktop.getDesktop().browse(new URI(url));
-                return;
-            }
-            catch (final Exception e)
-            {
-                LOG.debug("Desktop.browse non-fatal fallback: {}", e.getMessage());
-            }
-        }
-
-        try
-        {
-            final String os = System.getProperty("os.name", "").toLowerCase();
-            if (os.contains("win"))
-            {
-                Runtime.getRuntime().exec(new String[] { "cmd.exe", "/c", "start", url });
-                return;
-            }
-            else if (os.contains("mac"))
-            {
-                Runtime.getRuntime().exec(new String[] { "open", url });
-                return;
-            }
-            else
-            {
-                Runtime.getRuntime().exec(new String[] { "xdg-open", url });
-                return;
-            }
-        }
-        catch (final Exception e)
-        {
-            LOG.debug("OS native browser launch fallback: {}", e.getMessage());
-        }
-
-        // Heavyweight Selenide driver fallback if native launch failed
         try
         {
             final com.codeborne.selenide.SelenideConfig config = new com.codeborne.selenide.SelenideConfig();
@@ -179,7 +137,7 @@ public final class InteractiveConsoleServer
                 browser = "chrome";
             }
             config.browser(browser);
-            config.headless(false);
+            config.headless(false); // force non-headless
             if (browser.toLowerCase().contains("chrome"))
             {
                 final org.openqa.selenium.chrome.ChromeOptions options = new org.openqa.selenium.chrome.ChromeOptions();
@@ -188,6 +146,42 @@ public final class InteractiveConsoleServer
             }
             this.consoleDriver = new com.codeborne.selenide.SelenideDriver(config);
             this.consoleDriver.open(url);
+            return;
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Could not open browser via Selenide: {}. Falling back to Desktop.", e.getMessage());
+        }
+        // Fallback if selnide failed.
+
+        if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE))
+        {
+            try
+            {
+                Desktop.getDesktop().browse(new URI(url));
+                return;
+            }
+            catch (final Exception e)
+            {
+                LOG.warn("Could not open browser via Desktop.browse: {}. Trying OS fallback.", e.getMessage());
+            }
+        }
+
+        try
+        {
+            final String os = System.getProperty("os.name", "").toLowerCase();
+            if (os.contains("win"))
+            {
+                Runtime.getRuntime().exec(new String[] { "cmd.exe", "/c", "start", url });
+            }
+            else if (os.contains("mac"))
+            {
+                Runtime.getRuntime().exec(new String[] { "open", url });
+            }
+            else
+            {
+                Runtime.getRuntime().exec(new String[] { "xdg-open", url });
+            }
         }
         catch (final Exception e)
         {
@@ -440,12 +434,17 @@ public final class InteractiveConsoleServer
 
                 if (fileName != null)
                 {
-                    final AuraInteractiveService interactiveService = new AuraInteractiveService();
-                    final Optional<File> targetFile = interactiveService.getScreenshotFile(fileName, null);
-                    if (targetFile.isPresent())
+                    if (fileName.contains("/") || fileName.contains("\\") || fileName.contains(".."))
+                    {
+                        exchange.sendResponseHeaders(403, -1);
+                        return;
+                    }
+                    final String screenshotsDir = AiConfiguration.getInstance().getProperty("neodymium.ai.console.screenshotsDir", "target/aura-sandbox/ai-console-screenshots");
+                    final Path file = Paths.get(screenshotsDir, fileName);
+                    if (Files.exists(file))
                     {
                         exchange.getResponseHeaders().set("Content-Type", "image/png");
-                        final byte[] bytes = Files.readAllBytes(targetFile.get().toPath());
+                        final byte[] bytes = Files.readAllBytes(file);
                         exchange.sendResponseHeaders(200, bytes.length);
                         try (final OutputStream os = exchange.getResponseBody())
                         {

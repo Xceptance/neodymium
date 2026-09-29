@@ -1,5 +1,6 @@
 package org.neodymium.common.browser;
 
+import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.common.Data;
 import org.neodymium.junit5.NeodymiumTest;
 import org.neodymium.util.Neodymium;
@@ -252,7 +253,10 @@ public class BrowserData extends Data
     private BrowserMethodData addKeepBrowserOpenInformation(String browserTag, Method method)
     {
         BrowserMethodData browserMethodData = addKeepBrowserOpenInformationForBeforeOrAfter(browserTag, method);
-        boolean junit5 = NeodymiumAnnotationUtils.isAnnotationPresent(method, NeodymiumTest.class);
+        final boolean junit5 = NeodymiumAnnotationUtils.isAnnotationPresent(method, NeodymiumTest.class)
+            || NeodymiumAnnotationUtils.isAnnotationPresent(testClass, NeodymiumTest.class)
+            || NeodymiumAnnotationUtils.isAnnotationPresent(testClass, NeodymiumAiTest.class)
+            || Stream.of(testClass.getMethods()).anyMatch(classMethod -> classMethod.isAnnotationPresent(AfterEach.class) || classMethod.isAnnotationPresent(BeforeEach.class));
         List<Method> afterMethodsWithTestBrowser = Stream.of(testClass.getMethods())
                                                          .filter(classMethod -> (junit5 ? classMethod.getAnnotation(AfterEach.class)
                                                                                         : classMethod.getAnnotation(After.class)) != null)

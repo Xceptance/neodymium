@@ -18,6 +18,8 @@
  */
 package org.neodymium.ai.model;
 
+import org.neodymium.ai.util.ScreenshotHasher;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +42,9 @@ public final class LocatorCascadeResolver
     /**
      * Computes the composite similarity score (0.0 to 1.0) between a recorded target vector
      * and a live candidate element vector using the exact OpenSpec formula:
-     * 0.35 * TagScore + 0.30 * AttrJaccard + 0.25 * TextLevenshtein + 0.10 * ClassJaccard
+     * 0.35 * TagScore + 0.30 * AttrJaccard + 0.25 * TextLevenshtein + 0.10 * ClassJaccard.
+     * When text and accessible names are absent (e.g. icon-only elements), Tier 2 visual
+     * perceptual dHash and aspect ratio similarity are evaluated.
      *
      * @param recorded the baseline recorded feature vector
      * @param candidate the live candidate feature vector
@@ -58,6 +62,20 @@ public final class LocatorCascadeResolver
 
         // 2. Attributes Jaccard Overlap (Weight: 30%)
         final double attrScore = calculateAttributeJaccard(recorded.getAttributes(), candidate.getAttributes());
+
+        // Check if element is icon-only or textless with visual similarity metadata
+        final boolean isTextless = (recorded.getText() == null || recorded.getText().isBlank())
+            && (recorded.getAccessibleName() == null || recorded.getAccessibleName().isBlank());
+
+        if (isTextless && (recorded.hasVisualHash() || (recorded.getTileSsim() != null && !recorded.getTileSsim().isBlank())))
+        {
+            // Tier 2 Perceptual Visual Similarity (Aspect ratio + dHash / Tile SSIM)
+            final double visualScore = computeVisualSimilarity(recorded, candidate);
+            final double classScore = calculateJaccard(recorded.getClasses(), candidate.getClasses());
+
+            // 0.35 * TagScore + 0.15 * AttrJaccard + 0.45 * VisualScore + 0.05 * ClassJaccard
+            return (tagScore * 0.35) + (attrScore * 0.15) + (visualScore * 0.45) + (classScore * 0.05);
+        }
 
         // 3. Text & Accessible Name Score (Weight: 25%)
         final double textScore = Math.max(
@@ -326,5 +344,79 @@ public final class LocatorCascadeResolver
         }
 
         return prev[s2.length()];
+    }
+
+    /**
+     * Computes perceptual visual similarity combining bounding box aspect ratio and visual dHash (or tile SSIM).
+     *
+     * @param recorded baseline recorded vector
+     * @param candidate candidate live vector
+     * @return visual similarity score between 0.0 and 1.0
+     */
+    public static double computeVisualSimilarity(final DomFeatureVector recorded, final DomFeatureVector candidate)
+    {
+        if (recorded == null || candidate == null)
+        {
+            return 0.0;
+        }
+
+        final double aspectSim = calculateAspectSimilarity(recorded, candidate);
+
+        double hashSim = -1.0;
+        if (recorded.hasVisualHash() && candidate.hasVisualHash())
+        {
+            hashSim = calculateDHashSimilarity(recorded.getVisualHash(), candidate.getVisualHash());
+        }
+        else if (recorded.getTileSsim() != null && !recorded.getTileSsim().isBlank()
+            && candidate.getTileSsim() != null && !candidate.getTileSsim().isBlank())
+        {
+            hashSim = ScreenshotHasher.calculateSsim(recorded.getTileSsim(), candidate.getTileSsim());
+        }
+
+        if (hashSim >= 0.0)
+        {
+            return (hashSim * 0.75) + (aspectSim * 0.25);
+        }
+
+        return aspectSim;
+    }
+
+    /**
+     * Computes aspect ratio similarity between two bounding boxes.
+     *
+     * @param recorded baseline recorded vector
+     * @param candidate candidate live vector
+     * @return aspect ratio similarity between 0.0 and 1.0
+     */
+    public static double calculateAspectSimilarity(final DomFeatureVector recorded, final DomFeatureVector candidate)
+    {
+        if (recorded == null || candidate == null)
+        {
+            return 0.0;
+        }
+        if (recorded.getWidth() <= 0 || recorded.getHeight() <= 0
+            || candidate.getWidth() <= 0 || candidate.getHeight() <= 0)
+        {
+            return 1.0;
+        }
+
+        final double rAspect = (double) recorded.getWidth() / recorded.getHeight();
+        final double cAspect = (double) candidate.getWidth() / candidate.getHeight();
+        final double diff = Math.abs(rAspect - cAspect);
+        final double maxAspect = Math.max(rAspect, cAspect);
+
+        return Math.max(0.0, 1.0 - (diff / maxAspect));
+    }
+
+    /**
+     * Calculates the perceptual similarity score (0.0 to 1.0) between two 64-bit dHash hex strings.
+     *
+     * @param hash1 first hex dHash
+     * @param hash2 second hex dHash
+     * @return similarity score between 0.0 and 1.0 (1.0 = identical), or -1.0 if invalid
+     */
+    public static double calculateDHashSimilarity(final String hash1, final String hash2)
+    {
+        return ScreenshotHasher.calculateDHashSimilarity(hash1, hash2);
     }
 }

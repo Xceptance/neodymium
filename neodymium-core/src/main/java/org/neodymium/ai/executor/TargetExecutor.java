@@ -19,14 +19,18 @@
 package org.neodymium.ai.executor;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.executor.probe.LocatorProbeResult;
+import org.neodymium.ai.model.ContextLevel;
 
 /**
  * Interface representing the target execution environment driving operations
  * against a SUT (such as a Selenium web browser, a REST API, or a CLI process).
  *
  * @author AI-generated: Gemini 3.5 Flash
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 public interface TargetExecutor extends AutoCloseable
@@ -40,6 +44,7 @@ public interface TargetExecutor extends AutoCloseable
     default void close() throws Exception
     {
     }
+
     /**
      * Captures the current state of the SUT.
      *
@@ -47,7 +52,7 @@ public interface TargetExecutor extends AutoCloseable
      * @return the captured SUT state
      * @throws IOException if state capture fails
      */
-    SutState captureState(final org.neodymium.ai.model.ContextLevel level) throws IOException;
+    SutState captureState(final ContextLevel level) throws IOException;
 
     /**
      * Captures the current state of the SUT with optional full-page screenshot override.
@@ -57,7 +62,7 @@ public interface TargetExecutor extends AutoCloseable
      * @return the captured SUT state
      * @throws IOException if state capture fails
      */
-    default SutState captureState(final org.neodymium.ai.model.ContextLevel level, final boolean isFullPage) throws IOException
+    default SutState captureState(final ContextLevel level, final boolean isFullPage) throws IOException
     {
         return captureState(level);
     }
@@ -70,7 +75,7 @@ public interface TargetExecutor extends AutoCloseable
      */
     default SutState captureState() throws IOException
     {
-        return captureState(org.neodymium.ai.model.ContextLevel.LEAN);
+        return captureState(ContextLevel.LEAN);
     }
 
     /**
@@ -96,6 +101,34 @@ public interface TargetExecutor extends AutoCloseable
     default boolean supportsLocatorImprovement()
     {
         return false;
+    }
+
+    /**
+     * Indicates whether this target executor supports read-only live locator probing.
+     *
+     * @return true if locator probing is supported, false otherwise
+     */
+    default boolean supportsLocatorProbing()
+    {
+        return false;
+    }
+
+    /**
+     * Probes a list of candidate locators on the live SUT without performing any state-changing actions.
+     *
+     * @param candidateLocators list of candidate locators to probe
+     * @param maxDepth maximum number of element matches to summarize per candidate
+     * @return list of probe results corresponding to each candidate locator
+     */
+    default List<LocatorProbeResult> probeLocators(final List<String> candidateLocators, final int maxDepth)
+    {
+        if (candidateLocators == null || candidateLocators.isEmpty())
+        {
+            return List.of();
+        }
+        return candidateLocators.stream()
+                .map(LocatorProbeResult::unsupported)
+                .toList();
     }
 
     /**

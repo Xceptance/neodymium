@@ -20,14 +20,23 @@ package org.neodymium.ai.action;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.model.DomFeatureVector;
+import org.neodymium.ai.tool.ToolCall;
 
 /**
  * Represents a single executable action parsed from LLM response or recording.
@@ -38,6 +47,8 @@ import org.neodymium.ai.model.DomFeatureVector;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Action
 {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     private List<Action> condition;
     private List<Action> then;
     @JsonProperty("else")
@@ -73,6 +84,12 @@ public class Action
     @JsonProperty("isRegex")
     private boolean isRegex = false;
 
+    /**
+     * Flag indicating if the assertion is negated (e.g. asserts absence or non-matching).
+     */
+    @JsonProperty("negated")
+    private boolean negated = false;
+
     private String stepInstruction;
     private int stepLine = -1;
     private String stepFile;
@@ -99,6 +116,13 @@ public class Action
     private DomFeatureVector domFeatureVector;
 
     /**
+     * Associated structured tool call for unified tooling execution and serialization.
+     */
+    @JsonProperty("toolCall")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private ToolCall toolCall;
+
+    /**
      * Dynamic parameter binding bindings for extensible runtime properties.
      */
     private final transient Map<String, Object> parameters = new HashMap<>();
@@ -121,11 +145,12 @@ public class Action
     @JsonCreator(mode = JsonCreator.Mode.PROPERTIES)
     public Action(
             @JsonProperty(value = "type", required = false) @JsonAlias({"type", "action"}) final String type,
-            @JsonProperty(value = "target", required = false) @JsonAlias({"locator", "target"}) final String target,
-            @JsonProperty(value = "value", required = false) @JsonAlias({"values", "value"}) final Object value,
+            @JsonProperty(value = "target", required = false) @JsonAlias({"locator", "target", "selector", "url", "script"}) final String target,
+            @JsonProperty(value = "value", required = false) @JsonAlias({"values", "value", "text", "expectedText", "key"}) final Object value,
             @JsonProperty(value = "description", required = false) final String description,
-            @JsonProperty(value = "reasoning", required = false) final String reasoning,
-            @JsonProperty(value = "isRegex", required = false) @JsonAlias({"isRegex", "regex"}) final Boolean isRegex)
+            @JsonProperty(value = "reasoning", required = false) @JsonAlias({"reasoning", "thought"}) final String reasoning,
+            @JsonProperty(value = "isRegex", required = false) @JsonAlias({"isRegex", "regex"}) final Boolean isRegex,
+            @JsonProperty(value = "negated", required = false) @JsonAlias({"negated", "not", "inverted"}) final Boolean negated)
     {
         this.type = type != null ? type : "";
         this.target = target != null ? target : "";
@@ -155,6 +180,7 @@ public class Action
         this.description = description != null ? description : "";
         this.reasoning = reasoning != null ? reasoning : "";
         this.isRegex = Boolean.TRUE.equals(isRegex);
+        this.negated = Boolean.TRUE.equals(negated);
     }
 
     /**
@@ -174,6 +200,27 @@ public class Action
     }
 
     /**
+     * Constructs a fully detailed action including regex flag with generic value object.
+     *
+     * @param type the action type (e.g. "TYPE")
+     * @param target the target selector or URL
+     * @param value the action value (String, List, or Object)
+     * @param description the human-readable description
+     * @param reasoning the reasoning of the action
+     * @param isRegex whether target is a regex pattern
+     */
+    public Action(
+            final String type,
+            final String target,
+            final Object value,
+            final String description,
+            final String reasoning,
+            final Boolean isRegex)
+    {
+        this(type, target, value, description, reasoning, isRegex, false);
+    }
+
+    /**
      * Constructs a fully detailed action.
      *
      * @param type the action type (e.g. "TYPE")
@@ -184,7 +231,7 @@ public class Action
      */
     public Action(final String type, final String target, final List<String> value, final String description, final String reasoning)
     {
-        this(type, target, value, description, reasoning, false);
+        this(type, target, (Object) value, description, reasoning, false, false);
     }
 
     /**
@@ -199,12 +246,23 @@ public class Action
      */
     public Action(final String type, final String target, final List<String> value, final String description, final String reasoning, final boolean isRegex)
     {
-        this.type = type;
-        this.target = target;
-        this.value = value != null ? new ArrayList<>(value) : new ArrayList<>();
-        this.description = description;
-        this.reasoning = reasoning;
-        this.isRegex = isRegex;
+        this(type, target, (Object) value, description, reasoning, isRegex, false);
+    }
+
+    /**
+     * Constructs a fully detailed action including regex and negated flags.
+     *
+     * @param type the action type (e.g. "TYPE")
+     * @param target the target selector or URL
+     * @param value the action values list
+     * @param description the human-readable description
+     * @param reasoning the reasoning of the action
+     * @param isRegex whether target is a regex pattern
+     * @param negated whether the assertion is negated
+     */
+    public Action(final String type, final String target, final List<String> value, final String description, final String reasoning, final boolean isRegex, final boolean negated)
+    {
+        this(type, target, (Object) value, description, reasoning, isRegex, negated);
     }
 
     /**
@@ -235,7 +293,7 @@ public class Action
      */
     public Action withTarget(final String newTarget)
     {
-        final Action copy = new Action(this.type, newTarget, this.value, this.description, this.reasoning, this.isRegex);
+        final Action copy = new Action(this.type, newTarget, this.value, this.description, this.reasoning, this.isRegex, this.negated);
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
@@ -248,6 +306,7 @@ public class Action
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.domFeatureVector = this.domFeatureVector;
+        copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
         copy.parameters.putAll(this.parameters);
@@ -268,7 +327,7 @@ public class Action
 
     public Action withIsRegex(final boolean isRegex)
     {
-        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, isRegex);
+        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, isRegex, this.negated);
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
@@ -281,6 +340,7 @@ public class Action
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.domFeatureVector = this.domFeatureVector;
+        copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
         copy.parameters.putAll(this.parameters);
@@ -296,7 +356,7 @@ public class Action
     public Action withValue(final String newValue)
     {
         final List<String> newValues = newValue != null && !newValue.isEmpty() ? List.of(newValue) : List.of();
-        final Action copy = new Action(this.type, this.target, newValues, this.description, this.reasoning, this.isRegex);
+        final Action copy = new Action(this.type, this.target, newValues, this.description, this.reasoning, this.isRegex, this.negated);
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
@@ -309,6 +369,35 @@ public class Action
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.domFeatureVector = this.domFeatureVector;
+        copy.toolCall = this.toolCall;
+        copy.durationMs = this.durationMs;
+        copy.delayMs = this.delayMs;
+        copy.parameters.putAll(this.parameters);
+        return copy;
+    }
+
+    /**
+     * Creates a new Action copy with an updated reasoning string.
+     *
+     * @param newReasoning the new reasoning string
+     * @return a new Action instance with the updated reasoning
+     */
+    public Action withReasoning(final String newReasoning)
+    {
+        final Action copy = new Action(this.type, this.target, this.value, this.description, newReasoning, this.isRegex, this.negated);
+        copy.condition = this.condition;
+        copy.then = this.then;
+        copy.elseActions = this.elseActions;
+        copy.hasElse = this.hasElse;
+        copy.adjust = this.adjust;
+        copy.stepInstruction = this.stepInstruction;
+        copy.stepLine = this.stepLine;
+        copy.stepFile = this.stepFile;
+        copy.stepScreenshotHash = this.stepScreenshotHash;
+        copy.selfCritique = this.selfCritique;
+        copy.candidateLocators = new ArrayList<>(this.candidateLocators);
+        copy.domFeatureVector = this.domFeatureVector;
+        copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
         copy.parameters.putAll(this.parameters);
@@ -323,7 +412,7 @@ public class Action
      */
     public Action withDomFeatureVector(final DomFeatureVector featureVector)
     {
-        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, this.isRegex);
+        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, this.isRegex, this.negated);
         copy.condition = this.condition;
         copy.then = this.then;
         copy.elseActions = this.elseActions;
@@ -336,6 +425,41 @@ public class Action
         copy.selfCritique = this.selfCritique;
         copy.candidateLocators = new ArrayList<>(this.candidateLocators);
         copy.domFeatureVector = featureVector;
+        copy.toolCall = this.toolCall;
+        copy.durationMs = this.durationMs;
+        copy.delayMs = this.delayMs;
+        copy.parameters.putAll(this.parameters);
+        return copy;
+    }
+
+    @JsonProperty("negated")
+    public final boolean isNegated()
+    {
+        return this.negated;
+    }
+
+    @JsonProperty("negated")
+    public final void setNegated(final boolean negated)
+    {
+        this.negated = negated;
+    }
+
+    public Action withNegated(final boolean negated)
+    {
+        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, this.isRegex, negated);
+        copy.condition = this.condition;
+        copy.then = this.then;
+        copy.elseActions = this.elseActions;
+        copy.hasElse = this.hasElse;
+        copy.adjust = this.adjust;
+        copy.stepInstruction = this.stepInstruction;
+        copy.stepLine = this.stepLine;
+        copy.stepFile = this.stepFile;
+        copy.stepScreenshotHash = this.stepScreenshotHash;
+        copy.selfCritique = this.selfCritique;
+        copy.candidateLocators = new ArrayList<>(this.candidateLocators);
+        copy.domFeatureVector = this.domFeatureVector;
+        copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
         copy.parameters.putAll(this.parameters);
@@ -648,5 +772,808 @@ public class Action
     public final void setDelayMs(final Long delayMs)
     {
         this.delayMs = delayMs;
+    }
+
+    /**
+     * Gets the associated tool call, or null if none.
+     *
+     * @return tool call or null
+     */
+    public ToolCall getToolCall()
+    {
+        return this.toolCall;
+    }
+
+    /**
+     * Sets the associated tool call.
+     *
+     * @param toolCall the tool call
+     */
+    public void setToolCall(final ToolCall toolCall)
+    {
+        this.toolCall = toolCall;
+    }
+
+    /**
+     * Converts this action into a typed {@link ToolCall}, either returning its stored
+     * tool call or synthesizing one from its legacy type, target, and value properties.
+     *
+     * @return equivalent ToolCall
+     */
+    public ToolCall toToolCall()
+    {
+        if (this.toolCall != null)
+        {
+            return this.toolCall;
+        }
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        final String actionType = this.type != null ? this.type.toUpperCase(Locale.ROOT) : "";
+        final String toolName = switch (actionType)
+        {
+            case "CLICK" -> "click";
+            case "FILL", "TYPE" -> "fill";
+            case "NAVIGATE", "OPEN" -> "navigate";
+            case "SELECT" -> "select";
+            case "CHECK" -> "check";
+            case "HOVER" -> "hover";
+            case "ASSERT_URL" -> "assert_url";
+            case "ASSERT_TITLE" -> "assert_title";
+            case "ASSERT_TEXT" -> "assert_text";
+            case "ASSERT_ATTRIBUTE" -> "assert_attribute";
+            case "ASSERT_VISIBLE", "ASSERT_HIDDEN", "ASSERT_ENABLED", "ASSERT_DISABLED",
+                 "ASSERT_EDITABLE", "ASSERT_READONLY", "ASSERT_CHECKED", "ASSERT_UNCHECKED",
+                 "ASSERT_SELECTED", "ASSERT_UNSELECTED", "ASSERT_FOCUSED", "ASSERT_UNFOCUSED", "ASSERT_EXISTS",
+                 "ASSERT_ABSENT" -> "assert_element_state";
+            case "ASSERT" -> {
+                if ("url".equalsIgnoreCase(this.target) || "currentUrl".equalsIgnoreCase(this.target) || "pageUrl".equalsIgnoreCase(this.target))
+                {
+                    yield "assert_url";
+                }
+                if ("title".equalsIgnoreCase(this.target) || "pageTitle".equalsIgnoreCase(this.target))
+                {
+                    yield "assert_title";
+                }
+                yield "assert_text";
+            }
+            case "ASSERT_COUNT" -> "assert_count";
+            case "EXECUTE_SCRIPT", "SCRIPT" -> "execute_script";
+            case "SCROLL" -> "scroll";
+            default -> {
+                if (this.type != null && this.type.startsWith("browser_"))
+                {
+                    yield this.type.substring("browser_".length());
+                }
+                yield this.type != null && !this.type.isBlank() ? this.type.toLowerCase(Locale.ROOT) : "click";
+            }
+        };
+
+        if ("navigate".equals(toolName) || "browser_navigate".equals(toolName))
+        {
+            args.put("url", this.target != null ? this.target : "");
+        }
+        else if ("assert_url".equals(toolName) || "browser_assert_url".equals(toolName))
+        {
+            final String urlVal = (this.value != null && !this.value.isEmpty()) ? this.value.get(0) : this.target;
+            args.put("expectedUrl", urlVal != null ? urlVal : "");
+        }
+        else if ("assert_title".equals(toolName) || "browser_assert_title".equals(toolName))
+        {
+            final String titleVal = (this.value != null && !this.value.isEmpty()) ? this.value.get(0) : this.target;
+            args.put("expectedTitle", titleVal != null ? titleVal : "");
+        }
+        else if ("assert_text".equals(toolName) || "browser_assert_text".equals(toolName))
+        {
+            final String txt = (this.value != null && !this.value.isEmpty()) ? this.value.get(0) : this.target;
+            args.put("text", txt != null ? txt : "");
+            if (this.target != null && !this.target.isBlank() && !"url".equalsIgnoreCase(this.target) && !"title".equalsIgnoreCase(this.target))
+            {
+                args.put("selector", this.target);
+            }
+        }
+        else if ("check".equals(toolName) || "browser_check".equals(toolName))
+        {
+            args.put("selector", this.target != null ? this.target : "");
+            if (this.value != null && !this.value.isEmpty())
+            {
+                args.put("checked", Boolean.parseBoolean(this.value.get(0)));
+            }
+            else
+            {
+                args.put("checked", true);
+            }
+        }
+        else if ("assert_count".equals(toolName) || "browser_assert_count".equals(toolName))
+        {
+            args.put("selector", this.target != null ? this.target : "");
+            if (this.value != null && !this.value.isEmpty())
+            {
+                final String v = this.value.get(0).trim();
+                if (v.startsWith(">="))
+                {
+                    try
+                    {
+                        final int parsedMin = Integer.parseInt(v.substring(2).trim());
+                        args.put("count", parsedMin);
+                        args.put("operator", "MIN");
+                        args.put("minCount", parsedMin);
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                    }
+                }
+                else if (v.startsWith("<="))
+                {
+                    try
+                    {
+                        final int parsedMax = Integer.parseInt(v.substring(2).trim());
+                        args.put("count", parsedMax);
+                        args.put("operator", "MAX");
+                        args.put("maxCount", parsedMax);
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                    }
+                }
+                else
+                {
+                    try
+                    {
+                        final int parsedExact = Integer.parseInt(v);
+                        args.put("count", parsedExact);
+                        args.put("operator", "EXACT");
+                        args.put("expectedCount", parsedExact);
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                    }
+                }
+            }
+        }
+        else if ("assert_element_state".equals(toolName) || "browser_assert_element_state".equals(toolName))
+        {
+            args.put("selector", this.target != null ? this.target : "");
+            final String state = actionType.startsWith("ASSERT_")
+                    ? actionType.substring("ASSERT_".length()).toLowerCase(Locale.ROOT)
+                    : ((this.value != null && !this.value.isEmpty()) ? this.value.get(0).toLowerCase(Locale.ROOT) : "visible");
+            args.put("state", state);
+        }
+        else if ("assert_attribute".equals(toolName) || "browser_assert_attribute".equals(toolName))
+        {
+            args.put("selector", this.target != null ? this.target : "");
+            if (this.value != null && !this.value.isEmpty())
+            {
+                final String rawVal = this.value.get(0);
+                final int eqIdx = rawVal.indexOf('=');
+                if (eqIdx > 0)
+                {
+                    args.put("attribute", rawVal.substring(0, eqIdx).trim());
+                    String expectedVal = rawVal.substring(eqIdx + 1).trim();
+                    if ((expectedVal.startsWith("\"") && expectedVal.endsWith("\"")) || (expectedVal.startsWith("'") && expectedVal.endsWith("'")))
+                    {
+                        expectedVal = expectedVal.substring(1, expectedVal.length() - 1);
+                    }
+                    args.put("expectedValue", expectedVal);
+                }
+                else
+                {
+                    args.put("attribute", rawVal.trim());
+                }
+            }
+        }
+        else if ("execute_script".equals(toolName) || "browser_execute_script".equals(toolName))
+        {
+            args.put("script", this.target != null ? this.target : "");
+        }
+        else
+        {
+            args.put("target", this.target != null ? this.target : "");
+            final ClickAction.CoordinateTarget coord = ClickAction.parseCoordinateTarget(this.target);
+            if (coord != null)
+            {
+                args.put("x", coord.x());
+                args.put("y", coord.y());
+                if (coord.anchorSelector() != null && !coord.anchorSelector().isBlank())
+                {
+                    args.put("selector", coord.anchorSelector());
+                }
+            }
+            else if (this.target != null && !this.target.isBlank())
+            {
+                args.put("selector", this.target);
+            }
+
+            if (this.value != null && !this.value.isEmpty())
+            {
+                args.put("text", this.value.get(0));
+                args.put("value", this.value.get(0));
+            }
+        }
+
+        if (this.condition != null && !this.condition.isEmpty())
+        {
+            final ArrayNode condArray = args.putArray("condition");
+            for (final Action act : this.condition)
+            {
+                condArray.add(MAPPER.valueToTree(act));
+            }
+        }
+        if (this.then != null && !this.then.isEmpty())
+        {
+            final ArrayNode thenArray = args.putArray("then");
+            for (final Action act : this.then)
+            {
+                thenArray.add(MAPPER.valueToTree(act));
+            }
+        }
+        if (this.elseActions != null && !this.elseActions.isEmpty())
+        {
+            final ArrayNode elseArray = args.putArray("else");
+            for (final Action act : this.elseActions)
+            {
+                elseArray.add(MAPPER.valueToTree(act));
+            }
+        }
+        if (this.hasElse != null)
+        {
+            args.put("hasElse", this.hasElse);
+        }
+
+        if (this.domFeatureVector != null)
+        {
+            args.set("domFeatureVector", MAPPER.valueToTree(this.domFeatureVector));
+        }
+
+        if (this.negated)
+        {
+            args.put("negated", true);
+        }
+
+        return new ToolCall(UUID.randomUUID().toString(), toolName, args);
+    }
+
+    /**
+     * Factory method creating an Action from a {@link ToolCall}.
+     *
+     * @param call tool call
+     * @return equivalent Action instance
+     */
+    public static Action fromToolCall(final ToolCall call)
+    {
+        if (call == null)
+        {
+            return null;
+        }
+
+        final String rawName = call.toolName() != null ? call.toolName() : "";
+        final String name = (rawName.startsWith("browser_") ? rawName.substring("browser_".length()) : rawName).toLowerCase(Locale.ROOT);
+        final JsonNode args = call.arguments();
+        final boolean negated = args != null && (args.path("negated").asBoolean(false)
+                || args.path("not").asBoolean(false)
+                || args.path("invert").asBoolean(false)
+                || args.path("inverted").asBoolean(false));
+
+        final String type = switch (name)
+        {
+            case "navigate" -> "NAVIGATE";
+            case "click" -> "CLICK";
+            case "fill", "type" -> "TYPE";
+            case "hover" -> "HOVER";
+            case "scroll" -> "SCROLL";
+            case "select" -> "SELECT";
+            case "check" -> "CHECK";
+            case "clear" -> "CLEAR";
+            case "clear_cookies" -> "CLEAR_COOKIES";
+            case "back" -> "BACK";
+            case "forward" -> "FORWARD";
+            case "refresh" -> "REFRESH";
+            case "wait" -> "WAIT";
+            case "assert" -> "ASSERT";
+            case "assert_text" -> "ASSERT_TEXT";
+            case "assert_count" -> "ASSERT_COUNT";
+            case "assert_url" -> "ASSERT_URL";
+            case "assert_title" -> "ASSERT_TITLE";
+            case "assert_element_state", "assert_state" -> {
+                final String rawState = args != null && args.hasNonNull("state")
+                        ? args.path("state").asText().trim().toUpperCase(Locale.ROOT)
+                        : "";
+                final String baseType = switch (rawState)
+                {
+                    case "VISIBLE" -> "ASSERT_VISIBLE";
+                    case "HIDDEN" -> "ASSERT_HIDDEN";
+                    case "ENABLED" -> "ASSERT_ENABLED";
+                    case "DISABLED" -> "ASSERT_DISABLED";
+                    case "EDITABLE" -> "ASSERT_EDITABLE";
+                    case "READONLY", "READ_ONLY", "READ-ONLY" -> "ASSERT_READONLY";
+                    case "CHECKED" -> "ASSERT_CHECKED";
+                    case "UNCHECKED", "NOT_CHECKED", "UN-CHECKED" -> "ASSERT_UNCHECKED";
+                    case "SELECTED" -> "ASSERT_SELECTED";
+                    case "UNSELECTED", "NOT_SELECTED", "UN-SELECTED" -> "ASSERT_UNSELECTED";
+                    case "FOCUSED" -> "ASSERT_FOCUSED";
+                    case "UNFOCUSED", "NOT_FOCUSED" -> "ASSERT_UNFOCUSED";
+                    case "EXISTS", "PRESENT" -> "ASSERT_EXISTS";
+                    case "ABSENT", "NOT_EXIST", "NOT_EXISTS", "NON-EXISTENT" -> "ASSERT_ABSENT";
+                    default -> "ASSERT";
+                };
+                if (negated)
+                {
+                    yield switch (baseType)
+                    {
+                        case "ASSERT_VISIBLE" -> "ASSERT_HIDDEN";
+                        case "ASSERT_HIDDEN" -> "ASSERT_VISIBLE";
+                        case "ASSERT_ENABLED" -> "ASSERT_DISABLED";
+                        case "ASSERT_DISABLED" -> "ASSERT_ENABLED";
+                        case "ASSERT_CHECKED" -> "ASSERT_UNCHECKED";
+                        case "ASSERT_UNCHECKED" -> "ASSERT_CHECKED";
+                        case "ASSERT_SELECTED" -> "ASSERT_UNSELECTED";
+                        case "ASSERT_UNSELECTED" -> "ASSERT_SELECTED";
+                        case "ASSERT_FOCUSED" -> "ASSERT_UNFOCUSED";
+                        case "ASSERT_UNFOCUSED" -> "ASSERT_FOCUSED";
+                        case "ASSERT_EXISTS" -> "ASSERT_ABSENT";
+                        case "ASSERT_ABSENT" -> "ASSERT_EXISTS";
+                        default -> baseType;
+                    };
+                }
+                yield baseType;
+            }
+            case "assert_attribute", "assert_attr" -> "ASSERT_ATTRIBUTE";
+            case "press_key", "key_press" -> "KEY_PRESS";
+            case "branch" -> "BRANCH";
+            case "store" -> "STORE";
+            case "include" -> "INCLUDE";
+            case "execute_script" -> "EXECUTE_SCRIPT";
+            default -> {
+                if (args != null && args.hasNonNull("action") && !args.path("action").asText().isBlank())
+                {
+                    yield args.path("action").asText().toUpperCase(Locale.ROOT);
+                }
+                if (args != null && args.hasNonNull("type") && !args.path("type").asText().isBlank())
+                {
+                    yield args.path("type").asText().toUpperCase(Locale.ROOT);
+                }
+                yield name.toUpperCase(Locale.ROOT);
+            }
+        };
+
+        String target = "";
+        if (args != null && args.isObject())
+        {
+            if ("navigate".equals(name))
+            {
+                if (args.hasNonNull("url") && !args.path("url").asText().isBlank())
+                {
+                    target = args.path("url").asText();
+                }
+                else if (args.hasNonNull("target") && !args.path("target").asText().isBlank())
+                {
+                    target = args.path("target").asText();
+                }
+                else if (args.hasNonNull("locator") && !args.path("locator").asText().isBlank())
+                {
+                    target = args.path("locator").asText();
+                }
+                else if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+                {
+                    target = args.path("value").asText();
+                }
+            }
+            else if ("execute_script".equals(name))
+            {
+                if (args.hasNonNull("script") && !args.path("script").asText().isBlank())
+                {
+                    target = args.path("script").asText();
+                }
+                else if (args.hasNonNull("target") && !args.path("target").asText().isBlank())
+                {
+                    target = args.path("target").asText();
+                }
+            }
+            else if (args.hasNonNull("selector") && !args.path("selector").asText().isBlank())
+            {
+                target = args.path("selector").asText();
+            }
+            else if (args.hasNonNull("target") && !args.path("target").asText().isBlank())
+            {
+                target = args.path("target").asText();
+            }
+            else if (args.hasNonNull("path") && !args.path("path").asText().isBlank())
+            {
+                target = args.path("path").asText();
+            }
+            else if (args.hasNonNull("file") && !args.path("file").asText().isBlank())
+            {
+                target = args.path("file").asText();
+            }
+            else if (args.hasNonNull("locator") && !args.path("locator").asText().isBlank())
+            {
+                target = args.path("locator").asText();
+            }
+            else if (args.hasNonNull("url") && !args.path("url").asText().isBlank())
+            {
+                target = args.path("url").asText();
+            }
+            else if (args.hasNonNull("x") && args.hasNonNull("y"))
+            {
+                target = "coord: " + args.path("x").asInt() + "," + args.path("y").asInt();
+            }
+            else if (args.hasNonNull("text") && !args.path("text").asText().isBlank()
+                    && ("click".equals(name) || "hover".equals(name)))
+            {
+                target = "text:" + args.path("text").asText();
+            }
+            else if ("assert_url".equals(name))
+            {
+                target = "url";
+            }
+            else if ("assert_title".equals(name))
+            {
+                target = "title";
+            }
+        }
+
+        Object value = null;
+        if (args != null && args.isObject())
+        {
+            if ("store".equals(name))
+            {
+                final String varName;
+                if (args.hasNonNull("variableName") && !args.path("variableName").asText().isBlank())
+                {
+                    varName = args.path("variableName").asText();
+                }
+                else if (args.hasNonNull("variable") && !args.path("variable").asText().isBlank())
+                {
+                    varName = args.path("variable").asText();
+                }
+                else if (args.hasNonNull("name") && !args.path("name").asText().isBlank())
+                {
+                    varName = args.path("name").asText();
+                }
+                else if (args.hasNonNull("key") && !args.path("key").asText().isBlank())
+                {
+                    varName = args.path("key").asText();
+                }
+                else
+                {
+                    varName = "";
+                }
+
+                if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+                {
+                    value = List.of(varName, args.path("value").asText());
+                }
+                else
+                {
+                    value = varName;
+                }
+            }
+            else if (args.hasNonNull("text") && !args.path("text").asText().isBlank())
+            {
+                value = args.path("text").asText();
+            }
+            else if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+            {
+                value = args.path("value").asText();
+            }
+            else if (args.hasNonNull("expectedText") && !args.path("expectedText").asText().isBlank())
+            {
+                value = args.path("expectedText").asText();
+            }
+            else if (args.hasNonNull("expectedUrl") && !args.path("expectedUrl").asText().isBlank())
+            {
+                value = args.path("expectedUrl").asText();
+            }
+            else if (args.hasNonNull("expectedTitle") && !args.path("expectedTitle").asText().isBlank())
+            {
+                value = args.path("expectedTitle").asText();
+            }
+            else if ("assert_element_state".equals(name) || "assert_state".equals(name))
+            {
+                if (args.hasNonNull("state") && !args.path("state").asText().isBlank())
+                {
+                    value = args.path("state").asText();
+                }
+            }
+            else if ("assert_attribute".equals(name) || "assert_attr".equals(name))
+            {
+                final String attr = args.hasNonNull("attribute") ? args.path("attribute").asText()
+                        : (args.hasNonNull("name") ? args.path("name").asText() : "");
+                if (args.hasNonNull("expectedValue"))
+                {
+                    value = attr + "=" + args.path("expectedValue").asText();
+                }
+                else if (args.hasNonNull("value"))
+                {
+                    value = attr + "=" + args.path("value").asText();
+                }
+                else
+                {
+                    value = attr;
+                }
+            }
+            else if (args.hasNonNull("title") && !args.path("title").asText().isBlank())
+            {
+                value = args.path("title").asText();
+            }
+            else if (args.hasNonNull("expectedCount"))
+            {
+                value = String.valueOf(args.path("expectedCount").asInt());
+            }
+            else if (args.hasNonNull("count"))
+            {
+                final int c = args.path("count").asInt();
+                final String op = args.path("operator").asText("EXACT").toUpperCase(Locale.ROOT);
+                if ("MIN".equals(op))
+                {
+                    value = ">=" + c;
+                }
+                else if ("MAX".equals(op))
+                {
+                    value = "<=" + c;
+                }
+                else if ("NOT_EQUALS".equals(op) || "NOT_EQUAL".equals(op) || "NEQ".equals(op) || "NOT".equals(op) || negated)
+                {
+                    value = "!=" + c;
+                }
+                else
+                {
+                    value = String.valueOf(c);
+                }
+            }
+            else if (args.hasNonNull("minCount"))
+            {
+                value = ">=" + args.path("minCount").asInt();
+            }
+            else if (args.hasNonNull("maxCount"))
+            {
+                value = "<=" + args.path("maxCount").asInt();
+            }
+            else if (args.hasNonNull("key") && !args.path("key").asText().isBlank())
+            {
+                value = args.path("key").asText();
+            }
+            else if (args.hasNonNull("durationMs") && !args.path("durationMs").asText().isBlank())
+            {
+                value = args.path("durationMs").asText();
+            }
+            else if (args.hasNonNull("time") && !args.path("time").asText().isBlank())
+            {
+                value = args.path("time").asText();
+            }
+            else if ("direction".equals(name) || (args.hasNonNull("direction") && !args.path("direction").asText().isBlank()))
+            {
+                value = args.hasNonNull("direction") ? args.path("direction").asText() : "";
+            }
+            else if ("check".equals(name))
+            {
+                final boolean chk = !args.hasNonNull("checked") || args.path("checked").asBoolean(true);
+                value = Boolean.toString(chk);
+            }
+            else if (args.hasNonNull("values") && args.path("values").isArray())
+            {
+                final List<String> valList = new ArrayList<>();
+                for (final JsonNode node : args.path("values"))
+                {
+                    valList.add(node.asText());
+                }
+                value = valList;
+            }
+        }
+
+        String description = "";
+        if (args != null && args.hasNonNull("description") && !args.path("description").asText().isBlank())
+        {
+            description = args.path("description").asText();
+        }
+        else
+        {
+            description = switch (type)
+            {
+                case "NAVIGATE" -> "Navigate to " + target;
+                case "CLICK" -> !target.isBlank() ? "Click " + target : "Click element";
+                case "TYPE" -> "Type '" + (value != null ? value : "") + "' into " + target;
+                case "ASSERT_TEXT" -> "Assert text '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
+                case "ASSERT_URL" -> "Assert URL '" + (value != null ? value : "") + "'";
+                case "ASSERT_TITLE" -> "Assert page title '" + (value != null ? value : "") + "'";
+                case "ASSERT_VISIBLE", "ASSERT_HIDDEN", "ASSERT_ENABLED", "ASSERT_DISABLED",
+                     "ASSERT_EDITABLE", "ASSERT_READONLY", "ASSERT_CHECKED", "ASSERT_UNCHECKED",
+                     "ASSERT_SELECTED", "ASSERT_UNSELECTED", "ASSERT_FOCUSED", "ASSERT_UNFOCUSED", "ASSERT_EXISTS",
+                     "ASSERT_ABSENT" -> "Assert " + (!target.isBlank() ? target + " " : "") + "is " + (value != null ? value : type.substring("ASSERT_".length()).toLowerCase(Locale.ROOT));
+                case "ASSERT_ATTRIBUTE" -> "Assert attribute '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
+                case "SELECT" -> "Select '" + (value != null ? value : "") + "' on " + target;
+                case "HOVER" -> "Hover over " + target;
+                case "KEY_PRESS" -> "Press key '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
+                case "SCROLL" -> "Scroll " + (!target.isBlank() ? target : (value != null ? value : ""));
+                case "WAIT" -> "Wait " + (value != null ? value : "") + " ms";
+                case "CLEAR" -> "Clear " + target;
+                case "CLEAR_COOKIES" -> "Clear browser cookies";
+                case "BACK" -> "Navigate back";
+                case "FORWARD" -> "Navigate forward";
+                case "REFRESH" -> "Refresh page";
+                case "STORE" -> {
+                    final String varName = value instanceof List<?> l && !l.isEmpty() ? String.valueOf(l.get(0)) : String.valueOf(value != null ? value : "");
+                    yield !target.isBlank() ? "Store text from " + target + " as variable '" + varName + "'" : "Store variable '" + varName + "'";
+                }
+                default -> "Tool call: " + name;
+            };
+        }
+
+        String reasoning = "";
+        if (args != null && args.hasNonNull("reasoning") && !args.path("reasoning").asText().isBlank())
+        {
+            reasoning = args.path("reasoning").asText().trim();
+        }
+        else if (args != null && args.hasNonNull("thought") && !args.path("thought").asText().isBlank())
+        {
+            reasoning = args.path("thought").asText().trim();
+        }
+
+        final boolean isRegex = args != null && (args.path("regex").asBoolean(false)
+                || (value != null && (value.toString().contains("[0-9]") || value.toString().contains("\\d")
+                    || value.toString().contains(".*") || value.toString().contains(".+"))));
+
+        final boolean adjust = args != null && args.path("adjust").asBoolean(false);
+
+        final Action action = new Action(type, target, value, description, reasoning, isRegex, negated);
+        action.setAdjust(adjust);
+        action.setToolCall(call);
+
+        if (args != null && args.isObject())
+        {
+            if (args.hasNonNull("condition"))
+            {
+                final JsonNode condNode = args.path("condition");
+                final List<Action> conditionList = new ArrayList<>();
+                if (condNode.isArray())
+                {
+                    for (final JsonNode item : condNode)
+                    {
+                        final Action parsed = parseNestedAction(item);
+                        if (parsed != null)
+                        {
+                            conditionList.add(parsed);
+                        }
+                    }
+                }
+                else if (condNode.isObject())
+                {
+                    final Action parsed = parseNestedAction(condNode);
+                    if (parsed != null)
+                    {
+                        conditionList.add(parsed);
+                    }
+                }
+                action.setCondition(conditionList);
+            }
+
+            if (args.hasNonNull("then"))
+            {
+                final JsonNode thenNode = args.path("then");
+                final List<Action> thenList = new ArrayList<>();
+                if (thenNode.isArray())
+                {
+                    for (final JsonNode item : thenNode)
+                    {
+                        final Action parsed = parseNestedAction(item);
+                        if (parsed != null)
+                        {
+                            thenList.add(parsed);
+                        }
+                    }
+                }
+                else if (thenNode.isObject())
+                {
+                    final Action parsed = parseNestedAction(thenNode);
+                    if (parsed != null)
+                    {
+                        thenList.add(parsed);
+                    }
+                }
+                action.setThen(thenList);
+            }
+
+            final JsonNode elseNode = args.hasNonNull("else") ? args.path("else") : args.path("elseActions");
+            if (elseNode != null && !elseNode.isNull())
+            {
+                final List<Action> elseList = new ArrayList<>();
+                if (elseNode.isArray())
+                {
+                    for (final JsonNode item : elseNode)
+                    {
+                        final Action parsed = parseNestedAction(item);
+                        if (parsed != null)
+                        {
+                            elseList.add(parsed);
+                        }
+                    }
+                }
+                else if (elseNode.isObject())
+                {
+                    final Action parsed = parseNestedAction(elseNode);
+                    if (parsed != null)
+                    {
+                        elseList.add(parsed);
+                    }
+                }
+                action.setElseActions(elseList);
+            }
+
+            if (args.hasNonNull("hasElse"))
+            {
+                action.setHasElse(args.path("hasElse").asBoolean());
+            }
+            else if (action.getElseActions() != null && !action.getElseActions().isEmpty())
+            {
+                action.setHasElse(true);
+            }
+        }
+
+        if (args != null && args.has("domFeatureVector") && !args.path("domFeatureVector").isNull())
+        {
+            try
+            {
+                final DomFeatureVector vector = MAPPER.treeToValue(args.path("domFeatureVector"), DomFeatureVector.class);
+                action.setDomFeatureVector(vector);
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        return action;
+    }
+
+    private static Action parseNestedAction(final JsonNode node)
+    {
+        if (node == null || node.isNull() || !node.isObject())
+        {
+            return null;
+        }
+
+        if (node.hasNonNull("tool_call"))
+        {
+            return parseNestedAction(node.path("tool_call"));
+        }
+
+        final String callId = node.hasNonNull("id") && !node.path("id").asText().isBlank()
+                ? node.path("id").asText()
+                : UUID.randomUUID().toString();
+
+        if (node.hasNonNull("name") || node.hasNonNull("tool") || node.hasNonNull("toolName"))
+        {
+            final String toolName = node.hasNonNull("name") ? node.path("name").asText()
+                    : (node.hasNonNull("tool") ? node.path("tool").asText() : node.path("toolName").asText());
+            final JsonNode args = node.hasNonNull("arguments") ? node.path("arguments")
+                    : (node.hasNonNull("parameters") ? node.path("parameters")
+                    : (node.hasNonNull("args") ? node.path("args") : node));
+            return fromToolCall(new ToolCall(callId, toolName, args));
+        }
+
+        final String actionName = node.hasNonNull("action") ? node.path("action").asText()
+                : (node.hasNonNull("type") ? node.path("type").asText() : "");
+        if (!actionName.isBlank())
+        {
+            return fromToolCall(new ToolCall(callId, actionName, node));
+        }
+
+        final Iterator<String> it = node.fieldNames();
+        while (it.hasNext())
+        {
+            final String field = it.next();
+            final JsonNode child = node.path(field);
+            if (child.isObject())
+            {
+                return fromToolCall(new ToolCall(callId, field, child));
+            }
+        }
+
+        try
+        {
+            return MAPPER.treeToValue(node, Action.class);
+        }
+        catch (final Exception ignored)
+        {
+            return null;
+        }
     }
 }

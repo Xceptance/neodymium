@@ -18,7 +18,9 @@
  */
 package org.neodymium.ai.session;
 
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -47,10 +49,10 @@ import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
-import org.neodymium.ai.prompt.ActionExtractionPrompt;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.telemetry.TokenBudgetGuard;
+import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.util.Neodymium;
 
 /**
@@ -315,7 +317,6 @@ public abstract class AiSession implements AutoCloseable
 
         final Integer stdCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_STANDARD_CALL_COUNT);
         final Integer verifCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_VERIFICATION_CALL_COUNT);
-        final Integer pesapCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_PESAP_CALL_COUNT);
         final Integer judgeCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_JUDGE_CALL_COUNT);
         final Integer rcaCalls = (Integer) this.executionContext.getTransientData().get(ExecutionContext.KEY_RCA_CALL_COUNT);
 
@@ -336,7 +337,6 @@ public abstract class AiSession implements AutoCloseable
             getTotalLlmCalls(),
             stdCalls != null ? stdCalls : 0,
             verifCalls != null ? verifCalls : 0,
-            pesapCalls != null ? pesapCalls : 0,
             judgeCalls != null ? judgeCalls : 0,
             rcaCalls != null ? rcaCalls : 0,
             stepCount,
@@ -481,11 +481,6 @@ public abstract class AiSession implements AutoCloseable
 
         this.executionContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, this.executionMode);
         this.executionContext.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, playbook);
-
-        if (!this.executionContext.getTransientData().containsKey(ExecutionContext.KEY_ACTIVE_PROMPT))
-        {
-            this.executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_PROMPT, new ActionExtractionPrompt());
-        }
         this.executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_MODEL, Neodymium.aiConfiguration().aiModel());
 
         final List<PlaybookStep> playbookSteps = playbook.getSteps();
@@ -503,13 +498,49 @@ public abstract class AiSession implements AutoCloseable
                 {
                     parsed.setActions(recorded.getActions());
                 }
+                if (recorded.getToolCalls() != null && !recorded.getToolCalls().isEmpty())
+                {
+                    parsed.setToolCalls(recorded.getToolCalls());
+                }
+                if (recorded.getSchemaVersion() != null)
+                {
+                    parsed.setSchemaVersion(recorded.getSchemaVersion());
+                }
+                if (recorded.getBaselineState() != null)
+                {
+                    parsed.setBaselineState(recorded.getBaselineState());
+                }
+                if (recorded.getScreenshotHash() != null)
+                {
+                    parsed.setScreenshotHash(recorded.getScreenshotHash());
+                }
+                if (recorded.getScreenshotHashDim() != null)
+                {
+                    parsed.setScreenshotHashDim(recorded.getScreenshotHashDim());
+                }
+                if (recorded.getStatus() != null)
+                {
+                    parsed.setStatus(recorded.getStatus());
+                }
+                parsed.setFailed(recorded.isFailed());
+                if (recorded.getFailureReason() != null)
+                {
+                    parsed.setFailureReason(recorded.getFailureReason());
+                }
             }
         }
 
         if (sessionSteps != null && sessionSteps != playbookSteps)
         {
-            sessionSteps.clear();
-            sessionSteps.addAll(playbookSteps);
+            try
+            {
+                sessionSteps.clear();
+                sessionSteps.addAll(playbookSteps);
+            }
+            catch (final UnsupportedOperationException uoe)
+            {
+                this.executionContext.getTransientData().put("playbook.steps", new ArrayList<>(playbookSteps));
+            }
         }
 
         for (int i = playbookSteps.size() - 1; i >= 0; i--)
@@ -546,7 +577,6 @@ public abstract class AiSession implements AutoCloseable
         recordingMetadata.put("totalLlmCalls", getTotalLlmCalls());
         recordingMetadata.put("standardCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_STANDARD_CALL_COUNT, 0));
         recordingMetadata.put("verificationCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_VERIFICATION_CALL_COUNT, 0));
-        recordingMetadata.put("pesapCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_PESAP_CALL_COUNT, 0));
         recordingMetadata.put("judgeCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_JUDGE_CALL_COUNT, 0));
         recordingMetadata.put("rcaCallCount", this.executionContext.getTransientData().getOrDefault(ExecutionContext.KEY_RCA_CALL_COUNT, 0));
         recordingMetadata.put("totalReplays", getTotalReplays());
@@ -580,11 +610,13 @@ public abstract class AiSession implements AutoCloseable
         if (levels != null && !levels.isEmpty())
         {
             escalations += Math.max(0, levels.size() - 1);
-            final String lastLvl = levels.get(levels.size() - 1);
-            if (lastLvl != null && !lastLvl.isBlank())
+            for (final String lvl : levels)
             {
-                final String normalized = lastLvl.trim().toUpperCase();
-                contextLevelCounts.put(normalized, contextLevelCounts.getOrDefault(normalized, 0) + 1);
+                if (lvl != null && !lvl.isBlank())
+                {
+                    final String normalized = lvl.trim().toUpperCase();
+                    contextLevelCounts.put(normalized, contextLevelCounts.getOrDefault(normalized, 0) + 1);
+                }
             }
         }
         for (final StepStats child : stats.getSubStats())
@@ -811,7 +843,7 @@ public abstract class AiSession implements AutoCloseable
             @Override
             public LlmResponse chat(final LlmRequest request)
             {
-                return new LlmResponse("[]", new TokenUsage(10, 0, 10), "mock-model");
+                return new LlmResponse("[]", new TokenUsage(10, 0, 10), "mock-model", List.of(new ToolCall("mock_call", "complete_step", JsonNodeFactory.instance.objectNode())), null);
             }
 
             @Override

@@ -34,9 +34,9 @@ import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.ExecutionContext;
-import org.neodymium.ai.pipeline.steps.CallLlmStep;
 import org.neodymium.ai.prompt.PlaybookLinterPrompt;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.util.LlmLoggingUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -137,6 +137,22 @@ public final class PlaybookLinter
             final double temperature = config.getTemperature("linter");
             final int timeoutSeconds = config.getTimeoutSeconds("linter");
 
+            ReasoningEffort reasoningEffort = config.getLinterReasoningEffort();
+            if (this.session != null && this.session.data() != null)
+            {
+                final Object dynamicEffort = this.session.data().get("neodymium.ai.linter.reasoningEffort");
+                if (dynamicEffort != null && !String.valueOf(dynamicEffort).isBlank())
+                {
+                    try
+                    {
+                        reasoningEffort = ReasoningEffort.valueOf(String.valueOf(dynamicEffort).trim().toUpperCase());
+                    }
+                    catch (final IllegalArgumentException ignored)
+                    {
+                    }
+                }
+            }
+
             final LlmRequest request = new LlmRequest(
                 sysMsg,
                 userMsg,
@@ -144,7 +160,7 @@ public final class PlaybookLinter
                 ResponseSchema.LINTER,
                 temperature,
                 timeoutSeconds,
-                ReasoningEffort.LOW
+                reasoningEffort
             );
 
             if (this.session != null && this.session.getEventBus() != null)
@@ -159,7 +175,7 @@ public final class PlaybookLinter
 
             if (LOGGER.isDebugEnabled() && response != null && response.content() != null)
             {
-                LOGGER.debug("   🔍 [Playbook Linter Response]:\n{}", CallLlmStep.formatJsonForLogging(response.content()));
+                LOGGER.debug("   🔍 [Playbook Linter Response]:\n{}", LlmLoggingUtils.formatJsonForLogging(response.content()));
             }
 
             // Track tokens and call count

@@ -200,8 +200,8 @@ public final class LlmRegistry
                 }
             }
 
-            // 3. Resolve and register legacy role-specific providers: "pesap", "execution", "vision", "audit"
-            final String[] roles = {"pesap", "execution", "vision", "audit"};
+            // 3. Resolve and register legacy role-specific providers: "execution", "vision", "audit"
+            final String[] roles = {"execution", "vision", "audit"};
             for (final String role : roles)
             {
                 final boolean hasOverride = config.getProperty("neodymium.ai." + role + ".provider", null) != null

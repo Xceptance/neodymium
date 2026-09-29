@@ -18,24 +18,27 @@
  */
 package org.neodymium.ai.integration.live;
 
+import static com.codeborne.selenide.Condition.exactText;
 import static com.codeborne.selenide.Condition.value;
 import static com.codeborne.selenide.Selenide.$;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiLinter;
+import org.neodymium.ai.junit.AiMode;
+import org.neodymium.ai.junit.AiPlaybook;
+import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
 
-import org.junit.jupiter.api.Tag;
-import org.neodymium.ai.junit.AiDataSet;
-import org.neodymium.ai.junit.AiPlaybook;
-import org.neodymium.ai.junit.NeodymiumAiTest;
-import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.junit.AiMode;
-import org.neodymium.ai.session.AiSession;
-
 /**
- * Live integration test for the STORE action plugin.
+ * Live integration test for the STORE action plugin verifying DOM text capture into session
+ * variables, literal value storage, and dynamic variable substitution into downstream actions.
  *
- * @author AI-generated: Gemini 2.5 Pro
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 @Browser("Chrome_headless")
@@ -43,31 +46,94 @@ import org.neodymium.ai.session.AiSession;
 @Tag("LiveAPI")
 @NeodymiumAiTest
 @AiPlaybook("programmatic")
+@AiLinter(false)
 public class StoreIntegrationTest extends BaseAiTest
 {
-
     /**
-     * Executes Store integration test in both live and strict replay modes.
+     * Sets up test page URL before each test execution.
      *
      * @param session the thread-isolated AiSession
      */
-    @AiPlaybook
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
-    @AiDataSet("storeData")
-    public void testStore(final AiSession session) throws Exception
+    @BeforeEach
+    public void setupProperties(final AiSession session)
     {
         final String pageUrl = String.format("http://localhost:%d/StoreActionTest/testStoreHappyPath.html", server.getPort());
         session.data().putDynamic("store.test.url", pageUrl, false);
+    }
 
+    /**
+     * Verifies storing element text into a variable and using it in subsequent typing and validation.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/StoreIntegrationTest_testStoreElementTextAndVerify.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testStoreElementTextAndVerify(final AiSession session) throws Exception
+    {
         session.execute( """
-            data:
-              - testId: storeData
             steps: |
               Open ${store.test.url} in the browser
               Store the text of #order-id into variable storedOrderId
-              Type variable storedOrderId into #input-target
-            """);
+              Type ${storedOrderId} into #input-target
+              Click #btn-verify
+            """)
+            .verifyMetrics()
+            .hasStepCount(4)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
 
         $("#input-target").shouldHave(value("ORD-987654"));
+        $("#result").shouldHave(exactText("Verified successfully!"));
+    }
+
+    /**
+     * Verifies storing a literal string value into a variable and using it in downstream actions.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/StoreIntegrationTest_testStoreLiteralValueAndVerify.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testStoreLiteralValueAndVerify(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${store.test.url} in the browser
+              Store "ORD-987654" into variable customOrder
+              Type ${customOrder} into #input-target
+              Click #btn-verify
+            """)
+            .verifyMetrics()
+            .hasStepCount(4)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        $("#result").shouldHave(exactText("Verified successfully!"));
+    }
+
+    /**
+     * Verifies storing multiple DOM elements into distinct variables and inspecting session state.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook("/playbooks/integration/programmatic/StoreIntegrationTest_testStoreMultipleVariables.yaml")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testStoreMultipleVariables(final AiSession session) throws Exception
+    {
+        session.execute( """
+            steps: |
+              Open ${store.test.url} in the browser
+              Store the text of #order-id into variable orderId
+              Store the text of #price-amount into variable orderPrice
+            """)
+            .verifyMetrics()
+            .hasStepCount(3)
+            .hasNoSoftFailures()
+            .onLive(m -> m.hasLlmCalls())
+            .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+
+        assertEquals("ORD-987654", session.data().get("orderId"));
+        assertEquals("14,96 €", session.data().get("orderPrice"));
     }
 }

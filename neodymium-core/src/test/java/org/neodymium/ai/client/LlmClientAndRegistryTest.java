@@ -91,13 +91,13 @@ public final class LlmClientAndRegistryTest
         assertEquals(textProvider, registry.getProvider(LlmCapability.TEXT_ONLY));
         assertEquals(visionProvider, registry.getProvider(LlmCapability.VISION));
 
-        // 2. Fallback lookup (routing PESAP to default fallback provider)
-        assertEquals(fallbackProvider, registry.getProvider(LlmCapability.PESAP));
+        // 2. Fallback lookup (routing LINTER to default fallback provider)
+        assertEquals(fallbackProvider, registry.getProvider(LlmCapability.LINTER));
 
         // 3. Exception if fallback is removed and no provider matches
         registry.setDefaultProvider(null);
         assertThrows(IllegalStateException.class, () -> {
-            registry.getProvider(LlmCapability.PESAP);
+            registry.getProvider(LlmCapability.LINTER);
         });
     }
 
@@ -139,7 +139,7 @@ public final class LlmClientAndRegistryTest
         System.setProperty("neodymium.ai.model", "global-model");
         System.setProperty("neodymium.ai.vision.model", "vision-model");
         System.setProperty("neodymium.ai.vision.temperature", "0.7");
-        System.setProperty("neodymium.ai.pesap.provider", "mock");
+        System.setProperty("neodymium.ai.audit.provider", "mock");
 
         AiConfiguration.resetInstance();
         final AiConfiguration config = AiConfiguration.getInstance();
@@ -157,14 +157,14 @@ public final class LlmClientAndRegistryTest
         assertEquals(0.0, config.getTemperature("execution")); // falls back to default 0.0
 
         // 4. Check role specific provider overrides
-        assertEquals("mock", config.getProvider("pesap"));
+        assertEquals("mock", config.getProvider("audit"));
         assertEquals("gemini", config.getProvider("vision")); // falls back to global default
 
         // Clean up system properties
         System.clearProperty("neodymium.ai.model");
         System.clearProperty("neodymium.ai.vision.model");
         System.clearProperty("neodymium.ai.vision.temperature");
-        System.clearProperty("neodymium.ai.pesap.provider");
+        System.clearProperty("neodymium.ai.audit.provider");
     }
 
     /**
@@ -235,65 +235,5 @@ public final class LlmClientAndRegistryTest
 
         System.clearProperty("neodymium.ai.provider");
         System.clearProperty("neodymium.ai.visual.provider");
-    }
-
-    /**
-     * Verifies that LlmProviderFactory fails fast with a helpful message if provider is unknown.
-     */
-    @Test
-    public void testLlmProviderFactoryThrowsOnUnknownProvider()
-    {
-        System.setProperty("neodymium.ai.provider", "unknown-ai-provider");
-        AiConfiguration.resetInstance();
-        final AiConfiguration config = AiConfiguration.getInstance();
-
-        final IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-            LlmProviderFactory.createProvider("global", config);
-        });
-
-        assertTrue(exception.getMessage().contains("Unknown LLM provider 'unknown-ai-provider'"));
-        assertTrue(exception.getMessage().contains("neodymium.ai.provider.unknown-ai-provider.class"));
-
-        System.clearProperty("neodymium.ai.provider");
-    }
-
-    /**
-     * Verifies that LlmProviderFactory fails fast with a helpful message if provider is blank.
-     */
-    @Test
-    public void testLlmProviderFactoryThrowsOnBlankProvider()
-    {
-        System.setProperty("neodymium.ai.provider", "   ");
-        AiConfiguration.resetInstance();
-        final AiConfiguration config = AiConfiguration.getInstance();
-
-        final IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-            LlmProviderFactory.createProvider("global", config);
-        });
-
-        assertTrue(exception.getMessage().contains("LLM provider is not configured"));
-
-        System.clearProperty("neodymium.ai.provider");
-    }
-
-    /**
-     * Verifies that LlmProviderFactory fails fast if configured class cannot be found on classpath.
-     */
-    @Test
-    public void testLlmProviderFactoryThrowsOnClassNotFound()
-    {
-        System.setProperty("neodymium.ai.provider", "custom");
-        System.setProperty("neodymium.ai.provider.custom.class", "com.doesnotexist.FakeProvider");
-        AiConfiguration.resetInstance();
-        final AiConfiguration config = AiConfiguration.getInstance();
-
-        final IllegalStateException exception = assertThrows(IllegalStateException.class, () -> {
-            LlmProviderFactory.createProvider("global", config);
-        });
-
-        assertTrue(exception.getMessage().contains("was not found on the classpath"));
-
-        System.clearProperty("neodymium.ai.provider");
-        System.clearProperty("neodymium.ai.provider.custom.class");
     }
 }

@@ -45,11 +45,13 @@ import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.pipeline.VerificationFailureException;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.prompt.VerificationIssue;
 import org.neodymium.ai.prompt.VerificationPrompt;
 import org.neodymium.ai.prompt.VerificationResult;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.util.LlmLoggingUtils;
 import org.neodymium.ai.util.ScreenshotHasher;
 import org.neodymium.ai.util.VisualStabilityDetector;
 import org.slf4j.Logger;
@@ -112,11 +114,15 @@ public final class VerifyOutcomeStep implements PipelineStep
                 SutState capturedState = null;
                 if (step.getActions() != null && !step.getActions().isEmpty())
                 {
-                    capturedState = (SutState) context.getTransientData().remove("KEY_POST_ACTION_STATE");
+                    capturedState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+                }
+                else if (isFullPageReq && context.getTransientData().containsKey(ExecutionContext.KEY_POST_ACTION_STATE))
+                {
+                    capturedState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
                 }
                 else
                 {
-                    context.getTransientData().remove("KEY_POST_ACTION_STATE");
+                    context.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
                 }
                 if (capturedState == null || capturedState.getAttachments() == null || capturedState.getAttachments().isEmpty())
                 {
@@ -187,7 +193,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                                     step.setFullPage(true);
                                 }
                                 final String resolvedInstr = context.getSessionData() != null
-                                    ? context.getSessionData().resolveVariables(step.getInstruction())
+                                    ? context.getSessionData().resolveAvailableVariables(step.getInstruction())
                                     : step.getInstruction();
                                 LOGGER.debug("📸 [Visual Hashing] Computed SSIM matrix for instruction: \"{}\"", resolvedInstr);
 
@@ -218,7 +224,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             catch (final Exception e)
             {
                 final String resolvedInstr = (step != null && context.getSessionData() != null)
-                    ? context.getSessionData().resolveVariables(step.getInstruction())
+                    ? context.getSessionData().resolveAvailableVariables(step.getInstruction())
                     : (step != null ? step.getInstruction() : "Unknown");
                 LOGGER.warn("⚠️ Failed to capture visual baseline hash for instruction: \"{}\": {}", resolvedInstr, e.getMessage());
             }
@@ -229,6 +235,11 @@ public final class VerifyOutcomeStep implements PipelineStep
         final boolean isEnabled = override instanceof Boolean b ? b : config.isSemanticVerificationEnabled();
         if (!isEnabled)
         {
+            final SutState postActionState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+            if (postActionState != null)
+            {
+                context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, postActionState);
+            }
             if (step != null)
             {
                 final Long stepStartTime = (Long) context.getTransientData().get("KEY_STEP_START_TIME");
@@ -238,10 +249,9 @@ public final class VerifyOutcomeStep implements PipelineStep
                 }
                 context.getTransientData().put("KEY_LAST_STEP_END_TIME", System.currentTimeMillis());
 
-                step.setStatus(PlaybookStepStatus.SUCCESS);
-                if (session != null && session.getEventBus() != null)
+                if (step.getStatus() != PlaybookStepStatus.HEALED)
                 {
-                    session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+                    step.setStatus(PlaybookStepStatus.SUCCESS);
                 }
             }
             LOGGER.debug("Semantic outcome verification is disabled in configuration. Skipping step.");
@@ -259,8 +269,13 @@ public final class VerifyOutcomeStep implements PipelineStep
         }
 
         // 3. Skip outcome verification during deterministic replay unless healing is actively engaged
-        if (mode != null && mode.isReplay() && !mode.supportsHealing())
+        if (mode != null && mode.isReplay() && !Boolean.TRUE.equals(context.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP)))
         {
+            final SutState postActionState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+            if (postActionState != null)
+            {
+                context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, postActionState);
+            }
             if (step != null)
             {
                 final Long stepStartTime = (Long) context.getTransientData().get("KEY_STEP_START_TIME");
@@ -270,10 +285,9 @@ public final class VerifyOutcomeStep implements PipelineStep
                 }
                 context.getTransientData().put("KEY_LAST_STEP_END_TIME", System.currentTimeMillis());
 
-                step.setStatus(PlaybookStepStatus.SUCCESS);
-                if (session != null && session.getEventBus() != null)
+                if (step.getStatus() != PlaybookStepStatus.HEALED)
                 {
-                    session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+                    step.setStatus(PlaybookStepStatus.SUCCESS);
                 }
             }
             LOGGER.debug("Step was replayed from baseline. Bypassing semantic outcome verification.");
@@ -283,7 +297,7 @@ public final class VerifyOutcomeStep implements PipelineStep
         LOGGER.debug("================================================================================");
         LOGGER.debug("🔍 [Optional AI Outcome Verification]");
         final String resolvedHeaderInstr = (step != null && context.getSessionData() != null)
-            ? context.getSessionData().resolveVariables(step.getInstruction())
+            ? context.getSessionData().resolveAvailableVariables(step.getInstruction())
             : (step != null ? step.getInstruction() : "Unknown");
         LOGGER.debug("       Instruction: \"{}\"", resolvedHeaderInstr);
         LOGGER.debug("================================================================================");
@@ -294,7 +308,12 @@ public final class VerifyOutcomeStep implements PipelineStep
             final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
                 || (step != null && step.isFullPageVisualStep());
             final SutState finalState;
-            if (step != null && (step.isVisualStep() || isFullPageReq))
+            final SutState preCapturedPostState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+            if (preCapturedPostState != null)
+            {
+                finalState = preCapturedPostState;
+            }
+            else if (step != null && (step.isVisualStep() || isFullPageReq))
             {
                 LOGGER.debug("📸 [Capture] Capturing settled SUT state with temporal stability detection (fullPage: {}) AFTER executing actions", isFullPageReq);
                 finalState = VisualStabilityDetector.captureSettledState(executor, isFullPageReq);
@@ -306,7 +325,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                 finalState = executor.captureState(verificationLevel, isFullPageReq);
             }
             context.getTransientData().put("finalState", finalState);
-            if (session != null && session.getEventBus() != null && finalState != null)
+            if (session != null && session.getEventBus() != null && finalState != null && preCapturedPostState == null)
             {
                 session.getEventBus().dispatch(new StateCapturedEvent(finalState));
             }
@@ -328,7 +347,10 @@ public final class VerifyOutcomeStep implements PipelineStep
 
             // 6. Gather visual image attachments from initial and final SUT states for multimodal LLM comparison
             final List<SutAttachment> attachments = new ArrayList<>();
-            final SutState initialState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
+            final SutState preActionState = (SutState) context.getTransientData().get(ExecutionContext.KEY_PRE_ACTION_STATE);
+            final SutState initialState = preActionState != null
+                ? preActionState
+                : (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
             if (initialState != null && initialState.getAttachments() != null)
             {
                 for (final SutAttachment att : initialState.getAttachments())
@@ -377,7 +399,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             if (LOGGER.isTraceEnabled())
             {
                 LOGGER.trace("┌─ [Verification Raw Response] ─────────────────────────────────────────────");
-                LOGGER.trace("{}", CallLlmStep.formatJsonForLogging(response.content()));
+                LOGGER.trace("{}", LlmLoggingUtils.formatJsonForLogging(response.content()));
                 LOGGER.trace("└──────────────────────────────────────────────────────────────────────────");
             }
 
@@ -433,7 +455,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                     final String stepLoc = step != null ? String.format("%s:%d", step.getSourceFile(), step.getLineNumber()) : "Unknown Location";
                     final String rawInstr = step != null ? step.getInstruction() : "";
                     final String instruction = (context.getSessionData() != null)
-                        ? context.getSessionData().resolveVariables(rawInstr)
+                        ? context.getSessionData().resolveAvailableVariables(rawInstr)
                         : rawInstr;
                     final String summary = result.getOverallVerdict() != null ? result.getOverallVerdict().summary() : "";
 
@@ -473,7 +495,27 @@ public final class VerifyOutcomeStep implements PipelineStep
                     );
                     warnings.add(issue);
                     LOGGER.warn("   ⚠️ Semantic outcome verification FAILED for step {}: \"{}\"", stepLoc, instruction);
+
+                    boolean failOnError = config.isSemanticVerificationFailOnError();
+                    final Object transientFailOnError = context.getTransientData().get("neodymium.ai.semanticVerification.failOnError");
+                    if (transientFailOnError instanceof Boolean b)
+                    {
+                        failOnError = b;
+                    }
+                    else if (transientFailOnError instanceof String s)
+                    {
+                        failOnError = Boolean.parseBoolean(s);
+                    }
+                    if (failOnError)
+                    {
+                        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, finalState);
+                        throw new VerificationFailureException(result, String.format("Semantic outcome verification failed for step %s: \"%s\". Summary: %s", stepLoc, instruction, summary));
+                    }
                 }
+            }
+            catch (final VerificationFailureException e)
+            {
+                throw e;
             }
             catch (final Exception e)
             {
@@ -482,7 +524,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                 final List<Object> warnings = (List<Object>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new ArrayList<Object>());
                 final String rawInstr = step != null ? step.getInstruction() : "";
                 final String resolvedInstr = (context.getSessionData() != null)
-                    ? context.getSessionData().resolveVariables(rawInstr)
+                    ? context.getSessionData().resolveAvailableVariables(rawInstr)
                     : rawInstr;
                 final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), resolvedInstr) : "Unknown Step";
                 warnings.add(String.format("Step: %s. Parse error: %s", stepStr, e.getMessage()));
@@ -508,7 +550,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                 if (dHash != null)
                 {
                     final String resolvedInstr = context.getSessionData() != null
-                        ? context.getSessionData().resolveVariables(step.getInstruction())
+                        ? context.getSessionData().resolveAvailableVariables(step.getInstruction())
                         : step.getInstruction();
                     LOGGER.debug("   📸 Computed SSIM matrix for instruction: \"{}\"", resolvedInstr);
                     step.setScreenshotHash(dHash);
@@ -541,7 +583,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                 else
                 {
                     final String resolvedInstr = context.getSessionData() != null
-                        ? context.getSessionData().resolveVariables(step.getInstruction())
+                        ? context.getSessionData().resolveAvailableVariables(step.getInstruction())
                         : step.getInstruction();
                     LOGGER.warn("   ⚠️ No image attachment found or base64 data was empty to compute dHash for instruction: \"{}\"", resolvedInstr);
                 }
@@ -555,12 +597,30 @@ public final class VerifyOutcomeStep implements PipelineStep
                 }
                 context.getTransientData().put("KEY_LAST_STEP_END_TIME", System.currentTimeMillis());
 
-                step.setStatus(PlaybookStepStatus.SUCCESS);
-                if (session != null && session.getEventBus() != null)
+                if (step.getStatus() != PlaybookStepStatus.HEALED)
                 {
-                    session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+                    step.setStatus(PlaybookStepStatus.SUCCESS);
                 }
             }
+        }
+        catch (final VerificationFailureException e)
+        {
+            if (step != null)
+            {
+                final Long stepStartTime = (Long) context.getTransientData().get("KEY_STEP_START_TIME");
+                if (stepStartTime != null)
+                {
+                    step.setDurationMs(System.currentTimeMillis() - stepStartTime);
+                }
+                context.getTransientData().put("KEY_LAST_STEP_END_TIME", System.currentTimeMillis());
+
+                step.setStatus(PlaybookStepStatus.FAILED);
+                if (session != null && session.getEventBus() != null)
+                {
+                    session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.FAILED));
+                }
+            }
+            throw e;
         }
         catch (final Exception e)
         {
@@ -569,7 +629,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             final List<String> warnings = (List<String>) context.getTransientData().computeIfAbsent("verificationWarnings", k -> new ArrayList<String>());
             final String rawInstr = step != null ? step.getInstruction() : "";
             final String resolvedInstr = (context.getSessionData() != null)
-                ? context.getSessionData().resolveVariables(rawInstr)
+                ? context.getSessionData().resolveAvailableVariables(rawInstr)
                 : rawInstr;
             final String stepStr = step != null ? String.format("%s:%d (%s)", step.getSourceFile(), step.getLineNumber(), resolvedInstr) : "Unknown Step";
             warnings.add(String.format("Step: %s. Execution error: %s", stepStr, e.getMessage()));
@@ -594,6 +654,8 @@ public final class VerifyOutcomeStep implements PipelineStep
         {
             // Always clean transient state to prevent context leakage across pipeline steps
             context.getTransientData().remove("finalState");
+            context.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
+            context.getTransientData().remove(ExecutionContext.KEY_PRE_ACTION_STATE);
         }
     }
 

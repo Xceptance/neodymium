@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>File Upload &amp; Dropzones - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+    <style>
+        .dropzone-container {
+            border: 2px dashed rgba(255, 255, 255, 0.25);
+            border-radius: 12px;
+            padding: 3rem 2rem;
+            text-align: center;
+            background: rgba(255, 255, 255, 0.02);
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            position: relative;
+            margin: 2rem 0;
+        }
+        .dropzone-container:hover, .dropzone-container.dragover {
+            border-color: #00ffcc;
+            background: rgba(0, 255, 204, 0.05);
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.2);
+        }
+        .dropzone-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            display: inline-block;
+        }
+        .dropzone-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 0.5rem;
+        }
+        .dropzone-sub {
+            color: var(--text-secondary, #a0aec0);
+            font-size: 0.875rem;
+        }
+        .file-info-panel {
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: 8px;
+            padding: 1.25rem;
+            margin-top: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.4rem 0;
+            font-size: 0.95rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        .info-label {
+            color: var(--text-secondary, #a0aec0);
+        }
+        .info-value {
+            font-weight: 600;
+            color: #00ffcc;
+        }
+    </style>
+</head>
+<body class="aura-theme-dark">
+    <div class="aura-container">
+        <header class="aura-header">
+            <div class="aura-logo">Aura AI <span>Sandbox</span></div>
+            <nav class="aura-nav">
+                <a href="../index.html">← Back to Storefront</a>
+            </nav>
+        </header>
+
+        <main class="aura-main">
+            <section class="aura-card">
+                <h1>File Upload &amp; Styled Dropzones Challenge</h1>
+                <p class="aura-desc">
+                    Modern web applications use styled dropzones enclosing hidden <code>&lt;input type="file"&gt;</code> elements.
+                    This challenge tests the agent's ability to upload files to styled containers without triggering native OS dialogs.
+                </p>
+
+                <!-- Styled Dropzone Container enclosing hidden file input -->
+                <div id="document-dropzone" class="dropzone-container">
+                    <input type="file" id="document-input" style="display: none;" accept=".txt,.json,.csv,.pdf">
+                    <div class="dropzone-icon">📁</div>
+                    <div class="dropzone-title">Drag and drop document here, or click to browse</div>
+                    <div class="dropzone-sub">Supports .txt, .json, .csv, and .pdf documents</div>
+                </div>
+
+                <div class="file-info-panel">
+                    <div class="info-row">
+                        <span class="info-label">Upload Status:</span>
+                        <span id="upload-status" class="info-value">No file uploaded</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">File Name:</span>
+                        <span id="uploaded-filename" class="info-value" style="color: #fff;">None</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">File Size:</span>
+                        <span id="uploaded-filesize" class="info-value" style="color: #fff;">0 bytes</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; justify-content: center; gap: 1rem; margin-top: 2rem;">
+                    <button id="process-btn" class="aura-btn" disabled style="padding: 12px 30px;">
+                        Process Document
+                    </button>
+                </div>
+
+                <div id="process-status" style="margin-top: 1.5rem; text-align: center; font-weight: bold; color: #00ffcc; min-height: 1.5rem;"></div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        const dropzone = document.getElementById('document-dropzone');
+        const fileInput = document.getElementById('document-input');
+        const uploadStatus = document.getElementById('upload-status');
+        const fileNameSpan = document.getElementById('uploaded-filename');
+        const fileSizeSpan = document.getElementById('uploaded-filesize');
+        const processBtn = document.getElementById('process-btn');
+        const processStatus = document.getElementById('process-status');
+
+        let currentFile = null;
+
+        function handleFile(file) {
+            if (!file) return;
+            currentFile = file;
+            uploadStatus.textContent = 'File uploaded: ' + file.name;
+            fileNameSpan.textContent = file.name;
+            fileSizeSpan.textContent = file.size + ' bytes';
+            processBtn.removeAttribute('disabled');
+            processStatus.textContent = '';
+        }
+
+        // Forward click to hidden input
+        dropzone.addEventListener('click', function(e) {
+            if (e.target !== fileInput) {
+                fileInput.click();
+            }
+        });
+
+        // Change event on file input
+        fileInput.addEventListener('change', function(e) {
+            if (fileInput.files && fileInput.files.length > 0) {
+                handleFile(fileInput.files[0]);
+            }
+        });
+
+        // Drag & drop listeners
+        dropzone.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            dropzone.classList.add('dragover');
+        });
+
+        dropzone.addEventListener('dragleave', function() {
+            dropzone.classList.remove('dragover');
+        });
+
+        dropzone.addEventListener('drop', function(e) {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                fileInput.files = e.dataTransfer.files;
+                handleFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        processBtn.addEventListener('click', function() {
+            if (currentFile) {
+                processStatus.textContent = 'Document ' + currentFile.name + ' processed successfully';
+            }
+        });
+    </script>
+</body>
+</html>

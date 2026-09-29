@@ -63,7 +63,7 @@ public class TokenBudgetGuardTest
     @DisplayName("Input token budget breach triggers TokenBudgetExceededException")
     public void testInputTokenBudgetBreachThrowsException()
     {
-        final TokenBudgetGuard guard = new TokenBudgetGuard(100, -1);
+        final TokenBudgetGuard guard = new TokenBudgetGuard(100, 50_000);
         this.eventBus.registerListener(guard);
 
         final LlmRequest request = new LlmRequest("System prompt", "User prompt", null, null, 0.0, 30);
@@ -86,7 +86,7 @@ public class TokenBudgetGuardTest
     @DisplayName("Output token budget breach triggers TokenBudgetExceededException")
     public void testOutputTokenBudgetBreachThrowsException()
     {
-        final TokenBudgetGuard guard = new TokenBudgetGuard(-1, 50);
+        final TokenBudgetGuard guard = new TokenBudgetGuard(500_000, 50);
         this.eventBus.registerListener(guard);
 
         final LlmRequest request = new LlmRequest("System prompt", "User prompt", null, null, 0.0, 30);
@@ -120,17 +120,24 @@ public class TokenBudgetGuardTest
     }
 
     @Test
-    @DisplayName("Disabled token budgets (-1) allow arbitrary token counts without throwing exception")
-    public void testDisabledBudgetsAllowArbitraryTokens()
+    @DisplayName("Non-positive budgets (-1) fall back to safe finite ceiling and enforce limits")
+    public void testNonPositiveBudgetsFallBackToSafeFiniteCeiling()
     {
         final TokenBudgetGuard guard = new TokenBudgetGuard(-1, -1);
         this.eventBus.registerListener(guard);
 
         final LlmRequest request = new LlmRequest("System prompt", "User prompt", null, null, 0.0, 30);
-        final LlmResponse response = new LlmResponse("Result", new TokenUsage(1_000_000, 500_000, 1_500_000), "mock-model");
+        final LlmResponse response = new LlmResponse("Result", new TokenUsage(600_000, 10_000, 610_000), "mock-model");
         final LlmResponseReceivedEvent event = new LlmResponseReceivedEvent(request, response, 100, "EXECUTION");
 
-        Assertions.assertDoesNotThrow(() -> this.eventBus.dispatch(event));
+        final TokenBudgetExceededException exception = Assertions.assertThrows(
+            TokenBudgetExceededException.class,
+            () -> this.eventBus.dispatch(event)
+        );
+
+        Assertions.assertTrue(exception.isInputBudget());
+        Assertions.assertEquals(600_000, exception.getConsumedTokens());
+        Assertions.assertEquals(500_000, exception.getBudgetLimit());
     }
 
     @Test
@@ -140,7 +147,7 @@ public class TokenBudgetGuardTest
         final TokenUsage usage = new TokenUsage(1000, 200, 1200, 300);
         final ExecutionMetrics metrics = new ExecutionMetrics(
             ExecutionMode.LLM_ONLY,
-            1, 1, 0, 0, 0,
+            1, 1, 0, 0,
             1, 0, 0, 0, 0,
             0, null, usage
         );
@@ -159,5 +166,44 @@ public class TokenBudgetGuardTest
 
         final AssertionError outputErr = Assertions.assertThrows(AssertionError.class, () -> asserter.hasOutputTokens(50, 100));
         Assertions.assertTrue(outputErr.getMessage().contains("output tokens"));
+    }
+
+    @Test
+    @DisplayName("Default unconfigured TokenBudgetGuard enforces finite defaults from AiConfiguration")
+    public void testDefaultFiniteTokenBudgetsBreachThrowsException()
+    {
+        final TokenBudgetGuard guard = new TokenBudgetGuard();
+        this.eventBus.registerListener(guard);
+
+        final LlmRequest request = new LlmRequest("System prompt", "User prompt", null, null, 0.0, 30);
+        final LlmResponse response = new LlmResponse("Result", new TokenUsage(500_001, 10, 500_011), "mock-model");
+        final LlmResponseReceivedEvent event = new LlmResponseReceivedEvent(request, response, 100, "EXECUTION");
+
+        final TokenBudgetExceededException exception = Assertions.assertThrows(
+            TokenBudgetExceededException.class,
+            () -> this.eventBus.dispatch(event)
+        );
+
+        Assertions.assertTrue(exception.isInputBudget());
+        Assertions.assertEquals(500_001, exception.getConsumedTokens());
+        Assertions.assertEquals(500_000, exception.getBudgetLimit());
+    }
+
+    @Test
+    @DisplayName("TokenBudgetExceededException correctly supports TOTAL budget type")
+    public void testTotalBudgetType()
+    {
+        final TokenBudgetExceededException ex = new TokenBudgetExceededException(
+            TokenBudgetExceededException.BudgetType.TOTAL,
+            120_000,
+            100_000
+        );
+
+        Assertions.assertTrue(ex.isTotalBudget());
+        Assertions.assertFalse(ex.isInputBudget());
+        Assertions.assertFalse(ex.isOutputBudget());
+        Assertions.assertEquals(120_000, ex.getConsumedTokens());
+        Assertions.assertEquals(100_000, ex.getBudgetLimit());
+        Assertions.assertTrue(ex.getMessage().contains("Total tokens consumed (120000) exceeded configured step token budget (100000)"));
     }
 }

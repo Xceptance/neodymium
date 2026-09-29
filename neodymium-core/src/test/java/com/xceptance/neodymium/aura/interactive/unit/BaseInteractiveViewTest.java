@@ -28,6 +28,7 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleServer;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.util.Neodymium;
 
 /**
@@ -44,6 +45,7 @@ public abstract class BaseInteractiveViewTest
     protected InteractiveConsoleEngine engine;
     protected InteractiveConsoleServer server;
     private long originalTimeout;
+    private boolean originalClickViaJs;
 
     @BeforeEach
     public final void setupServer() throws IOException
@@ -53,7 +55,7 @@ public abstract class BaseInteractiveViewTest
         // Bind mock properties
         System.setProperty("neodymium.ai.interactive", "true");
         System.setProperty("neodymium.ai.interactive.allowHeadlessHUD", "true");
-        org.neodymium.ai.config.AiConfiguration.resetInstance();
+        AiConfiguration.resetInstance();
 
         // Initialize engine and server on a random free port
         this.engine = new InteractiveConsoleEngine("test-run-id");
@@ -62,6 +64,7 @@ public abstract class BaseInteractiveViewTest
         // Configure Selenide — use a generous 30 s timeout to cover multi-step
         // auto-run sequences, rewind flows, and drag-and-drop assertions.
         this.originalTimeout = Configuration.timeout;
+        this.originalClickViaJs = Configuration.clickViaJs;
         Configuration.timeout = 30000;
         Configuration.headless = true;
     }
@@ -70,6 +73,7 @@ public abstract class BaseInteractiveViewTest
     public final void tearDownServer()
     {
         Configuration.timeout = this.originalTimeout;
+        Configuration.clickViaJs = this.originalClickViaJs;
 
         if (this.server != null)
         {
