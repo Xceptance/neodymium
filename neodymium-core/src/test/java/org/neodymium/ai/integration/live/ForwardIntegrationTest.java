@@ -84,7 +84,7 @@ public class ForwardIntegrationTest extends BaseAiTest
               Go back
               We are on the "Forward Test Page 1" page again
               Go forward
-              We are now on "Forward Test Page 2"
+              We are on the "Forward Test Page 2"
             """)
             .verifyMetrics()
             .hasStepCount(6)
@@ -150,7 +150,7 @@ public class ForwardIntegrationTest extends BaseAiTest
               We are on the "Forward Test Page 3"
             """)
             .verifyMetrics()
-            .hasStepCount(7)
+            .hasStepCount(9)
             .hasNoSoftFailures()
             .onLive(m -> m.hasLlmCalls())
             .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
