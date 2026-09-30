@@ -827,38 +827,108 @@ public final class AiConfiguration
     }
 
     /**
+     * Resolves the configured reasoning effort tier for a specific role,
+     * checking role-specific keys before falling back to global keys, and finally
+     * falling back to the specified default.
+     * <p>
+     * Checks both {@code reasoningEffort} and {@code thinkingLevel} property names:
+     * <ol>
+     *   <li>{@code neodymium.ai.<role>.reasoningEffort}</li>
+     *   <li>{@code neodymium.ai.<role>.thinkingLevel}</li>
+     *   <li>{@code neodymium.ai.reasoningEffort}</li>
+     *   <li>{@code neodymium.ai.thinkingLevel}</li>
+     * </ol>
+     * Supports values {@code OFF}, {@code LOW}, {@code MEDIUM}, {@code HIGH}, along with
+     * aliases {@code MINIMAL} and {@code NONE} (which map to {@link ReasoningEffort#OFF}).
+     *
+     * @param role the execution role (e.g. "execution", "linter", "judge")
+     * @param defaultEffort fallback tier if no property is configured
+     * @return the resolved reasoning effort tier
+     */
+    public ReasoningEffort getReasoningEffort(final String role, final ReasoningEffort defaultEffort)
+    {
+        if (role != null && !role.isBlank())
+        {
+            final String roleExplicit = getProperty("neodymium.ai." + role + ".reasoningEffort", null);
+            final ReasoningEffort parsedRole = parseReasoningEffort(roleExplicit);
+            if (parsedRole != null)
+            {
+                return parsedRole;
+            }
+
+            final String roleThinking = getProperty("neodymium.ai." + role + ".thinkingLevel", null);
+            final ReasoningEffort parsedRoleThinking = parseReasoningEffort(roleThinking);
+            if (parsedRoleThinking != null)
+            {
+                return parsedRoleThinking;
+            }
+        }
+
+        final String global = getProperty("neodymium.ai.reasoningEffort", null);
+        final ReasoningEffort parsedGlobal = parseReasoningEffort(global);
+        if (parsedGlobal != null)
+        {
+            return parsedGlobal;
+        }
+
+        final String globalThinking = getProperty("neodymium.ai.thinkingLevel", null);
+        final ReasoningEffort parsedGlobalThinking = parseReasoningEffort(globalThinking);
+        if (parsedGlobalThinking != null)
+        {
+            return parsedGlobalThinking;
+        }
+
+        return defaultEffort != null ? defaultEffort : ReasoningEffort.LOW;
+    }
+
+    /**
+     * Resolves the default active reasoning effort tier for execution agent turns.
+     *
+     * @return the resolved execution reasoning effort tier (default: {@link ReasoningEffort#LOW})
+     */
+    public ReasoningEffort getReasoningEffort()
+    {
+        return getReasoningEffort("execution", ReasoningEffort.LOW);
+    }
+
+    /**
+     * Parses a string representation into a {@link ReasoningEffort}, handling common aliases
+     * such as MINIMAL and NONE (mapped to OFF). Returns {@code null} if the input is null, blank, or invalid.
+     *
+     * @param value the raw configuration value
+     * @return the mapped ReasoningEffort or null if not valid
+     */
+    public static ReasoningEffort parseReasoningEffort(final String value)
+    {
+        if (value == null || value.isBlank())
+        {
+            return null;
+        }
+        final String normalized = value.trim().toUpperCase();
+        return switch (normalized)
+        {
+            case "OFF", "MINIMAL", "NONE" -> ReasoningEffort.OFF;
+            case "LOW" -> ReasoningEffort.LOW;
+            case "MEDIUM" -> ReasoningEffort.MEDIUM;
+            case "HIGH" -> ReasoningEffort.HIGH;
+            default ->
+            {
+                LOG.warn("⚠️ Invalid reasoningEffort / thinkingLevel value '{}', falling back to default", value);
+                yield null;
+            }
+        };
+    }
+
+    /**
      * Resolves the configured reasoning effort tier for the pre-flight linter,
-     * checking {@code neodymium.ai.linter.reasoningEffort} before falling back
+     * checking {@code neodymium.ai.linter.reasoningEffort} / {@code thinkingLevel} before falling back
      * to {@code neodymium.ai.reasoningEffort}, defaulting to {@link ReasoningEffort#MEDIUM}.
      *
      * @return the resolved linter reasoning effort tier
      */
     public ReasoningEffort getLinterReasoningEffort()
     {
-        final String explicit = getProperty("neodymium.ai.linter.reasoningEffort", null);
-        if (explicit != null && !explicit.isBlank())
-        {
-            try
-            {
-                return ReasoningEffort.valueOf(explicit.trim().toUpperCase());
-            }
-            catch (final IllegalArgumentException e)
-            {
-                LOG.warn("⚠️ Invalid neodymium.ai.linter.reasoningEffort value '{}', falling back to default", explicit);
-            }
-        }
-        final String global = getProperty("neodymium.ai.reasoningEffort", null);
-        if (global != null && !global.isBlank())
-        {
-            try
-            {
-                return ReasoningEffort.valueOf(global.trim().toUpperCase());
-            }
-            catch (final IllegalArgumentException ignored)
-            {
-            }
-        }
-        return ReasoningEffort.MEDIUM;
+        return getReasoningEffort("linter", ReasoningEffort.MEDIUM);
     }
 
     /**
@@ -1036,7 +1106,9 @@ public final class AiConfiguration
      */
     public int getTokenBudgetInput()
     {
-        final int val = getInt("neodymium.ai.tokenBudget.input", 500_000);
+        final int val = getInt("neodymium.ai.tokenBudget.input",
+            getInt("neodymium.ai.tokenBudgetInput",
+                getInt("tokenBudget.input", 500_000)));
         return val > 0 ? val : 500_000;
     }
 
@@ -1048,7 +1120,9 @@ public final class AiConfiguration
      */
     public int getTokenBudgetOutput()
     {
-        final int val = getInt("neodymium.ai.tokenBudget.output", 50_000);
+        final int val = getInt("neodymium.ai.tokenBudget.output",
+            getInt("neodymium.ai.tokenBudgetOutput",
+                getInt("tokenBudget.output", 50_000)));
         return val > 0 ? val : 50_000;
     }
 
@@ -1070,11 +1144,14 @@ public final class AiConfiguration
      *
      * @return maximum cumulative token budget per step
      */
-    public int getStepTokenBudget()
-    {
-        final int val = getInt("neodymium.ai.step.maxTokens", 100_000);
-        return val > 0 ? val : 100_000;
-    }
+     public int getStepTokenBudget()
+     {
+         final int val = getInt("neodymium.ai.step.maxTokens",
+             getInt("neodymium.ai.tokenBudget.step",
+                 getInt("neodymium.ai.step.tokenBudget",
+                     getInt("tokenBudget.step", 100_000))));
+         return val > 0 ? val : 100_000;
+     }
 
     /**
      * Resolves the wall-clock timeout in seconds for an individual agent step execution loop.

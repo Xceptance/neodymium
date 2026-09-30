@@ -59,7 +59,10 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+import org.neodymium.ai.client.ReasoningEffort;
+import org.neodymium.ai.config.AiConfiguration;
 
 /**
  * Unit tests validating {@link AgentToolLoopStep} execution, dynamic intent-based scoping,
@@ -1074,6 +1077,187 @@ public class AgentToolLoopStepTest
 
         Assertions.assertEquals("Button clicked", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
         Assertions.assertEquals(2, turn.get());
+    }
+
+    @Test
+    public void testTurn2PrunesDomOnVisualObservationTurnAndAllowsContextRequest() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts state", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Visible");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<button id='country-btn'>🇺🇸</button>", List.of(new SutAttachment("image/png", "screenshot", "dummyBase64")), "DOM_LIGHT"));
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Validate that United States as country is selected.");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                final String userContent = req.messages().get(1).content();
+                Assertions.assertTrue(userContent.contains("<button id='country-btn'>🇺🇸</button>"));
+                Assertions.assertFalse(req.attachments().isEmpty());
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-1", "assert_element_state", MAPPER.createObjectNode().put("selector", "#country-btn"))));
+            }
+            if (t == 2)
+            {
+                // Turn 2 MUST prune the heavy Turn 1 DOM to save tokens
+                final String turn1MsgContent = req.messages().get(1).content();
+                Assertions.assertFalse(turn1MsgContent.contains("<button id='country-btn'>🇺🇸</button>"),
+                        "Turn 1 DOM must be pruned on Turn 2 to prevent token explosion!");
+                Assertions.assertTrue(turn1MsgContent.contains("[Initial page state omitted after Turn 1"),
+                        "Turn 1 message must indicate DOM was omitted!");
+
+                // Turn 2 latest message contains observation prompt advising request_context / query_dom
+                final String turn2MsgContent = req.messages().get(req.messages().size() - 1).content();
+                Assertions.assertTrue(turn2MsgContent.contains("request_context") || turn2MsgContent.contains("query_dom"),
+                        "Turn 2 prompt must inform model it can request context if needed!");
+
+                return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-2", "complete_step", MAPPER.createObjectNode().put("summary", "Country verified"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals("Country verified", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+        Assertions.assertEquals(2, turn.get());
+    }
+
+    @Test
+    public void testTurn2ContextEscalationViaRequestContext() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts state", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Visible");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("request_context", "Requests DOM", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS)
+                        .withContent("{\"status\":\"SUCCESS\",\"level\":\"STANDARD\"}")
+                        .withVariable("requestedContextLevel", "STANDARD")
+                        .build();
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<button id='country-btn'>🇺🇸</button>", List.of(new SutAttachment("image/png", "screenshot", "dummyBase64")), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<html>visual observation</html>", List.of(new SutAttachment("image/png", "screenshot", "dummyBase64_2")), "VISUAL"));
+        executor.enqueueState(new BrowserSutState("<div id='full-cart'><span>Cart Total</span></div>", List.of(new SutAttachment("image/png", "screenshot", "dummyBase64_3")), "STANDARD"));
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Validate that United States as country is selected.");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-1", "assert_element_state", MAPPER.createObjectNode().put("selector", "#country-btn"))));
+            }
+            if (t == 2)
+            {
+                // In Turn 2, LLM asks for fresh DOM
+                return new LlmResponse("", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-2", "request_context", MAPPER.createObjectNode().put("level", "STANDARD"))));
+            }
+            if (t == 3)
+            {
+                // In Turn 3, fresh DOM should be injected into the latest user message
+                final String latestMsgContent = req.messages().get(req.messages().size() - 1).content();
+                Assertions.assertTrue(latestMsgContent.contains("<div id='full-cart'><span>Cart Total</span></div>"),
+                        "Turn 3 must contain fresh DOM after request_context was called!");
+                return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-3", "complete_step", MAPPER.createObjectNode().put("summary", "Cart verified with fresh DOM"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals("Cart verified with fresh DOM", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+        Assertions.assertEquals(3, turn.get());
     }
 
     @Test
@@ -2687,6 +2871,34 @@ public class AgentToolLoopStepTest
         Assertions.assertTrue(thrown.getMessage().contains("Hover over 'Place Order'"));
         Assertions.assertTrue(thrown.getMessage().contains("Element not found for hover target: text='Place Order'"));
         Assertions.assertEquals(2, turn.get());
+    }
+
+    @Test
+    public void testConfiguredReasoningEffortPassedToLlmRequest() throws Exception
+    {
+        System.setProperty("neodymium.ai.reasoningEffort", "HIGH");
+        AiConfiguration.resetInstance();
+        try
+        {
+            final AtomicReference<ReasoningEffort> capturedEffort = new AtomicReference<>();
+            final AgentLoopLlmCaller caller = (req, ctx) -> {
+                capturedEffort.set(req.reasoningEffort());
+                return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-c1", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+            };
+
+            final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+            this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Test step");
+
+            step.execute(this.context);
+
+            Assertions.assertEquals(ReasoningEffort.HIGH, capturedEffort.get(), "Configured reasoning effort HIGH should be passed to LlmRequest");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.reasoningEffort");
+            AiConfiguration.resetInstance();
+        }
     }
 }
 

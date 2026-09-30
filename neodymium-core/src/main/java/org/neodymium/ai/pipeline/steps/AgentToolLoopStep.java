@@ -391,9 +391,9 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("You are an autonomous web testing agent. Execute the test instruction using available tools.\n\n");
         systemPrompt.append("### OPERATING RULES:\n");
         systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps.\n");
-        systemPrompt.append("2. GROUNDING & EXECUTION: Selectors are evaluated via Selenide (standard CSS, XPath, or text matching). Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Never propose the exact same failing tool call without changing selector or state.\n");
+        systemPrompt.append("2. GROUNDING & EXECUTION: Selectors are evaluated via Selenide (standard CSS, XPath, or text matching). Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Prior DOM snapshots are pruned after Turn 1 to minimize token context; if you need DOM details or element selectors in subsequent turns, invoke 'query_dom' (for specific element subtrees) or 'request_context' (for a fresh DOM snapshot). Never propose the exact same failing tool call without changing selector or state.\n");
         systemPrompt.append("3. ACTION STEPS: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, checking checkboxes/radios, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. When interacting with form controls, use 'fill' for text inputs, 'select' for dropdown menus, and 'check' for checkboxes and radio buttons (which is idempotent and sets the target state) rather than 'click'. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps. If an action fails (e.g., target element is disabled, missing, or non-interactable), DO NOT substitute uncommanded assertions (such as 'assert_element_state') and DO NOT call 'complete_step'; report the failure. Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
-        systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
+        systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. Propose [assertion, complete_step] in the same turn once the verification condition is satisfied. Directly assert the commanded property or content rather than splitting verification into separate intermediate visibility checks. To assert multiple states on the same element (e.g. 'displayed and enabled'), combine them into a single 'assert_element_state' call using compound states (e.g. state: 'visible, enabled' or states: ['visible', 'enabled']) rather than executing multiple separate tool calls. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
         if (isVisual)
         {
             systemPrompt.append("5. VISUAL CHECKS: When verifying visual appearance or when a screenshot is provided, inspect the screenshot visually to verify whether the condition is met on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
@@ -424,6 +424,24 @@ public final class AgentToolLoopStep implements PipelineStep
         if (LOGGER.isDebugEnabled())
         {
             LOGGER.debug("🛠️ Available Native Tools ({}):\n{}", availableTools.size(), ToolDefinition.formatTools(availableTools));
+        }
+
+        ReasoningEffort reasoningEffort = AiConfiguration.getInstance().getReasoningEffort();
+        if (context.getSessionData() != null)
+        {
+            final Object dynamicEffort = context.getSessionData().get("neodymium.ai.execution.reasoningEffort") != null
+                ? context.getSessionData().get("neodymium.ai.execution.reasoningEffort")
+                : (context.getSessionData().get("neodymium.ai.reasoningEffort") != null
+                    ? context.getSessionData().get("neodymium.ai.reasoningEffort")
+                    : context.getSessionData().get("neodymium.ai.thinkingLevel"));
+            if (dynamicEffort != null)
+            {
+                final ReasoningEffort parsed = AiConfiguration.parseReasoningEffort(String.valueOf(dynamicEffort));
+                if (parsed != null)
+                {
+                    reasoningEffort = parsed;
+                }
+            }
         }
 
         turnLoop: while (true)
@@ -460,7 +478,7 @@ public final class AgentToolLoopStep implements PipelineStep
                     ResponseSchema.TEXT,
                     0.0,
                     30,
-                    ReasoningEffort.LOW
+                    reasoningEffort
             );
 
             // Query LLM
@@ -1127,7 +1145,7 @@ public final class AgentToolLoopStep implements PipelineStep
                         tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
             }
 
-            // Always prune expired DOM snapshots from prior turn(s)
+            // Always prune expired DOM snapshots from prior turn(s) to minimize token context
             pruneExpiredDomFromConversation(conversation);
             attachments = Collections.emptyList();
 
@@ -1299,11 +1317,11 @@ public final class AgentToolLoopStep implements PipelineStep
 
                         if (milestones != null && !milestones.isEmpty())
                         {
-                            turnPrompt.append("Note: An action has been executed. Attached is the current viewport screenshot. This step contains multiple actions or milestones. Continue executing the remaining actions/milestones requested in the instruction. Do not invoke 'complete_step' until all requested actions and commanded verifications in this step have been fulfilled. For assertion milestones, invoke the commanded assertion tool directly (do not retry prior actions if text is absent). Do not perform uncommanded assertions or anticipate subsequent steps.");
+                            turnPrompt.append("Note: An action has been executed. Attached is the current viewport screenshot (prior DOM snapshot omitted to minimize context). This step contains multiple actions or milestones. Continue executing the remaining actions/milestones requested in the instruction. Do not invoke 'complete_step' until all requested actions and commanded verifications in this step have been fulfilled. For assertion milestones, invoke the commanded assertion tool directly (do not retry prior actions if text is absent). If you need DOM element selectors or structure to continue interacting or asserting, invoke 'request_context' or 'query_dom'. Do not perform uncommanded assertions or anticipate subsequent steps.");
                         }
                         else
                         {
-                            turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot. If this was an action instruction and all actions/fields requested in the instruction have been executed, invoke 'complete_step' now without performing uncommanded assertions or anticipating subsequent steps. If the instruction explicitly requested additional fields or actions that have not yet been executed, continue executing the remaining actions. If the step explicitly requires verification, use an assertion tool before calling 'complete_step'.");
+                            turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot (prior DOM snapshot omitted to minimize context). If this was an action instruction and all actions/fields requested in the instruction have been executed, invoke 'complete_step' now without performing uncommanded assertions or anticipating subsequent steps. If the instruction explicitly requested additional fields or actions that have not yet been executed, continue executing the remaining actions. If the step explicitly requires verification, use an assertion tool before calling 'complete_step'. If you need DOM element selectors or structure to continue interacting or asserting, invoke 'request_context' or 'query_dom'.");
                         }
 
                         conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
@@ -1324,18 +1342,6 @@ public final class AgentToolLoopStep implements PipelineStep
 
     static void pruneExpiredDomFromConversation(final List<ChatMessage> conversation)
     {
-        pruneExpiredDomFromConversation(conversation, true);
-    }
-
-    /**
-     * Prunes stale DOM snapshots and attachments from all previous user messages
-     * in the active multi-turn conversation so only the latest ground-truth DOM is preserved.
-     *
-     * @param conversation the active multi-turn conversation
-     * @param hasFreshDomIncoming whether a new DOM snapshot will be appended for the upcoming turn
-     */
-    static void pruneExpiredDomFromConversation(final List<ChatMessage> conversation, final boolean hasFreshDomIncoming)
-    {
         if (conversation == null || conversation.size() <= 1)
         {
             return;
@@ -1344,22 +1350,6 @@ public final class AgentToolLoopStep implements PipelineStep
         final String domSectionHeader = "### Current Page State & Interactive Elements:\n";
         final String replacement = "### Current Page State & Interactive Elements:\n"
                 + "[Initial page state omitted after Turn 1 — use browser tools for current page state]\n\n";
-
-        // Find the index of the latest message containing an active DOM section
-        int latestDomIndex = -1;
-        for (int i = conversation.size() - 1; i >= 1; i--)
-        {
-            final ChatMessage msg = conversation.get(i);
-            if (msg != null && msg.role() == Role.USER && msg.content() != null)
-            {
-                final String content = msg.content();
-                if (content.indexOf(domSectionHeader) != -1 && !content.contains("[Initial page state omitted"))
-                {
-                    latestDomIndex = i;
-                    break;
-                }
-            }
-        }
 
         for (int i = 1; i < conversation.size(); i++)
         {
@@ -1373,12 +1363,6 @@ public final class AgentToolLoopStep implements PipelineStep
             final int domIdx = content.indexOf(domSectionHeader);
             final boolean isUnprunedDom = domIdx != -1 && !content.contains("[Initial page state omitted");
 
-            // If no fresh DOM is incoming and this is the latest DOM we have, do NOT prune it
-            if (isUnprunedDom && !hasFreshDomIncoming && i == latestDomIndex)
-            {
-                continue;
-            }
-
             if (isUnprunedDom)
             {
                 final int nextSectionIdx = content.indexOf("\n\n### ", domIdx + domSectionHeader.length());
@@ -1391,11 +1375,16 @@ public final class AgentToolLoopStep implements PipelineStep
                 LOGGER.debug("✂️ Pruned expired DOM from message index {} (saved ~{} chars / ~{} tokens)",
                         i, prunedChars, prunedChars / 4);
             }
-            else if (msg.attachments() != null && !msg.attachments().isEmpty() && (hasFreshDomIncoming || i != latestDomIndex))
+            else if (msg.attachments() != null && !msg.attachments().isEmpty())
             {
                 conversation.set(i, ChatMessage.user(content, Collections.emptyList()));
             }
         }
+    }
+
+    static void pruneExpiredDomFromConversation(final List<ChatMessage> conversation, final boolean hasFreshDomIncoming)
+    {
+        pruneExpiredDomFromConversation(conversation);
     }
 
     private void finishLoop(final ExecutionContext context, final List<ToolCall> executedCalls, final String summary)
@@ -1994,7 +1983,15 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             return false;
         }
-        final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
+        String clean = name;
+        if (clean.startsWith("browser_"))
+        {
+            clean = clean.substring("browser_".length());
+        }
+        else if (clean.startsWith("mock_"))
+        {
+            clean = clean.substring("mock_".length());
+        }
         return "click".equals(clean)
                 || "hover".equals(clean)
                 || "fill".equals(clean)
