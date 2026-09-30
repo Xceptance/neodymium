@@ -410,6 +410,13 @@ public final class PlaybookStep
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*[0-9.]+%?\\s*\\)\\s*", " ");
             }
 
+            final Matcher contextLevelMatcher = CONTEXT_LEVEL_PATTERN.matcher(cleaned);
+            if (contextLevelMatcher.find())
+            {
+                this.contextLevel = contextLevelMatcher.group(1).toUpperCase().trim();
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*contextlevel\\s*[:=]\\s*[a-zA-Z_]+\\s*\\)\\s*", " ");
+            }
+
             final Matcher visualMatcher = VISUAL_TAG_PARAM_PATTERN.matcher(cleaned);
             if (visualMatcher.find())
             {
@@ -892,6 +899,7 @@ public final class PlaybookStep
     private static final Pattern VISUAL_TAG_PARAM_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:\\s*([^)]+))?\\s*\\)");
     private static final Pattern THRESHOLD_PARAM_PATTERN = Pattern.compile("(?i)^(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*([0-9.]+%?)$");
     private static final Pattern STANDALONE_THRESHOLD_PATTERN = Pattern.compile("(?i)\\(\\s*(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*([0-9.]+%?)\\s*\\)");
+    public static final Pattern CONTEXT_LEVEL_PATTERN = Pattern.compile("(?i)\\(\\s*contextlevel\\s*[:=]\\s*([a-zA-Z_]+)\\s*\\)");
     public static final Pattern LAYOUT_PATTERN = Pattern.compile("(?i)\\(\\s*layout\\s*\\)");
     public static final Pattern HINT_PATTERN = Pattern.compile("(?i)\\(\\s*hint\\s*:\\s*[^)]+\\)");
     public static final Pattern INTERACTIVE_ACTION_PATTERN =

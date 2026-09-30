@@ -273,17 +273,7 @@ public final class ExecuteActionsStep
             final StepStats stats = getOrCreateStatsForStep(step, stepStartTime, isReplayStats, stepStatsMap, allStats, contextState);
             contextState.getTransientData().put("KEY_CURRENT_STEP_STATS", stats);
 
-            ContextLevel initialLevel = ContextLevel.LEAN;
-            if (step.getContextLevel() != null && !step.getContextLevel().isBlank())
-            {
-                try
-                {
-                    initialLevel = ContextLevel.valueOf(step.getContextLevel().toUpperCase().trim());
-                }
-                catch (final Exception ignored)
-                {
-                }
-            }
+            ContextLevel initialLevel = AiConfiguration.getInstance().getContextLevel();
 
             final boolean hasVisualFull = PlaybookStep.VISUAL_FULL_PATTERN.matcher(resolvedInstruction).find();
             final boolean hasLayout = PlaybookStep.LAYOUT_PATTERN.matcher(resolvedInstruction).find();
@@ -304,6 +294,17 @@ public final class ExecuteActionsStep
             else if (hasHint)
             {
                 initialLevel = ContextLevel.HINT;
+            }
+
+            if (step.getContextLevel() != null && !step.getContextLevel().isBlank())
+            {
+                try
+                {
+                    initialLevel = ContextLevel.valueOf(step.getContextLevel().toUpperCase().trim());
+                }
+                catch (final Exception ignored)
+                {
+                }
             }
 
             @SuppressWarnings("unchecked")

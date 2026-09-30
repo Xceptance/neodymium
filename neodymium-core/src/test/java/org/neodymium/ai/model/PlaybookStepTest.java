@@ -434,4 +434,20 @@ public class PlaybookStepTest
         final PlaybookStep fromOriginal = mapper.readValue(jsonOriginal, PlaybookStep.class);
         Assertions.assertEquals(0.96, fromOriginal.getSsimMinScore(), 0.0001);
     }
+
+    @Test
+    public void testContextLevelTagParsing()
+    {
+        final PlaybookStep stepEquals = new PlaybookStep("Verify the estimated total is displayed (contextlevel=standard)");
+        Assertions.assertEquals("Verify the estimated total is displayed", stepEquals.getInstruction());
+        Assertions.assertEquals("STANDARD", stepEquals.getContextLevel());
+
+        final PlaybookStep stepColon = new PlaybookStep("Verify cart items (contextlevel: lean)");
+        Assertions.assertEquals("Verify cart items", stepColon.getInstruction());
+        Assertions.assertEquals("LEAN", stepColon.getContextLevel());
+
+        final PlaybookStep stepSpaces = new PlaybookStep("Verify pricing ( contextlevel = rich )");
+        Assertions.assertEquals("Verify pricing", stepSpaces.getInstruction());
+        Assertions.assertEquals("RICH", stepSpaces.getContextLevel());
+    }
 }

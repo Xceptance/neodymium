@@ -3217,7 +3217,7 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "CSS selector to search for");
         props.putObject("text").put("type", "string").put("description", "Case-insensitive text substring to search for");
         props.putObject("includeAncestors").put("type", "integer").put("description", "Number of ancestor levels to include in returned subtree (default: 1)");
-        props.putObject("limit").put("type", "integer").put("description", "Maximum number of elements to return (default: 10)");
+        props.putObject("limit").put("type", "integer").put("description", "Maximum number of elements to return (default: 20)");
 
         final ToolDefinition def = new ToolDefinition("query_dom", "Searches the live DOM for elements matching a selector or text, returning clean subtrees with attributes and visibility", schema);
         return new AiTool()
@@ -3234,7 +3234,7 @@ public final class BrowserToolProvider
                 final JsonNode args = call.arguments();
                 final String selector = args.hasNonNull("selector") ? args.path("selector").asText() : "";
                 final String text = args.hasNonNull("text") ? args.path("text").asText() : "";
-                final int limit = args.hasNonNull("limit") ? args.path("limit").asInt(10) : 10;
+                final int limit = args.hasNonNull("limit") ? args.path("limit").asInt(20) : 20;
 
                 final String queryScript = """
                     return (function(sel, searchText, maxCount) {
@@ -3280,11 +3280,46 @@ public final class BrowserToolProvider
                         }
 
                         var filtered = exactMatches.concat(wordMatches).concat(partialMatches);
+                        var uniqueFiltered = [];
+                        var seenElements = new Set();
+                        for (var k = 0; k < filtered.length; k++) {
+                            var fEl = filtered[k];
+                            if (!seenElements.has(fEl)) {
+                                seenElements.add(fEl);
+                                uniqueFiltered.push(fEl);
+                            }
+                        }
+
+                        var leafMatches = [];
+                        if (lowerText) {
+                            for (var a = 0; a < uniqueFiltered.length; a++) {
+                                var cand = uniqueFiltered[a];
+                                var isAncestorOfMatch = false;
+                                for (var b = 0; b < uniqueFiltered.length; b++) {
+                                    if (a !== b && cand.contains(uniqueFiltered[b])) {
+                                        isAncestorOfMatch = true;
+                                        break;
+                                    }
+                                }
+                                if (!isAncestorOfMatch) {
+                                    leafMatches.push(cand);
+                                }
+                            }
+                        }
+                        var toProcess = leafMatches.length > 0 ? leafMatches : uniqueFiltered;
+                        if (lowerText) {
+                            toProcess.sort(function(a, b) {
+                                var lenA = (a.innerText || a.textContent || '').trim().length;
+                                var lenB = (b.innerText || b.textContent || '').trim().length;
+                                return lenA - lenB;
+                            });
+                        }
+
                         var results = [];
                         var seen = new Set();
 
-                        for (var j = 0; j < filtered.length; j++) {
-                            var el = filtered[j];
+                        for (var j = 0; j < toProcess.length; j++) {
+                            var el = toProcess[j];
                             if (seen.has(el)) continue;
                             seen.add(el);
 

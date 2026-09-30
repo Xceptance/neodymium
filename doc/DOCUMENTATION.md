@@ -554,6 +554,13 @@ Specifies a custom execution timeout for a specific playbook step.
 * **Behavior**: Overrides the default action timeout for slow-loading asynchronous widgets or dynamic modals.
 * **Syntax Examples**: `(timeout: 10s)`, `(timeout: 5000ms)`, `(timeout: 30s)`
 
+##### `(contextlevel=<level>)`
+Explicitly sets the initial DOM context fidelity level for this specific playbook step.
+* **Behavior**: Overrides the global default context level (`neodymium.ai.contextLevel`) for Turn 1 of this step.
+* **Supported Levels**: `lean`, `standard`, `rich`, `minimal`, `hint`, etc.
+* **Syntax Examples**: `(contextlevel=standard)`, `(contextlevel: standard)`, `(contextlevel=rich)`, `(contextlevel=lean)`
+* **LLM Payload Cleanliness**: Dynamically parsed and stripped at step parsing time (`PlaybookStep`), ensuring the natural language prompt sent to the LLM remains clean.
+
 ##### `(visual)` / `(visual: full)` / `(layout)`
 Triggers visual execution mode with a page screenshot payload.
 * **`(visual)`**: Triggers standard visual execution at `ContextLevel.VISUAL` (URL + Title header only, 0 DOM element nodes), capturing a standard viewport screenshot matching the active browser window size on the initial attempt (~2,800 tokens).
@@ -563,7 +570,7 @@ Triggers visual execution mode with a page screenshot payload.
 * **Author Tag Protection**: Explicit `(visual)`, `(visual: full)`, and `(layout)` tags set by the test author are protected from being overwritten or downgraded.
 
 #### Runtime Instruction Preparation
-Before compiling prompts or sending request payloads to the LLM, the framework executes a dedicated instruction preparation step (`ExecuteActionsStep.prepareInstruction`). It dynamically strips most explicit control tags case-insensitively (`(no-replay)`, `(bug)`, `(continue-on-error)`, `(no-healing)`, `(optional)`, `(timeout: ...)`, `(visual)`, `(visual: full)`), preventing internal test configurations from polluting the natural language prompts sent to the LLM.
+Before compiling prompts or sending request payloads to the LLM, the framework executes a dedicated instruction preparation step (`ExecuteActionsStep.prepareInstruction`). It dynamically strips most explicit control tags case-insensitively (`(no-replay)`, `(bug)`, `(continue-on-error)`, `(no-healing)`, `(optional)`, `(timeout: ...)`, `(contextlevel=...)`, `(visual)`, `(visual: full)`), preventing internal test configurations from polluting the natural language prompts sent to the LLM.
 
 *(Note: The `(hint: <selector>)` and `(layout)` tags are intentionally **not** stripped, as the LLM requires their embedded string content and context to generate the correct structural actions.)*
 
@@ -954,7 +961,7 @@ $$\textbf{Track B (Visual Track): } \mathbf{VISUAL} \longrightarrow \mathbf{VISU
 | **`VISUAL_RICH`** | Visual | **Full-Page Screenshot + `RICH` DOM.** Maximum multimodal context. Strictly preserves all DOM text and attributes. | Triggered by `(layout)` checks or cross-track escalation from `RICH`; uses full-page screenshot. |
 
 #### Dynamic Escalation Flow
-1. **Initial Step**: Starts at **`MINIMAL`** (or `LEAN` / `VISUAL` based on explicit tags).
+1. **Initial Step**: Starts at **`LEAN`** by default (configurable via `neodymium.ai.contextLevel = LEAN|STANDARD|RICH` in `ai.properties`, or overridden on individual steps via `(contextlevel=standard)`).
 2. **Escalation 1 (`MINIMAL` $\rightarrow$ `LEAN`)**: Expands to all interactive elements, navigation links, and section headings.
 3. **Escalation 2 (`LEAN` $\rightarrow$ `STANDARD`)**: Expands to static text, paragraphs, and order summary totals.
 4. **Escalation 3 (`STANDARD` $\rightarrow$ `RICH`)**: Expands to all `data-*` attributes, ARIA descriptions, tables, and deep parent ancestry.
@@ -1372,6 +1379,7 @@ Neodymium AI uses hierarchical property loading (`AiConfiguration`):
 * `neodymium.ai.playbook.recordingDirectory` - Primary directory for saving and loading Playbook JSON execution recordings.
 * `neodymium.ai.replay.delayScale` - (Double) Scale multiplier applied to recorded delays. When `0.0`, pacing is disabled for maximum CI/CD speed. (Default: `0.0`)
 * `neodymium.ai.replay.useRecordedDelays` - (Boolean, Legacy) Replay actions at human speed utilizing recorded sleep intervals. (Default: `false`)
+* `neodymium.ai.contextLevel` - Controls default DOM fidelity level sent to the LLM during turn 1 of agent execution (`LEAN`, `STANDARD`, `RICH`). Individual playbook steps can override this via tags: `(contextlevel=standard)` or `(contextlevel=rich)`. (Default: `LEAN`)
 
 ### 8.2 Provider and Model Configuration
 * `neodymium.ai.provider` - Global active LLM provider (`gemini`, `openai`, `vertex`, `mistral`, `mock`). (Default: `gemini`)

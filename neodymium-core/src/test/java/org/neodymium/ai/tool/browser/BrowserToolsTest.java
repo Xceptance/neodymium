@@ -616,6 +616,74 @@ public class BrowserToolsTest
     }
 
     @Test
+    public void testBrowserQueryDomToolSchema()
+    {
+        final AiTool tool = this.registry.getTool("query_dom").orElseThrow();
+        final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
+        Assertions.assertTrue(props.has("selector"));
+        Assertions.assertTrue(props.has("text"));
+        Assertions.assertTrue(props.has("limit"));
+        Assertions.assertTrue(props.path("limit").path("description").asText().contains("default: 20"));
+    }
+
+    @Test
+    public void testBrowserQueryDomAncestorSuppressionAndSorting() throws Exception
+    {
+        Configuration.browser = "chrome";
+        Configuration.headless = true;
+        try
+        {
+            final String html = """
+                <!DOCTYPE html>
+                <html>
+                <body>
+                    <div id="page-wrapper" class="page">
+                        <div id="main-content" class="content">
+                            <div class="cart-summary">
+                                <div class="totals-container">
+                                    <span class="total-label">Estimated Total</span>
+                                    <span class="total-amount">$123.45</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """;
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            final AiTool tool = this.registry.getTool("query_dom").orElseThrow();
+            final ObjectMapper mapper = new ObjectMapper();
+            final ToolCall call = new ToolCall("call-query-ancestor", "query_dom", mapper.createObjectNode().put("text", "Estimated Total"));
+
+            final ToolResult result = tool.execute(call, null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+
+            final JsonNode json = mapper.readTree(result.content());
+            Assertions.assertEquals("SUCCESS", json.path("status").asText());
+            final JsonNode matches = json.path("matches");
+            Assertions.assertTrue(matches.isArray());
+            Assertions.assertTrue(matches.size() >= 1);
+
+            // Leaf match should be the first element, not the outer wrapper (page-wrapper or main-content)
+            final JsonNode firstMatch = matches.get(0);
+            Assertions.assertEquals("span", firstMatch.path("tag").asText());
+            Assertions.assertEquals("Estimated Total", firstMatch.path("text").asText());
+
+            // Outer ancestor containers should have been suppressed
+            for (final JsonNode match : matches)
+            {
+                Assertions.assertNotEquals("div#page-wrapper.page", match.path("selector").asText());
+                Assertions.assertNotEquals("div#main-content.content", match.path("selector").asText());
+            }
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+        }
+    }
+
+    @Test
     public void testUnescapeLiteralText()
     {
         Assertions.assertEquals("$27.58", BrowserToolProvider.unescapeLiteralText("\\$27.58"));

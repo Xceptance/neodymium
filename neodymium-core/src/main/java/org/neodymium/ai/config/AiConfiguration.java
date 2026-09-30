@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import org.neodymium.ai.client.ReasoningEffort;
+import org.neodymium.ai.model.ContextLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.neodymium.util.Neodymium;
@@ -1038,6 +1039,25 @@ public final class AiConfiguration
         catch (final IllegalArgumentException e)
         {
             return ExecutionMode.REPLAY_WITH_HEALING;
+        }
+    }
+
+    /**
+     * Gets the default context level for the AI pipeline.
+     * Defaults to LEAN.
+     *
+     * @return the default context level enum
+     */
+    public ContextLevel getContextLevel()
+    {
+        final String levelStr = getProperty("neodymium.ai.contextLevel", "LEAN");
+        try
+        {
+            return ContextLevel.valueOf(levelStr.trim().toUpperCase());
+        }
+        catch (final IllegalArgumentException e)
+        {
+            return ContextLevel.LEAN;
         }
     }
 
