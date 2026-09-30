@@ -60,8 +60,8 @@ public class PlaybookStepFullPagePersistenceTest
 
         final String jsonWithFullTag = "{\"instruction\":\"Verify dashboard (visual: full)\",\"screenshotHash\":\"hash123\"}";
         final PlaybookStep deserializedFull = MAPPER.readValue(jsonWithFullTag, PlaybookStep.class);
-        Assertions.assertNull(deserializedFull.isFullPage());
-        Assertions.assertTrue(deserializedFull.isFullPageVisualStep(), "(visual: full) must be true even if fullPage flag is null");
+        Assertions.assertEquals(Boolean.TRUE, deserializedFull.isFullPage(), "fullPage property must be auto-populated from (visual: full) instruction tag");
+        Assertions.assertTrue(deserializedFull.isFullPageVisualStep(), "(visual: full) must be true");
     }
 
     @Test

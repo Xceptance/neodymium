@@ -19,6 +19,7 @@
 package org.neodymium.ai.pipeline.steps;
 
 import com.codeborne.selenide.Configuration;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -48,6 +49,7 @@ import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
+import org.neodymium.ai.util.DomQuiescenceWatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -414,10 +416,19 @@ public final class ExecuteActionsStep
                             final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
                                     || (step != null && step.isFullPageVisualStep());
                             final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
-                            final SutState initialVisual = executor.captureState(cl, isFullPageReq);
-                            if (initialVisual != null && initialVisual.getAttachments() != null && !initialVisual.getAttachments().isEmpty())
+
+                            final Object prevPostState = c.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+                            if (prevPostState instanceof final SutState prevSutState && !isFullPageReq)
                             {
-                                c.getTransientData().put(ExecutionContext.KEY_PRE_ACTION_STATE, initialVisual);
+                                c.getTransientData().put(ExecutionContext.KEY_PRE_ACTION_STATE, prevSutState);
+                            }
+                            else
+                            {
+                                final SutState initialVisual = executor.captureState(cl, isFullPageReq);
+                                if (initialVisual != null && initialVisual.getAttachments() != null && !initialVisual.getAttachments().isEmpty())
+                                {
+                                    c.getTransientData().put(ExecutionContext.KEY_PRE_ACTION_STATE, initialVisual);
+                                }
                             }
                         }
                         catch (final Exception e)
@@ -548,13 +559,21 @@ public final class ExecuteActionsStep
                         final long settleMs = AiConfiguration.getInstance().getVisualPostActionSettleMs();
                         if (settleMs > 0 && hasMutatingAction)
                         {
-                            try
+                            final boolean isVisualRequired = step != null && step.isVisualStep();
+                            if (isVisualRequired)
                             {
-                                Thread.sleep(settleMs);
+                                try
+                                {
+                                    Thread.sleep(settleMs);
+                                }
+                                catch (final InterruptedException e)
+                                {
+                                    Thread.currentThread().interrupt();
+                                }
                             }
-                            catch (final InterruptedException e)
+                            else
                             {
-                                Thread.currentThread().interrupt();
+                                DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(Math.min(settleMs, 200L)), Duration.ofMillis(50L));
                             }
                         }
 

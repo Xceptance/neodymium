@@ -41,6 +41,34 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20260930-12] Redundant Duplicate Pre-Step Visual Capture and Blind Settle Sleep in `ExecuteActionsStep`
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`ExecuteActionsStep`)
+- **Scope:** `Framework`
+- **Symptom:** Every test step transition incurred an average 3.95s dead gap (~90.8s total overhead across 23 transitions) between goal completion and starting the next step.
+- **Root Cause:**
+  1. `ExecuteActionsStep` captured back-to-back screenshots: post-step visual state capture at the end of Step N (~1.2s) followed immediately by pre-step visual state capture at the start of Step N+1 (~1.0s) across identical, unchanged browser states.
+  2. `ExecuteActionsStep` executed an unconditional `Thread.sleep(1000)` post-action settle pause on all mutating steps regardless of whether visual baselines were requested or whether DOM quiescence had already settled.
+- **Detection Gap ("What did we miss?"):** End-to-end timing tests only evaluated step-internal durations, failing to track inter-step lifecycle transitions and screenshot redundancy.
+- **Resolution:**
+  1. Updated `ExecuteActionsStep` to reuse the preceding step's `POST_ACTION_STATE` as the current step's `PRE_ACTION_STATE` when not in full-page capture mode, eliminating duplicate screenshot capture.
+  2. Conditioned the full post-action settle sleep on `step.isVisualStep()`, delegating non-visual mutating steps to `DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(200), Duration.ofMillis(50))` to confirm stability without blind multi-second sleep.
+- **Safety Net Added:** Unit tests in `ExecuteActionsStepTest` asserting state reuse across step boundaries and quiescence integration.
+
+### [DEF-20260930-11] Eager `SelenideElementFinder` Polling on State Assertions and Blocking `interactable` Timeouts on Click
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`BrowserToolProvider`)
+- **Scope:** `Framework`
+- **Symptom:** In test executions (such as `AddToCartTest.executeAddToCart`), each `assert_element_state` call took 5.1s–5.3s (~76.5s across 14 assertions) even when elements were already visible, and `click` calls took 11.6s–22.8s on animated/overlay elements (~76.8s across 5 clicks).
+- **Root Cause:**
+  1. `BrowserToolProvider` resolved assertion targets via `SelenideElementFinder.findElement`, which executes an eager, custom 5,000ms polling loop requiring visible candidate matching rather than utilizing Selenide's native lazy element proxy (`Selenide.$(...)`). When asserting `hidden` or `absent` states, or when elements failed strict pre-visibility filters, it polled until the full 5,000ms timeout before falling back.
+  2. `BrowserToolProvider.executeElementClick` asserted `el.shouldBe(Condition.interactable)` prior to click. When overlay wrappers, banners, or CSS animations were present, Selenide blocked for its condition timeout (5,000ms–10,000ms), generated attachment failure dumps to disk, and only then fell back to JavaScript click.
+- **Detection Gap ("What did we miss?"):** Unit tests executed against mock WebDrivers or simple static fixtures where elements were instantly interactable and assertions were not timed against live multi-second timeouts.
+- **Resolution:**
+  1. Added `resolveLazyElement` to `BrowserToolProvider` using standard Selenide `Selenide.$(LocatorResolver.resolveLocator(selector))` for assertions (`assert_element_state`, `assert_attribute`, `assert_text`), delegating condition polling directly to Selenide's `shouldBe`.
+  2. Refactored `executeElementClick` to attempt native `el.click()` directly after `shouldBe(Condition.visible)`, catching `ElementClickInterceptedException` / `ElementNotInteractableException` immediately and falling back to JS click in < 50ms without waiting out a multi-second interactable timeout.
+- **Safety Net Added:** Unit tests verifying rapid assertion completion and immediate JS click fallback in `BrowserToolsTest`.
+
 ### [DEF-20260930-10] Multi-Turn query_dom Overhead Caused by Turn 1 DOM Pruning, Ancestor Container Bubbling, and Missing ContextLevel Overrides
 - **Date:** 2026-09-30
 - **Component:** `neodymium-core` (`ai-tool`, `ai-model`, `ai-pipeline`, `ai-config`)

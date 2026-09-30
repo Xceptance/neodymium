@@ -26,6 +26,7 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.executor.selenide.LocatorResolver;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
@@ -332,7 +333,8 @@ public final class BrowserToolProvider
         {
             try
             {
-                el.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
+                el.shouldBe(Condition.visible);
+                el.click();
             }
             catch (final Exception | AssertionError e)
             {
@@ -345,7 +347,7 @@ public final class BrowserToolProvider
                                 ? $(Selectors.byText(text))
                                 : $(Selectors.withText(text));
                         SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
-                        textEl.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
+                        textEl.shouldBe(Condition.visible).click();
                         fallbackTargetEl = textEl;
                     }
                     catch (final Exception | AssertionError ignored)
@@ -1875,7 +1877,7 @@ public final class BrowserToolProvider
                             }
                             else
                             {
-                                final SelenideElement singleEl = findElement(selector);
+                                final SelenideElement singleEl = resolveLazyElement(selector);
                                 if (singleEl.exists() && matchesElementOrAssociatedLabel(singleEl, expectedText, regex, exact))
                                 {
                                     matched = true;
@@ -1885,7 +1887,7 @@ public final class BrowserToolProvider
                             if (!matched && !negated)
                             {
                                 final ElementsCollection currentElements = findElements(selector);
-                                final SelenideElement primary = currentElements.isEmpty() ? findElement(selector) : currentElements.first();
+                                final SelenideElement primary = currentElements.isEmpty() ? resolveLazyElement(selector) : currentElements.first();
                                 if (primary.exists())
                                 {
                                     final SelenideElement container = primary.closest(".form-group, .form-floating, .form-row, .field, .input-group, form, [class*='checkout'], [class*='order'], [class*='summary'], [class*='card'], [class*='table']");
@@ -2323,6 +2325,15 @@ public final class BrowserToolProvider
         return $("body");
     }
 
+    private static SelenideElement resolveLazyElement(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return $("body");
+        }
+        return $(LocatorResolver.resolveLocator(selector));
+    }
+
     private static SelenideElement findElement(final String selector)
     {
         if (selector == null || selector.isBlank())
@@ -2739,7 +2750,7 @@ public final class BrowserToolProvider
                 final boolean negated = call.arguments().path("negated").asBoolean(false)
                         || call.arguments().path("not").asBoolean(false);
 
-                final SelenideElement el = findElement(selector);
+                final SelenideElement el = resolveLazyElement(selector);
 
                 final List<String> evaluatedStates = new ArrayList<>();
                 for (final String rawState : states)
@@ -2939,7 +2950,7 @@ public final class BrowserToolProvider
                         || call.arguments().path("not").asBoolean(false)
                         || call.arguments().path("invert").asBoolean(false);
 
-                final SelenideElement el = findElement(selector);
+                final SelenideElement el = resolveLazyElement(selector);
 
                 if (rawExpectedValue != null)
                 {
@@ -4595,7 +4606,7 @@ public final class BrowserToolProvider
                 try
                 {
                     final SelenideElement el = findElement(selector).shouldBe(Condition.visible);
-                    el.scrollIntoView("{behavior: \"instant\", block: \"center\"}");
+                    SelenideElementFinder.scrollIntoViewIfNeeded(el);
 
                     final WebDriver driver = WebDriverRunner.getWebDriver();
                     new Actions(driver)
@@ -4664,7 +4675,7 @@ public final class BrowserToolProvider
                     final SelenideElement sourceEl = findElement(source).shouldBe(Condition.visible);
                     final SelenideElement targetEl = findElement(target).shouldBe(Condition.visible);
 
-                    sourceEl.scrollIntoView("{behavior: \"instant\", block: \"center\"}");
+                    SelenideElementFinder.scrollIntoViewIfNeeded(sourceEl);
 
                     final WebDriver driver = WebDriverRunner.getWebDriver();
                     new Actions(driver)

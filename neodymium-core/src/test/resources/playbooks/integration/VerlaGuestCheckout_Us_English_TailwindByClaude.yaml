@@ -17,12 +17,13 @@ steps: |
 
   Capture the subtotal in 'subtotal'.
   Increase the quantity by 1.
-  The new subtotal is now 2 * ${subtotal}.
+  Verify that the new subtotal is 2 * ${subtotal}.
+  Capture the new subtotal in 'subtotal'.
 
   Go to the checkout.
   The headline says 'Checkout'.
   There is a form with address data.
-  There is an order summary on the page that shows the ${subtotal}.
+  Verify that the order summary shows the ${subtotal}.
 
   Fill out the contact form:
     - Enter 'Mario' as first name, 'Meier' as last, and the email address '${guestEmail}'.
@@ -38,12 +39,12 @@ steps: |
   Click 'Purchase'.
   Wait for text "Thank you for your purchase!" to appear.
 
-  Verify the order data:
-    - An order number is shown in the form 'V-[0-9]+-US'.
-    - The total is mentioned and in USD.
-    - The zip code says '12345'.
-    - The text "Thank you for your purchase!" is shown.
-    - There is a green checkmark in the middle of the screen (visual).
+  Scroll up as much as possible to reveal the full order confirmation.
+  An order number is shown in the form 'V-[0-9]+-US'.
+  The total is mentioned and in USD.
+  The zip code says '12345'.
+  The text "Thank you for your purchase!" is shown.
+  There is a green checkmark in the middle of the screen (visual).
 
 data:
   - testId: "tailwind-by-claude"

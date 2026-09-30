@@ -4,7 +4,7 @@
 
 # This demonstrates a YAML include feature.
 search: &search
-  - Gib "${searchQuery}" in das Suchfeld ein.
+  - Tippe "${searchQuery}" in das Suchfeld ein.
   - Ein Suchvorschlag-Dropdown ist sichtbar und enthält mindestens 6 Einträge.
   - Klicke auf "View All", um alle Suchergebnisse zu sehen.
   - Eine Suchergebnisseite wird angezeigt und zeigt die Suchergebnisse für "${searchQuery}".
