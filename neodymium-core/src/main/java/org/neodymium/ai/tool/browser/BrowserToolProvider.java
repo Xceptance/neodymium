@@ -50,6 +50,7 @@ import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
 import org.openqa.selenium.Alert;
 import org.openqa.selenium.Dimension;
+import org.openqa.selenium.ElementClickInterceptedException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.NoAlertPresentException;
@@ -341,25 +342,18 @@ public final class BrowserToolProvider
             }
             catch (final Exception | AssertionError e)
             {
-                SelenideElement fallbackTargetEl = null;
-                if (!text.isBlank() && !selector.isBlank())
-                {
-                    try
-                    {
-                        final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
-                                ? $(Selectors.byText(text))
-                                : $(Selectors.withText(text));
-                        SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
-                        textEl.shouldBe(Condition.visible).click();
-                        fallbackTargetEl = textEl;
-                    }
-                    catch (final Exception | AssertionError ignored)
-                    {
-                    }
-                }
+                // Check if element click was intercepted by an overlay, animation, or sticky element
+                final boolean isIntercepted = (e.getCause() instanceof ElementClickInterceptedException)
+                        || (e instanceof ElementClickInterceptedException)
+                        || (e.getMessage() != null && (e.getMessage().contains("click intercepted")
+                                || e.getMessage().contains("is not clickable at point")
+                                || e.getMessage().contains("element click intercepted")));
 
-                if (fallbackTargetEl == null)
+                SelenideElement fallbackTargetEl = null;
+                if (isIntercepted)
                 {
+                    // Fast-path: When native click is intercepted by an animation or overlay, directly execute JS click
+                    // rather than wasting multi-second retry timeouts and dumping failure attachments
                     if (el.is(Condition.disabled) || !el.is(Condition.enabled))
                     {
                         throw e;
@@ -372,6 +366,41 @@ public final class BrowserToolProvider
                     catch (final Throwable ignored)
                     {
                         throw e;
+                    }
+                }
+                else
+                {
+                    if (!text.isBlank() && !selector.isBlank())
+                    {
+                        try
+                        {
+                            final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
+                                    ? $(Selectors.byText(text))
+                                    : $(Selectors.withText(text));
+                            SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
+                            textEl.shouldBe(Condition.visible).click();
+                            fallbackTargetEl = textEl;
+                        }
+                        catch (final Exception | AssertionError ignored)
+                        {
+                        }
+                    }
+
+                    if (fallbackTargetEl == null)
+                    {
+                        if (el.is(Condition.disabled) || !el.is(Condition.enabled))
+                        {
+                            throw e;
+                        }
+                        try
+                        {
+                            SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                            Selenide.executeJavaScript("arguments[0].click();", el);
+                        }
+                        catch (final Throwable ignored)
+                        {
+                            throw e;
+                        }
                     }
                 }
                 clickedEl = (fallbackTargetEl != null) ? fallbackTargetEl : el;

@@ -41,6 +41,32 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20260930-14] Complete Stripping of CSS Classes in Non-RICH Context Levels Due to Synthetic `autoId` Checked in `hasSemanticLocator`
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`PageAnalyzer`)
+- **Scope:** `Framework`
+- **Symptom:** AI verification steps targeting structural containers without IDs or text (e.g. `Verify cart items section is displayed`) fail on Turn 1 because container CSS classes (such as `class="b-basket-content-items"`) are completely omitted from the simplified DOM, forcing the agent into expensive 9-turn discovery loops (`query_dom`, `inspect_element`) taking 22+ seconds.
+- **Root Cause:** In commit `af748f3b`, `PageAnalyzer.formatElementNode` and `formatElement` introduced a token optimization to omit presentation classes when an element had a semantic locator (`hasSemanticLocator`). However, `autoId != null` was included in the condition. Because `PageAnalyzer` automatically assigns a synthetic `automationId` (`data-ai="xc..."`) to 100% of all extracted elements in the DOM tree, `autoId != null` evaluated to true for every single container and leaf element. Since `level.includesRichMetadata()` is false for `MINIMAL`, `LEAN`, and `STANDARD`, `appendSanitizedClassAttribute` was never called, stripping CSS classes entirely across all non-RICH context levels.
+- **Detection Gap ("What did we miss?"):** `PageAnalyzerTest` asserted element tags (`<table`, `<tr`, `<td`, `<form`), interactive attributes (`data-testid`, `role`, `aria-label`, `href`, `data-ai`), and text strings (`"Company Brand Logo"`), but contained zero assertions validating the presence of `class` attributes on containers. Integration tests asserted overall step success without asserting turn-count efficiency (`turnCount == 1`).
+- **Resolution:** Removed `autoId != null` from `hasSemanticLocator` in both `formatElementNode` (line 1237) and `formatElement` (line 1297) of `PageAnalyzer.java`, restoring CSS classes on all elements that lack semantic identifiers (`id`, `name`, `data-testid`, `role`, `aria-label`).
+- **Safety Net Added:** Added unit regression test `testContainerClassPreservationWhenAutomationIdPresent` in `PageAnalyzerTest.java` verifying that containers with `automationId` present retain their `class` attribute in `STANDARD` and `LEAN` modes.
+
+### [DEF-20260930-13] High Latency in AI Test Execution Due to Turn 1 Context Starvation, Intercepted Click Retries, and Unchecked Quality Judge
+- **Date:** 2026-09-30
+- **Component:** AI Engine (`AgentToolLoopStep`, `BrowserToolProvider`, `QualityJudgeToolInterceptor`)
+- **Scope:** `Framework`
+- **Symptom:** E-commerce test runs (e.g. `AddToCartTest`) take 324s (~5.4 min) for 24 steps; verification steps require 5–8 LLM turns (15s–26s each), and element clicks suffer 12s–23s in browser retry timeouts.
+- **Root Cause:**
+  1. `AgentToolLoopStep` defaulted Turn 1 context to `ContextLevel.LEAN`, stripping static text leaves (`div`, `span`, `p`, `td`) needed for price/subtotal/total verifications, forcing the LLM into expensive multi-turn `query_dom` / `inspect` exploratory loops.
+  2. `QualityJudgeToolInterceptor` defaulted `this.enabled = true` and did not check `config.isJudgeEnabled()`, triggering WebDriver queries, attribute scans, and candidate scoring even when disabled.
+  3. `BrowserToolProvider.executeElementClick` incurred Selenide's full retry timeout and disk report attachments upon `ElementClickInterceptedException` before falling back to JavaScript click.
+- **Detection Gap ("What did we miss?"):** Existing unit tests mocked LLM tool calls with pre-canned selectors and did not evaluate turn efficiency on static text assertions or measure real-browser timeout cascading on intercepted clicks.
+- **Resolution:**
+  1. Updated `AgentToolLoopStep` to resolve initial context level via `AiConfiguration.getContextLevel()` (configured to `STANDARD`), ensuring all text content is visible on Turn 1 in a universal, language-agnostic manner.
+  2. Bypassed all DOM queries and scoring in `QualityJudgeToolInterceptor.intercept()` when `!config.isJudgeEnabled()`.
+  3. Fast-pathed intercepted clicks in `BrowserToolProvider.executeElementClick` directly to JavaScript click.
+- **Safety Net Added:** Unit tests asserting `ContextLevel.STANDARD` propagation from configuration, zero DOM queries when Quality Judge is disabled, and fast JavaScript click execution on intercepted elements.
+
 ### [DEF-20260930-12] Redundant Duplicate Pre-Step Visual Capture and Blind Settle Sleep in `ExecuteActionsStep`
 - **Date:** 2026-09-30
 - **Component:** `neodymium-core` (`ExecuteActionsStep`)

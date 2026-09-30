@@ -320,9 +320,10 @@ public final class AgentToolLoopStep implements PipelineStep
 
         List<SutAttachment> attachments = Collections.emptyList();
 
-        ContextLevel activeContextLevel = ContextLevel.LEAN;
+        final ContextLevel configuredDefault = AiConfiguration.getInstance().getContextLevel();
+        ContextLevel activeContextLevel = configuredDefault;
 
-        // Interactive Turn 1: Supply pierced DOM Light (LEAN) or configured context level
+        // Interactive Turn 1: Supply pierced DOM Light or configured context level
         if (executor != null)
         {
             try
@@ -330,7 +331,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 final Object levelObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
                 final ContextLevel baseLevel = levelObj instanceof ContextLevel cl
                         ? cl
-                        : ContextLevel.LEAN;
+                        : configuredDefault;
                 activeContextLevel = ContextLevel.clean(baseLevel);
 
                 // Visual tag check

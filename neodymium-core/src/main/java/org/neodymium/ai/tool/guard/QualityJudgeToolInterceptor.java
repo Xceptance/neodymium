@@ -77,7 +77,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
     /**
      * Constructs a default QualityJudgeToolInterceptor using global {@link AiConfiguration}
-     * with active locator guarding enabled.
+     * with active locator guarding enabled if configured in {@link AiConfiguration#isJudgeEnabled()}.
      */
     public QualityJudgeToolInterceptor()
     {
@@ -126,13 +126,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
 
         final ExecutionContext activeContext = ExecutionContext.getActiveContext();
 
-        // 2. If Quality Judge is disabled via instance flag, bypass locator deliberation
-        if (!this.enabled)
-        {
-            return InterceptionVerdict.allow("Quality Judge disabled");
-        }
-
-        // 3. Only inspect browser actions that interact with elements
+        // 1. Only inspect browser actions that interact with elements (exempt tools pass immediately)
         final String rawName = call.toolName();
         final String toolName = rawName.startsWith("browser_") ? rawName.substring("browser_".length()) : rawName;
         if ("screenshot".equals(toolName) || "scroll".equals(toolName)
@@ -147,9 +141,21 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             return InterceptionVerdict.allow("Tool " + rawName + " is exempt from locator quality judging");
         }
 
-        // 4. Extract target selector from call arguments
+        // 2. If Quality Judge is disabled via instance flag, bypass locator deliberation
+        if (!this.enabled)
+        {
+            return InterceptionVerdict.allow("Quality Judge disabled");
+        }
+
+        // 3. Extract target selector and candidate locators from call arguments
         final String selector = call.arguments().path("selector").asText("").trim();
         List<LocatorCandidate> candidates = extractCandidates(call, context);
+
+        // 4. Fast bypass: If candidates are empty and neither LLM judge nor locator improver is enabled in configuration, bypass DOM inspection
+        if (candidates.isEmpty() && !this.config.isJudgeEnabled() && !this.config.isLocatorImproverEnabled())
+        {
+            return InterceptionVerdict.allow("Quality Judge and Locator Improver disabled; skipping DOM candidate inspection");
+        }
 
         // 5. Inspect live DOM when WebDriver has started and selector is provided
         if (!selector.isEmpty() && WebDriverRunner.hasWebDriverStarted())
@@ -183,6 +189,10 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             // If ambiguous (multiple elements) or volatile (score < 6), generate candidate alternatives
             if (candidates.isEmpty() && !matchedElements.isEmpty() && (matchedElements.size() > 1 || score < 6))
             {
+                if (!this.config.isLocatorImproverEnabled())
+                {
+                    return InterceptionVerdict.allow("Locator Improver disabled; skipping candidate generation");
+                }
                 final List<String> generated = LocatorImprover.generateCandidates(matchedElements.get(0));
                 candidates = new ArrayList<>();
                 candidates.add(new LocatorCandidate(selector, determineStrategy(selector), (double) score / 10.0, "Original proposed selector"));
