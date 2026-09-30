@@ -115,5 +115,18 @@ public final class AuraQueueServiceTest
         Assertions.assertTrue(extractedError.contains("Caused by: java.lang.ClassCastException"),
             "Error message should contain root cause exception details");
     }
+
+    @Test
+    public void testExtractSubprocessErrorMessageIgnoresSlf4jWarnLogs()
+    {
+        final List<String> logs = List.of(
+            "14:41:18.606 [main] WARN com.codeborne.selenide.impl.BiDiUti -- Failed to establish BiDi connection: org.openqa.selenium.bidi.BiDiException: Unable to create a BiDi connection",
+            "14:42:39.000 [main] WARN com.codeborne.selenide.impl.BiDiUti -- Failed to establish BiDi connection: org.openqa.selenium.bidi.BiDiException: Unable to create a BiDi connection"
+        );
+
+        final String extractedError = AuraQueueService.extractSubprocessErrorMessage(logs);
+
+        Assertions.assertNull(extractedError, "Extracted error message should be null for log streams containing only WARN entries");
+    }
 }
 

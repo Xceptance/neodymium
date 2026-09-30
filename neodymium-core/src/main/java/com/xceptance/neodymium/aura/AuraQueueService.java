@@ -877,7 +877,11 @@ public final class AuraQueueService
                                                     || "failed-known".equalsIgnoreCase(currentStatus) || "error".equalsIgnoreCase(currentStatus)
                                                     || "skipped".equalsIgnoreCase(currentStatus) || "cancelled".equalsIgnoreCase(currentStatus);
 
-                                            if (!isFailureStatus)
+                                            final boolean isZeroStep = objNode.path("currentStepIndex").asInt(0) == 0
+                                                    && (!objNode.has("steps") || objNode.get("steps").isEmpty() || objNode.get("steps").isNull())
+                                                    && objNode.path("metrics").path("totalSteps").asInt(0) == 0;
+
+                                            if (!isFailureStatus && (isZeroStep || testWasCancelled))
                                             {
                                                 objNode.put("status", statusStr);
                                                 objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
@@ -1407,8 +1411,9 @@ public final class AuraQueueService
                     continue;
                 }
                 final String line = stripAnsi(rawLine).trim();
-                if (line.contains("WARNING:")
-                        || line.contains("WARN:")
+                final String upperLine = line.toUpperCase();
+                if (upperLine.contains("WARN")
+                        || upperLine.contains("WARNING")
                         || line.contains("Picked up _JAVA_OPTIONS")
                         || line.contains("SLF4J:"))
                 {
