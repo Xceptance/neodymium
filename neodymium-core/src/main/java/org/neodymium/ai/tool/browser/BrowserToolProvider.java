@@ -271,28 +271,7 @@ public final class BrowserToolProvider
             final String text, final int parsedX, final int parsedY)
     {
         final String targetDesc = !selector.isBlank() ? selector : text;
-        final SelenideElement el;
-
-        if (!selector.isBlank())
-        {
-            if (selector.startsWith("text="))
-            {
-                final String rawText = selector.substring("text=".length()).trim();
-                el = $(Selectors.byText(rawText)).is(Condition.visible)
-                        ? $(Selectors.byText(rawText))
-                        : $(Selectors.withText(rawText));
-            }
-            else
-            {
-                el = findElement(selector);
-            }
-        }
-        else
-        {
-            el = $(Selectors.byText(text)).is(Condition.visible)
-                    ? $(Selectors.byText(text))
-                    : $(Selectors.withText(text));
-        }
+        final SelenideElement el = resolveElementBySelectorAndText(selector, text);
 
         SelenideElementFinder.scrollIntoViewIfNeeded(el);
 
@@ -1164,31 +1143,8 @@ public final class BrowserToolProvider
                     return ToolResult.error(call.callId(), "Target selector or text must be specified for hover action");
                 }
 
-                final SelenideElement el;
-                final String targetDesc;
-                if (!selector.isBlank())
-                {
-                    targetDesc = selector;
-                    if (selector.startsWith("text="))
-                    {
-                        final String rawText = selector.substring("text=".length()).trim();
-                        el = $(Selectors.byText(rawText)).is(Condition.visible)
-                                ? $(Selectors.byText(rawText))
-                                : $(Selectors.withText(rawText));
-                    }
-                    else
-                    {
-                        final SelenideElement found = SelenideElementFinder.findElement(selector);
-                        el = found != null ? found : $(selector);
-                    }
-                }
-                else
-                {
-                    targetDesc = text;
-                    el = $(Selectors.byText(text)).is(Condition.visible)
-                            ? $(Selectors.byText(text))
-                            : $(Selectors.withText(text));
-                }
+                final String targetDesc = !selector.isBlank() ? selector : text;
+                final SelenideElement el = resolveElementBySelectorAndText(selector, text);
 
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
                 el.shouldBe(Condition.visible).hover();
@@ -1497,7 +1453,19 @@ public final class BrowserToolProvider
 
     static boolean matchesElementText(final SelenideElement el, final String expectedText, final boolean regex, final boolean exact)
     {
-        if (el == null || !el.exists())
+        if (el == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (!el.exists())
+            {
+                return false;
+            }
+        }
+        catch (final Exception | AssertionError ignored)
         {
             return false;
         }
@@ -1511,7 +1479,7 @@ public final class BrowserToolProvider
                 candidates.add(text);
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1523,7 +1491,7 @@ public final class BrowserToolProvider
                 candidates.add(val);
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1535,7 +1503,7 @@ public final class BrowserToolProvider
                 candidates.add(placeholder);
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1547,7 +1515,7 @@ public final class BrowserToolProvider
                 candidates.add(ariaLabel);
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1559,7 +1527,7 @@ public final class BrowserToolProvider
                 candidates.add(parentText);
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1571,11 +1539,18 @@ public final class BrowserToolProvider
                 candidates.add(innerText);
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
-        final String tag = el.getTagName();
+        String tag = null;
+        try
+        {
+            tag = el.getTagName();
+        }
+        catch (final Exception | AssertionError ignored)
+        {
+        }
         final boolean isRoot = tag == null || "body".equalsIgnoreCase(tag) || "html".equalsIgnoreCase(tag);
         if (!isRoot)
         {
@@ -1587,7 +1562,7 @@ public final class BrowserToolProvider
                     candidates.add(textContent);
                 }
             }
-            catch (final Exception ignored)
+            catch (final Exception | AssertionError ignored)
             {
             }
         }
@@ -1646,12 +1621,12 @@ public final class BrowserToolProvider
 
     static boolean matchesElementOrAssociatedLabel(final SelenideElement el, final String expectedText, final boolean regex, final boolean exact)
     {
-        if (matchesElementText(el, expectedText, regex, exact))
-        {
-            return true;
-        }
         try
         {
+            if (matchesElementText(el, expectedText, regex, exact))
+            {
+                return true;
+            }
             final String id = el.getAttribute("id");
             if (id != null && !id.isBlank())
             {
@@ -1670,7 +1645,7 @@ public final class BrowserToolProvider
                 return true;
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
         return false;
@@ -1685,7 +1660,7 @@ public final class BrowserToolProvider
                 return true;
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1884,21 +1859,21 @@ public final class BrowserToolProvider
                     while ((negated ? matched : !matched) && (System.currentTimeMillis() - start) < timeout)
                     {
                         matched = false;
-                        final ElementsCollection elements = findElements(selector);
-                        if (!elements.isEmpty())
+                        try
                         {
-                            for (final SelenideElement el : elements)
+                            final ElementsCollection elements = findElements(selector);
+                            if (!elements.isEmpty())
                             {
-                                if (matchesElementOrAssociatedLabel(el, expectedText, regex, exact))
+                                for (final SelenideElement el : elements)
                                 {
-                                    matched = true;
-                                    break;
+                                    if (matchesElementOrAssociatedLabel(el, expectedText, regex, exact))
+                                    {
+                                        matched = true;
+                                        break;
+                                    }
                                 }
                             }
-                        }
-                        else
-                        {
-                            try
+                            else
                             {
                                 final SelenideElement singleEl = findElement(selector);
                                 if (singleEl.exists() && matchesElementOrAssociatedLabel(singleEl, expectedText, regex, exact))
@@ -1906,14 +1881,8 @@ public final class BrowserToolProvider
                                     matched = true;
                                 }
                             }
-                            catch (final Exception ignored)
-                            {
-                            }
-                        }
 
-                        if (!matched && !negated)
-                        {
-                            try
+                            if (!matched && !negated)
                             {
                                 final ElementsCollection currentElements = findElements(selector);
                                 final SelenideElement primary = currentElements.isEmpty() ? findElement(selector) : currentElements.first();
@@ -1930,9 +1899,9 @@ public final class BrowserToolProvider
                                     }
                                 }
                             }
-                            catch (final Exception ignored)
-                            {
-                            }
+                        }
+                        catch (final Exception | AssertionError ignored)
+                        {
                         }
 
                         if (negated ? matched : !matched)
@@ -2220,6 +2189,138 @@ public final class BrowserToolProvider
             }
         }
         return "";
+    }
+
+    private static String safeGetText(final SelenideElement el)
+    {
+        try
+        {
+            return el.getText();
+        }
+        catch (final Exception | AssertionError ignored)
+        {
+            return null;
+        }
+    }
+
+    private static SelenideElement resolveElementBySelectorAndText(final String selector, final String text)
+    {
+        final boolean hasSelector = selector != null && !selector.isBlank();
+        final boolean hasText = text != null && !text.isBlank();
+
+        if (hasSelector && !hasText)
+        {
+            if (selector.startsWith("text="))
+            {
+                final String rawText = selector.substring("text=".length()).trim();
+                return $(Selectors.byText(rawText)).is(Condition.visible)
+                        ? $(Selectors.byText(rawText))
+                        : $(Selectors.withText(rawText));
+            }
+            return findElement(selector);
+        }
+
+        if (!hasSelector && hasText)
+        {
+            return $(Selectors.byText(text)).is(Condition.visible)
+                    ? $(Selectors.byText(text))
+                    : $(Selectors.withText(text));
+        }
+
+        if (hasSelector && hasText)
+        {
+            if (selector.startsWith("text="))
+            {
+                final String rawText = selector.substring("text=".length()).trim();
+                return $(Selectors.byText(rawText)).is(Condition.visible)
+                        ? $(Selectors.byText(rawText))
+                        : $(Selectors.withText(rawText));
+            }
+
+            try
+            {
+                final ElementsCollection candidates = findElements(selector);
+                final ElementsCollection visibleCandidates = candidates.filter(Condition.visible);
+
+                for (final SelenideElement candidate : visibleCandidates)
+                {
+                    final String candidateText = safeGetText(candidate);
+                    if (candidateText != null && candidateText.trim().equalsIgnoreCase(text.trim()))
+                    {
+                        return candidate;
+                    }
+                }
+
+                for (final SelenideElement candidate : visibleCandidates)
+                {
+                    final String candidateText = safeGetText(candidate);
+                    if (candidateText != null && candidateText.toLowerCase().contains(text.toLowerCase()))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+
+            try
+            {
+                final SelenideElement container = findElement(selector);
+                if (container.exists())
+                {
+                    final SelenideElement childExact = container.$(Selectors.byText(text));
+                    if (childExact.exists() && childExact.is(Condition.visible))
+                    {
+                        return childExact;
+                    }
+                    final SelenideElement childPartial = container.$(Selectors.withText(text));
+                    if (childPartial.exists() && childPartial.is(Condition.visible))
+                    {
+                        return childPartial;
+                    }
+                    if (childExact.exists())
+                    {
+                        return childExact;
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+
+            try
+            {
+                final ElementsCollection candidates = findElements(selector);
+                for (final SelenideElement candidate : candidates)
+                {
+                    final String candidateText = safeGetText(candidate);
+                    if (candidateText != null && candidateText.trim().equalsIgnoreCase(text.trim()))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+
+            try
+            {
+                final SelenideElement globalText = $(Selectors.byText(text));
+                if (globalText.exists() && globalText.is(Condition.visible))
+                {
+                    return globalText;
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+
+            return findElement(selector);
+        }
+
+        return $("body");
     }
 
     private static SelenideElement findElement(final String selector)
@@ -2519,7 +2620,7 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector targeting the element to assert state on");
         final ArrayNode stateEnum = props.putObject("state")
                 .put("type", "string")
-                .put("description", "Expected state of the element ('visible', 'hidden', 'enabled', 'disabled', 'editable', 'readonly', 'checked', 'unchecked', 'selected', 'unselected', 'focused', 'exists', 'absent')")
+                .put("description", "Expected state or comma-separated states of the element ('visible', 'hidden', 'enabled', 'disabled', 'editable', 'readonly', 'checked', 'unchecked', 'selected', 'unselected', 'focused', 'unfocused', 'exists', 'absent', or compound e.g. 'visible, enabled')")
                 .putArray("enum");
         stateEnum.add("visible");
         stateEnum.add("hidden");
@@ -2536,13 +2637,40 @@ public final class BrowserToolProvider
         stateEnum.add("not_focused");
         stateEnum.add("exists");
         stateEnum.add("absent");
+        stateEnum.add("visible, enabled");
+        stateEnum.add("visible, disabled");
+        stateEnum.add("visible, editable");
+        stateEnum.add("visible, readonly");
+        stateEnum.add("checked, enabled");
+        stateEnum.add("checked, disabled");
+        final ArrayNode statesEnum = props.putObject("states")
+                .put("type", "array")
+                .put("description", "Optional array of multiple states to assert simultaneously on the element (e.g. ['visible', 'enabled'])")
+                .putObject("items")
+                .put("type", "string")
+                .putArray("enum");
+        statesEnum.add("visible");
+        statesEnum.add("hidden");
+        statesEnum.add("enabled");
+        statesEnum.add("disabled");
+        statesEnum.add("editable");
+        statesEnum.add("readonly");
+        statesEnum.add("checked");
+        statesEnum.add("unchecked");
+        statesEnum.add("selected");
+        statesEnum.add("unselected");
+        statesEnum.add("focused");
+        statesEnum.add("unfocused");
+        statesEnum.add("not_focused");
+        statesEnum.add("exists");
+        statesEnum.add("absent");
         props.putObject("negated").put("type", "boolean").put("description", "Whether to invert the state assertion (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
         req.add("state");
 
-        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies a specific state (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent)", schema);
+        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies one or more states (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, or compound e.g. 'visible, enabled')", schema);
         return new AiTool()
         {
             @Override
@@ -2560,106 +2688,150 @@ public final class BrowserToolProvider
                     throw new AssertionError("assert_element_state requires a 'selector' argument");
                 }
 
-                final String rawState;
-                if (call.arguments().hasNonNull("state") && !call.arguments().path("state").asText().isBlank())
+                final List<String> states = new ArrayList<>();
+                if (call.arguments().has("states") && call.arguments().path("states").isArray())
                 {
-                    rawState = call.arguments().path("state").asText();
+                    for (final JsonNode s : call.arguments().path("states"))
+                    {
+                        if (s.isTextual() && !s.asText().isBlank())
+                        {
+                            states.add(s.asText().trim());
+                        }
+                    }
                 }
-                else if (call.arguments().hasNonNull("expectedState") && !call.arguments().path("expectedState").asText().isBlank())
+
+                if (states.isEmpty())
                 {
-                    rawState = call.arguments().path("expectedState").asText();
+                    final String rawState;
+                    if (call.arguments().hasNonNull("state") && !call.arguments().path("state").asText().isBlank())
+                    {
+                        rawState = call.arguments().path("state").asText();
+                    }
+                    else if (call.arguments().hasNonNull("expectedState") && !call.arguments().path("expectedState").asText().isBlank())
+                    {
+                        rawState = call.arguments().path("expectedState").asText();
+                    }
+                    else if (call.arguments().hasNonNull("value") && !call.arguments().path("value").asText().isBlank())
+                    {
+                        rawState = call.arguments().path("value").asText();
+                    }
+                    else
+                    {
+                        throw new AssertionError("assert_element_state requires a 'state' argument");
+                    }
+
+                    final String[] parts = rawState.split("[,&]|\\band\\b");
+                    for (final String part : parts)
+                    {
+                        final String trimmed = part.trim();
+                        if (!trimmed.isBlank())
+                        {
+                            states.add(trimmed);
+                        }
+                    }
                 }
-                else if (call.arguments().hasNonNull("value") && !call.arguments().path("value").asText().isBlank())
-                {
-                    rawState = call.arguments().path("value").asText();
-                }
-                else
+
+                if (states.isEmpty())
                 {
                     throw new AssertionError("assert_element_state requires a 'state' argument");
                 }
 
                 final boolean negated = call.arguments().path("negated").asBoolean(false)
                         || call.arguments().path("not").asBoolean(false);
-                final String normalized = normalizeElementState(rawState);
-                final String state = negated ? switch (normalized)
-                {
-                    case "visible" -> "hidden";
-                    case "hidden" -> "visible";
-                    case "enabled" -> "disabled";
-                    case "disabled" -> "enabled";
-                    case "checked" -> "unchecked";
-                    case "unchecked" -> "checked";
-                    case "selected" -> "unselected";
-                    case "unselected" -> "selected";
-                    case "focused" -> "unfocused";
-                    case "unfocused" -> "focused";
-                    case "exists" -> "absent";
-                    case "absent" -> "exists";
-                    default -> normalized;
-                } : normalized;
 
                 final SelenideElement el = findElement(selector);
 
-                switch (state)
+                final List<String> evaluatedStates = new ArrayList<>();
+                for (final String rawState : states)
                 {
-                    case "visible" -> el.shouldBe(Condition.visible);
-                    case "hidden" -> el.shouldBe(Condition.hidden);
-                    case "enabled" -> el.shouldBe(Condition.enabled);
-                    case "disabled" -> el.shouldBe(Condition.disabled);
-                    case "editable" -> el.shouldBe(Condition.editable);
-                    case "readonly" -> el.shouldBe(Condition.readonly);
-                    case "checked" -> el.shouldBe(Condition.checked);
-                    case "unchecked" -> el.shouldNotBe(Condition.checked);
-                    case "selected" ->
+                    final String normalized = normalizeElementState(rawState);
+                    final String state = negated ? switch (normalized)
                     {
-                        if ("SELECT".equalsIgnoreCase(el.getTagName()))
-                        {
-                            el.getSelectedOption().shouldBe(Condition.exist);
-                        }
-                        else
-                        {
-                            el.shouldBe(Condition.selected);
-                        }
-                    }
-                    case "unselected" ->
+                        case "visible" -> "hidden";
+                        case "hidden" -> "visible";
+                        case "enabled" -> "disabled";
+                        case "disabled" -> "enabled";
+                        case "checked" -> "unchecked";
+                        case "unchecked" -> "checked";
+                        case "selected" -> "unselected";
+                        case "unselected" -> "selected";
+                        case "focused" -> "unfocused";
+                        case "unfocused" -> "focused";
+                        case "exists" -> "absent";
+                        case "absent" -> "exists";
+                        default -> normalized;
+                    } : normalized;
+
+                    switch (state)
                     {
-                        if ("SELECT".equalsIgnoreCase(el.getTagName()))
+                        case "visible" -> el.shouldBe(Condition.visible);
+                        case "hidden" -> el.shouldBe(Condition.hidden);
+                        case "enabled" -> el.shouldBe(Condition.enabled);
+                        case "disabled" -> el.shouldBe(Condition.disabled);
+                        case "editable" -> el.shouldBe(Condition.editable);
+                        case "readonly" -> el.shouldBe(Condition.readonly);
+                        case "checked" -> el.shouldBe(Condition.checked);
+                        case "unchecked" -> el.shouldNotBe(Condition.checked);
+                        case "selected" ->
                         {
-                            el.getSelectedOption().shouldNotBe(Condition.exist);
+                            if ("SELECT".equalsIgnoreCase(el.getTagName()))
+                            {
+                                el.getSelectedOption().shouldBe(Condition.exist);
+                            }
+                            else
+                            {
+                                el.shouldBe(Condition.selected);
+                            }
                         }
-                        else
+                        case "unselected" ->
                         {
-                            el.shouldNotBe(Condition.selected);
+                            if ("SELECT".equalsIgnoreCase(el.getTagName()))
+                            {
+                                el.getSelectedOption().shouldNotBe(Condition.exist);
+                            }
+                            else
+                            {
+                                el.shouldNotBe(Condition.selected);
+                            }
                         }
+                        case "focused" ->
+                        {
+                            final Boolean isFocused = Selenide.executeJavaScript(
+                                    "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                                    el);
+                            if (!Boolean.TRUE.equals(isFocused))
+                            {
+                                el.shouldBe(Condition.focused);
+                            }
+                        }
+                        case "unfocused" ->
+                        {
+                            final Boolean isFocused = Selenide.executeJavaScript(
+                                    "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                                    el);
+                            if (Boolean.TRUE.equals(isFocused))
+                            {
+                                el.shouldNotBe(Condition.focused);
+                            }
+                        }
+                        case "exists" -> el.should(Condition.exist);
+                        case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
+                        default -> throw new AssertionError("Unsupported element state assertion: '" + rawState + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
                     }
-                    case "focused" ->
-                    {
-                        final Boolean isFocused = Selenide.executeJavaScript(
-                                "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                                el);
-                        if (!Boolean.TRUE.equals(isFocused))
-                        {
-                            el.shouldBe(Condition.focused);
-                        }
-                    }
-                    case "unfocused" ->
-                    {
-                        final Boolean isFocused = Selenide.executeJavaScript(
-                                "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                                el);
-                        if (Boolean.TRUE.equals(isFocused))
-                        {
-                            el.shouldNotBe(Condition.focused);
-                        }
-                    }
-                    case "exists" -> el.should(Condition.exist);
-                    case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
-                    default -> throw new AssertionError("Unsupported element state assertion: '" + rawState + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
+                    evaluatedStates.add(state);
                 }
 
                 final ObjectNode res = successNode("assert_element_state");
                 res.put("target", selector);
-                res.put("state", state);
+                res.put("state", String.join(", ", evaluatedStates));
+                if (evaluatedStates.size() > 1)
+                {
+                    final ArrayNode arr = res.putArray("states");
+                    for (final String s : evaluatedStates)
+                    {
+                        arr.add(s);
+                    }
+                }
                 res.put("negated", negated);
                 res.put("matched", true);
                 return ToolResult.success(call.callId(), res.toString());
@@ -2667,7 +2839,7 @@ public final class BrowserToolProvider
         };
     }
 
-    static String normalizeElementState(final String rawState)
+    public static String normalizeElementState(final String rawState)
     {
         if (rawState == null || rawState.isBlank())
         {

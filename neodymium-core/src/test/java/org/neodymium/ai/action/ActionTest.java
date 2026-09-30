@@ -365,6 +365,38 @@ public class ActionTest
     }
 
     @Test
+    public void testFromToolCallAssertElementStateCompoundComma()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#checkout-btn");
+        args.put("state", "visible, enabled");
+        final ToolCall call = new ToolCall("call-compound-1", "assert_element_state", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_ELEMENT_STATE", action.getType());
+        assertEquals("#checkout-btn", action.getTarget());
+        assertEquals("visible, enabled", action.getValue());
+        assertEquals("assert_element_state", action.toToolCall().toolName());
+    }
+
+    @Test
+    public void testFromToolCallAssertElementStateCompoundArray()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#checkout-btn");
+        final ArrayNode states = args.putArray("states");
+        states.add("visible");
+        states.add("enabled");
+        final ToolCall call = new ToolCall("call-compound-2", "assert_element_state", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_ELEMENT_STATE", action.getType());
+        assertEquals("#checkout-btn", action.getTarget());
+        assertEquals("visible, enabled", action.getValue());
+        assertEquals("assert_element_state", action.toToolCall().toolName());
+    }
+
+    @Test
     public void testFromToolCallAssertCountNotEquals()
     {
         final ObjectNode args = this.mapper.createObjectNode();

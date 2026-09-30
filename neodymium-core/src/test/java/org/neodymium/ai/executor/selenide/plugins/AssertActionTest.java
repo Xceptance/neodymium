@@ -563,4 +563,33 @@ public class AssertActionTest extends BaseAiTest
             plugin.execute(new Action("ASSERT_COUNT", "input[type='checkbox']", List.of("2"), "wrong count negated", "fail", false, true));
         });
     }
+
+    @Test
+    @DisplayName("AssertAction handles compound element state assertions")
+    public void testCompoundElementStateAssertions() throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AssertActionTest/testAssertHappyPath.html", server.getPort());
+        Selenide.open(pageUrl);
+
+        final AssertAction plugin = new AssertAction();
+
+        // 1. Compound comma-separated states on enabled button
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#visible-btn", List.of("visible, enabled"), "check visible and enabled", "reasoning", false));
+
+        // 2. Compound 'and'-separated states
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#visible-btn", List.of("visible and enabled"), "check visible and enabled", "reasoning", false));
+
+        // 3. Compound states on disabled input: visible, disabled
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#disabled-input", List.of("visible, disabled"), "check visible and disabled", "reasoning", false));
+
+        // 4. Compound states on readonly input: visible, readonly
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#readonly-input", List.of("visible, readonly"), "check visible and readonly", "reasoning", false));
+
+        // 5. Negative: asserting visible and enabled on disabled input must fail
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#disabled-input", List.of("visible, enabled"), "assert enabled on disabled element", "fail", false));
+        });
+    }
 }
+

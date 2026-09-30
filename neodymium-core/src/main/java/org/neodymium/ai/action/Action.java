@@ -824,7 +824,7 @@ public class Action
             case "ASSERT_VISIBLE", "ASSERT_HIDDEN", "ASSERT_ENABLED", "ASSERT_DISABLED",
                  "ASSERT_EDITABLE", "ASSERT_READONLY", "ASSERT_CHECKED", "ASSERT_UNCHECKED",
                  "ASSERT_SELECTED", "ASSERT_UNSELECTED", "ASSERT_FOCUSED", "ASSERT_UNFOCUSED", "ASSERT_EXISTS",
-                 "ASSERT_ABSENT" -> "assert_element_state";
+                 "ASSERT_ABSENT", "ASSERT_ELEMENT_STATE" -> "assert_element_state";
             case "ASSERT" -> {
                 if ("url".equalsIgnoreCase(this.target) || "currentUrl".equalsIgnoreCase(this.target) || "pageUrl".equalsIgnoreCase(this.target))
                 {
@@ -933,9 +933,19 @@ public class Action
         else if ("assert_element_state".equals(toolName) || "browser_assert_element_state".equals(toolName))
         {
             args.put("selector", this.target != null ? this.target : "");
-            final String state = actionType.startsWith("ASSERT_")
-                    ? actionType.substring("ASSERT_".length()).toLowerCase(Locale.ROOT)
-                    : ((this.value != null && !this.value.isEmpty()) ? this.value.get(0).toLowerCase(Locale.ROOT) : "visible");
+            final String state;
+            if ("ASSERT_ELEMENT_STATE".equals(actionType))
+            {
+                state = (this.value != null && !this.value.isEmpty()) ? this.value.get(0).toLowerCase(Locale.ROOT) : "visible";
+            }
+            else if (actionType.startsWith("ASSERT_"))
+            {
+                state = actionType.substring("ASSERT_".length()).toLowerCase(Locale.ROOT);
+            }
+            else
+            {
+                state = (this.value != null && !this.value.isEmpty()) ? this.value.get(0).toLowerCase(Locale.ROOT) : "visible";
+            }
             args.put("state", state);
         }
         else if ("assert_attribute".equals(toolName) || "browser_assert_attribute".equals(toolName))
@@ -1091,10 +1101,42 @@ public class Action
             case "assert_url" -> "ASSERT_URL";
             case "assert_title" -> "ASSERT_TITLE";
             case "assert_element_state", "assert_state" -> {
+                final List<String> statesList = new ArrayList<>();
+                if (args != null && args.hasNonNull("states") && args.path("states").isArray())
+                {
+                    for (final JsonNode s : args.path("states"))
+                    {
+                        if (s.isTextual() && !s.asText().isBlank())
+                        {
+                            statesList.add(s.asText().trim());
+                        }
+                    }
+                }
                 final String rawState = args != null && args.hasNonNull("state")
-                        ? args.path("state").asText().trim().toUpperCase(Locale.ROOT)
-                        : "";
-                final String baseType = switch (rawState)
+                        ? args.path("state").asText().trim()
+                        : (args != null && args.hasNonNull("expectedState")
+                                ? args.path("expectedState").asText().trim()
+                                : (args != null && args.hasNonNull("value") ? args.path("value").asText().trim() : ""));
+                if (statesList.isEmpty() && !rawState.isBlank())
+                {
+                    final String[] parts = rawState.split("[,&]|\\band\\b");
+                    for (final String part : parts)
+                    {
+                        final String trimmed = part.trim();
+                        if (!trimmed.isBlank())
+                        {
+                            statesList.add(trimmed);
+                        }
+                    }
+                }
+
+                if (statesList.size() > 1)
+                {
+                    yield "ASSERT_ELEMENT_STATE";
+                }
+
+                final String singleState = statesList.isEmpty() ? rawState.toUpperCase(Locale.ROOT) : statesList.get(0).toUpperCase(Locale.ROOT);
+                final String baseType = switch (singleState)
                 {
                     case "VISIBLE" -> "ASSERT_VISIBLE";
                     case "HIDDEN" -> "ASSERT_HIDDEN";
@@ -1110,7 +1152,7 @@ public class Action
                     case "UNFOCUSED", "NOT_FOCUSED" -> "ASSERT_UNFOCUSED";
                     case "EXISTS", "PRESENT" -> "ASSERT_EXISTS";
                     case "ABSENT", "NOT_EXIST", "NOT_EXISTS", "NON-EXISTENT" -> "ASSERT_ABSENT";
-                    default -> "ASSERT";
+                    default -> "ASSERT_ELEMENT_STATE";
                 };
                 if (negated)
                 {
@@ -1290,6 +1332,29 @@ public class Action
                 {
                     value = args.path("state").asText();
                 }
+                else if (args.hasNonNull("states") && args.path("states").isArray())
+                {
+                    final List<String> list = new ArrayList<>();
+                    for (final JsonNode n : args.path("states"))
+                    {
+                        if (n.isTextual() && !n.asText().isBlank())
+                        {
+                            list.add(n.asText().trim());
+                        }
+                    }
+                    if (!list.isEmpty())
+                    {
+                        value = String.join(", ", list);
+                    }
+                }
+                else if (args.hasNonNull("expectedState") && !args.path("expectedState").asText().isBlank())
+                {
+                    value = args.path("expectedState").asText();
+                }
+                else if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+                {
+                    value = args.path("value").asText();
+                }
             }
             else if ("assert_attribute".equals(name) || "assert_attr".equals(name))
             {
@@ -1395,7 +1460,7 @@ public class Action
                 case "ASSERT_VISIBLE", "ASSERT_HIDDEN", "ASSERT_ENABLED", "ASSERT_DISABLED",
                      "ASSERT_EDITABLE", "ASSERT_READONLY", "ASSERT_CHECKED", "ASSERT_UNCHECKED",
                      "ASSERT_SELECTED", "ASSERT_UNSELECTED", "ASSERT_FOCUSED", "ASSERT_UNFOCUSED", "ASSERT_EXISTS",
-                     "ASSERT_ABSENT" -> "Assert " + (!target.isBlank() ? target + " " : "") + "is " + (value != null ? value : type.substring("ASSERT_".length()).toLowerCase(Locale.ROOT));
+                     "ASSERT_ABSENT", "ASSERT_ELEMENT_STATE" -> "Assert " + (!target.isBlank() ? target + " " : "") + "is " + (value != null ? value : type.substring("ASSERT_".length()).toLowerCase(Locale.ROOT));
                 case "ASSERT_ATTRIBUTE" -> "Assert attribute '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
                 case "SELECT" -> "Select '" + (value != null ? value : "") + "' on " + target;
                 case "HOVER" -> "Hover over " + target;

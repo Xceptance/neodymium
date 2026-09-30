@@ -22,6 +22,7 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -839,6 +840,37 @@ public class BrowserToolProviderStabilityTest
             Assertions.assertThrows(AssertionError.class, () ->
             {
                 tool.execute(new ToolCall("call-editable", "browser_assert_element_state", failArgs), null);
+            });
+
+            // 3. Asserting compound state 'visible, enabled' should SUCCEED
+            final ObjectNode compoundSuccessArgs = MAPPER.createObjectNode();
+            compoundSuccessArgs.put("selector", "#readonly-input");
+            compoundSuccessArgs.put("state", "visible, enabled");
+            final ToolResult compoundResult = tool.execute(new ToolCall("call-compound", "browser_assert_element_state", compoundSuccessArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, compoundResult.status());
+            final JsonNode compoundJson = MAPPER.readTree(compoundResult.content());
+            Assertions.assertEquals("visible, enabled", compoundJson.path("state").asText());
+            Assertions.assertTrue(compoundJson.has("states"));
+            Assertions.assertEquals(2, compoundJson.path("states").size());
+
+            // 4. Asserting compound states via 'states' array should SUCCEED
+            final ObjectNode arraySuccessArgs = MAPPER.createObjectNode();
+            arraySuccessArgs.put("selector", "#readonly-input");
+            arraySuccessArgs.put("state", "visible");
+            final ArrayNode statesArr = arraySuccessArgs.putArray("states");
+            statesArr.add("visible");
+            statesArr.add("enabled");
+            statesArr.add("readonly");
+            final ToolResult arrayResult = tool.execute(new ToolCall("call-array", "browser_assert_element_state", arraySuccessArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, arrayResult.status());
+
+            // 5. Asserting compound state with a failing condition ('visible, disabled') must THROW AssertionError
+            final ObjectNode compoundFailArgs = MAPPER.createObjectNode();
+            compoundFailArgs.put("selector", "#readonly-input");
+            compoundFailArgs.put("state", "visible, disabled");
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                tool.execute(new ToolCall("call-compound-fail", "browser_assert_element_state", compoundFailArgs), null);
             });
         }
         finally
