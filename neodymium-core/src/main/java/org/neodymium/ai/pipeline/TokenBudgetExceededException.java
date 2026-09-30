@@ -65,8 +65,13 @@ public class TokenBudgetExceededException extends RuntimeException
      */
     private static String formatMessage(final BudgetType type, final int consumed, final int limit)
     {
-        final String direction = type == BudgetType.INPUT ? "Input tokens consumed" : (type == BudgetType.OUTPUT ? "Output tokens generated" : "Total tokens consumed");
-        final String target = type == BudgetType.INPUT ? "input token budget" : (type == BudgetType.OUTPUT ? "output token budget" : "step token budget");
+        if (type == BudgetType.TOTAL)
+        {
+            return String.format("Token budget exceeded for step: Total tokens consumed (%d) exceeded configured step token budget (%d). Step aborted.",
+                consumed, limit);
+        }
+        final String direction = type == BudgetType.INPUT ? "Input tokens consumed" : "Output tokens generated";
+        final String target = type == BudgetType.INPUT ? "input token budget" : "output token budget";
         return String.format("Token budget exceeded for test run: %s (%d) exceeded configured %s (%d). Test run aborted.",
             direction, consumed, target, limit);
     }

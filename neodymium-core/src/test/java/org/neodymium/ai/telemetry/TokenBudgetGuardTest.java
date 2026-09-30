@@ -29,13 +29,11 @@ import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
-import org.neodymium.ai.executor.MockTargetExecutor;
-import org.neodymium.ai.junit.AiContext;
 import org.neodymium.ai.model.ExecutionMetrics;
 import org.neodymium.ai.model.MetricsAsserter;
-import org.neodymium.ai.model.PlaybookRecording;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.TokenBudgetExceededException;
+import org.neodymium.util.Neodymium;
 
 /**
  * Unit tests verifying real-time token budget enforcement (input and output tokens) and post-execution verifyMetrics token asserter methods.
@@ -205,5 +203,30 @@ public class TokenBudgetGuardTest
         Assertions.assertEquals(120_000, ex.getConsumedTokens());
         Assertions.assertEquals(100_000, ex.getBudgetLimit());
         Assertions.assertTrue(ex.getMessage().contains("Total tokens consumed (120000) exceeded configured step token budget (100000)"));
+    }
+
+    @Test
+    @DisplayName("TokenBudgetGuard resolves custom budget from Neodymium.getData() thread-local context")
+    public void testTokenBudgetResolvesFromNeodymiumData()
+    {
+        Neodymium.clearThreadContext();
+        try
+        {
+            Neodymium.getData().put("neodymium.ai.tokenBudget.input", "1500000");
+
+            final TokenBudgetGuard guard = new TokenBudgetGuard();
+            this.eventBus.registerListener(guard);
+
+            // Usage of 600,000 tokens should PASS under 1,500,000 budget (whereas it would fail under default 500,000)
+            final LlmRequest request = new LlmRequest("System prompt", "User prompt", null, null, 0.0, 30);
+            final LlmResponse response = new LlmResponse("Result", new TokenUsage(600_000, 10_000, 610_000), "mock-model");
+            final LlmResponseReceivedEvent event = new LlmResponseReceivedEvent(request, response, 100, "EXECUTION");
+
+            Assertions.assertDoesNotThrow(() -> this.eventBus.dispatch(event));
+        }
+        finally
+        {
+            Neodymium.clearThreadContext();
+        }
     }
 }

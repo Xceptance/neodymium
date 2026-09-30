@@ -862,6 +862,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
         private void executeBeforeEach(final ExtensionContext context) throws Exception
         {
+            Neodymium.clearThreadContext();
+
             // Set test name dynamically in the Neodymium context
             if (context.getRequiredTestMethod() != null && context.getRequiredTestClass() != null)
             {
@@ -1087,10 +1089,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             if (resolvedInputBudget > 0)
             {
+                Neodymium.getData().put("neodymium.ai.tokenBudget.input", String.valueOf(resolvedInputBudget));
                 executionContext.getTransientData().put(ExecutionContext.KEY_TOKEN_BUDGET_INPUT, resolvedInputBudget);
             }
             if (resolvedOutputBudget > 0)
             {
+                Neodymium.getData().put("neodymium.ai.tokenBudget.output", String.valueOf(resolvedOutputBudget));
                 executionContext.getTransientData().put(ExecutionContext.KEY_TOKEN_BUDGET_OUTPUT, resolvedOutputBudget);
             }
 
@@ -1628,6 +1632,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     Neodymium.getData().remove("neodymium.ai.ssim.minScore");
                     com.xceptance.neodymium.util.Neodymium.getData().remove("neodymium.ai.ssim.minScore");
                 }
+
+                Neodymium.clearThreadContext();
             }
         }
 
