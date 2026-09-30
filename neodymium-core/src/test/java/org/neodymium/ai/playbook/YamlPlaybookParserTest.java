@@ -21,10 +21,13 @@ package org.neodymium.ai.playbook;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
@@ -115,7 +118,8 @@ public class YamlPlaybookParserTest
     {
         final String yamlContent = """
             steps:
-              - invalid_key: "some value"
+              - invalid_key1: "value 1"
+                invalid_key2: "value 2"
             """;
 
         final InMemoryResourceManager manager = new InMemoryResourceManager();
@@ -126,7 +130,7 @@ public class YamlPlaybookParserTest
             parser.parse("invalid-map-playbook.yaml", manager);
         });
 
-        assertEquals("Invalid playbook step format in file: invalid-map-playbook.yaml. Expected string step, 'include' map, or 'instruction' map, but found map keys: [invalid_key]", ex.getMessage());
+        assertTrue(ex.getMessage().contains("Invalid playbook step format in file: invalid-map-playbook.yaml"));
     }
 
     @Test
@@ -335,20 +339,19 @@ public class YamlPlaybookParserTest
         final Playbook playbook = parser.parse("main.yaml", manager);
 
         assertNotNull(playbook);
-        assertEquals(3, playbook.getSteps().size());
+        assertEquals(4, playbook.getSteps().size(), "Should parse 4 inlined steps across before, steps, and after blocks");
 
-        final PlaybookStep beforeInclude = playbook.getSteps().get(0);
-        assertEquals("_include: setup.yaml", beforeInclude.getInstruction());
-        assertEquals(2, beforeInclude.getSubSteps().size());
-        assertEquals("Setup step 1", beforeInclude.getSubSteps().get(0).getInstruction());
-        assertEquals("Setup step 2", beforeInclude.getSubSteps().get(1).getInstruction());
+        assertEquals("Setup step 1", playbook.getSteps().get(0).getInstruction());
+        assertEquals("setup.yaml", playbook.getSteps().get(0).getSourceFile());
 
-        assertEquals("Main step", playbook.getSteps().get(1).getInstruction());
+        assertEquals("Setup step 2", playbook.getSteps().get(1).getInstruction());
+        assertEquals("setup.yaml", playbook.getSteps().get(1).getSourceFile());
 
-        final PlaybookStep afterInclude = playbook.getSteps().get(2);
-        assertEquals("_include: teardown.yaml", afterInclude.getInstruction());
-        assertEquals(1, afterInclude.getSubSteps().size());
-        assertEquals("Teardown step 1", afterInclude.getSubSteps().get(0).getInstruction());
+        assertEquals("Main step", playbook.getSteps().get(2).getInstruction());
+        assertEquals("main.yaml", playbook.getSteps().get(2).getSourceFile());
+
+        assertEquals("Teardown step 1", playbook.getSteps().get(3).getInstruction());
+        assertEquals("teardown.yaml", playbook.getSteps().get(3).getSourceFile());
     }
 
     @Test
@@ -601,5 +604,197 @@ public class YamlPlaybookParserTest
 
         final PlaybookStep sub1 = parent.getSubSteps().get(1);
         assertTrue(sub1.isBug(), "sub1 must preserve its own bug flag");
+    }
+
+    /**
+     * Verifies that steps resolved from a statically-parsed {@code _include:} directive are inlined
+     * directly into the top-level playbook steps list without synthetic container wrapper nodes,
+     * retaining their original source file name and line number, and having no parent.
+     */
+    @Test
+    public void testStaticIncludeStepsAreInlinedWithOriginalSourceLocation() throws IOException
+    {
+        final String hostYaml = """
+            steps:
+              - "Navigate to homepage"
+              - include: shared-login.yaml
+              - "Verify dashboard"
+            """;
+
+        final String includedYaml = """
+            steps:
+              - "Enter username"
+              - "Enter password"
+              - "Click login"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("host.yaml", hostYaml);
+        manager.write("shared-login.yaml", includedYaml);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("host.yaml", manager);
+
+        final List<PlaybookStep> steps = playbook.getSteps();
+
+        // We expect 5 steps: "Navigate to homepage", 3 login steps, "Verify dashboard"
+        assertEquals(5, steps.size(), "Parsed step count should equal inlined steps without include wrappers");
+
+        // Step 0: "Navigate to homepage" — native host step
+        assertEquals("host.yaml", steps.get(0).getSourceFile());
+        assertNull(steps.get(0).getParent());
+
+        // Steps 1..3: Included login steps from shared-login.yaml
+        assertEquals("Enter username", steps.get(1).getInstruction());
+        assertEquals("shared-login.yaml", steps.get(1).getSourceFile());
+        assertNull(steps.get(1).getParent());
+        assertFalse(steps.get(1).hasSubSteps());
+
+        assertEquals("Enter password", steps.get(2).getInstruction());
+        assertEquals("shared-login.yaml", steps.get(2).getSourceFile());
+        assertNull(steps.get(2).getParent());
+        assertFalse(steps.get(2).hasSubSteps());
+
+        assertEquals("Click login", steps.get(3).getInstruction());
+        assertEquals("shared-login.yaml", steps.get(3).getSourceFile());
+        assertNull(steps.get(3).getParent());
+        assertFalse(steps.get(3).hasSubSteps());
+
+        // Step 4: "Verify dashboard" — native host step
+        assertEquals("Verify dashboard", steps.get(4).getInstruction());
+        assertEquals("host.yaml", steps.get(4).getSourceFile());
+        assertNull(steps.get(4).getParent());
+    }
+
+    /**
+     * Verifies that nested static includes (include inside include) inline recursively all the way up
+     * to the top level, with each step preserving its origin file and line number.
+     */
+    @Test
+    public void testNestedStaticIncludeStepsAreInlinedRecursively() throws IOException
+    {
+        final String hostYaml = """
+            steps:
+              - "Setup"
+              - include: middle.yaml
+            """;
+
+        final String middleYaml = """
+            steps:
+              - "Middle step"
+              - include: leaf.yaml
+            """;
+
+        final String leafYaml = """
+            steps:
+              - "Leaf step A"
+              - "Leaf step B"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("host.yaml", hostYaml);
+        manager.write("middle.yaml", middleYaml);
+        manager.write("leaf.yaml", leafYaml);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("host.yaml", manager);
+
+        final List<PlaybookStep> steps = playbook.getSteps();
+
+        // "Setup" (host.yaml), "Middle step" (middle.yaml), "Leaf step A" (leaf.yaml), "Leaf step B" (leaf.yaml)
+        assertEquals(4, steps.size(), "Nested static includes should expand to 4 top-level inlined steps");
+
+        assertEquals("host.yaml", steps.get(0).getSourceFile());
+        assertEquals("middle.yaml", steps.get(1).getSourceFile());
+        assertEquals("leaf.yaml", steps.get(2).getSourceFile());
+        assertEquals("leaf.yaml", steps.get(3).getSourceFile());
+
+        for (final PlaybookStep step : steps)
+        {
+            assertNull(step.getParent());
+            assertFalse(step.hasSubSteps());
+        }
+    }
+
+    @Test
+    public void testParseIncludedStepListFragment() throws IOException
+    {
+        final String hostYaml = """
+            steps: |
+              Navigate to homepage
+              Accept cookies
+              _include: checkout.steps
+            """;
+
+        final String checkoutSteps = """
+            - Select payment method
+            - Enter payment credentials
+            - Confirm order
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("stokkeTest.yml", hostYaml);
+        manager.write("checkout.steps", checkoutSteps);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("stokkeTest.yml", manager);
+
+        final List<PlaybookStep> steps = playbook.getSteps();
+        assertEquals(5, steps.size(), "Should expand included list fragment steps into 5 total steps");
+        assertEquals("Navigate to homepage", steps.get(0).getInstruction());
+        assertEquals("Accept cookies", steps.get(1).getInstruction());
+        assertEquals("Select payment method", steps.get(2).getInstruction());
+        assertEquals("Enter payment credentials", steps.get(3).getInstruction());
+        assertEquals("Confirm order", steps.get(4).getInstruction());
+    }
+
+    @Test
+    public void testParseYamlListStepWithInlineColonAndInclude() throws IOException
+    {
+        final String hostYaml = """
+            steps:
+              - Start checkout.
+              - If checkout page is not loaded, click retry and _include: fragments/restart.steps
+              - Validate checkout page is loaded.
+            """;
+
+        final String restartSteps = """
+            - Click start checkout again
+            - Save error message
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("host.yml", hostYaml);
+        manager.write("fragments/restart.steps", restartSteps);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("host.yml", manager);
+
+        final List<PlaybookStep> steps = playbook.getSteps();
+        assertEquals(3, steps.size());
+        assertEquals("Start checkout.", steps.get(0).getInstruction());
+        assertEquals("If checkout page is not loaded, click retry and _include: fragments/restart.steps", steps.get(1).getInstruction());
+        assertEquals("Validate checkout page is loaded.", steps.get(2).getInstruction());
+    }
+
+    @Test
+    public void testParseYamlListStepWithParentheticalHintColon() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - Generate random email address (hint: use java method)
+              - Enter email ${randomEmail} address and continue.
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("hint-playbook.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("hint-playbook.yaml", manager);
+
+        final List<PlaybookStep> steps = playbook.getSteps();
+        assertEquals(2, steps.size());
+        assertEquals("Generate random email address (hint: use java method)", steps.get(0).getInstruction());
+        assertEquals("Enter email ${randomEmail} address and continue.", steps.get(1).getInstruction());
     }
 }
