@@ -813,6 +813,28 @@ public class Action
         {
             case "CLICK" -> "click";
             case "FILL", "TYPE" -> "fill";
+            case "FILL_FORM" ->
+            {
+                if (this.parameters.containsKey("fields"))
+                {
+                    args.set("fields", MAPPER.valueToTree(this.parameters.get("fields")));
+                }
+                else
+                {
+                    final String valStr = getValue();
+                    if (valStr != null && (valStr.startsWith("[") || valStr.startsWith("{")))
+                    {
+                        try
+                        {
+                            args.set("fields", MAPPER.readTree(valStr));
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                }
+                yield "fill_form";
+            }
             case "NAVIGATE", "OPEN" -> "navigate";
             case "SELECT" -> "select";
             case "CHECK" -> "check";
@@ -1085,6 +1107,7 @@ public class Action
             case "navigate" -> "NAVIGATE";
             case "click" -> "CLICK";
             case "fill", "type" -> "TYPE";
+            case "fill_form" -> "FILL_FORM";
             case "hover" -> "HOVER";
             case "scroll" -> "SCROLL";
             case "select" -> "SELECT";
@@ -1227,6 +1250,10 @@ public class Action
                     target = args.path("target").asText();
                 }
             }
+            else if ("fill_form".equals(name))
+            {
+                target = args.hasNonNull("form") ? args.path("form").asText() : "form";
+            }
             else if (args.hasNonNull("selector") && !args.path("selector").asText().isBlank())
             {
                 target = args.path("selector").asText();
@@ -1304,6 +1331,13 @@ public class Action
                 else
                 {
                     value = varName;
+                }
+            }
+            else if ("fill_form".equals(name))
+            {
+                if (args.hasNonNull("fields"))
+                {
+                    value = args.path("fields").toString();
                 }
             }
             else if (args.hasNonNull("text") && !args.path("text").asText().isBlank())
@@ -1454,6 +1488,7 @@ public class Action
                 case "NAVIGATE" -> "Navigate to " + target;
                 case "CLICK" -> !target.isBlank() ? "Click " + target : "Click element";
                 case "TYPE" -> "Type '" + (value != null ? value : "") + "' into " + target;
+                case "FILL_FORM" -> "Fill form fields";
                 case "ASSERT_TEXT" -> "Assert text '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
                 case "ASSERT_URL" -> "Assert URL '" + (value != null ? value : "") + "'";
                 case "ASSERT_TITLE" -> "Assert page title '" + (value != null ? value : "") + "'";
@@ -1587,6 +1622,11 @@ public class Action
             else if (action.getElseActions() != null && !action.getElseActions().isEmpty())
             {
                 action.setHasElse(true);
+            }
+
+            if (args.hasNonNull("fields"))
+            {
+                action.getParameters().put("fields", args.get("fields"));
             }
         }
 

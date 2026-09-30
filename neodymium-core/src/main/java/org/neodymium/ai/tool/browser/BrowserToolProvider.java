@@ -30,6 +30,8 @@ import org.neodymium.ai.executor.selenide.LocatorResolver;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.executor.selenide.plugins.FillFormAction;
+import org.neodymium.ai.executor.selenide.plugins.FillFormAction.FormFieldEntry;
 import org.neodymium.ai.executor.selenide.plugins.IncludeAction;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.ContextLevel;
@@ -132,6 +134,7 @@ public final class BrowserToolProvider
 
         registry.register(createClickTool());
         registry.register(createFillTool());
+        registry.register(createFillFormTool());
         registry.register(createTypeTool());
         registry.register(createNavigateTool());
         registry.register(createSelectTool());
@@ -635,6 +638,76 @@ public final class BrowserToolProvider
 
         final ToolDefinition def = new ToolDefinition("fill", "Clears existing text and enters new text into an input or textarea element. Default tool for entering, typing, or setting form field values.", schema);
         return createBaseInputTool(def, true);
+    }
+
+    private static AiTool createFillFormTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+
+        final ObjectNode fieldsProp = props.putObject("fields");
+        fieldsProp.put("type", "array");
+        fieldsProp.put("description", "List of form fields to fill sequentially");
+        final ObjectNode itemSchema = fieldsProp.putObject("items");
+        itemSchema.put("type", "object");
+        final ObjectNode itemProps = itemSchema.putObject("properties");
+        itemProps.putObject("selector").put("type", "string").put("description", "Selector of the input or select element (e.g. CSS, role=textbox[name='...'], id=...)");
+        itemProps.putObject("value").put("type", "string").put("description", "Value or text to enter into the element");
+        itemProps.putObject("clearFirst").put("type", "boolean").put("description", "Whether to clear existing text before typing (default: true)");
+        final ArrayNode itemReq = itemSchema.putArray("required");
+        itemReq.add("selector");
+        itemReq.add("value");
+
+        final ArrayNode req = schema.putArray("required");
+        req.add("fields");
+
+        final ToolDefinition def = new ToolDefinition("fill_form", "Fills multiple form fields (inputs, textareas, selects) in a single operation. Use to fill entire forms (e.g. checkout, registration, address) efficiently without multiple sequential turns.", schema);
+
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                DomQuiescenceWatcher.installTracker();
+                final JsonNode args = call.arguments();
+                if (args == null || !args.hasNonNull("fields"))
+                {
+                    return ToolResult.error(call.callId(), "Argument 'fields' is required.");
+                }
+
+                final List<FormFieldEntry> fieldEntries = new ArrayList<>();
+                FillFormAction.parseFieldsJsonNode(args.get("fields"), fieldEntries);
+
+                if (fieldEntries.isEmpty())
+                {
+                    return ToolResult.error(call.callId(), "Argument 'fields' must contain at least one field entry.");
+                }
+
+                final ArrayNode filledList = MAPPER.createArrayNode();
+                for (final FormFieldEntry field : fieldEntries)
+                {
+                    final SelenideElement el = findElement(field.selector());
+                    SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                    FillFormAction.fillElement(el, field.value(), field.clearFirst());
+
+                    final ObjectNode entryNode = filledList.addObject();
+                    entryNode.put("selector", field.selector());
+                    entryNode.put("value", field.value());
+                }
+
+                final ObjectNode res = successNode(def.name());
+                res.set("fields", filledList);
+                res.put("count", filledList.size());
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
     }
 
     private static AiTool createTypeTool()

@@ -1639,6 +1639,7 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         final String clean = toolName.startsWith("browser_") ? toolName.substring("browser_".length()) : toolName;
         return "fill".equals(clean)
+                || "fill_form".equals(clean)
                 || "type".equals(clean)
                 || "select".equals(clean)
                 || "check".equals(clean)
@@ -1995,6 +1996,7 @@ public final class AgentToolLoopStep implements PipelineStep
         return "click".equals(clean)
                 || "hover".equals(clean)
                 || "fill".equals(clean)
+                || "fill_form".equals(clean)
                 || "type".equals(clean)
                 || "check".equals(clean)
                 || "upload_file".equals(clean)
@@ -2592,7 +2594,7 @@ public final class AgentToolLoopStep implements PipelineStep
         final String name = stripNamespacePrefix(rawName.trim()).toLowerCase(Locale.ROOT);
         final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
         return "complete_step".equals(clean) || "click".equals(clean)
-                || "fill".equals(clean) || "type".equals(clean)
+                || "fill".equals(clean) || "fill_form".equals(clean) || "type".equals(clean)
                 || "upload".equals(clean) || "upload_file".equals(clean)
                 || "handle_alert".equals(clean) || "alert".equals(clean)
                 || "switch_window".equals(clean) || "switch_tab".equals(clean)
@@ -2630,6 +2632,7 @@ public final class AgentToolLoopStep implements PipelineStep
             case "click" -> "click";
             case "check", "uncheck" -> "check";
             case "fill" -> "fill";
+            case "fill_form" -> "fill_form";
             case "type" -> "type";
             case "upload", "upload_file" -> "upload_file";
             case "handle_alert", "alert" -> "handle_alert";
