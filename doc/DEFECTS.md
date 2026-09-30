@@ -41,6 +41,102 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20260930-08] Missing Model Pricing for Gemini 3.8 Flash in MetricsCollector
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`ai-telemetry`)
+- **Scope:** `Framework`
+- **Symptom:** AI test runs configured with `neodymium.ai.model = gemini-3.8-flash` log a warning (`Unknown model 'gemini-3.8-flash' encountered for cost estimation. Cost calculation skipped (set to $0.00).`) and calculate $0.00 estimated USD cost in reports and session telemetry.
+- **Root Cause:** `MetricsCollector.getModelRate` lacked a rate entry for `3.8-flash`.
+- **Detection Gap ("What did we miss?"):** Unit tests in `MetricsCollectorTest` only asserted pricing for versions up through `3.7-flash`, allowing newly configured Flash models to silently evaluate to zero cost.
+- **Resolution:** Added `3.8-flash` rate resolution ($0.75 input, $3.75 output, $0.1875 cached per 1M tokens) matching `3.7-flash` rates.
+- **Safety Net Added:** Added test assertion for `gemini-3.8-flash` in `MetricsCollectorTest.testCostCalculationForSupportedGeminiModels`.
+
+### [DEF-20260930-07] Unpruned DOM in Multi-Turn Verification Observation Causing Token Doubling and Visual Call Bloat
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`ai-pipeline`)
+- **Scope:** `Framework`
+- **Symptom:** In execution reports, non-mutating verification steps that required 2 turns (Turn 1 executing `assert_text` or `assert_element_state` and Turn 2 executing `complete_step`) consumed 19,000–35,000 input tokens on Turn 2 instead of ~2,000–5,000 tokens, doubling the token consumption of every verification step.
+- **Root Cause:** In `AgentToolLoopStep.java:1132`, `pruneExpiredDomFromConversation` was guarded by `hasFreshDomIncoming = (requireDomForNextTurn || hasMutated)`. When an assertion succeeded without remaining milestones, `hasMutated == false` and `requireDomForNextTurn == false`, causing `pruneExpiredDomFromConversation` to preserve the entire 18,000–34,000 token Turn 1 DOM in conversation history alongside the viewport screenshot attached for Turn 2 visual observation.
+- **Detection Gap ("What did we miss?"):** [DEF-20260930-04] prevented Turn 1 DOM pruning when `hasFreshDomIncoming == false` to avoid multi-turn selector amnesia, and unit test `testTurn2PreservesDomWhenNonMutatingToolExecutedAndNoFreshDomIncoming` explicitly enforced retaining the DOM without verifying token efficiency or supporting on-demand DOM queries (`query_dom` / `request_context`).
+- **Resolution:**
+  1. Updated `AgentToolLoopStep.java` to unconditionally prune expired DOM snapshots from prior turns before entering visual observation turns, reducing Turn 1 user message content to `[Initial page state omitted after Turn 1 — use browser tools for current page state]`.
+  2. Updated the Turn 2 observation prompt and System Prompt rules to explicitly notify the agent that prior DOM snapshots are omitted to minimize context, and instructed it to call `request_context` (for full fresh DOM) or `query_dom` (for specific elements) if DOM targeting is needed.
+- **Safety Net Added:** Updated `AgentToolLoopStepTest.java` (`testTurn2PrunesDomOnVisualObservationTurnAndAllowsContextRequest`) asserting that Turn 2 prunes the Turn 1 DOM on visual observation turns, and added unit test `testTurn2ContextEscalationViaRequestContext` verifying that calling `request_context` in Turn 2 delivers a fresh DOM snapshot in Turn 3.
+
+### [DEF-20260930-06] Misleading Step Token Budget Exception Message and Missing Step Budget Aliases
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`ai-pipeline`, `ai-config`)
+- **Scope:** `Framework`
+- **Symptom:** When a composite or multi-turn playbook step exceeded the per-step token limit (`neodymium.ai.step.maxTokens`), the exception message reported `Token budget exceeded for test run: Total tokens consumed (...) exceeded configured step token budget (100000). Test run aborted.`. This led users to believe the test-level token budget had failed to pick up custom YAML `_properties:` (or was restricted to 100k despite total stats showing 600k+ tokens consumed). Furthermore, `AiConfiguration.getStepTokenBudget()` lacked intuitive aliases (`neodymium.ai.tokenBudget.step`, `tokenBudget.step`).
+- **Root Cause:**
+  1. `TokenBudgetExceededException.formatMessage` used a static prefix `"Token budget exceeded for test run:"` regardless of whether the exceeded budget was a test-level budget (`BudgetType.INPUT` / `BudgetType.OUTPUT`) or a per-step budget (`BudgetType.TOTAL`).
+  2. `AiConfiguration.getStepTokenBudget()` only resolved the canonical key `neodymium.ai.step.maxTokens` and lacked fallback aliases matching the token budget naming pattern.
+- **Detection Gap ("What did we miss?"):** Unit tests in `TokenBudgetGuardTest` and `AgentToolLoopStepTest` only checked that the exception was thrown and that it contained the numeric token limit, without asserting that the message clearly differentiated step-level failures from whole-test aborts.
+- **Resolution:**
+  1. Differentiated message formatting in `TokenBudgetExceededException.formatMessage`: `BudgetType.TOTAL` now explicitly states `"Token budget exceeded for step: Total tokens consumed (%d) exceeded configured step token budget (%d). Step aborted."`.
+  2. Enhanced `AiConfiguration.getStepTokenBudget()` to support fallback aliases: `neodymium.ai.step.maxTokens`, `neodymium.ai.tokenBudget.step`, `neodymium.ai.step.tokenBudget`, and `tokenBudget.step`.
+- **Safety Net Added:** Added unit tests in `PropertyPrecedenceOrderTest` (`testStepTokenBudgetAliasesAndOverrides` and `testTokenBudgetExceededExceptionStepMessageFormatting`) validating all aliases, precedence order, and message differentiation.
+
+### [DEF-20260930-05] Missing _properties Block Parsing in YamlPlaybookParser Causing Ignored Playbook Configuration and Token Budget Failures
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`ai-playbook`, `config`, `junit`)
+- **Scope:** `Framework`
+- **Symptom:** Setting framework configurations (such as `neodymium.ai.tokenBudget.input`) via `_properties:` or `properties:` in YAML playbooks had no effect. AI test runs aborted prematurely with `Token budget exceeded for test run: Input tokens consumed (...) exceeded configured input token budget (500000)`.
+- **Root Cause:**
+  1. `YamlPlaybookParser.java` omitted parsing for `_properties` and `properties` at both the root map level and inside dataset items, and omitted `_properties|properties` from `YAML_BLOCK_PATTERN`.
+  2. For playbooks with `_properties` but without an explicit `data:` block, no default dataset was generated, preventing thread-local variables and `SessionData` from being populated.
+  3. `NeodymiumAiRunner.java` and `TokenBudgetGuard.java` used disjoint data stores (`transientData`, annotations) rather than standardizing on `Neodymium.getData()` as the single source of truth for runtime execution settings.
+- **Detection Gap ("What did we miss?"):** Existing `YamlPlaybookParserTest` cases tested `data:` and `steps:`, but lacked test cases exercising `_properties:` or `properties:` blocks.
+- **Resolution:**
+  1. Updated `YamlPlaybookParser.java` to recognize `_properties` and `properties` in `YAML_BLOCK_PATTERN`, flatten nested maps to dotted property keys, propagate root properties to all datasets, and generate a default dataset when properties exist without a `data:` section.
+  2. Standardized runtime test configuration on `Neodymium.getData()`: `NeodymiumAiRunner` writes all dataset properties and `@AiContext` overrides directly into `Neodymium.getData()`, and `TokenBudgetGuard` / `AiConfiguration` read directly from it.
+  3. Reset thread-local context cleanly in `beforeEach` and `afterEach` via `Neodymium.clearThreadContext()` to ensure zero property bleed across test iterations.
+- **Safety Net Added:** Added unit tests in `YamlPlaybookParserTest` for root and dataset-level `_properties` flattening, and in `TokenBudgetGuardTest` for dynamic `Neodymium.getData()` budget resolution.
+
+### [DEF-20260930-04] DOM Amnesia in Multi-Turn Verification and Incomplete Single-Turn Assertion Batching
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`ai-pipeline`)
+- **Scope:** `Framework`
+- **Symptom:** In natural language verification steps (e.g. `Validate that United States as country is selected`), tests on inaccessible storefronts failed with `Stop Criterion 2: Assertion failure` due to hallucinated selectors (`img[alt*="United States"]`, `img[src*="us.svg"]`).
+- **Root Cause:**
+  1. In `AgentToolLoopStep.java:1131`, `pruneExpiredDomFromConversation(conversation)` unconditionally hardcoded `hasFreshDomIncoming = true`, wiping the Turn 1 DOM even when `requireDomForNextTurn` was `false`. Turn 2 was left with `[Initial page state omitted after Turn 1]`, completely blinding the model.
+  2. Rule 4 in `AgentToolLoopStep` did not instruct the model to propose `[assertion, complete_step]` in the same turn for single verification checks, leading the LLM to execute partial container visibility checks in Turn 1 and attempt content verification in a blind Turn 2.
+- **Detection Gap ("What did we miss?"):** Tests in `AgentToolLoopStepTest` only verified DOM pruning when mutating tools (`mock_click`) were executed, but did not test non-mutating assertion turns without incoming fresh DOM.
+- **Resolution:**
+  1. Updated `AgentToolLoopStep.java:1131` to preserve the latest DOM snapshot across turns when a non-mutating tool executes without fresh DOM incoming (`pruneExpiredDomFromConversation(conversation, requireDomForNextTurn || hasMutated)`).
+  2. Added `[assertion, complete_step]` single-turn completion and direct assertion guidance to Rule 4 in `AgentToolLoopStep`.
+- **Safety Net Added:** Added unit test `testTurn2PreservesDomWhenNonMutatingToolExecutedAndNoFreshDomIncoming` in `AgentToolLoopStepTest` verifying that Turn 2 retains the Turn 1 DOM when a non-mutating assertion executes without a fresh DOM snapshot incoming.
+
+### [DEF-20260930-03] BrowserToolProvider Uncaught ElementNotFound/AssertionError in Retry Loops
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`tool/browser/BrowserToolProvider`)
+- **Scope:** `Framework`
+- **Symptom:** Replay tests failed with `ElementNotFound {#cart-btn-anchor.snapshot(1 elements)[0]} Expected: exist` caused by `StaleElementReferenceException` during `assert_text` evaluation.
+- **Root Cause:** `matchesElementText`, `matchesElementOrAssociatedLabel`, `safeGetText`, and the `assert_text` retry loop caught only `java.lang.Exception`. In Selenide, `ElementNotFound` and `UIAssertionError` inherit from `java.lang.AssertionError` (subclass of `Error`), allowing stale/detached elements in dynamic collections to escape unhandled and prematurely abort the retry loop before the timeout.
+- **Detection Gap ("What did we miss?"):** Previous unit tests inspected static DOMs without concurrent DOM mutations or stale collection snapshots during assertion retries.
+- **Resolution:** Updated `matchesElementText`, `matchesElementOrAssociatedLabel`, `safeGetText`, `resolveElementBySelectorAndText`, and the `assert_text` retry loop in `BrowserToolProvider` to catch `(final Exception | AssertionError ignored)` per the `java_test_exception_handling` knowledge pattern.
+- **Safety Net Added:** Verified via `CartTest.livePerfect` and `CartTest.replayPerfect` with dynamic cart badge DOM updates passing end-to-end.
+
+### [DEF-20260930-02] BrowserToolProvider Click/Hover Text Disambiguation & Checkout/Search Fixture Sync Issues
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`tool/browser/BrowserToolProvider` / `verla-playbooks` / `PrelinterRuleMatrixLiveTest`)
+- **Scope:** `Framework` & `Test/Harness`
+- **Symptom:** 1) `CartTest` (`basic`, `full`, `judge`) failed when the agent called `click(selector="article[...] button", text="S")`: the primary button was clicked instead of the size button, leaving cart count at 0. 2) `SearchGermanTest` failed dropdown assertions when the search form was submitted prematurely on Enter. 3) `CheckoutTest` on `tailwind_by_claude` failed asserting updated order summary subtotal ($31.98) against initial captured subtotal ($15.99). 4) `PrelinterRuleMatrixLiveTest.testVagueVerification_Spanish_Aviation` failed asserting `VAGUE_VERIFICATION` because Spanish phrasing without explicit verification keywords triggered `MISSING_VISUAL_TAG`.
+- **Root Cause:** 1) `BrowserToolProvider.executeElementClick` and `executeHover` favored non-blank `selector` exclusively without filtering candidates by `text` when both parameters were present. 2) The instruction `Gib "${searchQuery}" in das Suchfeld ein.` led the LLM to submit the form immediately via `pressEnter: true`. 3) The playbook lacked a variable re-capture step after incrementing quantity. 4) Phrasing "se vea correcto y ordenado" triggered visual appearance rules rather than subjective verification.
+- **Detection Gap ("What did we miss?"):** Tool parameter interaction tests did not cover compound selector-plus-text resolution, and multi-language linter matrix phrases were not evaluated against the full pre-flight taxonomy.
+- **Resolution:** Implemented `resolveElementBySelectorAndText` and `safeGetText` in `BrowserToolProvider` to search matching visible candidates by text; updated search instruction to `Tippe...`; re-captured `${subtotal}` in the checkout playbook; and refined the Spanish linter prompt to `Compruebe que el plan de vuelo funcione correctamente.`.
+- **Safety Net Added:** Verified resolution across all four affected test suites (`CartTest`, `SearchGermanTest`, `CheckoutTest`, `PrelinterRuleMatrixLiveTest`).
+
+### [DEF-20260930-01] PlaybookStep (visual: full) Tag Parsing Inconsistency & VerifyOutcomeStep Unit Test Misconfiguration
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`model` / `runner` / `test-fixtures`)
+- **Scope:** `Framework` & `Test/Harness`
+- **Symptom:** `PlaybookStepFullPagePersistenceTest` failed with `expected: <null> but was: <true>`; `RunnerIntegrationTest.testVerifyOutcomeStepFailure` failed with `Expected VerificationFailureException to be thrown, but nothing was thrown`; and `ProgrammaticDemoTest.test7` threw `Failed to parse playbook: ...ProgrammaticDemoTest_test7_...yaml`.
+- **Root Cause:** 1) `PlaybookStep.setInstruction` automatically parses `(visual: full)` into `this.fullPage = true`, which contradicted an obsolete unit test assertion expecting `null`. 2) `VerifyOutcomeStep` requires `failOnError=true` (or transient configuration `neodymium.ai.semanticVerification.failOnError=true`) to throw `VerificationFailureException` rather than logging a soft warning. 3) The test class was refactored from `VerlaProgrammaticDemoTest` to `ProgrammaticDemoTest`, leaving the convention-based classpath YAML and JSON fixtures mismatched.
+- **Detection Gap ("What did we miss?"):** Unit tests and convention-based integration fixtures were not verified in an end-to-end reactor run following the class rename and model tag parser enhancements.
+- **Resolution:** Updated assertion in `PlaybookStepFullPagePersistenceTest` to expect `Boolean.TRUE`, configured `neodymium.ai.semanticVerification.failOnError=true` in `RunnerIntegrationTest`, and aligned convention-based YAML and JSON fixture filenames for `ProgrammaticDemoTest`.
+- **Safety Net Added:** Verified unit suite passes cleanly with zero failures via `mvn test -pl neodymium-core -Dtest="PlaybookStepFullPagePersistenceTest,RunnerIntegrationTest,ProgrammaticDemoTest#test7*"`.
+
 ### [DEF-20260929-08] Multi-Scroll Virtualized List Item Traversal Exceeds Default Step Token Budget
 - **Date:** 2026-09-29
 - **Component:** `neodymium-core` (`sandbox-tests` / `live-integration` / `VirtualizedListSandboxLiveTest`)
