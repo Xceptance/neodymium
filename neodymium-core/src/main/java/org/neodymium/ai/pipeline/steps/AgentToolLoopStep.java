@@ -394,7 +394,7 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps.\n");
         systemPrompt.append("2. GROUNDING & EXECUTION: Selectors are evaluated via Selenide (standard CSS, XPath, or text matching). Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Prior DOM snapshots are pruned after Turn 1 to minimize token context; if you need DOM details or element selectors in subsequent turns, invoke 'query_dom' (for specific element subtrees) or 'request_context' (for a fresh DOM snapshot). When querying DOM with 'query_dom', specify distinctive multi-word phrases or specific selectors from the instruction (rather than generic single words) to locate the exact target element directly. Never propose the exact same failing tool call without changing selector or state.\n");
         systemPrompt.append("3. ACTION STEPS: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, checking checkboxes/radios, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. When interacting with form controls, use 'fill' for text inputs, 'select' for dropdown menus, and 'check' for checkboxes and radio buttons (which is idempotent and sets the target state) rather than 'click'. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps. If an action fails (e.g., target element is disabled, missing, or non-interactable), DO NOT substitute uncommanded assertions (such as 'assert_element_state') and DO NOT call 'complete_step'; report the failure. Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
-        systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. Propose [assertion, complete_step] in the same turn once the verification condition is satisfied. Directly assert the commanded property or content rather than splitting verification into separate intermediate visibility checks. To assert multiple states on the same element (e.g. 'displayed and enabled'), combine them into a single 'assert_element_state' call using compound states (e.g. state: 'visible, enabled' or states: ['visible', 'enabled']) rather than executing multiple separate tool calls. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
+        systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. Propose [assertion, complete_step] in the same turn once the verification condition is satisfied. Directly assert the commanded property or content rather than splitting verification into separate intermediate visibility checks. To assert multiple states on the same element (e.g. 'displayed and enabled'), combine them into a single 'assert_element_state' call using compound states (e.g. state: 'visible, enabled' or states: ['visible', 'enabled']) rather than executing multiple separate tool calls. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify. Cohesive multi-assertion operations: When an instruction commands verifying multiple elements or conditions, you may propose all commanded [assert_*, ..., complete_step] calls in the same turn to execute all verifications cohesively.\n");
         if (isVisual)
         {
             systemPrompt.append("5. VISUAL CHECKS: When verifying visual appearance or when a screenshot is provided, inspect the screenshot visually to verify whether the condition is met on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
@@ -700,12 +700,12 @@ public final class AgentToolLoopStep implements PipelineStep
                 break;
             }
 
-            // Cohesive form input batching vs single action handling
+            // Cohesive batch execution (form inputs and/or assertions) vs single action handling
             final List<ToolCall> callsToExecute = new ArrayList<>();
             final ToolCall coProposedComplete;
 
-            final boolean allCohesiveFormInputs = isCohesiveFormInputBatch(proposedCalls);
-            if (allCohesiveFormInputs)
+            final boolean allCohesiveBatch = isCohesiveBatch(proposedCalls);
+            if (allCohesiveBatch)
             {
                 final ToolCall last = proposedCalls.get(proposedCalls.size() - 1);
                 if ("complete_step".equals(last.toolName()))
@@ -742,9 +742,11 @@ public final class AgentToolLoopStep implements PipelineStep
             ToolCall lastEffectiveCall = null;
             ToolResult lastResult = null;
             boolean batchInterrupted = false;
+            int executedInBatchCount = 0;
 
             for (final ToolCall currentCall : callsToExecute)
             {
+                executedInBatchCount++;
                 logToolCall(currentCall);
 
                 // Stop Criterion 3: Thrashing / Stagnation Breaker (3 consecutive identical calls, including complete_step)
@@ -1054,6 +1056,19 @@ public final class AgentToolLoopStep implements PipelineStep
                 if (isPageNavigatingAction(effectiveCall.toolName()))
                 {
                     break;
+                }
+            }
+
+            if (batchInterrupted || executedInBatchCount < callsToExecute.size())
+            {
+                for (int i = executedInBatchCount; i < callsToExecute.size(); i++)
+                {
+                    final ToolCall skippedCall = callsToExecute.get(i);
+                    conversation.add(ChatMessage.tool(
+                            skippedCall.callId(),
+                            skippedCall.toolName(),
+                            "{\"status\":\"SKIPPED\",\"error\":\"Batch execution interrupted by prior tool failure or transition\"}"
+                    ));
                 }
             }
 
@@ -1674,7 +1689,12 @@ public final class AgentToolLoopStep implements PipelineStep
                 || "request_context".equals(clean);
     }
 
-    private static boolean isCohesiveFormInputBatch(final List<ToolCall> proposedCalls)
+    private static boolean isBatchableTool(final String toolName)
+    {
+        return isFormInputAction(toolName) || isAssertionTool(toolName);
+    }
+
+    private static boolean isCohesiveBatch(final List<ToolCall> proposedCalls)
     {
         if (proposedCalls == null || proposedCalls.size() <= 1)
         {
@@ -1689,12 +1709,17 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         for (int i = 0; i < limit; i++)
         {
-            if (!isFormInputAction(proposedCalls.get(i).toolName()))
+            if (!isBatchableTool(proposedCalls.get(i).toolName()))
             {
                 return false;
             }
         }
         return true;
+    }
+
+    private static boolean isCohesiveFormInputBatch(final List<ToolCall> proposedCalls)
+    {
+        return isCohesiveBatch(proposedCalls);
     }
 
     private static ToolCall sanitizeToolCall(final ToolCall call, final SessionData sessionData, final DefaultActionSanitizer sanitizer)

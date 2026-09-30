@@ -2405,6 +2405,223 @@ public class AgentToolLoopStepTest
     }
 
     @Test
+    public void testCohesiveAssertionBatchExecutesAllAssertionsInSingleTurn() throws Exception
+    {
+        final List<String> executedAssertions = new ArrayList<>();
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_title", "Asserts title", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                executedAssertions.add("title=" + call.arguments().path("expectedTitle").asText());
+                return ToolResult.success(call.callId(), "Title OK");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts state", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                executedAssertions.add("state=" + call.arguments().path("selector").asText());
+                return ToolResult.success(call.callId(), "State OK");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                executedAssertions.add("text=" + call.arguments().path("selector").asText() + ":" + call.arguments().path("expectedText").asText());
+                return ToolResult.success(call.callId(), "Text OK");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Verify header and logo");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION,
+                "Verify the page title contains 'Store'. Verify the logo is visible. Verify navigation contains 'Featured'.");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Model proposes all 3 assertions + complete_step in Turn 1
+                return new LlmResponse("Verifying all header elements", new TokenUsage(100, 20, 120), "mock",
+                        List.of(
+                                new ToolCall("call-1", "assert_title", MAPPER.createObjectNode()
+                                        .put("expectedTitle", "Store")),
+                                new ToolCall("call-2", "assert_element_state", MAPPER.createObjectNode()
+                                        .put("selector", ".logo")
+                                        .put("state", "visible")),
+                                new ToolCall("call-3", "assert_text", MAPPER.createObjectNode()
+                                        .put("selector", "nav")
+                                        .put("expectedText", "Featured")),
+                                new ToolCall("call-4", "complete_step", MAPPER.createObjectNode()
+                                        .put("summary", "All header verifications passed"))
+                        ));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        step.execute(this.context);
+
+        Assertions.assertEquals(1, turn.get(), "Cohesive assertion batch must complete in exactly 1 turn!");
+        Assertions.assertEquals(List.of(
+                "title=Store",
+                "state=.logo",
+                "text=nav:Featured"
+        ), executedAssertions);
+        Assertions.assertEquals("All header verifications passed",
+                this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+
+        // PlaybookStep should record all 3 assertion actions and tool calls (excluding complete_step)
+        Assertions.assertEquals(3, playbookStep.getActions().size());
+        Assertions.assertEquals(3, playbookStep.getToolCalls().size());
+    }
+
+    @Test
+    public void testCohesiveAssertionBatchInterruptedOnAssertionFailure() throws Exception
+    {
+        final List<String> executedAssertions = new ArrayList<>();
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_title", "Asserts title", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                executedAssertions.add("title=OK");
+                return ToolResult.success(call.callId(), "Title OK");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new AssertionError("Text 'Missing' not found in navbar");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts state", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                executedAssertions.add("state=OK");
+                return ToolResult.success(call.callId(), "State OK");
+            }
+        });
+
+        final PlaybookStep playbookStep = new PlaybookStep("Verify header and logo");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION,
+                "Verify the title is 'Store'. Verify navigation contains 'Missing'. Verify logo is visible.");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Verifying all header elements", new TokenUsage(100, 20, 120), "mock",
+                        List.of(
+                                new ToolCall("call-1", "assert_title", MAPPER.createObjectNode()
+                                        .put("expectedTitle", "Store")),
+                                new ToolCall("call-2", "assert_text", MAPPER.createObjectNode()
+                                        .put("selector", "nav")
+                                        .put("expectedText", "Missing")),
+                                new ToolCall("call-3", "assert_element_state", MAPPER.createObjectNode()
+                                        .put("selector", ".logo")
+                                        .put("state", "visible")),
+                                new ToolCall("call-4", "complete_step", MAPPER.createObjectNode()
+                                        .put("summary", "Complete"))
+                        ));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+
+        final AssertionError thrown = Assertions.assertThrows(AssertionError.class, () -> step.execute(this.context));
+        Assertions.assertTrue(thrown.getMessage().contains("Text 'Missing' not found in navbar"));
+        Assertions.assertEquals(List.of("title=OK"), executedAssertions, "Downstream assertions must not execute after assertion failure");
+    }
+
+    @Test
     public void testDiscoveryToolsExcludedFromPlaybookActionsAndToolCalls() throws Exception
     {
         final ObjectNode schema = MAPPER.createObjectNode();
