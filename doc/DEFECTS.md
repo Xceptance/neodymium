@@ -41,6 +41,26 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261001-01] Test Run Storage Directory Contains Duplicate Dummy console-execution-1.json Files Beside Higher-Indexed Files
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`InteractiveConsoleEngine`, `AuraInteractiveService`, `AuraQueueService`)
+- **Scope:** `Framework`
+- **Symptom:** Run storage folders for subsequent test classes in a batch contain both `console-execution-1.json` (a dummy 0-step fallback file) and `console-execution-3.json` (the actual test log).
+- **Root Cause:** `InteractiveConsoleEngine` and `AuraInteractiveService` used global counters across all test classes in a batch run to index `console-execution-*.json` files. Subsequent test classes received indexes > 1 (e.g. 3). Later, `AuraQueueService` checked for index 1 in the class folder, saw it missing, and created a dummy fallback `console-execution-1.json`. Furthermore, `markRunningOrMissingExecutionsAsSkipped` failed to mark existing completed execution snapshots as processed, triggering fallback creation.
+- **Detection Gap ("What did we miss?"):** Tests verified multi-dataset indexing within a single test class, but did not assert per-class file indexing boundaries across multi-class batch execution.
+- **Resolution:** Refactored `InteractiveConsoleEngine` and `AuraInteractiveService` to map execution indexes per test class folder. Updated `AuraQueueService.markRunningOrMissingExecutionsAsSkipped` to recognize existing execution files with final statuses.
+- **Safety Net Added:** Added unit tests verifying per-class execution file indexing in `InteractiveConsoleEngineTest`.
+
+### [DEF-20261001-02] Queue Execution Report Total Duration Displays Multimillion Minutes Due to Unfiltered Zero Timestamps
+- **Date:** 2026-10-01
+- **Component:** `aura-manager` (`RunReportDto`)
+- **Scope:** `Framework`
+- **Symptom:** Total execution duration for queue runs (`run_20261001_12564`) showed invalid values such as `29847542 min 38 s` instead of actual wall-clock execution time (~4-5 min).
+- **Root Cause:** `RunReportDto.getTotalDurationMs()` evaluated `(maxStartMs - minStartMs) + latestExec.getDurationMs()` without filtering out uninitialized or missing start timestamps (`startMs = 0L`, Jan 1 1970). When an uninitialized execution stub or execution snapshot with `0L` timestamp was present, `minStartMs` was set to `0L`, causing the subtraction `maxStartMs - 0L` to evaluate to the current Epoch timestamp (~1.79x10^12 ms = 29,847,542 minutes).
+- **Detection Gap ("What did we miss?"):** Existing unit tests for `RunReportDto` verified total duration only with valid mock timestamps or single executions, missing test coverage for queue runs where some execution snapshots have `0L` start timestamps.
+- **Resolution:** Updated `RunReportDto.getTotalDurationMs()` to filter out invalid start timestamps (`startMs <= 0L`) when calculating wall-clock spans and fall back to the sum of test execution durations when valid start timestamps are missing or insufficient.
+- **Safety Net Added:** Added unit test `testGetTotalDurationMs_ignoresZeroTimestampAndFallsBackToSum` in `RunReportDtoTest.java`.
+
 ### [DEF-20261001-01] Conditional Include Main Step Recorded as Substep in Console Execution Reports
 - **Date:** 2026-10-01
 - **Component:** `neodymium-core` (`PreliminaryReportListener` / `ExecuteActionsStep` / `InteractiveStateBuilder`)

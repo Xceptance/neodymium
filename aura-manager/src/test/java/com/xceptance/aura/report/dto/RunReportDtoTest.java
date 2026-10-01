@@ -107,4 +107,37 @@ public final class RunReportDtoTest
         final RunReportDto report = new RunReportDto("run1", "batch1", "2026-08-20", "4 min 20 s", 1, 1, 0, 0, 0, 0, execs);
         Assertions.assertEquals("4 min 20 s", report.getTotalDurationFormatted());
     }
+
+    @Test
+    public void testGetTotalDurationMs_ignoresZeroTimestampAndFallsBackToSum()
+    {
+        // Execution A: timestampMs = 0L (uninitialized/missing start time), duration = 120,000 ms (2 min)
+        final TestExecutionDto execA = new TestExecutionDto(
+            "id1", "run1", "TestClassA", "TitleA", "testA", "playbookA", "testA.json",
+            "passed-clean", "Java", "US", "en_US", "Chrome", "NONE", new ArrayList<>(),
+            "", "Browsing", new ArrayList<>(), null, null, null, null,
+            "t1", "d1", "RECORDING", "RECORDING", "", "",
+            "", 0L, 5, 0, 120000L, "2 min 0 s", 0, 0L, 0.0, ""
+        );
+
+        // Execution B: timestampMs = 1,790,852,520,000L, duration = 180,000 ms (3 min)
+        final TestExecutionDto execB = new TestExecutionDto(
+            "id2", "run1", "TestClassB", "TitleB", "testB", "playbookB", "testB.json",
+            "passed-clean", "Java", "US", "en_US", "Chrome", "NONE", new ArrayList<>(),
+            "", "Browsing", new ArrayList<>(), null, null, null, null,
+            "t2", "d2", "RECORDING", "RECORDING", "12:56:40", "2026-10-01",
+            "12:56:40", 1790852520000L, 5, 0, 180000L, "3 min 0 s", 0, 0L, 0.0, ""
+        );
+
+        final List<TestExecutionDto> execs = new ArrayList<>();
+        execs.add(execA);
+        execs.add(execB);
+
+        final RunReportDto report = new RunReportDto("run_20261001_12564", "batch1", "2026-10-01", "0s", 2, 2, 0, 0, 0, 0, execs);
+
+        // Must NOT produce ~29.8 million minutes (1,790,852,520,000ms - 0ms).
+        // Should fall back to sum of durations: 120,000 + 180,000 = 300,000 ms (5 min)
+        Assertions.assertEquals(300000L, report.getTotalDurationMs());
+        Assertions.assertEquals("5 min 0 s", report.getTotalDurationFormatted());
+    }
 }

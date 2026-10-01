@@ -1085,8 +1085,8 @@ public final class AuraQueueService
                             rootNode.put("runnerStatus", "cancelled");
                             rootNode.put("message", "Test execution cancelled by user.");
                             AtomicFileUtils.writeStringAtomic(execJson.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(rootNode));
-                            markedAny = true;
                         }
+                        markedAny = true;
                     }
                     catch (final Exception e)
                     {
