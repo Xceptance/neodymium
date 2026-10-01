@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.Path;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -145,20 +146,20 @@ public class InteractiveConsoleEngineTest
 
         final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-unit");
 
-        engine.pushState("{\"testName\":\"AlphaTest\",\"status\":\"passed\"}");
-        engine.pushState("{\"testName\":\"BetaTest\",\"status\":\"passed\"}");
+        engine.pushState("{\"testName\":\"AlphaTest · ds1\",\"status\":\"passed\"}");
+        engine.pushState("{\"testName\":\"AlphaTest · ds2\",\"status\":\"passed\"}");
 
         final File log1 = new File(tempResultsDir, "console-execution-1.json");
         final File log2 = new File(tempResultsDir, "console-execution-2.json");
 
-        assertTrue(log1.exists(), "console-execution-1.json should exist for AlphaTest");
-        assertTrue(log2.exists(), "console-execution-2.json should exist for BetaTest");
+        assertTrue(log1.exists(), "console-execution-1.json should exist for ds1");
+        assertTrue(log2.exists(), "console-execution-2.json should exist for ds2");
 
         final String content1 = Files.readString(log1.toPath());
         final String content2 = Files.readString(log2.toPath());
 
-        assertTrue(content1.contains("AlphaTest"), "log1 should contain AlphaTest");
-        assertTrue(content2.contains("BetaTest"), "log2 should contain BetaTest");
+        assertTrue(content1.contains("ds1"), "log1 should contain ds1");
+        assertTrue(content2.contains("ds2"), "log2 should contain ds2");
     }
 
     @Test
@@ -338,5 +339,27 @@ public class InteractiveConsoleEngineTest
 
         assertTrue(stateJson.contains("\"linter\":{"), "State JSON should contain linter category");
         assertTrue(stateJson.contains("\"postFlightLinter\":{"), "State JSON should contain postFlightLinter category");
+    }
+
+    @Test
+    public void testPushStatePerformsPerClassExecutionIndexing(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-per-class");
+        
+        // Push state for Class A
+        engine.pushState("{\"testName\":\"AlphaTestClass · ds1\",\"testFile\":\"com.xceptance.AlphaTestClass#execute\",\"status\":\"passed\",\"steps\":[]}");
+        // Push state for Class B
+        engine.pushState("{\"testName\":\"BetaTestClass · ds1\",\"testFile\":\"com.xceptance.BetaTestClass#execute\",\"status\":\"passed\",\"steps\":[]}");
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File alphaLog = new File(customDir.toFile(), runFolder + "/AlphaTestClass/console-execution-1.json");
+        final File betaLog = new File(customDir.toFile(), runFolder + "/BetaTestClass/console-execution-1.json");
+
+        assertTrue(alphaLog.exists(), "AlphaTestClass should start execution indexing at 1 (console-execution-1.json)");
+        assertTrue(betaLog.exists(), "BetaTestClass should independently start execution indexing at 1 (console-execution-1.json)");
     }
 }

@@ -837,7 +837,7 @@ public final class AuraQueueService
                     completedFiles.add(file);
                     activeProcess.set(null);
 
-                    final boolean isFailedRun = exitCode != 0;
+                    final boolean isFailedRun = exitCode != 0 || fileFailures.get() > 0 || fileErrors.get() > 0;
                     final String extractedError = isFailedRun ? extractSubprocessErrorMessage(currentRunLogs) : null;
                     final String primaryBrowser = (!targetProfiles.isEmpty()) ? targetProfiles.get(0) : "Default";
                     final String statusStr = testWasCancelled ? "skipped" : (isFailedRun ? "failed" : "passed");
@@ -873,38 +873,33 @@ public final class AuraQueueService
                                         if (node instanceof ObjectNode objNode)
                                         {
                                             final String currentStatus = objNode.has("status") ? objNode.get("status").asText("") : "";
-                                            final int stepIndex = objNode.has("currentStepIndex") ? objNode.get("currentStepIndex").asInt(0) : 0;
-                                            final int totalSteps = objNode.has("totalStepsCount") ? objNode.get("totalStepsCount").asInt(0) : 0;
-                                            final boolean isPass = "passed".equalsIgnoreCase(currentStatus) || "passed-clean".equalsIgnoreCase(currentStatus) || "succeeded".equalsIgnoreCase(currentStatus);
-                                            final boolean isZeroStep = stepIndex == 0 && totalSteps == 0;
-
-                                            if ("running".equalsIgnoreCase(currentStatus) || "in_progress".equalsIgnoreCase(currentStatus))
-                                            {
-                                                objNode.put("status", statusStr);
-                                                objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
-                                                if (extractedError != null && !objNode.has("failureReason"))
-                                                {
-                                                    objNode.put("failureReason", extractedError);
-                                                    objNode.put("error", extractedError);
-                                                }
-                                                AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
-                                                hasFailureOrCancel = true;
-                                            }
-                                            else if (isPass && isZeroStep && isFailedRun)
-                                            {
-                                                objNode.put("status", statusStr);
-                                                objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
-                                                if (extractedError != null && !objNode.has("failureReason"))
-                                                {
-                                                    objNode.put("failureReason", extractedError);
-                                                    objNode.put("error", extractedError);
-                                                }
-                                                AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
-                                                hasFailureOrCancel = true;
-                                            }
-                                            else if ("failed".equalsIgnoreCase(currentStatus) || "failed-unknown".equalsIgnoreCase(currentStatus)
+                                            final boolean isFailureStatus = "failed".equalsIgnoreCase(currentStatus) || "failed-unknown".equalsIgnoreCase(currentStatus)
                                                     || "failed-known".equalsIgnoreCase(currentStatus) || "error".equalsIgnoreCase(currentStatus)
-                                                    || "skipped".equalsIgnoreCase(currentStatus))
+                                                    || "skipped".equalsIgnoreCase(currentStatus) || "cancelled".equalsIgnoreCase(currentStatus);
+
+                                            final boolean isZeroStep = objNode.path("currentStepIndex").asInt(0) == 0
+                                                    && (!objNode.has("steps") || objNode.get("steps").isEmpty() || objNode.get("steps").isNull())
+                                                    && objNode.path("metrics").path("totalSteps").asInt(0) == 0;
+
+                                            if (!isFailureStatus && (isZeroStep || testWasCancelled))
+                                            {
+                                                objNode.put("status", statusStr);
+                                                objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
+                                                if (extractedError != null)
+                                                {
+                                                    objNode.put("failureReason", extractedError);
+                                                    objNode.put("error", extractedError);
+                                                }
+                                                else if (!objNode.has("failureReason"))
+                                                {
+                                                    final String defaultFallback = "Test execution failed during setup (exit code " + exitCode + "). Check process logs or API configuration.";
+                                                    objNode.put("failureReason", defaultFallback);
+                                                    objNode.put("error", defaultFallback);
+                                                }
+                                                AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
+                                                hasFailureOrCancel = true;
+                                            }
+                                            else
                                             {
                                                 hasFailureOrCancel = true;
                                             }
@@ -1090,8 +1085,8 @@ public final class AuraQueueService
                             rootNode.put("runnerStatus", "cancelled");
                             rootNode.put("message", "Test execution cancelled by user.");
                             AtomicFileUtils.writeStringAtomic(execJson.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(rootNode));
-                            markedAny = true;
                         }
+                        markedAny = true;
                     }
                     catch (final Exception e)
                     {
@@ -1416,8 +1411,9 @@ public final class AuraQueueService
                     continue;
                 }
                 final String line = stripAnsi(rawLine).trim();
-                if (line.contains("WARNING:")
-                        || line.contains("WARN:")
+                final String upperLine = line.toUpperCase();
+                if (upperLine.contains("WARN")
+                        || upperLine.contains("WARNING")
                         || line.contains("Picked up _JAVA_OPTIONS")
                         || line.contains("SLF4J:"))
                 {
@@ -1425,8 +1421,9 @@ public final class AuraQueueService
                 }
                 if (line.contains("Failed to parse playbook")
                         || line.contains("Caused by:")
-                        || line.contains("java.lang.RuntimeException:")
-                        || line.contains("java.lang.IllegalArgumentException:")
+                        || line.contains("Exception:")
+                        || line.contains("Error:")
+                        || line.contains("Throwable:")
                         || (line.startsWith("[ERROR]") && !line.contains("Spawning Maven Subprocess")))
                 {
                     matchingLines.add(line);

@@ -686,6 +686,7 @@
             overflow-x: auto;
             white-space: pre-wrap;
             word-break: break-all;
+            contain: content;
         }
 
         .log-line {

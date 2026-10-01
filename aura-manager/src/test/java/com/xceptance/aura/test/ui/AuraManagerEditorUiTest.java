@@ -85,8 +85,8 @@ public final class AuraManagerEditorUiTest
             fileService.setActiveEditingFile("");
         }
 
-        final String[] dirPaths = new String[] { "src/test/resources", "target/test-classes" };
-        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps", "New Step Fragment.steps", "child.steps", "Child.steps", "Hierarchical Test.yaml" };
+        final String[] dirPaths = new String[] { "src/test/resources", "target/test-classes", "src/test/resources/fragments", "target/test-classes/fragments" };
+        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps", "New Step Fragment.steps", "child.steps", "Child.steps", "Hierarchical Test.yaml", "test.yaml", "MissingIncludeTest.yaml", "nonexistent.steps", "TestDataVarIncludeTest.yaml", "testdata_var.steps" };
 
         for (final String dirPath : dirPaths)
         {
@@ -124,7 +124,7 @@ public final class AuraManagerEditorUiTest
 
         // Open the test in editor to test deletion
         $(".file-container[data-file='New Interactive Aura Test.yaml'] .list-item").shouldBe(Condition.visible).hover();
-        $(".file-container[data-file='New Interactive Aura Test.yaml'] .edit-icon-btn").shouldBe(Condition.visible).click();
+        $$(".file-container[data-file='New Interactive Aura Test.yaml'] .edit-icon-btn").last().shouldBe(Condition.visible).click();
         $("#editorPanel").shouldBe(Condition.visible);
 
         // Delete the test file
@@ -531,6 +531,47 @@ public final class AuraManagerEditorUiTest
 
         // Verify redirect to /report completes
         Selenide.webdriver().shouldHave(WebDriverConditions.urlContaining("/report"));
+    }
+
+    @Test
+    public final void testOpenAndEditTestNamedTestYaml()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Ensure test.yaml is not present initially
+        $(".file-container[data-file='test.yaml']").shouldNotBe(Condition.exist);
+
+        // Create new test named 'test.yaml'
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("test.yaml");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+
+        // Verify editor panel opens and displays test.yaml
+        $("#editorPanel").shouldBe(Condition.visible);
+        $("#editorFileName").shouldHave(Condition.text("test.yaml"));
+
+        // Close editor to return to test selection view
+        Selenide.executeJavaScript("closeEditor(true);");
+        $("#editorPanel").shouldNotBe(Condition.visible);
+
+        // Re-open test.yaml from the selection list
+        $(".file-container[data-file='test.yaml']").shouldBe(Condition.visible);
+        $(".file-container[data-file='test.yaml'] .list-item").shouldBe(Condition.visible).hover();
+        $$(".file-container[data-file='test.yaml'] .edit-icon-btn").last().shouldBe(Condition.visible).click();
+
+        // Verify editor stays open and does not revert to selection state
+        $("#editorPanel").shouldBe(Condition.visible);
+        $("#editorFileName").shouldHave(Condition.text("test.yaml"));
+
+        // Delete the test file to leave a clean environment
+        $("#deleteTestBtn").shouldBe(Condition.visible).click();
+        $("#deleteTestModal").shouldBe(Condition.visible);
+        $(".btn-danger.neo-u-48").shouldBe(Condition.visible).click();
+        $("#deleteTestModal").shouldNotBe(Condition.visible);
+
+        // Verify deleted test disappears from test selection list
+        $(".file-container[data-file='test.yaml']").shouldNotBe(Condition.exist);
     }
 
     @Test
@@ -988,5 +1029,108 @@ public final class AuraManagerEditorUiTest
             }
         }
     }
+
+    @Test
+    public final void testEditNonExistentIncludeFileCreatesStepAndSavesFile()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create main test file
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("MissingIncludeTest.yaml");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Include a non-existent step fragment
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        final SelenideElement stepContent = stepRows.first().$(".step-content");
+        stepContent.click();
+        stepContent.sendKeys("_include: fragments/nonexistent.steps");
+
+        // Click outside to compile include card
+        $("#editorTitle").click();
+
+        // Find the include tree card for nonexistent.steps
+        final SelenideElement includeCard = $(".include-tree-card");
+        includeCard.shouldBe(Condition.visible);
+
+        // Verify warning banner is displayed indicating missing include
+        includeCard.$(".include-warning-banner").shouldBe(Condition.visible);
+
+        // Click Edit File button on missing include card
+        includeCard.$("button[id^='btnEditInclude_']").shouldBe(Condition.visible).click();
+
+        // Verify an editable step row was automatically created and focused
+        final SelenideElement rawTextSpan = includeCard.$(".raw-nested-text");
+        rawTextSpan.shouldBe(Condition.visible);
+        rawTextSpan.sendKeys("First step in created include");
+
+        // Verify Save button is visible and click it
+        final SelenideElement saveBtn = includeCard.$("button[id^='btnSaveInclude_']");
+        saveBtn.shouldBe(Condition.visible).click();
+
+        // Verify toast notification, unsaved badge removed, and warning banner removed
+        $(".toast.success").shouldBe(Condition.visible);
+        includeCard.$(".unsaved-badge").shouldNotBe(Condition.visible);
+        includeCard.$(".include-warning-banner").shouldNotBe(Condition.visible);
+    }
+
+    @Test
+    public final void testInsertVariableFromTestDataIntoInlineIncludeFragment()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create main test file
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("TestDataVarIncludeTest.yaml");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Include a step fragment
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        final SelenideElement stepContent = stepRows.first().$(".step-content");
+        stepContent.click();
+        stepContent.sendKeys("_include: fragments/testdata_var.steps");
+
+        // Click outside to compile include card
+        $("#editorTitle").click();
+
+        // Add a test data variable to matrix
+        $("#addVarBtn").shouldBe(Condition.visible).click();
+
+        // Find the include tree card for testdata_var.steps
+        final SelenideElement includeCard = $(".include-tree-card");
+        includeCard.shouldBe(Condition.visible);
+
+        // Click Edit File button on missing/existing include card
+        includeCard.$("button[id^='btnEditInclude_']").shouldBe(Condition.visible).click();
+
+        // Find the raw text span in the include step
+        final SelenideElement rawTextSpan = includeCard.$(".raw-nested-text");
+        rawTextSpan.shouldBe(Condition.visible).click();
+
+        // Click + Insert button next to test data variable in matrix
+        final SelenideElement insertBtn = $$("#transposedGrid .btn-insert-var-chip").first();
+        insertBtn.shouldBe(Condition.visible).click();
+
+        // Verify inserted variable text appears in the fragment step
+        rawTextSpan.shouldHave(Condition.text("${newVariable_1}"));
+
+        // Open the Variables in Include dropdown
+        includeCard.$("button[id^='btnVarsInclude_']").shouldBe(Condition.visible).click();
+
+        // Verify the variable row exists in the dropdown with Required from using file scope button active
+        final SelenideElement varRow = includeCard.$(".include-var-row");
+        varRow.shouldBe(Condition.visible);
+        varRow.$(".scope-required").shouldHave(Condition.cssClass("active-required"));
+        varRow.$(".scope-required").shouldHave(Condition.text("Required from using file"));
+
+        // Click Save on include card
+        includeCard.$("button[id^='btnSaveInclude_']").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+    }
 }
+
 

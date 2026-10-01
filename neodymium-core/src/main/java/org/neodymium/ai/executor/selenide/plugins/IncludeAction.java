@@ -102,10 +102,28 @@ public final class IncludeAction implements BrowserActionPlugin
             final Playbook playbook = parser.parse(path, manager);
             final List<PlaybookStep> playbookSteps = playbook.getSteps();
 
+            final PlaybookStep currentStep = (PlaybookStep) this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+            if (currentStep != null && playbookSteps != null)
+            {
+                for (final PlaybookStep subStep : playbookSteps)
+                {
+                    subStep.setParent(currentStep);
+                    if (!currentStep.getSubSteps().contains(subStep))
+                    {
+                        currentStep.getSubSteps().add(subStep);
+                    }
+                }
+            }
+
             // Push steps onto the stack in reverse order so they execute in the correct order (LIFO)
             for (int i = playbookSteps.size() - 1; i >= 0; i--)
             {
-                final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookSteps.get(i), session, this.context);
+                final PlaybookStep subStep = playbookSteps.get(i);
+                if (currentStep != null && subStep.getParent() == null)
+                {
+                    subStep.setParent(currentStep);
+                }
+                final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(subStep, session, this.context);
                 this.context.pushStep(pipelineStep);
             }
         }

@@ -183,6 +183,66 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 - **Resolution:** Replaced `isCohesiveFormInputBatch` with `isCohesiveBatch` in `AgentToolLoopStep.java`, recognizing both form inputs (`isFormInputAction`) and assertions (`isAssertionTool`) as safe batchable operations. Added synthetic `SKIPPED` handling for interrupted batches and updated System Prompt Rule 4 to guide cohesive multi-assertion generation.
 - **Safety Net Added:** Added `testCohesiveAssertionBatchExecutesAllAssertionsInSingleTurn` and `testCohesiveAssertionBatchInterruptedOnAssertionFailure` in `AgentToolLoopStepTest.java`.
 
+### [DEF-20261001-15] Variables from Test Data Cannot Be Inserted into Fragment Steps Being Edited Inline
+- **Date:** 2026-10-01
+- **Component:** `aura-manager` (`Visual Playbook Editor`, `dashboard-editor.js`, `editor.html`)
+- **Scope:** `Framework`
+- **Symptom:** Variables from test file test data could not be inserted into steps of fragment include cards being edited inside a test file, and inserted variables were not dynamically updated in the include card's variable dropdown with the flag "required from using file".
+- **Root Cause:** `insertVariableFromInput` in `dashboard-editor.js` lacked active nested step detection (`nestedStep`), and the editor did not trigger dynamic variable dropdown list refresh (`updateIncludeVarsDropdown`) when editing fragment step lines.
+- **Detection Gap ("What did we miss?"):** Existing UI tests focused on main playbook step insertion and pre-existing include tree variables, missing dynamic variable insertion into nested inline fragment steps.
+- **Resolution:** Updated `insertVariableFromInput` to check for active nested fragment steps and insert `${varName}` cleanly; introduced `updateIncludeVarsDropdown` to dynamically refresh the "Variables in Include" dropdown with flag "required from using file" (`scope-required active-required`).
+- **Safety Net Added:** Added UI test `testInsertVariableFromTestDataIntoInlineIncludeFragment()` in `AuraManagerEditorUiTest.java`.
+
+### [DEF-20261001-14] Warning Banner Remains Visible in Include Card After Saving Non-Existent Include File
+- **Date:** 2026-10-01
+- **Component:** `aura-manager` (`Visual Playbook Editor`, `dashboard-editor.js`)
+- **Scope:** `Test/Harness`
+- **Symptom:** The non-existent include file warning banner ("Included file does not exist on disk. Edit steps below and save to create it.") stays visible inside the include card even after saving the created steps to disk.
+- **Root Cause:** `saveIncludeInline(cardId)` posted step content to `/api/save` and updated unsaved badges, but did not remove the `.include-warning-banner` DOM node rendered when the card was initially loaded.
+- **Detection Gap ("What did we miss?"):** The initial UI test verified toast notification and unsaved badge removal, but did not assert that `.include-warning-banner` was removed after save.
+- **Resolution:** Updated `saveIncludeInline(cardId)` in `dashboard-editor.js` to locate and remove `.include-warning-banner` from `treeCard` when the save request succeeds.
+- **Safety Net Added:** Added assertion `includeCard.$(".include-warning-banner").shouldNotBe(Condition.visible)` in `AuraManagerEditorUiTest.java`.
+
+### [DEF-20261001-13] Visual Playbook Editor Include Fragment Preview Lacks Step Lines and Add-Step Capability for Non-Existent Includes
+- **Date:** 2026-10-01
+- **Component:** `aura-manager` (`Visual Playbook Editor`, `editor.html`, `dashboard-editor.js`)
+- **Scope:** `Test/Harness`
+- **Symptom:** When an include file does not exist on disk, the visual editor preview displays a warning ("Included file does not exist on disk. Edit steps below and save to create it."), but clicking "Edit File" provides no step line or UI mechanism to add a step line, preventing users from creating/editing the missing include.
+- **Root Cause:** Non-existent includes render 0 `.nested-editable-step` DOM elements (`includeSteps` is empty). `enableIncludeEdit(cardId)` only attempted to focus `steps[0]`. With 0 steps, no line was focused, and no empty placeholder or add step handler was provided.
+- **Detection Gap ("What did we miss?"):** Existing UI tests verified editing existing step fragments (`Child.steps`, `MultiChild.steps`), but lacked test coverage for editing missing/non-existent step fragment files.
+- **Resolution:** Added `addNestedStep(cardId)` helper, auto-insertion of an initial step row on `enableIncludeEdit` when steps are empty, an empty steps placeholder in Thymeleaf template, and an "+ Add Step" button to include cards.
+- **Safety Net Added:** Added Selenide UI test `testEditNonExistentIncludeFileCreatesStepAndSavesFile` in `AuraManagerEditorUiTest.java`.
+
+### [DEF-20261001-12] Test Run Storage Directory Contains Duplicate Dummy console-execution-1.json Files Beside Higher-Indexed Files
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`InteractiveConsoleEngine`, `AuraInteractiveService`, `AuraQueueService`)
+- **Scope:** `Framework`
+- **Symptom:** Run storage folders for subsequent test classes in a batch contain both `console-execution-1.json` (a dummy 0-step fallback file) and `console-execution-3.json` (the actual test log).
+- **Root Cause:** `InteractiveConsoleEngine` and `AuraInteractiveService` used global counters across all test classes in a batch run to index `console-execution-*.json` files. Subsequent test classes received indexes > 1 (e.g. 3). Later, `AuraQueueService` checked for index 1 in the class folder, saw it missing, and created a dummy fallback `console-execution-1.json`. Furthermore, `markRunningOrMissingExecutionsAsSkipped` failed to mark existing completed execution snapshots as processed, triggering fallback creation.
+- **Detection Gap ("What did we miss?"):** Tests verified multi-dataset indexing within a single test class, but did not assert per-class file indexing boundaries across multi-class batch execution.
+- **Resolution:** Refactored `InteractiveConsoleEngine` and `AuraInteractiveService` to map execution indexes per test class folder. Updated `AuraQueueService.markRunningOrMissingExecutionsAsSkipped` to recognize existing execution files with final statuses.
+- **Safety Net Added:** Added unit tests verifying per-class execution file indexing in `InteractiveConsoleEngineTest`.
+
+### [DEF-20261001-11] Queue Execution Report Total Duration Displays Multimillion Minutes Due to Unfiltered Zero Timestamps
+- **Date:** 2026-10-01
+- **Component:** `aura-manager` (`RunReportDto`)
+- **Scope:** `Framework`
+- **Symptom:** Total execution duration for queue runs (`run_20261001_12564`) showed invalid values such as `29847542 min 38 s` instead of actual wall-clock execution time (~4-5 min).
+- **Root Cause:** `RunReportDto.getTotalDurationMs()` evaluated `(maxStartMs - minStartMs) + latestExec.getDurationMs()` without filtering out uninitialized or missing start timestamps (`startMs = 0L`, Jan 1 1970). When an uninitialized execution stub or execution snapshot with `0L` timestamp was present, `minStartMs` was set to `0L`, causing the subtraction `maxStartMs - 0L` to evaluate to the current Epoch timestamp (~1.79x10^12 ms = 29,847,542 minutes).
+- **Detection Gap ("What did we miss?"):** Existing unit tests for `RunReportDto` verified total duration only with valid mock timestamps or single executions, missing test coverage for queue runs where some execution snapshots have `0L` start timestamps.
+- **Resolution:** Updated `RunReportDto.getTotalDurationMs()` to filter out invalid start timestamps (`startMs <= 0L`) when calculating wall-clock spans and fall back to the sum of test execution durations when valid start timestamps are missing or insufficient.
+- **Safety Net Added:** Added unit test `testGetTotalDurationMs_ignoresZeroTimestampAndFallsBackToSum` in `RunReportDtoTest.java`.
+
+### [DEF-20261001-10] Conditional Include Main Step Recorded as Substep in Console Execution Reports
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`PreliminaryReportListener` / `ExecuteActionsStep` / `InteractiveStateBuilder`)
+- **Scope:** `Framework`
+- **Symptom:** In `console-execution-*.json` and execution reports for steps with conditional includes (e.g. `Add product to cart:` with child `- If (condition) then _include: ...`), the main step's conditional instruction was recorded as `Substep 0` inside its own `subSteps` array alongside the actual included steps, and `subSteps` of included steps contained nested duplicates of the main step.
+- **Root Cause:** When a parent step has a child step containing `_include:`, `PreliminaryReportListener` pre-populated `subSteps` with the conditional instruction as `Substep 0` prior to runtime include expansion. When `ExecuteActionsStep` and `IncludeAction` ran, `stepStats.getSubStats()` contained the container step, causing `mergeStepStats` to overwrite `Substep 0` with the conditional instruction.
+- **Detection Gap ("What did we miss?"):** Existing tests for `IncludeAction` verified step execution order and execution results, but did not assert that the report's `subSteps` array excludes the conditional include step itself.
+- **Resolution:** Updated `ExecuteActionsStep` to extract effective leaf sub-steps when populating sub-stats, updated `PreliminaryReportListener` to clean up intermediate container/include steps from `subSteps`, and updated `InteractiveStateBuilder` to filter out include container instructions during subStep serialization.
+- **Safety Net Added:** Added unit test `testConditionalIncludeSubStepsExcludesMainStep` in `SubStepReportingAndScopingTest.java`.
+
 ### [DEF-20260930-14] Complete Stripping of CSS Classes in Non-RICH Context Levels Due to Synthetic `autoId` Checked in `hasSemanticLocator`
 - **Date:** 2026-09-30
 - **Component:** `neodymium-core` (`PageAnalyzer`)
@@ -366,6 +426,78 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 - **Resolution:** Updated assertion in `PlaybookStepFullPagePersistenceTest` to expect `Boolean.TRUE`, configured `neodymium.ai.semanticVerification.failOnError=true` in `RunnerIntegrationTest`, and aligned convention-based YAML and JSON fixture filenames for `ProgrammaticDemoTest`.
 - **Safety Net Added:** Verified unit suite passes cleanly with zero failures via `mvn test -pl neodymium-core -Dtest="PlaybookStepFullPagePersistenceTest,RunnerIntegrationTest,ProgrammaticDemoTest#test7*"`.
 
+### [DEF-20260930-21] Successful Executions Overwritten to Failed and SLF4J Warnings Extracted as Process Errors
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`AuraQueueService`)
+- **Scope:** `Framework`
+- **Symptom:** Successful test executions with completed steps (`totalSteps > 0`) in a multi-dataset batch were overwritten to status `"failed"` with SLF4J warning messages (e.g., `WARN ... BiDiException`) listed as `failureReason`.
+- **Root Cause:**
+  1. `AuraQueueService.executeQueue` updated all non-failed execution JSONs to `"failed"` when `isFailedRun` was true, missing the `isZeroStep` check to distinguish unexecuted tests from completed successful ones.
+  2. `extractSubprocessErrorMessage` checked `line.contains("WARN:")` with a required colon, failing to match SLF4J log lines (`[main] WARN ...`) which omit the colon, allowing lines containing `BiDiException:` to be parsed as error messages.
+- **Detection Gap ("What did we miss?"):** Tests did not assert that multi-dataset execution batches containing both a failing test and a passing test retain `"passed"` status for the completed test, nor did tests cover SLF4J `WARN` log formats without trailing colons.
+- **Resolution:** Re-enforced `isZeroStep` check in `AuraQueueService` when updating non-failed execution states on `isFailedRun`, and updated `extractSubprocessErrorMessage` to inspect `WARN` and `WARNING` without requiring trailing colons.
+- **Safety Net Added:** Added unit tests in `AuraQueueServiceTest.java` for SLF4J `WARN` filtering and zero-step status update bounds.
+
+### [DEF-20260930-20] Dynamically included playbook steps unlinked as sub-steps of active include step
+- **Date:** 2026-09-30
+- **Component:** `org.neodymium.ai.executor.selenide.plugins.IncludeAction`
+- **Scope:** `Framework`
+- **Symptom:** Playbook steps dynamically included at runtime via `include(...)` (such as inside conditional `If ... _include:` branches) executed as flat top-level steps on the execution context stack without being linked to the active `include` parent step in execution reports or console execution logs.
+- **Root Cause:** In `IncludeAction.java`, parsed steps from included playbooks were mapped to pipeline steps and pushed onto `ExecutionContext.runStack` without setting `subStep.setParent(currentStep)` or registering them under `currentStep.getSubSteps()`.
+- **Detection Gap ("What did we miss?"):** Tests for `IncludeAction` verified that included steps executed on the browser, but did not assert that dynamically included steps were attached as `subSteps` of the active `currentStep` in `ExecutionContext` and execution reports.
+- **Resolution:** Updated `IncludeAction.java` to retrieve the active `currentStep` from `ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP`, set `subStep.setParent(currentStep)` for each included step, and populate `currentStep.getSubSteps()`.
+- **Safety Net Added:** Verified dynamic sub-step linking across `PreliminaryReportListenerTest` and `SubStepReportingAndScopingTest`.
+
+### [DEF-20260930-19] IllegalArgumentException on natural language step list items containing colons or hints
+- **Date:** 2026-09-30
+- **Component:** `org.neodymium.ai.playbook.YamlPlaybookParser`
+- **Scope:** `Framework`
+- **Symptom:** Parsing playbooks with natural language YAML list steps containing colons within step text (such as `- Generate random email address (hint: use java method)`) fails with `java.lang.IllegalArgumentException: Invalid playbook step format in file: ... Expected string step, 'include' map, or 'instruction' map, but found map keys: [Generate random email address (hint]`.
+- **Root Cause:** SnakeYAML parses list items containing `: ` (`- key: value`) into single-entry `Map` objects. `YamlPlaybookParser.parseStepBlock` rejected single-entry maps whose scalar values did not contain an `include` keyword, failing to recognize natural language step instructions containing colons (such as parenthetical hints `(hint: ...)` or formatted text `Label: text`).
+- **Detection Gap ("What did we miss?"):** Unit tests only tested simple string list steps without inline colons or parenthetical hints containing `: `.
+- **Resolution:** In `YamlPlaybookParser.java`, updated single-entry map scalar handling in `parseStepBlock` to reconstruct `key + ": " + value` into a full step instruction for any single-entry map in a step list, while maintaining strict `IllegalArgumentException` validation for invalid multi-key step maps.
+- **Safety Net Added:** Added unit test `testParseYamlListStepWithParentheticalHintColon()` in `YamlPlaybookParserTest.java` validating natural language steps with colons in parenthetical hints or step text.
+
+### [DEF-20260930-18] IllegalArgumentException on YAML list steps containing colons or inline includes
+- **Date:** 2026-09-30
+- **Component:** `org.neodymium.ai.playbook.YamlPlaybookParser`
+- **Scope:** `Framework`
+- **Symptom:** Parsing playbooks containing list steps with colons in step text (such as `- ... and _include: fragment.steps`) fails with `java.lang.IllegalArgumentException: Invalid playbook step format in file: ... Expected string step, 'include' map, or 'instruction' map, but found map keys: [...]`.
+- **Root Cause:** SnakeYAML parses list items containing `: ` into single-entry `Map` objects. In `YamlPlaybookParser.parseStepBlock`, single-entry maps were only handled if the value was a `List` or `Map` (sub-steps) or if the key was exact `_include`/`instruction`. Single-entry maps with string/primitive values (resulting from natural language step lines containing colons or inline `_include:`) threw an `IllegalArgumentException`.
+- **Detection Gap ("What did we miss?"):** Unit tests in `YamlPlaybookParserTest` did not cover YAML list items containing inline colons (`:`) or inline `_include:` parameters within step text.
+- **Resolution:** In `YamlPlaybookParser.java`, extended single-entry map handling in `parseStepBlock` to reconstruct `key + ": " + value` into full step instruction text when the value is scalar (`String`, primitive, or `null`), correctly creating `PlaybookStep` instances or resolving inline include directives.
+- **Safety Net Added:** Added unit test `testParseYamlListStepWithInlineColonAndInclude()` in `YamlPlaybookParserTest.java` validating list steps containing inline colons and `_include:` targets.
+
+### [DEF-20260930-17] ClassCastException when parsing playbook fragments with top-level YAML array list
+- **Date:** 2026-09-30
+- **Component:** `org.neodymium.ai.playbook.YamlPlaybookParser`
+- **Scope:** `Framework`
+- **Symptom:** Parsing playbooks containing included fragment `.steps` files (or any YAML file structured as a top-level list `- ...`) fails with `java.lang.RuntimeException: Failed to parse playbook: <path> Caused by: java.lang.ClassCastException: class java.util.ArrayList cannot be cast to class java.util.Map`.
+- **Root Cause:** In `YamlPlaybookParser.java`, SnakeYAML's `yaml.load(fileContent)` was directly assigned to a `Map<String, Object>` variable. When an included fragment file (such as `checkout-with-paypal.steps` or `proceed-to-payment.steps`) contains a top-level YAML list (`- step1\n- step2`), `yaml.load(fileContent)` returns a `java.util.ArrayList`, causing an unhandled `ClassCastException`.
+- **Detection Gap ("What did we miss?"):** Existing `YamlPlaybookParserTest` unit tests only tested YAML files where the top-level structure was a YAML dictionary (e.g., `steps: ...`). There were no test cases for included fragment `.steps` files structured as top-level YAML array lists (`- ...`).
+- **Resolution:** Updated `YamlPlaybookParser.java` to capture the output of `yaml.load(fileContent)` as `Object loadedObject`. If `loadedObject` is a `Map<?, ?>`, process standard top-level keys (`data`, `steps`, `before`, `after`). If `loadedObject` is a `List<?>` or `String`, delegate directly to `parseStepBlock`.
+- **Safety Net Added:** Added unit test `testParseIncludedStepListFragment()` in `YamlPlaybookParserTest.java` validating recursive inclusion of fragment `.steps` files containing top-level YAML array lists.
+
+### [DEF-20260930-16] Main Page Console (Playbook & Queue) Hangs During Test Execution Under High Log Volume
+- **Date:** 2026-09-30
+- **Component:** `aura-manager` (`dashboard-runner.js`, `dashboard-styles.css`)
+- **Scope:** `Framework`
+- **Symptom:** The aura-manager main UI page (playbook & queue) freezes/hangs during test execution when large amounts of stdout/console logs are printed by the test process.
+- **Root Cause:** `dashboard-runner.js` invoked `localStorage.setItem('aura_previous_console_logs', terminalConsole.innerHTML)` synchronously on every single streamed log line. As log output grew to thousands of lines, writing multi-megabyte HTML strings synchronously to `localStorage` on the main JS thread dozens/hundreds of times per second blocked the browser event loop. Additionally, per-line unbatched DOM appends (`insertAdjacentHTML`) and layout queries (`innerText`) caused severe browser layout thrashing.
+- **Detection Gap ("What did we miss?"):** UI tests did not run stress tests with high-frequency console output streams to measure browser event-loop latency and DOM reflow overhead.
+- **Resolution:** Replaced per-line synchronous `localStorage` writes with debounced persistence (`debouncedSaveConsoleLogs`, throttled to 1 second), batched incoming log lines into single-pass DOM HTML appends (`appendLogsBatch`) per polling tick, replaced reflow-triggering `innerText` with `textContent` in filter updates, and added CSS layout containment (`contain: content`) to `#terminalConsole`—preserving 100% of all log lines without truncating output.
+- **Safety Net Added:** Updated `dashboard-runner.js` and `dashboard-styles.css` with batch DOM appends, debounced persistence, and `textContent` filtering.
+
+### [DEF-20260930-15] Aura Subprocess Playbook Parse Failures Logged as Passed in Console Execution Reports
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`AuraQueueService`)
+- **Scope:** `Framework`
+- **Symptom:** When a test subprocess fails due to playbook parsing errors (e.g., `Failed to parse playbook`), `console-execution-1.json` was retained with status `"passed"` and missing failure message.
+- **Root Cause:** `isFailedRun` in `AuraQueueService` did not account for `fileErrors`/`fileFailures` counters, and the execution JSON updater required `isZeroStep` (stepIndex == 0 && totalSteps == 0) to overwrite existing `"passed"` execution states.
+- **Detection Gap ("What did we miss?"):** Tests did not assert that existing `console-execution-*.json` files with non-zero step metrics are overridden to `"failed"` with `failureReason` when the batch subprocess fails.
+- **Resolution:** Updated `AuraQueueService` to include `fileErrors`/`fileFailures` in `isFailedRun`, relaxed `isZeroStep` restriction when `isFailedRun` is true to force-update non-failed execution states with `failureReason`, and expanded `extractSubprocessErrorMessage` trace parsing.
+- **Safety Net Added:** Added unit test `testExtractSubprocessErrorMessageAndExecutionStatusUpdateOnParseError` in `AuraQueueServiceTest.java`.
+
 ### [DEF-20260929-08] Multi-Scroll Virtualized List Item Traversal Exceeds Default Step Token Budget
 - **Date:** 2026-09-29
 - **Component:** `neodymium-core` (`sandbox-tests` / `live-integration` / `VirtualizedListSandboxLiveTest`)
@@ -445,6 +577,16 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 - **Detection Gap ("What did we miss?"):** Tests previously ran in IDEs or directly within the `neodymium-core` submodule directory where `user.dir` was set to `neodymium-core`. When executed from the reactor root in Maven, the relative file paths failed silently.
 - **Resolution:** Added `getTestResourceFile(final String relativePath)` helper to `BaseAiTest.java` that inspects both submodule (`src/test/resources/...`) and multi-module aggregator (`neodymium-core/src/test/resources/...`) paths. Refactored all 18 mock integration test suites to use `getTestResourceFile(...)` and standardized deprecated `@AiPlaybook(name = ...)` usages to `@AiPlaybook(recordingFileName = ...)`.
 - **Safety Net Added:** Verified all 18 mock integration test suites (`mvn test -pl neodymium-core -Dtest="org.neodymium.ai.integration.mock.*Test"`), passing 68/70 tests cleanly (remaining 2 errors isolated to `StoreIntegrationTest` validator in Issue #2).
+
+### [DEF-20260929-09] Static Includes Create Synthetic Wrapper Step Nodes and Duplicate Substeps in Console Execution Reports
+- **Date:** 2026-09-29
+- **Component:** `neodymium-core` (`playbook-parser` / `console-reporting`)
+- **Scope:** `Framework`
+- **Symptom:** Unconditional static includes (`_include: file.steps`) generated synthetic container step nodes with duplicated substeps in `console-execution.json` instead of clean inlined top-level steps.
+- **Root Cause:** `YamlPlaybookParser` wrapped static include steps inside a synthetic `PlaybookStep("_include: ...")` container and assigned `subStep.setParent(containerStep)`. Even after `flattenSteps()` flattened `flatSteps`, child steps retained `parent != null`, causing `PreliminaryReportListener` to reconstruct parent-child step hierarchies in `TestExecutionReport`.
+- **Detection Gap ("What did we miss?"):** `YamlPlaybookParserTest` verified step counts after flattening but did not assert `parent == null` or check step hierarchy rendering for static includes.
+- **Resolution:** Updated `YamlPlaybookParser` to inline static include steps directly into the playbook step list without synthetic wrapper nodes or parent links, keeping their origin `sourceFile` and `lineNumber` intact.
+- **Safety Net Added:** Added unit tests in `YamlPlaybookParserTest` asserting `steps.size() == 5`, `parent == null`, `subSteps.isEmpty()`, and correct origin source file metadata for inlined static include steps.
 
 ### [DEF-20260928-07] AiSession Default Mock LLM Provider Returns Empty Tool Calls Breaking LLM-Mode Unit Tests
 - **Date:** 2026-09-28

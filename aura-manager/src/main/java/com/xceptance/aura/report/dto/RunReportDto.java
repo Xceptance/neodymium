@@ -283,27 +283,40 @@ public final class RunReportDto
         long minStartMs = Long.MAX_VALUE;
         long maxStartMs = Long.MIN_VALUE;
         TestExecutionDto latestExec = null;
+        long sumDurationMs = 0L;
+        int validTimestampCount = 0;
 
         for (final TestExecutionDto exec : executions)
         {
+            sumDurationMs += exec.getDurationMs();
             final long startMs = exec.getTimestampMs();
-            if (startMs < minStartMs)
+            if (startMs > 0L)
             {
-                minStartMs = startMs;
-            }
-            if (startMs >= maxStartMs)
-            {
-                maxStartMs = startMs;
-                latestExec = exec;
+                validTimestampCount++;
+                if (startMs < minStartMs)
+                {
+                    minStartMs = startMs;
+                }
+                if (startMs >= maxStartMs)
+                {
+                    maxStartMs = startMs;
+                    latestExec = exec;
+                }
             }
         }
 
-        if (latestExec == null)
+        if (latestExec == null || validTimestampCount < 1)
         {
-            return 0L;
+            return sumDurationMs;
         }
 
-        return (maxStartMs - minStartMs) + latestExec.getDurationMs();
+        if (validTimestampCount < 2 && executions.size() > 1)
+        {
+            return sumDurationMs;
+        }
+
+        final long wallClockDurationMs = (maxStartMs - minStartMs) + latestExec.getDurationMs();
+        return wallClockDurationMs > 0L ? wallClockDurationMs : sumDurationMs;
     }
 
     public String getTotalDurationFormatted()

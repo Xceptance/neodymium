@@ -284,4 +284,57 @@ public final class SubStepReportingAndScopingTest
         assertTrue(md.contains("Step #2.1"), "Markdown trace table must render Step #2.1");
         assertTrue(md.contains("Step #2.2"), "Markdown trace table must render Step #2.2");
     }
+
+    /**
+     * Tests that a step containing a conditional include (e.g. 'Add product to cart:' with child
+     * '- If ... then _include: ...') records the main step instruction on the parent level,
+     * and its subSteps collection contains ONLY the leaf steps from the included fragment.
+     */
+    @Test
+    @DisplayName("Verify conditional include subSteps contains only included fragment steps and excludes main/conditional step")
+    public void testConditionalIncludeSubStepsExcludesMainStep() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-conditional-include");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep parentStep = new PlaybookStep("Add product to cart");
+        final PlaybookStep conditionalStep = new PlaybookStep("If (condition) then _include: fragment.steps else _include: fragment2.steps");
+        conditionalStep.setParent(parentStep);
+        parentStep.setSubSteps(List.of(conditionalStep));
+
+        final PlaybookStep incStep1 = new PlaybookStep("Set quantity of the product to 1.");
+        incStep1.setParent(conditionalStep);
+        final PlaybookStep incStep2 = new PlaybookStep("Click add to cart button.");
+        incStep2.setParent(conditionalStep);
+        conditionalStep.setSubSteps(List.of(incStep1, incStep2));
+
+        // Start parent step
+        bus.dispatch(new StepStartedEvent(parentStep, 0));
+
+        // Start included step 1
+        bus.dispatch(new StepStartedEvent(incStep1, 0));
+        bus.dispatch(new StepFinishedEvent(incStep1, PlaybookStepStatus.SUCCESS));
+
+        // Start included step 2
+        bus.dispatch(new StepStartedEvent(incStep2, 1));
+        bus.dispatch(new StepFinishedEvent(incStep2, PlaybookStepStatus.SUCCESS));
+
+        // Finish parent step
+        bus.dispatch(new StepFinishedEvent(parentStep, PlaybookStepStatus.SUCCESS));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getSteps().size());
+
+        final TestExecutionReport.ReportStepEntry mainEntry = report.getSteps().get(0);
+        assertEquals("Add product to cart", mainEntry.getInstruction());
+
+        final List<TestExecutionReport.ReportStepEntry> subSteps = mainEntry.getSubSteps();
+        assertEquals(2, subSteps.size(), "subSteps should contain exactly 2 items from included fragment");
+        assertEquals("Set quantity of the product to 1.", subSteps.get(0).getInstruction());
+        assertEquals("Click add to cart button.", subSteps.get(1).getInstruction());
+    }
 }

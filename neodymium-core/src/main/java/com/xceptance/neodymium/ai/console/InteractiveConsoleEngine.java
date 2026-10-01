@@ -183,8 +183,8 @@ public final class InteractiveConsoleEngine {
      */
     private volatile String currentStateJson = "{}";
 
-    private static final Map<String, Integer> EXECUTION_INDEX_MAP = new ConcurrentHashMap<>();
-    private static final AtomicInteger EXECUTION_INDEX_COUNTER = new AtomicInteger(0);
+    private static final Map<String, Map<String, Integer>> CLASS_EXECUTION_INDEX_MAP = new ConcurrentHashMap<>();
+    private static final Map<String, AtomicInteger> CLASS_EXECUTION_COUNTERS = new ConcurrentHashMap<>();
 
     /** Active SSE client output streams. */
     private final CopyOnWriteArrayList<OutputStream> sseClients = new CopyOnWriteArrayList<>();
@@ -320,7 +320,8 @@ public final class InteractiveConsoleEngine {
                 }
                 final JsonObject parsedState = JsonParser.parseString(minified).getAsJsonObject();
                 final String executionKey = extractExecutionKey(parsedState);
-                final int index = getExecutionIndex(executionKey);
+                final String testClassFolder = extractTestClassFolder(parsedState);
+                final int index = getExecutionIndex(testClassFolder, executionKey);
 
                 // 1. Root file for compatibility in default allure.results.directory
                 final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
@@ -328,7 +329,6 @@ public final class InteractiveConsoleEngine {
 
                 // 2. Structured run and test class folders in configured console logs directory
                 final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
-                final String testClassFolder = extractTestClassFolder(parsedState);
                 final String runFolder = getRunFolder();
                 final File structuredDir = new File(configuredResultsDirPath, runFolder + "/" + testClassFolder);
                 if (!structuredDir.exists())
@@ -408,19 +408,27 @@ public final class InteractiveConsoleEngine {
         return key.isEmpty() ? "default" : key;
     }
 
-    private int getExecutionIndex(final String executionKey)
+    private int getExecutionIndex(final String testClassFolder, final String executionKey)
     {
+        final String classKey = (testClassFolder != null && !testClassFolder.isBlank()) ? testClassFolder : "DefaultTestClass";
         if (executionKey == null || executionKey.isEmpty())
         {
             return 1;
         }
-        return EXECUTION_INDEX_MAP.computeIfAbsent(executionKey, k -> EXECUTION_INDEX_COUNTER.incrementAndGet());
+        final Map<String, Integer> classMap = CLASS_EXECUTION_INDEX_MAP.computeIfAbsent(classKey, k -> new ConcurrentHashMap<>());
+        final AtomicInteger classCounter = CLASS_EXECUTION_COUNTERS.computeIfAbsent(classKey, k -> new AtomicInteger(0));
+        return classMap.computeIfAbsent(executionKey, k -> classCounter.incrementAndGet());
+    }
+
+    public int getExecutionIndex(final String executionKey)
+    {
+        return getExecutionIndex("DefaultTestClass", executionKey);
     }
 
     public static void resetExecutionIndexes()
     {
-        EXECUTION_INDEX_MAP.clear();
-        EXECUTION_INDEX_COUNTER.set(0);
+        CLASS_EXECUTION_INDEX_MAP.clear();
+        CLASS_EXECUTION_COUNTERS.clear();
     }
     
     public String getCurrentStateJson() {

@@ -2820,6 +2820,48 @@ function handleNestedKeyDown(event, cardId) {
 }
 window.handleNestedKeyDown = handleNestedKeyDown;
 
+function addNestedStep(cardId) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    if (!treeCard) return;
+
+    const stepsContainer = document.getElementById(`includeInnerSteps_${cardId}`) || treeCard.querySelector('[id^="includeInnerSteps_"]');
+    if (!stepsContainer) return;
+
+    if (treeCard.getAttribute('data-editing') !== 'true') {
+        enableIncludeEdit(cardId);
+    }
+
+    const placeholder = stepsContainer.querySelector('.empty-steps-placeholder');
+    if (placeholder) {
+        placeholder.remove();
+    }
+
+    const newStep = document.createElement('div');
+    newStep.className = 'nested-editable-step';
+    newStep.setAttribute('contenteditable', 'false');
+    newStep.setAttribute('data-original', '');
+    newStep.setAttribute('data-card-id', cardId);
+    newStep.setAttribute('onfocus', 'handleNestedFocus(this, event)');
+    newStep.setAttribute('onblur', `handleNestedBlur(this, '${cardId}')`);
+    newStep.setAttribute('onkeydown', `handleNestedKeyDown(event, '${cardId}')`);
+    newStep.setAttribute('oninput', `markIncludeUnsaved('${cardId}')`);
+
+    const lineNumSpan = newStep.querySelector('.sub-line-num');
+    const lineNumText = lineNumSpan ? lineNumSpan.innerText : '-';
+    newStep.innerHTML = `<span class="sub-line-num" contenteditable="false">${lineNumText}</span><span class="raw-nested-text" style="outline: none;" contenteditable="true"></span>`;
+
+    stepsContainer.appendChild(newStep);
+    markIncludeUnsaved(cardId);
+    updateAllLineNumbers();
+
+    handleNestedFocus(newStep, null, 0);
+    const newRawSpan = newStep.querySelector('.raw-nested-text');
+    if (newRawSpan) {
+        newRawSpan.focus();
+    }
+}
+window.addNestedStep = addNestedStep;
+
 function enableIncludeEdit(cardId) {
     const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
     if (!treeCard) return;
@@ -2831,6 +2873,7 @@ function enableIncludeEdit(cardId) {
     treeCard.setAttribute('data-editing', 'true');
 
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
+    const btnAdd = document.getElementById(`btnAddIncludeStep_${cardId}`);
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
     const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
 
@@ -2859,6 +2902,7 @@ function enableIncludeEdit(cardId) {
     });
 
     if (btnEdit) btnEdit.style.display = 'none';
+    if (btnAdd) btnAdd.style.display = 'inline-flex';
     if (btnSave) btnSave.style.display = 'inline-flex';
     if (btnDiscard) btnDiscard.style.display = 'inline-flex';
 
@@ -2866,6 +2910,8 @@ function enableIncludeEdit(cardId) {
 
     if (steps.length > 0) {
         handleNestedFocus(steps[0], null, 0);
+    } else {
+        addNestedStep(cardId);
     }
 }
 window.enableIncludeEdit = enableIncludeEdit;
@@ -2876,15 +2922,98 @@ function markIncludeUnsaved(cardId) {
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
     const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
+    const btnAdd = document.getElementById(`btnAddIncludeStep_${cardId}`);
     if (treeCard) treeCard.classList.add('has-unsaved-changes');
     if (badge) badge.style.display = 'inline-flex';
     if (btnSave) btnSave.style.display = 'inline-flex';
     if (btnDiscard) btnDiscard.style.display = 'inline-flex';
+    if (btnAdd) btnAdd.style.display = 'inline-flex';
     if (btnEdit) btnEdit.style.display = 'none';
+    updateIncludeVarsDropdown(cardId);
 }
 window.markIncludeUnsaved = markIncludeUnsaved;
 
+function updateIncludeVarsDropdown(cardId) {
+    const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
+    if (!treeCard) return;
+
+    const dropdownBody = treeCard.querySelector('.include-vars-dropdown-body');
+    const countSpan = treeCard.querySelector(`[id^="btnVarsInclude_"] span:nth-child(2)`) || treeCard.querySelector(`.btn-include-vars span:nth-child(2)`);
+    if (!dropdownBody) return;
+
+    const steps = getDirectNestedSteps(treeCard);
+    const stepLines = [];
+    steps.forEach(step => {
+        const rawSpan = step.querySelector('.raw-nested-text');
+        const textSpan = step.querySelector('span:last-child');
+        let lineText = rawSpan ? rawSpan.innerText : (step.getAttribute('data-original') || (textSpan ? textSpan.innerText : step.innerText));
+        if (lineText) stepLines.push(lineText.trim());
+    });
+
+    const allVars = new Set();
+    const varRegex = /\$\{([a-zA-Z0-9_.-]+)(?::[^}]*)?\}/g;
+    stepLines.forEach(line => {
+        let match;
+        while ((match = varRegex.exec(line)) !== null) {
+            if (match[1]) allVars.add(match[1]);
+        }
+    });
+
+    if (treeCard._varScopes) {
+        Object.keys(treeCard._varScopes).forEach(v => allVars.add(v));
+    }
+
+    if (countSpan) {
+        countSpan.innerText = `Variables (${allVars.size})`;
+    }
+
+    if (allVars.size === 0) {
+        dropdownBody.innerHTML = '<div class="empty-include-vars">No variables used in this include.</div>';
+        return;
+    }
+
+    let html = '';
+    allVars.forEach(v => {
+        let scope = 'required';
+        if (treeCard._varScopes && treeCard._varScopes[v]) {
+            scope = treeCard._varScopes[v];
+        } else {
+            const selector = CSS && CSS.escape ? CSS.escape(v) : v;
+            const defBtn = treeCard.querySelector(`.include-var-row[data-var="${selector}"] .scope-defined.active-defined`);
+            if (defBtn) scope = 'defined';
+        }
+
+        const safeVar = (v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const isDefined = scope === 'defined';
+
+        html += `
+            <div class="include-var-row" data-var="${safeVar}">
+                <code class="var-badge">\${${safeVar}}</code>
+                <div class="var-scope-toggle-group">
+                    <button type="button" class="btn-var-scope scope-defined ${isDefined ? 'active-defined' : ''}"
+                            data-card-id="${cardId}"
+                            data-var="${safeVar}"
+                            onclick="toggleIncludeTreeVarScope('${cardId}', '${safeVar}', 'defined')"
+                            title="Variable is defined within this fragment">
+                        Defined in include
+                    </button>
+                    <button type="button" class="btn-var-scope scope-required ${!isDefined ? 'active-required' : ''}"
+                            data-card-id="${cardId}"
+                            data-var="${safeVar}"
+                            onclick="toggleIncludeTreeVarScope('${cardId}', '${safeVar}', 'required')"
+                            title="Variable requires definition from using file">
+                        Required from using file
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+    dropdownBody.innerHTML = html;
+}
+window.updateIncludeVarsDropdown = updateIncludeVarsDropdown;
+
 function toggleIncludeVarsDropdown(cardId) {
+    updateIncludeVarsDropdown(cardId);
     const dropdown = document.getElementById(`varsDropdown_${cardId}`);
     if (!dropdown) return;
 
@@ -2898,6 +3027,7 @@ function toggleIncludeVarsDropdown(cardId) {
     }
 }
 window.toggleIncludeVarsDropdown = toggleIncludeVarsDropdown;
+
 
 function toggleIncludeTreeVarScope(cardId, varName, scope) {
     const treeCard = document.getElementById(`includeTreeCard_${cardId}`) || document.getElementById(`includeTreeCard${cardId}`);
@@ -3007,6 +3137,11 @@ async function saveIncludeInline(cardId) {
                 showToast(`💾 Saved included file ${filePath}`, "success");
                 loadFiles();
 
+                const warningBanner = treeCard.querySelector('.include-warning-banner');
+                if (warningBanner) {
+                    warningBanner.remove();
+                }
+
                 const cleanFilePath = filePath.replace(/^['"]|['"]$/g, '').trim();
                 const cleanActiveFile = (window.activeEditingFile || '').replace(/^['"]|['"]$/g, '').trim();
                 if (cleanActiveFile && (cleanActiveFile === cleanFilePath || cleanActiveFile.endsWith(cleanFilePath))) {
@@ -3029,6 +3164,7 @@ async function saveIncludeInline(cardId) {
 
     const badge = document.getElementById(`unsavedBadge_${cardId}`);
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
+    const btnAdd = document.getElementById(`btnAddIncludeStep_${cardId}`);
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
     const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
 
@@ -3040,6 +3176,18 @@ async function saveIncludeInline(cardId) {
         step.setAttribute('data-original', text);
     });
 
+    if (steps.length === 0) {
+        const stepsContainer = document.getElementById(`includeInnerSteps_${cardId}`) || treeCard.querySelector('[id^="includeInnerSteps_"]');
+        if (stepsContainer) {
+            const safeCardId = CSS && CSS.escape ? CSS.escape(cardId) : cardId;
+            stepsContainer.innerHTML = `
+                <div class="empty-steps-placeholder" data-card-id="${safeCardId}" onclick="addNestedStep(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                    <span>No steps defined in this include. Click here to add a step.</span>
+                </div>`;
+        }
+    }
+
     delete treeCard._initialStepsSnapshot;
 
     formatIncludeTreeCardTokens(treeCard);
@@ -3047,6 +3195,7 @@ async function saveIncludeInline(cardId) {
     treeCard.classList.remove('has-unsaved-changes');
     if (badge) badge.style.display = 'none';
     if (btnEdit) btnEdit.style.display = 'inline-flex';
+    if (btnAdd) btnAdd.style.display = 'none';
     if (btnSave) btnSave.style.display = 'none';
     if (btnDiscard) btnDiscard.style.display = 'none';
     return true;
@@ -3061,6 +3210,7 @@ function discardIncludeInline(cardId) {
 
     const badge = document.getElementById(`unsavedBadge_${cardId}`);
     const btnEdit = document.getElementById(`btnEditInclude_${cardId}`);
+    const btnAdd = document.getElementById(`btnAddIncludeStep_${cardId}`);
     const btnSave = document.getElementById(`btnSaveInclude_${cardId}`);
     const btnDiscard = document.getElementById(`btnDiscardInclude_${cardId}`);
 
@@ -3069,21 +3219,30 @@ function discardIncludeInline(cardId) {
 
     if (stepsContainer && Array.isArray(snapshot)) {
         stepsContainer.innerHTML = '';
-        snapshot.forEach(origText => {
-            const stepDiv = document.createElement('div');
-            stepDiv.className = 'nested-editable-step';
-            stepDiv.setAttribute('contenteditable', 'false');
-            stepDiv.setAttribute('data-original', origText);
-            stepDiv.setAttribute('data-card-id', cardId);
-            stepDiv.setAttribute('onfocus', 'handleNestedFocus(this, event)');
-            stepDiv.setAttribute('onblur', `handleNestedBlur(this, '${cardId}')`);
-            stepDiv.setAttribute('onkeydown', `handleNestedKeyDown(event, '${cardId}')`);
-            stepDiv.setAttribute('oninput', `markIncludeUnsaved('${cardId}')`);
+        if (snapshot.length === 0) {
+            const safeCardId = CSS && CSS.escape ? CSS.escape(cardId) : cardId;
+            stepsContainer.innerHTML = `
+                <div class="empty-steps-placeholder" data-card-id="${safeCardId}" onclick="addNestedStep(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                    <span>No steps defined in this include. Click here to add a step.</span>
+                </div>`;
+        } else {
+            snapshot.forEach(origText => {
+                const stepDiv = document.createElement('div');
+                stepDiv.className = 'nested-editable-step';
+                stepDiv.setAttribute('contenteditable', 'false');
+                stepDiv.setAttribute('data-original', origText);
+                stepDiv.setAttribute('data-card-id', cardId);
+                stepDiv.setAttribute('onfocus', 'handleNestedFocus(this, event)');
+                stepDiv.setAttribute('onblur', `handleNestedBlur(this, '${cardId}')`);
+                stepDiv.setAttribute('onkeydown', `handleNestedKeyDown(event, '${cardId}')`);
+                stepDiv.setAttribute('oninput', `markIncludeUnsaved('${cardId}')`);
 
-            const safeText = origText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            stepDiv.innerHTML = `<span class="sub-line-num">-</span><span>${safeText}</span>`;
-            stepsContainer.appendChild(stepDiv);
-        });
+                const safeText = origText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                stepDiv.innerHTML = `<span class="sub-line-num">-</span><span>${safeText}</span>`;
+                stepsContainer.appendChild(stepDiv);
+            });
+        }
         delete treeCard._initialStepsSnapshot;
     } else {
         const steps = getDirectNestedSteps(treeCard);
@@ -3106,6 +3265,7 @@ function discardIncludeInline(cardId) {
     treeCard.classList.remove('has-unsaved-changes');
     if (badge) badge.style.display = 'none';
     if (btnEdit) btnEdit.style.display = 'inline-flex';
+    if (btnAdd) btnAdd.style.display = 'none';
     if (btnSave) btnSave.style.display = 'none';
     if (btnDiscard) btnDiscard.style.display = 'none';
 }
@@ -3114,7 +3274,7 @@ window.discardIncludeInline = discardIncludeInline;
 // Track Caret Offset Position
 document.addEventListener('selectionchange', () => {
     const activeEl = document.activeElement;
-    if (activeEl && activeEl.classList.contains('step-content')) {
+    if (activeEl && (activeEl.classList.contains('step-content') || activeEl.classList.contains('raw-nested-text'))) {
         lastCaretOffset = getCaretOffset(activeEl);
         window.lastCaretOffset = lastCaretOffset;
         const statLine = document.getElementById('statLine');
@@ -3126,6 +3286,52 @@ document.addEventListener('selectionchange', () => {
 
 function insertVariableFromInput(varName) {
     if (!varName) return;
+    const activeEl = document.activeElement;
+    let nestedStep = (activeEl && activeEl.closest('.nested-editable-step')) ? activeEl.closest('.nested-editable-step') : activeNestedStep;
+    if (!nestedStep && document.querySelector('.include-tree-card[data-editing="true"]')) {
+        const editingCard = document.querySelector('.include-tree-card[data-editing="true"]');
+        const steps = getDirectNestedSteps(editingCard);
+        if (steps.length > 0) {
+            nestedStep = steps[steps.length - 1];
+        }
+    }
+
+    if (nestedStep && document.contains(nestedStep)) {
+        const treeCard = nestedStep.closest('.include-tree-card');
+        let rawSpan = nestedStep.querySelector('.raw-nested-text');
+        if (!rawSpan) {
+            handleNestedFocus(nestedStep, null, 'end');
+            rawSpan = nestedStep.querySelector('.raw-nested-text') || nestedStep;
+        }
+        let raw = rawSpan.innerText || '';
+        const insertText = `\${${varName}}`;
+
+        if (lastCaretOffset >= 0 && lastCaretOffset <= raw.length) {
+            raw = raw.slice(0, lastCaretOffset) + insertText + raw.slice(lastCaretOffset);
+            lastCaretOffset += insertText.length;
+        } else {
+            raw += (raw.length > 0 && !raw.endsWith(' ') ? ' ' : '') + insertText;
+            lastCaretOffset = raw.length;
+        }
+
+        if (rawSpan !== nestedStep) {
+            rawSpan.innerText = raw;
+        } else {
+            nestedStep.innerText = raw;
+        }
+
+        if (treeCard) {
+            const safeCardId = treeCard.getAttribute('data-card-id') || treeCard.id.replace('includeTreeCard_', '').replace('includeTreeCard', '');
+            markIncludeUnsaved(safeCardId);
+            updateIncludeVarsDropdown(safeCardId);
+        }
+        if (rawSpan && typeof rawSpan.focus === 'function') {
+            rawSpan.focus();
+            setCaretOffset(rawSpan, lastCaretOffset);
+        }
+        return;
+    }
+
     const activeRow = document.querySelector(`.step-row[data-line="${activeLineNum}"]`);
     if (activeRow) {
         const content = activeRow.querySelector('.step-content');
@@ -3148,6 +3354,7 @@ function insertVariableFromInput(varName) {
     }
 }
 window.insertVariableFromInput = insertVariableFromInput;
+
 
 function insertSnippetWithCaret(templateText, caretOffset = -1) {
     const activeEl = document.activeElement;

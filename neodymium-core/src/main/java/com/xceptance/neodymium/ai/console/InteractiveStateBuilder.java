@@ -988,6 +988,10 @@ public final class InteractiveStateBuilder
             {
                 if (sub != null)
                 {
+                    if (sub.getInstruction() != null && sub.getInstruction().contains("_include:"))
+                    {
+                        continue;
+                    }
                     final JsonObject subObj = new JsonObject();
                     subObj.addProperty("stepIndex", sub.getStepIndex());
                     subObj.addProperty("instruction", sub.getInstruction() != null ? sub.getInstruction() : "");
@@ -1011,7 +1015,11 @@ public final class InteractiveStateBuilder
                     }
                     if (!sub.getSubSteps().isEmpty())
                     {
-                        subObj.add("subSteps", serializeSubSteps(sub.getSubSteps()));
+                        final JsonArray innerSubs = serializeSubSteps(sub.getSubSteps());
+                        if (innerSubs.size() > 0)
+                        {
+                            subObj.add("subSteps", innerSubs);
+                        }
                     }
                     arr.add(subObj);
                 }

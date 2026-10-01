@@ -290,10 +290,12 @@ public final class PreliminaryReportListener implements ExecutionListener
                 }
 
                 // If an intermediate parent container was added to parentEntry, remove it in favor of leaf sub-steps
-                if (pbStep.getParent() != rootPb && pbStep.getParent().getInstruction() != null)
+                if (pbStep.getParent() != null && pbStep.getParent().getInstruction() != null)
                 {
-                    final String intermediateInstruction = pbStep.getParent().getInstruction();
-                    parentEntry.removeSubStepIf(sub -> intermediateInstruction.equals(sub.getInstruction()) || intermediateInstruction.equals(sub.getRawInstruction()));
+                    final String parentInstruction = pbStep.getParent().getInstruction();
+                    parentEntry.removeSubStepIf(sub -> parentInstruction.equals(sub.getInstruction())
+                        || parentInstruction.equals(sub.getRawInstruction())
+                        || (sub.getInstruction() != null && sub.getInstruction().contains("_include:")));
                 }
 
                 TestExecutionReport.ReportStepEntry existingSub = null;
@@ -327,6 +329,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                 {
                     final PlaybookStep childStep = pbStep.getSubSteps().get(s);
                     final String cRaw = childStep.getInstruction();
+                    if (cRaw != null && cRaw.contains("_include:"))
+                    {
+                        continue;
+                    }
                     String cResolved = cRaw;
                     if (activeCtx != null && activeCtx.getSessionData() != null && cRaw != null)
                     {
@@ -1672,7 +1678,12 @@ public final class PreliminaryReportListener implements ExecutionListener
 
                 if (matchingSub == null && s < entry.getSubSteps().size())
                 {
-                    matchingSub = entry.getSubSteps().get(s);
+                    final TestExecutionReport.ReportStepEntry candidate = entry.getSubSteps().get(s);
+                    if (candidate.getInstruction() == null || candidate.getInstruction().isBlank()
+                        || (sub.getInstruction() != null && sub.getInstruction().equals(candidate.getInstruction())))
+                    {
+                        matchingSub = candidate;
+                    }
                 }
 
                 if (matchingSub != null)
@@ -1694,10 +1705,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                         matchingSub.setStatus(sub.getFailureReason() != null ? "FAILED" : "SUCCESS");
                     }
                 }
-                else if (entry.getSubSteps().isEmpty())
+                else
                 {
                     final TestExecutionReport.ReportStepEntry subEntry = new TestExecutionReport.ReportStepEntry(
-                        s,
+                        entry.getSubSteps().size(),
                         sub.getInstruction() != null ? sub.getInstruction() : "Sub-step " + (s + 1)
                     );
                     mergeStepStats(subEntry, sub);

@@ -383,12 +383,29 @@ function toggleErrorsOnly(checked) {
 }
 window.toggleErrorsOnly = toggleErrorsOnly;
 
+let consoleLogsSaveTimeout = null;
+
+function debouncedSaveConsoleLogs() {
+    if (consoleLogsSaveTimeout) return;
+    consoleLogsSaveTimeout = setTimeout(() => {
+        consoleLogsSaveTimeout = null;
+        const terminalConsole = document.getElementById('terminalConsole');
+        if (terminalConsole) {
+            try {
+                localStorage.setItem('aura_previous_console_logs', terminalConsole.innerHTML);
+            } catch (e) {
+                // ignore quota or storage errors
+            }
+        }
+    }, 1000);
+}
+
 function refreshLogFiltering() {
     const terminalConsole = document.getElementById('terminalConsole');
     if (!terminalConsole) return;
     const logLines = terminalConsole.querySelectorAll('.log-line');
     logLines.forEach(line => {
-        const text = line.innerText;
+        const text = line.textContent;
         const isErrorOrWarn = text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]');
 
         const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
@@ -404,8 +421,15 @@ function refreshLogFiltering() {
 window.refreshLogFiltering = refreshLogFiltering;
 
 function appendLog(line) {
+    appendLogsBatch([line]);
+}
+window.appendLog = appendLog;
+
+function appendLogsBatch(lines) {
+    if (!lines || lines.length === 0) return;
     const terminalConsole = document.getElementById('terminalConsole');
     if (!terminalConsole) return;
+
     if (terminalConsole.innerHTML.includes('Console idle.') || terminalConsole.innerHTML.includes('Connecting to run stream...')) {
         terminalConsole.innerHTML = '';
         if (logFilterAiOnly && !hasShownStartMessage) {
@@ -415,25 +439,28 @@ function appendLog(line) {
             terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line log-info" style="display: block; margin: 0; padding: 0;">${startLine}</div>`);
         }
     }
-    const isErrorOrWarn = line.includes('[ERROR]') || line.includes('[WARN]') || line.includes('[FATAL]');
 
-    const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
-    const matchesAiFilter = !logFilterAiOnly || isAiLogLine(line);
+    let batchHtml = '';
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const isErrorOrWarn = line.includes('[ERROR]') || line.includes('[WARN]') || line.includes('[FATAL]');
 
-    const displayStyle = (matchesErrorFilter && matchesAiFilter) ? 'block' : 'none';
-    const escapedLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const cssClass = isErrorOrWarn ? 'log-error' : 'log-info';
+        const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
+        const matchesAiFilter = !logFilterAiOnly || isAiLogLine(line);
 
-    terminalConsole.insertAdjacentHTML('beforeend', `<div class="log-line ${cssClass}" style="display: ${displayStyle}; margin: 0; padding: 0;">${escapedLine}</div>`);
+        const displayStyle = (matchesErrorFilter && matchesAiFilter) ? 'block' : 'none';
+        const escapedLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const cssClass = isErrorOrWarn ? 'log-error' : 'log-info';
+
+        batchHtml += `<div class="log-line ${cssClass}" style="display: ${displayStyle}; margin: 0; padding: 0;">${escapedLine}</div>`;
+    }
+
+    terminalConsole.insertAdjacentHTML('beforeend', batchHtml);
     terminalConsole.scrollTop = terminalConsole.scrollHeight;
 
-    try {
-        localStorage.setItem('aura_previous_console_logs', terminalConsole.innerHTML);
-    } catch (e) {
-        // ignore
-    }
+    debouncedSaveConsoleLogs();
 }
-window.appendLog = appendLog;
+window.appendLogsBatch = appendLogsBatch;
 
 function restorePreviousConsoleLogs() {
     const terminalConsole = document.getElementById('terminalConsole');
@@ -461,12 +488,12 @@ function copyTerminalOutput() {
         const visibleLines = [];
         logLines.forEach(line => {
             if (line.style.display !== 'none' && window.getComputedStyle(line).display !== 'none') {
-                visibleLines.push(line.innerText || line.textContent);
+                visibleLines.push(line.textContent);
             }
         });
         textToCopy = visibleLines.join('\n');
     } else {
-        textToCopy = terminalConsole.innerText || terminalConsole.textContent;
+        textToCopy = terminalConsole.textContent;
     }
 
     const copyIcon = document.getElementById('copyTerminalIcon');
@@ -529,7 +556,7 @@ async function pollStatus() {
             const data = await response.json();
 
             if (data.logs && data.logs.length > 0) {
-                data.logs.forEach(log => appendLog(log));
+                appendLogsBatch(data.logs);
             }
             if (data.newIndex !== undefined) {
                 lastLogIndex = data.newIndex;

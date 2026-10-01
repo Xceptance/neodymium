@@ -543,8 +543,8 @@
                                             th:data-card-id="${cardId}"
                                             th:data-var="${v}"
                                             onclick="toggleIncludeTreeVarScope(this.getAttribute('data-card-id'), this.getAttribute('data-var'), 'required')"
-                                            title="Variable requires definition from test">
-                                        Required from test
+                                            title="Variable requires definition from using file">
+                                        Required from using file
                                     </button>
                                 </div>
                             </div>
@@ -553,6 +553,9 @@
                 </div>
                 <button class="btn-editor" style="font-size: 11px; padding: 3px 8px;" th:id="'btnEditInclude_' + ${cardId}" th:data-card-id="${cardId}" onclick="enableIncludeEdit(this.getAttribute('data-card-id'))">
                     <span class="material-symbols-outlined" style="font-size: 14px;">edit</span> Edit File
+                </button>
+                <button class="btn-editor" style="display: none; font-size: 11px; padding: 3px 8px;" th:id="'btnAddIncludeStep_' + ${cardId}" th:data-card-id="${cardId}" onclick="addNestedStep(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">add</span> Add Step
                 </button>
                 <button class="btn-editor save" th:id="'btnSaveInclude_' + ${cardId}" style="display: none; font-size: 11px; padding: 3px 8px;" th:data-card-id="${cardId}" onclick="saveIncludeInline(this.getAttribute('data-card-id'))">
                     <span class="material-symbols-outlined" style="font-size: 14px;">save</span> Save
@@ -567,10 +570,18 @@
             <span>Included file does not exist on disk. Edit steps below and save to create it.</span>
         </div>
         <div th:id="'includeInnerSteps_' + ${cardId}" style="display: flex; flex-direction: column; gap: 4px;">
-            <div class="nested-editable-step" contenteditable="false" th:each="step : ${includeSteps}" th:data-original="${step}" th:data-card-id="${cardId}" onfocus="handleNestedFocus(this, event)" onblur="handleNestedBlur(this)" onkeydown="handleNestedKeyDown(event, this.getAttribute('data-card-id'))" oninput="markIncludeUnsaved(this.getAttribute('data-card-id'))">
-                <span class="sub-line-num">-</span>
-                <span th:text="${step}">Step text</span>
-            </div>
+            <th:block th:if="${includeSteps != null and !#lists.isEmpty(includeSteps)}">
+                <div class="nested-editable-step" contenteditable="false" th:each="step : ${includeSteps}" th:data-original="${step}" th:data-card-id="${cardId}" onfocus="handleNestedFocus(this, event)" onblur="handleNestedBlur(this)" onkeydown="handleNestedKeyDown(event, this.getAttribute('data-card-id'))" oninput="markIncludeUnsaved(this.getAttribute('data-card-id'))">
+                    <span class="sub-line-num">-</span>
+                    <span th:text="${step}">Step text</span>
+                </div>
+            </th:block>
+            <th:block th:if="${includeSteps == null or #lists.isEmpty(includeSteps)}">
+                <div class="empty-steps-placeholder" th:data-card-id="${cardId}" onclick="addNestedStep(this.getAttribute('data-card-id'))">
+                    <span class="material-symbols-outlined" style="font-size: 20px; color: var(--accent, #2563eb);">add_circle</span>
+                    <span>No steps defined in this include. Click here to add a step.</span>
+                </div>
+            </th:block>
         </div>
     </div>
 </th:block>
