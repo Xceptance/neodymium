@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.probe.LocatorProbeResult;
 import org.neodymium.ai.model.ContextLevel;
@@ -71,6 +72,10 @@ public final class MockTargetExecutor implements TargetExecutor
      * Flag indicating whether this mock executor reports probing support.
      */
     private boolean probingSupported = true;
+
+    private final AtomicInteger wireframeAppliedCount = new AtomicInteger();
+
+    private final AtomicInteger wireframeRemovedCount = new AtomicInteger();
 
     /**
      * The set of supported actions declared by this executor.
@@ -257,5 +262,27 @@ public final class MockTargetExecutor implements TargetExecutor
     public Set<ActionDefinition> getSupportedActions()
     {
         return this.supportedActions;
+    }
+
+    @Override
+    public void applyColorWireframe()
+    {
+        this.wireframeAppliedCount.incrementAndGet();
+    }
+
+    @Override
+    public void removeColorWireframe()
+    {
+        this.wireframeRemovedCount.incrementAndGet();
+    }
+
+    public int getWireframeAppliedCount()
+    {
+        return this.wireframeAppliedCount.get();
+    }
+
+    public int getWireframeRemovedCount()
+    {
+        return this.wireframeRemovedCount.get();
     }
 }

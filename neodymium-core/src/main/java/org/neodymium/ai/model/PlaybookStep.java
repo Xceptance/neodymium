@@ -458,6 +458,53 @@ public final class PlaybookStep
                 }
             }
 
+            final Matcher layoutMatcher = LAYOUT_TAG_PARAM_PATTERN.matcher(cleaned);
+            if (layoutMatcher.find())
+            {
+                final String paramStr = layoutMatcher.group(1);
+                if (paramStr != null && !paramStr.isBlank())
+                {
+                    final String[] tokens = paramStr.split(",");
+                    for (final String rawToken : tokens)
+                    {
+                        final String token = rawToken.trim();
+                        if (token.equalsIgnoreCase("full"))
+                        {
+                            this.fullPage = true;
+                        }
+                        else
+                        {
+                            final Matcher threshMatcher = THRESHOLD_PARAM_PATTERN.matcher(token);
+                            if (threshMatcher.matches())
+                            {
+                                final Double parsed = parseThreshold(threshMatcher.group(1));
+                                if (parsed != null)
+                                {
+                                    this.ssimMinScore = parsed;
+                                }
+                            }
+                            else
+                            {
+                                final Double parsed = parseThreshold(token);
+                                if (parsed != null)
+                                {
+                                    this.ssimMinScore = parsed;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (this.ssimMinScore == null)
+                {
+                    this.ssimMinScore = DEFAULT_LAYOUT_SSIM_MIN_SCORE;
+                }
+            }
+
+            if (VISUAL_FULL_PATTERN.matcher(cleaned).find() || LAYOUT_FULL_PATTERN.matcher(cleaned).find())
+            {
+                this.fullPage = true;
+            }
+
             this.instruction = cleaned.trim();
         }
         else
@@ -897,13 +944,17 @@ public final class PlaybookStep
     private static final Pattern NO_HEALING_PATTERN = Pattern.compile("(?i)\\(\\s*no-healing\\s*\\)");
     private static final Pattern TIMEOUT_PATTERN = Pattern.compile("(?i)\\(\\s*timeout\\s*:\\s*(\\d+)(ms|s)?\\s*\\)");
 
-    public static final Pattern VISUAL_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*visual\\s*:[^)]*\\bfull\\b[^)]*\\)");
-    public static final Pattern VISUAL_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:[^)]+)?\\s*\\)");
+    public static final double DEFAULT_LAYOUT_SSIM_MIN_SCORE = 0.92;
+
+    public static final Pattern VISUAL_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*(?:visual\\s*:[^)]*\\bfull\\b[^)]*|visual[-_]full)\\)");
+    public static final Pattern VISUAL_PATTERN = Pattern.compile("(?i)\\(\\s*(?:visual(?:\\s*:[^)]+)?|visual[-_]full)\\)");
     private static final Pattern VISUAL_TAG_PARAM_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:\\s*([^)]+))?\\s*\\)");
     private static final Pattern THRESHOLD_PARAM_PATTERN = Pattern.compile("(?i)^(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*([0-9.]+%?)$");
     private static final Pattern STANDALONE_THRESHOLD_PATTERN = Pattern.compile("(?i)\\(\\s*(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*([0-9.]+%?)\\s*\\)");
     public static final Pattern CONTEXT_LEVEL_PATTERN = Pattern.compile("(?i)\\(\\s*(?:contextlevel|context)\\s*[:=]\\s*([a-zA-Z_-]+)\\s*\\)");
-    public static final Pattern LAYOUT_PATTERN = Pattern.compile("(?i)\\(\\s*layout\\s*\\)");
+    public static final Pattern LAYOUT_PATTERN = Pattern.compile("(?i)\\(\\s*(?:layout(?:\\s*:[^)]+)?|layout[-_]full)\\)");
+    public static final Pattern LAYOUT_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*(?:layout\\s*:[^)]*\\bfull\\b[^)]*|layout[-_]full)\\)");
+    private static final Pattern LAYOUT_TAG_PARAM_PATTERN = Pattern.compile("(?i)\\(\\s*layout(?:\\s*:\\s*([^)]+))?\\s*\\)");
     public static final Pattern HINT_PATTERN = Pattern.compile("(?i)\\(\\s*hint\\s*:\\s*[^)]+\\)");
     public static final Pattern INTERACTIVE_ACTION_PATTERN =
         Pattern.compile("(?i)\\b(type|click|select|clear|submit|fill|press|enter|hover|drag|drop|scroll|check|uncheck|choose)\\b");
@@ -962,13 +1013,17 @@ public final class PlaybookStep
     }
 
     /**
-     * Checks if this step is a visual-only or layout verification step.
+     * Checks if this step is a visual-only verification step.
      *
      * @return true if the instruction indicates a visual verification, false otherwise
      */
     @JsonIgnore
     public boolean isVisualStep()
     {
+        if (isLayoutStep())
+        {
+            return false;
+        }
         if (Boolean.TRUE.equals(this.fullPage))
         {
             return true;
@@ -977,13 +1032,39 @@ public final class PlaybookStep
         {
             return false;
         }
-        return VISUAL_PATTERN.matcher(this.instruction).find() || LAYOUT_PATTERN.matcher(this.instruction).find();
+        return VISUAL_PATTERN.matcher(this.instruction).find();
     }
 
     /**
-     * Checks if this step explicitly requests full-page visual context.
+     * Checks if this step is a layout verification step.
      *
-     * @return true if the fullPage flag is true, or if the instruction contains (visual: full), (visual:full), false otherwise
+     * @return true if the instruction indicates a layout verification, false otherwise
+     */
+    @JsonIgnore
+    public boolean isLayoutStep()
+    {
+        if (this.instruction == null)
+        {
+            return false;
+        }
+        return LAYOUT_PATTERN.matcher(this.instruction).find();
+    }
+
+    /**
+     * Checks if this step is either a visual or layout verification step.
+     *
+     * @return true if the step has a visual or layout directive, false otherwise
+     */
+    @JsonIgnore
+    public boolean isVisualOrLayoutStep()
+    {
+        return isVisualStep() || isLayoutStep();
+    }
+
+    /**
+     * Checks if this step explicitly requests full-page visual or layout context.
+     *
+     * @return true if the fullPage flag is true, or if the instruction contains (visual: full) or (layout: full), false otherwise
      */
     @JsonIgnore
     public boolean isFullPageVisualStep()
@@ -996,7 +1077,7 @@ public final class PlaybookStep
         {
             return false;
         }
-        return VISUAL_FULL_PATTERN.matcher(this.instruction).find() || LAYOUT_PATTERN.matcher(this.instruction).find();
+        return VISUAL_FULL_PATTERN.matcher(this.instruction).find() || LAYOUT_FULL_PATTERN.matcher(this.instruction).find();
     }
 
     /**
@@ -1241,7 +1322,15 @@ public final class PlaybookStep
      */
     public Double getSsimMinScore()
     {
-        return this.ssimMinScore;
+        if (this.ssimMinScore != null)
+        {
+            return this.ssimMinScore;
+        }
+        if (isLayoutStep())
+        {
+            return DEFAULT_LAYOUT_SSIM_MIN_SCORE;
+        }
+        return null;
     }
 
     /**

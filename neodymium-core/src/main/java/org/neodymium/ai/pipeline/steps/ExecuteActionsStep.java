@@ -569,7 +569,7 @@ public final class ExecuteActionsStep
                         final long settleMs = AiConfiguration.getInstance().getVisualPostActionSettleMs();
                         if (settleMs > 0 && hasMutatingAction)
                         {
-                            final boolean isVisualRequired = step != null && step.isVisualStep();
+                            final boolean isVisualRequired = step != null && step.isVisualOrLayoutStep();
                             if (isVisualRequired)
                             {
                                 try
@@ -587,7 +587,7 @@ public final class ExecuteActionsStep
                             }
                         }
 
-                        final boolean isVisualRequired = (step != null && step.isVisualStep())
+                        final boolean isVisualRequired = (step != null && step.isVisualOrLayoutStep())
                                 || AiConfiguration.getInstance().isSemanticVerificationEnabled()
                                 || !isReplay
                                 || AiConfiguration.getInstance().isReplayScreenshotCaptureEnabled(mode);
@@ -612,13 +612,13 @@ public final class ExecuteActionsStep
                 }
             });
 
-            if (isReplay && step != null && step.isVisualStep() && !visualBaselineGateStep.isPureVerification())
+            if (isReplay && step != null && step.isVisualOrLayoutStep() && !visualBaselineGateStep.isPureVerification())
             {
                 standardFlow.add(visualBaselineGateStep::executePostActionCheck);
             }
 
             if (AiConfiguration.getInstance().isSemanticVerificationEnabled()
-                || (step != null && step.isVisualStep()))
+                || (step != null && step.isVisualOrLayoutStep()))
             {
                 standardFlow.add(verifyStep);
             }

@@ -19,6 +19,7 @@
 package org.neodymium.ai.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -154,6 +155,144 @@ final class ScreenshotHasherTest
         assertEquals(128, downscaled.getWidth());
         assertEquals(128, downscaled.getHeight());
         assertEquals(BufferedImage.TYPE_BYTE_GRAY, downscaled.getType());
+    }
+
+    @Test
+    void testDownsampleProgressiveColor_preservesRgb()
+    {
+        final BufferedImage large = createSolidColorImage(Color.MAGENTA, 1920, 1080);
+        final BufferedImage downscaled = ScreenshotHasher.downsampleProgressiveColor(large, 128);
+
+        assertNotNull(downscaled);
+        assertEquals(128, downscaled.getWidth());
+        assertEquals(128, downscaled.getHeight());
+        assertEquals(BufferedImage.TYPE_INT_RGB, downscaled.getType());
+
+        final Color sample = new Color(downscaled.getRGB(64, 64));
+        assertEquals(255, sample.getRed());
+        assertEquals(0, sample.getGreen());
+        assertEquals(255, sample.getBlue());
+    }
+
+    @Test
+    void testComputeColorSsimMatrix_andCalculateColorSsim_identicalImages() throws IOException
+    {
+        final BufferedImage img = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(Color.RED);
+        g.fillRect(0, 0, 300, 100);
+        g.setColor(Color.GREEN);
+        g.fillRect(0, 100, 300, 100);
+        g.setColor(Color.BLUE);
+        g.fillRect(0, 200, 300, 100);
+        g.dispose();
+
+        final String base64 = encodeToBase64Png(img);
+        final String matrix1 = ScreenshotHasher.computeColorSsimMatrix(base64);
+        final String matrix2 = ScreenshotHasher.computeColorSsimMatrix(base64);
+
+        assertNotNull(matrix1);
+        assertEquals(matrix1, matrix2);
+        assertTrue(ScreenshotHasher.isColorMatrix(matrix1));
+        assertEquals(128, ScreenshotHasher.getMatrixDimension(matrix1));
+
+        final double score = ScreenshotHasher.calculateColorSsim(matrix1, matrix2);
+        assertEquals(1.0, score, 0.001, "Identical color images must score 1.0");
+
+        // Verify delegation in calculateSsim
+        final double delegatedScore = ScreenshotHasher.calculateSsim(matrix1, matrix2);
+        assertEquals(1.0, delegatedScore, 0.001, "calculateSsim must delegate to calculateColorSsim");
+    }
+
+    @Test
+    void testComputeColorSsimMatrix_colorShiftDetection() throws IOException
+    {
+        // Blue themed wireframe page
+        final BufferedImage imgBlue = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = imgBlue.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 300, 300);
+        g1.setColor(new Color(37, 99, 235)); // Royal Blue
+        g1.fillRect(0, 0, 300, 60); // Header
+        g1.fillRect(20, 100, 100, 40); // Primary button
+        g1.fillRect(140, 100, 100, 40); // Secondary button
+        g1.dispose();
+
+        // Red themed wireframe page (identical geometry, brand color regression)
+        final BufferedImage imgRed = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = imgRed.createGraphics();
+        g2.setColor(Color.WHITE);
+        g2.fillRect(0, 0, 300, 300);
+        g2.setColor(new Color(220, 38, 38)); // Crimson Red
+        g2.fillRect(0, 0, 300, 60); // Header
+        g2.fillRect(20, 100, 100, 40); // Primary button
+        g2.fillRect(140, 100, 100, 40); // Secondary button
+        g2.dispose();
+
+        final String base64Blue = encodeToBase64Png(imgBlue);
+        final String base64Red = encodeToBase64Png(imgRed);
+
+        final String colorMatrixBlue = ScreenshotHasher.computeColorSsimMatrix(base64Blue);
+        final String colorMatrixRed = ScreenshotHasher.computeColorSsimMatrix(base64Red);
+
+        final double colorScore = ScreenshotHasher.calculateColorSsim(colorMatrixBlue, colorMatrixRed);
+        assertTrue(colorScore < 0.85, "Brand color theme shift must score < 0.85, got: " + colorScore);
+    }
+
+    @Test
+    void testComputeColorSsimMatrix_structuralBreak() throws IOException
+    {
+        // 3-column layout
+        final BufferedImage imgColumns = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = imgColumns.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 300, 300);
+        g1.setColor(Color.DARK_GRAY);
+        g1.fillRect(10, 10, 80, 280);
+        g1.fillRect(110, 10, 80, 280);
+        g1.fillRect(210, 10, 80, 280);
+        g1.dispose();
+
+        // Collapsed layout: single narrow block
+        final BufferedImage imgCollapsed = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = imgCollapsed.createGraphics();
+        g2.setColor(Color.WHITE);
+        g2.fillRect(0, 0, 300, 300);
+        g2.setColor(Color.DARK_GRAY);
+        g2.fillRect(10, 10, 280, 50);
+        g2.dispose();
+
+        final String base64Col = encodeToBase64Png(imgColumns);
+        final String base64Collapse = encodeToBase64Png(imgCollapsed);
+
+        final String matrixCol = ScreenshotHasher.computeColorSsimMatrix(base64Col);
+        final String matrixCollapse = ScreenshotHasher.computeColorSsimMatrix(base64Collapse);
+
+        final double score = ScreenshotHasher.calculateColorSsim(matrixCol, matrixCollapse);
+        assertTrue(score < 0.80, "Structural collapse must score < 0.80, got: " + score);
+    }
+
+    @Test
+    void testCalculateColorSsim_nullAndInvalid()
+    {
+        assertEquals(0.0, ScreenshotHasher.calculateColorSsim(null, null), 0.001);
+        assertEquals(0.0, ScreenshotHasher.calculateColorSsim("invalid", "invalid"), 0.001);
+        assertFalse(ScreenshotHasher.isColorMatrix(null));
+        assertFalse(ScreenshotHasher.isColorMatrix(""));
+        assertFalse(ScreenshotHasher.isColorMatrix("notBase64"));
+    }
+
+    @Test
+    void testMatrixToDataUri_colorMatrix() throws IOException
+    {
+        final BufferedImage img = createSolidColorImage(Color.ORANGE, 200, 200);
+        final String base64 = encodeToBase64Png(img);
+        final String colorMatrix = ScreenshotHasher.computeColorSsimMatrix(base64);
+
+        assertNotNull(colorMatrix);
+        final String dataUri = ScreenshotHasher.matrixToDataUri(colorMatrix);
+        assertNotNull(dataUri);
+        assertTrue(dataUri.startsWith("data:image/png;base64,"));
     }
 
     private BufferedImage createSolidColorImage(final Color color, final int width, final int height)

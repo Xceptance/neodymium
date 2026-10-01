@@ -47,6 +47,7 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [6.3 Post-Action AI Outcome Verification](#63-post-action-ai-outcome-verification)
    - [6.4 Universal Candidate Playbook Capture & Invalidation Lifecycle](#64-universal-candidate-playbook-capture--invalidation-lifecycle)
    - [6.5 Visual Root Cause Analysis (RCA) & Failure Diagnostics](#65-visual-root-cause-analysis-rca--failure-diagnostics)
+   - [6.6 Fuzzy Layout Snapshot Testing ((layout) & (layout: full))](#66-fuzzy-layout-snapshot-testing-layout--layout-full)
 7. [Performance, Caching, Telemetry & Assertions](#7-performance-caching-telemetry--assertions)
    - [7.1 In-Memory LLM Request Caching (`@AiLlmCache`)](#71-in-memory-llm-request-caching-aillmcache)
    - [7.2 Event-Driven Architecture, EventBus & HUD Overlays](#72-event-driven-architecture-eventbus--hud-overlays)
@@ -568,18 +569,33 @@ Explicitly sets the initial DOM context fidelity level for this specific playboo
 * **Syntax Examples**: `(context: none)`, `(context: lean)`, `(context: minimal)`, `(contextlevel=standard)`, `(contextlevel: rich)`
 * **LLM Payload Cleanliness**: Dynamically parsed and stripped at step parsing time (`PlaybookStep`), ensuring the natural language prompt sent to the LLM remains clean.
 
-##### `(visual)` / `(visual: full)` / `(layout)`
-Triggers visual execution mode with a page screenshot payload.
-* **`(visual)`**: Triggers standard visual execution at `ContextLevel.VISUAL` (URL + Title header only, 0 DOM element nodes), capturing a standard viewport screenshot matching the active browser window size on the initial attempt (~2,800 tokens).
-* **`(visual: full)`**: Triggers visual execution starting at ultra-lean `ContextLevel.VISUAL` (URL + Title header only, 0 DOM element nodes) while forcing full-page screenshot capture (full scrollable document height beyond the fold with a visual viewport border overlay) immediately on the initial attempt (~5,000–8,000 tokens).
-* **`(layout)`**: Triggers maximum multimodal execution starting directly at `ContextLevel.VISUAL_RICH` (full DOM tree context) while forcing full-page screenshot capture on the initial attempt.
-* **Persistent Full-Page Flag During Escalation**: Stored in step transient data as `KEY_IS_FULL_PAGE_SCREENSHOT = true`. If visual evaluation fails or requires element interaction, escalation (`VISUAL` $\rightarrow$ `VISUAL_LEAN` $\rightarrow$ `VISUAL_RICH`) **continuously preserves full-page screenshot capture**. It will **never** revert to a small viewport screenshot during escalations.
-* **Author Tag Protection**: Explicit `(visual)`, `(visual: full)`, and `(layout)` tags set by the test author are protected from being overwritten or downgraded.
+##### `(visual)` vs `(layout)` Directives
+
+Neodymium AI provides two complementary visual snapshot testing modes: **pixel-exact visual verification** (`(visual)`) and **content-agnostic structural layout verification** (`(layout)`).
+
+| Directive | Scope | Inspection Mode | SSIM Matrix Format | Default Threshold |
+| :--- | :--- | :--- | :--- | :--- |
+| **`(visual)`** | Viewport | Pixel-exact | $128 \times 128$ 8-bit Luminance | `0.99` |
+| **`(visual: full)`**, `(visual-full)`, `(visual_full)` | Full Page | Pixel-exact | $128 \times 128$ 8-bit Luminance | `0.99` |
+| **`(layout)`** | Viewport | Color wireframe | $128 \times 128 \times 3$ RGB Channels | `0.92` |
+| **`(layout: full)`**, `(layout-full)`, `(layout_full)` | Full Page | Color wireframe | $128 \times 128 \times 3$ RGB Channels | `0.92` |
+
+* **`(visual)`**: Captures a standard viewport screenshot matching the active browser window size and records a $128 \times 128$ luminance SSIM baseline matrix. Intended for strict, pixel-exact visual regression testing.
+* **`(visual: full)` / `(visual-full)` / `(visual_full)`**: Captures the complete scrollable page height beyond the fold and records a full-page luminance SSIM baseline matrix.
+* **`(layout)`**: Injects a client-side color wireframe transformation (`neodymium-color-wireframe.js`), turning text into solid skeleton bars and images into geometric placeholders while preserving computed brand styling, typography colors, margins, and alignments. Records a $128 \times 128 \times 3$ (49,152-byte) RGB color SSIM matrix.
+* **`(layout: full)` / `(layout-full)` / `(layout_full)`**: Applies the color wireframe transformation across the full scrollable page height and records a full-page color SSIM matrix baseline.
+* **Custom Tolerance Thresholds**: Authors can override default thresholds directly in the directive or via standalone threshold tags:
+  - `Verify homepage header (layout: threshold: 0.90)`
+  - `Verify hero layout (layout: 95%)`
+  - `Verify product catalog layout (layout: full, minScore: 0.88)`
+  - `Verify status badge (visual: min-score: 0.98)`
+* **Persistent Full-Page Flag During Escalation**: Stored in step transient data as `KEY_IS_FULL_PAGE_SCREENSHOT = true`. Escalation (`VISUAL` $\rightarrow$ `VISUAL_LEAN` $\rightarrow$ `VISUAL_RICH`) **continuously preserves full-page screenshot capture**.
+* **Author Tag Protection**: Explicit `(visual)`, `(visual: full)`, and `(layout)` tags set by the test author are strictly protected from being overwritten or downgraded.
 
 #### Runtime Instruction Preparation
-Before compiling prompts or sending request payloads to the LLM, the framework executes a dedicated instruction preparation step (`ExecuteActionsStep.prepareInstruction`). It dynamically strips most explicit control tags case-insensitively (`(no-replay)`, `(bug)`, `(continue-on-error)`, `(no-healing)`, `(optional)`, `(timeout: ...)`, `(contextlevel=...)`, `(context: ...)`, `(visual)`, `(visual: full)`), preventing internal test configurations from polluting the natural language prompts sent to the LLM.
+Before compiling prompts or sending request payloads to the LLM, the framework executes a dedicated instruction preparation step (`ExecuteActionsStep.prepareInstruction`). It dynamically strips internal runtime control tags case-insensitively (`(no-replay)`, `(bug)`, `(continue-on-error)`, `(no-healing)`, `(optional)`, `(timeout: ...)`, `(contextlevel=...)`, `(context: ...)`, `(visual)`, `(visual: full)`, `(visual-full)`), preventing internal test configurations from polluting natural language prompts sent to the LLM.
 
-*(Note: The `(hint: <selector>)` and `(layout)` tags are intentionally **not** stripped, as the LLM requires their embedded string content and context to generate the correct structural actions.)*
+*(Note: The `(hint: <selector>)` and `(layout)` / `(layout: full)` directives are intentionally **not** stripped, as the LLM uses their presence and context to verify structural composition and avoid DOM micro-assertions.)*
 
 ---
 
@@ -1225,6 +1241,117 @@ When a test step fails during execution, Neodymium AI automatically captures the
 
 ```properties
 neodymium.ai.visualRca.enabled=true
+```
+
+---
+
+### 6.6 Fuzzy Layout Snapshot Testing (`(layout)` & `(layout: full)`)
+
+Traditional visual regression testing tools perform pixel-by-pixel image comparisons (`toMatchSnapshot()`). While effective for static design systems, pixel-diffing is notoriously brittle in modern web applications where:
+* Content changes regularly (promotional copy, banner headlines, articles, blog posts).
+* Dynamic data fluctuates (stock levels, cart counts, live currency conversions, dates).
+* Images and avatars vary per environment, user session, or product category.
+
+Such changes cause pixel-diff tests to fail continually, even though the page layout, component hierarchy, brand styling, and grid alignment remain 100% correct.
+
+**Fuzzy Layout Snapshot Testing** solves this fundamental problem. Instead of comparing raw pixels, Neodymium AI captures and compares the **underlying spatial and stylistic structure** of the page.
+
+#### A. Client-Side Color Wireframing Engine (`neodymium-color-wireframe.js`)
+
+When a step commands `(layout)` or `(layout: full)`, Neodymium AI executes a client-side JavaScript injection (`neodymium-color-wireframe.js`) immediately prior to screenshot capture:
+
+```mermaid
+flowchart LR
+    LivePage["Live Web Page<br/>(Dynamic Text & Images)"] --> Inject["Wireframe Injection<br/>(neodymium-color-wireframe.js)"]
+    Inject --> Skeleton["Color Skeleton<br/>(currentColor Bars & Placeholders)"]
+    Skeleton --> Capture["Capture Screenshot<br/>(Viewport or Full-Page)"]
+    Capture --> Matrix["Color SSIM Matrix<br/>(128x128x3 RGB Bytes)"]
+```
+
+1. **Text Redaction via `currentColor`**:
+   All typography and text nodes (`p`, `span`, `h1`-`h6`, `a`, `button`, `label`, `li`, `td`) are styled with:
+   ```css
+   -webkit-text-fill-color: transparent !important;
+   background-color: currentColor !important;
+   border-radius: 3px !important;
+   box-decoration-break: clone !important;
+   -webkit-box-decoration-break: clone !important;
+   ```
+   This transforms text lines into solid skeleton bars matching their exact rendered width and height while **preserving the computed CSS brand color** of the element (e.g., navy headers, terracotta subheadings, dark neutral body copy). Changing the text from `"Summer Sale - 20% Off"` to `"Autumn Arrivals - Shop Now"` preserves the structural block width and color without triggering a visual defect.
+
+2. **Media Neutralization**:
+   All raster images (`img`, `picture`, `video`, `canvas`, `iframe`, and elements with CSS `background-image`) have their content replaced with uniform neutral placeholder boxes (`#E5E7EB` with subtle borders) using `object-position: -99999px !important;`. The bounding box, aspect ratio, and layout footprint are fully tested, but image asset changes do not cause false positives.
+
+3. **SVG & Icon Wireframing**:
+   Inline SVG elements, icon fonts, and decorative vectors are rendered as simplified wireframe shapes with consistent stroke/fill neutralization.
+
+4. **DOM Restoration**:
+   The injected stylesheet and modifications are scoped and cleanly removed immediately after capture, leaving the browser session in its original state.
+
+#### B. 3-Channel Color SSIM Matrix ($128 \times 128 \times 3$)
+
+Standard visual testing computes an 8-bit luminance matrix (grayscale brightness). For layout testing, Neodymium AI employs a 3-channel RGB matrix via `ScreenshotHasher.computeColorSsimMatrix`:
+
+1. **Progressive Bilinear Downsampling**: Downsamples the wireframed screenshot progressively to a $128 \times 128$ grid.
+2. **49,152-Byte RGB Vector**: Extracts 3 bytes per cell ($R, G, B \in [0..255]$), serializing the result as a compact Base64 string into `step.setScreenshotHash()`.
+3. **Dual Spatial-Color Sensitivity**: The resulting matrix verifies both:
+   * **Spatial Structure**: Grid column counts, section margins, card dimensions, button placements, flexbox wrapping, and responsive breakpoints.
+   * **Brand Color Palette**: Background card fills, header bar tints, navigation accents, and hero section gradients.
+
+#### C. Tolerance Thresholds & Gating
+
+Layout steps use a default SSIM acceptance threshold of **`0.92`** (`PlaybookStep.DEFAULT_LAYOUT_SSIM_MIN_SCORE`), compared to `0.99` for pixel-exact `(visual)`:
+
+* **Tolerant to Minor Flow Variations**: Minor differences in character wrap, font metrics across operating systems, or line count adjustments pass comfortably ($\text{SSIM} \approx 0.94 - 0.98$).
+* **Intolerant to Structural Defects**: Missing navigation bars, collapsed multi-column grids, missing footer sections, broken flex layouts, or dropped CSS stylesheets cause catastrophic structural divergence ($\text{SSIM} < 0.85$), failing the test conclusively.
+
+Authors can override the threshold per step:
+```yaml
+steps: |
+  Open ${app.url}/catalog
+  Verify product grid layout (layout: threshold: 0.90)
+  Verify checkout summary styling (layout: full, min-score: 0.95)
+```
+
+#### D. Deterministic Zero-Token Replay ($< 15\text{ms}$)
+
+During test authoring or recording (`FORCE_RECORDING`), the LLM inspects the page and validates the layout visually. Once recorded, the color SSIM matrix is stored in the companion JSON file.
+
+On subsequent runs (`REPLAY_STRICT`, `REPLAY_WITH_HEALING`):
+1. `VisualBaselineGateStep` executes before any LLM invocation.
+2. The browser renders the page, injects the color wireframe, captures the screenshot, and computes the color SSIM matrix.
+3. Neodymium compares the live matrix against the recorded baseline in memory across local $8 \times 8$ blocks.
+4. **Execution completes in $< 15\text{ms}$ with 0 LLM calls, 0 token costs, and 0 network roundtrips.**
+
+#### E. Playbook Authoring Examples
+
+##### 1. Plain-Text Playbook (YAML)
+```yaml
+name: Homepage Layout Regression Test
+steps: |
+  Open https://example.com in the browser
+  Verify header navigation, hero banner, and featured categories (layout)
+  Scroll window to bottom
+  Verify full page structure from top to bottom (layout: full)
+```
+
+##### 2. Programmatic Execution (Java)
+```java
+@AiPlaybook("/playbooks/integration/programmatic/HomepageLayoutTest.yaml")
+@AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+public void testHomepageLayout(final AiSession session) throws Exception
+{
+    session.execute("""
+        steps: |
+          Open ${test.page.url} in the browser
+          Verify homepage layout and brand styling (layout)
+          Verify entire page structure from header to footer (layout: full)
+        """)
+        .verifyMetrics()
+        .hasStepCount(3)
+        .hasNoSoftFailures()
+        .onReplay(m -> m.hasNoLlmCalls().wasNotHealed().hasAllStepsReplayed());
+}
 ```
 
 ---

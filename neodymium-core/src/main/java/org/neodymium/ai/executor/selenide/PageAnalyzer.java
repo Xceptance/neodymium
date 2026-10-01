@@ -71,6 +71,8 @@ public class PageAnalyzer
 
     private static final String FINGERPRINT_JS_FUNCTIONS = loadResource("ai-scripts/neodymium-dom-helpers.js");
 
+    private static final String COLOR_WIREFRAME_JS = loadResource("ai-scripts/neodymium-color-wireframe.js");
+
     private final WebDriver providedDriver;
 
     /**
@@ -1410,6 +1412,51 @@ public class PageAnalyzer
         {
             throw new RuntimeException("Failed to load resource: " + resourceName, e);
         }
+    }
+
+    /**
+     * Injects the transient color wireframe stylesheet into the active page.
+     * Neutralizes dynamic media and text while preserving layout geometry and brand colors.
+     *
+     * @param explicitDriver driver override to evaluate against, or null to resolve default
+     */
+    public void applyColorWireframe(final WebDriver explicitDriver)
+    {
+        final WebDriver activeDriver = resolveDriver(explicitDriver);
+        if (activeDriver instanceof final JavascriptExecutor js)
+        {
+            js.executeScript(COLOR_WIREFRAME_JS + "; if (window.__neodymiumApplyColorWireframe) { window.__neodymiumApplyColorWireframe(); }");
+        }
+    }
+
+    /**
+     * Injects the transient color wireframe stylesheet into the active page using the default driver.
+     */
+    public void applyColorWireframe()
+    {
+        applyColorWireframe(null);
+    }
+
+    /**
+     * Removes the transient color wireframe stylesheet from the active page.
+     *
+     * @param explicitDriver driver override to evaluate against, or null to resolve default
+     */
+    public void removeColorWireframe(final WebDriver explicitDriver)
+    {
+        final WebDriver activeDriver = resolveDriver(explicitDriver);
+        if (activeDriver instanceof final JavascriptExecutor js)
+        {
+            js.executeScript("if (window.__neodymiumRemoveColorWireframe) { window.__neodymiumRemoveColorWireframe(); }");
+        }
+    }
+
+    /**
+     * Removes the transient color wireframe stylesheet from the active page using the default driver.
+     */
+    public void removeColorWireframe()
+    {
+        removeColorWireframe(null);
     }
 
     /**
