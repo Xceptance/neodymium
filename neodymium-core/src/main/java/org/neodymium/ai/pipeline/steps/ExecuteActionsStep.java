@@ -206,9 +206,22 @@ public final class ExecuteActionsStep
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
             step.setStatus(PlaybookStepStatus.RUNNING);
             final String rawInstruction = step.hasSubSteps() ? step.getFullInstruction() : step.getInstruction();
-            final String resolvedInstruction = (contextState.getSessionData() != null && rawInstruction != null)
-                ? contextState.getSessionData().resolveAvailableVariables(rawInstruction)
-                : rawInstruction;
+            final String resolvedInstruction;
+            if (contextState.getSessionData() != null && rawInstruction != null)
+            {
+                if (!step.hasSubSteps())
+                {
+                    resolvedInstruction = contextState.getSessionData().resolveVariables(rawInstruction);
+                }
+                else
+                {
+                    resolvedInstruction = contextState.getSessionData().resolveAvailableVariables(rawInstruction);
+                }
+            }
+            else
+            {
+                resolvedInstruction = rawInstruction;
+            }
             final String preparedInstruction = prepareInstruction(resolvedInstruction);
             contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", resolvedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
