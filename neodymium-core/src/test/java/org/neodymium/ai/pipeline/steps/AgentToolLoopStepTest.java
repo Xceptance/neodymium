@@ -3117,6 +3117,60 @@ public class AgentToolLoopStepTest
             AiConfiguration.resetInstance();
         }
     }
+
+    @Test
+    public void testExplicitStepContextLevelOverridesConfiguredDefaultAndTransientState() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<div>initial</div>", Collections.emptyList(), "DOM_LIGHT"));
+
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.STANDARD);
+
+        final PlaybookStep playbookStep = new PlaybookStep("Scroll to the footer (context: minimal)");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, playbookStep.getInstruction());
+
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("call-1", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+        step.execute(this.context);
+
+        final List<ContextLevel> capturedLevels = executor.getCapturedContextLevels();
+        Assertions.assertFalse(capturedLevels.isEmpty(), "captureState should have been called.");
+        Assertions.assertEquals(ContextLevel.MINIMAL, capturedLevels.get(0), "Explicit step tag (context: minimal) should override configured STANDARD default.");
+        Assertions.assertEquals(ContextLevel.MINIMAL, this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+    }
+
+    @Test
+    public void testExplicitStepContextNoneResolvesToHintZeroDom() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<div>initial</div>", Collections.emptyList(), "DOM_LIGHT"));
+
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.STANDARD);
+
+        final PlaybookStep playbookStep = new PlaybookStep("Scroll to the footer (context: none)");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, playbookStep.getInstruction());
+
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("call-1", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+        step.execute(this.context);
+
+        final List<ContextLevel> capturedLevels = executor.getCapturedContextLevels();
+        Assertions.assertFalse(capturedLevels.isEmpty(), "captureState should have been called.");
+        Assertions.assertEquals(ContextLevel.HINT, capturedLevels.get(0), "Explicit step tag (context: none) should resolve to HINT for zero-DOM capture.");
+        Assertions.assertEquals(ContextLevel.HINT, this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+    }
 }
 
 

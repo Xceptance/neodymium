@@ -334,8 +334,22 @@ public final class AgentToolLoopStep implements PipelineStep
                         : configuredDefault;
                 activeContextLevel = ContextLevel.clean(baseLevel);
 
-                // Visual tag check
-                if (isVisual)
+                // Explicit step context level tag takes strict precedence
+                if (step != null && step.getContextLevel() != null && !step.getContextLevel().isBlank())
+                {
+                    activeContextLevel = ContextLevel.fromString(step.getContextLevel(), activeContextLevel);
+                }
+                else if (rawInstruction != null)
+                {
+                    final Matcher ctxMatcher = PlaybookStep.CONTEXT_LEVEL_PATTERN.matcher(rawInstruction);
+                    if (ctxMatcher.find())
+                    {
+                        activeContextLevel = ContextLevel.fromString(ctxMatcher.group(1), activeContextLevel);
+                    }
+                }
+
+                // Visual tag check (only applied when step did not explicitly override context level)
+                if (isVisual && (step == null || step.getContextLevel() == null || step.getContextLevel().isBlank()))
                 {
                     if (!activeContextLevel.includesScreenshot())
                     {

@@ -300,13 +300,7 @@ public final class ExecuteActionsStep
 
             if (step.getContextLevel() != null && !step.getContextLevel().isBlank())
             {
-                try
-                {
-                    initialLevel = ContextLevel.valueOf(step.getContextLevel().toUpperCase().trim());
-                }
-                catch (final Exception ignored)
-                {
-                }
+                initialLevel = ContextLevel.fromString(step.getContextLevel(), initialLevel);
             }
 
             @SuppressWarnings("unchecked")
