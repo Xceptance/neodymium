@@ -41,6 +41,99 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261001-01] Conditional Include Main Step Recorded as Substep in Console Execution Reports
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`PreliminaryReportListener` / `ExecuteActionsStep` / `InteractiveStateBuilder`)
+- **Scope:** `Framework`
+- **Symptom:** In `console-execution-*.json` and execution reports for steps with conditional includes (e.g. `Add product to cart:` with child `- If (condition) then _include: ...`), the main step's conditional instruction was recorded as `Substep 0` inside its own `subSteps` array alongside the actual included steps, and `subSteps` of included steps contained nested duplicates of the main step.
+- **Root Cause:** When a parent step has a child step containing `_include:`, `PreliminaryReportListener` pre-populated `subSteps` with the conditional instruction as `Substep 0` prior to runtime include expansion. When `ExecuteActionsStep` and `IncludeAction` ran, `stepStats.getSubStats()` contained the container step, causing `mergeStepStats` to overwrite `Substep 0` with the conditional instruction.
+- **Detection Gap ("What did we miss?"):** Existing tests for `IncludeAction` verified step execution order and execution results, but did not assert that the report's `subSteps` array excludes the conditional include step itself.
+- **Resolution:** Updated `ExecuteActionsStep` to extract effective leaf sub-steps when populating sub-stats, updated `PreliminaryReportListener` to clean up intermediate container/include steps from `subSteps`, and updated `InteractiveStateBuilder` to filter out include container instructions during subStep serialization.
+- **Safety Net Added:** Added unit test `testConditionalIncludeSubStepsExcludesMainStep` in `SubStepReportingAndScopingTest.java`.
+
+### [DEF-20260930-07] Successful Executions Overwritten to Failed and SLF4J Warnings Extracted as Process Errors
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`AuraQueueService`)
+- **Scope:** `Framework`
+- **Symptom:** Successful test executions with completed steps (`totalSteps > 0`) in a multi-dataset batch were overwritten to status `"failed"` with SLF4J warning messages (e.g., `WARN ... BiDiException`) listed as `failureReason`.
+- **Root Cause:**
+  1. `AuraQueueService.executeQueue` updated all non-failed execution JSONs to `"failed"` when `isFailedRun` was true, missing the `isZeroStep` check to distinguish unexecuted tests from completed successful ones.
+  2. `extractSubprocessErrorMessage` checked `line.contains("WARN:")` with a required colon, failing to match SLF4J log lines (`[main] WARN ...`) which omit the colon, allowing lines containing `BiDiException:` to be parsed as error messages.
+- **Detection Gap ("What did we miss?"):** Tests did not assert that multi-dataset execution batches containing both a failing test and a passing test retain `"passed"` status for the completed test, nor did tests cover SLF4J `WARN` log formats without trailing colons.
+- **Resolution:** Re-enforced `isZeroStep` check in `AuraQueueService` when updating non-failed execution states on `isFailedRun`, and updated `extractSubprocessErrorMessage` to inspect `WARN` and `WARNING` without requiring trailing colons.
+- **Safety Net Added:** Added unit tests in `AuraQueueServiceTest.java` for SLF4J `WARN` filtering and zero-step status update bounds.
+
+### [DEF-20260930-06] Dynamically included playbook steps unlinked as sub-steps of active include step
+- **Date:** 2026-09-30
+- **Component:** `org.neodymium.ai.executor.selenide.plugins.IncludeAction`
+- **Scope:** `Framework`
+- **Symptom:** Playbook steps dynamically included at runtime via `include(...)` (such as inside conditional `If ... _include:` branches) executed as flat top-level steps on the execution context stack without being linked to the active `include` parent step in execution reports or console execution logs.
+- **Root Cause:** In `IncludeAction.java`, parsed steps from included playbooks were mapped to pipeline steps and pushed onto `ExecutionContext.runStack` without setting `subStep.setParent(currentStep)` or registering them under `currentStep.getSubSteps()`.
+- **Detection Gap ("What did we miss?"):** Tests for `IncludeAction` verified that included steps executed on the browser, but did not assert that dynamically included steps were attached as `subSteps` of the active `currentStep` in `ExecutionContext` and execution reports.
+- **Resolution:** Updated `IncludeAction.java` to retrieve the active `currentStep` from `ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP`, set `subStep.setParent(currentStep)` for each included step, and populate `currentStep.getSubSteps()`.
+- **Safety Net Added:** Verified dynamic sub-step linking across `PreliminaryReportListenerTest` and `SubStepReportingAndScopingTest`.
+
+
+### [DEF-20260930-05] IllegalArgumentException on natural language step list items containing colons or hints
+- **Date:** 2026-09-30
+- **Component:** `org.neodymium.ai.playbook.YamlPlaybookParser`
+- **Scope:** `Framework`
+- **Symptom:** Parsing playbooks with natural language YAML list steps containing colons within step text (such as `- Generate random email address (hint: use java method)`) fails with `java.lang.IllegalArgumentException: Invalid playbook step format in file: ... Expected string step, 'include' map, or 'instruction' map, but found map keys: [Generate random email address (hint]`.
+- **Root Cause:** SnakeYAML parses list items containing `: ` (`- key: value`) into single-entry `Map` objects. `YamlPlaybookParser.parseStepBlock` rejected single-entry maps whose scalar values did not contain an `include` keyword, failing to recognize natural language step instructions containing colons (such as parenthetical hints `(hint: ...)` or formatted text `Label: text`).
+- **Detection Gap ("What did we miss?"):** Unit tests only tested simple string list steps without inline colons or parenthetical hints containing `: `.
+- **Resolution:** In `YamlPlaybookParser.java`, updated single-entry map scalar handling in `parseStepBlock` to reconstruct `key + ": " + value` into a full step instruction for any single-entry map in a step list, while maintaining strict `IllegalArgumentException` validation for invalid multi-key step maps.
+- **Safety Net Added:** Added unit test `testParseYamlListStepWithParentheticalHintColon()` in `YamlPlaybookParserTest.java` validating natural language steps with colons in parenthetical hints or step text.
+
+### [DEF-20260930-04] IllegalArgumentException on YAML list steps containing colons or inline includes
+- **Date:** 2026-09-30
+- **Component:** `org.neodymium.ai.playbook.YamlPlaybookParser`
+- **Scope:** `Framework`
+- **Symptom:** Parsing playbooks containing list steps with colons in step text (such as `- ... and _include: fragment.steps`) fails with `java.lang.IllegalArgumentException: Invalid playbook step format in file: ... Expected string step, 'include' map, or 'instruction' map, but found map keys: [...]`.
+- **Root Cause:** SnakeYAML parses list items containing `: ` into single-entry `Map` objects. In `YamlPlaybookParser.parseStepBlock`, single-entry maps were only handled if the value was a `List` or `Map` (sub-steps) or if the key was exact `_include`/`instruction`. Single-entry maps with string/primitive values (resulting from natural language step lines containing colons or inline `_include:`) threw an `IllegalArgumentException`.
+- **Detection Gap ("What did we miss?"):** Unit tests in `YamlPlaybookParserTest` did not cover YAML list items containing inline colons (`:`) or inline `_include:` parameters within step text.
+- **Resolution:** In `YamlPlaybookParser.java`, extended single-entry map handling in `parseStepBlock` to reconstruct `key + ": " + value` into full step instruction text when the value is scalar (`String`, primitive, or `null`), correctly creating `PlaybookStep` instances or resolving inline include directives.
+- **Safety Net Added:** Added unit test `testParseYamlListStepWithInlineColonAndInclude()` in `YamlPlaybookParserTest.java` validating list steps containing inline colons and `_include:` targets.
+
+### [DEF-20260930-03] ClassCastException when parsing playbook fragments with top-level YAML array list
+- **Date:** 2026-09-30
+- **Component:** `org.neodymium.ai.playbook.YamlPlaybookParser`
+- **Scope:** `Framework`
+- **Symptom:** Parsing playbooks containing included fragment `.steps` files (or any YAML file structured as a top-level list `- ...`) fails with `java.lang.RuntimeException: Failed to parse playbook: <path> Caused by: java.lang.ClassCastException: class java.util.ArrayList cannot be cast to class java.util.Map`.
+- **Root Cause:** In `YamlPlaybookParser.java`, SnakeYAML's `yaml.load(fileContent)` was directly assigned to a `Map<String, Object>` variable. When an included fragment file (such as `checkout-with-paypal.steps` or `proceed-to-payment.steps`) contains a top-level YAML list (`- step1\n- step2`), `yaml.load(fileContent)` returns a `java.util.ArrayList`, causing an unhandled `ClassCastException`.
+- **Detection Gap ("What did we miss?"):** Existing `YamlPlaybookParserTest` unit tests only tested YAML files where the top-level structure was a YAML dictionary (e.g., `steps: ...`). There were no test cases for included fragment `.steps` files structured as top-level YAML array lists (`- ...`).
+- **Resolution:** Updated `YamlPlaybookParser.java` to capture the output of `yaml.load(fileContent)` as `Object loadedObject`. If `loadedObject` is a `Map<?, ?>`, process standard top-level keys (`data`, `steps`, `before`, `after`). If `loadedObject` is a `List<?>` or `String`, delegate directly to `parseStepBlock`.
+- **Safety Net Added:** Added unit test `testParseIncludedStepListFragment()` in `YamlPlaybookParserTest.java` validating recursive inclusion of fragment `.steps` files containing top-level YAML array lists.
+
+### [DEF-20260930-02] Main Page Console (Playbook & Queue) Hangs During Test Execution Under High Log Volume
+- **Date:** 2026-09-30
+- **Component:** `aura-manager` (`dashboard-runner.js`, `dashboard-styles.css`)
+- **Scope:** `Framework`
+- **Symptom:** The aura-manager main UI page (playbook & queue) freezes/hangs during test execution when large amounts of stdout/console logs are printed by the test process.
+- **Root Cause:** `dashboard-runner.js` invoked `localStorage.setItem('aura_previous_console_logs', terminalConsole.innerHTML)` synchronously on every single streamed log line. As log output grew to thousands of lines, writing multi-megabyte HTML strings synchronously to `localStorage` on the main JS thread dozens/hundreds of times per second blocked the browser event loop. Additionally, per-line unbatched DOM appends (`insertAdjacentHTML`) and layout queries (`innerText`) caused severe browser layout thrashing.
+- **Detection Gap ("What did we miss?"):** UI tests did not run stress tests with high-frequency console output streams to measure browser event-loop latency and DOM reflow overhead.
+- **Resolution:** Replaced per-line synchronous `localStorage` writes with debounced persistence (`debouncedSaveConsoleLogs`, throttled to 1 second), batched incoming log lines into single-pass DOM HTML appends (`appendLogsBatch`) per polling tick, replaced reflow-triggering `innerText` with `textContent` in filter updates, and added CSS layout containment (`contain: content`) to `#terminalConsole`—preserving 100% of all log lines without truncating output.
+- **Safety Net Added:** Updated `dashboard-runner.js` and `dashboard-styles.css` with batch DOM appends, debounced persistence, and `textContent` filtering.
+
+### [DEF-20260930-01] Aura Subprocess Playbook Parse Failures Logged as Passed in Console Execution Reports
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`AuraQueueService`)
+- **Scope:** `Framework`
+- **Symptom:** When a test subprocess fails due to playbook parsing errors (e.g., `Failed to parse playbook`), `console-execution-1.json` was retained with status `"passed"` and missing failure message.
+- **Root Cause:** `isFailedRun` in `AuraQueueService` did not account for `fileErrors`/`fileFailures` counters, and the execution JSON updater required `isZeroStep` (stepIndex == 0 && totalSteps == 0) to overwrite existing `"passed"` execution states.
+- **Detection Gap ("What did we miss?"):** Tests did not assert that existing `console-execution-*.json` files with non-zero step metrics are overridden to `"failed"` with `failureReason` when the batch subprocess fails.
+- **Resolution:** Updated `AuraQueueService` to include `fileErrors`/`fileFailures` in `isFailedRun`, relaxed `isZeroStep` restriction when `isFailedRun` is true to force-update non-failed execution states with `failureReason`, and expanded `extractSubprocessErrorMessage` trace parsing.
+- **Safety Net Added:** Added unit test `testExtractSubprocessErrorMessageAndExecutionStatusUpdateOnParseError` in `AuraQueueServiceTest.java`.
+
+### [DEF-20260929-01] Static Includes Create Synthetic Wrapper Step Nodes and Duplicate Substeps in Console Execution Reports
+- **Date:** 2026-09-29
+- **Component:** `neodymium-core` (`playbook-parser` / `console-reporting`)
+- **Scope:** `Framework`
+- **Symptom:** Unconditional static includes (`_include: file.steps`) generated synthetic container step nodes with duplicated substeps in `console-execution.json` instead of clean inlined top-level steps.
+- **Root Cause:** `YamlPlaybookParser` wrapped static include steps inside a synthetic `PlaybookStep("_include: ...")` container and assigned `subStep.setParent(containerStep)`. Even after `flattenSteps()` flattened `flatSteps`, child steps retained `parent != null`, causing `PreliminaryReportListener` to reconstruct parent-child step hierarchies in `TestExecutionReport`.
+- **Detection Gap ("What did we miss?"):** `YamlPlaybookParserTest` verified step counts after flattening but did not assert `parent == null` or check step hierarchy rendering for static includes.
+- **Resolution:** Updated `YamlPlaybookParser` to inline static include steps directly into the playbook step list without synthetic wrapper nodes or parent links, keeping their origin `sourceFile` and `lineNumber` intact.
+- **Safety Net Added:** Added unit tests in `YamlPlaybookParserTest` asserting `steps.size() == 5`, `parent == null`, `subSteps.isEmpty()`, and correct origin source file metadata for inlined static include steps.
+
 ### [DEF-20260928-07] AiSession Default Mock LLM Provider Returns Empty Tool Calls Breaking LLM-Mode Unit Tests
 - **Date:** 2026-09-28
 - **Component:** `neodymium-core` (`ai-session` / `mock-testing` / `agent-loop`)

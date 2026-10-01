@@ -661,14 +661,18 @@ public final class ExecuteActionsStep
                     if (statsObj instanceof StepStats stepStats && stepStats.getSubStats().isEmpty())
                     {
                         final boolean replayed = stepStats.isReplayed();
-                        for (final PlaybookStep sub : step.getSubSteps())
+                        final List<PlaybookStep> leafSubSteps = getEffectiveLeafSubSteps(step.getSubSteps());
+                        final long leafDuration = step.getDurationMs() != null && !leafSubSteps.isEmpty()
+                            ? step.getDurationMs() / leafSubSteps.size()
+                            : childDuration;
+                        for (final PlaybookStep sub : leafSubSteps)
                         {
                             final String rawSub = sub.getInstruction();
                             final String resSub = c.getSessionData() != null
                                 ? c.getSessionData().resolveAvailableVariables(rawSub)
                                 : rawSub;
                             final StepStats subStats = new StepStats(resSub, stepStats.getStartTime());
-                            subStats.setDurationMs(childDuration);
+                            subStats.setDurationMs(leafDuration);
                             subStats.setReplayed(replayed);
                             stepStats.getSubStats().add(subStats);
                         }
@@ -849,5 +853,26 @@ public final class ExecuteActionsStep
         }
 
         return -1;
+    }
+
+    private static List<PlaybookStep> getEffectiveLeafSubSteps(final List<PlaybookStep> subSteps)
+    {
+        final List<PlaybookStep> result = new ArrayList<>();
+        if (subSteps == null)
+        {
+            return result;
+        }
+        for (final PlaybookStep sub : subSteps)
+        {
+            if (sub.hasSubSteps())
+            {
+                result.addAll(getEffectiveLeafSubSteps(sub.getSubSteps()));
+            }
+            else if (sub.getInstruction() == null || !sub.getInstruction().contains("_include:"))
+            {
+                result.add(sub);
+            }
+        }
+        return result;
     }
 }
