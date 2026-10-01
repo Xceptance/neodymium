@@ -1112,27 +1112,92 @@ public final class BrowserToolProvider
                         if (txt === target && exactTextIdx === -1) exactTextIdx = i;
                         if (txt && txt.indexOf(target) !== -1 && containsTextIdx === -1) containsTextIdx = i;
                     }
-                    if (preferVal && exactValIdx !== -1) return 'value';
-                    if (exactTextIdx !== -1) return 'text';
-                    if (exactValIdx !== -1) return 'value';
-                    if (containsTextIdx !== -1) return 'containsText';
-                    return null;
+
+                    var chosenIdx = -1;
+                    var strategy = null;
+                    if (preferVal && exactValIdx !== -1) { chosenIdx = exactValIdx; strategy = 'value'; }
+                    else if (exactTextIdx !== -1) { chosenIdx = exactTextIdx; strategy = 'text'; }
+                    else if (exactValIdx !== -1) { chosenIdx = exactValIdx; strategy = 'value'; }
+                    else if (containsTextIdx !== -1) { chosenIdx = containsTextIdx; strategy = 'containsText'; }
+
+                    if (chosenIdx === -1) return null;
+
+                    var isVisible = false;
+                    try {
+                        var style = window.getComputedStyle ? window.getComputedStyle(sel) : null;
+                        var notHiddenStyle = !style || (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0');
+                        var rect = sel.getBoundingClientRect ? sel.getBoundingClientRect() : null;
+                        var isClippedOrTiny = !rect || rect.width <= 1 || rect.height <= 1;
+                        var isAriaHidden = sel.getAttribute('aria-hidden') === 'true';
+                        var isClipped = style && style.clip && style.clip.indexOf('rect(0') !== -1;
+                        isVisible = notHiddenStyle && !isClippedOrTiny && !isAriaHidden && !isClipped;
+                    } catch (e) {
+                        isVisible = false;
+                    }
+
+                    if (!isVisible) {
+                        sel.selectedIndex = chosenIdx;
+                        sel.options[chosenIdx].selected = true;
+                        sel.value = sel.options[chosenIdx].value;
+                        try {
+                            sel.dispatchEvent(new Event('input', { bubbles: true }));
+                            sel.dispatchEvent(new Event('change', { bubbles: true }));
+                        } catch (e) {
+                            var ev = document.createEvent('HTMLEvents');
+                            ev.initEvent('change', true, true);
+                            sel.dispatchEvent(ev);
+                        }
+                        if (window.jQuery) {
+                            try { window.jQuery(sel).trigger('change'); } catch(e) {}
+                        }
+                        return 'domSelected';
+                    }
+
+                    return strategy;
                     """;
                 final Object matchStrategy = js.executeScript(script, el, target, preferValue);
-                if ("value".equals(matchStrategy))
+                if ("domSelected".equals(matchStrategy))
                 {
-                    el.selectOptionByValue(target);
                     return;
+                }
+                else if ("value".equals(matchStrategy))
+                {
+                    try
+                    {
+                        el.selectOptionByValue(target);
+                        return;
+                    }
+                    catch (final Exception e)
+                    {
+                        applyDomSelectFallback(js, el, target, preferValue);
+                        return;
+                    }
                 }
                 else if ("text".equals(matchStrategy))
                 {
-                    el.selectOption(target);
-                    return;
+                    try
+                    {
+                        el.selectOption(target);
+                        return;
+                    }
+                    catch (final Exception e)
+                    {
+                        applyDomSelectFallback(js, el, target, preferValue);
+                        return;
+                    }
                 }
                 else if ("containsText".equals(matchStrategy))
                 {
-                    el.selectOptionContainingText(target);
-                    return;
+                    try
+                    {
+                        el.selectOptionContainingText(target);
+                        return;
+                    }
+                    catch (final Exception e)
+                    {
+                        applyDomSelectFallback(js, el, target, preferValue);
+                        return;
+                    }
                 }
             }
             catch (final Exception ignored)
@@ -1148,13 +1213,20 @@ public final class BrowserToolProvider
             }
             catch (final Exception e)
             {
-                try
+                if (driver instanceof JavascriptExecutor js)
                 {
-                    el.selectOptionContainingText(target);
+                    applyDomSelectFallback(js, el, target, true);
                 }
-                catch (final Exception ex)
+                else
                 {
-                    el.selectOption(target);
+                    try
+                    {
+                        el.selectOptionContainingText(target);
+                    }
+                    catch (final Exception ex)
+                    {
+                        el.selectOption(target);
+                    }
                 }
             }
         }
@@ -1166,15 +1238,64 @@ public final class BrowserToolProvider
             }
             catch (final Exception e)
             {
-                try
+                if (driver instanceof JavascriptExecutor js)
                 {
-                    el.selectOptionContainingText(target);
+                    applyDomSelectFallback(js, el, target, false);
                 }
-                catch (final Exception ex)
+                else
                 {
-                    el.selectOptionByValue(target);
+                    try
+                    {
+                        el.selectOptionContainingText(target);
+                    }
+                    catch (final Exception ex)
+                    {
+                        el.selectOptionByValue(target);
+                    }
                 }
             }
+        }
+    }
+
+    private static void applyDomSelectFallback(final JavascriptExecutor js, final SelenideElement el, final String target, final boolean preferValue)
+    {
+        try
+        {
+            final String fallbackScript = """
+                var sel = arguments[0];
+                var target = arguments[1];
+                var preferVal = arguments[2];
+                if (!sel || !sel.options) return;
+                var chosenIdx = -1;
+                for (var i = 0; i < sel.options.length; i++) {
+                    var opt = sel.options[i];
+                    if (preferVal && opt.value === target) { chosenIdx = i; break; }
+                    var txt = (opt.text || opt.innerText || '').trim();
+                    if (txt === target) { chosenIdx = i; break; }
+                    if (opt.value === target && chosenIdx === -1) chosenIdx = i;
+                    if (txt && txt.indexOf(target) !== -1 && chosenIdx === -1) chosenIdx = i;
+                }
+                if (chosenIdx !== -1) {
+                    sel.selectedIndex = chosenIdx;
+                    sel.options[chosenIdx].selected = true;
+                    sel.value = sel.options[chosenIdx].value;
+                    try {
+                        sel.dispatchEvent(new Event('input', { bubbles: true }));
+                        sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    } catch (e) {
+                        var ev = document.createEvent('HTMLEvents');
+                        ev.initEvent('change', true, true);
+                        sel.dispatchEvent(ev);
+                    }
+                    if (window.jQuery) {
+                        try { window.jQuery(sel).trigger('change'); } catch(e) {}
+                    }
+                }
+                """;
+            js.executeScript(fallbackScript, el, target, preferValue);
+        }
+        catch (final Exception ignored)
+        {
         }
     }
 

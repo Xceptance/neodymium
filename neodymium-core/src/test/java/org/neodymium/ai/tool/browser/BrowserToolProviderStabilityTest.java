@@ -1241,6 +1241,87 @@ public class BrowserToolProviderStabilityTest
     }
 
     @Test
+    public void testSelectToolFastPathForHiddenSelectElement() throws Exception
+    {
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 200;
+        try
+        {
+            final AtomicBoolean scriptExecuted = new AtomicBoolean(false);
+            final WebElement selectElement = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("getTagName".equals(name))
+                        {
+                            return "select";
+                        }
+                        if ("isDisplayed".equals(name))
+                        {
+                            return false;
+                        }
+                        if ("isEnabled".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getAttribute".equals(name))
+                        {
+                            final String attr = (String) args[0];
+                            if ("id".equals(attr))
+                            {
+                                return "category";
+                            }
+                            return null;
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("executeScript".equals(name))
+                        {
+                            final String script = args[0] != null ? args[0].toString() : "";
+                            if (script.contains("domSelected") || script.contains("options"))
+                            {
+                                scriptExecuted.set(true);
+                                return "domSelected";
+                            }
+                            return "{}";
+                        }
+                        if ("findElement".equals(name))
+                        {
+                            return selectElement;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(selectElement);
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool tool = this.registry.getTool("select").orElseThrow();
+            final ObjectNode selectArgs = MAPPER.createObjectNode();
+            selectArgs.put("selector", "#category");
+            selectArgs.put("value", "Skincare");
+
+            final ToolResult result = tool.execute(new ToolCall("call-select-fast", "select", selectArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertTrue(scriptExecuted.get(), "executeScript must be executed and handled via domSelected");
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
     public void testAssertCountBatchVisibilityUsesJavaScriptExecutorWhenAvailable() throws Exception
     {
         final AtomicBoolean batchScriptCalled = new AtomicBoolean(false);

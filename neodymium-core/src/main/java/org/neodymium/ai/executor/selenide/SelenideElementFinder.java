@@ -64,6 +64,15 @@ public final class SelenideElementFinder
 {
     private static final Logger LOG = LoggerFactory.getLogger(SelenideElementFinder.class);
     private static final long RETRY_INTERVAL_MS = 100L;
+    private static final long DOM_STAMP_THROTTLE_MS = 1200L;
+    private static volatile long lastGlobalDomStampTime = 0L;
+    private static volatile String lastStampedUrl = "";
+
+    public static void resetDomStampCacheForTesting()
+    {
+        lastGlobalDomStampTime = 0L;
+        lastStampedUrl = "";
+    }
 
     private static final String SHADOW_DOM_HELPER_JS = """
                 var allRoots = [document];
@@ -603,7 +612,7 @@ public final class SelenideElementFinder
             {
                 try
                 {
-                    if ("select".equalsIgnoreCase(el.getTagName()) || el.has(Condition.cssClass("select2-hidden-accessible")))
+                    if ("select".equalsIgnoreCase(el.getTagName()))
                     {
                         return el;
                     }
@@ -696,12 +705,20 @@ public final class SelenideElementFinder
             {
                 try
                 {
-                    new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.STANDARD);
-                    els = Selenide.$$(By.cssSelector(transformedCss));
-                    visible = findFirstVisible(els, clean);
-                    if (visible != null)
+                    final long now = System.currentTimeMillis();
+                    final String currentUrl = driver.getCurrentUrl();
+                    final boolean urlChanged = currentUrl != null && !currentUrl.equals(lastStampedUrl);
+                    if (urlChanged || (now - lastGlobalDomStampTime >= DOM_STAMP_THROTTLE_MS))
                     {
-                        return visible;
+                        lastGlobalDomStampTime = now;
+                        lastStampedUrl = currentUrl != null ? currentUrl : "";
+                        new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.STANDARD);
+                        els = Selenide.$$(By.cssSelector(transformedCss));
+                        visible = findFirstVisible(els, clean);
+                        if (visible != null)
+                        {
+                            return visible;
+                        }
                     }
                 }
                 catch (final AssertionError | Exception ignored)
