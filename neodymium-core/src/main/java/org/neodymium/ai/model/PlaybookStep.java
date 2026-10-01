@@ -966,6 +966,10 @@ public final class PlaybookStep
     @JsonIgnore
     public boolean isVisualStep()
     {
+        if (Boolean.TRUE.equals(this.fullPage))
+        {
+            return true;
+        }
         if (this.instruction == null)
         {
             return false;

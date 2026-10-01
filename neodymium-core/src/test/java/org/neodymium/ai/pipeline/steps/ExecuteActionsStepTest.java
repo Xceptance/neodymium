@@ -41,7 +41,9 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
@@ -53,12 +55,16 @@ import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
+import org.neodymium.ai.executor.ActionDefinition;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -466,9 +472,7 @@ public final class ExecuteActionsStepTest
         final String baselineHash = ScreenshotHasher.computeSsimMatrix(blueBase64);
 
         final MockTargetExecutor executor = new MockTargetExecutor();
-        // 1. State captured during action replay (white)
-        executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "pre.png", whiteBase64)), "hash-pre"));
-        // 2. Post-action state capture (blue)
+        // Post-action state capture (blue)
         executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "post.png", blueBase64)), "hash-post"));
 
         final SessionData sessionData = new SessionData();
@@ -548,9 +552,7 @@ public final class ExecuteActionsStepTest
         final String baselineHash = ScreenshotHasher.computeSsimMatrix(blueBase64);
 
         final MockTargetExecutor executor = new MockTargetExecutor();
-        // 1. State captured during action replay (white)
-        executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "pre.png", whiteBase64)), "hash-pre"));
-        // 2. Post-action state capture (red != blue)
+        // Post-action state capture (red != blue)
         executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "post.png", redBase64)), "hash-post"));
 
         final SessionData sessionData = new SessionData();
@@ -949,6 +951,165 @@ public final class ExecuteActionsStepTest
 
         assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
         assertEquals(1, context.getTransientData().get(ExecutionContext.KEY_TOTAL_REPLAYS));
+    }
+
+    /**
+     * Verifies that in REPLAY_STRICT mode, executing a routine non-visual step bypasses
+     * both pre-action STANDARD DOM capture and post-action VISUAL screenshot capture.
+     */
+    @Test
+    public void testReplayStrictNonVisualStepBypassesStateCapture() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final AtomicInteger captureCalls = new AtomicInteger(0);
+        final MockTargetExecutor delegate = new MockTargetExecutor();
+        final TargetExecutor executor = new TargetExecutor()
+        {
+            @Override
+            public SutState captureState(final ContextLevel level) throws IOException
+            {
+                captureCalls.incrementAndGet();
+                return delegate.captureState(level);
+            }
+
+            @Override
+            public SutState captureState(final ContextLevel level, final boolean isFullPage) throws IOException
+            {
+                captureCalls.incrementAndGet();
+                return delegate.captureState(level, isFullPage);
+            }
+
+            @Override
+            public void execute(final Action action) throws IOException
+            {
+                delegate.execute(action);
+            }
+
+            @Override
+            public Set<ActionDefinition> getSupportedActions()
+            {
+                return delegate.getSupportedActions();
+            }
+        };
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final ToolRegistry registry = new ToolRegistry();
+        registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("click_button", "Click button", JsonNodeFactory.instance.objectNode());
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Clicked");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", registry);
+
+        final PlaybookStep step = new PlaybookStep("Click login button");
+        step.setToolCalls(List.of(new ToolCall("c1", "click_button", JsonNodeFactory.instance.objectNode())));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, null, context);
+        pipelineStep.execute(context);
+
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
+        assertEquals(0, captureCalls.get(), "Lean state capture must bypass captureState on non-visual steps in REPLAY_STRICT mode");
+    }
+
+    /**
+     * Verifies that in REPLAY_STRICT mode, executing a visual verification step
+     * still captures post-action visual state for baseline validation.
+     */
+    @Test
+    public void testReplayStrictVisualStepCapturesVisualState() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final AtomicInteger captureCalls = new AtomicInteger(0);
+        final MockTargetExecutor delegate = new MockTargetExecutor();
+        final TargetExecutor executor = new TargetExecutor()
+        {
+            @Override
+            public SutState captureState(final ContextLevel level) throws IOException
+            {
+                captureCalls.incrementAndGet();
+                return delegate.captureState(level);
+            }
+
+            @Override
+            public SutState captureState(final ContextLevel level, final boolean isFullPage) throws IOException
+            {
+                captureCalls.incrementAndGet();
+                return delegate.captureState(level, isFullPage);
+            }
+
+            @Override
+            public void execute(final Action action) throws IOException
+            {
+                delegate.execute(action);
+            }
+
+            @Override
+            public Set<ActionDefinition> getSupportedActions()
+            {
+                return delegate.getSupportedActions();
+            }
+        };
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final ToolRegistry registry = new ToolRegistry();
+        registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_visual", "Assert visual", JsonNodeFactory.instance.objectNode());
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Visual OK");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", registry);
+
+        final BufferedImage img = new BufferedImage(50, 50, BufferedImage.TYPE_INT_RGB);
+        final String imgBase64 = encodeToBase64(img);
+        final String hash = ScreenshotHasher.computeSsimMatrix(imgBase64);
+
+        final PlaybookStep step = new PlaybookStep("Verify logo banner (visual)");
+        step.setScreenshotHash(hash);
+        step.setToolCalls(List.of(new ToolCall("c1", "assert_visual", JsonNodeFactory.instance.objectNode())));
+
+        delegate.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "img.png", imgBase64)), "hash-img"));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, null, context);
+        pipelineStep.execute(context);
+
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
+        assertTrue(captureCalls.get() > 0, "Visual steps must capture visual state in REPLAY_STRICT mode");
     }
 }
 

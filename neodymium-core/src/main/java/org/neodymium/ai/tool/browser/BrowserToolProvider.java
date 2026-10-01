@@ -1067,41 +1067,13 @@ public final class BrowserToolProvider
                 if (call.arguments().hasNonNull("value"))
                 {
                     final String val = call.arguments().path("value").asText();
-                    try
-                    {
-                        el.selectOptionByValue(val);
-                    }
-                    catch (final Exception e)
-                    {
-                        try
-                        {
-                            el.selectOptionContainingText(val);
-                        }
-                        catch (final Exception ex)
-                        {
-                            el.selectOption(val);
-                        }
-                    }
+                    selectDropdownOption(el, val, true);
                     res.put("value", val);
                 }
                 else if (call.arguments().hasNonNull("text"))
                 {
                     final String txt = call.arguments().path("text").asText();
-                    try
-                    {
-                        el.selectOption(txt);
-                    }
-                    catch (final Exception e)
-                    {
-                        try
-                        {
-                            el.selectOptionContainingText(txt);
-                        }
-                        catch (final Exception ex)
-                        {
-                            el.selectOptionByValue(txt);
-                        }
-                    }
+                    selectDropdownOption(el, txt, false);
                     res.put("text", txt);
                 }
                 if (featureVector != null)
@@ -1111,6 +1083,99 @@ public final class BrowserToolProvider
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
+    }
+
+    private static void selectDropdownOption(final SelenideElement el, final String target, final boolean preferValue)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        if (driver instanceof JavascriptExecutor js)
+        {
+            try
+            {
+                final String script = """
+                    var sel = arguments[0];
+                    var target = arguments[1];
+                    var preferVal = arguments[2];
+                    if (!sel || !sel.options || sel.options.length === 0) return null;
+                    var exactValIdx = -1;
+                    var exactTextIdx = -1;
+                    var containsTextIdx = -1;
+                    for (var i = 0; i < sel.options.length; i++) {
+                        var opt = sel.options[i];
+                        if (opt.value === target && exactValIdx === -1) exactValIdx = i;
+                        var txt = (opt.text || opt.innerText || '').trim();
+                        if (txt === target && exactTextIdx === -1) exactTextIdx = i;
+                        if (txt && txt.indexOf(target) !== -1 && containsTextIdx === -1) containsTextIdx = i;
+                    }
+                    if (preferVal && exactValIdx !== -1) return 'value';
+                    if (exactTextIdx !== -1) return 'text';
+                    if (exactValIdx !== -1) return 'value';
+                    if (containsTextIdx !== -1) return 'containsText';
+                    return null;
+                    """;
+                final Object matchStrategy = js.executeScript(script, el, target, preferValue);
+                if ("value".equals(matchStrategy))
+                {
+                    el.selectOptionByValue(target);
+                    return;
+                }
+                else if ("text".equals(matchStrategy))
+                {
+                    el.selectOption(target);
+                    return;
+                }
+                else if ("containsText".equals(matchStrategy))
+                {
+                    el.selectOptionContainingText(target);
+                    return;
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (preferValue)
+        {
+            try
+            {
+                el.selectOptionByValue(target);
+            }
+            catch (final Exception e)
+            {
+                try
+                {
+                    el.selectOptionContainingText(target);
+                }
+                catch (final Exception ex)
+                {
+                    el.selectOption(target);
+                }
+            }
+        }
+        else
+        {
+            try
+            {
+                el.selectOption(target);
+            }
+            catch (final Exception e)
+            {
+                try
+                {
+                    el.selectOptionContainingText(target);
+                }
+                catch (final Exception ex)
+                {
+                    el.selectOptionByValue(target);
+                }
+            }
+        }
     }
 
     private static AiTool createCheckTool()
@@ -2117,17 +2182,60 @@ public final class BrowserToolProvider
                     totalElements = allElements.size();
                     if (visibleOnly)
                     {
-                        for (final SelenideElement el : allElements)
+                        boolean batchEvaluated = false;
+                        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                        if (driver instanceof JavascriptExecutor js && totalElements > 0)
                         {
                             try
                             {
-                                if (el.isDisplayed())
+                                final List<WebElement> webElements = new ArrayList<>(totalElements);
+                                for (final SelenideElement el : allElements)
                                 {
-                                    actualCount++;
+                                    webElements.add(el.toWebElement());
+                                }
+                                final String countScript = """
+                                    var els = arguments[0];
+                                    if (!els) return 0;
+                                    var count = 0;
+                                    for (var i = 0; i < els.length; i++) {
+                                        var el = els[i];
+                                        if (!el || !el.isConnected) continue;
+                                        var style = window.getComputedStyle(el);
+                                        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+                                        var rects = el.getClientRects();
+                                        if (rects && rects.length > 0) {
+                                            count++;
+                                        }
+                                    }
+                                    return count;
+                                    """;
+                                final Object result = js.executeScript(countScript, webElements);
+                                if (result instanceof Number num)
+                                {
+                                    actualCount = num.intValue();
+                                    batchEvaluated = true;
                                 }
                             }
-                            catch (final Exception ignored)
+                            catch (final Exception e)
                             {
+                                LOGGER.debug("Batch visibility count script failed: {}. Falling back to sequential check.", e.getMessage());
+                            }
+                        }
+
+                        if (!batchEvaluated)
+                        {
+                            for (final SelenideElement el : allElements)
+                            {
+                                try
+                                {
+                                    if (el.isDisplayed())
+                                    {
+                                        actualCount++;
+                                    }
+                                }
+                                catch (final Exception ignored)
+                                {
+                                }
                             }
                         }
                     }

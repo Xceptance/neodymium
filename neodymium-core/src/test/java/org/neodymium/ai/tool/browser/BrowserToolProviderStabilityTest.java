@@ -1239,4 +1239,72 @@ public class BrowserToolProviderStabilityTest
             Configuration.timeout = originalTimeout;
         }
     }
+
+    @Test
+    public void testAssertCountBatchVisibilityUsesJavaScriptExecutorWhenAvailable() throws Exception
+    {
+        final AtomicBoolean batchScriptCalled = new AtomicBoolean(false);
+        final WebElement buttonElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getTagName".equals(name))
+                    {
+                        return "button";
+                    }
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("executeScript".equals(name))
+                    {
+                        final String script = (String) args[0];
+                        if (script != null && script.contains("getClientRects"))
+                        {
+                            batchScriptCalled.set(true);
+                            return 25;
+                        }
+                        return Collections.emptyMap();
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        return buttonElement;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.nCopies(25, buttonElement);
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        try
+        {
+            final AiTool tool = this.registry.getTool("assert_count").orElseThrow();
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", ".results.striped button");
+            args.put("count", 25);
+            args.put("operator", "EXACT");
+            args.put("visibleOnly", true);
+
+            final ToolResult result = tool.execute(new ToolCall("call-cnt-batch", "assert_count", args), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertTrue(batchScriptCalled.get(), "Batch visibility script must be invoked via JavascriptExecutor");
+        }
+        finally
+        {
+            WebDriverRunner.closeWebDriver();
+        }
+    }
 }

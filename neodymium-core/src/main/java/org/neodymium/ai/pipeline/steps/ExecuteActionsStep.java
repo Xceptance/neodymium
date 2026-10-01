@@ -467,7 +467,9 @@ public final class ExecuteActionsStep
                     }
 
                     final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
-                    if (executor != null)
+                    final boolean skipPreCapture = !mode.supportsHealing()
+                            || AiConfiguration.getInstance().isReplayLeanStateCapture();
+                    if (!skipPreCapture && executor != null)
                     {
                         try
                         {
@@ -490,6 +492,7 @@ public final class ExecuteActionsStep
                     try
                     {
                         final SimpleToolContext toolContext = new SimpleToolContext(reg);
+                        toolContext.setVariable("neodymium.executionMode", mode);
                         if (executor != null)
                         {
                             toolContext.setVariable("neodymium.targetExecutor", executor);
@@ -577,14 +580,22 @@ public final class ExecuteActionsStep
                             }
                         }
 
-                        final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                                || (step != null && step.isFullPageVisualStep());
-                        final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
-                        final SutState postStepState = executor.captureState(cl, isFullPageReq);
-                        if (postStepState != null)
+                        final boolean isVisualRequired = (step != null && step.isVisualStep())
+                                || AiConfiguration.getInstance().isSemanticVerificationEnabled()
+                                || !isReplay
+                                || AiConfiguration.getInstance().isReplayScreenshotCaptureEnabled(mode);
+
+                        if (isVisualRequired)
                         {
-                            c.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postStepState);
-                            session.getEventBus().dispatch(new StateCapturedEvent(postStepState));
+                            final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                    || (step != null && step.isFullPageVisualStep());
+                            final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
+                            final SutState postStepState = executor.captureState(cl, isFullPageReq);
+                            if (postStepState != null)
+                            {
+                                c.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postStepState);
+                                session.getEventBus().dispatch(new StateCapturedEvent(postStepState));
+                            }
                         }
                     }
                     catch (final Exception e)
@@ -614,6 +625,18 @@ public final class ExecuteActionsStep
                 {
                     c.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
                     LOGGER.warn("⚠️ Replay step requires online healing — launching AgentToolLoopStep for: \"{}\"", step.getInstruction());
+                    final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                    if (executor != null && c.getTransientData().get(ExecutionContext.KEY_LAST_STATE) == null)
+                    {
+                        try
+                        {
+                            final SutState freshState = executor.captureState(ContextLevel.STANDARD);
+                            c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
                     if (AiConfiguration.getInstance().isSemanticVerificationEnabled())
                     {
                         c.pushStep(verifyStep);
