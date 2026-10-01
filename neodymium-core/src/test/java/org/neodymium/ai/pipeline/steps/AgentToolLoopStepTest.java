@@ -3171,6 +3171,89 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals(ContextLevel.HINT, capturedLevels.get(0), "Explicit step tag (context: none) should resolve to HINT for zero-DOM capture.");
         Assertions.assertEquals(ContextLevel.HINT, this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
     }
+
+    @Test
+    public void testVerificationStepSystemPromptInstructsModalClosureAndStateRestoration() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_click", "Clicks mock target", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\"}");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<button id='country-btn'>🇺🇸</button>",
+                List.of(new SutAttachment("image/png", "screenshot", "turn1Base64")), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<div class='modal'><li class='selected'>United States</li><button id='close'>×</button></div>",
+                List.of(new SutAttachment("image/png", "screenshot", "turn2Base64")), "DOM_LIGHT"));
+
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Validate that United States as country is selected.");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                final String systemPrompt = req.messages().get(0).content();
+                Assertions.assertTrue(systemPrompt.contains("When validating that an option, setting, country, language, or currency is selected"),
+                        "System prompt must instruct checking active trigger before opening menus!");
+                Assertions.assertTrue(systemPrompt.contains("restore the initial page state before completing the step: close the opened modal/dialog/overlay"),
+                        "System prompt must mandate closing modals/dialogs before completing!");
+                Assertions.assertTrue(systemPrompt.contains("Never invoke 'complete_step' while a temporary verification modal or overlay remains open on screen"),
+                        "System prompt must forbid completing with open modal/overlay!");
+
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-1", "mock_click", MAPPER.createObjectNode().put("selector", "#country-btn"))));
+            }
+            if (t == 2)
+            {
+                final List<ChatMessage> messages = req.messages();
+                final ChatMessage latestUserMsg = messages.get(messages.size() - 1);
+                Assertions.assertTrue(latestUserMsg.content().contains("ensure any opened modal or dropdown is closed to restore initial page state before completing"),
+                        "Turn prompt must remind agent to close modal before completing verification!");
+
+                return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-2", "complete_step", MAPPER.createObjectNode().put("summary", "Verified and closed"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+        step.execute(this.context);
+
+        Assertions.assertEquals("Verified and closed", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
 }
 
 
