@@ -449,5 +449,21 @@ public class PlaybookStepTest
         final PlaybookStep stepSpaces = new PlaybookStep("Verify pricing ( contextlevel = rich )");
         Assertions.assertEquals("Verify pricing", stepSpaces.getInstruction());
         Assertions.assertEquals("RICH", stepSpaces.getContextLevel());
+
+        final PlaybookStep stepShortColon = new PlaybookStep("Scroll to the footer (context: lean)");
+        Assertions.assertEquals("Scroll to the footer", stepShortColon.getInstruction());
+        Assertions.assertEquals("LEAN", stepShortColon.getContextLevel());
+
+        final PlaybookStep stepShortEquals = new PlaybookStep("Scroll to the footer (context=minimal)");
+        Assertions.assertEquals("Scroll to the footer", stepShortEquals.getInstruction());
+        Assertions.assertEquals("MINIMAL", stepShortEquals.getContextLevel());
+
+        final PlaybookStep stepShortNone = new PlaybookStep("Scroll to the footer (context: none)");
+        Assertions.assertEquals("Scroll to the footer", stepShortNone.getInstruction());
+        Assertions.assertEquals("HINT", stepShortNone.getContextLevel());
+
+        final PlaybookStep stepShortHyphen = new PlaybookStep("Check layout (context: visual-lean)");
+        Assertions.assertEquals("Check layout", stepShortHyphen.getInstruction());
+        Assertions.assertEquals("VISUAL_LEAN", stepShortHyphen.getContextLevel());
     }
 }

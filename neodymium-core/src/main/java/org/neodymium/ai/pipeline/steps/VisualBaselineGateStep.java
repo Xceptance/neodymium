@@ -126,10 +126,12 @@ public final class VisualBaselineGateStep implements PipelineStep
             return false;
         }
 
-        final String rawInstruction = this.step.getInstruction();
-        final String resolvedInstruction = (context.getSessionData() != null && rawInstruction != null)
-            ? context.getSessionData().resolveAvailableVariables(rawInstruction)
-            : rawInstruction;
+        final Object currentInstructionObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        final String resolvedInstruction = currentInstructionObj instanceof String s && !s.isBlank()
+            ? s
+            : (context.getSessionData() != null && this.step.getInstruction() != null
+                ? context.getSessionData().resolveAvailableVariables(this.step.getInstruction())
+                : this.step.getInstruction());
         final ExecutionMode mode = (ExecutionMode) context.getTransientData()
             .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
 
@@ -438,10 +440,12 @@ public final class VisualBaselineGateStep implements PipelineStep
             this.step.setScreenshotHashDim(ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM);
         }
 
-        final String rawInstruction = this.step.getInstruction();
-        final String resolvedInstruction = (context.getSessionData() != null && rawInstruction != null)
-            ? context.getSessionData().resolveAvailableVariables(rawInstruction)
-            : rawInstruction;
+        final Object currentInstructionObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        final String resolvedInstruction = currentInstructionObj instanceof String s && !s.isBlank()
+            ? s
+            : (context.getSessionData() != null && this.step.getInstruction() != null
+                ? context.getSessionData().resolveAvailableVariables(this.step.getInstruction())
+                : this.step.getInstruction());
 
         String replayDims = null;
         if (postState.getAttachments() != null)

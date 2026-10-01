@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
@@ -409,5 +410,53 @@ public class PlaybookToolReplayTest
         Assertions.assertEquals(1, this.executedCalls.size());
         Assertions.assertEquals("query_dom", this.executedCalls.get(0).toolName());
         Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
+    }
+
+    @Test
+    public void testReplayStrictBypassesHealingEvenWithLiveCandidatesAndFeatureVectors() throws Exception
+    {
+        final PlaybookStep step = new PlaybookStep("Click submit");
+
+        // Recorded with old selector: button.old-class
+        final ObjectNode clickArgs = MAPPER.createObjectNode().put("target", "button.old-class");
+        step.addToolCall(new ToolCall("call-20-strict", "browser_click", clickArgs));
+
+        // Companion recorded Action with DomFeatureVector
+        final DomFeatureVector recorded = new DomFeatureVector(
+                "button",
+                "Submit Order",
+                Set.of("old-class", "btn"),
+                Map.of("type", "submit", "name", "order"),
+                "button",
+                "Submit Order",
+                "form",
+                0
+        );
+        final Action act = new Action("CLICK", "button.old-class", List.of(), "Submit", "");
+        act.setDomFeatureVector(recorded);
+        step.setActions(List.of(act));
+
+        // Live page candidates: selector shifted to button#submit-order
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "button",
+                "Submit Order",
+                Set.of("new-redesigned-btn"),
+                Map.of("id", "submit-order", "type", "submit"),
+                "button",
+                "Submit Order",
+                "form",
+                0
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_STRICT);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
+        Assertions.assertEquals(1, this.executedCalls.size());
+        // In REPLAY_STRICT mode, healing MUST be bypassed completely; selector remains button.old-class!
+        Assertions.assertEquals("button.old-class", this.executedCalls.get(0).arguments().path("target").asText());
     }
 }

@@ -579,6 +579,32 @@ public final class AiConfiguration
     {
         return getDouble("neodymium.ai.replay.delayScale", 0.0);
     }
+
+    /**
+     * Checks if lean state capture during replay is enabled.
+     * When true (default), strict replay bypasses redundant pre-step DOM traversals and routine
+     * post-action visual screenshots on passing non-visual steps.
+     *
+     * @return true if lean state capture is enabled during replay, false otherwise (default: true)
+     */
+    public boolean isReplayLeanStateCapture()
+    {
+        return getBoolean("neodymium.ai.replay.leanStateCapture", true);
+    }
+
+    /**
+     * Checks if screenshot capture is enabled during replay for the given execution mode.
+     * In {@link ExecutionMode#REPLAY_STRICT}, defaults to false to avoid routine screenshot overhead,
+     * but can be overridden globally via {@code neodymium.ai.replay.captureScreenshots}.
+     *
+     * @param mode the current execution mode
+     * @return true if screenshots should be captured on routine passing replay steps, false otherwise
+     */
+    public boolean isReplayScreenshotCaptureEnabled(final ExecutionMode mode)
+    {
+        final boolean defaultCapture = mode != ExecutionMode.REPLAY_STRICT;
+        return getBoolean("neodymium.ai.replay.captureScreenshots", defaultCapture);
+    }
     /**
      * Returns the minimum structural similarity index (SSIM) score required for visual assertion matches.
      *

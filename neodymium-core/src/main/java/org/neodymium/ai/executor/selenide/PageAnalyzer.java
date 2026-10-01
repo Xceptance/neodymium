@@ -1234,7 +1234,7 @@ public class PageAnalyzer
             final Object ariaLabel = node.get("ariaLabel");
 
             // Omit class on containers if semantic locators exist (unless in RICH mode)
-            final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || autoId != null || ariaLabel != null || role != null;
+            final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || ariaLabel != null || role != null;
             if (level != null && level.includesRichMetadata() || !hasSemanticLocator)
             {
                 appendSanitizedClassAttribute(dom, node.get("className"));
@@ -1297,7 +1297,7 @@ public class PageAnalyzer
         final boolean hasDistinctText = text != null && !text.isBlank() && text.length() <= 80;
 
         // Omit presentation class in MINIMAL/LEAN if element already has strong semantic identification
-        final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || autoId != null || ariaLabel != null || placeholder != null || hasDistinctText;
+        final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || ariaLabel != null || placeholder != null || hasDistinctText;
         if (level != null && level.includesRichMetadata() || !hasSemanticLocator)
         {
             appendSanitizedClassAttribute(dom, el.get("className"));

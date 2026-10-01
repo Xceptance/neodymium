@@ -65,16 +65,19 @@ public class PlaybookStepFullPagePersistenceTest
     }
 
     @Test
-    @DisplayName("Verify isFullPageVisualStep returns true when fullPage is true regardless of instruction tag")
+    @DisplayName("Verify isFullPageVisualStep and isVisualStep return true when fullPage is true regardless of instruction tag")
     public void testIsFullPageVisualStepWithFlag()
     {
         final PlaybookStep step = new PlaybookStep("Check order summary");
+        Assertions.assertFalse(step.isVisualStep());
         Assertions.assertFalse(step.isFullPageVisualStep());
 
         step.setFullPage(true);
+        Assertions.assertTrue(step.isVisualStep(), "Step with fullPage=true must evaluate isVisualStep() as true");
         Assertions.assertTrue(step.isFullPageVisualStep());
 
         step.setFullPage(false);
+        Assertions.assertFalse(step.isVisualStep());
         Assertions.assertFalse(step.isFullPageVisualStep());
     }
 }

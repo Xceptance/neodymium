@@ -41,6 +41,174 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261001-09] Hidden Select Native Click Cascading Retries and Rapid Re-stamping Bottleneck Replay Latency
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`BrowserToolProvider`, `SelenideElementFinder`)
+- **Scope:** `Framework`
+- **Symptom:** In test cases with styled/hidden `<select>` elements (e.g., Select2 dropdowns in `SpaLocatorTest`), dropdown selection in replay mode incurred ~9.2 seconds of delay per select action. Concurrently, asynchronous modal mounting caused `tryResolveAutomationId` to execute heavy full-DOM serialization (`captureSimplifiedDom`) on every 100ms poll tick, adding ~10-13 seconds of latency.
+- **Root Cause:**
+  1. `BrowserToolProvider.selectDropdownOption` attempted standard Selenide click-based option selection (`selectOption`, `selectOptionByValue`, `selectOptionContainingText`) even when the target `<select>` element was visually hidden by CSS. When ChromeDriver failed with `ElementNotInteractableException`, Selenide waited up to `Configuration.timeout` (4,000ms) per method before cascading into two additional 4,000ms retry fallbacks.
+  2. `SelenideElementFinder.tryResolveAutomationId` unconditionally re-analyzed and stamped the entire DOM via `PageAnalyzer.captureSimplifiedDom(ContextLevel.STANDARD)` whenever an automation ID was not immediately matched, invoking heavy DOM serialization up to 10 times per second during async modal appearance.
+  3. `SelenideElementFinder` contained an SUT-specific class check (`select2-hidden-accessible`) violating framework neutrality.
+- **Detection Gap ("What did we miss?"):** Existing stability tests in `BrowserToolProviderStabilityTest` used mock drivers that simulated synchronous option click completion without modeling ChromeDriver's `ElementNotInteractableException` timeout retry loops on hidden elements. Furthermore, no polling benchmark measured the CPU and serialization overhead of unthrottled `captureSimplifiedDom` calls during element polling.
+- **Resolution:**
+  1. Enhanced `BrowserToolProvider.selectDropdownOption` to inspect element visibility in JavaScript. For visually hidden or non-interactable selects, it immediately updates `selectedIndex`, `selected`, `value`, and dispatches standard W3C `input` and `change` events in ~1ms without blocking.
+  2. Added non-blocking DOM event fallback (`applyDomSelectFallback`) if native selection throws an exception, eliminating cascading 4-second timeout retries.
+  3. Throttled `captureSimplifiedDom` in `SelenideElementFinder.tryResolveAutomationId` to a minimum interval of 1200ms per URL, preventing high-frequency DOM re-stamping while keeping 100ms lightweight CSS polling.
+  4. Removed the SUT-specific `select2-hidden-accessible` class check from `SelenideElementFinder`, universally supporting any `<select>` element.
+- **Safety Net Added:**
+  - `BrowserToolProviderStabilityTest.testSelectToolFastPathForHiddenSelectElement`: Verifies that hidden select elements immediately execute W3C DOM dispatch via `domSelected` without timeout delay.
+  - `SelenideElementFinderTest.testResetDomStampCacheForTesting`: Verifies DOM stamping cache reset capability.
+
+### [DEF-20261001-08] Unresolved Variable Placeholders Silently Preserved Due to Lenient Step-Level Resolution
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`ExecuteActionsStep`, `VisualBaselineGateStep`, `SessionData`)
+- **Scope:** `Framework`
+- **Symptom:** A playbook step referencing an unmapped variable (`${cartName}` instead of `${cartHeadline}`) passed silently in replay mode because lenient variable resolution left the placeholder intact and visual baseline dHash bypassed validation.
+- **Root Cause:** PlaybookStep instructions were resolved with lenient `resolveAvailableVariables()` at step execution dispatch, preserving unresolvable placeholders rather than invoking strict `resolveVariables()`. Visual baseline comparison subsequently matched the rendered page and short-circuited execution without checking variable integrity.
+- **Detection Gap ("What did we miss?"):** Existing test `testLeafStepWithRuntimeVariablesPreservesPlaceholdersWithoutFailing` explicitly encoded and tested the lenient behavior, and no test verified that executing a leaf step with an unresolvable variable throws `UnresolvableVariableException` prior to visual baseline gating.
+- **Resolution:**
+  1. Enforced strict resolution (`sessionData.resolveVariables()`) at leaf step execution dispatch in `ExecuteActionsStep`.
+  2. Preserved template immutability on `PlaybookStep.instruction` (stored resolved text strictly in `ExecutionContext.KEY_CURRENT_INSTRUCTION`), ensuring JSON recordings and multi-dataset iterations are not corrupted.
+  3. Simplified downstream helpers (`VisualBaselineGateStep`) to consume `ExecutionContext.KEY_CURRENT_INSTRUCTION` directly instead of redundantly re-resolving variables.
+- **Safety Net Added:** Comprehensive unit tests in `ExecuteActionsStepTest`:
+  - `testLeafStepWithUnresolvableVariableThrowsExceptionAndPreservesTemplate`: Asserts that missing variables throw `UnresolvableVariableException` and keep the original template pristine.
+  - `testLeafStepWithUnresolvableVariableFailsBeforeVisualBaselineGating`: Asserts that visual steps with unresolvable variables fail before visual baseline gating, preventing false-positive test bypass.
+  - `testLeafStepWithMissingRuntimeVariableFailsStrictly`: Asserts strict failure on missing runtime variables, succeeded once runtime variable is provided.
+  - `testMultiDataSetSequentialExecutionPreservesTemplateIsolation`: Asserts that executing the exact same `PlaybookStep` across sequential dataset iterations preserves template immutability and isolates resolved instructions without cross-contamination.
+  - `testUnrolledSubStepWithUnresolvableVariableFailsStrictlyOnChild`: Asserts that when a parent step with recorded sub-steps is unrolled in replay mode, an unmapped placeholder on child 2 strictly fails with `UnresolvableVariableException` after child 1 executes.
+  - `testStateMachineRunnerFailsConclusivelyOnUnresolvableVariable`: Asserts that `StateMachineRunner` propagates `UnresolvableVariableException` directly and marks failing playbook step status as `FAILED`.
+
+### [DEF-20261001-07] Ephemeral Verification Modals/Dropdowns Leak Across Steps Blocking Subsequent Actions
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`AgentToolLoopStep`)
+- **Scope:** `Framework`
+- **Symptom:** During live execution of CheckoutTest (e.g. `CheckoutTest_live_tailwind_20261001-220223.html`), verification steps like Step 2 ("Validate that United States as country is selected.") opened ephemeral modals/dropdowns to assert the selected list item and immediately called `complete_step` without closing them. In subsequent steps (such as Step 6: "Go to the cart using the mini cart"), the lingering modal and its backdrop blocked interaction with navigation elements, forcing the agent to spend 7 turns, 26 seconds, and over 60,000 tokens recovering.
+- **Root Cause:**
+  1. System Prompt Rule 4 did not instruct the agent to inspect active trigger/header elements first before expanding menus, nor did it mandate restoring initial page state (closing ephemeral modals/dropdowns/overlays) before invoking `complete_step`.
+  2. Turn prompts for verification steps did not remind the agent to close opened dialogs/overlays prior to step completion.
+- **Detection Gap ("What did we miss?"):** Existing tests in `AgentToolLoopStepTest` verified that assertion tools were called before `complete_step`, but never validated instructions preventing state leakage of ephemeral overlays into subsequent steps.
+- **Resolution:**
+  1. Hardened System Prompt Rule 4 in `AgentToolLoopStep`: Added explicit instructions to first check active trigger/header elements directly without opening menus, and mandated restoring initial page state (closing modals, dialogs, overlays, or dropdowns) before calling `complete_step`. Strictly forbade invoking `complete_step` while ephemeral dialogs or backdrops remain open.
+  2. Enhanced Turn prompts in `AgentToolLoopStep` (both full DOM and visual screenshot branches) to explicitly remind the agent: *"ensure any opened modal or dropdown is closed to restore initial page state before completing"*.
+- **Safety Net Added:** Regression unit test `AgentToolLoopStepTest.testVerificationStepSystemPromptInstructsModalClosureAndStateRestoration` verifying that both System Prompt Rule 4 and turn prompts explicitly enforce modal closure and state restoration before step completion.
+
+### [DEF-20261001-06] Inflexible Context Level Syntax in PlaybookStep Causes Silent Fallback to Full DOM
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`PlaybookStep`, `ContextLevel`, `AgentToolLoopStep`, `ExecuteActionsStep`)
+- **Scope:** `Framework`
+- **Symptom:** Step annotations using concise syntax such as `(context: lean)` or `(context: none)` were silently ignored by `PlaybookStep` because `CONTEXT_LEVEL_PATTERN` only matched the longer `contextlevel` prefix. The step silently fell back to the project default `STANDARD`, incurring unwanted ~25k token full-DOM dumps.
+- **Root Cause:**
+  1. `PlaybookStep.CONTEXT_LEVEL_PATTERN` only matched `contextlevel[:=]` and did not accept `context[:=]`.
+  2. `ContextLevel.fromString` did not recognize `NONE` or `ZERO` as synonyms for zero-DOM `HINT`.
+  3. `AgentToolLoopStep` did not check `step.getContextLevel()` directly as the primary authority over transient state.
+- **Detection Gap ("What did we miss?"):** `PlaybookStepTest` only tested `(contextlevel=...)`, missing the shorter and more ergonomic `(context: ...)` syntax.
+- **Resolution:**
+  1. Updated `PlaybookStep.CONTEXT_LEVEL_PATTERN` to support both `contextlevel` and `context` with `:` or `=`.
+  2. Added `NONE`, `ZERO`, `NODOM`, and `NO_DOM` mappings to `ContextLevel.HINT` in `ContextLevel.fromString`.
+  3. Enforced explicit `step.getContextLevel()` precedence in `AgentToolLoopStep` and `ExecuteActionsStep`.
+- **Safety Net Added:** Unit tests in `PlaybookStepTest` (`testContextLevelTagParsing`), `ContextLevelTest` (`testFromStringParsing`), and `AgentToolLoopStepTest` (`testExplicitStepContextLevelOverridesConfiguredDefaultAndTransientState`, `testExplicitStepContextNoneResolvesToHintZeroDom`).
+
+### [DEF-20261001-05] Strict Replay Incurs Massive Latency from Pre-Execution Feature Vector Scans and Dropdown Timeout Traps
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`PlaybookToolReplayer`, `BrowserToolProvider`)
+- **Scope:** `Framework`
+- **Symptom:** Strict replay (`REPLAY_STRICT`) of small 13-step test cases required ~92–94s despite 0 LLM calls ($0.00 cost).
+- **Root Cause:**
+  1. `PlaybookToolReplayer.attemptHealing` was executed unconditionally during replay, even in `REPLAY_STRICT`. When `isDirectlyPresent` was false or delayed (e.g. async dropdowns, Select2 hidden selects, un-stamped data-ai), it invoked `new PageAnalyzer().extractFeatureVectors(driver)` which crawled the full DOM and forced CSS layout reflows across hundreds of elements.
+  2. `BrowserToolProvider`'s `select` tool attempted `selectOptionByValue` before `selectOptionContainingText`. When the recorded parameter was display text (e.g. "15 Miles") instead of an option value, Selenide blocked for its full 3,000ms timeout before falling back to text.
+  3. `assert_count` with `visibleOnly=true` performed sequential `el.isDisplayed()` calls over WebDriver wire for every matching element (25+ elements = ~1.5s IPC wire overhead).
+- **Detection Gap ("What did we miss?"):** Existing replay unit tests ran against minimal in-memory mock HTML fixtures (<10 elements) where full-DOM feature extraction took <10ms and select options had matching values and text.
+- **Resolution:**
+  1. Updated `PlaybookToolReplayer` to completely bypass `attemptHealing` when `mode == ExecutionMode.REPLAY_STRICT` or when healing is disabled.
+  2. Updated `BrowserToolProvider` `select` tool with `selectDropdownOption` inspecting options via JavaScript in <1ms to avoid blocking on Selenide's full timeout when distinguishing between option value and visible text.
+  3. Replaced sequential `el.isDisplayed()` wire calls in `assert_count` with a single batch JavaScript visibility count.
+- **Safety Net Added:** Unit tests in `PlaybookToolReplayTest` (`testReplayStrictBypassesHealingEvenWithLiveCandidatesAndFeatureVectors`) verifying `REPLAY_STRICT` bypasses `attemptHealing`, and `BrowserToolProviderStabilityTest` (`testAssertCountBatchVisibilityUsesJavaScriptExecutorWhenAvailable`) verifying batch visibility script execution.
+
+### [DEF-20261001-04] Strict Replay Suffers Massive Latency Penalty Due to Redundant DOM Serialization and Routine Visual Captures
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`ExecuteActionsStep`, `PlaybookStep`, `AiConfiguration`)
+- **Scope:** `Framework`
+- **Symptom:** Replaying test playbooks in `REPLAY_STRICT` mode took nearly as long as initial LLM recording runs (e.g. 125s vs 171s), despite 100% LLM bypass ($0.00 cost, 0 LLM calls).
+- **Root Cause:**
+  1. `ExecuteActionsStep` unconditionally executed `executor.captureState(ContextLevel.STANDARD)` before every step (originally intended for data-ai stamping and healing fallback). In `REPLAY_STRICT`, healing is disabled (`mode.supportsHealing() == false`), and locators targeting automation IDs (`[data-ai="..."]`) are stamped dynamically on-demand by `SelenideElementFinder.tryResolveAutomationId` if absent.
+  2. `ExecuteActionsStep` unconditionally executed `executor.captureState(ContextLevel.VISUAL)` after every single step (for preliminary HTML report screenshot attachments). Routine action steps during strict replay do not perform visual regression gating, wasting 1.5s–2.0s per step on DOM tree serialization and DevTools screenshot fallbacks.
+  3. `PlaybookStep.isVisualStep()` only checked instruction text patterns, omitting `Boolean.TRUE.equals(this.fullPage)`. This created architectural inconsistency where `isFullPageVisualStep()` was true but `isVisualStep()` was false, forcing call-sites to defensively write `isVisualStep() || isFullPageVisualStep()`.
+- **Detection Gap ("What did we miss?"):** Unit tests for `ExecuteActionsStep` used in-memory `MockTargetExecutor` where `captureState` completes instantaneously without WebDriver screenshotting, DevTools fallback, or full DOM tree serialization.
+- **Resolution:**
+  1. Updated `PlaybookStep.isVisualStep()` to check `Boolean.TRUE.equals(this.fullPage)` first, ensuring every full-page visual step is guaranteed to be a visual step and centralizing visual classification.
+  2. Added `neodymium.ai.replay.leanStateCapture` (default: `true`) and `neodymium.ai.replay.captureScreenshots` (default: `false` in `REPLAY_STRICT`) in `AiConfiguration`.
+  3. Updated `ExecuteActionsStep` to bypass pre-step DOM traversal during replay when lean state capture is active or healing is unsupported, while lazily capturing state in `HealingRequiredException` if healing is ever triggered.
+  4. Conditioned post-action visual capture on `isVisualRequired` (`step.isVisualStep() || isSemanticVerificationEnabled() || !isReplay || isReplayScreenshotCaptureEnabled(mode)`), eliminating routine screenshots on passing non-visual replay steps while preserving visual baseline gating and failure state capture in `StateMachineRunner`.
+- **Safety Net Added:** Added `testReplayStrictNonVisualStepBypassesStateCapture` and `testReplayStrictVisualStepCapturesVisualState` in `ExecuteActionsStepTest.java`, and verified `isVisualStep` consistency in `PlaybookStepFullPagePersistenceTest.java`.
+
+### [DEF-20261001-03] False-Positive Failure in `assert_element_state` on Multi-Candidate Selectors with Inactive Leading Elements (e.g. Slick Carousels)
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`BrowserToolProvider`)
+- **Scope:** `Framework`
+- **Symptom:** AI validation step asserting visibility of elements using class selectors (e.g. `.c-product-recommendations .product-tile`) failed with `Element should be visible ... Actual value: hidden` even though multiple matching elements were prominently displayed on the page.
+- **Root Cause:** `BrowserToolProvider.createAssertElementStateTool()` resolved targets via `resolveLazyElement(selector)` which maps strictly to `$(selector)` (the first element in DOM order). In carousel components such as Slick (`slick-slider`), element 0 (`#slick-slide00`) is often an inactive or cloned slide with `display: none` (`displayed:false`), while subsequent elements (`#slick-slide01` etc.) are actively displayed. Unlike `assert_text` which iterates over matching candidates, `assert_element_state` tested only element 0 without checking whether other candidates matched the asserted state.
+- **Detection Gap ("What did we miss?"):** `BrowserToolProviderStabilityTest` tested `assert_element_state` only on single-element locators (`#readonly-input`), never on selectors matching multiple elements where index 0 is hidden or inactive.
+- **Resolution:**
+  1. Updated `BrowserToolProvider.createAssertElementStateTool()`: when the initial candidate is not visible, check `findElements(selector).filter(Condition.visible)` and reassign `el` to the visible candidate before assertion, or fall back to collection polling via `findBy(Condition.visible)` in `case "visible"`.
+  2. For negative assertions (`state: "hidden"` / `absent`), verify that no candidate matching the selector is currently visible before passing.
+  3. Added `"displayed"` normalization to `"visible"` in `BrowserToolProvider.normalizeElementState()`.
+- **Safety Net Added:** Added `testAssertElementStateMultiCandidateVisibilityFallback` and `normalizeElementState` assertions in `BrowserToolProviderStabilityTest.java`.
+
+### [DEF-20261001-02] Playbook Replayer Stalls on Select2 Hidden Select Elements and Unrestricted Full-DOM Self-Healing on Optional/Async Steps
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`BrowserToolProvider`, `SelenideElementFinder`, `PlaybookToolReplayer`)
+- **Scope:** `Framework`
+- **Symptom:** Playbook execution in `REPLAY_STRICT` mode experiences multi-second stalling (up to 20 seconds per step) on interactive elements, specifically when selecting options in dropdowns styled with Select2 (e.g. `#radius` in `SpaLocatorTest`), checking optional elements that may not be present (e.g. dismissible cookie consent modals), or selecting asynchronous autocomplete popups.
+- **Root Cause:**
+  1. `BrowserToolProvider.createSelectTool` strictly enforced `el = findElement(selector).shouldBe(Condition.visible).shouldBe(Condition.enabled)`. Modern UI widget libraries (like Select2, Chosen, and accessible form styling) hide standard HTML `<select>` elements (`display: none` or `.select2-hidden-accessible` with 1x1 dimensions) behind a customized `<div>` wrapper while delegating option values to the underlying `<select>`. Enforcing Selenide `Condition.visible` forced `findElement` to exhaust full polling timeouts (3,000ms - 5,000ms) before failing or resorting to expensive DOM scans.
+  2. `SelenideElementFinder.findDirect` discarded attached `<select>` elements if they were not visible in the light DOM, causing `isDirectlyPresent("#radius")` to return `false` despite the `<select>` being present and interactive in the DOM.
+  3. `PlaybookToolReplayer.attemptHealing` triggered heavy full-DOM feature vector extractions (`extractFeatureVectors(driver)`) unconditionally on absent targets, even for optional steps (`step.isOptional()`) like cookie banners or promotional modals where element absence is expected and harmless.
+  4. For live pages, `attemptHealing` triggered full-DOM scans immediately without brief async polling for standard CSS/ID locators that were in the process of rendering (e.g. Google Maps dropdowns).
+- **Detection Gap ("What did we miss?"):** `BrowserToolProviderStabilityTest` tested `createSelectTool` only with mock `WebElement`s where `isDisplayed() == true`. No unit tests evaluated hidden or Select2-styled `<select>` elements where the `<select>` has class `select2-hidden-accessible` and `isDisplayed() == false`. Integration tests in Verla demo store used native HTML5 `<select>` elements rather than Select2 or Chosen widgets.
+- **Resolution:**
+  1. Relaxed `createSelectTool` to check `if (found.is(Condition.visible)) { el = found.shouldBe(Condition.enabled); } else { el = found.shouldBe(Condition.exist).shouldBe(Condition.enabled); }`.
+  2. Enhanced `SelenideElementFinder.findDirect` to fall back to attached `<select>` elements or elements with class `select2-hidden-accessible` if no visible element was matched.
+  3. Added a guard in `PlaybookToolReplayer.attemptHealing` to skip expensive full-DOM extraction if `step != null && step.isOptional()`.
+  4. Added brief polling before triggering full-page feature extraction on live drivers for standard CSS/ID locators, while ensuring context-provided `liveCandidates` bypass polling for sub-millisecond offline execution.
+- **Safety Net Added:** Added `testSelectToolAllowsHiddenSelectElementsWithSelect2` in `BrowserToolProviderStabilityTest.java` and verified offline sub-millisecond replay in `PlaybookToolReplayTest.java`.
+
+### [DEF-20261001-01] Batched Assertions Forcibly Truncated to Single Call per Turn Causing Step Token Budget Exhaustion
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`AgentToolLoopStep`)
+- **Scope:** `Framework`
+- **Symptom:** Compound verification steps containing multiple assertions (e.g. verifying 10 header elements in a single step) fail with `Token budget exceeded for step: Total tokens consumed (101110) exceeded configured step token budget (100000)` after thrashing across 11 turns, despite the LLM correctly proposing all assertions in Turn 1.
+- **Root Cause:** `AgentToolLoopStep` restricted cohesive batch execution exclusively to form inputs via `isCohesiveFormInputBatch`. When the LLM proposed multiple `assert_*` calls alongside `complete_step`, the engine evaluated the batch as invalid, executed only the first call (`assert_title`), and discarded the remaining 13 calls to "prevent stale DOM errors" (even though assertions are read-only and non-navigating). This forced the agent into single-call turns, triggered DOM amnesia and `query_dom` fallbacks, and exceeded the token budget.
+- **Detection Gap ("What did we miss?"):** `AgentToolLoopStepTest.testCohesiveFormInputBatchExecutesAllInputsInSingleTurn` verified cohesive form input batches (`fill`), but there were no tests validating cohesive assertion batches (`assert_*`), and `testBatchedToolCallsTruncatedToSingleActionPerTurn` assumed any non-form batch should be truncated.
+- **Resolution:** Replaced `isCohesiveFormInputBatch` with `isCohesiveBatch` in `AgentToolLoopStep.java`, recognizing both form inputs (`isFormInputAction`) and assertions (`isAssertionTool`) as safe batchable operations. Added synthetic `SKIPPED` handling for interrupted batches and updated System Prompt Rule 4 to guide cohesive multi-assertion generation.
+- **Safety Net Added:** Added `testCohesiveAssertionBatchExecutesAllAssertionsInSingleTurn` and `testCohesiveAssertionBatchInterruptedOnAssertionFailure` in `AgentToolLoopStepTest.java`.
+
+### [DEF-20260930-14] Complete Stripping of CSS Classes in Non-RICH Context Levels Due to Synthetic `autoId` Checked in `hasSemanticLocator`
+- **Date:** 2026-09-30
+- **Component:** `neodymium-core` (`PageAnalyzer`)
+- **Scope:** `Framework`
+- **Symptom:** AI verification steps targeting structural containers without IDs or text (e.g. `Verify cart items section is displayed`) fail on Turn 1 because container CSS classes (such as `class="b-basket-content-items"`) are completely omitted from the simplified DOM, forcing the agent into expensive 9-turn discovery loops (`query_dom`, `inspect_element`) taking 22+ seconds.
+- **Root Cause:** In commit `af748f3b`, `PageAnalyzer.formatElementNode` and `formatElement` introduced a token optimization to omit presentation classes when an element had a semantic locator (`hasSemanticLocator`). However, `autoId != null` was included in the condition. Because `PageAnalyzer` automatically assigns a synthetic `automationId` (`data-ai="xc..."`) to 100% of all extracted elements in the DOM tree, `autoId != null` evaluated to true for every single container and leaf element. Since `level.includesRichMetadata()` is false for `MINIMAL`, `LEAN`, and `STANDARD`, `appendSanitizedClassAttribute` was never called, stripping CSS classes entirely across all non-RICH context levels.
+- **Detection Gap ("What did we miss?"):** `PageAnalyzerTest` asserted element tags (`<table`, `<tr`, `<td`, `<form`), interactive attributes (`data-testid`, `role`, `aria-label`, `href`, `data-ai`), and text strings (`"Company Brand Logo"`), but contained zero assertions validating the presence of `class` attributes on containers. Integration tests asserted overall step success without asserting turn-count efficiency (`turnCount == 1`).
+- **Resolution:** Removed `autoId != null` from `hasSemanticLocator` in both `formatElementNode` (line 1237) and `formatElement` (line 1297) of `PageAnalyzer.java`, restoring CSS classes on all elements that lack semantic identifiers (`id`, `name`, `data-testid`, `role`, `aria-label`).
+- **Safety Net Added:** Added unit regression test `testContainerClassPreservationWhenAutomationIdPresent` in `PageAnalyzerTest.java` verifying that containers with `automationId` present retain their `class` attribute in `STANDARD` and `LEAN` modes.
+
+### [DEF-20260930-13] High Latency in AI Test Execution Due to Turn 1 Context Starvation, Intercepted Click Retries, and Unchecked Quality Judge
+- **Date:** 2026-09-30
+- **Component:** AI Engine (`AgentToolLoopStep`, `BrowserToolProvider`, `QualityJudgeToolInterceptor`)
+- **Scope:** `Framework`
+- **Symptom:** E-commerce test runs (e.g. `AddToCartTest`) take 324s (~5.4 min) for 24 steps; verification steps require 5–8 LLM turns (15s–26s each), and element clicks suffer 12s–23s in browser retry timeouts.
+- **Root Cause:**
+  1. `AgentToolLoopStep` defaulted Turn 1 context to `ContextLevel.LEAN`, stripping static text leaves (`div`, `span`, `p`, `td`) needed for price/subtotal/total verifications, forcing the LLM into expensive multi-turn `query_dom` / `inspect` exploratory loops.
+  2. `QualityJudgeToolInterceptor` defaulted `this.enabled = true` and did not check `config.isJudgeEnabled()`, triggering WebDriver queries, attribute scans, and candidate scoring even when disabled.
+  3. `BrowserToolProvider.executeElementClick` incurred Selenide's full retry timeout and disk report attachments upon `ElementClickInterceptedException` before falling back to JavaScript click.
+- **Detection Gap ("What did we miss?"):** Existing unit tests mocked LLM tool calls with pre-canned selectors and did not evaluate turn efficiency on static text assertions or measure real-browser timeout cascading on intercepted clicks.
+- **Resolution:**
+  1. Updated `AgentToolLoopStep` to resolve initial context level via `AiConfiguration.getContextLevel()` (configured to `STANDARD`), ensuring all text content is visible on Turn 1 in a universal, language-agnostic manner.
+  2. Bypassed all DOM queries and scoring in `QualityJudgeToolInterceptor.intercept()` when `!config.isJudgeEnabled()`.
+  3. Fast-pathed intercepted clicks in `BrowserToolProvider.executeElementClick` directly to JavaScript click.
+- **Safety Net Added:** Unit tests asserting `ContextLevel.STANDARD` propagation from configuration, zero DOM queries when Quality Judge is disabled, and fast JavaScript click execution on intercepted elements.
+
 ### [DEF-20260930-12] Redundant Duplicate Pre-Step Visual Capture and Blind Settle Sleep in `ExecuteActionsStep`
 - **Date:** 2026-09-30
 - **Component:** `neodymium-core` (`ExecuteActionsStep`)

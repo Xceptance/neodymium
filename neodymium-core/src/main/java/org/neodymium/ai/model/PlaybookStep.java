@@ -21,6 +21,7 @@ package org.neodymium.ai.model;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -413,8 +414,10 @@ public final class PlaybookStep
             final Matcher contextLevelMatcher = CONTEXT_LEVEL_PATTERN.matcher(cleaned);
             if (contextLevelMatcher.find())
             {
-                this.contextLevel = contextLevelMatcher.group(1).toUpperCase().trim();
-                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*contextlevel\\s*[:=]\\s*[a-zA-Z_]+\\s*\\)\\s*", " ");
+                final String rawLevel = contextLevelMatcher.group(1).trim();
+                final ContextLevel parsed = ContextLevel.fromString(rawLevel, null);
+                this.contextLevel = parsed != null ? parsed.name() : rawLevel.toUpperCase(Locale.ROOT);
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*(?:contextlevel|context)\\s*[:=]\\s*[a-zA-Z_-]+\\s*\\)\\s*", " ");
             }
 
             final Matcher visualMatcher = VISUAL_TAG_PARAM_PATTERN.matcher(cleaned);
@@ -899,7 +902,7 @@ public final class PlaybookStep
     private static final Pattern VISUAL_TAG_PARAM_PATTERN = Pattern.compile("(?i)\\(\\s*visual(?:\\s*:\\s*([^)]+))?\\s*\\)");
     private static final Pattern THRESHOLD_PARAM_PATTERN = Pattern.compile("(?i)^(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*([0-9.]+%?)$");
     private static final Pattern STANDALONE_THRESHOLD_PATTERN = Pattern.compile("(?i)\\(\\s*(?:threshold|ssim|min-score|minScore)\\s*[:=]\\s*([0-9.]+%?)\\s*\\)");
-    public static final Pattern CONTEXT_LEVEL_PATTERN = Pattern.compile("(?i)\\(\\s*contextlevel\\s*[:=]\\s*([a-zA-Z_]+)\\s*\\)");
+    public static final Pattern CONTEXT_LEVEL_PATTERN = Pattern.compile("(?i)\\(\\s*(?:contextlevel|context)\\s*[:=]\\s*([a-zA-Z_-]+)\\s*\\)");
     public static final Pattern LAYOUT_PATTERN = Pattern.compile("(?i)\\(\\s*layout\\s*\\)");
     public static final Pattern HINT_PATTERN = Pattern.compile("(?i)\\(\\s*hint\\s*:\\s*[^)]+\\)");
     public static final Pattern INTERACTIVE_ACTION_PATTERN =
@@ -946,7 +949,7 @@ public final class PlaybookStep
     /**
      * Checks if this step provides an explicit selector hint.
      *
-     * @return true if the instruction contains (hint: <selector>), false otherwise
+     * @return true if the instruction contains {@code (hint: <selector>)}, false otherwise
      */
     @JsonIgnore
     public boolean isHintStep()
@@ -966,6 +969,10 @@ public final class PlaybookStep
     @JsonIgnore
     public boolean isVisualStep()
     {
+        if (Boolean.TRUE.equals(this.fullPage))
+        {
+            return true;
+        }
         if (this.instruction == null)
         {
             return false;

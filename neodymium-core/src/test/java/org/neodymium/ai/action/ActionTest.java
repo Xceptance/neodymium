@@ -512,4 +512,30 @@ public class ActionTest
         assertEquals("CLICK", action.getThen().get(0).getType());
         assertEquals("#accept", action.getThen().get(0).getTarget());
     }
+
+    @Test
+    public void testFillFormFromToolCall()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        final ArrayNode fields = args.putArray("fields");
+        final ObjectNode f1 = fields.addObject();
+        f1.put("selector", "#firstName");
+        f1.put("value", "John");
+        final ObjectNode f2 = fields.addObject();
+        f2.put("selector", "#lastName");
+        f2.put("value", "Doe");
+
+        final ToolCall call = new ToolCall("call-fill-form", "fill_form", args);
+        final Action action = Action.fromToolCall(call);
+
+        assertNotNull(action);
+        assertEquals("FILL_FORM", action.getType());
+        assertEquals("form", action.getTarget());
+        assertTrue(action.getParameters().containsKey("fields"));
+
+        final ToolCall generatedCall = action.toToolCall();
+        assertEquals("fill_form", generatedCall.toolName());
+        assertTrue(generatedCall.arguments().hasNonNull("fields"));
+        assertEquals(2, generatedCall.arguments().path("fields").size());
+    }
 }

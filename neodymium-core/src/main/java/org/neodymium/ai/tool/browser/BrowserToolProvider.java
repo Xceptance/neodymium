@@ -30,6 +30,8 @@ import org.neodymium.ai.executor.selenide.LocatorResolver;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.executor.selenide.plugins.FillFormAction;
+import org.neodymium.ai.executor.selenide.plugins.FillFormAction.FormFieldEntry;
 import org.neodymium.ai.executor.selenide.plugins.IncludeAction;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.ContextLevel;
@@ -48,6 +50,7 @@ import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
 import org.openqa.selenium.Alert;
 import org.openqa.selenium.Dimension;
+import org.openqa.selenium.ElementClickInterceptedException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.NoAlertPresentException;
@@ -132,6 +135,7 @@ public final class BrowserToolProvider
 
         registry.register(createClickTool());
         registry.register(createFillTool());
+        registry.register(createFillFormTool());
         registry.register(createTypeTool());
         registry.register(createNavigateTool());
         registry.register(createSelectTool());
@@ -338,25 +342,18 @@ public final class BrowserToolProvider
             }
             catch (final Exception | AssertionError e)
             {
-                SelenideElement fallbackTargetEl = null;
-                if (!text.isBlank() && !selector.isBlank())
-                {
-                    try
-                    {
-                        final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
-                                ? $(Selectors.byText(text))
-                                : $(Selectors.withText(text));
-                        SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
-                        textEl.shouldBe(Condition.visible).click();
-                        fallbackTargetEl = textEl;
-                    }
-                    catch (final Exception | AssertionError ignored)
-                    {
-                    }
-                }
+                // Check if element click was intercepted by an overlay, animation, or sticky element
+                final boolean isIntercepted = (e.getCause() instanceof ElementClickInterceptedException)
+                        || (e instanceof ElementClickInterceptedException)
+                        || (e.getMessage() != null && (e.getMessage().contains("click intercepted")
+                                || e.getMessage().contains("is not clickable at point")
+                                || e.getMessage().contains("element click intercepted")));
 
-                if (fallbackTargetEl == null)
+                SelenideElement fallbackTargetEl = null;
+                if (isIntercepted)
                 {
+                    // Fast-path: When native click is intercepted by an animation or overlay, directly execute JS click
+                    // rather than wasting multi-second retry timeouts and dumping failure attachments
                     if (el.is(Condition.disabled) || !el.is(Condition.enabled))
                     {
                         throw e;
@@ -369,6 +366,41 @@ public final class BrowserToolProvider
                     catch (final Throwable ignored)
                     {
                         throw e;
+                    }
+                }
+                else
+                {
+                    if (!text.isBlank() && !selector.isBlank())
+                    {
+                        try
+                        {
+                            final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
+                                    ? $(Selectors.byText(text))
+                                    : $(Selectors.withText(text));
+                            SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
+                            textEl.shouldBe(Condition.visible).click();
+                            fallbackTargetEl = textEl;
+                        }
+                        catch (final Exception | AssertionError ignored)
+                        {
+                        }
+                    }
+
+                    if (fallbackTargetEl == null)
+                    {
+                        if (el.is(Condition.disabled) || !el.is(Condition.enabled))
+                        {
+                            throw e;
+                        }
+                        try
+                        {
+                            SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                            Selenide.executeJavaScript("arguments[0].click();", el);
+                        }
+                        catch (final Throwable ignored)
+                        {
+                            throw e;
+                        }
                     }
                 }
                 clickedEl = (fallbackTargetEl != null) ? fallbackTargetEl : el;
@@ -635,6 +667,76 @@ public final class BrowserToolProvider
 
         final ToolDefinition def = new ToolDefinition("fill", "Clears existing text and enters new text into an input or textarea element. Default tool for entering, typing, or setting form field values.", schema);
         return createBaseInputTool(def, true);
+    }
+
+    private static AiTool createFillFormTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+
+        final ObjectNode fieldsProp = props.putObject("fields");
+        fieldsProp.put("type", "array");
+        fieldsProp.put("description", "List of form fields to fill sequentially");
+        final ObjectNode itemSchema = fieldsProp.putObject("items");
+        itemSchema.put("type", "object");
+        final ObjectNode itemProps = itemSchema.putObject("properties");
+        itemProps.putObject("selector").put("type", "string").put("description", "Selector of the input or select element (e.g. CSS, role=textbox[name='...'], id=...)");
+        itemProps.putObject("value").put("type", "string").put("description", "Value or text to enter into the element");
+        itemProps.putObject("clearFirst").put("type", "boolean").put("description", "Whether to clear existing text before typing (default: true)");
+        final ArrayNode itemReq = itemSchema.putArray("required");
+        itemReq.add("selector");
+        itemReq.add("value");
+
+        final ArrayNode req = schema.putArray("required");
+        req.add("fields");
+
+        final ToolDefinition def = new ToolDefinition("fill_form", "Fills multiple form fields (inputs, textareas, selects) in a single operation. Use to fill entire forms (e.g. checkout, registration, address) efficiently without multiple sequential turns.", schema);
+
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                DomQuiescenceWatcher.installTracker();
+                final JsonNode args = call.arguments();
+                if (args == null || !args.hasNonNull("fields"))
+                {
+                    return ToolResult.error(call.callId(), "Argument 'fields' is required.");
+                }
+
+                final List<FormFieldEntry> fieldEntries = new ArrayList<>();
+                FillFormAction.parseFieldsJsonNode(args.get("fields"), fieldEntries);
+
+                if (fieldEntries.isEmpty())
+                {
+                    return ToolResult.error(call.callId(), "Argument 'fields' must contain at least one field entry.");
+                }
+
+                final ArrayNode filledList = MAPPER.createArrayNode();
+                for (final FormFieldEntry field : fieldEntries)
+                {
+                    final SelenideElement el = findElement(field.selector());
+                    SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                    FillFormAction.fillElement(el, field.value(), field.clearFirst());
+
+                    final ObjectNode entryNode = filledList.addObject();
+                    entryNode.put("selector", field.selector());
+                    entryNode.put("value", field.value());
+                }
+
+                final ObjectNode res = successNode(def.name());
+                res.set("fields", filledList);
+                res.put("count", filledList.size());
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
     }
 
     private static AiTool createTypeTool()
@@ -920,7 +1022,16 @@ public final class BrowserToolProvider
             {
                 DomQuiescenceWatcher.installTracker();
                 final String selector = resolveSelector(call.arguments());
-                final SelenideElement el = findElement(selector).shouldBe(Condition.visible).shouldBe(Condition.enabled);
+                final SelenideElement found = findElement(selector);
+                final SelenideElement el;
+                if (found.is(Condition.visible))
+                {
+                    el = found.shouldBe(Condition.enabled);
+                }
+                else
+                {
+                    el = found.shouldBe(Condition.exist).shouldBe(Condition.enabled);
+                }
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 DomFeatureVector featureVector = null;
                 if (driver != null)
@@ -956,41 +1067,13 @@ public final class BrowserToolProvider
                 if (call.arguments().hasNonNull("value"))
                 {
                     final String val = call.arguments().path("value").asText();
-                    try
-                    {
-                        el.selectOptionByValue(val);
-                    }
-                    catch (final Exception e)
-                    {
-                        try
-                        {
-                            el.selectOptionContainingText(val);
-                        }
-                        catch (final Exception ex)
-                        {
-                            el.selectOption(val);
-                        }
-                    }
+                    selectDropdownOption(el, val, true);
                     res.put("value", val);
                 }
                 else if (call.arguments().hasNonNull("text"))
                 {
                     final String txt = call.arguments().path("text").asText();
-                    try
-                    {
-                        el.selectOption(txt);
-                    }
-                    catch (final Exception e)
-                    {
-                        try
-                        {
-                            el.selectOptionContainingText(txt);
-                        }
-                        catch (final Exception ex)
-                        {
-                            el.selectOptionByValue(txt);
-                        }
-                    }
+                    selectDropdownOption(el, txt, false);
                     res.put("text", txt);
                 }
                 if (featureVector != null)
@@ -1000,6 +1083,220 @@ public final class BrowserToolProvider
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
+    }
+
+    private static void selectDropdownOption(final SelenideElement el, final String target, final boolean preferValue)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        if (driver instanceof JavascriptExecutor js)
+        {
+            try
+            {
+                final String script = """
+                    var sel = arguments[0];
+                    var target = arguments[1];
+                    var preferVal = arguments[2];
+                    if (!sel || !sel.options || sel.options.length === 0) return null;
+                    var exactValIdx = -1;
+                    var exactTextIdx = -1;
+                    var containsTextIdx = -1;
+                    for (var i = 0; i < sel.options.length; i++) {
+                        var opt = sel.options[i];
+                        if (opt.value === target && exactValIdx === -1) exactValIdx = i;
+                        var txt = (opt.text || opt.innerText || '').trim();
+                        if (txt === target && exactTextIdx === -1) exactTextIdx = i;
+                        if (txt && txt.indexOf(target) !== -1 && containsTextIdx === -1) containsTextIdx = i;
+                    }
+
+                    var chosenIdx = -1;
+                    var strategy = null;
+                    if (preferVal && exactValIdx !== -1) { chosenIdx = exactValIdx; strategy = 'value'; }
+                    else if (exactTextIdx !== -1) { chosenIdx = exactTextIdx; strategy = 'text'; }
+                    else if (exactValIdx !== -1) { chosenIdx = exactValIdx; strategy = 'value'; }
+                    else if (containsTextIdx !== -1) { chosenIdx = containsTextIdx; strategy = 'containsText'; }
+
+                    if (chosenIdx === -1) return null;
+
+                    var isVisible = false;
+                    try {
+                        var style = window.getComputedStyle ? window.getComputedStyle(sel) : null;
+                        var notHiddenStyle = !style || (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0');
+                        var rect = sel.getBoundingClientRect ? sel.getBoundingClientRect() : null;
+                        var isClippedOrTiny = !rect || rect.width <= 1 || rect.height <= 1;
+                        var isAriaHidden = sel.getAttribute('aria-hidden') === 'true';
+                        var isClipped = style && style.clip && style.clip.indexOf('rect(0') !== -1;
+                        isVisible = notHiddenStyle && !isClippedOrTiny && !isAriaHidden && !isClipped;
+                    } catch (e) {
+                        isVisible = false;
+                    }
+
+                    if (!isVisible) {
+                        sel.selectedIndex = chosenIdx;
+                        sel.options[chosenIdx].selected = true;
+                        sel.value = sel.options[chosenIdx].value;
+                        try {
+                            sel.dispatchEvent(new Event('input', { bubbles: true }));
+                            sel.dispatchEvent(new Event('change', { bubbles: true }));
+                        } catch (e) {
+                            var ev = document.createEvent('HTMLEvents');
+                            ev.initEvent('change', true, true);
+                            sel.dispatchEvent(ev);
+                        }
+                        if (window.jQuery) {
+                            try { window.jQuery(sel).trigger('change'); } catch(e) {}
+                        }
+                        return 'domSelected';
+                    }
+
+                    return strategy;
+                    """;
+                final Object matchStrategy = js.executeScript(script, el, target, preferValue);
+                if ("domSelected".equals(matchStrategy))
+                {
+                    return;
+                }
+                else if ("value".equals(matchStrategy))
+                {
+                    try
+                    {
+                        el.selectOptionByValue(target);
+                        return;
+                    }
+                    catch (final Exception e)
+                    {
+                        applyDomSelectFallback(js, el, target, preferValue);
+                        return;
+                    }
+                }
+                else if ("text".equals(matchStrategy))
+                {
+                    try
+                    {
+                        el.selectOption(target);
+                        return;
+                    }
+                    catch (final Exception e)
+                    {
+                        applyDomSelectFallback(js, el, target, preferValue);
+                        return;
+                    }
+                }
+                else if ("containsText".equals(matchStrategy))
+                {
+                    try
+                    {
+                        el.selectOptionContainingText(target);
+                        return;
+                    }
+                    catch (final Exception e)
+                    {
+                        applyDomSelectFallback(js, el, target, preferValue);
+                        return;
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (preferValue)
+        {
+            try
+            {
+                el.selectOptionByValue(target);
+            }
+            catch (final Exception e)
+            {
+                if (driver instanceof JavascriptExecutor js)
+                {
+                    applyDomSelectFallback(js, el, target, true);
+                }
+                else
+                {
+                    try
+                    {
+                        el.selectOptionContainingText(target);
+                    }
+                    catch (final Exception ex)
+                    {
+                        el.selectOption(target);
+                    }
+                }
+            }
+        }
+        else
+        {
+            try
+            {
+                el.selectOption(target);
+            }
+            catch (final Exception e)
+            {
+                if (driver instanceof JavascriptExecutor js)
+                {
+                    applyDomSelectFallback(js, el, target, false);
+                }
+                else
+                {
+                    try
+                    {
+                        el.selectOptionContainingText(target);
+                    }
+                    catch (final Exception ex)
+                    {
+                        el.selectOptionByValue(target);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void applyDomSelectFallback(final JavascriptExecutor js, final SelenideElement el, final String target, final boolean preferValue)
+    {
+        try
+        {
+            final String fallbackScript = """
+                var sel = arguments[0];
+                var target = arguments[1];
+                var preferVal = arguments[2];
+                if (!sel || !sel.options) return;
+                var chosenIdx = -1;
+                for (var i = 0; i < sel.options.length; i++) {
+                    var opt = sel.options[i];
+                    if (preferVal && opt.value === target) { chosenIdx = i; break; }
+                    var txt = (opt.text || opt.innerText || '').trim();
+                    if (txt === target) { chosenIdx = i; break; }
+                    if (opt.value === target && chosenIdx === -1) chosenIdx = i;
+                    if (txt && txt.indexOf(target) !== -1 && chosenIdx === -1) chosenIdx = i;
+                }
+                if (chosenIdx !== -1) {
+                    sel.selectedIndex = chosenIdx;
+                    sel.options[chosenIdx].selected = true;
+                    sel.value = sel.options[chosenIdx].value;
+                    try {
+                        sel.dispatchEvent(new Event('input', { bubbles: true }));
+                        sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    } catch (e) {
+                        var ev = document.createEvent('HTMLEvents');
+                        ev.initEvent('change', true, true);
+                        sel.dispatchEvent(ev);
+                    }
+                    if (window.jQuery) {
+                        try { window.jQuery(sel).trigger('change'); } catch(e) {}
+                    }
+                }
+                """;
+            js.executeScript(fallbackScript, el, target, preferValue);
+        }
+        catch (final Exception ignored)
+        {
+        }
     }
 
     private static AiTool createCheckTool()
@@ -2006,17 +2303,60 @@ public final class BrowserToolProvider
                     totalElements = allElements.size();
                     if (visibleOnly)
                     {
-                        for (final SelenideElement el : allElements)
+                        boolean batchEvaluated = false;
+                        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                        if (driver instanceof JavascriptExecutor js && totalElements > 0)
                         {
                             try
                             {
-                                if (el.isDisplayed())
+                                final List<WebElement> webElements = new ArrayList<>(totalElements);
+                                for (final SelenideElement el : allElements)
                                 {
-                                    actualCount++;
+                                    webElements.add(el.toWebElement());
+                                }
+                                final String countScript = """
+                                    var els = arguments[0];
+                                    if (!els) return 0;
+                                    var count = 0;
+                                    for (var i = 0; i < els.length; i++) {
+                                        var el = els[i];
+                                        if (!el || !el.isConnected) continue;
+                                        var style = window.getComputedStyle(el);
+                                        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+                                        var rects = el.getClientRects();
+                                        if (rects && rects.length > 0) {
+                                            count++;
+                                        }
+                                    }
+                                    return count;
+                                    """;
+                                final Object result = js.executeScript(countScript, webElements);
+                                if (result instanceof Number num)
+                                {
+                                    actualCount = num.intValue();
+                                    batchEvaluated = true;
                                 }
                             }
-                            catch (final Exception ignored)
+                            catch (final Exception e)
                             {
+                                LOGGER.debug("Batch visibility count script failed: {}. Falling back to sequential check.", e.getMessage());
+                            }
+                        }
+
+                        if (!batchEvaluated)
+                        {
+                            for (final SelenideElement el : allElements)
+                            {
+                                try
+                                {
+                                    if (el.isDisplayed())
+                                    {
+                                        actualCount++;
+                                    }
+                                }
+                                catch (final Exception ignored)
+                                {
+                                }
                             }
                         }
                     }
@@ -2750,7 +3090,15 @@ public final class BrowserToolProvider
                 final boolean negated = call.arguments().path("negated").asBoolean(false)
                         || call.arguments().path("not").asBoolean(false);
 
-                final SelenideElement el = resolveLazyElement(selector);
+                SelenideElement el = resolveLazyElement(selector);
+                if (!el.is(Condition.visible))
+                {
+                    final ElementsCollection visibleCandidates = findElements(selector).filter(Condition.visible);
+                    if (!visibleCandidates.isEmpty())
+                    {
+                        el = visibleCandidates.first();
+                    }
+                }
 
                 final List<String> evaluatedStates = new ArrayList<>();
                 for (final String rawState : states)
@@ -2775,8 +3123,27 @@ public final class BrowserToolProvider
 
                     switch (state)
                     {
-                        case "visible" -> el.shouldBe(Condition.visible);
-                        case "hidden" -> el.shouldBe(Condition.hidden);
+                        case "visible" ->
+                        {
+                            if (el.is(Condition.visible))
+                            {
+                                el.shouldBe(Condition.visible);
+                            }
+                            else
+                            {
+                                el = findElements(selector).findBy(Condition.visible);
+                                el.shouldBe(Condition.visible);
+                            }
+                        }
+                        case "hidden" ->
+                        {
+                            final ElementsCollection visibleCandidates = findElements(selector).filter(Condition.visible);
+                            if (!visibleCandidates.isEmpty())
+                            {
+                                el = visibleCandidates.first();
+                            }
+                            el.shouldBe(Condition.hidden);
+                        }
                         case "enabled" -> el.shouldBe(Condition.enabled);
                         case "disabled" -> el.shouldBe(Condition.disabled);
                         case "editable" -> el.shouldBe(Condition.editable);
@@ -2870,6 +3237,7 @@ public final class BrowserToolProvider
             case "unfocused", "not_focused" -> "unfocused";
             case "present", "exist", "exists" -> "exists";
             case "invisible", "hidden" -> "hidden";
+            case "displayed", "visible" -> "visible";
             default -> s;
         };
     }

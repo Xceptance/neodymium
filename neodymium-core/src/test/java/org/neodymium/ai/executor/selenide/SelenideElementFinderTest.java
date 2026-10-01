@@ -92,4 +92,11 @@ public class SelenideElementFinderTest
         Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("article[data-ai=\"xcboo7um\"] button[data-ai=\"xcz0f8a5\"]"));
         Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("article#xcboo7um button#xcz0f8a5"));
     }
+
+    @Test
+    public void testResetDomStampCacheForTesting()
+    {
+        SelenideElementFinder.resetDomStampCacheForTesting();
+        Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("#non-existent-after-reset"));
+    }
 }

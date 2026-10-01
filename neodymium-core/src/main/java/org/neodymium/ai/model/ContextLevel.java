@@ -158,6 +158,10 @@ public enum ContextLevel
             return fallback;
         }
         final String normalized = name.trim().toUpperCase().replace("-", "_");
+        if ("NONE".equals(normalized) || "ZERO".equals(normalized) || "NODOM".equals(normalized) || "NO_DOM".equals(normalized))
+        {
+            return HINT;
+        }
         try
         {
             return ContextLevel.valueOf(normalized);

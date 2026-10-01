@@ -18,12 +18,15 @@
  */
 package org.neodymium.ai.tool.browser;
 
+import static com.codeborne.selenide.Selenide.$;
+
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -81,6 +84,7 @@ public class BrowserToolsTest
         final List<String> expectedTools = List.of(
                 "click",
                 "fill",
+                "fill_form",
                 "type",
                 "navigate",
                 "select",
@@ -331,6 +335,24 @@ public class BrowserToolsTest
         final JsonNode req = tool.getDefinition().parametersSchema().path("required");
         Assertions.assertTrue(req.isArray());
         Assertions.assertEquals(2, req.size());
+    }
+
+    @Test
+    public void testBrowserFillFormToolSchema()
+    {
+        final AiTool tool = this.registry.getTool("fill_form").orElseThrow();
+        final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
+
+        Assertions.assertTrue(props.has("fields"));
+        final JsonNode items = props.path("fields").path("items").path("properties");
+        Assertions.assertTrue(items.has("selector"));
+        Assertions.assertTrue(items.has("value"));
+        Assertions.assertTrue(items.has("clearFirst"));
+
+        final JsonNode req = tool.getDefinition().parametersSchema().path("required");
+        Assertions.assertTrue(req.isArray());
+        Assertions.assertEquals(1, req.size());
+        Assertions.assertEquals("fields", req.get(0).asText());
     }
 
     @Test
@@ -1335,6 +1357,72 @@ public class BrowserToolsTest
         final ToolResult blankResult = hoverTool.execute(blankCall, null);
         Assertions.assertEquals(ToolResult.Status.ERROR, blankResult.status());
         Assertions.assertTrue(blankResult.content().contains("Target selector or text must be specified"));
+    }
+
+    @Test
+    public void testBrowserFillFormExecution() throws Exception
+    {
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Form Test</title></head>
+            <body>
+                <form id="checkout-form">
+                    <input id="firstName" type="text" value="OldFirst" />
+                    <input id="lastName" type="text" value="OldLast" />
+                    <select id="country">
+                        <option value="US">United States</option>
+                        <option value="CA">Canada</option>
+                        <option value="DE">Germany</option>
+                    </select>
+                    <textarea id="notes">Old Note</textarea>
+                </form>
+            </body>
+            </html>
+            """;
+        try
+        {
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            final AiTool tool = this.registry.getTool("fill_form").orElseThrow();
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode args = mapper.createObjectNode();
+            final ArrayNode fields = args.putArray("fields");
+
+            final ObjectNode f1 = fields.addObject();
+            f1.put("selector", "#firstName");
+            f1.put("value", "Alice");
+
+            final ObjectNode f2 = fields.addObject();
+            f2.put("selector", "#lastName");
+            f2.put("value", "Smith");
+
+            final ObjectNode f3 = fields.addObject();
+            f3.put("selector", "#country");
+            f3.put("value", "DE");
+
+            final ObjectNode f4 = fields.addObject();
+            f4.put("selector", "#notes");
+            f4.put("value", "Deliver to porch");
+
+            final ToolCall call = new ToolCall("call-fill-form-1", "fill_form", args);
+            final ToolResult result = tool.execute(call, null);
+
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+
+            final JsonNode res = mapper.readTree(result.content());
+            Assertions.assertEquals("SUCCESS", res.path("status").asText());
+            Assertions.assertEquals(4, res.path("count").asInt());
+
+            Assertions.assertEquals("Alice", $("#firstName").getValue());
+            Assertions.assertEquals("Smith", $("#lastName").getValue());
+            Assertions.assertEquals("DE", $("#country").getSelectedOptionValue());
+            Assertions.assertEquals("Deliver to porch", $("#notes").getValue());
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+        }
     }
 }
 

@@ -608,4 +608,30 @@ public class QualityJudgeToolInterceptorTest
             System.clearProperty("neodymium.ai.judge.discussion.maxTurns");
         }
     }
+
+    @Test
+    public void testBypassWhenJudgeAndLocatorImproverDisabled()
+    {
+        try
+        {
+            System.setProperty("neodymium.ai.judge.enabled", "false");
+            System.setProperty("neodymium.ai.locatorImprover.enabled", "false");
+
+            final QualityJudgeToolInterceptor disabledInterceptor = new QualityJudgeToolInterceptor();
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "button.submit");
+
+            final ToolCall call = new ToolCall("call-bypass", "click", args);
+            final InterceptionVerdict verdict = disabledInterceptor.intercept(call, this.context);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
+            Assertions.assertTrue(verdict.reason().contains("Quality Judge and Locator Improver disabled"));
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.locatorImprover.enabled");
+        }
+    }
 }

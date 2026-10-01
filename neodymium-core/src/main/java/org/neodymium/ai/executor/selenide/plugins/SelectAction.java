@@ -71,7 +71,7 @@ public final class SelectAction implements BrowserActionPlugin
         }
     }
 
-    private static boolean selectOptionFuzzy(final SelenideElement selectElement, final String targetText)
+    public static boolean selectOptionFuzzy(final SelenideElement selectElement, final String targetText)
     {
         if (targetText == null || targetText.isBlank())
         {
