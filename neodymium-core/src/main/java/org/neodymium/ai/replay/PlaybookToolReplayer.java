@@ -466,6 +466,12 @@ public final class PlaybookToolReplayer
         {
         }
 
+        // Optional steps (e.g. dismissible modals, cookie banners) must not perform heavy full-DOM healing scans
+        if (step != null && step.isOptional())
+        {
+            return null;
+        }
+
         // Check for live candidate vectors provided via context variable or dynamically extracted from active page
         List<DomFeatureVector> liveCandidates = null;
         final Object candidateObj = context != null ? context.getVariable("liveCandidates", Object.class).orElse(null) : null;
@@ -478,6 +484,28 @@ public final class PlaybookToolReplayer
         }
         else if (WebDriverRunner.hasWebDriverStarted())
         {
+            // For standard CSS or ID locators, do a brief poll (up to 300ms) in case an async element (e.g. dropdown) is currently rendering
+            if (!currentTarget.contains("data-ai=") && !currentTarget.contains("#xc"))
+            {
+                final long quickPollStart = System.currentTimeMillis();
+                while (System.currentTimeMillis() - quickPollStart < 300)
+                {
+                    try
+                    {
+                        Thread.sleep(50);
+                    }
+                    catch (final InterruptedException e)
+                    {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    if (SelenideElementFinder.isDirectlyPresent(currentTarget))
+                    {
+                        return null;
+                    }
+                }
+            }
+
             try
             {
                 liveCandidates = new PageAnalyzer().extractFeatureVectors(WebDriverRunner.getWebDriver());

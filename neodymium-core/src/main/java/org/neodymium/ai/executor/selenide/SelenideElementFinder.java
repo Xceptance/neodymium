@@ -599,6 +599,19 @@ public final class SelenideElementFinder
             {
                 return visible;
             }
+            for (final SelenideElement el : els)
+            {
+                try
+                {
+                    if ("select".equalsIgnoreCase(el.getTagName()) || el.has(Condition.cssClass("select2-hidden-accessible")))
+                    {
+                        return el;
+                    }
+                }
+                catch (final AssertionError | Exception ignored)
+                {
+                }
+            }
         }
         catch (final AssertionError | Exception ignored)
         {

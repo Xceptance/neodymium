@@ -1022,7 +1022,16 @@ public final class BrowserToolProvider
             {
                 DomQuiescenceWatcher.installTracker();
                 final String selector = resolveSelector(call.arguments());
-                final SelenideElement el = findElement(selector).shouldBe(Condition.visible).shouldBe(Condition.enabled);
+                final SelenideElement found = findElement(selector);
+                final SelenideElement el;
+                if (found.is(Condition.visible))
+                {
+                    el = found.shouldBe(Condition.enabled);
+                }
+                else
+                {
+                    el = found.shouldBe(Condition.exist).shouldBe(Condition.enabled);
+                }
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 DomFeatureVector featureVector = null;
                 if (driver != null)
@@ -2852,7 +2861,15 @@ public final class BrowserToolProvider
                 final boolean negated = call.arguments().path("negated").asBoolean(false)
                         || call.arguments().path("not").asBoolean(false);
 
-                final SelenideElement el = resolveLazyElement(selector);
+                SelenideElement el = resolveLazyElement(selector);
+                if (!el.is(Condition.visible))
+                {
+                    final ElementsCollection visibleCandidates = findElements(selector).filter(Condition.visible);
+                    if (!visibleCandidates.isEmpty())
+                    {
+                        el = visibleCandidates.first();
+                    }
+                }
 
                 final List<String> evaluatedStates = new ArrayList<>();
                 for (final String rawState : states)
@@ -2877,8 +2894,27 @@ public final class BrowserToolProvider
 
                     switch (state)
                     {
-                        case "visible" -> el.shouldBe(Condition.visible);
-                        case "hidden" -> el.shouldBe(Condition.hidden);
+                        case "visible" ->
+                        {
+                            if (el.is(Condition.visible))
+                            {
+                                el.shouldBe(Condition.visible);
+                            }
+                            else
+                            {
+                                el = findElements(selector).findBy(Condition.visible);
+                                el.shouldBe(Condition.visible);
+                            }
+                        }
+                        case "hidden" ->
+                        {
+                            final ElementsCollection visibleCandidates = findElements(selector).filter(Condition.visible);
+                            if (!visibleCandidates.isEmpty())
+                            {
+                                el = visibleCandidates.first();
+                            }
+                            el.shouldBe(Condition.hidden);
+                        }
                         case "enabled" -> el.shouldBe(Condition.enabled);
                         case "disabled" -> el.shouldBe(Condition.disabled);
                         case "editable" -> el.shouldBe(Condition.editable);
@@ -2972,6 +3008,7 @@ public final class BrowserToolProvider
             case "unfocused", "not_focused" -> "unfocused";
             case "present", "exist", "exists" -> "exists";
             case "invisible", "hidden" -> "hidden";
+            case "displayed", "visible" -> "visible";
             default -> s;
         };
     }
