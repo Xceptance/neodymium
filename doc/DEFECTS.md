@@ -41,6 +41,37 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261001-01] Variables from Test Data Cannot Be Inserted into Fragment Steps Being Edited Inline
+- **Date:** 2026-10-01
+- **Component:** `aura-manager` (`Visual Playbook Editor`, `dashboard-editor.js`, `editor.html`)
+- **Scope:** `Framework`
+- **Symptom:** Variables from test file test data could not be inserted into steps of fragment include cards being edited inside a test file, and inserted variables were not dynamically updated in the include card's variable dropdown with the flag "required from using file".
+- **Root Cause:** `insertVariableFromInput` in `dashboard-editor.js` lacked active nested step detection (`nestedStep`), and the editor did not trigger dynamic variable dropdown list refresh (`updateIncludeVarsDropdown`) when editing fragment step lines.
+- **Detection Gap ("What did we miss?"):** Existing UI tests focused on main playbook step insertion and pre-existing include tree variables, missing dynamic variable insertion into nested inline fragment steps.
+- **Resolution:** Updated `insertVariableFromInput` to check for active nested fragment steps and insert `${varName}` cleanly; introduced `updateIncludeVarsDropdown` to dynamically refresh the "Variables in Include" dropdown with flag "required from using file" (`scope-required active-required`).
+- **Safety Net Added:** Added UI test `testInsertVariableFromTestDataIntoInlineIncludeFragment()` in `AuraManagerEditorUiTest.java`.
+
+
+### [DEF-20261001-04] Warning Banner Remains Visible in Include Card After Saving Non-Existent Include File
+- **Date:** 2026-10-01
+- **Component:** `aura-manager` (`Visual Playbook Editor`, `dashboard-editor.js`)
+- **Scope:** `Test/Harness`
+- **Symptom:** The non-existent include file warning banner ("Included file does not exist on disk. Edit steps below and save to create it.") stays visible inside the include card even after saving the created steps to disk.
+- **Root Cause:** `saveIncludeInline(cardId)` posted step content to `/api/save` and updated unsaved badges, but did not remove the `.include-warning-banner` DOM node rendered when the card was initially loaded.
+- **Detection Gap ("What did we miss?"):** The initial UI test verified toast notification and unsaved badge removal, but did not assert that `.include-warning-banner` was removed after save.
+- **Resolution:** Updated `saveIncludeInline(cardId)` in `dashboard-editor.js` to locate and remove `.include-warning-banner` from `treeCard` when the save request succeeds.
+- **Safety Net Added:** Added assertion `includeCard.$(".include-warning-banner").shouldNotBe(Condition.visible)` in `AuraManagerEditorUiTest.java`.
+
+### [DEF-20261001-03] Visual Playbook Editor Include Fragment Preview Lacks Step Lines and Add-Step Capability for Non-Existent Includes
+- **Date:** 2026-10-01
+- **Component:** `aura-manager` (`Visual Playbook Editor`, `editor.html`, `dashboard-editor.js`)
+- **Scope:** `Test/Harness`
+- **Symptom:** When an include file does not exist on disk, the visual editor preview displays a warning ("Included file does not exist on disk. Edit steps below and save to create it."), but clicking "Edit File" provides no step line or UI mechanism to add a step line, preventing users from creating/editing the missing include.
+- **Root Cause:** Non-existent includes render 0 `.nested-editable-step` DOM elements (`includeSteps` is empty). `enableIncludeEdit(cardId)` only attempted to focus `steps[0]`. With 0 steps, no line was focused, and no empty placeholder or add step handler was provided.
+- **Detection Gap ("What did we miss?"):** Existing UI tests verified editing existing step fragments (`Child.steps`, `MultiChild.steps`), but lacked test coverage for editing missing/non-existent step fragment files.
+- **Resolution:** Added `addNestedStep(cardId)` helper, auto-insertion of an initial step row on `enableIncludeEdit` when steps are empty, an empty steps placeholder in Thymeleaf template, and an "+ Add Step" button to include cards.
+- **Safety Net Added:** Added Selenide UI test `testEditNonExistentIncludeFileCreatesStepAndSavesFile` in `AuraManagerEditorUiTest.java`.
+
 ### [DEF-20261001-01] Test Run Storage Directory Contains Duplicate Dummy console-execution-1.json Files Beside Higher-Indexed Files
 - **Date:** 2026-10-01
 - **Component:** `neodymium-core` (`InteractiveConsoleEngine`, `AuraInteractiveService`, `AuraQueueService`)
