@@ -222,7 +222,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                 stepEntry.setOptional(pbStep.isOptional());
                 stepEntry.setContinueOnError(pbStep.isContinueOnError());
                 stepEntry.setNoHealing(pbStep.isNoHealing());
-                stepEntry.setVisual(pbStep.isVisualStep());
+                stepEntry.setVisual(pbStep.isVisualOrLayoutStep());
 
                 if (pbStep.getReasoning() != null)
                 {
@@ -285,7 +285,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     parentEntry.setOptional(rootPb.isOptional());
                     parentEntry.setContinueOnError(rootPb.isContinueOnError());
                     parentEntry.setNoHealing(rootPb.isNoHealing());
-                    parentEntry.setVisual(rootPb.isVisualStep());
+                    parentEntry.setVisual(rootPb.isVisualOrLayoutStep());
                     this.report.addStep(parentEntry);
                 }
 
@@ -354,7 +354,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     childEntry.setOptional(childStep.isOptional());
                     childEntry.setContinueOnError(childStep.isContinueOnError());
                     childEntry.setNoHealing(childStep.isNoHealing());
-                    childEntry.setVisual(childStep.isVisualStep());
+                    childEntry.setVisual(childStep.isVisualOrLayoutStep());
                     stepEntry.addSubStep(childEntry);
                 }
             }
@@ -550,7 +550,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                             childEntry.setOptional(childStep.isOptional());
                             childEntry.setContinueOnError(childStep.isContinueOnError());
                             childEntry.setNoHealing(childStep.isNoHealing());
-                            childEntry.setVisual(childStep.isVisualStep());
+                            childEntry.setVisual(childStep.isVisualOrLayoutStep());
                             targetStep.addSubStep(childEntry);
                         }
                     }

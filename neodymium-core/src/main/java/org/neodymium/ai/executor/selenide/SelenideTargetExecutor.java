@@ -612,6 +612,38 @@ public final class SelenideTargetExecutor implements TargetExecutor
     }
 
     @Override
+    public void applyColorWireframe()
+    {
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            try
+            {
+                new PageAnalyzer(WebDriverRunner.getWebDriver()).applyColorWireframe();
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Failed to apply color wireframe: {}", e.getMessage());
+            }
+        }
+    }
+
+    @Override
+    public void removeColorWireframe()
+    {
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            try
+            {
+                new PageAnalyzer(WebDriverRunner.getWebDriver()).removeColorWireframe();
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Failed to remove color wireframe: {}", e.getMessage());
+            }
+        }
+    }
+
+    @Override
     public void close() throws Exception
     {
         if (!Neodymium.hasDriver() && WebDriverRunner.hasWebDriverStarted())

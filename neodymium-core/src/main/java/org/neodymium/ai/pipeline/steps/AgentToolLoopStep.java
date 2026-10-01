@@ -220,7 +220,7 @@ public final class AgentToolLoopStep implements PipelineStep
         final PlaybookStep step = stepObj instanceof PlaybookStep ps ? ps : null;
         final String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
         final String rawInstruction = (String) context.getTransientData().get("KEY_CURRENT_STEP_RAW_INSTRUCTION");
-        final boolean isVisual = (step != null && step.isVisualStep())
+        final boolean isVisual = (step != null && step.isVisualOrLayoutStep())
                 || (rawInstruction != null && (rawInstruction.toLowerCase().contains("(visual)") || rawInstruction.toLowerCase().contains("(layout)")))
                 || (instruction != null && (instruction.toLowerCase().contains("(visual)") || instruction.toLowerCase().contains("(layout)")));
 
@@ -293,7 +293,7 @@ public final class AgentToolLoopStep implements PipelineStep
         }
 
         userPrompt.append("### Test Instruction:\n").append(displayInstruction != null ? displayInstruction : "");
-        if (isVisual && displayInstruction != null && !displayInstruction.toLowerCase().contains("(visual)"))
+        if (isVisual && displayInstruction != null && !displayInstruction.toLowerCase().contains("(visual)") && !displayInstruction.toLowerCase().contains("(layout)"))
         {
             userPrompt.append(" (visual)");
         }
