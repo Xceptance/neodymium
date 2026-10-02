@@ -505,14 +505,6 @@ public final class AgentToolLoopStep implements PipelineStep
                 if (response != null && response.tokenUsage() != null)
                 {
                     stepCumulativeTokens += response.tokenUsage().totalTokenCount();
-                    if (this.maxTokens > 0 && stepCumulativeTokens > this.maxTokens)
-                    {
-                        throw new TokenBudgetExceededException(
-                                TokenBudgetExceededException.BudgetType.TOTAL,
-                                stepCumulativeTokens,
-                                this.maxTokens
-                        );
-                    }
                 }
             }
             catch (final TokenBudgetExceededException e)
@@ -557,6 +549,29 @@ public final class AgentToolLoopStep implements PipelineStep
                     proposedCalls = parsed.calls();
                     isSingleShotAction = parsed.isSingleShotAction();
                 }
+            }
+
+            // Stop Criterion 5: Step Token Budget Enforcement (with 20% grace for completing turns)
+            if (this.maxTokens > 0 && stepCumulativeTokens > this.maxTokens)
+            {
+                final boolean proposesCompletion = isSingleShotAction
+                        || (proposedCalls != null && !proposedCalls.isEmpty() && (
+                                "complete_step".equals(proposedCalls.get(0).toolName())
+                                || "include".equals(proposedCalls.get(0).toolName())
+                                || (proposedCalls.size() == 2 && "complete_step".equals(proposedCalls.get(1).toolName()))
+                                || (isCohesiveBatch(proposedCalls) && "complete_step".equals(proposedCalls.get(proposedCalls.size() - 1).toolName()))
+                        ));
+                final long graceLimit = (long) (this.maxTokens * 1.20);
+                if (!proposesCompletion || stepCumulativeTokens > graceLimit)
+                {
+                    throw new TokenBudgetExceededException(
+                            TokenBudgetExceededException.BudgetType.TOTAL,
+                            stepCumulativeTokens,
+                            this.maxTokens
+                    );
+                }
+                LOGGER.warn("⚠️ Turn #{} exceeded token budget ({} / {} tokens), but proposes step completion. Granting grace completion execution (grace limit: {}).",
+                        turn, stepCumulativeTokens, this.maxTokens, graceLimit);
             }
 
             // If no tool call could be parsed
@@ -801,6 +816,14 @@ public final class AgentToolLoopStep implements PipelineStep
                                     + "(If all milestones have genuinely been achieved already, invoke complete_step again to confirm.)";
                             LOGGER.warn("Rejecting premature complete_step: compound instruction has {} milestones but only {} tool calls executed.",
                                     milestones.size(), executedCalls.size());
+                            if (this.maxTokens > 0 && stepCumulativeTokens > this.maxTokens)
+                            {
+                                throw new TokenBudgetExceededException(
+                                        TokenBudgetExceededException.BudgetType.TOTAL,
+                                        stepCumulativeTokens,
+                                        this.maxTokens
+                                );
+                            }
                             conversation.add(ChatMessage.tool(currentCall.callId(), currentCall.toolName(), rejectMsg));
                             continue turnLoop;
                         }
@@ -1173,6 +1196,15 @@ public final class AgentToolLoopStep implements PipelineStep
                 final TokenUsage tu = response.tokenUsage();
                 LOGGER.info("📊 Tokens: {} in ({} cached) → {} out (total: {}) | Turn {}",
                         tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
+            }
+
+            if (this.maxTokens > 0 && stepCumulativeTokens > this.maxTokens)
+            {
+                throw new TokenBudgetExceededException(
+                        TokenBudgetExceededException.BudgetType.TOTAL,
+                        stepCumulativeTokens,
+                        this.maxTokens
+                );
             }
 
             // Always prune expired DOM snapshots from prior turn(s) to minimize token context

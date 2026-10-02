@@ -2068,6 +2068,8 @@ public final class BrowserToolProvider
                         || "head > title".equalsIgnoreCase(selector.trim())
                         || "head title".equalsIgnoreCase(selector.trim()));
 
+                SelenideElement matchedElement = null;
+
                 if (isTitle)
                 {
                     if (!WebDriverRunner.hasWebDriverStarted())
@@ -2168,6 +2170,7 @@ public final class BrowserToolProvider
                                     if (matchesElementOrAssociatedLabel(el, expectedText, regex, exact))
                                     {
                                         matched = true;
+                                        matchedElement = el;
                                         break;
                                     }
                                 }
@@ -2178,6 +2181,7 @@ public final class BrowserToolProvider
                                 if (singleEl.exists() && matchesElementOrAssociatedLabel(singleEl, expectedText, regex, exact))
                                 {
                                     matched = true;
+                                    matchedElement = singleEl;
                                 }
                             }
 
@@ -2191,10 +2195,12 @@ public final class BrowserToolProvider
                                     if (container.exists() && matchesElementText(container, expectedText, regex, exact))
                                     {
                                         matched = true;
+                                        matchedElement = container;
                                     }
                                     else if (primary.parent().exists() && matchesElementText(primary.parent(), expectedText, regex, exact))
                                     {
                                         matched = true;
+                                        matchedElement = primary.parent();
                                     }
                                 }
                             }
@@ -2229,6 +2235,20 @@ public final class BrowserToolProvider
                 res.put("regex", regex);
                 res.put("negated", negated);
                 res.put("matched", true);
+                if (matchedElement != null && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        final DomFeatureVector featureVector = new PageAnalyzer(WebDriverRunner.getWebDriver()).extractFeatureVector(matchedElement);
+                        if (featureVector != null)
+                        {
+                            res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -2671,7 +2691,11 @@ public final class BrowserToolProvider
         {
             return $("body");
         }
-        return $(LocatorResolver.resolveLocator(selector));
+        if (SelenideElementFinder.isAutomationIdSelector(selector))
+        {
+            SelenideElementFinder.ensureAutomationIdsStampedIfNeeded(selector);
+        }
+        return $(SelenideElementFinder.resolveLocator(selector));
     }
 
     private static SelenideElement findElement(final String selector)
@@ -2692,6 +2716,10 @@ public final class BrowserToolProvider
         }
         try
         {
+            if (SelenideElementFinder.isAutomationIdSelector(selector))
+            {
+                SelenideElementFinder.ensureAutomationIdsStampedIfNeeded(selector);
+            }
             return Selenide.$$(SelenideElementFinder.resolveLocator(selector));
         }
         catch (final Exception ignored)
@@ -3212,6 +3240,20 @@ public final class BrowserToolProvider
                 }
                 res.put("negated", negated);
                 res.put("matched", true);
+                if (el != null && el.exists() && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        final DomFeatureVector featureVector = new PageAnalyzer(WebDriverRunner.getWebDriver()).extractFeatureVector(el);
+                        if (featureVector != null)
+                        {
+                            res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -3377,6 +3419,20 @@ public final class BrowserToolProvider
                 }
                 res.put("negated", negated);
                 res.put("matched", true);
+                if (el != null && el.exists() && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        final DomFeatureVector featureVector = new PageAnalyzer(WebDriverRunner.getWebDriver()).extractFeatureVector(el);
+                        if (featureVector != null)
+                        {
+                            res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -3595,7 +3651,7 @@ public final class BrowserToolProvider
         final ObjectNode props = schema.putObject("properties");
         props.putObject("selector").put("type", "string").put("description", "CSS selector to search for");
         props.putObject("text").put("type", "string").put("description", "Case-insensitive text substring to search for");
-        props.putObject("includeAncestors").put("type", "integer").put("description", "Number of ancestor levels to include in returned subtree (default: 1)");
+        props.putObject("includeAncestors").put("type", "integer").put("description", "Number of ancestor levels to include in returned subtree (default: 0)");
         props.putObject("limit").put("type", "integer").put("description", "Maximum number of elements to return (default: 20)");
 
         final ToolDefinition def = new ToolDefinition("query_dom", "Searches the live DOM for elements matching a selector or text, returning clean subtrees with attributes and visibility", schema);
@@ -3614,9 +3670,11 @@ public final class BrowserToolProvider
                 final String selector = args.hasNonNull("selector") ? args.path("selector").asText() : "";
                 final String text = args.hasNonNull("text") ? args.path("text").asText() : "";
                 final int limit = args.hasNonNull("limit") ? args.path("limit").asInt(20) : 20;
+                final int includeAncestors = args.hasNonNull("includeAncestors") ? Math.max(0, args.path("includeAncestors").asInt(0)) : 0;
 
                 final String queryScript = """
-                    return (function(sel, searchText, maxCount) {
+                    return (function(sel, searchText, maxCount, ancestorLevels) {
+                        ancestorLevels = (typeof ancestorLevels === 'number' && ancestorLevels > 0) ? ancestorLevels : 0;
                         var candidates = [];
                         if (sel && sel.trim()) {
                             try {
@@ -3685,45 +3743,130 @@ public final class BrowserToolProvider
                                 }
                             }
                         }
+                        function isVisible(node) {
+                            if (!node || !node.isConnected) return false;
+                            if (node.closest && node.closest('.neodymium-ai-hud')) return false;
+
+                            if (typeof node.checkVisibility === 'function') {
+                                try {
+                                    if (!node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) {
+                                        return false;
+                                    }
+                                } catch(e) {}
+                            }
+
+                            var cur = node;
+                            while (cur && cur !== document.documentElement) {
+                                var style = window.getComputedStyle(cur);
+                                if (!style) return false;
+                                if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
+                                    return false;
+                                }
+                                var op = parseFloat(style.opacity);
+                                if (!isNaN(op) && op < 0.01) {
+                                    return false;
+                                }
+                                cur = cur.parentElement;
+                            }
+
+                            var rect = node.getBoundingClientRect();
+                            var tagName = node.tagName ? node.tagName.toLowerCase() : '';
+                            if (rect.width === 0 && rect.height === 0) {
+                                var isCheckable = tagName === 'input' && (node.type === 'radio' || node.type === 'checkbox');
+                                if (isCheckable) {
+                                    var label = (node.labels && node.labels.length > 0) ? node.labels[0] : (node.closest ? node.closest('label') : null);
+                                    if (label && isVisible(label)) return true;
+                                }
+                                return false;
+                            }
+                            return true;
+                        }
+
                         var toProcess = leafMatches.length > 0 ? leafMatches : uniqueFiltered;
-                        if (lowerText) {
-                            toProcess.sort(function(a, b) {
+                        toProcess.sort(function(a, b) {
+                            var visA = isVisible(a) ? 1 : 0;
+                            var visB = isVisible(b) ? 1 : 0;
+                            if (visA !== visB) {
+                                return visB - visA;
+                            }
+                            if (lowerText) {
                                 var lenA = (a.innerText || a.textContent || '').trim().length;
                                 var lenB = (b.innerText || b.textContent || '').trim().length;
                                 return lenA - lenB;
-                            });
-                        }
+                            }
+                            return 0;
+                        });
 
                         var results = [];
                         var seen = new Set();
 
                         for (var j = 0; j < toProcess.length; j++) {
-                            var el = toProcess[j];
+                            var rawEl = toProcess[j];
+                            var el = rawEl;
+                            if (ancestorLevels > 0) {
+                                for (var lvl = 0; lvl < ancestorLevels; lvl++) {
+                                    if (el.parentElement && el.parentElement !== document.body && el.parentElement !== document.documentElement) {
+                                        el = el.parentElement;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
                             if (seen.has(el)) continue;
                             seen.add(el);
 
                             var rect = el.getBoundingClientRect();
-                            var inViewport = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+                            var vis = isVisible(el);
+                            var inRect = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+                            var inViewport = vis && inRect;
+
                             var tag = el.tagName.toLowerCase();
-                            var idStr = el.id ? '#' + el.id : '';
-                            var clsStr = el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\\s+/).slice(0, 2).join('.') : '';
+                            var autoId = el.getAttribute('data-ai');
+                            var idStr = (el.id && typeof el.id === 'string' && /^[a-zA-Z0-9_-]+$/.test(el.id)) ? '#' + el.id : '';
+
+                            var safeClasses = [];
+                            if (el.className && typeof el.className === 'string') {
+                                var parts = el.className.trim().split(/\\s+/);
+                                for (var p = 0; p < parts.length; p++) {
+                                    var cls = parts[p];
+                                    if (cls && /^[a-zA-Z0-9_-]+$/.test(cls)) {
+                                        safeClasses.push(cls);
+                                        if (safeClasses.length >= 2) break;
+                                    }
+                                }
+                            }
+                            var clsStr = safeClasses.length > 0 ? '.' + safeClasses.join('.') : '';
+
+                            var selectorStr = '';
+                            if (idStr) {
+                                selectorStr = tag + idStr + clsStr;
+                            } else if (autoId) {
+                                selectorStr = tag + '[data-ai="' + autoId + '"]';
+                            } else {
+                                selectorStr = tag + clsStr;
+                            }
+
                             var elText = (el.innerText || el.textContent || '').trim();
+                            var maxTextLen = ancestorLevels > 0 ? 150 : 80;
+                            var maxHtmlLen = ancestorLevels > 0 ? 500 : 200;
 
                             results.push({
                                 tag: tag,
-                                selector: tag + idStr + clsStr,
-                                text: elText.length > 80 ? elText.substring(0, 80) + '…' : elText,
+                                selector: selectorStr,
+                                text: elText.length > maxTextLen ? elText.substring(0, maxTextLen) + '…' : elText,
+                                visible: vis,
                                 inViewport: inViewport,
+                                dataAi: autoId || null,
                                 y: Math.round(rect.top + window.scrollY),
-                                outerHtml: el.outerHTML.length > 200 ? el.outerHTML.substring(0, 200) + '…' : el.outerHTML
+                                outerHtml: el.outerHTML.length > maxHtmlLen ? el.outerHTML.substring(0, maxHtmlLen) + '…' : el.outerHTML
                             });
                             if (results.length >= maxCount) break;
                         }
                         return JSON.stringify(results);
-                    })(arguments[0], arguments[1], arguments[2]);
+                    })(arguments[0], arguments[1], arguments[2], arguments[3]);
                     """;
 
-                final Object res = Selenide.executeJavaScript(queryScript, selector, text, limit);
+                final Object res = Selenide.executeJavaScript(queryScript, selector, text, limit, includeAncestors);
                 final String resStr = res != null ? res.toString() : "[]";
                 final ObjectNode rootNode = successNode("query_dom");
                 JsonNode matchesNode;
@@ -3736,10 +3879,27 @@ public final class BrowserToolProvider
                     matchesNode = MAPPER.createArrayNode();
                 }
                 rootNode.set("matches", matchesNode);
-                rootNode.put("matchCount", matchesNode.size());
-                if ("[]".equals(resStr.trim()) && !text.isBlank())
+                final int matchCount = matchesNode.size();
+                rootNode.put("matchCount", matchCount);
+                if (matchCount == 0 && !text.isBlank())
                 {
                     rootNode.put("note", "No elements found matching text: '" + text + "'. Verify if the element is inside a closed menu, dropdown, modal, or iframe");
+                }
+                else if (matchCount > 0 && !text.isBlank())
+                {
+                    boolean hasVisible = false;
+                    for (final JsonNode m : matchesNode)
+                    {
+                        if (m.path("visible").asBoolean(false))
+                        {
+                            hasVisible = true;
+                            break;
+                        }
+                    }
+                    if (!hasVisible)
+                    {
+                        rootNode.put("note", "All " + matchCount + " matching element(s) are currently hidden (visible=false). Verify if a parent dropdown, menu, or modal needs to be opened first");
+                    }
                 }
                 return ToolResult.success(call.callId(), rootNode.toString());
             }

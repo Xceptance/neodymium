@@ -164,6 +164,10 @@ public class LocatorResolverTest
         Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), LocatorResolver.resolveLocator("data-ai=\"xc123\""));
         Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), LocatorResolver.resolveLocator("data-ai='xc123'"));
         Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), LocatorResolver.resolveLocator("DATA-AI=xc123"));
+        Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), LocatorResolver.resolveLocator("#xc123"));
+        Assertions.assertEquals(By.cssSelector("[data-ai='xcrxcvi']"), LocatorResolver.resolveLocator("#xcrxcvi"));
+        Assertions.assertEquals(By.cssSelector("[data-ai='xcrxcvi']"), LocatorResolver.resolveLocator("xcrxcvi"));
+        Assertions.assertEquals(By.cssSelector("div > [data-ai='xc4o48u']"), LocatorResolver.resolveLocator("div > #xc4o48u"));
 
         Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("data-testid=submit-btn"));
         Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("data-testid=\"submit-btn\""));
