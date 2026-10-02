@@ -972,7 +972,7 @@ public class AgentToolLoopStepTest
             Assertions.assertTrue(toolNames.contains("screenshot"));
             Assertions.assertTrue(toolNames.contains("inspect_visual"));
             Assertions.assertTrue(toolNames.contains("scroll"));
-            Assertions.assertTrue(toolNames.contains("request_context"));
+            Assertions.assertFalse(toolNames.contains("request_context"));
 
             // Must NOT contain mutating tools
             Assertions.assertFalse(toolNames.contains("click"));
@@ -986,6 +986,7 @@ public class AgentToolLoopStepTest
             Assertions.assertFalse(toolNames.contains("query_dom"));
             Assertions.assertFalse(toolNames.contains("assert_text"));
             Assertions.assertFalse(toolNames.contains("inspect"));
+            Assertions.assertFalse(toolNames.contains("request_context"));
 
             final String userContent = req.messages().get(1).content();
             Assertions.assertTrue(userContent.contains("There is a green checkmark in the middle of the screen . (visual)"));
@@ -999,6 +1000,45 @@ public class AgentToolLoopStepTest
         step.execute(this.context);
 
         Assertions.assertEquals("Green checkmark verified", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
+
+    @Test
+    public void testVisualAssertionExcessiveScrollingTerminatesConclusively() throws Exception
+    {
+        final ObjectNode scrollSchema = MAPPER.createObjectNode();
+        scrollSchema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("scroll", "Scrolls page", scrollSchema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\"}");
+            }
+        });
+
+        final PlaybookStep visualStep = new PlaybookStep("Verify footer banner (visual).");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, visualStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify footer banner .");
+        this.context.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", "Verify footer banner (visual).");
+
+        final AtomicInteger turnCounter = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turnCounter.incrementAndGet();
+            return new LlmResponse("Scroll " + t, new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("c-scroll-" + t, "scroll", MAPPER.createObjectNode().put("yOffset", t * 100))));
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        final ConclusiveFailureException ex = Assertions.assertThrows(ConclusiveFailureException.class, () -> step.execute(this.context));
+        Assertions.assertTrue(ex.getMessage().contains("Visual verification exceeded maximum scroll repositioning attempts"));
     }
 
     @Test
@@ -1222,7 +1262,6 @@ public class AgentToolLoopStepTest
 
         final MockTargetExecutor executor = new MockTargetExecutor();
         executor.enqueueState(new BrowserSutState("<button id='country-btn'>🇺🇸</button>", List.of(new SutAttachment("image/png", "screenshot", "dummyBase64")), "DOM_LIGHT"));
-        executor.enqueueState(new BrowserSutState("<html>visual observation</html>", List.of(new SutAttachment("image/png", "screenshot", "dummyBase64_2")), "VISUAL"));
         executor.enqueueState(new BrowserSutState("<div id='full-cart'><span>Cart Total</span></div>", List.of(new SutAttachment("image/png", "screenshot", "dummyBase64_3")), "STANDARD"));
         this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
         this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Validate that United States as country is selected.");
@@ -3319,6 +3358,214 @@ public class AgentToolLoopStepTest
         step.execute(this.context);
 
         Assertions.assertEquals("Verified and closed", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
+
+    /**
+     * Verifies that executing a read-only discovery/inspection tool (e.g. mock_inspect) in a standard
+     * step does NOT capture intermediate visual state or attach redundant screenshots to subsequent turns,
+     * saving token budget.
+     */
+    @Test
+    public void testDiscoveryToolOmitsVisualStateCaptureAndAttachments() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_inspect", "Inspects page", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Subtotal: $123.45");
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<div>initial</div>", Collections.emptyList(), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<div>after inspect</div>", List.of(new SutAttachment("image/png", "screenshot", "freshBase64")), "DOM_LIGHT"));
+
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        final PlaybookStep playbookStep = new PlaybookStep("Capture the new subtotal in 'subtotal'.");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, playbookStep.getInstruction());
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.STANDARD);
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-1", "mock_inspect", MAPPER.createObjectNode())));
+            }
+            if (t == 2)
+            {
+                Assertions.assertTrue(req.attachments().isEmpty(),
+                        "Turn 2 attachments must be empty after discovery tool execution!");
+                final List<ChatMessage> messages = req.messages();
+                final ChatMessage latestUserMsg = messages.get(messages.size() - 1);
+                Assertions.assertTrue(latestUserMsg.attachments().isEmpty(),
+                        "Latest user message attachments must be empty!");
+                Assertions.assertTrue(latestUserMsg.content().contains("Note: Page visual state is unchanged after discovery/inspection tool execution (viewport screenshot omitted)."),
+                        "Turn prompt must note that viewport screenshot is omitted due to unchanged visual state!");
+
+                return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-2", "complete_step", MAPPER.createObjectNode().put("summary", "Subtotal captured"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+        step.execute(this.context);
+
+        Assertions.assertEquals(2, turn.get());
+        // Executor should only have been called ONCE for the initial state capture in Turn 1
+        Assertions.assertEquals(1, executor.getCapturedContextLevels().size(),
+                "captureState should not have been called between turns for read-only discovery tool.");
+        Assertions.assertEquals("Subtotal captured", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
+
+    /**
+     * Verifies that executing a mutating action (e.g. mock_click) in a standard step captures fresh visual state
+     * and attaches the viewport screenshot to subsequent turns.
+     */
+    @Test
+    public void testMutatingActionRetainsVisualStateCaptureAndAttachments() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("mock_click", "Clicks target", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Clicked");
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<div>initial</div>", Collections.emptyList(), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<div>after click</div>",
+                List.of(new SutAttachment("image/png", "screenshot", "afterClickBase64")), "DOM_LIGHT"));
+
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        final PlaybookStep playbookStep = new PlaybookStep("Click the submit button.");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, playbookStep.getInstruction());
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.STANDARD);
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-1", "mock_click", MAPPER.createObjectNode().put("selector", "#submit"))));
+            }
+            if (t == 2)
+            {
+                Assertions.assertFalse(req.attachments().isEmpty(),
+                        "Turn 2 attachments must NOT be empty after mutating action!");
+                Assertions.assertEquals("afterClickBase64", req.attachments().get(0).base64Data());
+                final List<ChatMessage> messages = req.messages();
+                final ChatMessage latestUserMsg = messages.get(messages.size() - 1);
+                Assertions.assertTrue(latestUserMsg.content().contains("Note: The requested action has been executed. Attached is the current viewport screenshot"),
+                        "Turn prompt must note that viewport screenshot is attached!");
+
+                return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-2", "complete_step", MAPPER.createObjectNode().put("summary", "Submitted"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+        step.execute(this.context);
+
+        Assertions.assertEquals(2, turn.get());
+        Assertions.assertEquals(2, executor.getCapturedContextLevels().size(),
+                "captureState should have been called twice: initial state and post-action visual state.");
+        Assertions.assertEquals(ContextLevel.VISUAL, executor.getCapturedContextLevels().get(1));
+    }
+
+    /**
+     * Verifies that the scroll tool is treated as a mutating action because it changes the visible viewport,
+     * ensuring fresh visual state is captured and attached.
+     */
+    @Test
+    public void testScrollToolTreatedAsMutatingActionCapturesVisualState() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("scroll", "Scrolls viewport", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Scrolled");
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<div>initial</div>", Collections.emptyList(), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<div>after scroll</div>",
+                List.of(new SutAttachment("image/png", "screenshot", "afterScrollBase64")), "DOM_LIGHT"));
+
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        final PlaybookStep playbookStep = new PlaybookStep("Scroll down to view footer.");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, playbookStep.getInstruction());
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.STANDARD);
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("", new TokenUsage(100, 20, 120), "mock",
+                        List.of(new ToolCall("call-1", "scroll", MAPPER.createObjectNode().put("yOffset", 500))));
+            }
+            if (t == 2)
+            {
+                Assertions.assertFalse(req.attachments().isEmpty(),
+                        "Turn 2 attachments must NOT be empty after scroll!");
+                Assertions.assertEquals("afterScrollBase64", req.attachments().get(0).base64Data());
+
+                return new LlmResponse("Done", new TokenUsage(50, 10, 60), "mock",
+                        List.of(new ToolCall("call-2", "complete_step", MAPPER.createObjectNode().put("summary", "Scrolled and verified"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+        step.execute(this.context);
+
+        Assertions.assertEquals(2, turn.get());
+        Assertions.assertEquals(2, executor.getCapturedContextLevels().size(),
+                "captureState should have been called twice because scroll modifies viewport visibility.");
+        Assertions.assertEquals(ContextLevel.VISUAL, executor.getCapturedContextLevels().get(1));
     }
 }
 

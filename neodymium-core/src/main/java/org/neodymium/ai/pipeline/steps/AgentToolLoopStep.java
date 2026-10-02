@@ -224,6 +224,8 @@ public final class AgentToolLoopStep implements PipelineStep
         final boolean isVisual = (step != null && step.isVisualOrLayoutStep())
                 || (rawInstruction != null && (rawInstruction.toLowerCase().contains("(visual)") || rawInstruction.toLowerCase().contains("(layout)")))
                 || (instruction != null && (instruction.toLowerCase().contains("(visual)") || instruction.toLowerCase().contains("(layout)")));
+        final boolean hasInteractive = hasInteractiveMilestones(context);
+        final boolean isVisualAssertion = isVisual && !hasInteractive;
 
         @SuppressWarnings("unchecked")
         final List<String> milestones = (List<String>) context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
@@ -305,7 +307,8 @@ public final class AgentToolLoopStep implements PipelineStep
             userPrompt.append("### Visual Inspection Directive:\n")
                     .append("This instruction is marked for visual verification. A screenshot of the active page is attached. ")
                     .append("Visually inspect the screenshot to verify whether the condition (appearance, layout, colors, elements, checkmarks, badges) is met on screen. ")
-                    .append("If the visual condition is satisfied, invoke tool 'complete_step' immediately.\n\n");
+                    .append("If the visual condition is satisfied, invoke tool 'complete_step' immediately. ")
+                    .append("If the visual condition is not met or expected elements are missing/off-screen, conclude the visual check with an appropriate summary or fail — do NOT repeatedly scroll or attempt DOM recovery.\n\n");
         }
 
         if (milestones != null && !milestones.isEmpty())
@@ -412,7 +415,7 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. Propose [assertion, complete_step] in the same turn once the verification condition is satisfied. Directly assert the commanded property or content rather than splitting verification into separate intermediate visibility checks. To assert multiple states on the same element (e.g. 'displayed and enabled'), combine them into a single 'assert_element_state' call using compound states (e.g. state: 'visible, enabled' or states: ['visible', 'enabled']) rather than executing multiple separate tool calls. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. When validating that an option, setting, country, language, or currency is selected, first check if the active trigger or header element reflects this (via text, title, or attributes like aria-label); assert on it directly without opening menus. If you perform temporary interactions (such as expanding dropdowns, opening modals/dialogs, or switching tabs) to reveal hidden content to verify, you MUST restore the initial page state before completing the step: close the opened modal/dialog/overlay (e.g. clicking the close button or pressing Escape) or collapse the dropdown so that ephemeral dialogs and backdrops do not leak into and block subsequent steps. Never invoke 'complete_step' while a temporary verification modal or overlay remains open on screen. Cohesive multi-assertion operations: When an instruction commands verifying multiple elements or conditions, you may propose all commanded [assert_*, ..., complete_step] calls in the same turn to execute all verifications cohesively.\n");
         if (isVisual)
         {
-            systemPrompt.append("5. VISUAL CHECKS: When verifying visual appearance or when a screenshot is provided, inspect the screenshot visually to verify whether the condition is met on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
+            systemPrompt.append("5. VISUAL CHECKS: When verifying visual appearance or when a screenshot is provided, inspect the screenshot visually to verify whether the condition is met on screen, then invoke 'complete_step'. Do not query DOM or escalate context for visual checks.\n");
         }
         systemPrompt.append("6. CONDITIONAL & INCLUDE STEPS: When instructed to conditionally execute actions or playbooks (e.g. 'If (condition), Include fileA, else Include fileB'): First evaluate the condition using available tools (e.g. 'query_dom' or inspecting element presence). If the condition is satisfied, execute the matching action or invoke 'include' with the target playbook path. If the condition is not satisfied and an 'else' branch is provided, execute the 'else' action or invoke 'include'. If the condition is not satisfied and no 'else' branch is provided, call 'complete_step'. When invoking 'include', you may co-propose 'complete_step' in the same turn [include, complete_step], or call 'complete_step' once include succeeds.\n");
         systemPrompt.append("\n### LOCATOR SYNTAX RULES:\n");
@@ -436,6 +439,7 @@ public final class AgentToolLoopStep implements PipelineStep
         String lastActionFailureMessage = null;
         List<SutAttachment> pendingVisualAttachments = null;
         String pendingVisualNote = null;
+        int visualScrollCount = 0;
 
         LOGGER.info("🚀 Starting Agent Tool Loop for instruction: \"{}\" (milestones: {})",
                 instruction, milestones != null ? milestones.size() : 0);
@@ -775,6 +779,7 @@ public final class AgentToolLoopStep implements PipelineStep
             ToolResult lastResult = null;
             boolean batchInterrupted = false;
             int executedInBatchCount = 0;
+            boolean turnHadMutatingAction = false;
 
             for (final ToolCall currentCall : callsToExecute)
             {
@@ -864,6 +869,17 @@ public final class AgentToolLoopStep implements PipelineStep
                     throw new AssertionError("Policy violation: " + rejContent);
                 }
 
+                if (isVisualAssertion && !hasInteractive && ("scroll".equals(effectiveCall.toolName()) || "browser_scroll".equals(effectiveCall.toolName())))
+                {
+                    visualScrollCount++;
+                    if (visualScrollCount > 3)
+                    {
+                        throw new ConclusiveFailureException(String.format(
+                                "Visual verification exceeded maximum scroll repositioning attempts (%d). Target visual condition could not be brought into view.",
+                                visualScrollCount - 1));
+                    }
+                }
+
                 // Execute the tool
                 ToolResult result;
                 try
@@ -930,6 +946,7 @@ public final class AgentToolLoopStep implements PipelineStep
 
                 if (isMutatingTool(effectiveCall.toolName()))
                 {
+                    turnHadMutatingAction = true;
                     final String callSelector = effectiveCall.arguments() != null
                             ? (effectiveCall.arguments().hasNonNull("selector") && !effectiveCall.arguments().path("selector").asText().isBlank()
                                     ? effectiveCall.arguments().path("selector").asText()
@@ -969,9 +986,17 @@ public final class AgentToolLoopStep implements PipelineStep
                     final String reqLevel = (String) result.variables().get("requestedContextLevel");
                     try
                     {
-                        activeContextLevel = ContextLevel.valueOf(reqLevel);
-                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-                        LOGGER.info("🔄 Active context level updated to '{}' via tool request", activeContextLevel);
+                        final ContextLevel targetLevel = ContextLevel.valueOf(reqLevel);
+                        if (isVisualAssertion && !hasInteractive && !targetLevel.includesScreenshot())
+                        {
+                            LOGGER.warn("⚠️ Refusing context level escalation to '{}' for pure visual assertion step", targetLevel);
+                        }
+                        else
+                        {
+                            activeContextLevel = targetLevel;
+                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                            LOGGER.info("🔄 Active context level updated to '{}' via tool request", activeContextLevel);
+                        }
                     }
                     catch (final Exception ignored)
                     {
@@ -1194,6 +1219,13 @@ public final class AgentToolLoopStep implements PipelineStep
                 LOGGER.warn(warn);
             }
 
+            if (isVisualAssertion && !hasInteractive && visualScrollCount == 3)
+            {
+                final String warn = "WARNING: Maximum scroll repositioning attempts reached for this visual verification step. Do NOT call 'scroll' again. Visually inspect the current viewport to evaluate the condition and invoke 'complete_step'.";
+                conversation.add(ChatMessage.user(warn));
+                LOGGER.warn(warn);
+            }
+
             if (response != null && response.tokenUsage() != null)
             {
                 final TokenUsage tu = response.tokenUsage();
@@ -1364,7 +1396,14 @@ public final class AgentToolLoopStep implements PipelineStep
                         List<SutAttachment> nextAttachments = pendingVisualAttachments != null ? pendingVisualAttachments : null;
                         pendingVisualAttachments = null;
 
-                        if ((nextAttachments == null || nextAttachments.isEmpty()) && executor != null)
+                        final boolean isVisualStep = isVisual
+                                || isVisualAssertion
+                                || (activeContextLevel != null && activeContextLevel.includesScreenshot())
+                                || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"));
+
+                        final boolean shouldCaptureVisualState = isVisualStep || turnHadMutatingAction;
+
+                        if (shouldCaptureVisualState && (nextAttachments == null || nextAttachments.isEmpty()) && executor != null)
                         {
                             try
                             {
@@ -1391,11 +1430,27 @@ public final class AgentToolLoopStep implements PipelineStep
 
                         if (milestones != null && !milestones.isEmpty())
                         {
-                            turnPrompt.append("Note: An action has been executed. Attached is the current viewport screenshot (prior DOM snapshot omitted to minimize context). This step contains multiple actions or milestones. Continue executing the remaining actions/milestones requested in the instruction. Do not invoke 'complete_step' until all requested actions and commanded verifications in this step have been fulfilled. For assertion milestones, invoke the commanded assertion tool directly (do not retry prior actions if text is absent). If you need DOM element selectors or structure to continue interacting or asserting, invoke 'request_context' or 'query_dom'. Do not perform uncommanded assertions or anticipate subsequent steps.");
+                            if (turnHadMutatingAction)
+                            {
+                                turnPrompt.append("Note: An action has been executed. Attached is the current viewport screenshot (prior DOM snapshot omitted to minimize context). ");
+                            }
+                            else
+                            {
+                                turnPrompt.append("Note: Page visual state is unchanged after discovery/inspection tool execution (viewport screenshot omitted). ");
+                            }
+                            turnPrompt.append("This step contains multiple actions or milestones. Continue executing the remaining actions/milestones requested in the instruction. Do not invoke 'complete_step' until all requested actions and commanded verifications in this step have been fulfilled. For assertion milestones, invoke the commanded assertion tool directly (do not retry prior actions if text is absent). If you need DOM element selectors or structure to continue interacting or asserting, invoke 'request_context' or 'query_dom'. Do not perform uncommanded assertions or anticipate subsequent steps.");
                         }
                         else
                         {
-                            turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot (prior DOM snapshot omitted to minimize context). If this was an action instruction and all actions/fields requested in the instruction have been executed, invoke 'complete_step' now without performing uncommanded assertions or anticipating subsequent steps. If the instruction explicitly requested additional fields or actions that have not yet been executed, continue executing the remaining actions. If the step explicitly requires verification, use an assertion tool before calling 'complete_step', and ensure any opened modal or dropdown is closed to restore initial page state before completing. If you need DOM element selectors or structure to continue interacting or asserting, invoke 'request_context' or 'query_dom'.");
+                            if (turnHadMutatingAction)
+                            {
+                                turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot (prior DOM snapshot omitted to minimize context). ");
+                            }
+                            else
+                            {
+                                turnPrompt.append("Note: Page visual state is unchanged after discovery/inspection tool execution (viewport screenshot omitted). ");
+                            }
+                            turnPrompt.append("If this was an action instruction and all actions/fields requested in the instruction have been executed, invoke 'complete_step' now without performing uncommanded assertions or anticipating subsequent steps. If the instruction explicitly requested additional fields or actions that have not yet been executed, continue executing the remaining actions. If the step explicitly requires verification, use an assertion tool before calling 'complete_step', and ensure any opened modal or dropdown is closed to restore initial page state before completing. If you need DOM element selectors or structure to continue interacting or asserting, invoke 'request_context' or 'query_dom'.");
                         }
 
                         conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
@@ -1931,14 +1986,14 @@ public final class AgentToolLoopStep implements PipelineStep
             final String name = def.name();
             final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
 
-            // Pure visual assertions omit mutating tools
-            if (isVisualAssertion && !hasInteractive && isMutatingTool(name))
+            // Pure visual assertions omit mutating tools (except scroll for viewport repositioning)
+            if (isVisualAssertion && !hasInteractive && isMutatingTool(name) && !"scroll".equals(clean))
             {
                 continue;
             }
 
-            // Pure visual assertions omit DOM querying/text matching tools to prevent brittle DOM matching
-            if (isVisualAssertion && !hasInteractive && isDomMatchingTool(name))
+            // Pure visual assertions omit DOM querying/text matching tools and DOM context escalation
+            if (isVisualAssertion && !hasInteractive && (isDomMatchingTool(name) || "request_context".equals(clean)))
             {
                 continue;
             }
@@ -2098,6 +2153,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 || "execute_script".equals(clean)
                 || "drag".equals(clean)
                 || "drag_to".equals(clean)
+                || "scroll".equals(clean)
                 || "navigate".equals(clean);
     }
 

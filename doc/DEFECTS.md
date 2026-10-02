@@ -41,6 +41,41 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261002-06] Redundant Viewport Screenshot Re-Capture and Context Inflation on Read-Only Discovery Tools
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`AgentToolLoopStep`)
+- **Scope:** `Framework`
+- **Symptom:** Multi-turn discovery steps (e.g. `query_dom`, `inspect`, `store`) in standard non-visual instructions consumed tens of thousands of redundant tokens (e.g. ~100k tokens in `CheckoutTest_live_tailwind-by-claude` Step #11, ~81k in Step #1, ~63k in Step #4), rapidly exhausting the test step token budget.
+- **Root Cause:**
+  1. `AgentToolLoopStep` unconditionally invoked `executor.captureState(ContextLevel.VISUAL, isFullPage)` after every turn and attached the resulting viewport screenshot to subsequent observation turns, even when only read-only discovery/inspection tools (`query_dom`, `inspect`, `request_context`, `store`) were executed.
+  2. On multimodal models (Gemini), each unneeded PNG image attachment adds ~2,000–2,500 input tokens per turn, inflating cumulative context by 60k–100k tokens over 5–10 discovery turns on an unchanged page.
+  3. `isMutatingTool()` omitted `"scroll"`, causing viewport repositioning actions to be misclassified as non-mutating.
+- **Detection Gap ("What did we miss?"):** Existing multi-turn unit tests in `AgentToolLoopStepTest` only verified turn count and mock responses without asserting that non-visual discovery turns omit intermediate screenshot capture and attachments.
+- **Resolution:**
+  1. Added `"scroll"` to `AgentToolLoopStep.isMutatingTool()`, while ensuring `filterTools()` permits `scroll` for visual assertion repositioning.
+  2. Tracked `turnHadMutatingAction` per turn in `executeStep()`.
+  3. Gated intermediate `captureState(ContextLevel.VISUAL)` so that viewport screenshots are captured and attached only when the step is visual (`isVisualStep`) or when a mutating action actually executed in the turn (`turnHadMutatingAction`).
+  4. Updated turn prompts to inform the model when visual state is unchanged: `"Note: Page visual state is unchanged after discovery/inspection tool execution (viewport screenshot omitted)."`.
+- **Safety Net Added:** Added regression tests `testDiscoveryToolOmitsVisualStateCaptureAndAttachments`, `testMutatingActionRetainsVisualStateCaptureAndAttachments`, and `testScrollToolTreatedAsMutatingActionCapturesVisualState` in `AgentToolLoopStepTest.java`.
+
+### [DEF-20261002-05] Visual Assertion Step Derailment via DOM Context Escalation and Runaway Scrolling
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`AgentToolLoopStep`)
+- **Scope:** `Framework`
+- **Symptom:** In live test runs with visual verification steps (e.g. `SearchGermanTest_live_DE` Step 19), an instruction marked `(visual)` executed 9 scroll actions and invoked `request_context({"level": "STANDARD"})`, escalating context to DOM. Prompt tokens spiked from ~5,500 to >21,000 per turn, burning 115,804 tokens and failing with `TokenBudgetExceededException`.
+- **Root Cause:**
+  1. `AgentToolLoopStep.filterTools()` omitted mutating tools and DOM assertion tools for pure visual assertions (`isVisualAssertion && !hasInteractive`), but left `request_context` in `availableTools`.
+  2. The target element (*Angebot* filter) was cut off below the viewport fold and pinned inside a CSS `position: sticky; top: 100px;` sidebar. Window scrolling (`window.scrollBy`) moved the page content but left the sticky sidebar pinned and cut off in the viewport.
+  3. Unable to reveal the element via scrolling, the agent invoked `request_context(level="STANDARD")`, injecting the full DOM tree into a visual verification turn in violation of Rule 5 ("Do not query DOM for visual checks").
+  4. Consecutive identical call detection was bypassed by varying `yOffset` on each turn (`300`, `250`, `200`, `350`), permitting runaway scrolling loops.
+- **Detection Gap ("What did we miss?"):** `AgentToolLoopStepTest.testVisualAssertionFiltersDomAndMutatingTools` explicitly asserted that `request_context` was present in visual step tools without checking whether requesting DOM levels was prohibited, and no test bounded consecutive scrolling in visual steps.
+- **Resolution:**
+  1. Excluded `request_context` from `filterTools()` when `isVisualAssertion && !hasInteractive`.
+  2. Added a defensive guard against non-screenshot context level escalation via tool requests in pure visual steps.
+  3. Clarified the `Visual Inspection Directive` and Rule 5 so the agent concludes the visual evaluation instead of attempting DOM recovery.
+  4. Capped consecutive `scroll` interactions during visual assertion steps to 3 attempts, warning at attempt 3 and failing with `ConclusiveFailureException` at attempt 4.
+- **Safety Net Added:** Updated `AgentToolLoopStepTest.testVisualAssertionFiltersDomAndMutatingTools` to assert `request_context` is excluded from visual assertion tools, and added regression test `testVisualAssertionExcessiveScrollingTerminatesConclusively`.
+
 ### [DEF-20261002-04] Chained Pseudo-Selector Text Stripping and Unsupported Ordinal Selectors in LocatorResolver
 - **Date:** 2026-10-02
 - **Component:** `neodymium-core` (`LocatorResolver`, `BrowserToolProvider`)
