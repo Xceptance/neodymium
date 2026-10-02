@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.testing.BaseAiTest;
 
 import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -61,6 +62,7 @@ public class InteractiveReasoningAndActionsUiTest extends BaseAiTest
     public void startStandaloneConsole() throws IOException
     {
         System.clearProperty("neodymium.managerActive");
+        Configuration.browserSize = "1400x900";
 
         this.consoleEngine = new InteractiveConsoleEngine("test-run-" + System.currentTimeMillis());
         this.consoleServer = new InteractiveConsoleServer(this.consoleEngine);
@@ -106,6 +108,11 @@ public class InteractiveReasoningAndActionsUiTest extends BaseAiTest
         state.add("blocks", blocks);
 
         this.consoleEngine.broadcastSseEvent("state", state.toString());
+        final Object res = Selenide.executeJavaScript("return window.applyState ? (window.applyState(" + state.toString() + "), 'APPLIED') : 'NO_APPLY_STATE';");
+        System.out.println("APPLY STATE RESULT: " + res);
+        System.out.println("STEPS STEPS HTML: " + Selenide.executeJavaScript("return document.getElementById('stepsSteps') ? document.getElementById('stepsSteps').innerHTML : 'NO_STEPS';"));
+        System.out.println("BODY CLASS: " + Selenide.executeJavaScript("return document.body.className;"));
+        sleep(300);
 
         $(".inline-reasoning-thinking")
             .shouldBe(Condition.visible)
@@ -149,6 +156,8 @@ public class InteractiveReasoningAndActionsUiTest extends BaseAiTest
         state.add("blocks", blocks);
 
         this.consoleEngine.broadcastSseEvent("state", state.toString());
+        Selenide.executeJavaScript("if (window.applyState) window.applyState(" + state.toString() + ");");
+        sleep(300);
 
         $(".inline-reasoning-bubble")
             .shouldBe(Condition.visible)
@@ -157,5 +166,62 @@ public class InteractiveReasoningAndActionsUiTest extends BaseAiTest
         $$(".step-card").first()
             .shouldBe(Condition.visible)
             .shouldHave(Condition.text("Click Sign In button"));
+    }
+
+    @NeodymiumTest
+    public void testLlmCommunicationsRenderingInInteractiveView()
+    {
+        final JsonObject state = new JsonObject();
+        state.addProperty("runId", this.consoleEngine.getRunId());
+        state.addProperty("status", "paused");
+        state.addProperty("pauseId", "pause-llm-123");
+        state.addProperty("activeStepIndex", 0);
+
+        final JsonObject blocks = new JsonObject();
+        blocks.add("before", new JsonArray());
+
+        final JsonArray steps = new JsonArray();
+        final JsonObject step0 = new JsonObject();
+        step0.addProperty("index", 0);
+        step0.addProperty("status", "running");
+        step0.addProperty("instruction", "Search for products");
+
+        final JsonArray llmCalls = new JsonArray();
+        final JsonObject call0 = new JsonObject();
+        call0.addProperty("capability", "TEXT");
+        call0.addProperty("modelName", "gemini-3.6-flash");
+        call0.addProperty("durationMs", 1250);
+        call0.addProperty("inputTokens", 1000);
+        call0.addProperty("outputTokens", 250);
+        call0.addProperty("totalTokens", 1250);
+        call0.addProperty("estimatedCostUsd", 0.0012);
+        call0.addProperty("systemPrompt", "You are an automated web agent.");
+        call0.addProperty("userPrompt", "Locate search input field.");
+        call0.addProperty("responseContent", "[{\"type\":\"type\",\"target\":\"input#search\",\"value\":\"shoes\"}]");
+        llmCalls.add(call0);
+
+        step0.add("llmCalls", llmCalls);
+        steps.add(step0);
+        blocks.add("steps", steps);
+        blocks.add("after", new JsonArray());
+        state.add("blocks", blocks);
+
+        this.consoleEngine.broadcastSseEvent("state", state.toString());
+        Selenide.executeJavaScript("if (window.applyState) window.applyState(" + state.toString() + ");");
+        sleep(300);
+
+        $(".llm-communications-section")
+            .shouldBe(Condition.visible)
+            .shouldHave(Condition.text("LLM Communications (1 call)"));
+
+        $(".llm-call-card")
+            .shouldBe(Condition.visible)
+            .shouldHave(Condition.text("gemini-3.6-flash"));
+
+        $(".llm-subsection-card")
+            .shouldBe(Condition.visible);
+
+        $(".llm-subsection-body")
+            .shouldHave(Condition.text("You are an automated web agent."));
     }
 }

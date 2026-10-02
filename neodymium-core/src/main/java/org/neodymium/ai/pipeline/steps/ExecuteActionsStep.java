@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.ExecutionListener;
+import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
@@ -326,6 +328,42 @@ public final class ExecuteActionsStep
                 final PlaybookStep targetForIndex = step.getParent() != null ? step.getParent() : step;
                 final int stepIndex = resolveStepIndex(step, targetForIndex, flatSteps, playbookSteps);
                 session.getEventBus().dispatch(new StepStartedEvent(step, Math.max(0, stepIndex)));
+            }
+
+            InteractiveConsoleListener interactiveListener = null;
+            if (session != null && session.getEventBus() != null)
+            {
+                for (final ExecutionListener listener : session.getEventBus().getListeners())
+                {
+                    if (listener instanceof InteractiveConsoleListener icl && icl.isInteractive())
+                    {
+                        interactiveListener = icl;
+                        break;
+                    }
+                }
+            }
+
+            final boolean hasRecordedCalls = (step.getToolCalls() != null && !step.getToolCalls().isEmpty())
+                || (step.getActions() != null && !step.getActions().isEmpty());
+            if (hasRecordedCalls && interactiveListener != null && !interactiveListener.isAutoRun())
+            {
+                final String userAction = interactiveListener.pauseBeforeActionExecution(contextState, step);
+                if ("SKIP".equalsIgnoreCase(userAction) || step.getStatus() == PlaybookStepStatus.SKIPPED)
+                {
+                    LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", resolvedInstruction);
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SKIPPED));
+                    }
+                    return;
+                }
+                final String currentRaw = step.hasSubSteps() ? step.getFullInstruction() : step.getInstruction();
+                final String currentResolved = (contextState.getSessionData() != null && currentRaw != null)
+                    ? (step.hasSubSteps() ? contextState.getSessionData().resolveAvailableVariables(currentRaw) : contextState.getSessionData().resolveVariables(currentRaw))
+                    : currentRaw;
+                final String currentPrepared = prepareInstruction(currentResolved);
+                contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", currentResolved);
+                contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, currentPrepared);
             }
 
             if (step.getStatus() == PlaybookStepStatus.SKIPPED)

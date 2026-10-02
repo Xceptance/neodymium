@@ -19,8 +19,8 @@
 package org.neodymium.ai.event;
 
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Set;
 
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
@@ -434,7 +434,25 @@ public final class InteractiveConsoleListener implements ExecutionListener
                         currentStep.setInstruction(newInst);
                         if (currentStep.getActions() != null)
                         {
-                            currentStep.getActions().clear();
+                            try
+                            {
+                                currentStep.getActions().clear();
+                            }
+                            catch (final UnsupportedOperationException e)
+                            {
+                                currentStep.setActions(new ArrayList<>());
+                            }
+                        }
+                        if (currentStep.getToolCalls() != null)
+                        {
+                            try
+                            {
+                                currentStep.getToolCalls().clear();
+                            }
+                            catch (final UnsupportedOperationException e)
+                            {
+                                currentStep.setToolCalls(new ArrayList<>());
+                            }
                         }
                         currentStep.setReasoning(null);
                         if (context != null)

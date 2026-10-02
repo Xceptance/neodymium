@@ -41,6 +41,39 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261002-13] Interactive Console UI Omitted LLM Calls from Memoization Signature and Viewport Details
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`interactive_console.js`, `InteractiveReasoningAndActionsUiTest.java`)
+- **Scope:** `Framework`
+- **Symptom:** UI tests asserting `.llm-communications-section`, `.inline-reasoning-bubble`, and `.inline-reasoning-thinking` failed with `Element not found`.
+- **Root Cause:** 
+  1. `renderBlock` in `interactive_console.js` constructed a DOM memoization signature (`sig`) that omitted `llmCalls`, causing state updates containing LLM communication history to skip re-rendering step HTML.
+  2. Headless Chrome defaulted to standard mobile viewport width (<= 900px) which activated responsive CSS media queries hiding `#bigScreenStepDetails` (`display: none !important`).
+- **Detection Gap ("What did we miss?"):** UI integration tests lacked explicit browser window sizing (`browserSize = "1400x900"`), and JS memoization tests did not verify `llmCalls` cache invalidation.
+- **Resolution:** Added `s.llmCalls ? s.llmCalls.length : 0` to `interactive_console.js` `renderBlock` signature calculation and set explicit desktop viewport dimensions in `InteractiveReasoningAndActionsUiTest.java`.
+- **Safety Net Added:** `InteractiveReasoningAndActionsUiTest.testLlmCommunicationsRenderingInInteractiveView()`.
+
+### [DEF-20261002-12] Interactive Console Displays Empty Step Details Without Proposed Tools or LLM Reasoning
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`AgentToolLoopStep.java`, `ExecuteActionsStep.java`)
+- **Scope:** `Framework`
+- **Symptom:** In interactive debugging mode, when execution paused at a step, the "Step Details" panel displayed "No actions recorded yet" and contained no LLM reasoning text or proposed tool calls.
+- **Root Cause:** `AgentToolLoopStep.java` only populated `PlaybookStep.setActions()` and `setToolCalls()` at the very end of step execution after tools were already executed on SUT, and `ExecuteActionsStep.java` triggered `pauseBeforeActionExecution` before LLM invocation occurred.
+- **Detection Gap ("What did we miss?"):** Unit tests tested `pauseBeforeActionExecution` in isolation without verifying that `PlaybookStep` contained mapped proposed actions and reasoning before tool execution.
+- **Resolution:** Updated `AgentToolLoopStep` to map proposed LLM tool calls and reasoning onto `PlaybookStep` immediately upon receiving the LLM response, and call `pauseBeforeActionExecution` before executing tools on SUT. Prompt edits trigger LLM re-invocation to generate updated proposals.
+- **Safety Net Added:** Added unit test `testAgentToolLoopPausesWithProposedActionsAndReasoningInInteractiveMode` in `AgentToolLoopStepTest.java`.
+
+### [DEF-20261002-11] Interactive Debugging Mode Fails to Pause Before Step Execution
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`ExecuteActionsStep.java`, `InteractiveConsoleListener.java`)
+- **Scope:** `Framework`
+- **Symptom:** In interactive debugging mode, test execution proceeded automatically through playbook steps without pausing before step execution, rendering interactive prompt editing and AI tool approval inoperable.
+- **Root Cause:** `ExecuteActionsStep.java` mapped and executed playbook steps without invoking `InteractiveConsoleListener.pauseBeforeActionExecution(context, step)`. The `pauseBeforeActionExecution` method existed in `InteractiveConsoleListener`, but was not wired into the step pipeline in `ExecuteActionsStep`.
+- **Detection Gap ("What did we miss?"):** Unit tests tested `pauseBeforeActionExecution` on `InteractiveConsoleListener` directly in isolation without running interactive execution flows through `ExecuteActionsStep` and `StateMachineRunner`.
+- **Resolution:** Updated `ExecuteActionsStep.java` to check for an active `InteractiveConsoleListener` on the `ExecutionEventBus` during step pipeline execution. When interactive mode is active (`isInteractive()` and `!isAutoRun()`), `pauseBeforeActionExecution` is called before executing the step's tool/action loop. Handled returned user actions (`RUN`, `EDIT`/`UPDATE_STEP`, `SUGGEST_FIX`, `SKIP`, `AUTO`, `ABORT`) to update the step instruction and trigger AI tool generation with the updated prompt.
+- **Safety Net Added:** Added unit and integration tests verifying that step execution pauses before step actions in interactive mode, prompt edits update step instructions and trigger new AI suggestions/tools, and user confirmations proceed cleanly.
+
+
 ### [DEF-20261002-10] Dummy Video Player Displayed in Report Side Panel when No Video Attached
 - **Date:** 2026-10-02
 - **Component:** `aura-manager` (`side-panel-step-list.html`, `report-manager.js`)

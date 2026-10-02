@@ -29,6 +29,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.gson.JsonObject;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -54,6 +56,7 @@ import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.executor.ActionDefinition;
 import org.neodymium.ai.executor.MockSutState;
@@ -1334,6 +1337,107 @@ public final class ExecuteActionsStepTest
         assertEquals("missingHeadline", ex.getVariableName());
         assertEquals(PlaybookStepStatus.FAILED, step.getStatus(),
             "Failing step status must be set to FAILED");
+    }
+
+    @Test
+    public void testInteractiveModePausesBeforeActionExecutionInPipeline() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine("test-run-interactive-1");
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final PlaybookStep step = new PlaybookStep("Interactive step instruction");
+        step.setStatus(PlaybookStepStatus.SUCCESS);
+        context.getTransientData().put("playbook.steps", List.of(step));
+        context.getTransientData().put("playbook.flatSteps", List.of(step));
+
+        final Thread t = new Thread(() -> {
+            try
+            {
+                int attempts = 0;
+                while (consoleEngine.getCurrentPauseId() == null && attempts < 50)
+                {
+                    Thread.sleep(50);
+                    attempts++;
+                }
+                final JsonObject runAction = new JsonObject();
+                runAction.addProperty("runId", consoleEngine.getRunId());
+                runAction.addProperty("pauseId", consoleEngine.getCurrentPauseId());
+                runAction.addProperty("action", "RUN");
+                consoleEngine.submitAction(runAction);
+            }
+            catch (final Exception ignored)
+            {
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+        pipelineStep.execute(context);
+
+        assertNotNull(consoleEngine.getCurrentStateJson());
+        assertTrue(consoleEngine.getCurrentStateJson().contains("Interactive step instruction"));
+    }
+
+    @Test
+    public void testInteractiveModePromptEditUpdatesInstructionAndReEvaluatesInPipeline() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine("test-run-interactive-2");
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final PlaybookStep step = new PlaybookStep("Initial instruction before user edit");
+        step.setStatus(PlaybookStepStatus.SUCCESS);
+        context.getTransientData().put("playbook.steps", List.of(step));
+        context.getTransientData().put("playbook.flatSteps", List.of(step));
+
+        final Thread t = new Thread(() -> {
+            try
+            {
+                int attempts = 0;
+                while (consoleEngine.getCurrentPauseId() == null && attempts < 50)
+                {
+                    Thread.sleep(50);
+                    attempts++;
+                }
+                final JsonObject editAction = new JsonObject();
+                editAction.addProperty("runId", consoleEngine.getRunId());
+                editAction.addProperty("pauseId", consoleEngine.getCurrentPauseId());
+                editAction.addProperty("action", "EDIT");
+                editAction.addProperty("instruction", "Edited prompt by user");
+                consoleEngine.submitAction(editAction);
+            }
+            catch (final Exception ignored)
+            {
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+        pipelineStep.execute(context);
+
+        assertEquals("Edited prompt by user", step.getInstruction());
+        assertEquals("Edited prompt by user", context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION));
     }
 }
 
