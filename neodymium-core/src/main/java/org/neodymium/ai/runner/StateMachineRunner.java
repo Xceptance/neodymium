@@ -19,6 +19,8 @@
 package org.neodymium.ai.runner;
 
 import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.WebDriverRunner;
 import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.client.LlmCapability;
@@ -862,7 +864,22 @@ public final class StateMachineRunner
             final String failedInstruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
             final String errorMessage = exception != null ? exception.getMessage() : "Unknown execution error";
 
-            final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(failedInstruction, errorMessage);
+            String pageUrl = null;
+            String pageTitle = null;
+            if (WebDriverRunner.hasWebDriverStarted())
+            {
+                try
+                {
+                    pageUrl = WebDriverRunner.url();
+                    pageTitle = Selenide.title();
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.debug("Could not extract page URL/title for Visual RCA in StateMachineRunner: {}", e.getMessage());
+                }
+            }
+
+            final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(failedInstruction, errorMessage, pageUrl, pageTitle);
             final String system = rcaPrompt.compileSystemMessage(context);
             final String user = rcaPrompt.compileUserMessage(context);
 

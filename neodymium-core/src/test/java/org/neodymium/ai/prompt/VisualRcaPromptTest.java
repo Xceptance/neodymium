@@ -18,11 +18,17 @@
  */
 package org.neodymium.ai.prompt;
 
+import java.util.List;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
+import org.neodymium.ai.tool.ToolCall;
 
 /**
  * Unit tests validating {@link VisualRcaPrompt} compilation, SUT URL/title grounding,
@@ -99,5 +105,40 @@ public final class VisualRcaPromptTest
         Assertions.assertTrue(systemMessage.contains("Visual Root Cause Analysis"));
         Assertions.assertTrue(systemMessage.contains("Zero Premise Bias"));
         Assertions.assertTrue(systemMessage.contains("Zero Confabulation"));
+    }
+
+    @Test
+    public void testVisualRcaPromptWithExplicitToolInteractions()
+    {
+        final VisualRcaPrompt prompt = new VisualRcaPrompt(
+            "Assert total",
+            "AssertionError: expected $31.98",
+            "https://example.com/checkout",
+            "Checkout",
+            "1. inspect(selector=\"#total\")\n2. assert_text(selector=\"#total\", expectedText=\"$31.98\")"
+        );
+        Assertions.assertEquals("1. inspect(selector=\"#total\")\n2. assert_text(selector=\"#total\", expectedText=\"$31.98\")", prompt.getRecentToolInteractions());
+
+        final String userMessage = prompt.compileUserMessage(null);
+        Assertions.assertTrue(userMessage.contains("## Recent Tool Interactions in this Step:"));
+        Assertions.assertTrue(userMessage.contains("1. inspect(selector=\"#total\")"));
+        Assertions.assertTrue(userMessage.contains("2. assert_text(selector=\"#total\", expectedText=\"$31.98\")"));
+    }
+
+    @Test
+    public void testVisualRcaPromptExtractsToolInteractionsFromContext()
+    {
+        final VisualRcaPrompt prompt = new VisualRcaPrompt("Click submit", "TimeoutException");
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final ObjectMapper mapper = new ObjectMapper();
+        final ObjectNode args = mapper.createObjectNode();
+        args.put("selector", "button.submit");
+        final ToolCall call = new ToolCall("call-1", "click", args);
+
+        context.getTransientData().put(AgentToolLoopStep.KEY_EXECUTED_TOOL_CALLS, List.of(call));
+
+        final String userMessage = prompt.compileUserMessage(context);
+        Assertions.assertTrue(userMessage.contains("## Recent Tool Interactions in this Step:"));
+        Assertions.assertTrue(userMessage.contains("1. click(selector=\"button.submit\")"));
     }
 }
