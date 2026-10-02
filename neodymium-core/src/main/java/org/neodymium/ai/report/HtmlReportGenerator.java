@@ -30,6 +30,7 @@ import java.util.Locale;
 import java.util.Map;
 import org.neodymium.ai.playbook.linter.LinterSeverity;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.prompt.VisualRcaResult;
 
 /**
  * Report generator producing standalone, interactive, single-file HTML documents
@@ -198,7 +199,7 @@ public final class HtmlReportGenerator
         sb.append("  </section>\n");
 
         // 4. Failure Diagnostic Box (STRICTLY rendered only if the test actually failed)
-        if (!isPassed && (report.getFailureReason() != null || report.getVisualRcaExplanation() != null || (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())))
+        if (!isPassed && (report.getFailureReason() != null || report.getVisualRcaResult() != null || report.getVisualRcaExplanation() != null || (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())))
         {
             sb.append("  <section class=\"diagnostic-box failure-box\">\n");
             sb.append("    <div class=\"box-header\">🚨 Execution Failure Details</div>\n");
@@ -206,7 +207,30 @@ public final class HtmlReportGenerator
             {
                 sb.append("    <div class=\"failure-reason\"><strong>Error:</strong> ").append(escapeHtml(report.getFailureReason())).append("</div>\n");
             }
-            if (report.getVisualRcaExplanation() != null)
+            if (report.getVisualRcaResult() != null)
+            {
+                final VisualRcaResult rcaResult = report.getVisualRcaResult();
+                sb.append("    <div class=\"visual-rca-box\">\n");
+                sb.append("      <div class=\"rca-title\">🔍 Visual Root Cause Analysis (RCA)</div>\n");
+                if (rcaResult.getRootCause() != null && !rcaResult.getRootCause().isBlank())
+                {
+                    sb.append("      <div class=\"rca-root-cause\" style=\"margin-bottom: 12px; font-size: 0.92rem; line-height: 1.5; color: var(--text);\">")
+                      .append("<strong>Root Cause Diagnosis:</strong> ").append(escapeHtml(rcaResult.getRootCause().trim()))
+                      .append("</div>\n");
+                }
+                if (rcaResult.getRubrics() != null)
+                {
+                    sb.append("      <div class=\"rubrics-grid\">\n");
+                    final VisualRcaResult.Rubrics rubrics = rcaResult.getRubrics();
+                    renderHtmlRubricCard(sb, "🎯 Target Presence Check", rubrics.targetPresence());
+                    renderHtmlRubricCard(sb, "📝 Form & Validation Check", rubrics.formValidation());
+                    renderHtmlRubricCard(sb, "🧭 Navigation & Flow State", rubrics.flowState());
+                    renderHtmlRubricCard(sb, "🚫 Action Obstruction Check", rubrics.obstruction());
+                    sb.append("      </div>\n");
+                }
+                sb.append("    </div>\n");
+            }
+            else if (report.getVisualRcaExplanation() != null)
             {
                 sb.append("    <div class=\"visual-rca-box\">\n");
                 sb.append("      <div class=\"rca-title\">🔍 Visual Root Cause Analysis (RCA)</div>\n");
@@ -3416,6 +3440,28 @@ public final class HtmlReportGenerator
                 box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
             }
         """);
+    }
+
+    private static void renderHtmlRubricCard(final StringBuilder sb, final String title, final VisualRcaResult.RubricItem item)
+    {
+        if (item == null)
+        {
+            return;
+        }
+        final String score = item.score() != null ? item.score().trim().toUpperCase() : "UNKNOWN";
+        final String scoreClass = switch (score)
+        {
+            case "ERROR_PRESENT", "MISSING", "STUCK", "OBSTRUCTED", "FAIL", "FAILED" -> "pill-fail";
+            case "CLEAN", "FOUND", "PROGRESSING", "CLEAR", "PASS", "PASSED" -> "pill-pass";
+            default -> "pill-pending";
+        };
+        sb.append("        <div class=\"rubric-item-card\">\n");
+        sb.append("          <div class=\"rubric-item-header\">\n");
+        sb.append("            <span class=\"rubric-name\">").append(escapeHtml(title)).append("</span>\n");
+        sb.append("            <span class=\"rubric-score ").append(scoreClass).append("\">").append(escapeHtml(score)).append("</span>\n");
+        sb.append("          </div>\n");
+        sb.append("          <div class=\"rubric-analysis\">").append(escapeHtml(item.analysis() != null ? item.analysis() : "No detailed analysis provided.")).append("</div>\n");
+        sb.append("        </div>\n");
     }
 
     private static String escapeHtml(final String text)

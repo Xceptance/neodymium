@@ -28,6 +28,7 @@ import java.util.Map;
 import org.neodymium.ai.playbook.linter.LinterSeverity;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.prompt.VerificationResult;
+import org.neodymium.ai.prompt.VisualRcaResult;
 
 /**
  * Report generator producing GitHub-flavored Markdown documents from {@link TestExecutionReport}.
@@ -146,16 +147,51 @@ public final class MarkdownReportGenerator
         }
 
         // 3. Diagnostics & Errors (strictly if test failed)
-        if (!report.isSuccess() && (report.getFailureReason() != null || report.getVisualRcaExplanation() != null || (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())))
+        if (!report.isSuccess() && (report.getFailureReason() != null || report.getVisualRcaResult() != null || report.getVisualRcaExplanation() != null || (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())))
         {
             sb.append("## 🚨 Failure Diagnostics\n\n");
             if (report.getFailureReason() != null)
             {
                 sb.append("> **Error**: ").append(report.getFailureReason()).append("\n\n");
             }
-            if (report.getVisualRcaExplanation() != null)
+            if (report.getVisualRcaResult() != null)
             {
-                sb.append("### Visual RCA Diagnosis\n\n");
+                final VisualRcaResult vr = report.getVisualRcaResult();
+                sb.append("### 🔍 Visual Root Cause Analysis (RCA)\n\n");
+                if (vr.getRootCause() != null && !vr.getRootCause().isBlank())
+                {
+                    sb.append("**Root Cause Diagnosis:**\n").append(vr.getRootCause().trim()).append("\n\n");
+                }
+                if (vr.getRubrics() != null)
+                {
+                    sb.append("#### Diagnostic Rubrics\n\n");
+                    final VisualRcaResult.Rubrics rubrics = vr.getRubrics();
+                    if (rubrics.targetPresence() != null)
+                    {
+                        sb.append("- **🎯 Target Presence:** `[").append(rubrics.targetPresence().score()).append("]` ")
+                          .append(rubrics.targetPresence().analysis()).append("\n");
+                    }
+                    if (rubrics.formValidation() != null)
+                    {
+                        sb.append("- **📝 Form & Validation:** `[").append(rubrics.formValidation().score()).append("]` ")
+                          .append(rubrics.formValidation().analysis()).append("\n");
+                    }
+                    if (rubrics.flowState() != null)
+                    {
+                        sb.append("- **🧭 Navigation & Flow:** `[").append(rubrics.flowState().score()).append("]` ")
+                          .append(rubrics.flowState().analysis()).append("\n");
+                    }
+                    if (rubrics.obstruction() != null)
+                    {
+                        sb.append("- **🚫 Action Obstruction:** `[").append(rubrics.obstruction().score()).append("]` ")
+                          .append(rubrics.obstruction().analysis()).append("\n");
+                    }
+                    sb.append("\n");
+                }
+            }
+            else if (report.getVisualRcaExplanation() != null)
+            {
+                sb.append("### 🔍 Visual Root Cause Analysis (RCA)\n\n");
                 sb.append("```\n").append(report.getVisualRcaExplanation()).append("\n```\n\n");
             }
             if (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())

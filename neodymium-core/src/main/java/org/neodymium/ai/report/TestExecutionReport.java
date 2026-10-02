@@ -33,6 +33,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.prompt.VerificationResult;
+import org.neodymium.ai.prompt.VisualRcaResult;
 
 /**
  * Data model encapsulating full execution metadata, steps, actions, LLM calls,
@@ -58,6 +59,7 @@ public final class TestExecutionReport
     private String failureReason;
     private String failureStackTrace;
     private String visualRcaExplanation;
+    private VisualRcaResult visualRcaResult;
 
     private final List<String> tags = new ArrayList<>();
     private final List<String> warnings = new ArrayList<>();
@@ -213,6 +215,16 @@ public final class TestExecutionReport
     public void setVisualRcaExplanation(final String visualRcaExplanation)
     {
         this.visualRcaExplanation = visualRcaExplanation;
+    }
+
+    public VisualRcaResult getVisualRcaResult()
+    {
+        return this.visualRcaResult;
+    }
+
+    public void setVisualRcaResult(final VisualRcaResult visualRcaResult)
+    {
+        this.visualRcaResult = visualRcaResult;
     }
 
     public List<String> getWarnings()

@@ -18,8 +18,13 @@
  */
 package org.neodymium.ai.prompt;
 
+import java.util.List;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
+import org.neodymium.ai.tool.ToolCall;
 
 /**
  * Prompt implementation that performs multimodal vision analysis on a failed SUT state
@@ -28,7 +33,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
  * @author AI-generated: Gemini 2.5 Pro
  * @author Xceptance GmbH 2026
  */
-public final class VisualRcaPrompt implements AiPrompt<String>
+public final class VisualRcaPrompt implements AiPrompt<VisualRcaResult>
 {
     /**
      * The instruction that failed execution.
@@ -51,6 +56,11 @@ public final class VisualRcaPrompt implements AiPrompt<String>
     private final String pageTitle;
 
     /**
+     * Formatted string of recent tool interactions or actions executed before failure, if available.
+     */
+    private final String recentToolInteractions;
+
+    /**
      * Constructs a VisualRcaPrompt with instruction and error details.
      *
      * @param failedInstruction the instruction that failed
@@ -58,7 +68,7 @@ public final class VisualRcaPrompt implements AiPrompt<String>
      */
     public VisualRcaPrompt(final String failedInstruction, final String errorMessage)
     {
-        this(failedInstruction, errorMessage, null, null);
+        this(failedInstruction, errorMessage, null, null, null);
     }
 
     /**
@@ -71,10 +81,31 @@ public final class VisualRcaPrompt implements AiPrompt<String>
      */
     public VisualRcaPrompt(final String failedInstruction, final String errorMessage, final String pageUrl, final String pageTitle)
     {
+        this(failedInstruction, errorMessage, pageUrl, pageTitle, null);
+    }
+
+    /**
+     * Constructs a VisualRcaPrompt with instruction, error details, SUT page context, and recent tool interactions.
+     *
+     * @param failedInstruction the instruction that failed
+     * @param errorMessage the error message
+     * @param pageUrl the URL of the page where failure occurred
+     * @param pageTitle the title of the page where failure occurred
+     * @param recentToolInteractions recent tool calls or actions executed in the failed step
+     */
+    public VisualRcaPrompt(
+        final String failedInstruction,
+        final String errorMessage,
+        final String pageUrl,
+        final String pageTitle,
+        final String recentToolInteractions
+    )
+    {
         this.failedInstruction = failedInstruction;
         this.errorMessage = errorMessage;
         this.pageUrl = pageUrl;
         this.pageTitle = pageTitle;
+        this.recentToolInteractions = recentToolInteractions;
     }
 
     @Override
@@ -103,19 +134,123 @@ public final class VisualRcaPrompt implements AiPrompt<String>
         {
             sb.append("Current Page Title: ").append(this.pageTitle).append("\n");
         }
+
+        final String interactions = resolveToolInteractions(context);
+        if (interactions != null && !interactions.isBlank())
+        {
+            sb.append("\n## Recent Tool Interactions in this Step:\n").append(interactions).append("\n");
+        }
+
+        final Object rawStats = context != null && context.getTransientData() != null
+            ? context.getTransientData().get("execution.stepStatsList")
+            : null;
+        if (rawStats instanceof List<?> list && !list.isEmpty())
+        {
+            final StringBuilder recentStepsSb = new StringBuilder();
+            final int startIdx = Math.max(0, list.size() - 5);
+            for (int i = startIdx; i < list.size(); i++)
+            {
+                if (list.get(i) instanceof StepStats stats)
+                {
+                    recentStepsSb.append(String.format("Step %d: %s\n", (i + 1), stats.getInstruction()));
+                }
+            }
+            if (recentStepsSb.length() > 0)
+            {
+                sb.append("\n## Preceding Steps Executed:\n").append(recentStepsSb).append("\n");
+            }
+        }
+
         return sb.toString();
+    }
+
+    /**
+     * Resolves tool interactions either from explicit field or from execution context.
+     *
+     * @param context the active execution context
+     * @return formatted tool interactions, or null if none available
+     */
+    private String resolveToolInteractions(final ExecutionContext context)
+    {
+        if (this.recentToolInteractions != null && !this.recentToolInteractions.isBlank())
+        {
+            return this.recentToolInteractions;
+        }
+        if (context == null || context.getTransientData() == null)
+        {
+            return null;
+        }
+        final Object rawCalls = context.getTransientData().get(AgentToolLoopStep.KEY_EXECUTED_TOOL_CALLS);
+        if (rawCalls instanceof List<?> list && !list.isEmpty())
+        {
+            return formatToolInteractions(list);
+        }
+        final Object rawActions = context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
+        if (rawActions instanceof List<?> list && !list.isEmpty())
+        {
+            return formatToolInteractions(list);
+        }
+        return null;
+    }
+
+    /**
+     * Formats a list of recent tool calls or actions into a numbered, human-readable trace.
+     *
+     * @param rawItems list of tool calls or actions
+     * @return formatted tool interactions string, or null if list is empty
+     */
+    static String formatToolInteractions(final List<?> rawItems)
+    {
+        if (rawItems == null || rawItems.isEmpty())
+        {
+            return null;
+        }
+        final StringBuilder sb = new StringBuilder();
+        int count = 0;
+        final int startIdx = Math.max(0, rawItems.size() - 10);
+        for (int i = startIdx; i < rawItems.size(); i++)
+        {
+            final Object item = rawItems.get(i);
+            if (item instanceof ToolCall call)
+            {
+                count++;
+                sb.append(count).append(". ").append(VerificationPrompt.formatToolCallForVerification(call)).append("\n");
+            }
+            else if (item instanceof Action action)
+            {
+                count++;
+                sb.append(count).append(". ").append(action.getDescription()).append("\n");
+            }
+        }
+        return count > 0 ? sb.toString().trim() : null;
     }
 
     @Override
     public ResponseSchema getResponseSchema()
     {
-        return ResponseSchema.TEXT;
+        return ResponseSchema.ASSERTION;
     }
 
     @Override
-    public String parseResponse(final String rawResponse, final ExecutionContext context)
+    public VisualRcaResult parseResponse(final String rawResponse, final ExecutionContext context)
     {
-        return rawResponse != null ? rawResponse.trim() : "";
+        if (rawResponse == null || rawResponse.isBlank())
+        {
+            return new VisualRcaResult(null, "No RCA diagnosis returned by LLM");
+        }
+        try
+        {
+            final VisualRcaResult parsed = ResponseRepairService.deserialize(rawResponse, VisualRcaResult.class);
+            if (parsed != null && (parsed.getRootCause() != null || parsed.getRubrics() != null))
+            {
+                return parsed;
+            }
+        }
+        catch (final Exception e)
+        {
+            // Fallback for unstructured plain text responses
+        }
+        return new VisualRcaResult(null, rawResponse.trim());
     }
 
     /**
@@ -136,5 +271,15 @@ public final class VisualRcaPrompt implements AiPrompt<String>
     public String getPageTitle()
     {
         return this.pageTitle;
+    }
+
+    /**
+     * Returns the explicit recent tool interactions string, or null if not set.
+     *
+     * @return the recent tool interactions, or null
+     */
+    public String getRecentToolInteractions()
+    {
+        return this.recentToolInteractions;
     }
 }

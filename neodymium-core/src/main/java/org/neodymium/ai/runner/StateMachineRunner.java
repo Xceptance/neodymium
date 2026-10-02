@@ -19,6 +19,8 @@
 package org.neodymium.ai.runner;
 
 import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.WebDriverRunner;
 import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.client.LlmCapability;
@@ -56,6 +58,7 @@ import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
 import org.neodymium.ai.playbook.linter.PlaybookLinterException;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.prompt.VisualRcaResult;
 import org.neodymium.ai.playbook.linter.PostFlightPlaybookLinter;
 import org.neodymium.ai.prompt.VisualRcaPrompt;
 import org.neodymium.ai.session.AiSession;
@@ -862,7 +865,22 @@ public final class StateMachineRunner
             final String failedInstruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
             final String errorMessage = exception != null ? exception.getMessage() : "Unknown execution error";
 
-            final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(failedInstruction, errorMessage);
+            String pageUrl = null;
+            String pageTitle = null;
+            if (WebDriverRunner.hasWebDriverStarted())
+            {
+                try
+                {
+                    pageUrl = WebDriverRunner.url();
+                    pageTitle = Selenide.title();
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.debug("Could not extract page URL/title for Visual RCA in StateMachineRunner: {}", e.getMessage());
+                }
+            }
+
+            final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(failedInstruction, errorMessage, pageUrl, pageTitle);
             final String system = rcaPrompt.compileSystemMessage(context);
             final String user = rcaPrompt.compileUserMessage(context);
 
@@ -874,7 +892,7 @@ public final class StateMachineRunner
                 system,
                 user,
                 state.getAttachments() != null ? state.getAttachments() : Collections.emptyList(),
-                ResponseSchema.TEXT,
+                rcaPrompt.getResponseSchema(),
                 0.0,
                 60
             );
@@ -961,11 +979,13 @@ public final class StateMachineRunner
                 }
             }
 
-            final String rcaExplanation = rcaPrompt.parseResponse(response.content(), context);
+            final VisualRcaResult rcaResult = rcaPrompt.parseResponse(response.content(), context);
+            final String rcaExplanation = rcaResult != null ? rcaResult.toFormattedDiagnosis() : "";
 
             LOGGER.info("🚨 [Visual RCA Diagnosis]: {}", rcaExplanation);
+            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_RESULT, rcaResult);
             context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_EXPLANATION, rcaExplanation);
-            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_SUMMARY, rcaExplanation);
+            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_SUMMARY, rcaResult != null && rcaResult.getRootCause() != null ? rcaResult.getRootCause() : rcaExplanation);
             this.session.getEventBus().dispatch(new DiagnosticErrorEvent("Visual RCA analysis: " + rcaExplanation, exception));
         }
         catch (final Exception e)

@@ -18,11 +18,17 @@
  */
 package org.neodymium.ai.prompt;
 
+import java.util.List;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
+import org.neodymium.ai.tool.ToolCall;
 
 /**
  * Unit tests validating {@link VisualRcaPrompt} compilation, SUT URL/title grounding,
@@ -45,7 +51,7 @@ public final class VisualRcaPromptTest
         Assertions.assertFalse(userMessage.contains("Current Page Title:"));
         Assertions.assertNull(prompt.getPageUrl());
         Assertions.assertNull(prompt.getPageTitle());
-        Assertions.assertEquals(ResponseSchema.TEXT, prompt.getResponseSchema());
+        Assertions.assertEquals(ResponseSchema.ASSERTION, prompt.getResponseSchema());
     }
 
     @Test
@@ -84,8 +90,36 @@ public final class VisualRcaPromptTest
     {
         final VisualRcaPrompt prompt = new VisualRcaPrompt("Verify cart", "TimeoutException");
 
-        Assertions.assertEquals("Button is disabled", prompt.parseResponse("  Button is disabled  \n", null));
-        Assertions.assertEquals("", prompt.parseResponse(null, null));
+        final String json = """
+            {
+              "rubrics": {
+                "targetPresence": { "analysis": "Total element missing", "score": "MISSING" },
+                "formValidation": { "analysis": "Province field is empty with validation tooltip", "score": "ERROR_PRESENT" },
+                "flowState": { "analysis": "Still on checkout page", "score": "STUCK" },
+                "obstruction": { "analysis": "No modal dialog", "score": "CLEAR" }
+              },
+              "rootCause": "Checkout halted due to missing province field."
+            }
+            """;
+
+        final VisualRcaResult parsed = prompt.parseResponse(json, null);
+        Assertions.assertNotNull(parsed);
+        Assertions.assertEquals("Checkout halted due to missing province field.", parsed.getRootCause());
+        Assertions.assertNotNull(parsed.getRubrics());
+        Assertions.assertEquals("MISSING", parsed.getRubrics().targetPresence().score());
+        Assertions.assertEquals("ERROR_PRESENT", parsed.getRubrics().formValidation().score());
+        Assertions.assertEquals("STUCK", parsed.getRubrics().flowState().score());
+        Assertions.assertEquals("CLEAR", parsed.getRubrics().obstruction().score());
+        Assertions.assertTrue(parsed.toFormattedDiagnosis().contains("Root Cause Analysis"));
+
+        final VisualRcaResult fallback = prompt.parseResponse("  Button is disabled  \n", null);
+        Assertions.assertNotNull(fallback);
+        Assertions.assertEquals("Button is disabled", fallback.getRootCause());
+        Assertions.assertNull(fallback.getRubrics());
+
+        final VisualRcaResult empty = prompt.parseResponse(null, null);
+        Assertions.assertNotNull(empty);
+        Assertions.assertTrue(empty.getRootCause().contains("No RCA diagnosis"));
     }
 
     @Test
@@ -99,5 +133,40 @@ public final class VisualRcaPromptTest
         Assertions.assertTrue(systemMessage.contains("Visual Root Cause Analysis"));
         Assertions.assertTrue(systemMessage.contains("Zero Premise Bias"));
         Assertions.assertTrue(systemMessage.contains("Zero Confabulation"));
+    }
+
+    @Test
+    public void testVisualRcaPromptWithExplicitToolInteractions()
+    {
+        final VisualRcaPrompt prompt = new VisualRcaPrompt(
+            "Assert total",
+            "AssertionError: expected $31.98",
+            "https://example.com/checkout",
+            "Checkout",
+            "1. inspect(selector=\"#total\")\n2. assert_text(selector=\"#total\", expectedText=\"$31.98\")"
+        );
+        Assertions.assertEquals("1. inspect(selector=\"#total\")\n2. assert_text(selector=\"#total\", expectedText=\"$31.98\")", prompt.getRecentToolInteractions());
+
+        final String userMessage = prompt.compileUserMessage(null);
+        Assertions.assertTrue(userMessage.contains("## Recent Tool Interactions in this Step:"));
+        Assertions.assertTrue(userMessage.contains("1. inspect(selector=\"#total\")"));
+        Assertions.assertTrue(userMessage.contains("2. assert_text(selector=\"#total\", expectedText=\"$31.98\")"));
+    }
+
+    @Test
+    public void testVisualRcaPromptExtractsToolInteractionsFromContext()
+    {
+        final VisualRcaPrompt prompt = new VisualRcaPrompt("Click submit", "TimeoutException");
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final ObjectMapper mapper = new ObjectMapper();
+        final ObjectNode args = mapper.createObjectNode();
+        args.put("selector", "button.submit");
+        final ToolCall call = new ToolCall("call-1", "click", args);
+
+        context.getTransientData().put(AgentToolLoopStep.KEY_EXECUTED_TOOL_CALLS, List.of(call));
+
+        final String userMessage = prompt.compileUserMessage(context);
+        Assertions.assertTrue(userMessage.contains("## Recent Tool Interactions in this Step:"));
+        Assertions.assertTrue(userMessage.contains("1. click(selector=\"button.submit\")"));
     }
 }
