@@ -543,15 +543,121 @@ public class LocatorResolverTest
                 () -> LocatorResolver.resolveLocator("span:near(:text('Price'))"));
         Assertions.assertTrue(nearEx.getMessage().contains("near"));
 
-        // :nth-match and :text-matches
-        final InvalidSelectorException nthMatchEx = Assertions.assertThrows(
-                InvalidSelectorException.class,
-                () -> LocatorResolver.resolveLocator(":nth-match(button, 2)"));
-        Assertions.assertTrue(nthMatchEx.getMessage().contains(":nth-match"));
-
+        // :text-matches is unsupported vendor pseudo
         final InvalidSelectorException textMatchesEx = Assertions.assertThrows(
                 InvalidSelectorException.class,
                 () -> LocatorResolver.resolveLocator(":text-matches('pattern', 'i')"));
         Assertions.assertTrue(textMatchesEx.getMessage().contains(":text-matches"));
+    }
+
+    @Test
+    public void testPlaywrightNthMatch()
+    {
+        Assertions.assertEquals(By.xpath("(//button)[2]"), LocatorResolver.resolveLocator(":nth-match(button, 2)"));
+        Assertions.assertEquals(By.xpath("(//button)[2]"), LocatorResolver.resolveLocator("button:nth-match(2)"));
+        Assertions.assertEquals(By.xpath("(//div[contains(concat(' ', normalize-space(@class), ' '), ' card ')])[3]"),
+                LocatorResolver.resolveLocator(":nth-match(div.card, 3)"));
+    }
+
+    @Test
+    public void testChainedOrdinals()
+    {
+        // 0-based indexing (nth=0 is 1st)
+        Assertions.assertEquals(By.xpath("(//table//tr)[3]"), LocatorResolver.resolveLocator("table >> tr >> nth=2"));
+        Assertions.assertEquals(By.xpath("(//table//tr)[1]"), LocatorResolver.resolveLocator("table >> tr >> nth=0"));
+
+        // first / last aliases
+        Assertions.assertEquals(By.xpath("(//table//tr)[1]"), LocatorResolver.resolveLocator("table >> tr >> first"));
+        Assertions.assertEquals(By.xpath("(//table//tr)[last()]"), LocatorResolver.resolveLocator("table >> tr >> last"));
+
+        // Negative indexing (nth=-1 is last)
+        Assertions.assertEquals(By.xpath("(//table//tr)[last()]"), LocatorResolver.resolveLocator("table >> tr >> nth=-1"));
+        Assertions.assertEquals(By.xpath("(//table//tr)[last()-1]"), LocatorResolver.resolveLocator("table >> tr >> nth=-2"));
+
+        // Multi-level chaining with ordinals
+        Assertions.assertEquals(By.xpath("(//table//tr)[3]//button"), LocatorResolver.resolveLocator("table >> tr >> nth=2 >> button"));
+        Assertions.assertEquals(By.xpath("((//table//tr)[3]//button)[1]"), LocatorResolver.resolveLocator("table >> tr >> nth=2 >> button >> nth=0"));
+    }
+
+    @Test
+    public void testChainedPseudoSelectorsPreserveText()
+    {
+        // Chained :has-text inside >> chain
+        final By chainedHasText = LocatorResolver.resolveLocator("table >> tr:has-text(\"Alice\") >> button");
+        Assertions.assertEquals(By.xpath("//table//tr[contains(normalize-space(.), 'Alice')]//button"), chainedHasText);
+
+        // Chained :text-is inside >> chain
+        final By chainedTextIs = LocatorResolver.resolveLocator("table >> tr:text-is(\"Alice\") >> button");
+        Assertions.assertEquals(By.xpath("//table//tr[(normalize-space(.)='Alice' or normalize-space(text())='Alice')]//button"), chainedTextIs);
+
+        // Chained roles with ordinals
+        final By chainedRoles = LocatorResolver.resolveLocator("role=table >> role=row >> nth=1 >> role=button");
+        Assertions.assertTrue(chainedRoles instanceof By.ByXPath);
+        final String xpath = chainedRoles.toString();
+        Assertions.assertTrue(xpath.contains("self::table"));
+        Assertions.assertTrue(xpath.contains("self::tr"));
+        Assertions.assertTrue(xpath.contains("[2]"));
+        Assertions.assertTrue(xpath.contains("self::button"));
+    }
+
+    @Test
+    public void testChainedHasAndNot()
+    {
+        final By chainedHas = LocatorResolver.resolveLocator("table >> tr:has(td) >> nth=2");
+        Assertions.assertTrue(chainedHas instanceof By.ByXPath);
+        final String xpathHas = chainedHas.toString();
+        Assertions.assertTrue(xpathHas.contains("descendant::td"));
+        Assertions.assertTrue(xpathHas.contains("[3]"));
+
+        final By chainedNot = LocatorResolver.resolveLocator("div.tw-table >> div.row:not(.header) >> nth=1");
+        Assertions.assertTrue(chainedNot instanceof By.ByXPath);
+        final String xpathNot = chainedNot.toString();
+        Assertions.assertTrue(xpathNot.contains("not(contains"));
+        Assertions.assertTrue(xpathNot.contains("[2]"));
+    }
+
+    @Test
+    public void testChainedMultiTokenCssSegment()
+    {
+        final By chained = LocatorResolver.resolveLocator("#aria-orders [role=\"row\"] >> nth=2 >> button");
+        Assertions.assertTrue(chained instanceof By.ByXPath);
+        final String xpath = chained.toString();
+        Assertions.assertTrue(xpath.contains("@id='aria-orders'"));
+        Assertions.assertTrue(xpath.contains("@role='row'"));
+        Assertions.assertTrue(xpath.contains("[3]"));
+        Assertions.assertTrue(xpath.contains("//button"));
+    }
+
+    @Test
+    public void testChainedAriaDataGridRowWithHasAttribute()
+    {
+        final By chained = LocatorResolver.resolveLocator("[role=\"table\"] [role=\"row\"]:has([role=\"cell\"]) >> nth=2 >> button");
+        Assertions.assertTrue(chained instanceof By.ByXPath);
+        final String xpath = chained.toString();
+        Assertions.assertTrue(xpath.contains("@role='table'"));
+        Assertions.assertTrue(xpath.contains("@role='row'"));
+        Assertions.assertTrue(xpath.contains("descendant::*[@role='cell']"));
+        Assertions.assertTrue(xpath.contains("[3]"));
+        Assertions.assertTrue(xpath.contains("//button"));
+    }
+
+    @Test
+    public void testHasWithMultipleCommaSeparatedSelectors()
+    {
+        final By chained = LocatorResolver.resolveLocator("[role=\"row\"]:has([role=\"cell\"], [role=\"gridcell\"]) >> nth=0");
+        Assertions.assertTrue(chained instanceof By.ByXPath);
+        final String xpath = chained.toString();
+        Assertions.assertTrue(xpath.contains("descendant::*[@role='cell'] or descendant::*[@role='gridcell']"));
+        Assertions.assertTrue(xpath.contains("[1]"));
+    }
+
+    @Test
+    public void testNotWithNestedHas()
+    {
+        final By chained = LocatorResolver.resolveLocator("tr:not(:has(th)) >> nth=1");
+        Assertions.assertTrue(chained instanceof By.ByXPath);
+        final String xpath = chained.toString();
+        Assertions.assertTrue(xpath.contains("not(descendant::th)"));
+        Assertions.assertTrue(xpath.contains("[2]"));
     }
 }

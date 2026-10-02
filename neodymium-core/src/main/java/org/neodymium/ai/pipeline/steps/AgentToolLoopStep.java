@@ -55,6 +55,7 @@ import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.StepTimeoutExceededException;
 import org.neodymium.ai.pipeline.StepTurnLimitExceededException;
 import org.neodymium.ai.pipeline.TokenBudgetExceededException;
+import org.neodymium.ai.prompt.AiAgentPrompts;
 import org.neodymium.ai.prompt.DefaultActionSanitizer;
 import org.neodymium.ai.prompt.LlmResponseSanitizer;
 import org.neodymium.ai.session.AiSession;
@@ -414,6 +415,8 @@ public final class AgentToolLoopStep implements PipelineStep
             systemPrompt.append("5. VISUAL CHECKS: When verifying visual appearance or when a screenshot is provided, inspect the screenshot visually to verify whether the condition is met on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
         }
         systemPrompt.append("6. CONDITIONAL & INCLUDE STEPS: When instructed to conditionally execute actions or playbooks (e.g. 'If (condition), Include fileA, else Include fileB'): First evaluate the condition using available tools (e.g. 'query_dom' or inspecting element presence). If the condition is satisfied, execute the matching action or invoke 'include' with the target playbook path. If the condition is not satisfied and an 'else' branch is provided, execute the 'else' action or invoke 'include'. If the condition is not satisfied and no 'else' branch is provided, call 'complete_step'. When invoking 'include', you may co-propose 'complete_step' in the same turn [include, complete_step], or call 'complete_step' once include succeeds.\n");
+        systemPrompt.append("\n### LOCATOR SYNTAX RULES:\n");
+        systemPrompt.append(AiAgentPrompts.getSelenideLocatorRule().trim()).append("\n");
 
         final List<ChatMessage> conversation = new ArrayList<>();
         conversation.add(ChatMessage.system(systemPrompt.toString()));

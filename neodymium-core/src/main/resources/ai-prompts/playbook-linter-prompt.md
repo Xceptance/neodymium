@@ -53,6 +53,7 @@ You evaluate instructions for linguistic precision, atomic action clarity, visua
 4. **`VAGUE_TARGET`**:
    - Target reference refers to a generic element type or generic action descriptor without container, section, label, or quoted text context to disambiguate it (e.g. `Click the button`, `Click the Action button`, `Click the link`, `Click the trash icon`).
    - If an element is referred to only as "the button", "the action button", or "the link" without quotes or clarifying section/container context, flag it as `VAGUE_TARGET`.
+   - **Exemption for Ordinals & Relational Scoping**: Ordinal targets scoped with an element or container (e.g. `Click the third row in table users-table`, `Click the first card`, `Click the last item in the list`) and relational targeting (e.g. `Click the edit button in the row with Alice as name`) provide sufficient structural context and MUST NOT be flagged as `VAGUE_TARGET`.
    - *Suggested Rewrite*: Scope the target with container, section, or label context (e.g. `Click the "Action" button`, `Click the trash icon in the header`).
 
 5. **`VAGUE_VERIFICATION`**:
