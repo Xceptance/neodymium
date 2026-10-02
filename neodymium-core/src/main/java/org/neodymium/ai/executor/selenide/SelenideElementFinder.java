@@ -434,7 +434,11 @@ public final class SelenideElementFinder
         {
             throw new IllegalArgumentException("Action and target cannot be null or blank");
         }
-        final ElementsCollection collection = Selenide.$$(LocatorResolver.resolveLocator(action.getTarget()));
+        if (isAutomationIdSelector(action.getTarget()))
+        {
+            ensureAutomationIdsStampedIfNeeded(action.getTarget());
+        }
+        final ElementsCollection collection = Selenide.$$(resolveLocator(action.getTarget()));
         if (collection.isEmpty())
         {
             final ElementsCollection shadowCollection = findAllInShadowRoots(action.getTarget());
@@ -591,7 +595,7 @@ public final class SelenideElementFinder
 
         final String clean = rawCandidate.trim();
 
-        if (clean.contains("data-ai=") || clean.startsWith("[data-ai=") || clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*"))
+        if (isAutomationIdSelector(clean))
         {
             final SelenideElement el = tryResolveAutomationId(clean);
             if (el != null)
@@ -700,30 +704,12 @@ public final class SelenideElementFinder
                 return visible;
             }
 
-            final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-            if (driver != null)
+            ensureAutomationIdsStampedIfNeeded(clean);
+            els = Selenide.$$(By.cssSelector(transformedCss));
+            visible = findFirstVisible(els, clean);
+            if (visible != null)
             {
-                try
-                {
-                    final long now = System.currentTimeMillis();
-                    final String currentUrl = driver.getCurrentUrl();
-                    final boolean urlChanged = currentUrl != null && !currentUrl.equals(lastStampedUrl);
-                    if (urlChanged || (now - lastGlobalDomStampTime >= DOM_STAMP_THROTTLE_MS))
-                    {
-                        lastGlobalDomStampTime = now;
-                        lastStampedUrl = currentUrl != null ? currentUrl : "";
-                        new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.STANDARD);
-                        els = Selenide.$$(By.cssSelector(transformedCss));
-                        visible = findFirstVisible(els, clean);
-                        if (visible != null)
-                        {
-                            return visible;
-                        }
-                    }
-                }
-                catch (final AssertionError | Exception ignored)
-                {
-                }
+                return visible;
             }
 
             final boolean isSimple = !clean.contains(" ") && !clean.contains(">") && !clean.contains("+") && !clean.contains("~") && !clean.contains(",");
@@ -736,11 +722,74 @@ public final class SelenideElementFinder
                     return visible;
                 }
             }
+
+            if (!els.isEmpty())
+            {
+                return els.first();
+            }
         }
         catch (final AssertionError | Exception ignored)
         {
         }
         return null;
+    }
+
+    /**
+     * Determines whether the given selector targets a Neodymium automation ID (data-ai or xc... signature).
+     *
+     * @param target the target selector string
+     * @return true if target contains or references an automation ID
+     */
+    public static boolean isAutomationIdSelector(final String target)
+    {
+        if (target == null || target.isBlank())
+        {
+            return false;
+        }
+        final String clean = target.trim();
+        return clean.contains("data-ai=")
+                || clean.startsWith("[data-ai=")
+                || clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*")
+                || clean.matches("^xc[a-zA-Z0-9_\\-]+$");
+    }
+
+    /**
+     * Dynamically triggers DOM attribute stamping via {@link PageAnalyzer} if the target selector
+     * references an automation ID and the active page has not been stamped yet or the URL changed.
+     *
+     * @param target the target locator to inspect
+     */
+    public static void ensureAutomationIdsStampedIfNeeded(final String target)
+    {
+        if (target == null || target.isBlank() || !WebDriverRunner.hasWebDriverStarted())
+        {
+            return;
+        }
+
+        final String clean = target.trim();
+        if (isAutomationIdSelector(clean))
+        {
+            final WebDriver driver = WebDriverRunner.getWebDriver();
+            if (driver != null)
+            {
+                try
+                {
+                    final long now = System.currentTimeMillis();
+                    final String currentUrl = driver.getCurrentUrl();
+                    final boolean urlChanged = currentUrl != null && !currentUrl.equals(lastStampedUrl);
+                    final boolean neverStamped = !Selenide.$("[data-ai]").exists();
+                    if (urlChanged || neverStamped || (now - lastGlobalDomStampTime >= DOM_STAMP_THROTTLE_MS))
+                    {
+                        lastGlobalDomStampTime = now;
+                        lastStampedUrl = currentUrl != null ? currentUrl : "";
+                        new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.STANDARD);
+                    }
+                }
+                catch (final AssertionError | Exception ignored)
+                {
+                }
+            }
+        }
     }
 
     public static SelenideElement findFirstVisible(final ElementsCollection els, final String originalTarget)
@@ -861,6 +910,11 @@ public final class SelenideElementFinder
 
     public static By resolveLocator(final String target)
     {
+        if (target != null && target.matches(".*#xc[a-zA-Z0-9_\\-]+.*"))
+        {
+            final String transformed = target.replaceAll("#(xc[a-zA-Z0-9_\\-]+)", "[data-ai='$1']");
+            return LocatorResolver.resolveLocator(transformed);
+        }
         return LocatorResolver.resolveLocator(target);
     }
 

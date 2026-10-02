@@ -1,9 +1,11 @@
-# @author AI-generated: Gemini 3.6 Flash
 # @author Xceptance GmbH 2026
+
+_properties:
+  neodymium.ai.contextLevel: STANDARD
 
 steps: |
   Open ${verla.url}/verla-tailwind-by-claude/index.html
-  Validate that United States as country is selected.
+  Validate that 'United States' is shown as the current country context.
 
   Locate the first product card:
     - Click its 'Add to Cart' button
@@ -11,11 +13,10 @@ steps: |
   The mini cart quantity is now 1.
   
   Hover over the mini cart and click the 'View Cart & Checkout' button.
-
   The headline says now 'Cart'.
-  We have a single lineitem on the left, and an order summary box on the right (visual).
-
+  We see a single lineitem on the left, and an order summary box on the right (visual).
   Capture the subtotal in 'subtotal'.
+
   Increase the quantity by 1.
   Verify that the new subtotal is 2 * ${subtotal}.
   Capture the new subtotal in 'subtotal'.

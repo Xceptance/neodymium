@@ -41,6 +41,68 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261002-03] False Positive inViewport Detection and Weak Selectors in query_dom Tool
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`BrowserToolProvider`)
+- **Scope:** `Framework`
+- **Symptom:**
+  In `CheckoutTest.live()`, Step #2 ("Validate that 'United States' is shown as the current country context") consumed 11 agent turns and 95,598 tokens. `query_dom` returned matching elements located inside closed modals/overlays (e.g. `visibility: hidden; opacity: 0;`) with `inViewport: true` and generic selectors like `span`. This misled the AI agent into believing the element was actively visible in the current viewport, triggering repetitive inspection loops and locator failures.
+- **Root Cause:**
+  1. `query_dom` evaluated viewport inclusion purely via layout boundaries (`rect.top < window.innerHeight && rect.bottom > 0 ...`), completely ignoring CSS `display`, `visibility`, `opacity`, and `content-visibility`. Full-screen modal overlays covering `(0, 0, 1200, 800)` satisfied the bounding box checks despite being styled with `visibility: hidden` and `opacity: 0`.
+  2. Element visibility was never explicitly evaluated or returned as a boolean property (`visible`) in `query_dom` result payloads.
+  3. `selector` generation used naive `tag + idStr + clsStr`, emitting bare tag names (e.g. `span`) when no ID was present and including invalid CSS selector characters (e.g. Tailwind `:` in `hover:bg-gray-100`) without leveraging deterministic `data-ai` automation IDs.
+  4. Search results did not prioritize visible elements over hidden elements, and did not inform the agent when all matching elements were hidden inside closed containers.
+- **Detection Gap ("What did we miss?"):**
+  Existing `query_dom` unit tests (`testBrowserQueryDomAncestorSuppressionAndSorting`) tested ancestor suppression and literal text matching against simple visible DOM trees, but did not test hidden elements (`visibility: hidden`, `display: none`, `opacity: 0`) or verify accurate boolean flags (`visible`, `inViewport`) and selector enrichment.
+- **Resolution:**
+  1. Implemented comprehensive `isVisible(node)` checking in `query_dom`'s injected JavaScript using modern `node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })` with recursive ancestor computed-style fallback checking `display`, `visibility`, and `opacity < 0.01`.
+  2. Gated `inViewport` calculation so that `inViewport = vis && inRect`, guaranteeing invisible elements never report `inViewport: true`.
+  3. Enriched result objects with explicit `visible: vis` and `dataAi: autoId || null` fields.
+  4. Prioritized visible elements over hidden elements in candidate sorting (`visB - visA`).
+  5. Enhanced selector construction: uses `tag#id` if valid ID exists, falls back to `tag[data-ai="..."]` if automation ID exists, and sanitizes class names to prevent invalid CSS selectors with colons or slashes.
+  6. Added diagnostic `note` when all matching elements are hidden: `"All X matching element(s) are currently hidden (visible=false). Verify if a parent dropdown, menu, or modal needs to be opened first"`.
+- **Safety Net Added:**
+  Added unit and regression test `testBrowserQueryDomAccurateVisibilityAndDataAiSelector` in `BrowserToolsTest.java` verifying that elements with `visibility: hidden`, `opacity: 0`, and `display: none` return `visible: false` and `inViewport: false`, that `data-ai` selectors are properly constructed, and that the diagnostic hidden note is returned.
+
+### [DEF-20261002-02] Replay Failure on Assertion Tools Due to Missing Automation ID DOM Stamping
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`BrowserToolProvider`, `SelenideElementFinder`, `LocatorResolver`)
+- **Scope:** `Framework`
+- **Symptom:**
+  In `CheckoutTest.replay()` for dataset `tailwind-by-claude`, replay failed at step #15 ("Verify that the order summary shows the $31.98.") with `AssertionError: Expected text/pattern "$31.98" was not found on selector "[data-ai="xcrxcvi"]" within 3000ms.` The visual RCA erroneously diagnosed that the order summary showed $29.98 instead of $31.98, whereas viewport screenshots confirmed the page rendered $31.98 correctly.
+- **Root Cause:**
+  1. During live recording, `AgentToolLoopStep` stamped deterministic automation IDs (`data-ai="xc..."`) onto the live DOM via `PageAnalyzer.captureSimplifiedDom(ContextLevel.STANDARD)` on every agent turn. The LLM emitted `assert_text(selector="[data-ai=\"xcrxcvi\"]", text="31.98")`.
+  2. In replay mode, the test navigated from `cart.html` to `checkout.html` via `click` and `wait_for_condition(type="url_matches")`. No interaction tool (`click`, `fill`) was invoked on `checkout.html` before the assertion.
+  3. Interaction tools resolve elements via `SelenideElementFinder.findElement`, which triggers on-demand DOM stamping via `tryResolveAutomationId`. However, assertion tools (`assert_text`, `assert_count`, `assert_element_state`, `assert_attribute`) directly invoked `BrowserToolProvider.findElements` and `BrowserToolProvider.resolveLazyElement`. Both methods delegated to `LocatorResolver.resolveLocator` which merely translated CSS/XPath syntax without checking if the page was stamped with `data-ai`. As a result, `[data-ai="..."]` matched 0 elements in the unstamped DOM and timed out after 3,000ms.
+  4. Additionally, `assert_text`, `assert_element_state`, and `assert_attribute` did not capture and attach `domFeatureVector` upon success during live execution, leaving the recorded playbook action without a feature vector and preventing `PlaybookToolReplayer` from performing cascade healing.
+  5. Furthermore, `LocatorResolver` did not transform `#xc...` into `[data-ai='...']`, leaving `#xc...` resolving as HTML element `id` instead of synthetic `data-ai`.
+- **Detection Gap ("What did we miss?"):**
+  Previous unit tests for `assert_text` tested plain text assertions or mocked elements where `data-ai` was already present. There were no replay integration tests asserting on newly navigated pages targeting automation IDs before any user interaction occurred.
+- **Resolution:**
+  1. In `SelenideElementFinder`, introduced `isAutomationIdSelector(target)` and `ensureAutomationIdsStampedIfNeeded(target)` to dynamically stamp `data-ai` via `PageAnalyzer` whenever an automation ID (`[data-ai=...]`, `#xc...`, `xc...`) is targeted on an unstamped page or after a URL change.
+  2. Updated `BrowserToolProvider.findElements(selector)` and `BrowserToolProvider.resolveLazyElement(selector)` to ensure automation IDs are stamped on demand before evaluating Selenide collections or lazy element proxies.
+  3. Updated `LocatorResolver` and `SelenideElementFinder.resolveLocator` to normalize `#xc...` and bare `xc...` selectors into `[data-ai='...']`.
+  4. Updated `BrowserToolProvider.assert_text`, `assert_element_state`, and `assert_attribute` to extract and attach `domFeatureVector` to the tool call result so recorded playbooks preserve feature vectors for cascade healing.
+- **Safety Net Added:**
+  Added unit tests in `LocatorResolverTest`: `testAutomationAndTestIdAttributes` asserting `#xc...` and `xc...` resolve to `[data-ai='...']`. Added unit tests in `SelenideElementFinderTest`: `testIsAutomationIdSelector` and `testResolveLocatorTransformsHashAutomationId`. Added regression test in `BrowserToolsTest`: `testAssertTextOnUnstampedPageWithAutomationIdTriggersStamping` verifying that calling `assert_text` with an automation ID on an unstamped page dynamically triggers stamping and succeeds. Verified full end-to-end replay passes in `CheckoutTest.replay()` with 0 LLM calls and 0 tokens.
+
+### [DEF-20261002-01] Premature TokenBudgetExceededException on Completing Turns & Dead includeAncestors in query_dom
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`AgentToolLoopStep`, `BrowserToolProvider`)
+- **Scope:** `Framework`
+- **Symptom:**
+  In `CheckoutTest.live()`, step #2 ("Validate that United States as country is selected.") failed with `TokenBudgetExceededException` (104,443 tokens consumed vs 100,000 budget limit) at turn 11 right after the agent had successfully verified the country and issued `complete_step`. Additionally, the agent struggled over multiple turns to locate the country picker container because `query_dom`'s `includeAncestors` parameter was dead code.
+- **Root Cause:**
+  1. `AgentToolLoopStep` evaluated `stepCumulativeTokens > this.maxTokens` immediately upon receiving the LLM response without inspecting whether the response proposed completing the step (`complete_step`, `include`, or single-shot action). Even though turn 11 achieved the goal and issued `complete_step`, it was aborted before executing the completion tool call.
+  2. In `BrowserToolProvider`, `query_dom` declared `includeAncestors` in its JSON schema, but never passed the parameter to the client-side JavaScript `queryScript` and never traversed ancestors in DOM query results.
+- **Detection Gap ("What did we miss?"):**
+  Unit tests in `AgentToolLoopStepTest` tested token budget exhaustion with an ongoing action (`token_action`) rather than testing a turn that proposes `complete_step` slightly above the budget. `BrowserToolsTest` verified basic `query_dom` results without testing the `includeAncestors` parameter.
+- **Resolution:**
+  1. In `AgentToolLoopStep`, deferred immediate token budget exceptions for turns proposing completion (`complete_step`, `include`, or single-shot action), granting a 20% grace limit (e.g. up to 120k for a 100k budget) to execute completion. If the step fails to complete or is rejected, the budget exception is enforced at the end of the turn before proceeding to any subsequent turns.
+  2. In `BrowserToolProvider`, wired `includeAncestors` into `queryScript`, traversing up parent nodes up to `ancestorLevels` with deduplication and 500-char `outerHtml` output.
+- **Safety Net Added:**
+  Added unit tests in `AgentToolLoopStepTest`: `testStepTokenBudgetGraceAllowedForCompletingTurn`, `testStepTokenBudgetGraceExceededEvenIfProposesCompletion`, and `testStepTokenBudgetGraceEnforcedIfCompletingTurnFailsToComplete`. Added unit test in `BrowserToolsTest` verifying `includeAncestors: 1` hierarchy traversal.
+
 ### [DEF-20261001-10] Color Wireframe CSS Invisibility & Action Step Replay State
 - **Date:** 2026-10-01
 - **Component:** `neodymium-core` (`PageAnalyzer`, `ExecuteActionsStep`, `VisualBaselineGateStep`, `PlaybookStep`)

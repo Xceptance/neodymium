@@ -1533,6 +1533,72 @@ public class AgentToolLoopStepTest
     }
 
     @Test
+    public void testStepTokenBudgetGraceAllowedForCompletingTurn() throws PipelineException
+    {
+        // 1100 tokens consumed vs 1000 limit (within 20% grace limit = 1200)
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+                new LlmResponse("Finishing step", new TokenUsage(550, 550, 1100), "mock",
+                        List.of(new ToolCall("c-1", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30, 15, 1000);
+        Assertions.assertDoesNotThrow(() -> step.execute(this.context));
+    }
+
+    @Test
+    public void testStepTokenBudgetGraceExceededEvenIfProposesCompletion()
+    {
+        // 1250 tokens consumed vs 1000 limit (> 20% grace limit = 1200)
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+                new LlmResponse("Finishing step over grace", new TokenUsage(625, 625, 1250), "mock",
+                        List.of(new ToolCall("c-1", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30, 15, 1000);
+        final TokenBudgetExceededException thrown = Assertions.assertThrows(TokenBudgetExceededException.class, () -> step.execute(this.context));
+        Assertions.assertEquals(TokenBudgetExceededException.BudgetType.TOTAL, thrown.getBudgetType());
+        Assertions.assertEquals(1250, thrown.getConsumedTokens());
+        Assertions.assertEquals(1000, thrown.getBudgetLimit());
+    }
+
+    @Test
+    public void testStepTokenBudgetGraceEnforcedIfCompletingTurnFailsToComplete()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("failing_token_action", "Fails", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.error(call.callId(), "Action failed");
+            }
+        });
+
+        // Proposes [failing_token_action, complete_step] with 1100 tokens (<= 1200 grace)
+        // Since failing_token_action fails, coProposedComplete is not executed and turn loop finishes without completing step.
+        // End-of-turn budget check must throw TokenBudgetExceededException.
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+                new LlmResponse("Attempt action and finish", new TokenUsage(550, 550, 1100), "mock",
+                        List.of(
+                                new ToolCall("c-1", "failing_token_action", MAPPER.createObjectNode()),
+                                new ToolCall("c-2", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))
+                        ));
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30, 15, 1000);
+        final TokenBudgetExceededException thrown = Assertions.assertThrows(TokenBudgetExceededException.class, () -> step.execute(this.context));
+        Assertions.assertEquals(TokenBudgetExceededException.BudgetType.TOTAL, thrown.getBudgetType());
+        Assertions.assertEquals(1100, thrown.getConsumedTokens());
+        Assertions.assertEquals(1000, thrown.getBudgetLimit());
+    }
+
+    @Test
     public void testBatchedToolCallsTruncatedToSingleActionPerTurn() throws PipelineException
     {
         final ObjectNode schema = MAPPER.createObjectNode();

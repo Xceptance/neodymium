@@ -130,7 +130,16 @@ public final class LocatorResolver
             return resolveLocator(clean.substring(4).trim());
         }
 
-        // 4. Neodymium Automation Reference ID shorthand (e.g. "data-ai=xc123")
+        // 4. Neodymium Automation Reference ID shorthand (e.g. "data-ai=xc123", "#xc123", or selectors containing "#xc...")
+        if (clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*"))
+        {
+            final String transformed = clean.replaceAll("#(xc[a-zA-Z0-9_\\-]+)", "[data-ai='$1']");
+            return resolveLocator(transformed);
+        }
+        if (clean.matches("^xc[a-zA-Z0-9_\\-]+$"))
+        {
+            return By.cssSelector("[data-ai='" + clean + "']");
+        }
         if (lower.startsWith("data-ai="))
         {
             final int eqIdx = clean.indexOf('=');
