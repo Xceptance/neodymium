@@ -1234,14 +1234,50 @@ After executing SUT actions for a step, the framework performs a **Post-Action O
 
 ---
 
-### 6.5 Visual Root Cause Analysis (RCA) & Failure Diagnostics
+### 6.5 Visual Root Cause Analysis (RCA) & Rubric-Based Failure Diagnostics
 
-When a test step fails during execution, Neodymium AI automatically captures the final SUT page state and invokes the Vision LLM (`LlmCapability.VISION`) to generate a plain-English **Visual Root Cause Analysis (RCA)**:
-* **Post-Mortem Failure Diagnostic**: Attaches root cause explanations to Allure reports, telemetry sinks, and log files.
+When an automated test step fails during execution (e.g. an assertion timeout, missing element, or unprogressed flow), Neodymium AI automatically triggers **Visual Root Cause Analysis (RCA)**.
+
+Instead of stopping at cryptic framework exceptions like `TimeoutException: Expected text 'Merci pour votre achat !' was not found within 3000ms`, Neodymium captures the final SUT page state, active URL, page title, recent tool interactions, and the trace of preceding executed steps, and invokes the multimodal Vision LLM (`LlmCapability.VISION`) using a structured rubric evaluation engine.
 
 ```properties
 neodymium.ai.visualRca.enabled=true
 ```
+
+#### A. Structured Diagnostic Rubrics
+
+Visual RCA evaluates the failure against four mandatory, specialized rubrics before synthesizing the root cause:
+
+1. **Target Presence Check (`targetPresence`)**:
+   - **Zero-Premise Bias**: Verifies objectively whether the expected target text, values, or elements are visually present on screen.
+   - If the content is visibly present, Visual RCA classifies the failure as an automated selector, locator syntax, or synchronization timeout mismatch rather than a real application defect.
+   - **Score**: `FOUND` | `MISSING` | `UNKNOWN`
+
+2. **Form & Validation Check (`formValidation`)**:
+   - Scrutinizes all visible inputs, dropdowns, and checkboxes on the screen for:
+     - **Browser-Native HTML5 Validation Bubbles**: Detects native tooltips pointing to empty required inputs (e.g., `! Please fill out this field.` or `! Please select an item in the list.`).
+     - **Form Error Messages & Borders**: Identifies red borders, field-level error messages, and asterisks (`*`) on omitted mandatory inputs (e.g. Province, State, Postal Code, Phone, Terms).
+     - Identifies when a form submission action (such as clicking 'Acheter' or 'Submit') was blocked because an unfilled required field prevented navigation.
+   - **Score**: `ERROR_PRESENT` | `CLEAN` | `UNKNOWN`
+
+3. **Navigation & Flow State (`flowState`)**:
+   - Correlates the current URL, page title, and visible view with preceding executed actions (e.g. submit button clicked in the previous step).
+   - Identifies if the application navigated successfully or remained stuck on the previous form or view.
+   - **Score**: `STUCK` | `PROGRESSING` | `UNKNOWN`
+
+4. **Action Obstruction Check (`obstruction`)**:
+   - Detects visual blockers preventing user interaction, such as modal overlays, cookie consent banners, loading spinners, disabled buttons, or off-screen elements.
+   - **Score**: `OBSTRUCTED` | `CLEAR` | `UNKNOWN`
+
+#### B. The `VisualRcaResult` Model & Report Rendering
+
+The diagnosis produces a typed `VisualRcaResult` object containing:
+- `rootCause`: Clear, natural-language engineering synthesis explaining the root cause based on visual evidence.
+- `rubrics`: Structured breakdown containing scores and detailed analysis for each of the 4 diagnostic checks.
+
+Both HTML and Markdown reports render dedicated diagnostic cards:
+- **HTML Report**: Displays a styled `.visual-rca-box` in the failure details section with a prominent Root Cause summary and a `.rubrics-grid` showing individual rubric cards with status pills (`MISSING`, `ERROR_PRESENT`, `STUCK`, `CLEAR`).
+- **Markdown Report**: Includes a dedicated `### 🔍 Visual Root Cause Analysis (RCA)` block with the root cause explanation and a bulleted `Diagnostic Rubrics` scorecard.
 
 ---
 

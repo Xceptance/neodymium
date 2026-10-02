@@ -55,6 +55,7 @@ import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.prompt.VisualRcaResult;
 import org.neodymium.ai.telemetry.MetricsCollector;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.util.Neodymium;
@@ -1209,6 +1210,14 @@ public final class PreliminaryReportListener implements ExecutionListener
                             this.report.addTag(item.toString());
                         }
                     }
+                }
+            }
+            if (this.report.getVisualRcaResult() == null)
+            {
+                final Object rcaResult = ctx.getTransientData().get(ExecutionContext.KEY_VISUAL_RCA_RESULT);
+                if (rcaResult instanceof VisualRcaResult vr)
+                {
+                    this.report.setVisualRcaResult(vr);
                 }
             }
             if (this.report.getVisualRcaExplanation() == null)

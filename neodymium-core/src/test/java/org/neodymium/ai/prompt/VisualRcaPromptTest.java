@@ -51,7 +51,7 @@ public final class VisualRcaPromptTest
         Assertions.assertFalse(userMessage.contains("Current Page Title:"));
         Assertions.assertNull(prompt.getPageUrl());
         Assertions.assertNull(prompt.getPageTitle());
-        Assertions.assertEquals(ResponseSchema.TEXT, prompt.getResponseSchema());
+        Assertions.assertEquals(ResponseSchema.ASSERTION, prompt.getResponseSchema());
     }
 
     @Test
@@ -90,8 +90,36 @@ public final class VisualRcaPromptTest
     {
         final VisualRcaPrompt prompt = new VisualRcaPrompt("Verify cart", "TimeoutException");
 
-        Assertions.assertEquals("Button is disabled", prompt.parseResponse("  Button is disabled  \n", null));
-        Assertions.assertEquals("", prompt.parseResponse(null, null));
+        final String json = """
+            {
+              "rubrics": {
+                "targetPresence": { "analysis": "Total element missing", "score": "MISSING" },
+                "formValidation": { "analysis": "Province field is empty with validation tooltip", "score": "ERROR_PRESENT" },
+                "flowState": { "analysis": "Still on checkout page", "score": "STUCK" },
+                "obstruction": { "analysis": "No modal dialog", "score": "CLEAR" }
+              },
+              "rootCause": "Checkout halted due to missing province field."
+            }
+            """;
+
+        final VisualRcaResult parsed = prompt.parseResponse(json, null);
+        Assertions.assertNotNull(parsed);
+        Assertions.assertEquals("Checkout halted due to missing province field.", parsed.getRootCause());
+        Assertions.assertNotNull(parsed.getRubrics());
+        Assertions.assertEquals("MISSING", parsed.getRubrics().targetPresence().score());
+        Assertions.assertEquals("ERROR_PRESENT", parsed.getRubrics().formValidation().score());
+        Assertions.assertEquals("STUCK", parsed.getRubrics().flowState().score());
+        Assertions.assertEquals("CLEAR", parsed.getRubrics().obstruction().score());
+        Assertions.assertTrue(parsed.toFormattedDiagnosis().contains("Root Cause Analysis"));
+
+        final VisualRcaResult fallback = prompt.parseResponse("  Button is disabled  \n", null);
+        Assertions.assertNotNull(fallback);
+        Assertions.assertEquals("Button is disabled", fallback.getRootCause());
+        Assertions.assertNull(fallback.getRubrics());
+
+        final VisualRcaResult empty = prompt.parseResponse(null, null);
+        Assertions.assertNotNull(empty);
+        Assertions.assertTrue(empty.getRootCause().contains("No RCA diagnosis"));
     }
 
     @Test

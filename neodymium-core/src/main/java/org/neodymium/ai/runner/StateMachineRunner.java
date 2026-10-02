@@ -58,6 +58,7 @@ import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
 import org.neodymium.ai.playbook.linter.PlaybookLinterException;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.prompt.VisualRcaResult;
 import org.neodymium.ai.playbook.linter.PostFlightPlaybookLinter;
 import org.neodymium.ai.prompt.VisualRcaPrompt;
 import org.neodymium.ai.session.AiSession;
@@ -891,7 +892,7 @@ public final class StateMachineRunner
                 system,
                 user,
                 state.getAttachments() != null ? state.getAttachments() : Collections.emptyList(),
-                ResponseSchema.TEXT,
+                rcaPrompt.getResponseSchema(),
                 0.0,
                 60
             );
@@ -978,11 +979,13 @@ public final class StateMachineRunner
                 }
             }
 
-            final String rcaExplanation = rcaPrompt.parseResponse(response.content(), context);
+            final VisualRcaResult rcaResult = rcaPrompt.parseResponse(response.content(), context);
+            final String rcaExplanation = rcaResult != null ? rcaResult.toFormattedDiagnosis() : "";
 
             LOGGER.info("🚨 [Visual RCA Diagnosis]: {}", rcaExplanation);
+            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_RESULT, rcaResult);
             context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_EXPLANATION, rcaExplanation);
-            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_SUMMARY, rcaExplanation);
+            context.getTransientData().put(ExecutionContext.KEY_VISUAL_RCA_SUMMARY, rcaResult != null && rcaResult.getRootCause() != null ? rcaResult.getRootCause() : rcaExplanation);
             this.session.getEventBus().dispatch(new DiagnosticErrorEvent("Visual RCA analysis: " + rcaExplanation, exception));
         }
         catch (final Exception e)

@@ -19,10 +19,10 @@
 package org.neodymium.ai.prompt;
 
 import java.util.List;
-
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
 import org.neodymium.ai.tool.ToolCall;
 
@@ -33,7 +33,7 @@ import org.neodymium.ai.tool.ToolCall;
  * @author AI-generated: Gemini 2.5 Pro
  * @author Xceptance GmbH 2026
  */
-public final class VisualRcaPrompt implements AiPrompt<String>
+public final class VisualRcaPrompt implements AiPrompt<VisualRcaResult>
 {
     /**
      * The instruction that failed execution.
@@ -141,6 +141,26 @@ public final class VisualRcaPrompt implements AiPrompt<String>
             sb.append("\n## Recent Tool Interactions in this Step:\n").append(interactions).append("\n");
         }
 
+        final Object rawStats = context != null && context.getTransientData() != null
+            ? context.getTransientData().get("execution.stepStatsList")
+            : null;
+        if (rawStats instanceof List<?> list && !list.isEmpty())
+        {
+            final StringBuilder recentStepsSb = new StringBuilder();
+            final int startIdx = Math.max(0, list.size() - 5);
+            for (int i = startIdx; i < list.size(); i++)
+            {
+                if (list.get(i) instanceof StepStats stats)
+                {
+                    recentStepsSb.append(String.format("Step %d: %s\n", (i + 1), stats.getInstruction()));
+                }
+            }
+            if (recentStepsSb.length() > 0)
+            {
+                sb.append("\n## Preceding Steps Executed:\n").append(recentStepsSb).append("\n");
+            }
+        }
+
         return sb.toString();
     }
 
@@ -208,13 +228,29 @@ public final class VisualRcaPrompt implements AiPrompt<String>
     @Override
     public ResponseSchema getResponseSchema()
     {
-        return ResponseSchema.TEXT;
+        return ResponseSchema.ASSERTION;
     }
 
     @Override
-    public String parseResponse(final String rawResponse, final ExecutionContext context)
+    public VisualRcaResult parseResponse(final String rawResponse, final ExecutionContext context)
     {
-        return rawResponse != null ? rawResponse.trim() : "";
+        if (rawResponse == null || rawResponse.isBlank())
+        {
+            return new VisualRcaResult(null, "No RCA diagnosis returned by LLM");
+        }
+        try
+        {
+            final VisualRcaResult parsed = ResponseRepairService.deserialize(rawResponse, VisualRcaResult.class);
+            if (parsed != null && (parsed.getRootCause() != null || parsed.getRubrics() != null))
+            {
+                return parsed;
+            }
+        }
+        catch (final Exception e)
+        {
+            // Fallback for unstructured plain text responses
+        }
+        return new VisualRcaResult(null, rawResponse.trim());
     }
 
     /**
