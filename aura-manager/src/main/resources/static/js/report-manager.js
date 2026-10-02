@@ -2632,12 +2632,27 @@ function renderStepsForExecution(activeRow) {
             const stepActionsCount = Array.isArray(s.actions) ? s.actions.length : 0;
             const stepScreenshotsCount = screenshotSources.length;
             const stepLlmCallsCount = Array.isArray(calls) ? calls.length : 0;
+            let stepInTokens = 0;
+            let stepOutTokens = 0;
+            if (Array.isArray(calls)) {
+                for (const c of calls) {
+                    stepInTokens += Number(c.inputTokens || c.input_tokens || 0) || 0;
+                    stepOutTokens += Number(c.outputTokens || c.output_tokens || 0) || 0;
+                }
+            }
+            if (stepInTokens === 0 && stepOutTokens === 0) {
+                stepInTokens = Number(s.standardInputTokens || s.standard_input_tokens || 0) || 0;
+                stepOutTokens = Number(s.standardOutputTokens || s.standard_output_tokens || 0) || 0;
+            }
+            const tokensSuffix = (stepInTokens > 0 || stepOutTokens > 0)
+                ? `, ${stepInTokens.toLocaleString('en-US')} in/ ${stepOutTokens.toLocaleString('en-US')} out`
+                : '';
             const hasSsim = s.baselineMatrixPng || s.replayMatrixPng || s.ssimScore != null || s.ssimMinScore != null || s.screenshotHashDim;
             const countsSummaryHtml = `
                 <div class="step-exec-stats" style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; margin-top: 0.25rem;">
                     <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #7e22ce;">terminal</span> ${stepActionsCount} action(s)</span>
                     <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #2563eb;">image</span> ${stepScreenshotsCount} screenshot(s)</span>
-                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #a855f7;">smart_toy</span> ${stepLlmCallsCount} LLM call(s)</span>
+                    <span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted); background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #a855f7;">smart_toy</span> ${stepLlmCallsCount} LLM call(s)${tokensSuffix}</span>
                     ${hasSsim ? `<span class="step-stat-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: #0f766e; background: #f0fdfa; border: 1px solid #99f6e4; border-radius: 10px; padding: 0.15rem 0.5rem;"><span class="material-symbols-outlined" style="font-size: 0.8rem; color: #0d9488;">compare</span> Visual SSIM</span>` : ''}
                 </div>
             `;

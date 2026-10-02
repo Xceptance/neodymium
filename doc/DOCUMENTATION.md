@@ -51,7 +51,7 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
 7. [Performance, Caching, Telemetry & Assertions](#7-performance-caching-telemetry--assertions)
    - [7.1 In-Memory LLM Request Caching (`@AiLlmCache`)](#71-in-memory-llm-request-caching-aillmcache)
    - [7.2 Event-Driven Architecture, EventBus & HUD Overlays](#72-event-driven-architecture-eventbus--hud-overlays)
-   - [7.3 Real-Time Token Budget Guard & Limits](#73-real-time-token-budget-guard--limits)
+   - [7.3 Real-Time Token Budget Guard, Step Limits & Turn Bounds](#73-real-time-token-budget-guard-step-limits--turn-bounds)
    - [7.4 Per-Call-Type Telemetry Breakdown](#74-per-call-type-telemetry-breakdown)
    - [7.5 Execution Data Access, Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)](#75-execution-data-access-telemetry-metrics--mode-conditional-asserters-verifymetrics)
 8. [Configuration Reference](#8-configuration-reference)
@@ -1386,13 +1386,26 @@ public final class VerlaProgrammaticDemoTest
 
 ---
 
-### 7.3 Real-Time Token Budget Guard & Limits
+### 7.3 Real-Time Token Budget Guard, Step Limits & Turn Bounds
 
-Supports real-time input (prompt) and output (completion) token budget limits per test run:
+Neodymium AI enforces two layers of budget protection during agent execution:
+
+#### 1. Step-Level Token, Turn & Timeout Bounds
+Guards individual step execution loops against infinite tool-calling loops and runaway token consumption:
+* **`neodymium.ai.step.maxTokens`**: Maximum cumulative tokens across all turns in a single step (default: `100000`). If cumulative tokens breach this limit, the step halts with `TokenBudgetExceededException`.
+* **`neodymium.ai.step.maxTurns`**: Maximum tool-execution turns allowed per step loop (default: `15`).
+* **`neodymium.ai.step.timeoutSeconds`**: Wall-clock timeout in seconds for an individual step loop (default: `60`).
+
+> [!NOTE]
+> When `neodymium.ai.contextLevel` is set to `STANDARD` (or higher), DOM payloads per turn are ~2-3x larger due to static copy inclusion (`p, span, li, td, div`). It is strongly recommended to increase `neodymium.ai.step.maxTokens` to `200000` - `250000` to prevent compound multi-turn steps from prematurely exhausting the default budget.
+
+#### 2. Test-Run Cumulative Token Budgets
+Guards total input (prompt) and output (completion) token consumption across the entire test case lifecycle:
 
 ```properties
-neodymium.ai.tokenBudget.input=50000
-neodymium.ai.tokenBudget.output=10000
+# Global per-test-run token ceilings (ai.properties)
+neodymium.ai.tokenBudget.input=1000000
+neodymium.ai.tokenBudget.output=100000
 ```
 
 ```java
@@ -1544,7 +1557,11 @@ mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-g
 * `neodymium.ai.judge.mode` - Mode of Quality Judge (`ON_AMBIGUITY`, `ALWAYS`, `ON_FAIL`). (Default: `ON_AMBIGUITY`)
 
 ### 8.4 Network and Budget Limits
+* `neodymium.ai.step.maxTokens` - Maximum cumulative token budget per individual step loop. Throws `TokenBudgetExceededException` if exceeded. Aliases: `neodymium.ai.tokenBudget.step`, `neodymium.ai.step.tokenBudget`, `tokenBudget.step`. (Default: `100000`, recommended `250000` when `contextLevel = STANDARD`)
+* `neodymium.ai.step.maxTurns` - Maximum tool execution turns allowed per individual step loop. (Default: `15`)
+* `neodymium.ai.step.timeoutSeconds` - Per-step execution wall-clock timeout in seconds. (Default: `60`, fallback: `neodymium.ai.timeoutSeconds`)
+* `neodymium.ai.judge.discussion.maxTurns` - Maximum turns allowed in multi-agent consensus judge deliberation. (Default: `3`)
 * `neodymium.ai.maxRetriesAtMaxLevel` - Number of LLM self-healing iterations allowed after reaching maximum context level. (Default: `1`)
 * `neodymium.ai.llm.maxRetries` - Maximum network retries for 429/500 LLM API failures.
-* `neodymium.ai.tokenBudget.input` - Hard limit on input context tokens per execution. (Default: `-1` disabled)
-* `neodymium.ai.tokenBudget.output` - Hard limit on output response tokens per execution. (Default: `-1` disabled)
+* `neodymium.ai.tokenBudget.input` - Cumulative input context token limit per entire test run. Aliases: `neodymium.ai.tokenBudgetInput`, `tokenBudget.input`. (Default: `500000`)
+* `neodymium.ai.tokenBudget.output` - Cumulative output response token limit per entire test run. Aliases: `neodymium.ai.tokenBudgetOutput`, `tokenBudget.output`. (Default: `50000`)

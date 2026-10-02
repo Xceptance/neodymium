@@ -49,7 +49,10 @@ public final class LocatorResolver
     private static final Logger LOG = LoggerFactory.getLogger(LocatorResolver.class);
 
     private static final Pattern PLAYWRIGHT_PSEUDO_PATTERN = Pattern.compile(
-            "^(.*?):(has-text|has-text\\*|has-text-is|contains|text|text\\*|text-is|exact-text)\\((.*?)\\)$", Pattern.CASE_INSENSITIVE);
+            "^(.*?):(has-text|has-text\\*|has-text-is|contains|text|text\\*|text-is|exact-text)\\(((?:[^()]|\"[^\"]*\"|'[^']*')*)\\)$", Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern EXTENDED_PSEUDO_PATTERN = Pattern.compile(
+            ":(has-text|has-text\\*|has-text-is|contains|text|text\\*|text-is|exact-text)\\(", Pattern.CASE_INSENSITIVE);
 
     private LocatorResolver()
     {
@@ -91,12 +94,21 @@ public final class LocatorResolver
                     + "()' is not supported in W3C WebDriver. Please use standard hierarchical selectors, CSS combinators, or chained '>>' locators.");
         }
 
-        final Matcher unsupportedPseudos = Pattern.compile(":(nth-match|text-matches)\\(", Pattern.CASE_INSENSITIVE).matcher(clean);
+        final Matcher unsupportedPseudos = Pattern.compile(":text-matches\\(", Pattern.CASE_INSENSITIVE).matcher(clean);
         if (unsupportedPseudos.find())
         {
-            final String pseudo = unsupportedPseudos.group(1).toLowerCase(Locale.ROOT);
-            throw new InvalidSelectorException("Unsupported selector syntax '" + clean + "': Playwright ':" + pseudo
-                    + "()' pseudo-class is not supported in W3C WebDriver. Please use standard CSS or text locators.");
+            throw new InvalidSelectorException("Unsupported selector syntax '" + clean + "': Playwright ':text-matches()' pseudo-class is not supported in W3C WebDriver. Please use standard CSS or text locators.");
+        }
+
+        // Playwright :nth-match(selector, N) or selector:nth-match(N)
+        final Matcher nthMatchMatcher = Pattern.compile("^(.*?):nth-match\\((?:(.+?),\\s*)?(\\d+)\\)$", Pattern.CASE_INSENSITIVE).matcher(clean);
+        if (nthMatchMatcher.matches())
+        {
+            final String prefix = nthMatchMatcher.group(1).trim();
+            final String inner = nthMatchMatcher.group(2) != null ? nthMatchMatcher.group(2).trim() : prefix;
+            final int index = Integer.parseInt(nthMatchMatcher.group(3).trim());
+            final String seg = toXPathSegment(inner);
+            return By.xpath("(//" + seg + ")[" + index + "]");
         }
 
         // 1. Chained Playwright selectors (e.g. "#header >> button" or ".card >> text=Buy")
@@ -110,6 +122,25 @@ public final class LocatorResolver
         }
 
         final String lower = clean.toLowerCase(Locale.ROOT);
+
+        // Playwright standalone nth=N (e.g. "nth=0", "nth=2", "nth=-1")
+        if (lower.replaceAll("\\s+", "").matches("^nth=\\-?\\d+$"))
+        {
+            final int index = Integer.parseInt(lower.replaceAll("\\s+", "").substring(4));
+            if (index >= 0)
+            {
+                return By.xpath("(//*)[ " + (index + 1) + " ]");
+            }
+            else if (index == -1)
+            {
+                return By.xpath("(//*)[last()]");
+            }
+            else
+            {
+                final int offset = Math.abs(index) - 1;
+                return By.xpath("(//*)[last()-" + offset + "]");
+            }
+        }
 
         // 2. Playwright codegen internal prefixes (e.g. internal:role=..., internal:text=...)
         if (lower.startsWith("internal:"))
@@ -255,6 +286,11 @@ public final class LocatorResolver
             return buildPseudoSelectorXpath(tag, textVal, isExact);
         }
 
+        if (EXTENDED_PSEUDO_PATTERN.matcher(clean).find())
+        {
+            return buildPseudoSelectorXpath(clean, null, false);
+        }
+
         // 12. Explicit Shadow DOM targets (e.g. host-el ::shadow button)
         if (clean.contains("::shadow"))
         {
@@ -350,8 +386,7 @@ public final class LocatorResolver
             return By.xpath("//*[not(self::html or self::body or self::head) and " + textCondition + "]");
         }
 
-        final String normalized = cssPrefix.trim().replaceAll("\\s*>\\s*", " > ");
-        final String[] tokens = normalized.split("\\s+");
+        final List<String> tokens = tokenizeCssSelector(cssPrefix.trim());
         final List<String> segments = new ArrayList<>();
         final List<Boolean> isChildCombinator = new ArrayList<>();
         boolean nextIsChild = false;
@@ -418,8 +453,40 @@ public final class LocatorResolver
 
         final String rest = segment.substring(cursor);
 
+        // Match substring text pseudo-classes: :has-text(...), :has-text*(...), :contains(...), :text(...), :text*(...)
+        final String[] subTextPseudos = {"has-text", "has-text*", "contains", "text", "text*"};
+        for (final String pseudo : subTextPseudos)
+        {
+            for (final String textArg : extractBalancedPseudoArgs(rest, pseudo))
+            {
+                final String textVal = unquote(textArg);
+                conditions.add("contains(normalize-space(.), " + escapeXpath(textVal) + ")");
+            }
+        }
+
+        // Match exact text pseudo-classes: :has-text-is(...), :text-is(...), :exact-text(...)
+        final String[] exactTextPseudos = {"has-text-is", "text-is", "exact-text"};
+        for (final String pseudo : exactTextPseudos)
+        {
+            for (final String textArg : extractBalancedPseudoArgs(rest, pseudo))
+            {
+                final String textVal = unquote(textArg);
+                conditions.add("(normalize-space(.)=" + escapeXpath(textVal) + " or normalize-space(text())=" + escapeXpath(textVal) + ")");
+            }
+        }
+
+        String cleanedRest = rest;
+        for (final String pseudo : subTextPseudos)
+        {
+            cleanedRest = stripBalancedPseudo(cleanedRest, pseudo);
+        }
+        for (final String pseudo : exactTextPseudos)
+        {
+            cleanedRest = stripBalancedPseudo(cleanedRest, pseudo);
+        }
+
         // Match attributes: [name='value'] or [required]
-        final Matcher attrMatcher = Pattern.compile("\\[([a-zA-Z0-9_-]+)(?:([*^$|~]?=)(['\"]?)(.*?)\\3)?\\]").matcher(rest);
+        final Matcher attrMatcher = Pattern.compile("\\[([a-zA-Z0-9_-]+)(?:([*^$|~]?=)(['\"]?)(.*?)\\3)?\\]").matcher(cleanedRest);
         while (attrMatcher.find())
         {
             final String attrName = attrMatcher.group(1);
@@ -449,17 +516,79 @@ public final class LocatorResolver
         }
 
         // Match IDs: #id
-        final Matcher idMatcher = Pattern.compile("#([a-zA-Z0-9_-]+)").matcher(rest);
+        final Matcher idMatcher = Pattern.compile("#([a-zA-Z0-9_-]+)").matcher(cleanedRest);
         while (idMatcher.find())
         {
             conditions.add("@id=" + escapeXpath(idMatcher.group(1)));
         }
 
         // Match classes: .class
-        final Matcher classMatcher = Pattern.compile("\\.([a-zA-Z0-9_-]+)").matcher(rest);
+        final Matcher classMatcher = Pattern.compile("\\.([a-zA-Z0-9_-]+)").matcher(cleanedRest);
         while (classMatcher.find())
         {
             conditions.add("contains(concat(' ', normalize-space(@class), ' '), ' " + classMatcher.group(1) + " ')");
+        }
+
+        // Match :nth-child(N)
+        final Matcher nthChildMatcher = Pattern.compile(":nth-child\\((\\d+)\\)").matcher(cleanedRest);
+        while (nthChildMatcher.find())
+        {
+            conditions.add("position()=" + nthChildMatcher.group(1));
+        }
+
+        // Match :nth-of-type(N)
+        final Matcher nthOfTypeMatcher = Pattern.compile(":nth-of-type\\((\\d+)\\)").matcher(cleanedRest);
+        while (nthOfTypeMatcher.find())
+        {
+            conditions.add("position()=" + nthOfTypeMatcher.group(1));
+        }
+
+        if (cleanedRest.contains(":first-child") || cleanedRest.contains(":first-of-type"))
+        {
+            conditions.add("position()=1");
+        }
+
+        if (cleanedRest.contains(":last-child") || cleanedRest.contains(":last-of-type"))
+        {
+            conditions.add("position()=last()");
+        }
+
+        // Match :has(...) e.g. :has(td) or :has(.btn) or :has([role="cell"])
+        for (final String inner : extractBalancedPseudoArgs(cleanedRest, "has"))
+        {
+            final String[] subInners = inner.split("\\s*,\\s*");
+            final List<String> hasOrConditions = new ArrayList<>();
+            for (final String sub : subInners)
+            {
+                hasOrConditions.add("descendant::" + toXPathSegment(sub));
+            }
+            if (hasOrConditions.size() == 1)
+            {
+                conditions.add(hasOrConditions.get(0));
+            }
+            else
+            {
+                conditions.add("(" + String.join(" or ", hasOrConditions) + ")");
+            }
+        }
+
+        // Match :not(...) e.g. :not(th) or :not(.header) or :not(:has(...))
+        for (final String inner : extractBalancedPseudoArgs(cleanedRest, "not"))
+        {
+            if (inner.startsWith(":has(") && inner.endsWith(")"))
+            {
+                final String nested = inner.substring(5, inner.length() - 1).trim();
+                conditions.add("not(descendant::" + toXPathSegment(nested) + ")");
+            }
+            else if (inner.startsWith("."))
+            {
+                conditions.add("not(contains(concat(' ', normalize-space(@class), ' '), ' " + inner.substring(1) + " '))");
+            }
+            else
+            {
+                final String target = toXPathSegment(inner);
+                conditions.add("not(self::" + target + " or descendant::" + target + ")");
+            }
         }
 
         if (extraCondition != null && !extraCondition.isBlank())
@@ -574,7 +703,45 @@ public final class LocatorResolver
                 part = part.substring(9).trim().replaceAll("(?i)\\[([a-zA-Z0-9_-]+)=([\"'])(.*?)\\2i\\]", "[$1=$2$3$2]");
             }
             final String lowerPart = part.toLowerCase(Locale.ROOT);
+            final String normalizedPart = lowerPart.replaceAll("\\s+", "");
             final String prefix = "//";
+
+            if (normalizedPart.matches("^nth=\\-?\\d+$")
+                    || "first".equals(normalizedPart) || "first()".equals(normalizedPart)
+                    || "last".equals(normalizedPart) || "last()".equals(normalizedPart))
+            {
+                final int index;
+                if ("first".equals(normalizedPart) || "first()".equals(normalizedPart))
+                {
+                    index = 0;
+                }
+                else if ("last".equals(normalizedPart) || "last()".equals(normalizedPart))
+                {
+                    index = -1;
+                }
+                else
+                {
+                    index = Integer.parseInt(normalizedPart.substring(4));
+                }
+
+                final String current = xpath.length() == 0 ? "//*" : xpath.toString();
+                xpath.setLength(0);
+                if (index >= 0)
+                {
+                    final int xpathIndex = index + 1;
+                    xpath.append("(").append(current).append(")[").append(xpathIndex).append("]");
+                }
+                else if (index == -1)
+                {
+                    xpath.append("(").append(current).append(")[last()]");
+                }
+                else
+                {
+                    final int offset = Math.abs(index) - 1;
+                    xpath.append("(").append(current).append(")[last()-").append(offset).append("]");
+                }
+                continue;
+            }
 
             if (lowerPart.startsWith("text=") || lowerPart.startsWith("has-text="))
             {
@@ -655,11 +822,256 @@ public final class LocatorResolver
             }
             else
             {
-                xpath.append(prefix).append(toXPathSegment(part));
+                if (hasCssCombinator(part))
+                {
+                    final By resolvedPart = buildPseudoSelectorXpath(part, null, false);
+                    String rawPart = resolvedPart.toString();
+                    if (rawPart.startsWith("By.xpath: "))
+                    {
+                        rawPart = rawPart.substring(10).trim();
+                    }
+                    if (rawPart.startsWith("//"))
+                    {
+                        rawPart = rawPart.substring(2);
+                    }
+                    xpath.append(prefix).append(rawPart);
+                }
+                else
+                {
+                    xpath.append(prefix).append(toXPathSegment(part));
+                }
             }
         }
 
         return By.xpath(xpath.toString());
+    }
+
+    /**
+     * Checks whether a CSS selector segment contains combinators (whitespace or {@code >}) outside of quotes,
+     * brackets, or parentheses.
+     *
+     * @param selector the CSS selector to check
+     * @return {@code true} if an unnested CSS combinator is present
+     */
+    private static boolean hasCssCombinator(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return false;
+        }
+        int parenDepth = 0;
+        int bracketDepth = 0;
+        boolean inQuote = false;
+        char quoteChar = 0;
+
+        for (int i = 0; i < selector.length(); i++)
+        {
+            final char c = selector.charAt(i);
+            if (inQuote)
+            {
+                if (c == quoteChar)
+                {
+                    inQuote = false;
+                }
+            }
+            else if (c == '"' || c == '\'')
+            {
+                inQuote = true;
+                quoteChar = c;
+            }
+            else if (c == '(')
+            {
+                parenDepth++;
+            }
+            else if (c == ')')
+            {
+                parenDepth = Math.max(0, parenDepth - 1);
+            }
+            else if (c == '[')
+            {
+                bracketDepth++;
+            }
+            else if (c == ']')
+            {
+                bracketDepth = Math.max(0, bracketDepth - 1);
+            }
+            else if (parenDepth == 0 && bracketDepth == 0)
+            {
+                if (Character.isWhitespace(c) || c == '>')
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Tokenizes a CSS selector into segments and combinators, respecting quoted strings, attribute brackets,
+     * and pseudo-class parentheses.
+     *
+     * @param selector the CSS selector to tokenize
+     * @return a list of tokens and combinators
+     */
+    private static List<String> tokenizeCssSelector(final String selector)
+    {
+        final List<String> tokens = new ArrayList<>();
+        final StringBuilder current = new StringBuilder();
+        int parenDepth = 0;
+        int bracketDepth = 0;
+        boolean inQuote = false;
+        char quoteChar = 0;
+
+        for (int i = 0; i < selector.length(); i++)
+        {
+            final char c = selector.charAt(i);
+            if (inQuote)
+            {
+                current.append(c);
+                if (c == quoteChar)
+                {
+                    inQuote = false;
+                }
+            }
+            else if (c == '"' || c == '\'')
+            {
+                inQuote = true;
+                quoteChar = c;
+                current.append(c);
+            }
+            else if (c == '(')
+            {
+                parenDepth++;
+                current.append(c);
+            }
+            else if (c == ')')
+            {
+                parenDepth = Math.max(0, parenDepth - 1);
+                current.append(c);
+            }
+            else if (c == '[')
+            {
+                bracketDepth++;
+                current.append(c);
+            }
+            else if (c == ']')
+            {
+                bracketDepth = Math.max(0, bracketDepth - 1);
+                current.append(c);
+            }
+            else if (parenDepth == 0 && bracketDepth == 0 && (Character.isWhitespace(c) || c == '>'))
+            {
+                if (current.length() > 0)
+                {
+                    tokens.add(current.toString().trim());
+                    current.setLength(0);
+                }
+                if (c == '>')
+                {
+                    tokens.add(">");
+                }
+            }
+            else
+            {
+                current.append(c);
+            }
+        }
+        if (current.length() > 0 && !current.toString().isBlank())
+        {
+            tokens.add(current.toString().trim());
+        }
+        return tokens;
+    }
+
+    /**
+     * Extracts argument contents of balanced pseudo-classes such as {@code :has(...)} or {@code :not(...)}
+     * from a CSS selector substring.
+     *
+     * @param input the raw selector substring
+     * @param pseudoName the pseudo-class name without colon or parentheses
+     * @return a list of inner arguments for matched occurrences
+     */
+    private static List<String> extractBalancedPseudoArgs(final String input, final String pseudoName)
+    {
+        final List<String> results = new ArrayList<>();
+        if (input == null || input.isBlank())
+        {
+            return results;
+        }
+        final String prefix = ":" + pseudoName + "(";
+        int idx = 0;
+        while ((idx = input.indexOf(prefix, idx)) != -1)
+        {
+            final int start = idx + prefix.length();
+            int depth = 1;
+            int pos = start;
+            while (pos < input.length() && depth > 0)
+            {
+                final char c = input.charAt(pos);
+                if (c == '(')
+                {
+                    depth++;
+                }
+                else if (c == ')')
+                {
+                    depth--;
+                }
+                pos++;
+            }
+            if (depth == 0)
+            {
+                results.add(input.substring(start, pos - 1).trim());
+                idx = pos;
+            }
+            else
+            {
+                idx = start;
+            }
+        }
+        return results;
+    }
+
+    /**
+     * Strips balanced pseudo-classes such as {@code :has-text(...)} from a selector string so that
+     * embedded punctuation (e.g. dots in numbers, brackets, quotes) does not interfere with standard CSS matching.
+     *
+     * @param input the raw selector substring
+     * @param pseudoName the pseudo-class name without colon or parentheses
+     * @return the selector string with matching balanced pseudo occurrences removed
+     */
+    private static String stripBalancedPseudo(final String input, final String pseudoName)
+    {
+        if (input == null || input.isBlank())
+        {
+            return input;
+        }
+        final String prefix = ":" + pseudoName + "(";
+        final StringBuilder sb = new StringBuilder();
+        int lastEnd = 0;
+        int idx = 0;
+        while ((idx = input.indexOf(prefix, lastEnd)) != -1)
+        {
+            sb.append(input, lastEnd, idx);
+            final int start = idx + prefix.length();
+            int depth = 1;
+            int pos = start;
+            while (pos < input.length() && depth > 0)
+            {
+                final char c = input.charAt(pos);
+                if (c == '(')
+                {
+                    depth++;
+                }
+                else if (c == ')')
+                {
+                    depth--;
+                }
+                pos++;
+            }
+            lastEnd = pos;
+        }
+        sb.append(input.substring(lastEnd));
+        return sb.toString();
     }
 
     /**
@@ -712,6 +1124,18 @@ public final class LocatorResolver
             {
                 return "*[(self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6 or @role='heading') and (contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + ")]";
             }
+            if ("row".equals(role))
+            {
+                return "*[(self::tr or @role='row') and (contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + ")]";
+            }
+            if ("cell".equals(role) || "gridcell".equals(role))
+            {
+                return "*[(self::td or self::th or @role='cell' or @role='gridcell') and (contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + ")]";
+            }
+            if ("tab".equals(role))
+            {
+                return "*[@role='tab' and (contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + ")]";
+            }
             return "*[@role='" + role + "' and (contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + " or @value=" + escaped + " or @title=" + escaped + ")]";
         }
         return resolveBareRoleXPath(role);
@@ -743,6 +1167,22 @@ public final class LocatorResolver
         {
             return "*[self::textarea or (self::input and (not(@type) or @type='text' or @type='email' or @type='password')) or @role='textbox']";
         }
+        if ("row".equals(role))
+        {
+            return "*[self::tr or @role='row']";
+        }
+        if ("cell".equals(role) || "gridcell".equals(role))
+        {
+            return "*[self::td or self::th or @role='cell' or @role='gridcell']";
+        }
+        if ("table".equals(role))
+        {
+            return "*[self::table or @role='table' or @role='grid']";
+        }
+        if ("tab".equals(role))
+        {
+            return "*[@role='tab']";
+        }
         return "*[@role='" + role + "']";
     }
 
@@ -773,7 +1213,24 @@ public final class LocatorResolver
             }
             return xp;
         }
+        final Matcher pseudoMatcher = PLAYWRIGHT_PSEUDO_PATTERN.matcher(cleanSeg);
+        if (pseudoMatcher.matches())
+        {
+            final String tag = pseudoMatcher.group(1).trim();
+            final String pseudoType = pseudoMatcher.group(2).trim().toLowerCase(Locale.ROOT);
+            final String rawVal = pseudoMatcher.group(3).trim();
+            final String textVal = unquote(rawVal);
+            final boolean isExact = "text-is".equals(pseudoType) || "has-text-is".equals(pseudoType) || "exact-text".equals(pseudoType);
+            final By by = buildPseudoSelectorXpath(tag.isEmpty() ? "*" : tag, textVal, isExact);
+            return stripLeadingSlashes(by);
+        }
+
         final By by = buildPseudoSelectorXpath(cleanSeg, null, false);
+        return stripLeadingSlashes(by);
+    }
+
+    private static String stripLeadingSlashes(final By by)
+    {
         String xp = by.toString();
         if (xp.startsWith("By.xpath: "))
         {

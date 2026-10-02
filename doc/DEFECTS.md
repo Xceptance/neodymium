@@ -41,6 +41,89 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261002-07] Embedded Text Pseudo-Class Parsing Failure in LocatorResolver and Confabulated Visual RCA Diagnosis
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`LocatorResolver`, `VisualRcaPrompt`, `VisualRcaStep`, `visual-rca-prompt.md`)
+- **Scope:** `Framework`
+- **Symptom:**
+  1. Automated test failure: `InvalidSelectorException: Compound class names not permitted / invalid selector` when executing CSS descendant selector containing pseudo-class `:has-text(...)` followed by child elements (e.g. `div[data-ai="xckdm47x"] .flex.justify-between:has-text("Subtotal") span:nth-child(2)`).
+  2. Confabulated Visual RCA diagnosis: When asserting expected subtotal `$31.98`, the vision model hallucinated that the cart contained previous items from SauceDemo (`Sauce Labs Backpack at $29.99` and `Sauce Labs Bike Light at $9.99`) summing to an aggregate subtotal of `$71.96`, despite the screenshot clearly displaying only the two T-shirts and the exact `$31.98` subtotal on Verla Store.
+- **Root Cause:**
+  1. `LocatorResolver.PLAYWRIGHT_PSEUDO_PATTERN` relied on end-of-string anchoring `\(((?:[^()]|\"[^\"]*\"|'[^']*')*)\)$`, which failed to match when pseudo-classes were embedded in descendant chains. Furthermore, its regex group greedily matched across trailing selector segments containing parentheses (like `:nth-child(2)`). As a result, the selector fell through to `By.cssSelector()`, which failed in WebDriver because `:has-text()` is not standard CSS. Additionally, regex class/attribute extraction on segments containing pseudo-text with punctuation (e.g. `v1.0 ($15.99)`) corrupted class and attribute matching.
+  2. `VisualRcaPrompt` and `visual-rca-prompt.md` suffered from premise bias: the prompt phrased failure as an unquestioned premise ("Expected text '$31.98' was not found"). The model assumed the subtotal was wrong, and seeing `$15.99` triggered training memories of SauceDemo's `$15.99` Bolt T-Shirt, leading the model to hallucinate other standard SauceDemo products (`$29.99` and `$9.99`) and confabulate an arithmetic explanation to justify the supposed failure. Furthermore, the RCA prompt lacked SUT grounding (current page URL and page title).
+- **Detection Gap ("What did we miss?"):**
+  1. `LocatorResolverTest` only tested `:has-text(...)` at the very end of selectors (e.g. `button:has-text("Submit")`) or chained via `>>` (e.g. `table >> tr:has-text("Alice") >> button`), not space-delimited descendant chains with trailing segments like `:has-text(...) span:nth-child(2)`.
+  2. Visual RCA tests were unit tested using mock responses without verifying zero-premise-bias instructions and SUT URL/title grounding in prompts.
+- **Resolution:**
+  1. Added `EXTENDED_PSEUDO_PATTERN` to `LocatorResolver` detecting `:has-text`, `:contains`, `:text`, etc. anywhere in the selector.
+  2. Hardened argument parsing using balanced-parentheses stripping (`stripBalancedPseudo`), and upgraded `buildSegmentPredicate` to translate embedded `:has-text(...)` and `:text-is(...)` directly into XPath predicates (`contains(normalize-space(.), ...)` and `(normalize-space(.)=... or normalize-space(text())=...)`).
+  3. Re-architected `visual-rca-prompt.md` to enforce **Verification First (Zero Premise Bias)**: models must first inspect the screenshot to verify if the expected value is visually present; if so, diagnose an automated locator/selector mismatch rather than SUT defect, and strictly forbids confabulating items from external demo stores (SauceDemo).
+  4. Injected `pageUrl` and `pageTitle` into `VisualRcaPrompt` and `VisualRcaStep` to ground multimodal visual analysis in the active SUT context.
+- **Safety Net Added:** Added unit tests `testEmbeddedHasTextInDescendantChain`, `testEmbeddedTextPseudoWithPunctuationAndQuotes`, `testEmbeddedExactTextPseudoInDescendantChain`, and `testSpaceDelimitedPseudoEquivalentToChainedLocator` in `LocatorResolverTest.java`, and prompt grounding tests in `VisualRcaPromptTest.java`.
+
+### [DEF-20261002-06] Redundant Viewport Screenshot Re-Capture and Context Inflation on Read-Only Discovery Tools
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`AgentToolLoopStep`)
+- **Scope:** `Framework`
+- **Symptom:** Multi-turn discovery steps (e.g. `query_dom`, `inspect`, `store`) in standard non-visual instructions consumed tens of thousands of redundant tokens (e.g. ~100k tokens in `CheckoutTest_live_tailwind-by-claude` Step #11, ~81k in Step #1, ~63k in Step #4), rapidly exhausting the test step token budget.
+- **Root Cause:**
+  1. `AgentToolLoopStep` unconditionally invoked `executor.captureState(ContextLevel.VISUAL, isFullPage)` after every turn and attached the resulting viewport screenshot to subsequent observation turns, even when only read-only discovery/inspection tools (`query_dom`, `inspect`, `request_context`, `store`) were executed.
+  2. On multimodal models (Gemini), each unneeded PNG image attachment adds ~2,000–2,500 input tokens per turn, inflating cumulative context by 60k–100k tokens over 5–10 discovery turns on an unchanged page.
+  3. `isMutatingTool()` omitted `"scroll"`, causing viewport repositioning actions to be misclassified as non-mutating.
+- **Detection Gap ("What did we miss?"):** Existing multi-turn unit tests in `AgentToolLoopStepTest` only verified turn count and mock responses without asserting that non-visual discovery turns omit intermediate screenshot capture and attachments.
+- **Resolution:**
+  1. Added `"scroll"` to `AgentToolLoopStep.isMutatingTool()`, while ensuring `filterTools()` permits `scroll` for visual assertion repositioning.
+  2. Tracked `turnHadMutatingAction` per turn in `executeStep()`.
+  3. Gated intermediate `captureState(ContextLevel.VISUAL)` so that viewport screenshots are captured and attached only when the step is visual (`isVisualStep`) or when a mutating action actually executed in the turn (`turnHadMutatingAction`).
+  4. Updated turn prompts to inform the model when visual state is unchanged: `"Note: Page visual state is unchanged after discovery/inspection tool execution (viewport screenshot omitted)."`.
+- **Safety Net Added:** Added regression tests `testDiscoveryToolOmitsVisualStateCaptureAndAttachments`, `testMutatingActionRetainsVisualStateCaptureAndAttachments`, and `testScrollToolTreatedAsMutatingActionCapturesVisualState` in `AgentToolLoopStepTest.java`.
+
+### [DEF-20261002-05] Visual Assertion Step Derailment via DOM Context Escalation and Runaway Scrolling
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`AgentToolLoopStep`)
+- **Scope:** `Framework`
+- **Symptom:** In live test runs with visual verification steps (e.g. `SearchGermanTest_live_DE` Step 19), an instruction marked `(visual)` executed 9 scroll actions and invoked `request_context({"level": "STANDARD"})`, escalating context to DOM. Prompt tokens spiked from ~5,500 to >21,000 per turn, burning 115,804 tokens and failing with `TokenBudgetExceededException`.
+- **Root Cause:**
+  1. `AgentToolLoopStep.filterTools()` omitted mutating tools and DOM assertion tools for pure visual assertions (`isVisualAssertion && !hasInteractive`), but left `request_context` in `availableTools`.
+  2. The target element (*Angebot* filter) was cut off below the viewport fold and pinned inside a CSS `position: sticky; top: 100px;` sidebar. Window scrolling (`window.scrollBy`) moved the page content but left the sticky sidebar pinned and cut off in the viewport.
+  3. Unable to reveal the element via scrolling, the agent invoked `request_context(level="STANDARD")`, injecting the full DOM tree into a visual verification turn in violation of Rule 5 ("Do not query DOM for visual checks").
+  4. Consecutive identical call detection was bypassed by varying `yOffset` on each turn (`300`, `250`, `200`, `350`), permitting runaway scrolling loops.
+- **Detection Gap ("What did we miss?"):** `AgentToolLoopStepTest.testVisualAssertionFiltersDomAndMutatingTools` explicitly asserted that `request_context` was present in visual step tools without checking whether requesting DOM levels was prohibited, and no test bounded consecutive scrolling in visual steps.
+- **Resolution:**
+  1. Excluded `request_context` from `filterTools()` when `isVisualAssertion && !hasInteractive`.
+  2. Added a defensive guard against non-screenshot context level escalation via tool requests in pure visual steps.
+  3. Clarified the `Visual Inspection Directive` and Rule 5 so the agent concludes the visual evaluation instead of attempting DOM recovery.
+  4. Capped consecutive `scroll` interactions during visual assertion steps to 3 attempts, warning at attempt 3 and failing with `ConclusiveFailureException` at attempt 4.
+- **Safety Net Added:** Updated `AgentToolLoopStepTest.testVisualAssertionFiltersDomAndMutatingTools` to assert `request_context` is excluded from visual assertion tools, and added regression test `testVisualAssertionExcessiveScrollingTerminatesConclusively`.
+
+### [DEF-20261002-04] Chained Pseudo-Selector Text Stripping and Unsupported Ordinal Selectors in LocatorResolver
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`LocatorResolver`, `BrowserToolProvider`)
+- **Scope:** `Framework`
+- **Symptom:**
+  1. Chained selectors with pseudo text filters (e.g. `table >> tr:has-text("Alice") >> button`) lost their text predicate during translation in `toXPathSegment`, resulting in `//table//tr//button` and clicking the first row's button instead of Alice's button.
+  2. Playwright ordinal syntax (`>> nth=N`, `:nth-match(...)`, `nth=N`) was either actively blocked with `InvalidSelectorException` or unhandled, preventing natural-language ordinal and relational element targeting in playbooks.
+  3. `BrowserToolProvider.query_dom` fallback candidate selector omitted `tr, td, th, li, [role="row"], [role="cell"]`, leaving table and grid cells invisible to text queries unless wrapped in inner spans.
+  4. Multi-token CSS selector segments inside chained locators (e.g. `#aria-orders [role="row"] >> nth=2`) treated whitespace as intra-element attribute combinations rather than descendant combinators (`//`), causing queries to search for impossible composite elements (`*[@id='aria-orders' and @role='row']`).
+  5. Pseudo-class `:has(...)` and `:not(...)` translation used unbalanced greedy `[^)]+` regexes and failed to translate nested attribute selectors (e.g. `:has([role="cell"])` $\rightarrow$ invalid `descendant::[role="cell"]`).
+- **Root Cause:**
+  1. `toXPathSegment` invoked `buildPseudoSelectorXpath(cleanSeg, null, false)` with `textVal = null`, discarding `:has-text(...)` argument.
+  2. `LocatorResolver` classified `:nth-match()` as an unsupported vendor pseudo-class and lacked parsing for `>> nth=N` segments.
+  3. `query_dom` candidate query selector lacked structural table and grid element tags.
+  4. `resolveChainedLocator` delegated each chain segment directly to `toXPathSegment` without tokenizing CSS combinators (` `, `>`), improperly treating whitespace as intra-tag selector criteria.
+  5. `buildSegmentPredicate` lacked balanced parenthesis extraction and did not delegate nested selector tokens in `:has` / `:not` to `toXPathSegment`.
+- **Detection Gap ("What did we miss?"):**
+  Existing tests in `LocatorResolverTest` explicitly asserted that `:nth-match` threw an `InvalidSelectorException` rather than implementing translation, no tests checked compound pseudo text selectors inside `>>` chains, and no tests verified multi-token CSS segments combined with `>> nth=N`.
+- **Resolution:**
+  1. Updated `toXPathSegment` in `LocatorResolver` to parse `PLAYWRIGHT_PSEUDO_PATTERN` and forward extracted `textVal` and `isExact` flag to `buildPseudoSelectorXpath`.
+  2. Added support for `>> nth=N` (0-based) and negative indexing (`nth=-1` for last, `nth=-2`, etc.), aliases (`first`, `last`), and translated `:nth-match(sel, N)` to `(//xpath)[N]`.
+  3. Expanded `query_dom` fallback candidate query selector in `BrowserToolProvider` to include `tr, td, th, li, [role="row"], [role="cell"]`.
+  4. Expanded ARIA role resolution in `LocatorResolver` to support `row`, `cell`, `gridcell`, `table`, and `tab`.
+  5. Added `tokenizeCssSelector`, `hasCssCombinator`, and `extractBalancedPseudoArgs` to support multi-token CSS segments and balanced nested `:has(...)` / `:not(...)` expressions with attribute selectors (e.g. `[role="row"]:has([role="cell"])`).
+  6. Clarified prompt rules in `selenide-locator-rule.md` to guide agents to target data rows (`tr:has(td)`, `[role="row"]:has([role="cell"])`) rather than including column header rows in ordinal calculations.
+- **Safety Net Added:**
+  Unit tests in `LocatorResolverTest` (`testPlaywrightNthMatch`, `testChainedOrdinals`, `testChainedPseudoSelectorsPreserveText`, `testChainedMultiTokenCssSegment`, `testChainedAriaDataGridRowWithHasAttribute`, `testHasWithMultipleCommaSeparatedSelectors`, `testNotWithNestedHas`) and comprehensive 29-case live integration test suite in `OrdinalIntegrationTest` (174 test runs passing 100%).
+
 ### [DEF-20261002-03] False Positive inViewport Detection and Weak Selectors in query_dom Tool
 - **Date:** 2026-10-02
 - **Component:** `neodymium-core` (`BrowserToolProvider`)

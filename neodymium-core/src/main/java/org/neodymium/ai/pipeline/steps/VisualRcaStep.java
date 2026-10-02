@@ -21,6 +21,9 @@ package org.neodymium.ai.pipeline.steps;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.WebDriverRunner;
+
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
@@ -128,8 +131,24 @@ public final class VisualRcaStep implements PipelineStep
         final String instruction = context.getSessionData() != null ? context.getSessionData().resolveAvailableVariables(rawInstruction) : rawInstruction;
         final String err = this.errorMessage != null ? this.errorMessage : "Execution error occurred";
 
-        // 3. Construct VisualRcaPrompt template with step instruction and error context
-        final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(instruction, err);
+        // 3. Extract page URL and title if browser is active to ground analysis in SUT state
+        String pageUrl = null;
+        String pageTitle = null;
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            try
+            {
+                pageUrl = WebDriverRunner.url();
+                pageTitle = Selenide.title();
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not extract page URL/title for Visual RCA: {}", e.getMessage());
+            }
+        }
+
+        // 4. Construct VisualRcaPrompt template with step instruction, error context, and page grounding
+        final VisualRcaPrompt rcaPrompt = new VisualRcaPrompt(instruction, err, pageUrl, pageTitle);
         final String system = rcaPrompt.compileSystemMessage(context);
         final String user = rcaPrompt.compileUserMessage(context);
 

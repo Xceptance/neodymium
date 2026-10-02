@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ordinal Challenges - Legacy Bad HTML</title>
+    <style>
+        body { font-family: sans-serif; margin: 25px; }
+        table { border-collapse: collapse; width: 600px; margin-bottom: 25px; }
+        th, td { border: 1px solid #aaa; padding: 8px 12px; }
+        tr.clickable-row { cursor: pointer; }
+        tr.clickable-row:hover { background-color: #f9f9f9; }
+        .select-btn { display: inline-block; padding: 4px 8px; background: #ddd; border: 1px solid #999; cursor: pointer; }
+        .cards-container { display: flex; flex-direction: column; gap: 8px; max-width: 400px; margin-bottom: 25px; }
+        .legacy-card { border: 1px solid #bbb; padding: 10px; cursor: pointer; }
+        .legacy-card:hover { background-color: #f0f0f0; }
+        #status-message { margin-top: 15px; padding: 10px; background: #eef; border: 1px solid #99c; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>Legacy Unstructured HTML (Header Offset & Duplicate IDs)</h1>
+
+    <!-- Legacy table with NO <thead> or <tbody>: row 0 is <th>, data rows start at row 1 -->
+    <table id="legacy-orders">
+        <tr>
+            <th>Order Ref</th>
+            <th>Customer</th>
+            <th>Action</th>
+        </tr>
+        <tr id="row" class="clickable-row">
+            <td>#1001</td>
+            <td>Frank Miller</td>
+            <td><div class="select-btn">Select</div></td>
+        </tr>
+        <tr id="row" class="clickable-row">
+            <td>#1002</td>
+            <td>Grace Hopper</td>
+            <td><div class="select-btn">Select</div></td>
+        </tr>
+        <tr id="row" class="clickable-row">
+            <td>#1003</td>
+            <td>Heidi Cruz</td>
+            <td><div class="select-btn">Select</div></td>
+        </tr>
+        <tr id="row" class="clickable-row">
+            <td>#1004</td>
+            <td>Ivan Petrov</td>
+            <td><div class="select-btn">Select</div></td>
+        </tr>
+        <tr id="row" class="clickable-row">
+            <td>#1005</td>
+            <td>Judy Garland</td>
+            <td><div class="select-btn">Select</div></td>
+        </tr>
+    </table>
+
+    <!-- Anonymous cards with duplicate IDs -->
+    <h2>Catalog Cards</h2>
+    <div class="cards-container" id="legacy-cards">
+        <div id="card" class="legacy-card">Product Alpha - $19.99</div>
+        <div id="card" class="legacy-card">Product Beta - $29.99</div>
+        <div id="card" class="legacy-card">Product Gamma - $39.99</div>
+        <div id="card" class="legacy-card">Product Delta - $49.99</div>
+        <div id="card" class="legacy-card">Product Epsilon - $59.99</div>
+        <div id="card" class="legacy-card">Product Zeta - $69.99</div>
+    </div>
+
+    <div id="status-message">Ready</div>
+
+    <script>
+        const status = document.getElementById('status-message');
+
+        // Table row click
+        document.querySelectorAll('#legacy-orders tr.clickable-row').forEach((row, idx) => {
+            row.addEventListener('click', function(e) {
+                const orderId = this.cells[0].innerText.trim();
+                status.innerText = 'Order ' + orderId + ' selected';
+            });
+        });
+
+        // Select button click inside row
+        document.querySelectorAll('#legacy-orders .select-btn').forEach((btn, idx) => {
+            btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                const row = this.closest('tr');
+                const orderId = row.cells[0].innerText.trim();
+                status.innerText = 'Order ' + orderId + ' selected';
+            });
+        });
+
+        // Cards click
+        document.querySelectorAll('#legacy-cards .legacy-card').forEach((card, idx) => {
+            card.addEventListener('click', function() {
+                status.innerText = 'Item ' + (idx + 1) + ' selected';
+            });
+        });
+    </script>
+</body>
+</html>

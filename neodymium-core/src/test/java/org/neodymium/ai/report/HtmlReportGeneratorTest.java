@@ -355,6 +355,89 @@ public class HtmlReportGeneratorTest
             "Header must contain badge for mode:judge tag");
     }
 
+    @Test
+    @DisplayName("Verify step footer tag renders instant token consumption for direct calls, fallback stats, and sub-step aggregates")
+    public void testStepFooterTagTokenConsumption()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("TokenConsumptionTest");
+        report.setTestName("testTokenConsumptionInFooter");
+        report.setExecutionMode("LIVE");
+
+        // Step 0: Single step with direct LLM call
+        final TestExecutionReport.ReportStepEntry step0 = new TestExecutionReport.ReportStepEntry(0, "Search query");
+        step0.setStatus("SUCCESS");
+        final TestExecutionReport.ReportLlmCallEntry directCall = new TestExecutionReport.ReportLlmCallEntry();
+        directCall.setStepIndex(0);
+        directCall.setInputTokens(10817);
+        directCall.setOutputTokens(3211);
+        step0.addLlmCall(directCall);
+        report.addStep(step0);
+
+        // Step 1: Compound step aggregating tokens from sub-steps
+        final TestExecutionReport.ReportStepEntry step1 = new TestExecutionReport.ReportStepEntry(1, "Compound step");
+        step1.setStatus("SUCCESS");
+        final TestExecutionReport.ReportStepEntry sub1 = new TestExecutionReport.ReportStepEntry(1, "Sub step 1");
+        final TestExecutionReport.ReportLlmCallEntry subCall1 = new TestExecutionReport.ReportLlmCallEntry();
+        subCall1.setStepIndex(1);
+        subCall1.setSubStepIndex(0);
+        subCall1.setInputTokens(4000);
+        subCall1.setOutputTokens(1000);
+        sub1.addLlmCall(subCall1);
+
+        final TestExecutionReport.ReportStepEntry sub2 = new TestExecutionReport.ReportStepEntry(1, "Sub step 2");
+        final TestExecutionReport.ReportLlmCallEntry subCall2 = new TestExecutionReport.ReportLlmCallEntry();
+        subCall2.setStepIndex(1);
+        subCall2.setSubStepIndex(1);
+        subCall2.setInputTokens(6817);
+        subCall2.setOutputTokens(2211);
+        sub2.addLlmCall(subCall2);
+
+        step1.addSubStep(sub1);
+        step1.addSubStep(sub2);
+        report.addStep(step1);
+
+        // Step 2: Step with standard calls but 0 tokens
+        final TestExecutionReport.ReportStepEntry step2 = new TestExecutionReport.ReportStepEntry(2, "Stub call step");
+        step2.setStatus("SUCCESS");
+        step2.setStandardCalls(1);
+        report.addStep(step2);
+
+        // Step 3: Step with standardInputTokens / standardOutputTokens fallback
+        final TestExecutionReport.ReportStepEntry step3 = new TestExecutionReport.ReportStepEntry(3, "Fallback stats step");
+        step3.setStatus("SUCCESS");
+        step3.setStandardCalls(1);
+        step3.setStandardInputTokens(5000);
+        step3.setStandardOutputTokens(250);
+        report.addStep(step3);
+
+        final HtmlReportGenerator generator = new HtmlReportGenerator();
+        final String html = generator.generate(report);
+        Assertions.assertNotNull(html);
+
+        // Step 0 check
+        Assertions.assertTrue(html.contains("🤖 1 LLM call(s), 10,817 in/ 3,211 out"),
+            "Step 0 must display 1 LLM call with exact token consumption formatted");
+
+        // Step 1 parent aggregate check
+        Assertions.assertTrue(html.contains("🤖 2 LLM call(s), 10,817 in/ 3,211 out"),
+            "Parent step 1 must aggregate sub-step LLM calls and tokens");
+
+        // Step 1 sub-steps check
+        Assertions.assertTrue(html.contains("🤖 1 LLM call(s), 4,000 in/ 1,000 out"),
+            "Sub-step 1 must display its individual token consumption");
+        Assertions.assertTrue(html.contains("🤖 1 LLM call(s), 6,817 in/ 2,211 out"),
+            "Sub-step 2 must display its individual token consumption");
+
+        // Step 2 zero-token check
+        Assertions.assertTrue(html.contains("🤖 1 LLM call(s)"),
+            "Step 2 must display 1 LLM call without token suffix when 0 tokens");
+
+        // Step 3 fallback stats check
+        Assertions.assertTrue(html.contains("🤖 1 LLM call(s), 5,000 in/ 250 out"),
+            "Step 3 must display fallback standard token counts when direct LLM calls list is empty");
+    }
+
     private static void verifyScriptWithNodeIfAvailable(final String script)
     {
         try

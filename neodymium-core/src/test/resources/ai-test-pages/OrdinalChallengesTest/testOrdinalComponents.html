@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ordinal Challenges - Non-Table Components & Dynamic Views</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 30px; }
+        .component-section { margin-bottom: 35px; border-bottom: 1px solid #e2e8f0; padding-bottom: 25px; }
+
+        /* Search Autocomplete */
+        .search-box { position: relative; max-width: 400px; }
+        .search-box input { width: 100%; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; }
+        .suggestions { border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; margin-top: 4px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .suggestion-item { display: block; padding: 10px 14px; text-decoration: none; color: #1e293b; border-bottom: 1px solid #f1f5f9; cursor: pointer; }
+        .suggestion-item:last-child { border-bottom: none; }
+        .suggestion-item:hover { background: #f8fafc; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; margin-bottom: 15px; }
+        .tab-btn { padding: 8px 16px; border: none; background: none; font-weight: 500; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+        .tab-btn.active { border-bottom-color: #2563eb; color: #2563eb; font-weight: 600; }
+
+        /* Cart Drawer */
+        .cart-drawer { border: 1px solid #cbd5e1; border-radius: 6px; padding: 15px; max-width: 350px; background: #fafafa; }
+        .cart-line-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #e5e5e5; }
+        .remove-btn { color: #dc2626; border: 1px solid #fca5a5; background: #fff; border-radius: 4px; padding: 4px 8px; cursor: pointer; }
+
+        /* Filtered List */
+        .filter-list { list-style: none; padding: 0; max-width: 350px; }
+        .filter-item { padding: 10px; border: 1px solid #e2e8f0; margin-bottom: 6px; border-radius: 4px; cursor: pointer; }
+
+        /* Color Swatches inside card */
+        .swatch-card { border: 1px solid #cbd5e1; padding: 16px; border-radius: 6px; max-width: 300px; }
+        .swatch-group { display: flex; gap: 8px; margin-top: 10px; }
+        .swatch-btn { width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff; outline: 1px solid #cbd5e1; cursor: pointer; }
+        .swatch-red { background: #ef4444; }
+        .swatch-blue { background: #3b82f6; }
+        .swatch-green { background: #10b981; }
+
+        #status-message { margin-top: 20px; padding: 12px 16px; background: #fef3c7; border: 1px solid #fde68a; color: #92400e; font-weight: 600; border-radius: 6px; display: inline-block; }
+    </style>
+</head>
+<body>
+    <h1>Non-Table Components Ordinal Challenges</h1>
+
+    <!-- 1. Search Autocomplete Suggestions -->
+    <div class="component-section">
+        <h2>1. Search Autocomplete Dropdown</h2>
+        <div class="search-box">
+            <input type="text" id="search-input" value="minimalist" placeholder="Search products...">
+            <div id="search-suggestions" class="suggestions">
+                <a class="suggestion-item" href="#item1">Minimalist Charcoal T-Shirt</a>
+                <a class="suggestion-item" href="#item2">Minimalist Terracotta Sweater</a>
+                <a class="suggestion-item" href="#item3">Minimalist Taupe Shirt</a>
+                <a class="suggestion-item" href="#item4">Minimalist Sand T-Shirt</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Navigation Tabs -->
+    <div class="component-section">
+        <h2>2. Navigation Tabs (role="tablist")</h2>
+        <div role="tablist" id="account-tabs" class="tabs">
+            <button role="tab" id="tab-overview" class="tab-btn active" aria-selected="true">Account Overview</button>
+            <button role="tab" id="tab-orders" class="tab-btn" aria-selected="false">Order History</button>
+            <button role="tab" id="tab-addresses" class="tab-btn" aria-selected="false">Saved Addresses</button>
+            <button role="tab" id="tab-security" class="tab-btn" aria-selected="false">Security Settings</button>
+        </div>
+        <div id="tab-panel-display">Displaying: Account Overview</div>
+    </div>
+
+    <!-- 3. Dynamic Cart Line Items (Negative Index / Last Item) -->
+    <div class="component-section">
+        <h2>3. Cart Line Items (Remove Actions & Last Item)</h2>
+        <div id="mini-cart" class="cart-drawer">
+            <div class="cart-items">
+                <div class="cart-line-item"><span class="item-name">Silk Scarf</span><button class="remove-btn">Remove</button></div>
+                <div class="cart-line-item"><span class="item-name">Leather Belt</span><button class="remove-btn">Remove</button></div>
+                <div class="cart-line-item"><span class="item-name">Canvas Tote Bag</span><button class="remove-btn">Remove</button></div>
+                <div class="cart-line-item"><span class="item-name">Wool Socks</span><button class="remove-btn">Remove</button></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Filtered List with Hidden Elements (Visible-Only Indexing) -->
+    <div class="component-section">
+        <h2>4. Filtered List (Item 2 and 4 are hidden)</h2>
+        <ul id="filtered-orders" class="filter-list">
+            <li class="filter-item order-entry">Active Order #401</li>
+            <li class="filter-item order-entry" style="display: none;">Archived Order #402</li>
+            <li class="filter-item order-entry">Active Order #403</li>
+            <li class="filter-item order-entry" style="display: none;">Archived Order #404</li>
+            <li class="filter-item order-entry">Active Order #405</li>
+        </ul>
+    </div>
+
+    <!-- 5. Nested Multi-Ordinal Swatches -->
+    <div class="component-section">
+        <h2>5. Nested Multi-Ordinal (Cards with Swatches)</h2>
+        <div id="swatch-catalog" style="display: flex; gap: 15px;">
+            <div class="swatch-card" id="card-alpha">
+                <h4>Card 1</h4>
+                <div class="swatch-group">
+                    <button class="swatch-btn swatch-red" title="Red"></button>
+                    <button class="swatch-btn swatch-blue" title="Blue"></button>
+                    <button class="swatch-btn swatch-green" title="Green"></button>
+                </div>
+            </div>
+            <div class="swatch-card" id="card-beta">
+                <h4>Card 2</h4>
+                <div class="swatch-group">
+                    <button class="swatch-btn swatch-red" title="Red"></button>
+                    <button class="swatch-btn swatch-blue" title="Blue"></button>
+                    <button class="swatch-btn swatch-green" title="Green"></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="status-message">Ready</div>
+
+    <script>
+        const status = document.getElementById('status-message');
+
+        // 1. Suggestions Click
+        document.querySelectorAll('#search-suggestions .suggestion-item').forEach((item) => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                status.innerText = 'Navigated to ' + this.innerText.trim();
+            });
+        });
+
+        // 2. Tabs Click
+        document.querySelectorAll('#account-tabs .tab-btn').forEach((tab) => {
+            tab.addEventListener('click', function() {
+                document.querySelectorAll('#account-tabs .tab-btn').forEach(t => {
+                    t.classList.remove('active');
+                    t.setAttribute('aria-selected', 'false');
+                });
+                this.classList.add('active');
+                this.setAttribute('aria-selected', 'true');
+                const label = this.innerText.trim();
+                document.getElementById('tab-panel-display').innerText = 'Displaying: ' + label;
+                status.innerText = 'Tab selected: ' + label;
+            });
+        });
+
+        // 3. Cart Line Item Direct Click
+        document.querySelectorAll('#mini-cart .cart-line-item').forEach((item) => {
+            item.addEventListener('click', function(e) {
+                if (e.target.tagName.toLowerCase() === 'button') return;
+                const name = this.querySelector('.item-name').innerText.trim();
+                status.innerText = 'Cart item clicked: ' + name;
+            });
+        });
+
+        // 3. Cart Line Item Remove Button Click
+        document.querySelectorAll('#mini-cart .cart-line-item .remove-btn').forEach((btn) => {
+            btn.addEventListener('click', function(e) {
+                const item = this.closest('.cart-line-item');
+                const name = item.querySelector('.item-name').innerText.trim();
+                status.innerText = 'Removed ' + name;
+                item.remove();
+            });
+        });
+
+        // 4. Filtered List Click (only visible elements can be clicked)
+        document.querySelectorAll('#filtered-orders .filter-item').forEach((item) => {
+            item.addEventListener('click', function() {
+                status.innerText = 'Selected ' + this.innerText.trim();
+            });
+        });
+
+        // 5. Nested Swatch Click
+        document.querySelectorAll('.swatch-card').forEach((card, cardIdx) => {
+            card.querySelectorAll('.swatch-btn').forEach((swatch, swatchIdx) => {
+                swatch.addEventListener('click', function() {
+                    const cardTitle = card.querySelector('h4').innerText.trim();
+                    const color = this.getAttribute('title');
+                    status.innerText = 'Selected ' + color + ' on ' + cardTitle;
+                });
+            });
+        });
+    </script>
+</body>
+</html>

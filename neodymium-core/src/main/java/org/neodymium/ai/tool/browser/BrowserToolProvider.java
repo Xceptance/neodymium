@@ -3689,7 +3689,7 @@ public final class BrowserToolProvider
                                 } catch(e) {}
                             }
                         } else {
-                            candidates = Array.from(document.querySelectorAll('button, a, input, select, textarea, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="tab"], [role="option"], label, h1, h2, h3, h4, p, span, div'));
+                            candidates = Array.from(document.querySelectorAll('button, a, input, select, textarea, [role="button"], [role="link"], [role="checkbox"], [role="radio"], [role="tab"], [role="option"], label, h1, h2, h3, h4, p, span, div, tr, td, th, li, [role="row"], [role="cell"]'));
                         }
 
                         var lowerText = (searchText || '').toLowerCase().trim();
