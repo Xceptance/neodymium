@@ -1,11 +1,11 @@
 # @author Xceptance GmbH 2026
 
-_properties:
-  neodymium.ai.contextLevel: STANDARD
+#_properties:
+#  neodymium.ai.contextLevel: LEAN
 
 steps: |
   Open ${verla.url}/verla-tailwind-by-claude/index.html
-  Validate that 'United States' is shown as the current country context.
+  Validate that the flag of the 'United States' is shown.
 
   Locate the first product card:
     - Click its 'Add to Cart' button
