@@ -41,6 +41,141 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261002-10] Dummy Video Player Displayed in Report Side Panel when No Video Attached
+- **Date:** 2026-10-02
+- **Component:** `aura-manager` (`side-panel-step-list.html`, `report-manager.js`)
+- **Scope:** `Framework`
+- **Symptom:** In Aura report UI execution side panel, a dummy video player (`execution_replay.mp4`) was displayed even when no video attachment was attached to the test execution.
+- **Root Cause:** `side-panel-step-list.html` hardcoded a static video attachment preview box mockup, and `report-manager.js` did not hide the box when `data-video-url` or `data-video` attribute was missing/empty on the active execution row.
+- **Detection Gap ("What did we miss?"):** UI HTML template mockups were not hidden by default, and frontend JS logic lacked fallback hiding for empty video attributes.
+- **Resolution:** Set default `style="display: none;"` on `#attachmentVideoBox` in `side-panel-step-list.html` and updated `report-manager.js` to dynamically show/hide `#attachmentVideoBox` and update `#attachmentSectionContainer` visibility based on actual attachment presence.
+- **Safety Net Added:** Frontend assertion/verification in report manager JS and UI component tests.
+
+
+### [DEF-20261002-09] Separate Window Attachment Button Used Unresolved Relative Filename Path Resulting in 404 Error Page
+- **Date:** 2026-10-02
+- **Component:** `aura-manager` (`side-panel-step-list.html`, `report-manager.js`)
+- **Scope:** `Framework`
+- **Symptom:** Clicking "Open in Separate Window" on test video attachments produced a Spring MVC 404 Whitelabel Error Page for `/execution_replay.mp4`.
+- **Root Cause:** `openAttachmentWindow` received bare filenames (e.g. `execution_replay.mp4`) from fallback HTML template attributes instead of resolving the target URL to `/api/runs/{runId}/{testClass}/{filename}`.
+- **Detection Gap ("What did we miss?"):** UI tests verified inline `<video>` element rendering without triggering the popup window action button.
+- **Resolution:** Updated `renderStepsForExecution` in `report-manager.js` to dynamically set the popup button's `onclick` to the resolved API endpoint URL (`/api/runs/...`). Enhanced `openAttachmentWindow` with auto-resolution logic for relative filenames.
+- **Safety Net Added:** Added frontend unit check verifying popup window URL construction.
+
+
+### [DEF-20261002-08] Missing `data-test-class` Attribute in Run Report Template Caused HTTP 404 Video URL Resolution Failures
+- **Date:** 2026-10-02
+- **Component:** `aura-manager` (`run-report.html`, `report-manager.js`)
+- **Scope:** `Framework`
+- **Symptom:** Video playback in Aura report UI failed with HTTP 404. Console log showed request URL containing a double slash `/api/runs/<runId>//video-1.mp4`.
+- **Root Cause:** `run-report.html` set `th:data-test-name="${exec.testClass}"` on `<tr>` elements instead of `th:data-test-class`. `report-manager.js` looked only for `data-test-class`, resolving `testClass` to an empty string `""` and forming invalid 2-segment URLs.
+- **Detection Gap ("What did we miss?"):** UI tests verified test class names in table text cells without inspecting `data-*` HTML row attributes used by media endpoints.
+- **Resolution:** Added `th:data-test-class="${exec.testClass}"` to `run-report.html` and updated `report-manager.js` to fallback gracefully to `data-test-name`. Declared `window.openAttachmentWindow` in `report-manager.js`.
+- **Safety Net Added:** Added frontend JS attribute fallback check and unit test verifying valid `/api/runs/{runId}/{testClass}/{filename}` URL construction.
+
+
+### [DEF-20261002-07] Video File Not Copied to storage/runs Storage Directory During Test Teardown
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`InteractiveConsoleEngine.java`)
+- **Scope:** `Framework`
+- **Symptom:** Test runs triggered from Aura Manager (such as `run_20261002_131742`) created `storage/runs/<runId>/<testClass>/console-execution-1.json` but no video file was copied to `storage/runs/<runId>/<testClass>/video-1.mp4`.
+- **Root Cause:** `InteractiveConsoleEngine.attachVideoToLatestExecutionLog` only populated `getConsoleExecutionLogsDirectory()` (`target/aura-sandbox/allure-results`) and `getDiskReportDirectory()` (`target/ai-reports`), omitting `storage/runs`.
+- **Detection Gap ("What did we miss?"):** Integration tests checked video relocation in `target/ai-reports` or `target/aura-sandbox/allure-results` without verifying `storage/runs` root storage.
+- **Resolution:** Updated `InteractiveConsoleEngine.attachVideoToLatestExecutionLog` to discover all active storage root directories (including `storage/runs`), copy the video into `<storageRoot>/<runFolder>/<testClass>/video-1.mp4`, and update `console-execution-*.json` across all storage targets.
+- **Safety Net Added:** Added unit test coverage verifying video relocation and JSON tagging across `storage/runs` and `target/ai-reports`.
+
+
+### [DEF-20261002-06] Video Generation Aborted Due to Stream Flush After Close Exception in VideoWriter
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`VideoWriter.java`, `TakeScreenshotsThread.java`)
+- **Scope:** `Framework`
+- **Symptom:** Tests executed with video filming enabled failed to produce any video files in run storage or execution logs.
+- **Root Cause:** `VideoWriter.stop()` invoked `ffmpegInput.close()` before `ffmpegInput.flush()`. Calling `flush()` on a closed `OutputStream` threw an `IOException: Stream closed`, which was wrapped in a `RuntimeException`, terminating `VideoWriter.stop()` prematurely and aborting `TakeScreenshotsThread` video relocation.
+- **Detection Gap ("What did we miss?"):** Unit tests used mock streams without testing real FFmpeg output stream teardown sequence.
+- **Resolution:** Reordered stream closing in `VideoWriter.stop()` to `flush()` before `close()` with safe exception handling. Wrapped `writer.stop()` in `TakeScreenshotsThread` with try-catch to ensure run folder file relocation and execution log video attachment always execute.
+- **Safety Net Added:** Added unit test verifying `VideoWriter.stop()` stream teardown without throwing exceptions.
+
+
+### [DEF-20261002-05] Video File Relocated to UUID Subfolder Instead of Execution Test Class Directory
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`InteractiveConsoleEngine.java`, `NeodymiumAiRunner.java`)
+- **Scope:** `Framework`
+- **Symptom:** Active test runs (such as `run_20261002_120132`) contained execution log JSON files but no video files in the test class folder.
+- **Root Cause:** `FilmTestExecution.startVideoRecording` received a random UUID as `recordingID`. `InteractiveConsoleEngine.attachVideoToLatestExecutionLog` extracted the UUID as the test class folder name, storing videos in isolated UUID subdirectories rather than matching the active execution log directory.
+- **Detection Gap ("What did we miss?"):** Previous tests passed explicit test class names to `attachVideoToLatestExecutionLog` instead of testing random UUID `recordingID` parameters generated by test runners.
+- **Resolution:** Updated `attachVideoToLatestExecutionLog` with directory fallback scanning: if `new File(runDir, testClassFolder)` has no execution JSON files, it scans `runDir` for the active test class directory containing execution JSON files and attaches the video there. Prefix `recordingID` with `testClass` name in `NeodymiumAiRunner`.
+- **Safety Net Added:** Added unit test in `InteractiveConsoleEngineTest` verifying video attachment when `rawTestName` is a UUID.
+
+### [DEF-20261002-04] Video Recording Attribute Missing in Execution JSON Files Named After Test ID
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`InteractiveConsoleEngine.java`)
+- **Scope:** `Framework`
+- **Symptom:** The execution report UI rendered the video attachment section without playing or referencing the video file ("video is not referenced").
+- **Root Cause:** `InteractiveConsoleEngine.attachVideoToLatestExecutionLog` filtered JSON log files strictly by prefix `console-execution-*.json`, missing execution JSON files named after execution IDs (e.g. `Aura_my_test_yaml_Test#executeYamlTest#en#Chrome_1920x1080.json`).
+- **Detection Gap ("What did we miss?"):** Previous unit tests only generated log files starting with `console-execution-`.
+- **Resolution:** Updated `attachVideoToLatestExecutionLog` to discover all execution JSON files (`*.json` excluding index metadata) in the target test directory and append `videoUrl` / `videoPath` to them.
+- **Safety Net Added:** Added unit test coverage verifying video property injection into custom-named execution log JSON files.
+
+### [DEF-20261002-03] Report Video Attachment 404 Failure Due to Mismatched Test Class Folder Name in Run Storage
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`InteractiveConsoleEngine.java`), `aura-manager` (`AuraReportViewController.java`)
+- **Scope:** `Framework`
+- **Symptom:** Video recordings were missing in the report UI and returned HTTP 404 when requested via `/api/runs/{runId}/{testClass}/{filename}`.
+- **Root Cause:** `InteractiveConsoleEngine.attachVideoToLatestExecutionLog` constructed target directories using raw test names with dataset suffixes (e.g. `WikipediaSearchTest___dataset_1`) instead of extracting the clean test class name (`WikipediaSearchTest`) required by `AuraReportViewController`.
+- **Detection Gap ("What did we miss?"):** Unit tests created single dummy folders without verifying end-to-end HTTP URL resolution in `AuraReportViewController`.
+- **Resolution:** Updated `InteractiveConsoleEngine.attachVideoToLatestExecutionLog` to use `extractTestClassFolder` to consistently resolve `<testClass>` for video storage and report attachment.
+- **Safety Net Added:** Added unit test coverage verifying `/api/runs` URL structure and video file attachment in run folders.
+
+### [DEF-20261002-02] Test Filming Videos Not Relocated to Corresponding Run Folder On Test Teardown
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`TakeScreenshotsThread.java`, `InteractiveConsoleEngine.java`)
+- **Scope:** `Framework`
+- **Symptom:** Videos and GIFs created during tests with filming enabled remained in root `target/videos/` or were deleted by temp cleanup instead of being stored in the active run folder.
+- **Root Cause:** `TakeScreenshotsThread` wrote recordings directly into `tempFolderToStoreRecording()` root without moving the resulting file into `InteractiveConsoleEngine.getRunFolder()` on test finish.
+- **Detection Gap ("What did we miss?"):** Early recording tests checked for files directly in `target/videos/` or `target/gifs/` without verifying run folder organization.
+- **Resolution:** Updated `TakeScreenshotsThread` teardown to resolve the active run folder via `InteractiveConsoleEngine.getRunFolder()`, create `<tempFolderToStoreRecording>/<runFolder>/`, and move the test recording file into the run folder upon test completion.
+- **Safety Net Added:** Added unit tests in `AutomaticVideoRecordingTest`, `AutomaticGifRecordingTest`, and `InteractiveConsoleEngineTest` verifying video relocation to the corresponding run folder on test finish.
+
+### [DEF-20261002-01] Video Directory Creation Order & FFmpeg Framerate Adjustment Failures Prevent Video File Generation
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`TakeScreenshotsThread.java`, `VideoWriter.java`)
+- **Scope:** `Framework`
+- **Symptom:** Tests executed with video recording enabled produced no video recordings in target/videos/ or run storage folders.
+- **Root Cause:** TakeScreenshotsThread instantiated VideoWriter before calling directory.mkdir(), causing FFmpeg to attempt writing to non-existent target/videos/ directory. In addition, VideoWriter.stop() attempted to rename and re-encode videos without verifying screenshots > 0 or file existence.
+- **Detection Gap ("What did we miss?"):** Unit tests created target/videos/ manually during test setup, masking the missing directory initialization order during real test runs.
+- **Resolution:** Moved target directory creation using directory.mkdirs() prior to Writer.instantiate in TakeScreenshotsThread constructor. Added defensive checks for file existence, non-zero screenshots, and fallback file copying in VideoWriter.stop().
+- **Safety Net Added:** Added unit test coverage verifying automatic directory creation and zero-screenshot video handling.
+
+### [DEF-20261001-07] TakeScreenshotsThread Throws NullPointerException When Driver Is Not Yet Initialized at Thread Start
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`TakeScreenshotsThread.java`, `FilmTestExecution.java`)
+- **Scope:** `Framework`
+- **Symptom:** AI/Aura test runs with video recording enabled failed to produce video files when the browser driver was opened dynamically after test initialization.
+- **Root Cause:** TakeScreenshotsThread bound to a fixed WebDriver instance passed at constructor time during executeBeforeEach before Selenide/Neodymium opened the browser. Attempting to take screenshots against a null driver threw NullPointerException and aborted video creation.
+- **Detection Gap ("What did we miss?"):** Unit tests for TakeScreenshotsThread passed a pre-initialized mock WebDriver, missing the asynchronous driver initialization lifecycle in AI runners.
+- **Resolution:** Updated TakeScreenshotsThread with dynamic driver resolution (getActiveDriver()) that gracefully polls until Neodymium or Selenide starts the WebDriver instance before taking screenshots.
+- **Safety Net Added:** Added unit test coverage verifying dynamic driver resolution when started prior to browser opening.
+
+### [DEF-20261001-06] NeodymiumAiRunner Does Not Initialize Video Recording During AI Test Execution
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`NeodymiumAiRunner.java`, `AiInvocationExtension`)
+- **Scope:** `Framework`
+- **Symptom:** Running AI/Aura tests with video filming enabled (-Dvideo.enableFilming=true) produced no video files in the run storage directory or execution logs.
+- **Root Cause:** NeodymiumAiRunner's AiInvocationExtension initialized AiSession and InteractiveConsoleEngine but did not check FilmTestExecution.getContextVideo().enableFilming() in executeBeforeEach, nor did it call FilmTestExecution.startVideoRecording(...) / finishVideoFilming(...). Video recording was only implemented in legacy BrowserRunner.
+- **Detection Gap ("What did we miss?"):** Previous video recording integration tests focused exclusively on JUnit 4/5 BrowserRunner test classes, omitting NeodymiumAiRunner test templates.
+- **Resolution:** Updated AiInvocationExtension in NeodymiumAiRunner to trigger FilmTestExecution.startVideoRecording(...) in executeBeforeEach and FilmTestExecution.finishVideoFilming(...) in afterEach when video filming is enabled.
+- **Safety Net Added:** Added unit test coverage verifying video recording lifecycle start and teardown for AI playbooks.
+
+### [DEF-20261001-05] Video Recordings Missing from Run Storage Folder and Execution Logs
+- **Date:** 2026-10-01
+- **Component:** `neodymium-core` (`InteractiveConsoleEngine.java`, `TakeScreenshotsThread.java`)
+- **Scope:** `Framework`
+- **Symptom:** Test video recordings generated during test runs (such as run_20261001_164918) were missing from the run storage directory and not referenced in console-execution-*.json.
+- **Root Cause:** InteractiveConsoleEngine checked for videos in target/videos/ during live step dispatches before FFmpeg finished video assembly at test teardown. Upon test teardown, TakeScreenshotsThread finalized the video and immediately deleted target/videos/*.mp4 before InteractiveConsoleEngine had a chance to attach it.
+- **Detection Gap ("What did we miss?"):** Previous video relocation logic relied solely on live step dispatches and did not hook into TakeScreenshotsThread teardown before temp file cleanup.
+- **Resolution:** Added InteractiveConsoleEngine.attachVideoToLatestExecutionLog helper and called it from TakeScreenshotsThread immediately after writer.stop() completes, copying the video to run storage and updating console-execution-*.json with videoUrl before temp deletion.
+- **Safety Net Added:** Added unit test coverage in InteractiveConsoleEngineTest verifying video attachment and JSON tagging upon test teardown.
+
 ### [DEF-20261001-01] Variables from Test Data Cannot Be Inserted into Fragment Steps Being Edited Inline
 - **Date:** 2026-10-01
 - **Component:** `aura-manager` (`Visual Playbook Editor`, `dashboard-editor.js`, `editor.html`)

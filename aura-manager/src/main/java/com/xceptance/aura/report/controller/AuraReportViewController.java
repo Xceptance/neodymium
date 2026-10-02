@@ -36,6 +36,9 @@ import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.aura.report.service.RunStorageSyncService;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -48,11 +51,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.UrlResource;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -437,6 +444,62 @@ public class AuraReportViewController
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(exec);
+    }
+
+    @GetMapping("/api/runs/{runId}/{testClass}/{filename:.+}")
+    @ResponseBody
+    public ResponseEntity<Resource> serveRunFile(
+        @PathVariable("runId") final String runId,
+        @PathVariable("testClass") final String testClass,
+        @PathVariable("filename") final String filename)
+    {
+        final Path filePath = Paths.get("storage/runs", runId, testClass, filename);
+        if (!Files.exists(filePath) || !Files.isReadable(filePath))
+        {
+            final Path defaultPath = Paths.get("target/aura-sandbox/allure-results", filename);
+            if (Files.exists(defaultPath) && Files.isReadable(defaultPath))
+            {
+                return servePath(defaultPath, filename);
+            }
+            return ResponseEntity.notFound().build();
+        }
+        return servePath(filePath, filename);
+    }
+
+    private ResponseEntity<Resource> servePath(final Path path, final String filename)
+    {
+        try
+        {
+            final Resource resource = new UrlResource(path.toUri());
+            String contentType = "application/octet-stream";
+            if (filename.endsWith(".mp4"))
+            {
+                contentType = "video/mp4";
+            }
+            else if (filename.endsWith(".webm"))
+            {
+                contentType = "video/webm";
+            }
+            else if (filename.endsWith(".png"))
+            {
+                contentType = "image/png";
+            }
+            else if (filename.endsWith(".html"))
+            {
+                contentType = "text/html";
+            }
+            else if (filename.endsWith(".json"))
+            {
+                contentType = "application/json";
+            }
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(contentType))
+                    .body(resource);
+        }
+        catch (final Exception e)
+        {
+            return ResponseEntity.internalServerError().build();
+        }
     }
 
     @GetMapping("/fragments/test-side-panel/bugs")

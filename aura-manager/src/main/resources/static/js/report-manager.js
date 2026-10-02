@@ -1698,6 +1698,8 @@ function startLiveStepRefreshTimer(activeRow) {
                     if (execDto.startTime) currentActiveEl.setAttribute('data-start-time', execDto.startTime);
                     if (execDto.dateFormatted) currentActiveEl.setAttribute('data-date-formatted', execDto.dateFormatted);
                     if (execDto.timeFormatted) currentActiveEl.setAttribute('data-time-formatted', execDto.timeFormatted);
+                    if (execDto.videoUrl) currentActiveEl.setAttribute('data-video-url', execDto.videoUrl);
+                    else if (execDto.videoPath) currentActiveEl.setAttribute('data-video-url', execDto.videoPath);
                     if (execDto.llmResponsibilityJson) currentActiveEl.setAttribute('data-llm-responsibility', execDto.llmResponsibilityJson);
                     if (execDto.contextLevelCountsJson) currentActiveEl.setAttribute('data-context-level-counts', execDto.contextLevelCountsJson);
 
@@ -1768,6 +1770,8 @@ function renderStepsForExecution(activeRow) {
                         if (execDto.startTime) activeRow.setAttribute('data-start-time', execDto.startTime);
                         if (execDto.dateFormatted) activeRow.setAttribute('data-date-formatted', execDto.dateFormatted);
                         if (execDto.timeFormatted) activeRow.setAttribute('data-time-formatted', execDto.timeFormatted);
+                        if (execDto.videoUrl) activeRow.setAttribute('data-video-url', execDto.videoUrl);
+                        else if (execDto.videoPath) activeRow.setAttribute('data-video-url', execDto.videoPath);
                         if (execDto.llmResponsibilityJson) activeRow.setAttribute('data-llm-responsibility', execDto.llmResponsibilityJson);
                         if (execDto.contextLevelCountsJson) activeRow.setAttribute('data-context-level-counts', execDto.contextLevelCountsJson);
 
@@ -2725,7 +2729,76 @@ function renderStepsForExecution(activeRow) {
     html += renderSection('AFTER STEPS / TEARDOWN', afterSteps, 'after', 'stop', 'var(--text-muted)');
 
     stepListEl.innerHTML = html;
+
+    const videoUrlAttr = activeRow.getAttribute('data-video-url') || activeRow.getAttribute('data-video');
+    const attachmentContainer = document.getElementById('attachmentSectionContainer');
+    const videoPreviewBox = document.getElementById('attachmentVideoBox') || (attachmentContainer ? attachmentContainer.querySelector('.attachment-video-mock')?.closest('.attachment-preview-box') : null);
+
+    const hasVideo = videoUrlAttr && videoUrlAttr.trim().length > 0 && videoUrlAttr !== 'null';
+
+    if (hasVideo && attachmentContainer) {
+        if (videoPreviewBox) {
+            videoPreviewBox.style.display = 'flex';
+        }
+        const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
+        const testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || '';
+        const src = (videoUrlAttr.startsWith('http') || videoUrlAttr.startsWith('/'))
+            ? videoUrlAttr
+            : `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(videoUrlAttr)}`;
+
+        const videoBox = videoPreviewBox ? videoPreviewBox.querySelector('.attachment-video-mock') : attachmentContainer.querySelector('.attachment-video-mock');
+        if (videoBox) {
+            videoBox.style.height = 'auto';
+            videoBox.style.padding = '0.5rem';
+            videoBox.innerHTML = `<video controls style="width:100%; max-height:280px; border-radius:6px; background:#000;" src="${src}"></video>`;
+        }
+        const tagChip = videoPreviewBox ? videoPreviewBox.querySelector('.tag-chip') : null;
+        if (tagChip) {
+            tagChip.textContent = videoUrlAttr;
+        }
+        const openBtn = videoPreviewBox ? videoPreviewBox.querySelector('button[onclick*="openAttachmentWindow"]') : null;
+        if (openBtn) {
+            openBtn.setAttribute('onclick', `openAttachmentWindow('video', '${src}')`);
+        }
+    } else {
+        if (videoPreviewBox) {
+            videoPreviewBox.style.display = 'none';
+        }
+    }
+
+    if (attachmentContainer) {
+        const visibleAttachments = attachmentContainer.querySelectorAll('.attachment-preview-box:not([style*="display: none"])');
+        if (visibleAttachments.length === 0) {
+            attachmentContainer.style.display = 'none';
+        } else {
+            attachmentContainer.style.display = 'block';
+            const fileCountChip = attachmentContainer.querySelector('.step-section-header .tag-chip');
+            if (fileCountChip) {
+                fileCountChip.textContent = `${visibleAttachments.length} FILE${visibleAttachments.length > 1 ? 'S' : ''}`;
+            }
+        }
+    }
 }
+
+function openAttachmentWindow(type, url) {
+    if (!url) return;
+    let targetUrl = url;
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://') && !targetUrl.startsWith('/api/')) {
+        const activeRow = document.querySelector('.execution-row.selected, .clickable-row.selected, tr.execution-row:hover, tr.clickable-row');
+        if (activeRow) {
+            const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '');
+            const testClass = activeRow.getAttribute('data-test-class') || activeRow.getAttribute('data-test-name') || activeRow.getAttribute('data-class-name') || '';
+            const filename = activeRow.getAttribute('data-video-url') || url;
+            if (filename.startsWith('http') || filename.startsWith('/')) {
+                targetUrl = filename;
+            } else {
+                targetUrl = `/api/runs/${encodeURIComponent(runId)}/${encodeURIComponent(testClass)}/${encodeURIComponent(filename)}`;
+            }
+        }
+    }
+    window.open(targetUrl, '_blank', 'width=1000,height=700,resizable=yes,scrollbars=yes');
+}
+window.openAttachmentWindow = openAttachmentWindow;
 
 function extractStepContextLevelCounts(activeRow) {
     if (!activeRow) return null;

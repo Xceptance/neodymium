@@ -27,6 +27,7 @@ import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -154,6 +155,36 @@ public final class InteractiveConsoleEngine {
                     }
                     return tn;
                 }
+            }
+        }
+        return "DefaultTestClass";
+    }
+
+    public static String extractTestClassFolder(final String rawTestName)
+    {
+        if (rawTestName != null && !rawTestName.isBlank())
+        {
+            String tn = rawTestName;
+            if (tn.contains("#"))
+            {
+                tn = tn.substring(0, tn.indexOf('#'));
+            }
+            if (tn.contains(" · "))
+            {
+                tn = tn.substring(0, tn.indexOf(" · "));
+            }
+            else if (tn.contains(" "))
+            {
+                tn = tn.substring(0, tn.indexOf(' '));
+            }
+            if (tn.contains("."))
+            {
+                tn = tn.substring(tn.lastIndexOf('.') + 1);
+            }
+            final String safeFolder = tn.replaceAll("[^a-zA-Z0-9._-]", "_");
+            if (!safeFolder.isBlank())
+            {
+                return safeFolder;
             }
         }
         return "DefaultTestClass";
@@ -323,6 +354,46 @@ public final class InteractiveConsoleEngine {
                 final String testClassFolder = extractTestClassFolder(parsedState);
                 final int index = getExecutionIndex(testClassFolder, executionKey);
 
+                // Relocate video recording if generated in target/videos/
+                final File videosFolder = new File("target/videos");
+                if (videosFolder.exists() && videosFolder.isDirectory())
+                {
+                    final File[] videoFiles = videosFolder.listFiles((dir, name) -> name.endsWith(".mp4") || name.endsWith(".webm"));
+                    if (videoFiles != null && videoFiles.length > 0)
+                    {
+                        File newestVideo = videoFiles[0];
+                        for (final File vf : videoFiles)
+                        {
+                            if (vf.lastModified() > newestVideo.lastModified())
+                            {
+                                newestVideo = vf;
+                            }
+                        }
+                        final String videoName = "video-" + index + ".mp4";
+                        parsedState.addProperty("videoUrl", videoName);
+                        parsedState.addProperty("videoPath", videoName);
+                        minified = parsedState.toString();
+
+                        final String configuredResultsDirPath = AiConfiguration.getInstance().getConsoleExecutionLogsDirectory();
+                        final String runFolder = getRunFolder();
+                        final File structuredDir = new File(configuredResultsDirPath, runFolder + "/" + testClassFolder);
+                        if (!structuredDir.exists())
+                        {
+                            structuredDir.mkdirs();
+                        }
+                        try
+                        {
+                            Files.copy(newestVideo.toPath(), new File(structuredDir, videoName).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            final File defaultVideoFile = new File(defaultResultsDir, videoName);
+                            Files.copy(newestVideo.toPath(), defaultVideoFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                        }
+                        catch (final Exception ve)
+                        {
+                            LOG.warn("[InteractiveConsole] Could not move video recording: {}", ve.getMessage());
+                        }
+                    }
+                }
+
                 // 1. Root file for compatibility in default allure.results.directory
                 final File executionJson = new File(defaultResultsDir, "console-execution-" + index + ".json");
                 Files.writeString(executionJson.toPath(), minified, StandardCharsets.UTF_8);
@@ -348,6 +419,21 @@ public final class InteractiveConsoleEngine {
                 }
                 final File reportsStructuredJson = new File(reportsStructuredDir, "console-execution-" + index + ".json");
                 Files.writeString(reportsStructuredJson.toPath(), minified, StandardCharsets.UTF_8);
+                if (parsedState.has("videoUrl"))
+                {
+                    final String videoName = parsedState.get("videoUrl").getAsString();
+                    final File srcVideo = new File(structuredDir, videoName);
+                    if (srcVideo.exists())
+                    {
+                        try
+                        {
+                            Files.copy(srcVideo.toPath(), new File(reportsStructuredDir, videoName).toPath(), StandardCopyOption.REPLACE_EXISTING);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                }
             }
             catch (final Exception e)
             {
@@ -356,6 +442,148 @@ public final class InteractiveConsoleEngine {
         }
 
         broadcastSseEvent("state", minified);
+    }
+
+    /**
+     * Relocates a completed video recording file into the active run storage directory
+     * and updates the corresponding execution log JSON with video reference attributes.
+     *
+     * @param videoFile the completed video file to relocate
+     * @param rawTestName the name of the test or recording target
+     * @author AI-generated: Gemini 3.6 Flash
+     * @author Xceptance GmbH 2026
+     */
+    public static void attachVideoToLatestExecutionLog(final File videoFile, final String rawTestName)
+    {
+        if (videoFile == null || !videoFile.exists())
+        {
+            return;
+        }
+        try
+        {
+            final String runFolder = getRunFolder();
+            final String testClassFolder = extractTestClassFolder(rawTestName);
+            final String ext = videoFile.getName().toLowerCase().endsWith(".gif") ? ".gif" : ".mp4";
+
+            final List<String> storageRoots = List.of(
+                "storage/runs",
+                AiConfiguration.getInstance().getConsoleExecutionLogsDirectory(),
+                AiConfiguration.getInstance().getDiskReportDirectory(),
+                System.getProperty("allure.results.directory", "target/aura-sandbox/allure-results")
+            );
+
+            for (final String rootPath : storageRoots)
+            {
+                if (rootPath == null || rootPath.isBlank())
+                {
+                    continue;
+                }
+                final File runDir = new File(rootPath, runFolder);
+                if (!runDir.exists() && !"storage/runs".equals(rootPath))
+                {
+                    continue;
+                }
+                if (!runDir.exists())
+                {
+                    runDir.mkdirs();
+                }
+
+                File targetTestDir = new File(runDir, testClassFolder);
+                File[] jsonFiles = targetTestDir.exists() ? targetTestDir.listFiles((dir, name) -> name.endsWith(".json") && !name.equals("index-data.json")) : null;
+
+                if ((jsonFiles == null || jsonFiles.length == 0) && runDir.exists())
+                {
+                    final File[] subDirs = runDir.listFiles(File::isDirectory);
+                    if (subDirs != null && subDirs.length > 0)
+                    {
+                        File bestDir = null;
+                        File[] bestJsons = null;
+                        long newestMod = -1;
+
+                        for (final File subDir : subDirs)
+                        {
+                            final File[] jsons = subDir.listFiles((dir, name) -> name.endsWith(".json") && !name.equals("index-data.json"));
+                            if (jsons != null && jsons.length > 0)
+                            {
+                                for (final File jf : jsons)
+                                {
+                                    if (jf.lastModified() > newestMod)
+                                    {
+                                        newestMod = jf.lastModified();
+                                        bestDir = subDir;
+                                        bestJsons = jsons;
+                                    }
+                                }
+                            }
+                        }
+                        if (bestDir != null)
+                        {
+                            targetTestDir = bestDir;
+                            jsonFiles = bestJsons;
+                        }
+                    }
+                }
+
+                if (!targetTestDir.exists())
+                {
+                    targetTestDir.mkdirs();
+                }
+
+                int index = 1;
+                if (jsonFiles != null && jsonFiles.length > 0)
+                {
+                    for (final File f : jsonFiles)
+                    {
+                        final String name = f.getName();
+                        if (name.startsWith("console-execution-"))
+                        {
+                            try
+                            {
+                                index = Integer.parseInt(name.substring("console-execution-".length(), name.length() - ".json".length()));
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
+                    }
+                }
+
+                final String videoName = "video-" + index + ext;
+                final File destVideo = new File(targetTestDir, videoName);
+                try
+                {
+                    Files.copy(videoFile.toPath(), destVideo.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                }
+                catch (final Exception e)
+                {
+                    LOG.warn("[InteractiveConsole] Could not copy video file to {}: {}", destVideo.getAbsolutePath(), e.getMessage());
+                }
+
+                if (jsonFiles != null && jsonFiles.length > 0)
+                {
+                    for (final File jsonFileToUpdate : jsonFiles)
+                    {
+                        try
+                        {
+                            final String jsonContent = Files.readString(jsonFileToUpdate.toPath(), StandardCharsets.UTF_8);
+                            final JsonObject parsedState = JsonParser.parseString(jsonContent).getAsJsonObject();
+                            parsedState.addProperty("videoUrl", videoName);
+                            parsedState.addProperty("videoPath", videoName);
+                            final String updatedJson = parsedState.toString();
+
+                            Files.writeString(jsonFileToUpdate.toPath(), updatedJson, StandardCharsets.UTF_8);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("[InteractiveConsole] Could not attach video to execution log: {}", e.getMessage());
+        }
     }
 
     private String extractExecutionKey(final JsonObject json)
