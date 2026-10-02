@@ -768,6 +768,22 @@ public final class HtmlReportGenerator
         int llmCount = !step.getLlmCalls().isEmpty() ? step.getLlmCalls().size() : (step.getStandardCalls() + step.getVerificationCalls() + step.getRcaCalls());
         int actionCount = step.getActions().size();
         int screenshotCount = step.getScreenshots().size();
+        long inTokens = 0;
+        long outTokens = 0;
+
+        if (!step.getLlmCalls().isEmpty())
+        {
+            for (final TestExecutionReport.ReportLlmCallEntry call : step.getLlmCalls())
+            {
+                inTokens += call.getInputTokens();
+                outTokens += call.getOutputTokens();
+            }
+        }
+        else
+        {
+            inTokens = step.getStandardInputTokens() + step.getVerificationInputTokens() + step.getRcaInputTokens();
+            outTokens = step.getStandardOutputTokens() + step.getVerificationOutputTokens() + step.getRcaOutputTokens();
+        }
 
         if (hasSubSteps && !isSub)
         {
@@ -788,15 +804,41 @@ public final class HtmlReportGenerator
             if (step.getLlmCalls().isEmpty())
             {
                 int aggregatedLlmCount = 0;
+                long aggregatedInTokens = 0;
+                long aggregatedOutTokens = 0;
                 for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
                 {
                     aggregatedLlmCount += !sub.getLlmCalls().isEmpty() ? sub.getLlmCalls().size() : (sub.getStandardCalls() + sub.getVerificationCalls() + sub.getRcaCalls());
+                    if (!sub.getLlmCalls().isEmpty())
+                    {
+                        for (final TestExecutionReport.ReportLlmCallEntry call : sub.getLlmCalls())
+                        {
+                            aggregatedInTokens += call.getInputTokens();
+                            aggregatedOutTokens += call.getOutputTokens();
+                        }
+                    }
+                    else
+                    {
+                        aggregatedInTokens += sub.getStandardInputTokens() + sub.getVerificationInputTokens() + sub.getRcaInputTokens();
+                        aggregatedOutTokens += sub.getStandardOutputTokens() + sub.getVerificationOutputTokens() + sub.getRcaOutputTokens();
+                    }
                 }
                 if (aggregatedLlmCount > 0)
                 {
                     llmCount = aggregatedLlmCount;
                 }
+                if (inTokens == 0 && outTokens == 0)
+                {
+                    inTokens = aggregatedInTokens;
+                    outTokens = aggregatedOutTokens;
+                }
             }
+        }
+
+        if (inTokens == 0 && outTokens == 0)
+        {
+            inTokens = step.getStandardInputTokens() + step.getVerificationInputTokens() + step.getRcaInputTokens();
+            outTokens = step.getStandardOutputTokens() + step.getVerificationOutputTokens() + step.getRcaOutputTokens();
         }
 
         if (actionCount > 0 || step.getStandardCalls() > 0 || step.getVerificationCalls() > 0 || step.getRcaCalls() > 0 || hasSubSteps || !step.getLlmCalls().isEmpty() || screenshotCount > 0 || step.getSsimScore() != null || step.getVerificationResult() != null)
@@ -832,7 +874,12 @@ public final class HtmlReportGenerator
             }
             if (llmCount > 0)
             {
-                sb.append("            <span class=\"footer-tag\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'llm')\">🤖 ").append(llmCount).append(" LLM call(s)</span>\n");
+                final StringBuilder llmTag = new StringBuilder("🤖 ").append(llmCount).append(" LLM call(s)");
+                if (inTokens > 0 || outTokens > 0)
+                {
+                    llmTag.append(", ").append(NUMBER_FORMAT.format(inTokens)).append(" in/ ").append(NUMBER_FORMAT.format(outTokens)).append(" out");
+                }
+                sb.append("            <span class=\"footer-tag\" onclick=\"event.stopPropagation(); openAndSelectStep(").append(parentIndex).append(", ").append(subIndex).append(", 'llm')\">").append(llmTag).append("</span>\n");
             }
             if (hasSubSteps)
             {
