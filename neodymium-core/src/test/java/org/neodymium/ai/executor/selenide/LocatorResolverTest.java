@@ -20,6 +20,7 @@ package org.neodymium.ai.executor.selenide;
 
 import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selectors;
+import com.codeborne.selenide.selector.ByRole;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.By;
@@ -163,6 +164,10 @@ public class LocatorResolverTest
         Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), LocatorResolver.resolveLocator("data-ai=\"xc123\""));
         Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), LocatorResolver.resolveLocator("data-ai='xc123'"));
         Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), LocatorResolver.resolveLocator("DATA-AI=xc123"));
+        Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), LocatorResolver.resolveLocator("#xc123"));
+        Assertions.assertEquals(By.cssSelector("[data-ai='xcrxcvi']"), LocatorResolver.resolveLocator("#xcrxcvi"));
+        Assertions.assertEquals(By.cssSelector("[data-ai='xcrxcvi']"), LocatorResolver.resolveLocator("xcrxcvi"));
+        Assertions.assertEquals(By.cssSelector("div > [data-ai='xc4o48u']"), LocatorResolver.resolveLocator("div > #xc4o48u"));
 
         Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("data-testid=submit-btn"));
         Assertions.assertEquals(By.cssSelector("[data-testid='submit-btn']"), LocatorResolver.resolveLocator("data-testid=\"submit-btn\""));
@@ -223,48 +228,44 @@ public class LocatorResolverTest
     {
         // Named roles
         final By roleBtnNamed = LocatorResolver.resolveLocator("role=button[name=\"Submit\"]");
-        Assertions.assertTrue(roleBtnNamed instanceof By.ByXPath);
-        final String btnNamedXpath = roleBtnNamed.toString();
-        Assertions.assertTrue(btnNamedXpath.contains("button"));
-        Assertions.assertTrue(btnNamedXpath.contains("Submit"));
-        Assertions.assertTrue(btnNamedXpath.contains("@role='button'"));
+        Assertions.assertTrue(roleBtnNamed instanceof ByRole);
+        final String btnNamedString = roleBtnNamed.toString();
+        Assertions.assertTrue(btnNamedString.contains("button"));
+        Assertions.assertTrue(btnNamedString.contains("Submit"));
 
         final By roleBtnUnquoted = LocatorResolver.resolveLocator("role=button[name=Submit]");
         Assertions.assertEquals(roleBtnNamed, roleBtnUnquoted);
 
         final By roleLinkNamed = LocatorResolver.resolveLocator("role=link[name='Home']");
-        Assertions.assertTrue(roleLinkNamed instanceof By.ByXPath);
-        final String linkNamedXpath = roleLinkNamed.toString();
-        Assertions.assertTrue(linkNamedXpath.contains("a"));
-        Assertions.assertTrue(linkNamedXpath.contains("Home"));
-        Assertions.assertTrue(linkNamedXpath.contains("@role='link'"));
+        Assertions.assertTrue(roleLinkNamed instanceof ByRole);
+        final String linkNamedString = roleLinkNamed.toString();
+        Assertions.assertTrue(linkNamedString.contains("link"));
+        Assertions.assertTrue(linkNamedString.contains("Home"));
 
         final By roleHeadingNamed = LocatorResolver.resolveLocator("role=heading[name='Page Title']");
-        Assertions.assertTrue(roleHeadingNamed instanceof By.ByXPath);
-        final String headingNamedXpath = roleHeadingNamed.toString();
-        Assertions.assertTrue(headingNamedXpath.contains("self::h1"));
-        Assertions.assertTrue(headingNamedXpath.contains("self::h2"));
-        Assertions.assertTrue(headingNamedXpath.contains("@role='heading'"));
-        Assertions.assertTrue(headingNamedXpath.contains("Page Title"));
+        Assertions.assertTrue(roleHeadingNamed instanceof ByRole);
+        final String headingNamedString = roleHeadingNamed.toString();
+        Assertions.assertTrue(headingNamedString.contains("heading"));
+        Assertions.assertTrue(headingNamedString.contains("Page Title"));
 
         final By roleCustomNamed = LocatorResolver.resolveLocator("role=tab[name='Settings']");
-        Assertions.assertTrue(roleCustomNamed instanceof By.ByXPath);
-        final String tabNamedXpath = roleCustomNamed.toString();
-        Assertions.assertTrue(tabNamedXpath.contains("@role='tab'"));
-        Assertions.assertTrue(tabNamedXpath.contains("Settings"));
+        Assertions.assertTrue(roleCustomNamed instanceof ByRole);
+        final String tabNamedString = roleCustomNamed.toString();
+        Assertions.assertTrue(tabNamedString.contains("tab"));
+        Assertions.assertTrue(tabNamedString.contains("Settings"));
 
         // Bare roles
-        Assertions.assertEquals(By.cssSelector("button, input[type='button'], input[type='submit'], [role='button']"), LocatorResolver.resolveLocator("role=button"));
-        Assertions.assertEquals(By.cssSelector("a, [role='link']"), LocatorResolver.resolveLocator("role=link"));
-        Assertions.assertEquals(By.cssSelector("h1, h2, h3, h4, h5, h6, [role='heading']"), LocatorResolver.resolveLocator("role=heading"));
-        Assertions.assertEquals(By.cssSelector("input[type='checkbox'], [role='checkbox']"), LocatorResolver.resolveLocator("role=checkbox"));
-        Assertions.assertEquals(By.cssSelector("input[type='radio'], [role='radio']"), LocatorResolver.resolveLocator("role=radio"));
-        Assertions.assertEquals(By.cssSelector("input:not([type]), input[type='text'], input[type='email'], input[type='password'], textarea, [role='textbox']"), LocatorResolver.resolveLocator("role=textbox"));
-        Assertions.assertEquals(By.cssSelector("[role='navigation']"), LocatorResolver.resolveLocator("role=navigation"));
-        Assertions.assertEquals(By.cssSelector("[role='alert']"), LocatorResolver.resolveLocator("role=alert"));
+        Assertions.assertEquals(Selectors.byRole("button"), LocatorResolver.resolveLocator("role=button"));
+        Assertions.assertEquals(Selectors.byRole("link"), LocatorResolver.resolveLocator("role=link"));
+        Assertions.assertEquals(Selectors.byRole("heading"), LocatorResolver.resolveLocator("role=heading"));
+        Assertions.assertEquals(Selectors.byRole("checkbox"), LocatorResolver.resolveLocator("role=checkbox"));
+        Assertions.assertEquals(Selectors.byRole("radio"), LocatorResolver.resolveLocator("role=radio"));
+        Assertions.assertEquals(Selectors.byRole("textbox"), LocatorResolver.resolveLocator("role=textbox"));
+        Assertions.assertEquals(Selectors.byRole("navigation"), LocatorResolver.resolveLocator("role=navigation"));
+        Assertions.assertEquals(Selectors.byRole("alert"), LocatorResolver.resolveLocator("role=alert"));
 
         // Case insensitivity
-        Assertions.assertEquals(By.cssSelector("button, input[type='button'], input[type='submit'], [role='button']"), LocatorResolver.resolveLocator("ROLE=BUTTON"));
+        Assertions.assertEquals(Selectors.byRole("button"), LocatorResolver.resolveLocator("ROLE=BUTTON"));
     }
 
     @Test
@@ -480,10 +481,10 @@ public class LocatorResolverTest
     {
         // internal:role=button[name="Submit"i]
         final By internalRole = LocatorResolver.resolveLocator("internal:role=button[name=\"Submit\"i]");
-        Assertions.assertTrue(internalRole instanceof By.ByXPath);
-        final String roleXpath = internalRole.toString();
-        Assertions.assertTrue(roleXpath.contains("button"));
-        Assertions.assertTrue(roleXpath.contains("Submit"));
+        Assertions.assertTrue(internalRole instanceof ByRole);
+        final String roleString = internalRole.toString();
+        Assertions.assertTrue(roleString.contains("button"));
+        Assertions.assertTrue(roleString.contains("Submit"));
 
         // internal:text="Submit"
         final By internalText = LocatorResolver.resolveLocator("internal:text=\"Submit\"");

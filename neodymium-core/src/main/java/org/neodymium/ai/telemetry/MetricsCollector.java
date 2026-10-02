@@ -207,7 +207,7 @@ public final class MetricsCollector implements ExecutionListener
 
     /**
      * Resolves the token price rates for a given model.
-     * Supported models: gemini-3.5-flash-lite, gemini-2.5-flash-lite, gemini-3.7-flash, gemini-3.5-flash, gemini-3.6-flash.
+     * Supported models: gemini-3.5-flash-lite, gemini-2.5-flash-lite, gemini-3.8-flash, gemini-3.7-flash, gemini-3.5-flash, gemini-3.6-flash.
      * For any unknown model, a warning is logged and {@code null} is returned.
      *
      * @param modelName the model identifier
@@ -229,6 +229,10 @@ public final class MetricsCollector implements ExecutionListener
         if (normalized.contains("2.5-flash-lite"))
         {
             return new ModelRate(0.10, 0.40, 0.025);
+        }
+        if (normalized.contains("3.8-flash"))
+        {
+            return new ModelRate(0.75, 3.75, 0.1875);
         }
         if (normalized.contains("3.7-flash"))
         {

@@ -127,7 +127,7 @@ public class RichEditorSandboxMockTest extends BaseAiTest
               "thought": "Type formatted document text into the rich text editor.",
               "actions": [
                 {
-                  "action": "TYPE",
+                  "action": "FILL",
                   "selector": "#rich-editor",
                   "value": "Autonomous release notes for Q3 2026."
                 }
@@ -198,7 +198,7 @@ public class RichEditorSandboxMockTest extends BaseAiTest
                   "thought": "Type a comment into the comment editor.",
                   "actions": [
                     {
-                      "action": "TYPE",
+                      "action": "FILL",
                       "selector": "#comment-editor",
                       "value": "Excellent contenteditable support."
                     }

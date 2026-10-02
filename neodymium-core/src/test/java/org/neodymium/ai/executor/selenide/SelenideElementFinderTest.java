@@ -18,12 +18,12 @@
  */
 package org.neodymium.ai.executor.selenide;
 
+import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
-
-import java.util.List;
+import org.openqa.selenium.By;
 
 /**
  * Unit tests verifying target locator splitting and candidate resolution in {@link SelenideElementFinder}.
@@ -91,5 +91,41 @@ public class SelenideElementFinderTest
     {
         Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("article[data-ai=\"xcboo7um\"] button[data-ai=\"xcz0f8a5\"]"));
         Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("article#xcboo7um button#xcz0f8a5"));
+    }
+
+    @Test
+    public void testResetDomStampCacheForTesting()
+    {
+        SelenideElementFinder.resetDomStampCacheForTesting();
+        Assertions.assertFalse(SelenideElementFinder.isDirectlyPresent("#non-existent-after-reset"));
+    }
+
+    @Test
+    public void testIsAutomationIdSelector()
+    {
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("[data-ai='xc123']"));
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("[data-ai=\"xcrxcvi\"]"));
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("data-ai=xc123"));
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("#xc123"));
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("div > #xc4o48u"));
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("xc123"));
+        Assertions.assertTrue(SelenideElementFinder.isAutomationIdSelector("xcrxcvi"));
+
+        Assertions.assertFalse(SelenideElementFinder.isAutomationIdSelector(null));
+        Assertions.assertFalse(SelenideElementFinder.isAutomationIdSelector(""));
+        Assertions.assertFalse(SelenideElementFinder.isAutomationIdSelector("   "));
+        Assertions.assertFalse(SelenideElementFinder.isAutomationIdSelector(".btn-primary"));
+        Assertions.assertFalse(SelenideElementFinder.isAutomationIdSelector("#submit-btn"));
+        Assertions.assertFalse(SelenideElementFinder.isAutomationIdSelector("//button[@id='save']"));
+    }
+
+    @Test
+    public void testResolveLocatorTransformsHashAutomationId()
+    {
+        final By resolvedHash = SelenideElementFinder.resolveLocator("#xc123");
+        Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), resolvedHash);
+
+        final By resolvedCompound = SelenideElementFinder.resolveLocator("div.order-summary > #xcrxcvi");
+        Assertions.assertEquals(By.cssSelector("div.order-summary > [data-ai='xcrxcvi']"), resolvedCompound);
     }
 }

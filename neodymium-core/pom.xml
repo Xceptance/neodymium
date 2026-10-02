@@ -57,7 +57,7 @@
 		<allure.version>2.32.0</allure.version>
 		<allure.maven.version>2.15.2</allure.maven.version>
 		<allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
-		<selenide.version>7.16.0</selenide.version>
+		<selenide.version>7.18.2</selenide.version>
 		<cucumber.version>7.33.0</cucumber.version>
 		<browserup.version>3.2.2</browserup.version>
 		<log4j.version>2.25.3</log4j.version>

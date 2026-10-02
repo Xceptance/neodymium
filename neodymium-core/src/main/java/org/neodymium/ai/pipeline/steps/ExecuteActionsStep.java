@@ -19,6 +19,7 @@
 package org.neodymium.ai.pipeline.steps;
 
 import com.codeborne.selenide.Configuration;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -48,6 +49,7 @@ import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
+import org.neodymium.ai.util.DomQuiescenceWatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -204,9 +206,22 @@ public final class ExecuteActionsStep
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
             step.setStatus(PlaybookStepStatus.RUNNING);
             final String rawInstruction = step.hasSubSteps() ? step.getFullInstruction() : step.getInstruction();
-            final String resolvedInstruction = (contextState.getSessionData() != null && rawInstruction != null)
-                ? contextState.getSessionData().resolveAvailableVariables(rawInstruction)
-                : rawInstruction;
+            final String resolvedInstruction;
+            if (contextState.getSessionData() != null && rawInstruction != null)
+            {
+                if (!step.hasSubSteps())
+                {
+                    resolvedInstruction = contextState.getSessionData().resolveVariables(rawInstruction);
+                }
+                else
+                {
+                    resolvedInstruction = contextState.getSessionData().resolveAvailableVariables(rawInstruction);
+                }
+            }
+            else
+            {
+                resolvedInstruction = rawInstruction;
+            }
             final String preparedInstruction = prepareInstruction(resolvedInstruction);
             contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", resolvedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
@@ -273,17 +288,7 @@ public final class ExecuteActionsStep
             final StepStats stats = getOrCreateStatsForStep(step, stepStartTime, isReplayStats, stepStatsMap, allStats, contextState);
             contextState.getTransientData().put("KEY_CURRENT_STEP_STATS", stats);
 
-            ContextLevel initialLevel = ContextLevel.LEAN;
-            if (step.getContextLevel() != null && !step.getContextLevel().isBlank())
-            {
-                try
-                {
-                    initialLevel = ContextLevel.valueOf(step.getContextLevel().toUpperCase().trim());
-                }
-                catch (final Exception ignored)
-                {
-                }
-            }
+            ContextLevel initialLevel = AiConfiguration.getInstance().getContextLevel();
 
             final boolean hasVisualFull = PlaybookStep.VISUAL_FULL_PATTERN.matcher(resolvedInstruction).find();
             final boolean hasLayout = PlaybookStep.LAYOUT_PATTERN.matcher(resolvedInstruction).find();
@@ -304,6 +309,11 @@ public final class ExecuteActionsStep
             else if (hasHint)
             {
                 initialLevel = ContextLevel.HINT;
+            }
+
+            if (step.getContextLevel() != null && !step.getContextLevel().isBlank())
+            {
+                initialLevel = ContextLevel.fromString(step.getContextLevel(), initialLevel);
             }
 
             @SuppressWarnings("unchecked")
@@ -413,10 +423,19 @@ public final class ExecuteActionsStep
                             final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
                                     || (step != null && step.isFullPageVisualStep());
                             final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
-                            final SutState initialVisual = executor.captureState(cl, isFullPageReq);
-                            if (initialVisual != null && initialVisual.getAttachments() != null && !initialVisual.getAttachments().isEmpty())
+
+                            final Object prevPostState = c.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+                            if (prevPostState instanceof final SutState prevSutState && !isFullPageReq)
                             {
-                                c.getTransientData().put(ExecutionContext.KEY_PRE_ACTION_STATE, initialVisual);
+                                c.getTransientData().put(ExecutionContext.KEY_PRE_ACTION_STATE, prevSutState);
+                            }
+                            else
+                            {
+                                final SutState initialVisual = executor.captureState(cl, isFullPageReq);
+                                if (initialVisual != null && initialVisual.getAttachments() != null && !initialVisual.getAttachments().isEmpty())
+                                {
+                                    c.getTransientData().put(ExecutionContext.KEY_PRE_ACTION_STATE, initialVisual);
+                                }
                             }
                         }
                         catch (final Exception e)
@@ -455,7 +474,9 @@ public final class ExecuteActionsStep
                     }
 
                     final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
-                    if (executor != null)
+                    final boolean skipPreCapture = !mode.supportsHealing()
+                            || AiConfiguration.getInstance().isReplayLeanStateCapture();
+                    if (!skipPreCapture && executor != null)
                     {
                         try
                         {
@@ -478,6 +499,7 @@ public final class ExecuteActionsStep
                     try
                     {
                         final SimpleToolContext toolContext = new SimpleToolContext(reg);
+                        toolContext.setVariable("neodymium.executionMode", mode);
                         if (executor != null)
                         {
                             toolContext.setVariable("neodymium.targetExecutor", executor);
@@ -547,24 +569,40 @@ public final class ExecuteActionsStep
                         final long settleMs = AiConfiguration.getInstance().getVisualPostActionSettleMs();
                         if (settleMs > 0 && hasMutatingAction)
                         {
-                            try
+                            final boolean isVisualRequired = step != null && step.isVisualOrLayoutStep();
+                            if (isVisualRequired)
                             {
-                                Thread.sleep(settleMs);
+                                try
+                                {
+                                    Thread.sleep(settleMs);
+                                }
+                                catch (final InterruptedException e)
+                                {
+                                    Thread.currentThread().interrupt();
+                                }
                             }
-                            catch (final InterruptedException e)
+                            else
                             {
-                                Thread.currentThread().interrupt();
+                                DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(Math.min(settleMs, 200L)), Duration.ofMillis(50L));
                             }
                         }
 
-                        final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                                || (step != null && step.isFullPageVisualStep());
-                        final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
-                        final SutState postStepState = executor.captureState(cl, isFullPageReq);
-                        if (postStepState != null)
+                        final boolean isVisualRequired = (step != null && step.isVisualOrLayoutStep())
+                                || AiConfiguration.getInstance().isSemanticVerificationEnabled()
+                                || !isReplay
+                                || AiConfiguration.getInstance().isReplayScreenshotCaptureEnabled(mode);
+
+                        if (isVisualRequired)
                         {
-                            c.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postStepState);
-                            session.getEventBus().dispatch(new StateCapturedEvent(postStepState));
+                            final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                    || (step != null && step.isFullPageVisualStep());
+                            final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
+                            final SutState postStepState = executor.captureState(cl, isFullPageReq);
+                            if (postStepState != null)
+                            {
+                                c.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postStepState);
+                                session.getEventBus().dispatch(new StateCapturedEvent(postStepState));
+                            }
                         }
                     }
                     catch (final Exception e)
@@ -574,13 +612,13 @@ public final class ExecuteActionsStep
                 }
             });
 
-            if (isReplay && step != null && step.isVisualStep() && !visualBaselineGateStep.isPureVerification())
+            if (isReplay && step != null && step.isVisualOrLayoutStep() && !visualBaselineGateStep.isPureVerification())
             {
                 standardFlow.add(visualBaselineGateStep::executePostActionCheck);
             }
 
             if (AiConfiguration.getInstance().isSemanticVerificationEnabled()
-                || (step != null && step.isVisualStep()))
+                || (step != null && step.isVisualOrLayoutStep()))
             {
                 standardFlow.add(verifyStep);
             }
@@ -594,6 +632,18 @@ public final class ExecuteActionsStep
                 {
                     c.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
                     LOGGER.warn("⚠️ Replay step requires online healing — launching AgentToolLoopStep for: \"{}\"", step.getInstruction());
+                    final TargetExecutor executor = (TargetExecutor) c.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
+                    if (executor != null && c.getTransientData().get(ExecutionContext.KEY_LAST_STATE) == null)
+                    {
+                        try
+                        {
+                            final SutState freshState = executor.captureState(ContextLevel.STANDARD);
+                            c.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
                     if (AiConfiguration.getInstance().isSemanticVerificationEnabled())
                     {
                         c.pushStep(verifyStep);

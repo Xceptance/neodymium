@@ -70,6 +70,7 @@ import org.neodymium.ai.executor.selenide.plugins.ScrollAction;
 import org.neodymium.ai.executor.selenide.plugins.SelectAction;
 import org.neodymium.ai.executor.selenide.plugins.SwitchWindowAction;
 import org.neodymium.ai.executor.selenide.plugins.TypeAction;
+import org.neodymium.ai.executor.selenide.plugins.FillFormAction;
 import org.neodymium.ai.executor.selenide.plugins.UploadAction;
 import org.neodymium.ai.executor.selenide.plugins.AlertAction;
 import org.neodymium.ai.executor.selenide.plugins.DragAction;
@@ -108,6 +109,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
         this.plugins.put("NAVIGATE", new NavigateAction());
         this.plugins.put("CLICK", new ClickAction());
         this.plugins.put("TYPE", new TypeAction());
+        this.plugins.put("FILL_FORM", new FillFormAction());
         this.plugins.put("CLEAR", new ClearAction());
         this.plugins.put("HOVER", new HoverAction());
         this.plugins.put("BACK", new BackAction());
@@ -607,6 +609,38 @@ public final class SelenideTargetExecutor implements TargetExecutor
                     .toList();
         }
         return SelenideLocatorProber.probe(WebDriverRunner.getWebDriver(), candidateLocators, maxDepth);
+    }
+
+    @Override
+    public void applyColorWireframe()
+    {
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            try
+            {
+                new PageAnalyzer(WebDriverRunner.getWebDriver()).applyColorWireframe();
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Failed to apply color wireframe: {}", e.getMessage());
+            }
+        }
+    }
+
+    @Override
+    public void removeColorWireframe()
+    {
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            try
+            {
+                new PageAnalyzer(WebDriverRunner.getWebDriver()).removeColorWireframe();
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Failed to remove color wireframe: {}", e.getMessage());
+            }
+        }
     }
 
     @Override

@@ -71,6 +71,8 @@ public class PageAnalyzer
 
     private static final String FINGERPRINT_JS_FUNCTIONS = loadResource("ai-scripts/neodymium-dom-helpers.js");
 
+    private static final String COLOR_WIREFRAME_JS = loadResource("ai-scripts/neodymium-color-wireframe.js");
+
     private final WebDriver providedDriver;
 
     /**
@@ -1234,7 +1236,7 @@ public class PageAnalyzer
             final Object ariaLabel = node.get("ariaLabel");
 
             // Omit class on containers if semantic locators exist (unless in RICH mode)
-            final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || autoId != null || ariaLabel != null || role != null;
+            final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || ariaLabel != null || role != null;
             if (level != null && level.includesRichMetadata() || !hasSemanticLocator)
             {
                 appendSanitizedClassAttribute(dom, node.get("className"));
@@ -1297,7 +1299,7 @@ public class PageAnalyzer
         final boolean hasDistinctText = text != null && !text.isBlank() && text.length() <= 80;
 
         // Omit presentation class in MINIMAL/LEAN if element already has strong semantic identification
-        final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || autoId != null || ariaLabel != null || placeholder != null || hasDistinctText;
+        final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || ariaLabel != null || placeholder != null || hasDistinctText;
         if (level != null && level.includesRichMetadata() || !hasSemanticLocator)
         {
             appendSanitizedClassAttribute(dom, el.get("className"));
@@ -1410,6 +1412,51 @@ public class PageAnalyzer
         {
             throw new RuntimeException("Failed to load resource: " + resourceName, e);
         }
+    }
+
+    /**
+     * Injects the transient color wireframe stylesheet into the active page.
+     * Neutralizes dynamic media and text while preserving layout geometry and brand colors.
+     *
+     * @param explicitDriver driver override to evaluate against, or null to resolve default
+     */
+    public void applyColorWireframe(final WebDriver explicitDriver)
+    {
+        final WebDriver activeDriver = resolveDriver(explicitDriver);
+        if (activeDriver instanceof final JavascriptExecutor js)
+        {
+            js.executeScript(COLOR_WIREFRAME_JS + "; if (window.__neodymiumApplyColorWireframe) { window.__neodymiumApplyColorWireframe(); }");
+        }
+    }
+
+    /**
+     * Injects the transient color wireframe stylesheet into the active page using the default driver.
+     */
+    public void applyColorWireframe()
+    {
+        applyColorWireframe(null);
+    }
+
+    /**
+     * Removes the transient color wireframe stylesheet from the active page.
+     *
+     * @param explicitDriver driver override to evaluate against, or null to resolve default
+     */
+    public void removeColorWireframe(final WebDriver explicitDriver)
+    {
+        final WebDriver activeDriver = resolveDriver(explicitDriver);
+        if (activeDriver instanceof final JavascriptExecutor js)
+        {
+            js.executeScript("if (window.__neodymiumRemoveColorWireframe) { window.__neodymiumRemoveColorWireframe(); }");
+        }
+    }
+
+    /**
+     * Removes the transient color wireframe stylesheet from the active page using the default driver.
+     */
+    public void removeColorWireframe()
+    {
+        removeColorWireframe(null);
     }
 
     /**

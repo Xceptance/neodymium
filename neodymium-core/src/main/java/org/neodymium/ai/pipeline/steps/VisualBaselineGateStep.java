@@ -126,10 +126,12 @@ public final class VisualBaselineGateStep implements PipelineStep
             return false;
         }
 
-        final String rawInstruction = this.step.getInstruction();
-        final String resolvedInstruction = (context.getSessionData() != null && rawInstruction != null)
-            ? context.getSessionData().resolveAvailableVariables(rawInstruction)
-            : rawInstruction;
+        final Object currentInstructionObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        final String resolvedInstruction = currentInstructionObj instanceof String s && !s.isBlank()
+            ? s
+            : (context.getSessionData() != null && this.step.getInstruction() != null
+                ? context.getSessionData().resolveAvailableVariables(this.step.getInstruction())
+                : this.step.getInstruction());
         final ExecutionMode mode = (ExecutionMode) context.getTransientData()
             .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
 
@@ -193,11 +195,26 @@ public final class VisualBaselineGateStep implements PipelineStep
 
                     final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
                         || (this.step != null && this.step.isFullPageVisualStep());
-                    final SutState currentState = VisualStabilityDetector.captureSettledState(
-                        executor,
-                        isFullPageReq,
-                        coordinateTarget == null ? recordedHash : null,
-                        minScore);
+                    if (this.step.isLayoutStep())
+                    {
+                        executor.applyColorWireframe();
+                    }
+                    final SutState currentState;
+                    try
+                    {
+                        currentState = VisualStabilityDetector.captureSettledState(
+                            executor,
+                            isFullPageReq,
+                            coordinateTarget == null ? recordedHash : null,
+                            minScore);
+                    }
+                    finally
+                    {
+                        if (this.step.isLayoutStep())
+                        {
+                            executor.removeColorWireframe();
+                        }
+                    }
                     context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, currentState);
                     if (this.session != null && this.session.getEventBus() != null && currentState != null)
                     {
@@ -208,13 +225,27 @@ public final class VisualBaselineGateStep implements PipelineStep
                     if (coordinateTarget != null)
                     {
                         // Micro-crop 64x64 luminance tile around centroid (x, y) with radius 32
-                        if (currentState.getAttachments() != null)
+                        if (currentState != null && currentState.getAttachments() != null)
                         {
                             for (final SutAttachment attachment : currentState.getAttachments())
                             {
                                 if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
                                 {
                                     currentSsimMatrix = ScreenshotHasher.computeTileSsimMatrix(attachment.base64Data(), coordinateTarget.x(), coordinateTarget.y(), 32);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    else if (this.step.isLayoutStep() || ScreenshotHasher.isColorMatrix(recordedHash))
+                    {
+                        if (currentState != null && currentState.getAttachments() != null)
+                        {
+                            for (final SutAttachment attachment : currentState.getAttachments())
+                            {
+                                if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                                {
+                                    currentSsimMatrix = ScreenshotHasher.computeColorSsimMatrix(attachment.base64Data());
                                     break;
                                 }
                             }
@@ -282,8 +313,12 @@ public final class VisualBaselineGateStep implements PipelineStep
                         {
                             if (pureVerification && !isVisualMatch)
                             {
-                                final String msg = String.format("Visual SSIM score below threshold (score: %s < %.2f) for visual instruction: \"%s\".",
-                                    currentSsimScore != null ? String.format("%.4f", currentSsimScore) : "N/A", minScore, resolvedInstruction);
+                                final String msg = String.format("%s SSIM score below threshold (score: %s < %.2f) for %s instruction: \"%s\".",
+                                    this.step.isLayoutStep() ? "Layout" : "Visual",
+                                    currentSsimScore != null ? String.format("%.4f", currentSsimScore) : "N/A",
+                                    minScore,
+                                    this.step.isLayoutStep() ? "layout" : "visual",
+                                    resolvedInstruction);
                                 LOGGER.warn("   ❌ " + msg);
 
                                 if (mode.supportsHealing())
@@ -384,7 +419,7 @@ public final class VisualBaselineGateStep implements PipelineStep
         }
 
         SutState postState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
-        if (postState == null || postState.getAttachments() == null || postState.getAttachments().isEmpty())
+        if (this.step.isLayoutStep() || postState == null || postState.getAttachments() == null || postState.getAttachments().isEmpty())
         {
             final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);
             if (executor != null)
@@ -394,10 +429,24 @@ public final class VisualBaselineGateStep implements PipelineStep
                 final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
                 try
                 {
-                    postState = executor.captureState(cl, isFullPageReq);
-                    if (postState != null)
+                    if (this.step.isLayoutStep())
                     {
-                        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postState);
+                        executor.applyColorWireframe();
+                    }
+                    try
+                    {
+                        postState = executor.captureState(cl, isFullPageReq);
+                        if (postState != null)
+                        {
+                            context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, postState);
+                        }
+                    }
+                    finally
+                    {
+                        if (this.step.isLayoutStep())
+                        {
+                            executor.removeColorWireframe();
+                        }
                     }
                 }
                 catch (final Exception e)
@@ -415,7 +464,27 @@ public final class VisualBaselineGateStep implements PipelineStep
 
         context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, postState);
 
-        final String currentSsimMatrix = VisualStabilityDetector.extractSsimMatrix(postState);
+        final String currentSsimMatrix;
+        if (this.step.isLayoutStep() || ScreenshotHasher.isColorMatrix(recordedHash))
+        {
+            String extracted = null;
+            if (postState.getAttachments() != null)
+            {
+                for (final SutAttachment attachment : postState.getAttachments())
+                {
+                    if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                    {
+                        extracted = ScreenshotHasher.computeColorSsimMatrix(attachment.base64Data());
+                        break;
+                    }
+                }
+            }
+            currentSsimMatrix = extracted;
+        }
+        else
+        {
+            currentSsimMatrix = VisualStabilityDetector.extractSsimMatrix(postState);
+        }
         if (currentSsimMatrix == null)
         {
             LOGGER.warn("Failed to extract SSIM matrix from post-action state for: \"{}\"", this.step.getInstruction());
@@ -438,10 +507,12 @@ public final class VisualBaselineGateStep implements PipelineStep
             this.step.setScreenshotHashDim(ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM);
         }
 
-        final String rawInstruction = this.step.getInstruction();
-        final String resolvedInstruction = (context.getSessionData() != null && rawInstruction != null)
-            ? context.getSessionData().resolveAvailableVariables(rawInstruction)
-            : rawInstruction;
+        final Object currentInstructionObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        final String resolvedInstruction = currentInstructionObj instanceof String s && !s.isBlank()
+            ? s
+            : (context.getSessionData() != null && this.step.getInstruction() != null
+                ? context.getSessionData().resolveAvailableVariables(this.step.getInstruction())
+                : this.step.getInstruction());
 
         String replayDims = null;
         if (postState.getAttachments() != null)
@@ -468,8 +539,12 @@ public final class VisualBaselineGateStep implements PipelineStep
         }
         else
         {
-            final String msg = String.format("Visual SSIM score below threshold (score: %s < %.2f) for visual instruction: \"%s\".",
-                String.format("%.4f", ssimScore), minScore, resolvedInstruction);
+            final String msg = String.format("%s SSIM score below threshold (score: %s < %.2f) for %s instruction: \"%s\".",
+                this.step.isLayoutStep() ? "Layout" : "Visual",
+                String.format("%.4f", ssimScore),
+                minScore,
+                this.step.isLayoutStep() ? "layout" : "visual",
+                resolvedInstruction);
             LOGGER.warn("   ❌ " + msg);
 
             if (mode.supportsHealing())

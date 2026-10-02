@@ -26,9 +26,12 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.executor.selenide.LocatorResolver;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.executor.selenide.plugins.FillFormAction;
+import org.neodymium.ai.executor.selenide.plugins.FillFormAction.FormFieldEntry;
 import org.neodymium.ai.executor.selenide.plugins.IncludeAction;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.ContextLevel;
@@ -47,6 +50,7 @@ import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
 import org.openqa.selenium.Alert;
 import org.openqa.selenium.Dimension;
+import org.openqa.selenium.ElementClickInterceptedException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.Keys;
 import org.openqa.selenium.NoAlertPresentException;
@@ -131,6 +135,7 @@ public final class BrowserToolProvider
 
         registry.register(createClickTool());
         registry.register(createFillTool());
+        registry.register(createFillFormTool());
         registry.register(createTypeTool());
         registry.register(createNavigateTool());
         registry.register(createSelectTool());
@@ -271,28 +276,7 @@ public final class BrowserToolProvider
             final String text, final int parsedX, final int parsedY)
     {
         final String targetDesc = !selector.isBlank() ? selector : text;
-        final SelenideElement el;
-
-        if (!selector.isBlank())
-        {
-            if (selector.startsWith("text="))
-            {
-                final String rawText = selector.substring("text=".length()).trim();
-                el = $(Selectors.byText(rawText)).is(Condition.visible)
-                        ? $(Selectors.byText(rawText))
-                        : $(Selectors.withText(rawText));
-            }
-            else
-            {
-                el = findElement(selector);
-            }
-        }
-        else
-        {
-            el = $(Selectors.byText(text)).is(Condition.visible)
-                    ? $(Selectors.byText(text))
-                    : $(Selectors.withText(text));
-        }
+        final SelenideElement el = resolveElementBySelectorAndText(selector, text);
 
         SelenideElementFinder.scrollIntoViewIfNeeded(el);
 
@@ -353,29 +337,23 @@ public final class BrowserToolProvider
         {
             try
             {
-                el.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
+                el.shouldBe(Condition.visible);
+                el.click();
             }
             catch (final Exception | AssertionError e)
             {
-                SelenideElement fallbackTargetEl = null;
-                if (!text.isBlank() && !selector.isBlank())
-                {
-                    try
-                    {
-                        final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
-                                ? $(Selectors.byText(text))
-                                : $(Selectors.withText(text));
-                        SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
-                        textEl.shouldBe(Condition.visible).shouldBe(Condition.interactable).click();
-                        fallbackTargetEl = textEl;
-                    }
-                    catch (final Exception | AssertionError ignored)
-                    {
-                    }
-                }
+                // Check if element click was intercepted by an overlay, animation, or sticky element
+                final boolean isIntercepted = (e.getCause() instanceof ElementClickInterceptedException)
+                        || (e instanceof ElementClickInterceptedException)
+                        || (e.getMessage() != null && (e.getMessage().contains("click intercepted")
+                                || e.getMessage().contains("is not clickable at point")
+                                || e.getMessage().contains("element click intercepted")));
 
-                if (fallbackTargetEl == null)
+                SelenideElement fallbackTargetEl = null;
+                if (isIntercepted)
                 {
+                    // Fast-path: When native click is intercepted by an animation or overlay, directly execute JS click
+                    // rather than wasting multi-second retry timeouts and dumping failure attachments
                     if (el.is(Condition.disabled) || !el.is(Condition.enabled))
                     {
                         throw e;
@@ -388,6 +366,41 @@ public final class BrowserToolProvider
                     catch (final Throwable ignored)
                     {
                         throw e;
+                    }
+                }
+                else
+                {
+                    if (!text.isBlank() && !selector.isBlank())
+                    {
+                        try
+                        {
+                            final SelenideElement textEl = $(Selectors.byText(text)).is(Condition.visible)
+                                    ? $(Selectors.byText(text))
+                                    : $(Selectors.withText(text));
+                            SelenideElementFinder.scrollIntoViewIfNeeded(textEl);
+                            textEl.shouldBe(Condition.visible).click();
+                            fallbackTargetEl = textEl;
+                        }
+                        catch (final Exception | AssertionError ignored)
+                        {
+                        }
+                    }
+
+                    if (fallbackTargetEl == null)
+                    {
+                        if (el.is(Condition.disabled) || !el.is(Condition.enabled))
+                        {
+                            throw e;
+                        }
+                        try
+                        {
+                            SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                            Selenide.executeJavaScript("arguments[0].click();", el);
+                        }
+                        catch (final Throwable ignored)
+                        {
+                            throw e;
+                        }
                     }
                 }
                 clickedEl = (fallbackTargetEl != null) ? fallbackTargetEl : el;
@@ -654,6 +667,76 @@ public final class BrowserToolProvider
 
         final ToolDefinition def = new ToolDefinition("fill", "Clears existing text and enters new text into an input or textarea element. Default tool for entering, typing, or setting form field values.", schema);
         return createBaseInputTool(def, true);
+    }
+
+    private static AiTool createFillFormTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+
+        final ObjectNode fieldsProp = props.putObject("fields");
+        fieldsProp.put("type", "array");
+        fieldsProp.put("description", "List of form fields to fill sequentially");
+        final ObjectNode itemSchema = fieldsProp.putObject("items");
+        itemSchema.put("type", "object");
+        final ObjectNode itemProps = itemSchema.putObject("properties");
+        itemProps.putObject("selector").put("type", "string").put("description", "Selector of the input or select element (e.g. CSS, role=textbox[name='...'], id=...)");
+        itemProps.putObject("value").put("type", "string").put("description", "Value or text to enter into the element");
+        itemProps.putObject("clearFirst").put("type", "boolean").put("description", "Whether to clear existing text before typing (default: true)");
+        final ArrayNode itemReq = itemSchema.putArray("required");
+        itemReq.add("selector");
+        itemReq.add("value");
+
+        final ArrayNode req = schema.putArray("required");
+        req.add("fields");
+
+        final ToolDefinition def = new ToolDefinition("fill_form", "Fills multiple form fields (inputs, textareas, selects) in a single operation. Use to fill entire forms (e.g. checkout, registration, address) efficiently without multiple sequential turns.", schema);
+
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                DomQuiescenceWatcher.installTracker();
+                final JsonNode args = call.arguments();
+                if (args == null || !args.hasNonNull("fields"))
+                {
+                    return ToolResult.error(call.callId(), "Argument 'fields' is required.");
+                }
+
+                final List<FormFieldEntry> fieldEntries = new ArrayList<>();
+                FillFormAction.parseFieldsJsonNode(args.get("fields"), fieldEntries);
+
+                if (fieldEntries.isEmpty())
+                {
+                    return ToolResult.error(call.callId(), "Argument 'fields' must contain at least one field entry.");
+                }
+
+                final ArrayNode filledList = MAPPER.createArrayNode();
+                for (final FormFieldEntry field : fieldEntries)
+                {
+                    final SelenideElement el = findElement(field.selector());
+                    SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                    FillFormAction.fillElement(el, field.value(), field.clearFirst());
+
+                    final ObjectNode entryNode = filledList.addObject();
+                    entryNode.put("selector", field.selector());
+                    entryNode.put("value", field.value());
+                }
+
+                final ObjectNode res = successNode(def.name());
+                res.set("fields", filledList);
+                res.put("count", filledList.size());
+                return ToolResult.success(call.callId(), res.toString());
+            }
+        };
     }
 
     private static AiTool createTypeTool()
@@ -939,7 +1022,16 @@ public final class BrowserToolProvider
             {
                 DomQuiescenceWatcher.installTracker();
                 final String selector = resolveSelector(call.arguments());
-                final SelenideElement el = findElement(selector).shouldBe(Condition.visible).shouldBe(Condition.enabled);
+                final SelenideElement found = findElement(selector);
+                final SelenideElement el;
+                if (found.is(Condition.visible))
+                {
+                    el = found.shouldBe(Condition.enabled);
+                }
+                else
+                {
+                    el = found.shouldBe(Condition.exist).shouldBe(Condition.enabled);
+                }
                 final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 DomFeatureVector featureVector = null;
                 if (driver != null)
@@ -975,41 +1067,13 @@ public final class BrowserToolProvider
                 if (call.arguments().hasNonNull("value"))
                 {
                     final String val = call.arguments().path("value").asText();
-                    try
-                    {
-                        el.selectOptionByValue(val);
-                    }
-                    catch (final Exception e)
-                    {
-                        try
-                        {
-                            el.selectOptionContainingText(val);
-                        }
-                        catch (final Exception ex)
-                        {
-                            el.selectOption(val);
-                        }
-                    }
+                    selectDropdownOption(el, val, true);
                     res.put("value", val);
                 }
                 else if (call.arguments().hasNonNull("text"))
                 {
                     final String txt = call.arguments().path("text").asText();
-                    try
-                    {
-                        el.selectOption(txt);
-                    }
-                    catch (final Exception e)
-                    {
-                        try
-                        {
-                            el.selectOptionContainingText(txt);
-                        }
-                        catch (final Exception ex)
-                        {
-                            el.selectOptionByValue(txt);
-                        }
-                    }
+                    selectDropdownOption(el, txt, false);
                     res.put("text", txt);
                 }
                 if (featureVector != null)
@@ -1019,6 +1083,220 @@ public final class BrowserToolProvider
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
+    }
+
+    private static void selectDropdownOption(final SelenideElement el, final String target, final boolean preferValue)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+        if (driver instanceof JavascriptExecutor js)
+        {
+            try
+            {
+                final String script = """
+                    var sel = arguments[0];
+                    var target = arguments[1];
+                    var preferVal = arguments[2];
+                    if (!sel || !sel.options || sel.options.length === 0) return null;
+                    var exactValIdx = -1;
+                    var exactTextIdx = -1;
+                    var containsTextIdx = -1;
+                    for (var i = 0; i < sel.options.length; i++) {
+                        var opt = sel.options[i];
+                        if (opt.value === target && exactValIdx === -1) exactValIdx = i;
+                        var txt = (opt.text || opt.innerText || '').trim();
+                        if (txt === target && exactTextIdx === -1) exactTextIdx = i;
+                        if (txt && txt.indexOf(target) !== -1 && containsTextIdx === -1) containsTextIdx = i;
+                    }
+
+                    var chosenIdx = -1;
+                    var strategy = null;
+                    if (preferVal && exactValIdx !== -1) { chosenIdx = exactValIdx; strategy = 'value'; }
+                    else if (exactTextIdx !== -1) { chosenIdx = exactTextIdx; strategy = 'text'; }
+                    else if (exactValIdx !== -1) { chosenIdx = exactValIdx; strategy = 'value'; }
+                    else if (containsTextIdx !== -1) { chosenIdx = containsTextIdx; strategy = 'containsText'; }
+
+                    if (chosenIdx === -1) return null;
+
+                    var isVisible = false;
+                    try {
+                        var style = window.getComputedStyle ? window.getComputedStyle(sel) : null;
+                        var notHiddenStyle = !style || (style.display !== 'none' && style.visibility !== 'hidden' && style.opacity !== '0');
+                        var rect = sel.getBoundingClientRect ? sel.getBoundingClientRect() : null;
+                        var isClippedOrTiny = !rect || rect.width <= 1 || rect.height <= 1;
+                        var isAriaHidden = sel.getAttribute('aria-hidden') === 'true';
+                        var isClipped = style && style.clip && style.clip.indexOf('rect(0') !== -1;
+                        isVisible = notHiddenStyle && !isClippedOrTiny && !isAriaHidden && !isClipped;
+                    } catch (e) {
+                        isVisible = false;
+                    }
+
+                    if (!isVisible) {
+                        sel.selectedIndex = chosenIdx;
+                        sel.options[chosenIdx].selected = true;
+                        sel.value = sel.options[chosenIdx].value;
+                        try {
+                            sel.dispatchEvent(new Event('input', { bubbles: true }));
+                            sel.dispatchEvent(new Event('change', { bubbles: true }));
+                        } catch (e) {
+                            var ev = document.createEvent('HTMLEvents');
+                            ev.initEvent('change', true, true);
+                            sel.dispatchEvent(ev);
+                        }
+                        if (window.jQuery) {
+                            try { window.jQuery(sel).trigger('change'); } catch(e) {}
+                        }
+                        return 'domSelected';
+                    }
+
+                    return strategy;
+                    """;
+                final Object matchStrategy = js.executeScript(script, el, target, preferValue);
+                if ("domSelected".equals(matchStrategy))
+                {
+                    return;
+                }
+                else if ("value".equals(matchStrategy))
+                {
+                    try
+                    {
+                        el.selectOptionByValue(target);
+                        return;
+                    }
+                    catch (final Exception e)
+                    {
+                        applyDomSelectFallback(js, el, target, preferValue);
+                        return;
+                    }
+                }
+                else if ("text".equals(matchStrategy))
+                {
+                    try
+                    {
+                        el.selectOption(target);
+                        return;
+                    }
+                    catch (final Exception e)
+                    {
+                        applyDomSelectFallback(js, el, target, preferValue);
+                        return;
+                    }
+                }
+                else if ("containsText".equals(matchStrategy))
+                {
+                    try
+                    {
+                        el.selectOptionContainingText(target);
+                        return;
+                    }
+                    catch (final Exception e)
+                    {
+                        applyDomSelectFallback(js, el, target, preferValue);
+                        return;
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (preferValue)
+        {
+            try
+            {
+                el.selectOptionByValue(target);
+            }
+            catch (final Exception e)
+            {
+                if (driver instanceof JavascriptExecutor js)
+                {
+                    applyDomSelectFallback(js, el, target, true);
+                }
+                else
+                {
+                    try
+                    {
+                        el.selectOptionContainingText(target);
+                    }
+                    catch (final Exception ex)
+                    {
+                        el.selectOption(target);
+                    }
+                }
+            }
+        }
+        else
+        {
+            try
+            {
+                el.selectOption(target);
+            }
+            catch (final Exception e)
+            {
+                if (driver instanceof JavascriptExecutor js)
+                {
+                    applyDomSelectFallback(js, el, target, false);
+                }
+                else
+                {
+                    try
+                    {
+                        el.selectOptionContainingText(target);
+                    }
+                    catch (final Exception ex)
+                    {
+                        el.selectOptionByValue(target);
+                    }
+                }
+            }
+        }
+    }
+
+    private static void applyDomSelectFallback(final JavascriptExecutor js, final SelenideElement el, final String target, final boolean preferValue)
+    {
+        try
+        {
+            final String fallbackScript = """
+                var sel = arguments[0];
+                var target = arguments[1];
+                var preferVal = arguments[2];
+                if (!sel || !sel.options) return;
+                var chosenIdx = -1;
+                for (var i = 0; i < sel.options.length; i++) {
+                    var opt = sel.options[i];
+                    if (preferVal && opt.value === target) { chosenIdx = i; break; }
+                    var txt = (opt.text || opt.innerText || '').trim();
+                    if (txt === target) { chosenIdx = i; break; }
+                    if (opt.value === target && chosenIdx === -1) chosenIdx = i;
+                    if (txt && txt.indexOf(target) !== -1 && chosenIdx === -1) chosenIdx = i;
+                }
+                if (chosenIdx !== -1) {
+                    sel.selectedIndex = chosenIdx;
+                    sel.options[chosenIdx].selected = true;
+                    sel.value = sel.options[chosenIdx].value;
+                    try {
+                        sel.dispatchEvent(new Event('input', { bubbles: true }));
+                        sel.dispatchEvent(new Event('change', { bubbles: true }));
+                    } catch (e) {
+                        var ev = document.createEvent('HTMLEvents');
+                        ev.initEvent('change', true, true);
+                        sel.dispatchEvent(ev);
+                    }
+                    if (window.jQuery) {
+                        try { window.jQuery(sel).trigger('change'); } catch(e) {}
+                    }
+                }
+                """;
+            js.executeScript(fallbackScript, el, target, preferValue);
+        }
+        catch (final Exception ignored)
+        {
+        }
     }
 
     private static AiTool createCheckTool()
@@ -1164,31 +1442,8 @@ public final class BrowserToolProvider
                     return ToolResult.error(call.callId(), "Target selector or text must be specified for hover action");
                 }
 
-                final SelenideElement el;
-                final String targetDesc;
-                if (!selector.isBlank())
-                {
-                    targetDesc = selector;
-                    if (selector.startsWith("text="))
-                    {
-                        final String rawText = selector.substring("text=".length()).trim();
-                        el = $(Selectors.byText(rawText)).is(Condition.visible)
-                                ? $(Selectors.byText(rawText))
-                                : $(Selectors.withText(rawText));
-                    }
-                    else
-                    {
-                        final SelenideElement found = SelenideElementFinder.findElement(selector);
-                        el = found != null ? found : $(selector);
-                    }
-                }
-                else
-                {
-                    targetDesc = text;
-                    el = $(Selectors.byText(text)).is(Condition.visible)
-                            ? $(Selectors.byText(text))
-                            : $(Selectors.withText(text));
-                }
+                final String targetDesc = !selector.isBlank() ? selector : text;
+                final SelenideElement el = resolveElementBySelectorAndText(selector, text);
 
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
                 el.shouldBe(Condition.visible).hover();
@@ -1497,7 +1752,19 @@ public final class BrowserToolProvider
 
     static boolean matchesElementText(final SelenideElement el, final String expectedText, final boolean regex, final boolean exact)
     {
-        if (el == null || !el.exists())
+        if (el == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            if (!el.exists())
+            {
+                return false;
+            }
+        }
+        catch (final Exception | AssertionError ignored)
         {
             return false;
         }
@@ -1511,7 +1778,7 @@ public final class BrowserToolProvider
                 candidates.add(text);
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1523,7 +1790,7 @@ public final class BrowserToolProvider
                 candidates.add(val);
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1535,7 +1802,7 @@ public final class BrowserToolProvider
                 candidates.add(placeholder);
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1547,7 +1814,7 @@ public final class BrowserToolProvider
                 candidates.add(ariaLabel);
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1559,7 +1826,7 @@ public final class BrowserToolProvider
                 candidates.add(parentText);
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1571,11 +1838,18 @@ public final class BrowserToolProvider
                 candidates.add(innerText);
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
-        final String tag = el.getTagName();
+        String tag = null;
+        try
+        {
+            tag = el.getTagName();
+        }
+        catch (final Exception | AssertionError ignored)
+        {
+        }
         final boolean isRoot = tag == null || "body".equalsIgnoreCase(tag) || "html".equalsIgnoreCase(tag);
         if (!isRoot)
         {
@@ -1587,7 +1861,7 @@ public final class BrowserToolProvider
                     candidates.add(textContent);
                 }
             }
-            catch (final Exception ignored)
+            catch (final Exception | AssertionError ignored)
             {
             }
         }
@@ -1646,12 +1920,12 @@ public final class BrowserToolProvider
 
     static boolean matchesElementOrAssociatedLabel(final SelenideElement el, final String expectedText, final boolean regex, final boolean exact)
     {
-        if (matchesElementText(el, expectedText, regex, exact))
-        {
-            return true;
-        }
         try
         {
+            if (matchesElementText(el, expectedText, regex, exact))
+            {
+                return true;
+            }
             final String id = el.getAttribute("id");
             if (id != null && !id.isBlank())
             {
@@ -1670,7 +1944,7 @@ public final class BrowserToolProvider
                 return true;
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
         return false;
@@ -1685,7 +1959,7 @@ public final class BrowserToolProvider
                 return true;
             }
         }
-        catch (final Exception ignored)
+        catch (final Exception | AssertionError ignored)
         {
         }
 
@@ -1794,6 +2068,8 @@ public final class BrowserToolProvider
                         || "head > title".equalsIgnoreCase(selector.trim())
                         || "head title".equalsIgnoreCase(selector.trim()));
 
+                SelenideElement matchedElement = null;
+
                 if (isTitle)
                 {
                     if (!WebDriverRunner.hasWebDriverStarted())
@@ -1884,55 +2160,53 @@ public final class BrowserToolProvider
                     while ((negated ? matched : !matched) && (System.currentTimeMillis() - start) < timeout)
                     {
                         matched = false;
-                        final ElementsCollection elements = findElements(selector);
-                        if (!elements.isEmpty())
+                        try
                         {
-                            for (final SelenideElement el : elements)
+                            final ElementsCollection elements = findElements(selector);
+                            if (!elements.isEmpty())
                             {
-                                if (matchesElementOrAssociatedLabel(el, expectedText, regex, exact))
+                                for (final SelenideElement el : elements)
                                 {
-                                    matched = true;
-                                    break;
+                                    if (matchesElementOrAssociatedLabel(el, expectedText, regex, exact))
+                                    {
+                                        matched = true;
+                                        matchedElement = el;
+                                        break;
+                                    }
                                 }
                             }
-                        }
-                        else
-                        {
-                            try
+                            else
                             {
-                                final SelenideElement singleEl = findElement(selector);
+                                final SelenideElement singleEl = resolveLazyElement(selector);
                                 if (singleEl.exists() && matchesElementOrAssociatedLabel(singleEl, expectedText, regex, exact))
                                 {
                                     matched = true;
+                                    matchedElement = singleEl;
                                 }
                             }
-                            catch (final Exception ignored)
-                            {
-                            }
-                        }
 
-                        if (!matched && !negated)
-                        {
-                            try
+                            if (!matched && !negated)
                             {
                                 final ElementsCollection currentElements = findElements(selector);
-                                final SelenideElement primary = currentElements.isEmpty() ? findElement(selector) : currentElements.first();
+                                final SelenideElement primary = currentElements.isEmpty() ? resolveLazyElement(selector) : currentElements.first();
                                 if (primary.exists())
                                 {
                                     final SelenideElement container = primary.closest(".form-group, .form-floating, .form-row, .field, .input-group, form, [class*='checkout'], [class*='order'], [class*='summary'], [class*='card'], [class*='table']");
                                     if (container.exists() && matchesElementText(container, expectedText, regex, exact))
                                     {
                                         matched = true;
+                                        matchedElement = container;
                                     }
                                     else if (primary.parent().exists() && matchesElementText(primary.parent(), expectedText, regex, exact))
                                     {
                                         matched = true;
+                                        matchedElement = primary.parent();
                                     }
                                 }
                             }
-                            catch (final Exception ignored)
-                            {
-                            }
+                        }
+                        catch (final Exception | AssertionError ignored)
+                        {
                         }
 
                         if (negated ? matched : !matched)
@@ -1961,6 +2235,20 @@ public final class BrowserToolProvider
                 res.put("regex", regex);
                 res.put("negated", negated);
                 res.put("matched", true);
+                if (matchedElement != null && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        final DomFeatureVector featureVector = new PageAnalyzer(WebDriverRunner.getWebDriver()).extractFeatureVector(matchedElement);
+                        if (featureVector != null)
+                        {
+                            res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -2035,17 +2323,60 @@ public final class BrowserToolProvider
                     totalElements = allElements.size();
                     if (visibleOnly)
                     {
-                        for (final SelenideElement el : allElements)
+                        boolean batchEvaluated = false;
+                        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                        if (driver instanceof JavascriptExecutor js && totalElements > 0)
                         {
                             try
                             {
-                                if (el.isDisplayed())
+                                final List<WebElement> webElements = new ArrayList<>(totalElements);
+                                for (final SelenideElement el : allElements)
                                 {
-                                    actualCount++;
+                                    webElements.add(el.toWebElement());
+                                }
+                                final String countScript = """
+                                    var els = arguments[0];
+                                    if (!els) return 0;
+                                    var count = 0;
+                                    for (var i = 0; i < els.length; i++) {
+                                        var el = els[i];
+                                        if (!el || !el.isConnected) continue;
+                                        var style = window.getComputedStyle(el);
+                                        if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+                                        var rects = el.getClientRects();
+                                        if (rects && rects.length > 0) {
+                                            count++;
+                                        }
+                                    }
+                                    return count;
+                                    """;
+                                final Object result = js.executeScript(countScript, webElements);
+                                if (result instanceof Number num)
+                                {
+                                    actualCount = num.intValue();
+                                    batchEvaluated = true;
                                 }
                             }
-                            catch (final Exception ignored)
+                            catch (final Exception e)
                             {
+                                LOGGER.debug("Batch visibility count script failed: {}. Falling back to sequential check.", e.getMessage());
+                            }
+                        }
+
+                        if (!batchEvaluated)
+                        {
+                            for (final SelenideElement el : allElements)
+                            {
+                                try
+                                {
+                                    if (el.isDisplayed())
+                                    {
+                                        actualCount++;
+                                    }
+                                }
+                                catch (final Exception ignored)
+                                {
+                                }
                             }
                         }
                     }
@@ -2222,6 +2553,151 @@ public final class BrowserToolProvider
         return "";
     }
 
+    private static String safeGetText(final SelenideElement el)
+    {
+        try
+        {
+            return el.getText();
+        }
+        catch (final Exception | AssertionError ignored)
+        {
+            return null;
+        }
+    }
+
+    private static SelenideElement resolveElementBySelectorAndText(final String selector, final String text)
+    {
+        final boolean hasSelector = selector != null && !selector.isBlank();
+        final boolean hasText = text != null && !text.isBlank();
+
+        if (hasSelector && !hasText)
+        {
+            if (selector.startsWith("text="))
+            {
+                final String rawText = selector.substring("text=".length()).trim();
+                return $(Selectors.byText(rawText)).is(Condition.visible)
+                        ? $(Selectors.byText(rawText))
+                        : $(Selectors.withText(rawText));
+            }
+            return findElement(selector);
+        }
+
+        if (!hasSelector && hasText)
+        {
+            return $(Selectors.byText(text)).is(Condition.visible)
+                    ? $(Selectors.byText(text))
+                    : $(Selectors.withText(text));
+        }
+
+        if (hasSelector && hasText)
+        {
+            if (selector.startsWith("text="))
+            {
+                final String rawText = selector.substring("text=".length()).trim();
+                return $(Selectors.byText(rawText)).is(Condition.visible)
+                        ? $(Selectors.byText(rawText))
+                        : $(Selectors.withText(rawText));
+            }
+
+            try
+            {
+                final ElementsCollection candidates = findElements(selector);
+                final ElementsCollection visibleCandidates = candidates.filter(Condition.visible);
+
+                for (final SelenideElement candidate : visibleCandidates)
+                {
+                    final String candidateText = safeGetText(candidate);
+                    if (candidateText != null && candidateText.trim().equalsIgnoreCase(text.trim()))
+                    {
+                        return candidate;
+                    }
+                }
+
+                for (final SelenideElement candidate : visibleCandidates)
+                {
+                    final String candidateText = safeGetText(candidate);
+                    if (candidateText != null && candidateText.toLowerCase().contains(text.toLowerCase()))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+
+            try
+            {
+                final SelenideElement container = findElement(selector);
+                if (container.exists())
+                {
+                    final SelenideElement childExact = container.$(Selectors.byText(text));
+                    if (childExact.exists() && childExact.is(Condition.visible))
+                    {
+                        return childExact;
+                    }
+                    final SelenideElement childPartial = container.$(Selectors.withText(text));
+                    if (childPartial.exists() && childPartial.is(Condition.visible))
+                    {
+                        return childPartial;
+                    }
+                    if (childExact.exists())
+                    {
+                        return childExact;
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+
+            try
+            {
+                final ElementsCollection candidates = findElements(selector);
+                for (final SelenideElement candidate : candidates)
+                {
+                    final String candidateText = safeGetText(candidate);
+                    if (candidateText != null && candidateText.trim().equalsIgnoreCase(text.trim()))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+
+            try
+            {
+                final SelenideElement globalText = $(Selectors.byText(text));
+                if (globalText.exists() && globalText.is(Condition.visible))
+                {
+                    return globalText;
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+
+            return findElement(selector);
+        }
+
+        return $("body");
+    }
+
+    private static SelenideElement resolveLazyElement(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return $("body");
+        }
+        if (SelenideElementFinder.isAutomationIdSelector(selector))
+        {
+            SelenideElementFinder.ensureAutomationIdsStampedIfNeeded(selector);
+        }
+        return $(SelenideElementFinder.resolveLocator(selector));
+    }
+
     private static SelenideElement findElement(final String selector)
     {
         if (selector == null || selector.isBlank())
@@ -2240,6 +2716,10 @@ public final class BrowserToolProvider
         }
         try
         {
+            if (SelenideElementFinder.isAutomationIdSelector(selector))
+            {
+                SelenideElementFinder.ensureAutomationIdsStampedIfNeeded(selector);
+            }
             return Selenide.$$(SelenideElementFinder.resolveLocator(selector));
         }
         catch (final Exception ignored)
@@ -2519,7 +2999,7 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector targeting the element to assert state on");
         final ArrayNode stateEnum = props.putObject("state")
                 .put("type", "string")
-                .put("description", "Expected state of the element ('visible', 'hidden', 'enabled', 'disabled', 'editable', 'readonly', 'checked', 'unchecked', 'selected', 'unselected', 'focused', 'exists', 'absent')")
+                .put("description", "Expected state or comma-separated states of the element ('visible', 'hidden', 'enabled', 'disabled', 'editable', 'readonly', 'checked', 'unchecked', 'selected', 'unselected', 'focused', 'unfocused', 'exists', 'absent', or compound e.g. 'visible, enabled')")
                 .putArray("enum");
         stateEnum.add("visible");
         stateEnum.add("hidden");
@@ -2536,13 +3016,40 @@ public final class BrowserToolProvider
         stateEnum.add("not_focused");
         stateEnum.add("exists");
         stateEnum.add("absent");
+        stateEnum.add("visible, enabled");
+        stateEnum.add("visible, disabled");
+        stateEnum.add("visible, editable");
+        stateEnum.add("visible, readonly");
+        stateEnum.add("checked, enabled");
+        stateEnum.add("checked, disabled");
+        final ArrayNode statesEnum = props.putObject("states")
+                .put("type", "array")
+                .put("description", "Optional array of multiple states to assert simultaneously on the element (e.g. ['visible', 'enabled'])")
+                .putObject("items")
+                .put("type", "string")
+                .putArray("enum");
+        statesEnum.add("visible");
+        statesEnum.add("hidden");
+        statesEnum.add("enabled");
+        statesEnum.add("disabled");
+        statesEnum.add("editable");
+        statesEnum.add("readonly");
+        statesEnum.add("checked");
+        statesEnum.add("unchecked");
+        statesEnum.add("selected");
+        statesEnum.add("unselected");
+        statesEnum.add("focused");
+        statesEnum.add("unfocused");
+        statesEnum.add("not_focused");
+        statesEnum.add("exists");
+        statesEnum.add("absent");
         props.putObject("negated").put("type", "boolean").put("description", "Whether to invert the state assertion (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
         req.add("state");
 
-        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies a specific state (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent)", schema);
+        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies one or more states (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, or compound e.g. 'visible, enabled')", schema);
         return new AiTool()
         {
             @Override
@@ -2560,114 +3067,199 @@ public final class BrowserToolProvider
                     throw new AssertionError("assert_element_state requires a 'selector' argument");
                 }
 
-                final String rawState;
-                if (call.arguments().hasNonNull("state") && !call.arguments().path("state").asText().isBlank())
+                final List<String> states = new ArrayList<>();
+                if (call.arguments().has("states") && call.arguments().path("states").isArray())
                 {
-                    rawState = call.arguments().path("state").asText();
+                    for (final JsonNode s : call.arguments().path("states"))
+                    {
+                        if (s.isTextual() && !s.asText().isBlank())
+                        {
+                            states.add(s.asText().trim());
+                        }
+                    }
                 }
-                else if (call.arguments().hasNonNull("expectedState") && !call.arguments().path("expectedState").asText().isBlank())
+
+                if (states.isEmpty())
                 {
-                    rawState = call.arguments().path("expectedState").asText();
+                    final String rawState;
+                    if (call.arguments().hasNonNull("state") && !call.arguments().path("state").asText().isBlank())
+                    {
+                        rawState = call.arguments().path("state").asText();
+                    }
+                    else if (call.arguments().hasNonNull("expectedState") && !call.arguments().path("expectedState").asText().isBlank())
+                    {
+                        rawState = call.arguments().path("expectedState").asText();
+                    }
+                    else if (call.arguments().hasNonNull("value") && !call.arguments().path("value").asText().isBlank())
+                    {
+                        rawState = call.arguments().path("value").asText();
+                    }
+                    else
+                    {
+                        throw new AssertionError("assert_element_state requires a 'state' argument");
+                    }
+
+                    final String[] parts = rawState.split("[,&]|\\band\\b");
+                    for (final String part : parts)
+                    {
+                        final String trimmed = part.trim();
+                        if (!trimmed.isBlank())
+                        {
+                            states.add(trimmed);
+                        }
+                    }
                 }
-                else if (call.arguments().hasNonNull("value") && !call.arguments().path("value").asText().isBlank())
-                {
-                    rawState = call.arguments().path("value").asText();
-                }
-                else
+
+                if (states.isEmpty())
                 {
                     throw new AssertionError("assert_element_state requires a 'state' argument");
                 }
 
                 final boolean negated = call.arguments().path("negated").asBoolean(false)
                         || call.arguments().path("not").asBoolean(false);
-                final String normalized = normalizeElementState(rawState);
-                final String state = negated ? switch (normalized)
-                {
-                    case "visible" -> "hidden";
-                    case "hidden" -> "visible";
-                    case "enabled" -> "disabled";
-                    case "disabled" -> "enabled";
-                    case "checked" -> "unchecked";
-                    case "unchecked" -> "checked";
-                    case "selected" -> "unselected";
-                    case "unselected" -> "selected";
-                    case "focused" -> "unfocused";
-                    case "unfocused" -> "focused";
-                    case "exists" -> "absent";
-                    case "absent" -> "exists";
-                    default -> normalized;
-                } : normalized;
 
-                final SelenideElement el = findElement(selector);
-
-                switch (state)
+                SelenideElement el = resolveLazyElement(selector);
+                if (!el.is(Condition.visible))
                 {
-                    case "visible" -> el.shouldBe(Condition.visible);
-                    case "hidden" -> el.shouldBe(Condition.hidden);
-                    case "enabled" -> el.shouldBe(Condition.enabled);
-                    case "disabled" -> el.shouldBe(Condition.disabled);
-                    case "editable" -> el.shouldBe(Condition.editable);
-                    case "readonly" -> el.shouldBe(Condition.readonly);
-                    case "checked" -> el.shouldBe(Condition.checked);
-                    case "unchecked" -> el.shouldNotBe(Condition.checked);
-                    case "selected" ->
+                    final ElementsCollection visibleCandidates = findElements(selector).filter(Condition.visible);
+                    if (!visibleCandidates.isEmpty())
                     {
-                        if ("SELECT".equalsIgnoreCase(el.getTagName()))
-                        {
-                            el.getSelectedOption().shouldBe(Condition.exist);
-                        }
-                        else
-                        {
-                            el.shouldBe(Condition.selected);
-                        }
+                        el = visibleCandidates.first();
                     }
-                    case "unselected" ->
+                }
+
+                final List<String> evaluatedStates = new ArrayList<>();
+                for (final String rawState : states)
+                {
+                    final String normalized = normalizeElementState(rawState);
+                    final String state = negated ? switch (normalized)
                     {
-                        if ("SELECT".equalsIgnoreCase(el.getTagName()))
-                        {
-                            el.getSelectedOption().shouldNotBe(Condition.exist);
-                        }
-                        else
-                        {
-                            el.shouldNotBe(Condition.selected);
-                        }
-                    }
-                    case "focused" ->
+                        case "visible" -> "hidden";
+                        case "hidden" -> "visible";
+                        case "enabled" -> "disabled";
+                        case "disabled" -> "enabled";
+                        case "checked" -> "unchecked";
+                        case "unchecked" -> "checked";
+                        case "selected" -> "unselected";
+                        case "unselected" -> "selected";
+                        case "focused" -> "unfocused";
+                        case "unfocused" -> "focused";
+                        case "exists" -> "absent";
+                        case "absent" -> "exists";
+                        default -> normalized;
+                    } : normalized;
+
+                    switch (state)
                     {
-                        final Boolean isFocused = Selenide.executeJavaScript(
-                                "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                                el);
-                        if (!Boolean.TRUE.equals(isFocused))
+                        case "visible" ->
                         {
-                            el.shouldBe(Condition.focused);
+                            if (el.is(Condition.visible))
+                            {
+                                el.shouldBe(Condition.visible);
+                            }
+                            else
+                            {
+                                el = findElements(selector).findBy(Condition.visible);
+                                el.shouldBe(Condition.visible);
+                            }
                         }
-                    }
-                    case "unfocused" ->
-                    {
-                        final Boolean isFocused = Selenide.executeJavaScript(
-                                "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                                el);
-                        if (Boolean.TRUE.equals(isFocused))
+                        case "hidden" ->
                         {
-                            el.shouldNotBe(Condition.focused);
+                            final ElementsCollection visibleCandidates = findElements(selector).filter(Condition.visible);
+                            if (!visibleCandidates.isEmpty())
+                            {
+                                el = visibleCandidates.first();
+                            }
+                            el.shouldBe(Condition.hidden);
                         }
+                        case "enabled" -> el.shouldBe(Condition.enabled);
+                        case "disabled" -> el.shouldBe(Condition.disabled);
+                        case "editable" -> el.shouldBe(Condition.editable);
+                        case "readonly" -> el.shouldBe(Condition.readonly);
+                        case "checked" -> el.shouldBe(Condition.checked);
+                        case "unchecked" -> el.shouldNotBe(Condition.checked);
+                        case "selected" ->
+                        {
+                            if ("SELECT".equalsIgnoreCase(el.getTagName()))
+                            {
+                                el.getSelectedOption().shouldBe(Condition.exist);
+                            }
+                            else
+                            {
+                                el.shouldBe(Condition.selected);
+                            }
+                        }
+                        case "unselected" ->
+                        {
+                            if ("SELECT".equalsIgnoreCase(el.getTagName()))
+                            {
+                                el.getSelectedOption().shouldNotBe(Condition.exist);
+                            }
+                            else
+                            {
+                                el.shouldNotBe(Condition.selected);
+                            }
+                        }
+                        case "focused" ->
+                        {
+                            final Boolean isFocused = Selenide.executeJavaScript(
+                                    "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                                    el);
+                            if (!Boolean.TRUE.equals(isFocused))
+                            {
+                                el.shouldBe(Condition.focused);
+                            }
+                        }
+                        case "unfocused" ->
+                        {
+                            final Boolean isFocused = Selenide.executeJavaScript(
+                                    "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                                    el);
+                            if (Boolean.TRUE.equals(isFocused))
+                            {
+                                el.shouldNotBe(Condition.focused);
+                            }
+                        }
+                        case "exists" -> el.should(Condition.exist);
+                        case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
+                        default -> throw new AssertionError("Unsupported element state assertion: '" + rawState + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
                     }
-                    case "exists" -> el.should(Condition.exist);
-                    case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
-                    default -> throw new AssertionError("Unsupported element state assertion: '" + rawState + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
+                    evaluatedStates.add(state);
                 }
 
                 final ObjectNode res = successNode("assert_element_state");
                 res.put("target", selector);
-                res.put("state", state);
+                res.put("state", String.join(", ", evaluatedStates));
+                if (evaluatedStates.size() > 1)
+                {
+                    final ArrayNode arr = res.putArray("states");
+                    for (final String s : evaluatedStates)
+                    {
+                        arr.add(s);
+                    }
+                }
                 res.put("negated", negated);
                 res.put("matched", true);
+                if (el != null && el.exists() && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        final DomFeatureVector featureVector = new PageAnalyzer(WebDriverRunner.getWebDriver()).extractFeatureVector(el);
+                        if (featureVector != null)
+                        {
+                            res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
     }
 
-    static String normalizeElementState(final String rawState)
+    public static String normalizeElementState(final String rawState)
     {
         if (rawState == null || rawState.isBlank())
         {
@@ -2687,6 +3279,7 @@ public final class BrowserToolProvider
             case "unfocused", "not_focused" -> "unfocused";
             case "present", "exist", "exists" -> "exists";
             case "invisible", "hidden" -> "hidden";
+            case "displayed", "visible" -> "visible";
             default -> s;
         };
     }
@@ -2767,7 +3360,7 @@ public final class BrowserToolProvider
                         || call.arguments().path("not").asBoolean(false)
                         || call.arguments().path("invert").asBoolean(false);
 
-                final SelenideElement el = findElement(selector);
+                final SelenideElement el = resolveLazyElement(selector);
 
                 if (rawExpectedValue != null)
                 {
@@ -2826,6 +3419,20 @@ public final class BrowserToolProvider
                 }
                 res.put("negated", negated);
                 res.put("matched", true);
+                if (el != null && el.exists() && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        final DomFeatureVector featureVector = new PageAnalyzer(WebDriverRunner.getWebDriver()).extractFeatureVector(el);
+                        if (featureVector != null)
+                        {
+                            res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -3044,8 +3651,8 @@ public final class BrowserToolProvider
         final ObjectNode props = schema.putObject("properties");
         props.putObject("selector").put("type", "string").put("description", "CSS selector to search for");
         props.putObject("text").put("type", "string").put("description", "Case-insensitive text substring to search for");
-        props.putObject("includeAncestors").put("type", "integer").put("description", "Number of ancestor levels to include in returned subtree (default: 1)");
-        props.putObject("limit").put("type", "integer").put("description", "Maximum number of elements to return (default: 10)");
+        props.putObject("includeAncestors").put("type", "integer").put("description", "Number of ancestor levels to include in returned subtree (default: 0)");
+        props.putObject("limit").put("type", "integer").put("description", "Maximum number of elements to return (default: 20)");
 
         final ToolDefinition def = new ToolDefinition("query_dom", "Searches the live DOM for elements matching a selector or text, returning clean subtrees with attributes and visibility", schema);
         return new AiTool()
@@ -3062,10 +3669,12 @@ public final class BrowserToolProvider
                 final JsonNode args = call.arguments();
                 final String selector = args.hasNonNull("selector") ? args.path("selector").asText() : "";
                 final String text = args.hasNonNull("text") ? args.path("text").asText() : "";
-                final int limit = args.hasNonNull("limit") ? args.path("limit").asInt(10) : 10;
+                final int limit = args.hasNonNull("limit") ? args.path("limit").asInt(20) : 20;
+                final int includeAncestors = args.hasNonNull("includeAncestors") ? Math.max(0, args.path("includeAncestors").asInt(0)) : 0;
 
                 final String queryScript = """
-                    return (function(sel, searchText, maxCount) {
+                    return (function(sel, searchText, maxCount, ancestorLevels) {
+                        ancestorLevels = (typeof ancestorLevels === 'number' && ancestorLevels > 0) ? ancestorLevels : 0;
                         var candidates = [];
                         if (sel && sel.trim()) {
                             try {
@@ -3108,36 +3717,156 @@ public final class BrowserToolProvider
                         }
 
                         var filtered = exactMatches.concat(wordMatches).concat(partialMatches);
+                        var uniqueFiltered = [];
+                        var seenElements = new Set();
+                        for (var k = 0; k < filtered.length; k++) {
+                            var fEl = filtered[k];
+                            if (!seenElements.has(fEl)) {
+                                seenElements.add(fEl);
+                                uniqueFiltered.push(fEl);
+                            }
+                        }
+
+                        var leafMatches = [];
+                        if (lowerText) {
+                            for (var a = 0; a < uniqueFiltered.length; a++) {
+                                var cand = uniqueFiltered[a];
+                                var isAncestorOfMatch = false;
+                                for (var b = 0; b < uniqueFiltered.length; b++) {
+                                    if (a !== b && cand.contains(uniqueFiltered[b])) {
+                                        isAncestorOfMatch = true;
+                                        break;
+                                    }
+                                }
+                                if (!isAncestorOfMatch) {
+                                    leafMatches.push(cand);
+                                }
+                            }
+                        }
+                        function isVisible(node) {
+                            if (!node || !node.isConnected) return false;
+                            if (node.closest && node.closest('.neodymium-ai-hud')) return false;
+
+                            if (typeof node.checkVisibility === 'function') {
+                                try {
+                                    if (!node.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true })) {
+                                        return false;
+                                    }
+                                } catch(e) {}
+                            }
+
+                            var cur = node;
+                            while (cur && cur !== document.documentElement) {
+                                var style = window.getComputedStyle(cur);
+                                if (!style) return false;
+                                if (style.display === 'none' || style.visibility === 'hidden' || style.visibility === 'collapse') {
+                                    return false;
+                                }
+                                var op = parseFloat(style.opacity);
+                                if (!isNaN(op) && op < 0.01) {
+                                    return false;
+                                }
+                                cur = cur.parentElement;
+                            }
+
+                            var rect = node.getBoundingClientRect();
+                            var tagName = node.tagName ? node.tagName.toLowerCase() : '';
+                            if (rect.width === 0 && rect.height === 0) {
+                                var isCheckable = tagName === 'input' && (node.type === 'radio' || node.type === 'checkbox');
+                                if (isCheckable) {
+                                    var label = (node.labels && node.labels.length > 0) ? node.labels[0] : (node.closest ? node.closest('label') : null);
+                                    if (label && isVisible(label)) return true;
+                                }
+                                return false;
+                            }
+                            return true;
+                        }
+
+                        var toProcess = leafMatches.length > 0 ? leafMatches : uniqueFiltered;
+                        toProcess.sort(function(a, b) {
+                            var visA = isVisible(a) ? 1 : 0;
+                            var visB = isVisible(b) ? 1 : 0;
+                            if (visA !== visB) {
+                                return visB - visA;
+                            }
+                            if (lowerText) {
+                                var lenA = (a.innerText || a.textContent || '').trim().length;
+                                var lenB = (b.innerText || b.textContent || '').trim().length;
+                                return lenA - lenB;
+                            }
+                            return 0;
+                        });
+
                         var results = [];
                         var seen = new Set();
 
-                        for (var j = 0; j < filtered.length; j++) {
-                            var el = filtered[j];
+                        for (var j = 0; j < toProcess.length; j++) {
+                            var rawEl = toProcess[j];
+                            var el = rawEl;
+                            if (ancestorLevels > 0) {
+                                for (var lvl = 0; lvl < ancestorLevels; lvl++) {
+                                    if (el.parentElement && el.parentElement !== document.body && el.parentElement !== document.documentElement) {
+                                        el = el.parentElement;
+                                    } else {
+                                        break;
+                                    }
+                                }
+                            }
                             if (seen.has(el)) continue;
                             seen.add(el);
 
                             var rect = el.getBoundingClientRect();
-                            var inViewport = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+                            var vis = isVisible(el);
+                            var inRect = rect.top < window.innerHeight && rect.bottom > 0 && rect.left < window.innerWidth && rect.right > 0;
+                            var inViewport = vis && inRect;
+
                             var tag = el.tagName.toLowerCase();
-                            var idStr = el.id ? '#' + el.id : '';
-                            var clsStr = el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\\s+/).slice(0, 2).join('.') : '';
+                            var autoId = el.getAttribute('data-ai');
+                            var idStr = (el.id && typeof el.id === 'string' && /^[a-zA-Z0-9_-]+$/.test(el.id)) ? '#' + el.id : '';
+
+                            var safeClasses = [];
+                            if (el.className && typeof el.className === 'string') {
+                                var parts = el.className.trim().split(/\\s+/);
+                                for (var p = 0; p < parts.length; p++) {
+                                    var cls = parts[p];
+                                    if (cls && /^[a-zA-Z0-9_-]+$/.test(cls)) {
+                                        safeClasses.push(cls);
+                                        if (safeClasses.length >= 2) break;
+                                    }
+                                }
+                            }
+                            var clsStr = safeClasses.length > 0 ? '.' + safeClasses.join('.') : '';
+
+                            var selectorStr = '';
+                            if (idStr) {
+                                selectorStr = tag + idStr + clsStr;
+                            } else if (autoId) {
+                                selectorStr = tag + '[data-ai="' + autoId + '"]';
+                            } else {
+                                selectorStr = tag + clsStr;
+                            }
+
                             var elText = (el.innerText || el.textContent || '').trim();
+                            var maxTextLen = ancestorLevels > 0 ? 150 : 80;
+                            var maxHtmlLen = ancestorLevels > 0 ? 500 : 200;
 
                             results.push({
                                 tag: tag,
-                                selector: tag + idStr + clsStr,
-                                text: elText.length > 80 ? elText.substring(0, 80) + '…' : elText,
+                                selector: selectorStr,
+                                text: elText.length > maxTextLen ? elText.substring(0, maxTextLen) + '…' : elText,
+                                visible: vis,
                                 inViewport: inViewport,
+                                dataAi: autoId || null,
                                 y: Math.round(rect.top + window.scrollY),
-                                outerHtml: el.outerHTML.length > 200 ? el.outerHTML.substring(0, 200) + '…' : el.outerHTML
+                                outerHtml: el.outerHTML.length > maxHtmlLen ? el.outerHTML.substring(0, maxHtmlLen) + '…' : el.outerHTML
                             });
                             if (results.length >= maxCount) break;
                         }
                         return JSON.stringify(results);
-                    })(arguments[0], arguments[1], arguments[2]);
+                    })(arguments[0], arguments[1], arguments[2], arguments[3]);
                     """;
 
-                final Object res = Selenide.executeJavaScript(queryScript, selector, text, limit);
+                final Object res = Selenide.executeJavaScript(queryScript, selector, text, limit, includeAncestors);
                 final String resStr = res != null ? res.toString() : "[]";
                 final ObjectNode rootNode = successNode("query_dom");
                 JsonNode matchesNode;
@@ -3150,10 +3879,27 @@ public final class BrowserToolProvider
                     matchesNode = MAPPER.createArrayNode();
                 }
                 rootNode.set("matches", matchesNode);
-                rootNode.put("matchCount", matchesNode.size());
-                if ("[]".equals(resStr.trim()) && !text.isBlank())
+                final int matchCount = matchesNode.size();
+                rootNode.put("matchCount", matchCount);
+                if (matchCount == 0 && !text.isBlank())
                 {
                     rootNode.put("note", "No elements found matching text: '" + text + "'. Verify if the element is inside a closed menu, dropdown, modal, or iframe");
+                }
+                else if (matchCount > 0 && !text.isBlank())
+                {
+                    boolean hasVisible = false;
+                    for (final JsonNode m : matchesNode)
+                    {
+                        if (m.path("visible").asBoolean(false))
+                        {
+                            hasVisible = true;
+                            break;
+                        }
+                    }
+                    if (!hasVisible)
+                    {
+                        rootNode.put("note", "All " + matchCount + " matching element(s) are currently hidden (visible=false). Verify if a parent dropdown, menu, or modal needs to be opened first");
+                    }
                 }
                 return ToolResult.success(call.callId(), rootNode.toString());
             }
@@ -3503,25 +4249,37 @@ public final class BrowserToolProvider
             {
                 final JsonNode args = call.arguments();
                 final String variableName;
+                final boolean valueUsedAsVarName;
                 if (args.hasNonNull("variableName") && !args.path("variableName").asText().isBlank())
                 {
                     variableName = args.path("variableName").asText().trim();
+                    valueUsedAsVarName = false;
                 }
                 else if (args.hasNonNull("variable") && !args.path("variable").asText().isBlank())
                 {
                     variableName = args.path("variable").asText().trim();
+                    valueUsedAsVarName = false;
                 }
                 else if (args.hasNonNull("name") && !args.path("name").asText().isBlank())
                 {
                     variableName = args.path("name").asText().trim();
+                    valueUsedAsVarName = false;
                 }
                 else if (args.hasNonNull("key") && !args.path("key").asText().isBlank())
                 {
                     variableName = args.path("key").asText().trim();
+                    valueUsedAsVarName = false;
+                }
+                else if (args.hasNonNull("value") && !args.path("value").asText().isBlank()
+                        && resolveSelector(args) != null && !resolveSelector(args).isBlank())
+                {
+                    variableName = args.path("value").asText().trim();
+                    valueUsedAsVarName = true;
                 }
                 else
                 {
                     variableName = "";
+                    valueUsedAsVarName = false;
                 }
 
                 if (variableName.isEmpty())
@@ -3532,7 +4290,7 @@ public final class BrowserToolProvider
                 final boolean adjust = args.path("adjust").asBoolean(false);
                 final String valueToStore;
 
-                if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+                if (args.hasNonNull("value") && !args.path("value").asText().isBlank() && !valueUsedAsVarName)
                 {
                     final String literalVal = args.path("value").asText();
                     valueToStore = adjust ? AiAssertions.normalizeNumericOrPrice(literalVal) : literalVal;
@@ -4376,7 +5134,7 @@ public final class BrowserToolProvider
                 try
                 {
                     final SelenideElement el = findElement(selector).shouldBe(Condition.visible);
-                    el.scrollIntoView("{behavior: \"instant\", block: \"center\"}");
+                    SelenideElementFinder.scrollIntoViewIfNeeded(el);
 
                     final WebDriver driver = WebDriverRunner.getWebDriver();
                     new Actions(driver)
@@ -4445,7 +5203,7 @@ public final class BrowserToolProvider
                     final SelenideElement sourceEl = findElement(source).shouldBe(Condition.visible);
                     final SelenideElement targetEl = findElement(target).shouldBe(Condition.visible);
 
-                    sourceEl.scrollIntoView("{behavior: \"instant\", block: \"center\"}");
+                    SelenideElementFinder.scrollIntoViewIfNeeded(sourceEl);
 
                     final WebDriver driver = WebDriverRunner.getWebDriver();
                     new Actions(driver)

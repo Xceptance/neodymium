@@ -22,6 +22,7 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -758,6 +759,8 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertEquals("absent", BrowserToolProvider.normalizeElementState("non-existent"));
         Assertions.assertEquals("exists", BrowserToolProvider.normalizeElementState("present"));
         Assertions.assertEquals("hidden", BrowserToolProvider.normalizeElementState("invisible"));
+        Assertions.assertEquals("visible", BrowserToolProvider.normalizeElementState("displayed"));
+        Assertions.assertEquals("visible", BrowserToolProvider.normalizeElementState("visible"));
         Assertions.assertEquals("editable", BrowserToolProvider.normalizeElementState("editable"));
     }
 
@@ -840,6 +843,178 @@ public class BrowserToolProviderStabilityTest
             {
                 tool.execute(new ToolCall("call-editable", "browser_assert_element_state", failArgs), null);
             });
+
+            // 3. Asserting compound state 'visible, enabled' should SUCCEED
+            final ObjectNode compoundSuccessArgs = MAPPER.createObjectNode();
+            compoundSuccessArgs.put("selector", "#readonly-input");
+            compoundSuccessArgs.put("state", "visible, enabled");
+            final ToolResult compoundResult = tool.execute(new ToolCall("call-compound", "browser_assert_element_state", compoundSuccessArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, compoundResult.status());
+            final JsonNode compoundJson = MAPPER.readTree(compoundResult.content());
+            Assertions.assertEquals("visible, enabled", compoundJson.path("state").asText());
+            Assertions.assertTrue(compoundJson.has("states"));
+            Assertions.assertEquals(2, compoundJson.path("states").size());
+
+            // 4. Asserting compound states via 'states' array should SUCCEED
+            final ObjectNode arraySuccessArgs = MAPPER.createObjectNode();
+            arraySuccessArgs.put("selector", "#readonly-input");
+            arraySuccessArgs.put("state", "visible");
+            final ArrayNode statesArr = arraySuccessArgs.putArray("states");
+            statesArr.add("visible");
+            statesArr.add("enabled");
+            statesArr.add("readonly");
+            final ToolResult arrayResult = tool.execute(new ToolCall("call-array", "browser_assert_element_state", arraySuccessArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, arrayResult.status());
+
+            // 5. Asserting compound state with a failing condition ('visible, disabled') must THROW AssertionError
+            final ObjectNode compoundFailArgs = MAPPER.createObjectNode();
+            compoundFailArgs.put("selector", "#readonly-input");
+            compoundFailArgs.put("state", "visible, disabled");
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                tool.execute(new ToolCall("call-compound-fail", "browser_assert_element_state", compoundFailArgs), null);
+            });
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
+    public void testAssertElementStateMultiCandidateVisibilityFallback() throws Exception
+    {
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 200;
+        try
+        {
+            final WebElement hiddenTile = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("isDisplayed".equals(name))
+                        {
+                            return false;
+                        }
+                        if ("isEnabled".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "div";
+                        }
+                        if ("getAttribute".equals(name) && "class".equals(args[0]))
+                        {
+                            return "product-tile slick-slide";
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
+            final WebElement visibleTile = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("isDisplayed".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("isEnabled".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "div";
+                        }
+                        if ("getAttribute".equals(name) && "class".equals(args[0]))
+                        {
+                            return "product-tile slick-slide slick-active";
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("findElement".equals(name))
+                        {
+                            return hiddenTile;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(hiddenTile, visibleTile);
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool tool = this.registry.getTool("browser_assert_element_state").orElseThrow();
+
+            // 1. Asserting 'visible' on selector matching [hiddenTile, visibleTile] should succeed via fallback
+            final ObjectNode visibleArgs = MAPPER.createObjectNode();
+            visibleArgs.put("selector", ".product-tile");
+            visibleArgs.put("state", "visible");
+            final ToolResult visibleResult = tool.execute(new ToolCall("call-visible", "browser_assert_element_state", visibleArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, visibleResult.status());
+
+            // 2. Asserting 'displayed' (synonym) should normalize to 'visible' and succeed
+            final ObjectNode displayedArgs = MAPPER.createObjectNode();
+            displayedArgs.put("selector", ".product-tile");
+            displayedArgs.put("state", "displayed");
+            final ToolResult displayedResult = tool.execute(new ToolCall("call-displayed", "browser_assert_element_state", displayedArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, displayedResult.status());
+
+            // 3. Asserting 'hidden' when a visible candidate exists must THROW AssertionError
+            final ObjectNode hiddenArgs = MAPPER.createObjectNode();
+            hiddenArgs.put("selector", ".product-tile");
+            hiddenArgs.put("state", "hidden");
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                tool.execute(new ToolCall("call-hidden", "browser_assert_element_state", hiddenArgs), null);
+            });
+
+            // 4. If driver only returns hidden elements, asserting 'visible' throws and 'hidden' succeeds
+            final MockJsDriver allHiddenDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("findElement".equals(name))
+                        {
+                            return hiddenTile;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(hiddenTile, hiddenTile);
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(allHiddenDriver);
+
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                tool.execute(new ToolCall("call-all-hidden-visible", "browser_assert_element_state", visibleArgs), null);
+            });
+
+            final ToolResult allHiddenResult = tool.execute(new ToolCall("call-all-hidden-pass", "browser_assert_element_state", hiddenArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, allHiddenResult.status());
         }
         finally
         {
@@ -934,6 +1109,283 @@ public class BrowserToolProviderStabilityTest
         finally
         {
             Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
+    public void testSelectToolAllowsHiddenSelectElementsWithSelect2() throws Exception
+    {
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 200;
+        try
+        {
+            final AtomicBoolean optionSelected = new AtomicBoolean(false);
+            final WebElement optionElement = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("getTagName".equals(name))
+                        {
+                            return "option";
+                        }
+                        if ("isSelected".equals(name))
+                        {
+                            return optionSelected.get();
+                        }
+                        if ("setSelected".equals(name) || "click".equals(name))
+                        {
+                            optionSelected.set(true);
+                            return null;
+                        }
+                        if ("getText".equals(name))
+                        {
+                            return "15 Miles";
+                        }
+                        if ("getAttribute".equals(name))
+                        {
+                            final String attr = (String) args[0];
+                            if ("value".equals(attr))
+                            {
+                                return "15 Miles";
+                            }
+                            return "";
+                        }
+                        if ("isEnabled".equals(name))
+                        {
+                            return true;
+                        }
+                        return null;
+                    }
+            );
+
+            final WebElement selectElement = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("isDisplayed".equals(name))
+                        {
+                            // Visually hidden by Select2
+                            return false;
+                        }
+                        if ("isEnabled".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "select";
+                        }
+                        if ("getAttribute".equals(name))
+                        {
+                            final String attr = (String) args[0];
+                            if ("id".equals(attr))
+                            {
+                                return "radius";
+                            }
+                            if ("class".equals(attr))
+                            {
+                                return "form-control select2-hidden-accessible";
+                            }
+                            if ("multiple".equals(attr))
+                            {
+                                return null;
+                            }
+                            return null;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(optionElement);
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("executeScript".equals(name))
+                        {
+                            optionSelected.set(true);
+                            return Collections.emptyMap();
+                        }
+                        if ("findElement".equals(name))
+                        {
+                            return selectElement;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(selectElement);
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool tool = this.registry.getTool("select").orElseThrow();
+            final ObjectNode selectArgs = MAPPER.createObjectNode();
+            selectArgs.put("selector", "#radius");
+            selectArgs.put("value", "15 Miles");
+
+            final ToolResult result = tool.execute(new ToolCall("call-select-1", "select", selectArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertTrue(optionSelected.get(), "Option must be selected on the hidden select element");
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
+    public void testSelectToolFastPathForHiddenSelectElement() throws Exception
+    {
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 200;
+        try
+        {
+            final AtomicBoolean scriptExecuted = new AtomicBoolean(false);
+            final WebElement selectElement = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("getTagName".equals(name))
+                        {
+                            return "select";
+                        }
+                        if ("isDisplayed".equals(name))
+                        {
+                            return false;
+                        }
+                        if ("isEnabled".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getAttribute".equals(name))
+                        {
+                            final String attr = (String) args[0];
+                            if ("id".equals(attr))
+                            {
+                                return "category";
+                            }
+                            return null;
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("executeScript".equals(name))
+                        {
+                            final String script = args[0] != null ? args[0].toString() : "";
+                            if (script.contains("domSelected") || script.contains("options"))
+                            {
+                                scriptExecuted.set(true);
+                                return "domSelected";
+                            }
+                            return "{}";
+                        }
+                        if ("findElement".equals(name))
+                        {
+                            return selectElement;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(selectElement);
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool tool = this.registry.getTool("select").orElseThrow();
+            final ObjectNode selectArgs = MAPPER.createObjectNode();
+            selectArgs.put("selector", "#category");
+            selectArgs.put("value", "Skincare");
+
+            final ToolResult result = tool.execute(new ToolCall("call-select-fast", "select", selectArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertTrue(scriptExecuted.get(), "executeScript must be executed and handled via domSelected");
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
+    public void testAssertCountBatchVisibilityUsesJavaScriptExecutorWhenAvailable() throws Exception
+    {
+        final AtomicBoolean batchScriptCalled = new AtomicBoolean(false);
+        final WebElement buttonElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getTagName".equals(name))
+                    {
+                        return "button";
+                    }
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("executeScript".equals(name))
+                    {
+                        final String script = (String) args[0];
+                        if (script != null && script.contains("getClientRects"))
+                        {
+                            batchScriptCalled.set(true);
+                            return 25;
+                        }
+                        return Collections.emptyMap();
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        return buttonElement;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.nCopies(25, buttonElement);
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        try
+        {
+            final AiTool tool = this.registry.getTool("assert_count").orElseThrow();
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", ".results.striped button");
+            args.put("count", 25);
+            args.put("operator", "EXACT");
+            args.put("visibleOnly", true);
+
+            final ToolResult result = tool.execute(new ToolCall("call-cnt-batch", "assert_count", args), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertTrue(batchScriptCalled.get(), "Batch visibility script must be invoked via JavascriptExecutor");
+        }
+        finally
+        {
+            WebDriverRunner.closeWebDriver();
         }
     }
 }

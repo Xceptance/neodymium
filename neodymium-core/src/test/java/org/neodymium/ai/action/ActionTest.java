@@ -365,6 +365,38 @@ public class ActionTest
     }
 
     @Test
+    public void testFromToolCallAssertElementStateCompoundComma()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#checkout-btn");
+        args.put("state", "visible, enabled");
+        final ToolCall call = new ToolCall("call-compound-1", "assert_element_state", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_ELEMENT_STATE", action.getType());
+        assertEquals("#checkout-btn", action.getTarget());
+        assertEquals("visible, enabled", action.getValue());
+        assertEquals("assert_element_state", action.toToolCall().toolName());
+    }
+
+    @Test
+    public void testFromToolCallAssertElementStateCompoundArray()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        args.put("selector", "#checkout-btn");
+        final ArrayNode states = args.putArray("states");
+        states.add("visible");
+        states.add("enabled");
+        final ToolCall call = new ToolCall("call-compound-2", "assert_element_state", args);
+
+        final Action action = Action.fromToolCall(call);
+        assertEquals("ASSERT_ELEMENT_STATE", action.getType());
+        assertEquals("#checkout-btn", action.getTarget());
+        assertEquals("visible, enabled", action.getValue());
+        assertEquals("assert_element_state", action.toToolCall().toolName());
+    }
+
+    @Test
     public void testFromToolCallAssertCountNotEquals()
     {
         final ObjectNode args = this.mapper.createObjectNode();
@@ -479,5 +511,31 @@ public class ActionTest
         assertEquals(1, action.getThen().size());
         assertEquals("CLICK", action.getThen().get(0).getType());
         assertEquals("#accept", action.getThen().get(0).getTarget());
+    }
+
+    @Test
+    public void testFillFormFromToolCall()
+    {
+        final ObjectNode args = this.mapper.createObjectNode();
+        final ArrayNode fields = args.putArray("fields");
+        final ObjectNode f1 = fields.addObject();
+        f1.put("selector", "#firstName");
+        f1.put("value", "John");
+        final ObjectNode f2 = fields.addObject();
+        f2.put("selector", "#lastName");
+        f2.put("value", "Doe");
+
+        final ToolCall call = new ToolCall("call-fill-form", "fill_form", args);
+        final Action action = Action.fromToolCall(call);
+
+        assertNotNull(action);
+        assertEquals("FILL_FORM", action.getType());
+        assertEquals("form", action.getTarget());
+        assertTrue(action.getParameters().containsKey("fields"));
+
+        final ToolCall generatedCall = action.toToolCall();
+        assertEquals("fill_form", generatedCall.toolName());
+        assertTrue(generatedCall.arguments().hasNonNull("fields"));
+        assertEquals(2, generatedCall.arguments().path("fields").size());
     }
 }

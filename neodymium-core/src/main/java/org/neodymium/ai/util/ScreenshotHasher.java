@@ -22,8 +22,10 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Base64;
 import javax.imageio.ImageIO;
@@ -93,6 +95,101 @@ public final class ScreenshotHasher
         g.dispose();
 
         return finalImg;
+    }
+
+    /**
+     * Progressively downsamples an image to the target dimension using multi-pass half-stepping
+     * while preserving full RGB color channels (TYPE_INT_RGB).
+     *
+     * @param image the source BufferedImage
+     * @param targetDim the target square dimension (e.g. 128)
+     * @return an RGB BufferedImage of size targetDim x targetDim, or {@code null} if input is null
+     */
+    public static BufferedImage downsampleProgressiveColor(final BufferedImage image, final int targetDim)
+    {
+        if (image == null)
+        {
+            return null;
+        }
+
+        BufferedImage current = image;
+        int w = image.getWidth();
+        int h = image.getHeight();
+
+        while (w > targetDim * 2 || h > targetDim * 2)
+        {
+            w = Math.max(targetDim, w / 2);
+            h = Math.max(targetDim, h / 2);
+            final BufferedImage step = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+            final Graphics2D g = step.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.drawImage(current, 0, 0, w, h, null);
+            g.dispose();
+            current = step;
+        }
+
+        final BufferedImage finalImg = new BufferedImage(targetDim, targetDim, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = finalImg.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(current, 0, 0, targetDim, targetDim, null);
+        g.dispose();
+
+        return finalImg;
+    }
+
+    /**
+     * Computes a 128x128 3-channel (RGB) color SSIM matrix (49,152 bytes) for a Base64-encoded PNG screenshot.
+     * Progressively downsamples preserving RGB channels and stores concatenated R, G, and B channel planes.
+     *
+     * @param base64Png the Base64-encoded PNG screenshot string
+     * @return the Base64-encoded 128x128x3 color matrix, or {@code null} if input is invalid
+     */
+    public static String computeColorSsimMatrix(final String base64Png)
+    {
+        if (base64Png == null || base64Png.isEmpty())
+        {
+            return null;
+        }
+
+        try
+        {
+            final byte[] imageBytes = Base64.getDecoder().decode(base64Png);
+            try (final ByteArrayInputStream bais = new ByteArrayInputStream(imageBytes))
+            {
+                final BufferedImage image = ImageIO.read(bais);
+                if (image == null)
+                {
+                    return null;
+                }
+
+                final BufferedImage resized = downsampleProgressiveColor(image, DEFAULT_SSIM_MATRIX_DIM);
+                if (resized == null)
+                {
+                    return null;
+                }
+
+                final int channelSize = DEFAULT_SSIM_MATRIX_DIM * DEFAULT_SSIM_MATRIX_DIM;
+                final byte[] matrixBytes = new byte[channelSize * 3];
+
+                for (int y = 0; y < DEFAULT_SSIM_MATRIX_DIM; y++)
+                {
+                    for (int x = 0; x < DEFAULT_SSIM_MATRIX_DIM; x++)
+                    {
+                        final int rgb = resized.getRGB(x, y);
+                        final int idx = y * DEFAULT_SSIM_MATRIX_DIM + x;
+                        matrixBytes[idx] = (byte) ((rgb >> 16) & 0xFF);
+                        matrixBytes[channelSize + idx] = (byte) ((rgb >> 8) & 0xFF);
+                        matrixBytes[(channelSize * 2) + idx] = (byte) (rgb & 0xFF);
+                    }
+                }
+                return Base64.getEncoder().encodeToString(matrixBytes);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.error("Failed to decode screenshot or compute color SSIM matrix", e);
+            return null;
+        }
     }
 
     /**
@@ -222,6 +319,15 @@ public final class ScreenshotHasher
         {
             final byte[] bytes = Base64.getDecoder().decode(base64Matrix);
             final int len = bytes.length;
+            if (len % 3 == 0)
+            {
+                final int channelLen = len / 3;
+                final int dim = (int) Math.sqrt(channelLen);
+                if (dim * dim == channelLen)
+                {
+                    return dim;
+                }
+            }
             final int dim = (int) Math.sqrt(len);
             return (dim * dim == len) ? dim : 0;
         }
@@ -232,7 +338,39 @@ public final class ScreenshotHasher
     }
 
     /**
+     * Checks whether the given Base64-encoded SSIM matrix represents a 3-channel color matrix.
+     *
+     * @param base64Matrix the Base64 matrix string
+     * @return true if the matrix length corresponds to 3 square channels (3 * dim * dim)
+     */
+    public static boolean isColorMatrix(final String base64Matrix)
+    {
+        if (base64Matrix == null || base64Matrix.isBlank())
+        {
+            return false;
+        }
+
+        try
+        {
+            final byte[] bytes = Base64.getDecoder().decode(base64Matrix);
+            final int len = bytes.length;
+            if (len % 3 != 0)
+            {
+                return false;
+            }
+            final int channelLen = len / 3;
+            final int dim = (int) Math.sqrt(channelLen);
+            return (dim * dim == channelLen) && dim >= 8;
+        }
+        catch (final Exception e)
+        {
+            return false;
+        }
+    }
+
+    /**
      * Converts a Base64-encoded SSIM luminance matrix into a viewable PNG data URI (e.g. data:image/png;base64,...).
+     * Automatically handles both 1-channel grayscale and 3-channel RGB matrices.
      *
      * @param base64Matrix the Base64-encoded luminance matrix
      * @return the PNG data URI string, or {@code null} if invalid
@@ -248,6 +386,30 @@ public final class ScreenshotHasher
         {
             final byte[] bytes = Base64.getDecoder().decode(base64Matrix);
             final int len = bytes.length;
+
+            if (isColorMatrix(base64Matrix))
+            {
+                final int channelLen = len / 3;
+                final int dim = (int) Math.sqrt(channelLen);
+                final BufferedImage img = new BufferedImage(dim, dim, BufferedImage.TYPE_INT_RGB);
+                for (int y = 0; y < dim; y++)
+                {
+                    for (int x = 0; x < dim; x++)
+                    {
+                        final int idx = y * dim + x;
+                        final int r = bytes[idx] & 0xFF;
+                        final int g = bytes[channelLen + idx] & 0xFF;
+                        final int b = bytes[(channelLen * 2) + idx] & 0xFF;
+                        img.setRGB(x, y, (r << 16) | (g << 8) | b);
+                    }
+                }
+                try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
+                {
+                    ImageIO.write(img, "png", baos);
+                    return "data:image/png;base64," + Base64.getEncoder().encodeToString(baos.toByteArray());
+                }
+            }
+
             final int dim = (int) Math.sqrt(len);
             if (dim * dim != len || dim == 0)
             {
@@ -255,10 +417,10 @@ public final class ScreenshotHasher
             }
 
             final BufferedImage img = new BufferedImage(dim, dim, BufferedImage.TYPE_BYTE_GRAY);
-            final byte[] imgData = ((java.awt.image.DataBufferByte) img.getRaster().getDataBuffer()).getData();
+            final byte[] imgData = ((DataBufferByte) img.getRaster().getDataBuffer()).getData();
             System.arraycopy(bytes, 0, imgData, 0, len);
 
-            try (final java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream())
+            try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
             {
                 ImageIO.write(img, "png", baos);
                 return "data:image/png;base64," + Base64.getEncoder().encodeToString(baos.toByteArray());
@@ -272,11 +434,12 @@ public final class ScreenshotHasher
     }
 
     /**
-     * Calculates the Mean SSIM score (0.0 to 1.0) between two Base64-encoded luminance matrices.
-     * Evaluates across 8x8 sliding blocks dynamically matching the square matrix dimension.
+     * Calculates the Mean SSIM score (0.0 to 1.0) between two Base64-encoded matrices.
+     * Automatically dispatches to 3-channel color SSIM if both matrices are color matrices,
+     * or single-channel luminance SSIM otherwise.
      *
-     * @param base64Matrix1 the first Base64 luminance matrix
-     * @param base64Matrix2 the second Base64 luminance matrix
+     * @param base64Matrix1 the first Base64 matrix
+     * @param base64Matrix2 the second Base64 matrix
      * @return SSIM score between 0.0 and 1.0 (1.0 = identical), or 0.0 if invalid
      */
     public static double calculateSsim(final String base64Matrix1, final String base64Matrix2)
@@ -284,6 +447,11 @@ public final class ScreenshotHasher
         if (base64Matrix1 == null || base64Matrix2 == null)
         {
             return 0.0;
+        }
+
+        if (isColorMatrix(base64Matrix1) && isColorMatrix(base64Matrix2))
+        {
+            return calculateColorSsim(base64Matrix1, base64Matrix2);
         }
 
         try
@@ -303,81 +471,145 @@ public final class ScreenshotHasher
                 return 0.0;
             }
 
-            final int width = dim;
-            final int height = dim;
-            final int windowSize = 8;
-            final double k1 = 0.01;
-            final double k2 = 0.03;
-            final double L = 255.0;
-            final double c1 = Math.pow(k1 * L, 2);
-            final double c2 = Math.pow(k2 * L, 2);
-
-            double totalSsim = 0;
-            int blockCount = 0;
-
-            for (int y = 0; y < height; y += windowSize)
-            {
-                for (int x = 0; x < width; x += windowSize)
-                {
-                    final int w = Math.min(windowSize, width - x);
-                    final int h = Math.min(windowSize, height - y);
-                    final int numPixels = w * h;
-
-                    double sumX = 0;
-                    double sumY = 0;
-
-                    for (int j = 0; j < h; j++)
-                    {
-                        for (int i = 0; i < w; i++)
-                        {
-                            final int idx = (y + j) * width + (x + i);
-                            final int valX = bytes1[idx] & 0xFF;
-                            final int valY = bytes2[idx] & 0xFF;
-                            sumX += valX;
-                            sumY += valY;
-                        }
-                    }
-
-                    final double muX = sumX / numPixels;
-                    final double muY = sumY / numPixels;
-
-                    double varX = 0;
-                    double varY = 0;
-                    double covXY = 0;
-
-                    for (int j = 0; j < h; j++)
-                    {
-                        for (int i = 0; i < w; i++)
-                        {
-                            final int idx = (y + j) * width + (x + i);
-                            final double valX = (bytes1[idx] & 0xFF) - muX;
-                            final double valY = (bytes2[idx] & 0xFF) - muY;
-                            varX += valX * valX;
-                            varY += valY * valY;
-                            covXY += valX * valY;
-                        }
-                    }
-
-                    varX /= numPixels;
-                    varY /= numPixels;
-                    covXY /= numPixels;
-
-                    final double numerator = (2 * muX * muY + c1) * (2 * covXY + c2);
-                    final double denominator = (muX * muX + muY * muY + c1) * (varX + varY + c2);
-                    final double blockSsim = numerator / denominator;
-
-                    totalSsim += blockSsim;
-                    blockCount++;
-                }
-            }
-
-            return blockCount > 0 ? Math.max(0.0, Math.min(1.0, totalSsim / blockCount)) : 0.0;
+            return calculateSsimChannel(bytes1, bytes2, 0, dim);
         }
         catch (final IllegalArgumentException e)
         {
             LOG.error("Failed to decode Base64 matrix for SSIM calculation", e);
             return 0.0;
         }
+    }
+
+    /**
+     * Calculates the composite 3-channel color SSIM score across R, G, and B planes.
+     *
+     * @param base64Matrix1 the first Base64 color matrix
+     * @param base64Matrix2 the second Base64 color matrix
+     * @return composite color SSIM score between 0.0 and 1.0 (1.0 = identical), or 0.0 if invalid
+     */
+    public static double calculateColorSsim(final String base64Matrix1, final String base64Matrix2)
+    {
+        if (base64Matrix1 == null || base64Matrix2 == null)
+        {
+            return 0.0;
+        }
+
+        try
+        {
+            final byte[] bytes1 = Base64.getDecoder().decode(base64Matrix1);
+            final byte[] bytes2 = Base64.getDecoder().decode(base64Matrix2);
+
+            if (bytes1.length != bytes2.length)
+            {
+                return 0.0;
+            }
+
+            final int totalLen = bytes1.length;
+            if (totalLen % 3 != 0)
+            {
+                return 0.0;
+            }
+
+            final int channelLen = totalLen / 3;
+            final int dim = (int) Math.sqrt(channelLen);
+            if (dim * dim != channelLen || dim < 8)
+            {
+                return 0.0;
+            }
+
+            final double ssimR = calculateSsimChannel(bytes1, bytes2, 0, dim);
+            final double ssimG = calculateSsimChannel(bytes1, bytes2, channelLen, dim);
+            final double ssimB = calculateSsimChannel(bytes1, bytes2, channelLen * 2, dim);
+
+            return (ssimR + ssimG + ssimB) / 3.0;
+        }
+        catch (final IllegalArgumentException e)
+        {
+            LOG.error("Failed to decode Base64 matrix for Color SSIM calculation", e);
+            return 0.0;
+        }
+    }
+
+    /**
+     * Calculates the Mean SSIM score for a single channel plane within a byte array starting at offset.
+     *
+     * @param bytes1 the first byte array
+     * @param bytes2 the second byte array
+     * @param offset starting index in both byte arrays
+     * @param dim the square channel dimension
+     * @return SSIM score for the channel plane
+     */
+    private static double calculateSsimChannel(final byte[] bytes1, final byte[] bytes2, final int offset, final int dim)
+    {
+        final int width = dim;
+        final int height = dim;
+        final int windowSize = 8;
+        final double k1 = 0.01;
+        final double k2 = 0.03;
+        final double L = 255.0;
+        final double c1 = Math.pow(k1 * L, 2);
+        final double c2 = Math.pow(k2 * L, 2);
+
+        double totalSsim = 0;
+        int blockCount = 0;
+
+        for (int y = 0; y < height; y += windowSize)
+        {
+            for (int x = 0; x < width; x += windowSize)
+            {
+                final int w = Math.min(windowSize, width - x);
+                final int h = Math.min(windowSize, height - y);
+                final int numPixels = w * h;
+
+                double sumX = 0;
+                double sumY = 0;
+
+                for (int j = 0; j < h; j++)
+                {
+                    for (int i = 0; i < w; i++)
+                    {
+                        final int idx = offset + (y + j) * width + (x + i);
+                        final int valX = bytes1[idx] & 0xFF;
+                        final int valY = bytes2[idx] & 0xFF;
+                        sumX += valX;
+                        sumY += valY;
+                    }
+                }
+
+                final double muX = sumX / numPixels;
+                final double muY = sumY / numPixels;
+
+                double varX = 0;
+                double varY = 0;
+                double covXY = 0;
+
+                for (int j = 0; j < h; j++)
+                {
+                    for (int i = 0; i < w; i++)
+                    {
+                        final int idx = offset + (y + j) * width + (x + i);
+                        final double valX = (bytes1[idx] & 0xFF) - muX;
+                        final double valY = (bytes2[idx] & 0xFF) - muY;
+                        varX += valX * valX;
+                        varY += valY * valY;
+                        covXY += valX * valY;
+                    }
+                }
+
+                varX /= numPixels;
+                varY /= numPixels;
+                covXY /= numPixels;
+
+                final double numerator = (2 * muX * muY + c1) * (2 * covXY + c2);
+                final double denominator = (muX * muX + muY * muY + c1) * (varX + varY + c2);
+                final double blockSsim = numerator / denominator;
+
+                totalSsim += blockSsim;
+                blockCount++;
+            }
+        }
+
+        return blockCount > 0 ? Math.max(0.0, Math.min(1.0, totalSsim / blockCount)) : 0.0;
     }
 
     /**

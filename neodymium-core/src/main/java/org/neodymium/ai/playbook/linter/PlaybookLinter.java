@@ -140,15 +140,19 @@ public final class PlaybookLinter
             ReasoningEffort reasoningEffort = config.getLinterReasoningEffort();
             if (this.session != null && this.session.data() != null)
             {
-                final Object dynamicEffort = this.session.data().get("neodymium.ai.linter.reasoningEffort");
+                final Object dynamicEffort = this.session.data().get("neodymium.ai.linter.reasoningEffort") != null
+                    ? this.session.data().get("neodymium.ai.linter.reasoningEffort")
+                    : (this.session.data().get("neodymium.ai.linter.thinkingLevel") != null
+                        ? this.session.data().get("neodymium.ai.linter.thinkingLevel")
+                        : (this.session.data().get("neodymium.ai.reasoningEffort") != null
+                            ? this.session.data().get("neodymium.ai.reasoningEffort")
+                            : this.session.data().get("neodymium.ai.thinkingLevel")));
                 if (dynamicEffort != null && !String.valueOf(dynamicEffort).isBlank())
                 {
-                    try
+                    final ReasoningEffort parsed = AiConfiguration.parseReasoningEffort(String.valueOf(dynamicEffort));
+                    if (parsed != null)
                     {
-                        reasoningEffort = ReasoningEffort.valueOf(String.valueOf(dynamicEffort).trim().toUpperCase());
-                    }
-                    catch (final IllegalArgumentException ignored)
-                    {
+                        reasoningEffort = parsed;
                     }
                 }
             }

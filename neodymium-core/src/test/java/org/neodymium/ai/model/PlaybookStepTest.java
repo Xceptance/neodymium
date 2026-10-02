@@ -55,7 +55,51 @@ public class PlaybookStepTest
 
         final PlaybookStep layoutStep = new PlaybookStep();
         layoutStep.setInstruction("Check sidebar layout (layout)");
-        Assertions.assertTrue(layoutStep.isVisualStep());
+        Assertions.assertFalse(layoutStep.isVisualStep());
+        Assertions.assertTrue(layoutStep.isLayoutStep());
+    }
+
+    @Test
+    public void testIsLayoutStep()
+    {
+        final PlaybookStep standardStep = new PlaybookStep();
+        standardStep.setInstruction("Click on the login button");
+        Assertions.assertFalse(standardStep.isLayoutStep());
+
+        final PlaybookStep defaultLayout = new PlaybookStep();
+        defaultLayout.setInstruction("Verify category grid layout (layout)");
+        Assertions.assertTrue(defaultLayout.isLayoutStep());
+        Assertions.assertFalse(defaultLayout.isVisualStep());
+        Assertions.assertFalse(defaultLayout.isFullPageVisualStep());
+        Assertions.assertEquals(0.92, defaultLayout.getSsimMinScore(), 0.001);
+
+        final PlaybookStep threshStep1 = new PlaybookStep();
+        threshStep1.setInstruction("Check layout (layout: threshold=0.90)");
+        Assertions.assertTrue(threshStep1.isLayoutStep());
+        Assertions.assertEquals(0.90, threshStep1.getSsimMinScore(), 0.001);
+
+        final PlaybookStep threshStep2 = new PlaybookStep();
+        threshStep2.setInstruction("Check layout (layout: 88%)");
+        Assertions.assertTrue(threshStep2.isLayoutStep());
+        Assertions.assertEquals(0.88, threshStep2.getSsimMinScore(), 0.001);
+
+        final PlaybookStep fullStep = new PlaybookStep();
+        fullStep.setInstruction("Check entire page structure (layout: full)");
+        Assertions.assertTrue(fullStep.isLayoutStep());
+        Assertions.assertTrue(fullStep.isFullPageVisualStep());
+        Assertions.assertEquals(0.92, fullStep.getSsimMinScore(), 0.001);
+
+        final PlaybookStep combStep1 = new PlaybookStep();
+        combStep1.setInstruction("Check entire page (layout: full, threshold=0.85)");
+        Assertions.assertTrue(combStep1.isLayoutStep());
+        Assertions.assertTrue(combStep1.isFullPageVisualStep());
+        Assertions.assertEquals(0.85, combStep1.getSsimMinScore(), 0.001);
+
+        final PlaybookStep combStep2 = new PlaybookStep();
+        combStep2.setInstruction("Check entire page (layout: 95%, full)");
+        Assertions.assertTrue(combStep2.isLayoutStep());
+        Assertions.assertTrue(combStep2.isFullPageVisualStep());
+        Assertions.assertEquals(0.95, combStep2.getSsimMinScore(), 0.001);
     }
 
     @Test
@@ -433,5 +477,37 @@ public class PlaybookStepTest
         final String jsonOriginal = "{\"instruction\":\"Verify logo\",\"ssimMinScore\":0.96}";
         final PlaybookStep fromOriginal = mapper.readValue(jsonOriginal, PlaybookStep.class);
         Assertions.assertEquals(0.96, fromOriginal.getSsimMinScore(), 0.0001);
+    }
+
+    @Test
+    public void testContextLevelTagParsing()
+    {
+        final PlaybookStep stepEquals = new PlaybookStep("Verify the estimated total is displayed (contextlevel=standard)");
+        Assertions.assertEquals("Verify the estimated total is displayed", stepEquals.getInstruction());
+        Assertions.assertEquals("STANDARD", stepEquals.getContextLevel());
+
+        final PlaybookStep stepColon = new PlaybookStep("Verify cart items (contextlevel: lean)");
+        Assertions.assertEquals("Verify cart items", stepColon.getInstruction());
+        Assertions.assertEquals("LEAN", stepColon.getContextLevel());
+
+        final PlaybookStep stepSpaces = new PlaybookStep("Verify pricing ( contextlevel = rich )");
+        Assertions.assertEquals("Verify pricing", stepSpaces.getInstruction());
+        Assertions.assertEquals("RICH", stepSpaces.getContextLevel());
+
+        final PlaybookStep stepShortColon = new PlaybookStep("Scroll to the footer (context: lean)");
+        Assertions.assertEquals("Scroll to the footer", stepShortColon.getInstruction());
+        Assertions.assertEquals("LEAN", stepShortColon.getContextLevel());
+
+        final PlaybookStep stepShortEquals = new PlaybookStep("Scroll to the footer (context=minimal)");
+        Assertions.assertEquals("Scroll to the footer", stepShortEquals.getInstruction());
+        Assertions.assertEquals("MINIMAL", stepShortEquals.getContextLevel());
+
+        final PlaybookStep stepShortNone = new PlaybookStep("Scroll to the footer (context: none)");
+        Assertions.assertEquals("Scroll to the footer", stepShortNone.getInstruction());
+        Assertions.assertEquals("HINT", stepShortNone.getContextLevel());
+
+        final PlaybookStep stepShortHyphen = new PlaybookStep("Check layout (context: visual-lean)");
+        Assertions.assertEquals("Check layout", stepShortHyphen.getInstruction());
+        Assertions.assertEquals("VISUAL_LEAN", stepShortHyphen.getContextLevel());
     }
 }

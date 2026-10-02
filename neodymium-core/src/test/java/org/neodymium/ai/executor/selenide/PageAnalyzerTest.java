@@ -484,4 +484,40 @@ public class PageAnalyzerTest extends BaseAiTest
             Selenide.closeWebDriver();
         }
     }
+
+    /**
+     * Verifies that containers without semantic locators (id, name, data-testid, aria-label, role)
+     * retain their CSS class attribute in STANDARD mode even when stamped with synthetic automationId (data-ai).
+     *
+     * @throws Exception if embedded server fails to start
+     */
+    @Test
+    public void testContainerClassPreservationWhenAutomationIdPresent() throws Exception
+    {
+        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        server.start();
+        try
+        {
+            Selenide.open("http://localhost:" + server.getPort() + "/PageAnalyzerTest/testElementsAndContextLevels.html");
+            final PageAnalyzer analyzer = new PageAnalyzer(WebDriverRunner.getWebDriver());
+
+            final String standardDom = analyzer.captureSimplifiedDom(ContextLevel.STANDARD);
+            assertNotNull(standardDom, "STANDARD DOM must not be null");
+
+            // Synthetic data-ai must be stamped on extracted elements
+            assertTrue(standardDom.contains("data-ai="), "DOM must contain synthetic data-ai attributes");
+
+            // Containers without semantic locators must preserve their class names
+            assertTrue(standardDom.contains("class=\"nav-bar\""), "STANDARD DOM must retain class on nav container");
+            assertTrue(standardDom.contains("class=\"site-footer\""), "STANDARD DOM must retain class on footer container");
+            assertTrue(standardDom.contains("class=\"auth-form-section\""), "STANDARD DOM must retain class on auth-form-section container");
+            assertTrue(standardDom.contains("class=\"interactive-widgets\""), "STANDARD DOM must retain class on interactive-widgets container");
+        }
+        finally
+        {
+            server.stop();
+            Selenide.closeWebDriver();
+        }
+    }
 }
+

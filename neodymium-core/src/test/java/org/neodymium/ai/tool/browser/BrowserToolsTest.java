@@ -18,17 +18,23 @@
  */
 package org.neodymium.ai.tool.browser;
 
+import static com.codeborne.selenide.Selenide.$;
+
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.executor.selenide.PageAnalyzer;
+import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.session.AiSession;
@@ -81,6 +87,7 @@ public class BrowserToolsTest
         final List<String> expectedTools = List.of(
                 "click",
                 "fill",
+                "fill_form",
                 "type",
                 "navigate",
                 "select",
@@ -331,6 +338,24 @@ public class BrowserToolsTest
         final JsonNode req = tool.getDefinition().parametersSchema().path("required");
         Assertions.assertTrue(req.isArray());
         Assertions.assertEquals(2, req.size());
+    }
+
+    @Test
+    public void testBrowserFillFormToolSchema()
+    {
+        final AiTool tool = this.registry.getTool("fill_form").orElseThrow();
+        final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
+
+        Assertions.assertTrue(props.has("fields"));
+        final JsonNode items = props.path("fields").path("items").path("properties");
+        Assertions.assertTrue(items.has("selector"));
+        Assertions.assertTrue(items.has("value"));
+        Assertions.assertTrue(items.has("clearFirst"));
+
+        final JsonNode req = tool.getDefinition().parametersSchema().path("required");
+        Assertions.assertTrue(req.isArray());
+        Assertions.assertEquals(1, req.size());
+        Assertions.assertEquals("fields", req.get(0).asText());
     }
 
     @Test
@@ -616,6 +641,165 @@ public class BrowserToolsTest
     }
 
     @Test
+    public void testBrowserQueryDomToolSchema()
+    {
+        final AiTool tool = this.registry.getTool("query_dom").orElseThrow();
+        final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
+        Assertions.assertTrue(props.has("selector"));
+        Assertions.assertTrue(props.has("text"));
+        Assertions.assertTrue(props.has("limit"));
+        Assertions.assertTrue(props.path("limit").path("description").asText().contains("default: 20"));
+    }
+
+    @Test
+    public void testBrowserQueryDomAncestorSuppressionAndSorting() throws Exception
+    {
+        Configuration.browser = "chrome";
+        Configuration.headless = true;
+        try
+        {
+            final String html = """
+                <!DOCTYPE html>
+                <html>
+                <body>
+                    <div id="page-wrapper" class="page">
+                        <div id="main-content" class="content">
+                            <div class="cart-summary">
+                                <div class="totals-container">
+                                    <span class="total-label">Estimated Total</span>
+                                    <span class="total-amount">$123.45</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </body>
+                </html>
+                """;
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            final AiTool tool = this.registry.getTool("query_dom").orElseThrow();
+            final ObjectMapper mapper = new ObjectMapper();
+            final ToolCall call = new ToolCall("call-query-ancestor", "query_dom", mapper.createObjectNode().put("text", "Estimated Total"));
+
+            final ToolResult result = tool.execute(call, null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+
+            final JsonNode json = mapper.readTree(result.content());
+            Assertions.assertEquals("SUCCESS", json.path("status").asText());
+            final JsonNode matches = json.path("matches");
+            Assertions.assertTrue(matches.isArray());
+            Assertions.assertTrue(matches.size() >= 1);
+
+            // Leaf match should be the first element, not the outer wrapper (page-wrapper or main-content)
+            final JsonNode firstMatch = matches.get(0);
+            Assertions.assertEquals("span", firstMatch.path("tag").asText());
+            Assertions.assertEquals("Estimated Total", firstMatch.path("text").asText());
+
+            // Outer ancestor containers should have been suppressed
+            for (final JsonNode match : matches)
+            {
+                Assertions.assertNotEquals("div#page-wrapper.page", match.path("selector").asText());
+                Assertions.assertNotEquals("div#main-content.content", match.path("selector").asText());
+            }
+
+            // When includeAncestors is specified, it should navigate up the specified number of levels
+            final ToolCall callWithAncestors = new ToolCall("call-query-ancestor-1", "query_dom", mapper.createObjectNode()
+                    .put("text", "Estimated Total")
+                    .put("includeAncestors", 1));
+            final ToolResult resultWithAncestors = tool.execute(callWithAncestors, null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, resultWithAncestors.status());
+            final JsonNode jsonWithAncestors = mapper.readTree(resultWithAncestors.content());
+            final JsonNode matchesWithAncestors = jsonWithAncestors.path("matches");
+            Assertions.assertTrue(matchesWithAncestors.size() >= 1);
+            Assertions.assertEquals("div", matchesWithAncestors.get(0).path("tag").asText());
+            Assertions.assertEquals("div.totals-container", matchesWithAncestors.get(0).path("selector").asText());
+            Assertions.assertTrue(matchesWithAncestors.get(0).path("outerHtml").asText().contains("Estimated Total"));
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testBrowserQueryDomAccurateVisibilityAndDataAiSelector() throws Exception
+    {
+        Configuration.browser = "chrome";
+        Configuration.headless = true;
+        try
+        {
+            final String html = """
+                <!DOCTYPE html>
+                <html>
+                <body>
+                    <div id="country-modal-overlay" style="visibility: hidden; opacity: 0;">
+                        <span data-ai="xc-modal-us">United States ($)</span>
+                    </div>
+                    <div style="display: none;">
+                        <p>Hidden by display none</p>
+                    </div>
+                    <button id="country-btn" class="utility-btn hover:bg-gray-100" data-ai="xc-country-btn">🇺🇸</button>
+                    <span data-ai="xc-page-tag">Visible Text Node</span>
+                </body>
+                </html>
+                """;
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            final AiTool tool = this.registry.getTool("query_dom").orElseThrow();
+            final ObjectMapper mapper = new ObjectMapper();
+
+            // 1. Hidden in modal overlay (visibility: hidden, opacity: 0) -> visible: false, inViewport: false, data-ai selector
+            final ToolCall callHidden = new ToolCall("call-query-hidden", "query_dom", mapper.createObjectNode().put("text", "United States ($)"));
+            final ToolResult resultHidden = tool.execute(callHidden, null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, resultHidden.status());
+            final JsonNode jsonHidden = mapper.readTree(resultHidden.content());
+            Assertions.assertEquals(1, jsonHidden.path("matchCount").asInt());
+            final JsonNode matchHidden = jsonHidden.path("matches").get(0);
+            Assertions.assertFalse(matchHidden.path("visible").asBoolean());
+            Assertions.assertFalse(matchHidden.path("inViewport").asBoolean());
+            Assertions.assertEquals("span[data-ai=\"xc-modal-us\"]", matchHidden.path("selector").asText());
+            Assertions.assertEquals("xc-modal-us", matchHidden.path("dataAi").asText());
+            Assertions.assertTrue(jsonHidden.has("note"));
+            Assertions.assertTrue(jsonHidden.path("note").asText().contains("All 1 matching element(s) are currently hidden (visible=false)"));
+
+            // 2. Hidden by display: none -> visible: false, inViewport: false
+            final ToolCall callDisplayNone = new ToolCall("call-query-none", "query_dom", mapper.createObjectNode().put("text", "Hidden by display none"));
+            final ToolResult resultDisplayNone = tool.execute(callDisplayNone, null);
+            final JsonNode jsonDisplayNone = mapper.readTree(resultDisplayNone.content());
+            Assertions.assertEquals(1, jsonDisplayNone.path("matchCount").asInt());
+            Assertions.assertFalse(jsonDisplayNone.path("matches").get(0).path("visible").asBoolean());
+            Assertions.assertFalse(jsonDisplayNone.path("matches").get(0).path("inViewport").asBoolean());
+
+            // 3. Visible button with ID and data-ai -> selector uses ID, dataAi field populated, invalid Tailwind class filtered
+            final ToolCall callButton = new ToolCall("call-query-btn", "query_dom", mapper.createObjectNode().put("selector", "#country-btn"));
+            final ToolResult resultButton = tool.execute(callButton, null);
+            final JsonNode jsonButton = mapper.readTree(resultButton.content());
+            Assertions.assertEquals(1, jsonButton.path("matchCount").asInt());
+            final JsonNode matchButton = jsonButton.path("matches").get(0);
+            Assertions.assertTrue(matchButton.path("visible").asBoolean());
+            Assertions.assertTrue(matchButton.path("inViewport").asBoolean());
+            Assertions.assertEquals("button#country-btn.utility-btn", matchButton.path("selector").asText());
+            Assertions.assertEquals("xc-country-btn", matchButton.path("dataAi").asText());
+
+            // 4. Visible element with no ID but data-ai -> selector uses [data-ai="..."]
+            final ToolCall callDataAi = new ToolCall("call-query-data-ai", "query_dom", mapper.createObjectNode().put("text", "Visible Text Node"));
+            final ToolResult resultDataAi = tool.execute(callDataAi, null);
+            final JsonNode jsonDataAi = mapper.readTree(resultDataAi.content());
+            Assertions.assertEquals(1, jsonDataAi.path("matchCount").asInt());
+            final JsonNode matchDataAi = jsonDataAi.path("matches").get(0);
+            Assertions.assertTrue(matchDataAi.path("visible").asBoolean());
+            Assertions.assertTrue(matchDataAi.path("inViewport").asBoolean());
+            Assertions.assertEquals("span[data-ai=\"xc-page-tag\"]", matchDataAi.path("selector").asText());
+            Assertions.assertEquals("xc-page-tag", matchDataAi.path("dataAi").asText());
+            Assertions.assertFalse(jsonDataAi.has("note"));
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+        }
+    }
+
+    @Test
     public void testUnescapeLiteralText()
     {
         Assertions.assertEquals("$27.58", BrowserToolProvider.unescapeLiteralText("\\$27.58"));
@@ -649,6 +833,72 @@ public class BrowserToolsTest
 
         final AssertionError err = Assertions.assertThrows(AssertionError.class, () -> tool.execute(call, null));
         Assertions.assertTrue(err.getMessage().contains("No active browser window found to assert page title"));
+    }
+
+    @Test
+    public void testAssertTextOnUnstampedPageWithAutomationIdTriggersStamping() throws Exception
+    {
+        Configuration.browser = "chrome";
+        Configuration.headless = true;
+        try
+        {
+            final String html = """
+                <!DOCTYPE html>
+                <html>
+                <body>
+                    <div class="order-summary-box">
+                        <span class="subtotal-label">Subtotal:</span>
+                        <span class="subtotal-value">$31.98</span>
+                    </div>
+                </body>
+                </html>
+                """;
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            // Initially, the raw HTML in the browser has NO data-ai attributes
+            Assertions.assertFalse(Selenide.$("[data-ai]").exists());
+
+            // First, determine what deterministic automation ID is generated for the subtotal value
+            final WebDriver driver = WebDriverRunner.getWebDriver();
+            new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.STANDARD);
+            final String autoId = Selenide.$(".subtotal-value").getAttribute("data-ai");
+            Assertions.assertNotNull(autoId);
+            Assertions.assertTrue(autoId.startsWith("xc"));
+
+            // Now reset the page to unstamped state
+            Selenide.open("data:text/html;charset=utf-8," + html);
+            Assertions.assertFalse(Selenide.$("[data-ai]").exists());
+            SelenideElementFinder.resetDomStampCacheForTesting();
+
+            final AiTool tool = this.registry.getTool("assert_text").orElseThrow();
+            final ObjectMapper mapper = new ObjectMapper();
+
+            // Calling assert_text with [data-ai="..."] on the unstamped page must trigger stamping and succeed
+            final ToolCall call = new ToolCall("call-assert-auto-1", "assert_text", mapper.createObjectNode()
+                    .put("selector", "[data-ai='" + autoId + "']")
+                    .put("expectedText", "$31.98"));
+            final ToolResult result = tool.execute(call, null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+
+            final JsonNode json = mapper.readTree(result.content());
+            Assertions.assertEquals("SUCCESS", json.path("status").asText());
+            Assertions.assertTrue(json.path("matched").asBoolean());
+            Assertions.assertTrue(json.hasNonNull("domFeatureVector"));
+
+            // Verify DOM is now stamped
+            Assertions.assertTrue(Selenide.$("[data-ai]").exists());
+
+            // Also test with #xc... selector format
+            final ToolCall callHash = new ToolCall("call-assert-auto-2", "assert_text", mapper.createObjectNode()
+                    .put("selector", "#" + autoId)
+                    .put("expectedText", "$31.98"));
+            final ToolResult resultHash = tool.execute(callHash, null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, resultHash.status());
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+        }
     }
 
     @Test
@@ -1267,6 +1517,72 @@ public class BrowserToolsTest
         final ToolResult blankResult = hoverTool.execute(blankCall, null);
         Assertions.assertEquals(ToolResult.Status.ERROR, blankResult.status());
         Assertions.assertTrue(blankResult.content().contains("Target selector or text must be specified"));
+    }
+
+    @Test
+    public void testBrowserFillFormExecution() throws Exception
+    {
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Form Test</title></head>
+            <body>
+                <form id="checkout-form">
+                    <input id="firstName" type="text" value="OldFirst" />
+                    <input id="lastName" type="text" value="OldLast" />
+                    <select id="country">
+                        <option value="US">United States</option>
+                        <option value="CA">Canada</option>
+                        <option value="DE">Germany</option>
+                    </select>
+                    <textarea id="notes">Old Note</textarea>
+                </form>
+            </body>
+            </html>
+            """;
+        try
+        {
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            final AiTool tool = this.registry.getTool("fill_form").orElseThrow();
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode args = mapper.createObjectNode();
+            final ArrayNode fields = args.putArray("fields");
+
+            final ObjectNode f1 = fields.addObject();
+            f1.put("selector", "#firstName");
+            f1.put("value", "Alice");
+
+            final ObjectNode f2 = fields.addObject();
+            f2.put("selector", "#lastName");
+            f2.put("value", "Smith");
+
+            final ObjectNode f3 = fields.addObject();
+            f3.put("selector", "#country");
+            f3.put("value", "DE");
+
+            final ObjectNode f4 = fields.addObject();
+            f4.put("selector", "#notes");
+            f4.put("value", "Deliver to porch");
+
+            final ToolCall call = new ToolCall("call-fill-form-1", "fill_form", args);
+            final ToolResult result = tool.execute(call, null);
+
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+
+            final JsonNode res = mapper.readTree(result.content());
+            Assertions.assertEquals("SUCCESS", res.path("status").asText());
+            Assertions.assertEquals(4, res.path("count").asInt());
+
+            Assertions.assertEquals("Alice", $("#firstName").getValue());
+            Assertions.assertEquals("Smith", $("#lastName").getValue());
+            Assertions.assertEquals("DE", $("#country").getSelectedOptionValue());
+            Assertions.assertEquals("Deliver to porch", $("#notes").getValue());
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+        }
     }
 }
 

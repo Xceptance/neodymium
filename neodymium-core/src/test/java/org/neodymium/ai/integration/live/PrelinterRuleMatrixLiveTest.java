@@ -157,7 +157,7 @@ public class PrelinterRuleMatrixLiveTest extends BaseAiTest
     @AiInlinePlaybook("""
         description: "Sistema de despacho y plan de vuelo operacional"
         steps: |
-          Asegúrese de que el plan de vuelo se vea correcto y ordenado.
+          Compruebe que el plan de vuelo funcione correctamente.
         """)
     @DisplayName("Rule 5: VAGUE_VERIFICATION (Spanish - Aviation)")
     public void testVagueVerification_Spanish_Aviation(final AiSession session)

@@ -130,7 +130,16 @@ public final class LocatorResolver
             return resolveLocator(clean.substring(4).trim());
         }
 
-        // 4. Neodymium Automation Reference ID shorthand (e.g. "data-ai=xc123")
+        // 4. Neodymium Automation Reference ID shorthand (e.g. "data-ai=xc123", "#xc123", or selectors containing "#xc...")
+        if (clean.matches(".*#xc[a-zA-Z0-9_\\-]+.*"))
+        {
+            final String transformed = clean.replaceAll("#(xc[a-zA-Z0-9_\\-]+)", "[data-ai='$1']");
+            return resolveLocator(transformed);
+        }
+        if (clean.matches("^xc[a-zA-Z0-9_\\-]+$"))
+        {
+            return By.cssSelector("[data-ai='" + clean + "']");
+        }
         if (lower.startsWith("data-ai="))
         {
             final int eqIdx = clean.indexOf('=');
@@ -496,7 +505,7 @@ public final class LocatorResolver
 
     /**
      * Translates a Playwright ARIA role selector (e.g. {@code role=button[name="Submit"]} or {@code role=button})
-     * into a standard Selenium locator.
+     * to Selenide's native W3C {@link Selectors#byRole}.
      *
      * @param clean the sanitized role selector string
      * @return the resolved {@link By} locator, or {@code null} if parsing fails
@@ -535,51 +544,10 @@ public final class LocatorResolver
 
         if (nameVal != null)
         {
-            final String escaped = escapeXpath(nameVal);
-            if ("button".equals(role))
-            {
-                return By.xpath("//button[contains(normalize-space(.), " + escaped + ") or @value=" + escaped + " or @aria-label=" + escaped + "]"
-                        + " | //input[(@type='button' or @type='submit') and (contains(normalize-space(.), " + escaped + ") or @value=" + escaped + " or @aria-label=" + escaped + ")]"
-                        + " | //*[@role='button' and (contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + " or @value=" + escaped + ")]");
-            }
-            if ("link".equals(role))
-            {
-                return By.xpath("//a[contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + "]"
-                        + " | //*[@role='link' and (contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + ")]");
-            }
-            if ("heading".equals(role))
-            {
-                return By.xpath("//*[self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6 or @role='heading'][contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + "]");
-            }
-            return By.xpath("//*[@role='" + role + "' and (contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + " or @value=" + escaped + " or @title=" + escaped + ")]");
+            return Selectors.byRole(role, nameVal);
         }
 
-        if ("button".equals(role))
-        {
-            return By.cssSelector("button, input[type='button'], input[type='submit'], [role='button']");
-        }
-        if ("link".equals(role))
-        {
-            return By.cssSelector("a, [role='link']");
-        }
-        if ("heading".equals(role))
-        {
-            return By.cssSelector("h1, h2, h3, h4, h5, h6, [role='heading']");
-        }
-        if ("checkbox".equals(role))
-        {
-            return By.cssSelector("input[type='checkbox'], [role='checkbox']");
-        }
-        if ("radio".equals(role))
-        {
-            return By.cssSelector("input[type='radio'], [role='radio']");
-        }
-        if ("textbox".equals(role))
-        {
-            return By.cssSelector("input:not([type]), input[type='text'], input[type='email'], input[type='password'], textarea, [role='textbox']");
-        }
-
-        return By.cssSelector("[role='" + role + "']");
+        return Selectors.byRole(role);
     }
 
     /**
@@ -621,25 +589,7 @@ public final class LocatorResolver
             }
             else if (lowerPart.startsWith("role="))
             {
-                final By roleBy = resolveRoleLocator(part);
-                if (roleBy instanceof By.ByXPath byXPath)
-                {
-                    String roleXpath = byXPath.toString();
-                    if (roleXpath.startsWith("By.xpath: "))
-                    {
-                        roleXpath = roleXpath.substring(10).trim();
-                    }
-                    if (roleXpath.startsWith("//"))
-                    {
-                        roleXpath = roleXpath.substring(2);
-                    }
-                    xpath.append(prefix).append("(").append(roleXpath).append(")");
-                }
-                else
-                {
-                    final String roleName = part.substring(5).trim().toLowerCase(Locale.ROOT);
-                    xpath.append(prefix).append(resolveBareRoleXPath(roleName));
-                }
+                xpath.append(prefix).append(resolveRoleXPathForChain(part));
             }
             else if (lowerPart.startsWith("id="))
             {
@@ -718,6 +668,55 @@ public final class LocatorResolver
      * @param role the lowercased role name
      * @return XPath relative step
      */
+    private static String resolveRoleXPathForChain(final String part)
+    {
+        final Matcher matcher = Pattern.compile("^role=([a-zA-Z0-9_-]+)(?:\\[(.*?)\\])?$", Pattern.CASE_INSENSITIVE).matcher(part);
+        if (!matcher.matches())
+        {
+            return "*";
+        }
+        final String role = matcher.group(1).toLowerCase(Locale.ROOT);
+        final String attrs = matcher.group(2);
+        String nameVal = null;
+        if (attrs != null && !attrs.isBlank())
+        {
+            final Matcher nameMatcher = Pattern.compile("name=(?:\"([^\"]*)\"|'([^']*)'|([^,\\]]+))").matcher(attrs);
+            if (nameMatcher.find())
+            {
+                if (nameMatcher.group(1) != null)
+                {
+                    nameVal = nameMatcher.group(1);
+                }
+                else if (nameMatcher.group(2) != null)
+                {
+                    nameVal = nameMatcher.group(2);
+                }
+                else
+                {
+                    nameVal = nameMatcher.group(3).trim();
+                }
+            }
+        }
+        if (nameVal != null)
+        {
+            final String escaped = escapeXpath(nameVal);
+            if ("button".equals(role))
+            {
+                return "*[(self::button or (self::input and (@type='button' or @type='submit')) or @role='button') and (contains(normalize-space(.), " + escaped + ") or @value=" + escaped + " or @aria-label=" + escaped + ")]";
+            }
+            if ("link".equals(role))
+            {
+                return "*[(self::a or @role='link') and (contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + ")]";
+            }
+            if ("heading".equals(role))
+            {
+                return "*[(self::h1 or self::h2 or self::h3 or self::h4 or self::h5 or self::h6 or @role='heading') and (contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + ")]";
+            }
+            return "*[@role='" + role + "' and (contains(normalize-space(.), " + escaped + ") or @aria-label=" + escaped + " or @value=" + escaped + " or @title=" + escaped + ")]";
+        }
+        return resolveBareRoleXPath(role);
+    }
+
     private static String resolveBareRoleXPath(final String role)
     {
         if ("button".equals(role))

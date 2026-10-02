@@ -69,7 +69,7 @@ public final class YamlPlaybookParser implements PlaybookParser
      * Pattern matching standard top-level YAML section keys at the start of lines.
      */
     private static final Pattern YAML_BLOCK_PATTERN = Pattern.compile(
-        "(?m)^(steps|_steps|data|_data|before|beforeEach|_beforeEach|_beforeAll|after|afterEach|_afterEach|_afterAll|inline|_include|include|playbook|actions|promptAddon|description|teardown|_meta|meta):",
+        "(?m)^(steps|_steps|data|_data|before|beforeEach|_beforeEach|_beforeAll|after|afterEach|_afterEach|_afterAll|inline|_include|include|playbook|actions|promptAddon|description|teardown|_meta|meta|_properties|properties):",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -491,47 +491,40 @@ public final class YamlPlaybookParser implements PlaybookParser
 
             if (loadedObject instanceof Map<?, ?> loadedMap)
             {
-                @SuppressWarnings("unchecked")
-                final Map<String, Object> map = (Map<String, Object>) loadedMap;
+                // 1. Root-level properties
+                final Map<String, String> rootProperties = new HashMap<>();
+                parseAndFlattenProperties(loadedMap.get("_properties"), rootProperties);
+                parseAndFlattenProperties(loadedMap.get("properties"), rootProperties);
 
-                // 2. Parse datasets ('data')
-                final Object rawData = map.get("data");
+                // 2. Parse datasets ('data' or '_data')
+                Object rawData = loadedMap.get("data");
+                if (rawData == null)
+                {
+                    rawData = loadedMap.get("_data");
+                }
+
                 if (rawData instanceof List)
                 {
                     for (final Object entry : (List<?>) rawData)
                     {
-                        if (entry instanceof Map)
+                        if (entry instanceof Map<?, ?> mapRow)
                         {
-                            final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
-                            for (final Map.Entry<?, ?> mapEntry : ((Map<?, ?>) entry).entrySet())
-                            {
-                                final String key = String.valueOf(mapEntry.getKey());
-                                final Object val = mapEntry.getValue();
-                                final boolean sensitive = isSensitiveKey(key);
-                                datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
-                            }
-                            injectMetaEntries(datasetMap, map.get("_meta"), fileName, identifier);
-                            outDataSets.add(datasetMap);
+                            parseDatasetRow(mapRow, rootProperties, loadedMap.get("_meta"), fileName, identifier, outDataSets);
                         }
                     }
                 }
-                else if (rawData instanceof Map)
+                else if (rawData instanceof Map<?, ?> mapRow)
                 {
-                    final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
-                    for (final Map.Entry<?, ?> mapEntry : ((Map<?, ?>) rawData).entrySet())
-                    {
-                        final String key = String.valueOf(mapEntry.getKey());
-                        final Object val = mapEntry.getValue();
-                        final boolean sensitive = isSensitiveKey(key);
-                        datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
-                    }
-                    injectMetaEntries(datasetMap, map.get("_meta"), fileName, identifier);
-                    outDataSets.add(datasetMap);
+                    parseDatasetRow(mapRow, rootProperties, loadedMap.get("_meta"), fileName, identifier, outDataSets);
                 }
-                else if (map.containsKey("_meta"))
+                else if (loadedMap.containsKey("_meta") || !rootProperties.isEmpty())
                 {
                     final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
-                    injectMetaEntries(datasetMap, map.get("_meta"), fileName, identifier);
+                    for (final Map.Entry<String, String> propEntry : rootProperties.entrySet())
+                    {
+                        datasetMap.put(propEntry.getKey(), new SessionData.DataEntry(propEntry.getValue(), false));
+                    }
+                    injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
                     outDataSets.add(datasetMap);
                 }
 
@@ -541,25 +534,25 @@ public final class YamlPlaybookParser implements PlaybookParser
                 final String[] beforeKeys = {"before", "beforeEach", "_beforeEach", "_beforeAll"};
                 for (final String key : beforeKeys)
                 {
-                    parseStepBlock(map.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
                 }
 
                 final String[] stepKeys = {"steps", "_steps"};
                 for (final String key : stepKeys)
                 {
-                    parseStepBlock(map.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
                 }
 
                 final String[] afterKeys = {"after", "afterEach", "_afterEach", "_afterAll"};
                 for (final String key : afterKeys)
                 {
-                    parseStepBlock(map.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
                 }
 
-                if (outSteps.isEmpty() && (map.containsKey("_include") || map.containsKey("include")))
+                if (outSteps.isEmpty() && (loadedMap.containsKey("_include") || loadedMap.containsKey("include")))
                 {
-                    final String actualIncludeKey = map.containsKey("_include") ? "_include" : "include";
-                    final String includeRelativePath = String.valueOf(map.get(actualIncludeKey));
+                    final String actualIncludeKey = loadedMap.containsKey("_include") ? "_include" : "include";
+                    final String includeRelativePath = String.valueOf(loadedMap.get(actualIncludeKey));
                     final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
 
                     parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
@@ -918,6 +911,93 @@ public final class YamlPlaybookParser implements PlaybookParser
         }
 
         return yamlPlaybook;
+    }
+
+    private void parseDatasetRow(
+        final Map<?, ?> rawRow,
+        final Map<String, String> rootProperties,
+        final Object rawMeta,
+        final String fileName,
+        final String identifier,
+        final List<Map<String, SessionData.DataEntry>> outDataSets)
+    {
+        final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
+
+        // 1. Populate root-level properties first
+        for (final Map.Entry<String, String> propEntry : rootProperties.entrySet())
+        {
+            datasetMap.put(propEntry.getKey(), new SessionData.DataEntry(propEntry.getValue(), false));
+        }
+
+        // 2. Parse dataset keys and local row properties
+        final Map<String, String> rowProperties = new HashMap<>();
+        for (final Map.Entry<?, ?> mapEntry : rawRow.entrySet())
+        {
+            final String key = String.valueOf(mapEntry.getKey());
+            final Object val = mapEntry.getValue();
+            if ("_properties".equals(key) || "properties".equals(key))
+            {
+                parseAndFlattenProperties(val, rowProperties);
+            }
+            else
+            {
+                final boolean sensitive = isSensitiveKey(key);
+                datasetMap.put(key, new SessionData.DataEntry(val, sensitive));
+            }
+        }
+
+        // 3. Overlay row-level properties
+        for (final Map.Entry<String, String> propEntry : rowProperties.entrySet())
+        {
+            datasetMap.put(propEntry.getKey(), new SessionData.DataEntry(propEntry.getValue(), false));
+        }
+
+        injectMetaEntries(datasetMap, rawMeta, fileName, identifier);
+        outDataSets.add(datasetMap);
+    }
+
+    private static void parseAndFlattenProperties(final Object propertiesObj, final Map<String, String> targetMap)
+    {
+        if (propertiesObj instanceof Map<?, ?> map)
+        {
+            for (final Map.Entry<?, ?> entry : map.entrySet())
+            {
+                final String key = String.valueOf(entry.getKey());
+                if ("skipReplay".equals(key))
+                {
+                    targetMap.put("neodymium.ai.skipReplay", String.valueOf(entry.getValue()));
+                }
+                else
+                {
+                    flattenProperties(entry.getValue(), key, targetMap);
+                }
+            }
+            for (final Map.Entry<?, ?> entry : map.entrySet())
+            {
+                final String key = String.valueOf(entry.getKey());
+                if (key.contains("."))
+                {
+                    targetMap.put(key, String.valueOf(entry.getValue()));
+                }
+            }
+        }
+    }
+
+    private static void flattenProperties(final Object value, final String prefix, final Map<String, String> targetMap)
+    {
+        if (value instanceof Map<?, ?> map)
+        {
+            for (final Map.Entry<?, ?> entry : map.entrySet())
+            {
+                final String key = String.valueOf(entry.getKey());
+                final String nextPrefix = prefix.isEmpty() ? key : prefix + "." + key;
+                flattenProperties(entry.getValue(), nextPrefix, targetMap);
+            }
+        }
+        else if (value != null)
+        {
+            targetMap.put(prefix, String.valueOf(value));
+        }
     }
 
     /**

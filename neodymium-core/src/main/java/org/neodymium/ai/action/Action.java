@@ -813,6 +813,28 @@ public class Action
         {
             case "CLICK" -> "click";
             case "FILL", "TYPE" -> "fill";
+            case "FILL_FORM" ->
+            {
+                if (this.parameters.containsKey("fields"))
+                {
+                    args.set("fields", MAPPER.valueToTree(this.parameters.get("fields")));
+                }
+                else
+                {
+                    final String valStr = getValue();
+                    if (valStr != null && (valStr.startsWith("[") || valStr.startsWith("{")))
+                    {
+                        try
+                        {
+                            args.set("fields", MAPPER.readTree(valStr));
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+                }
+                yield "fill_form";
+            }
             case "NAVIGATE", "OPEN" -> "navigate";
             case "SELECT" -> "select";
             case "CHECK" -> "check";
@@ -824,7 +846,7 @@ public class Action
             case "ASSERT_VISIBLE", "ASSERT_HIDDEN", "ASSERT_ENABLED", "ASSERT_DISABLED",
                  "ASSERT_EDITABLE", "ASSERT_READONLY", "ASSERT_CHECKED", "ASSERT_UNCHECKED",
                  "ASSERT_SELECTED", "ASSERT_UNSELECTED", "ASSERT_FOCUSED", "ASSERT_UNFOCUSED", "ASSERT_EXISTS",
-                 "ASSERT_ABSENT" -> "assert_element_state";
+                 "ASSERT_ABSENT", "ASSERT_ELEMENT_STATE" -> "assert_element_state";
             case "ASSERT" -> {
                 if ("url".equalsIgnoreCase(this.target) || "currentUrl".equalsIgnoreCase(this.target) || "pageUrl".equalsIgnoreCase(this.target))
                 {
@@ -933,9 +955,19 @@ public class Action
         else if ("assert_element_state".equals(toolName) || "browser_assert_element_state".equals(toolName))
         {
             args.put("selector", this.target != null ? this.target : "");
-            final String state = actionType.startsWith("ASSERT_")
-                    ? actionType.substring("ASSERT_".length()).toLowerCase(Locale.ROOT)
-                    : ((this.value != null && !this.value.isEmpty()) ? this.value.get(0).toLowerCase(Locale.ROOT) : "visible");
+            final String state;
+            if ("ASSERT_ELEMENT_STATE".equals(actionType))
+            {
+                state = (this.value != null && !this.value.isEmpty()) ? this.value.get(0).toLowerCase(Locale.ROOT) : "visible";
+            }
+            else if (actionType.startsWith("ASSERT_"))
+            {
+                state = actionType.substring("ASSERT_".length()).toLowerCase(Locale.ROOT);
+            }
+            else
+            {
+                state = (this.value != null && !this.value.isEmpty()) ? this.value.get(0).toLowerCase(Locale.ROOT) : "visible";
+            }
             args.put("state", state);
         }
         else if ("assert_attribute".equals(toolName) || "browser_assert_attribute".equals(toolName))
@@ -964,6 +996,23 @@ public class Action
         else if ("execute_script".equals(toolName) || "browser_execute_script".equals(toolName))
         {
             args.put("script", this.target != null ? this.target : "");
+        }
+        else if ("store".equals(toolName) || "browser_store".equals(toolName))
+        {
+            if (this.value != null && !this.value.isEmpty())
+            {
+                final String varName = this.value.get(0);
+                args.put("variableName", varName);
+                if (this.value.size() >= 2)
+                {
+                    args.put("value", this.value.get(1));
+                }
+            }
+            if (this.target != null && !this.target.isBlank())
+            {
+                args.put("selector", this.target);
+                args.put("target", this.target);
+            }
         }
         else
         {
@@ -1058,6 +1107,7 @@ public class Action
             case "navigate" -> "NAVIGATE";
             case "click" -> "CLICK";
             case "fill", "type" -> "TYPE";
+            case "fill_form" -> "FILL_FORM";
             case "hover" -> "HOVER";
             case "scroll" -> "SCROLL";
             case "select" -> "SELECT";
@@ -1074,10 +1124,42 @@ public class Action
             case "assert_url" -> "ASSERT_URL";
             case "assert_title" -> "ASSERT_TITLE";
             case "assert_element_state", "assert_state" -> {
+                final List<String> statesList = new ArrayList<>();
+                if (args != null && args.hasNonNull("states") && args.path("states").isArray())
+                {
+                    for (final JsonNode s : args.path("states"))
+                    {
+                        if (s.isTextual() && !s.asText().isBlank())
+                        {
+                            statesList.add(s.asText().trim());
+                        }
+                    }
+                }
                 final String rawState = args != null && args.hasNonNull("state")
-                        ? args.path("state").asText().trim().toUpperCase(Locale.ROOT)
-                        : "";
-                final String baseType = switch (rawState)
+                        ? args.path("state").asText().trim()
+                        : (args != null && args.hasNonNull("expectedState")
+                                ? args.path("expectedState").asText().trim()
+                                : (args != null && args.hasNonNull("value") ? args.path("value").asText().trim() : ""));
+                if (statesList.isEmpty() && !rawState.isBlank())
+                {
+                    final String[] parts = rawState.split("[,&]|\\band\\b");
+                    for (final String part : parts)
+                    {
+                        final String trimmed = part.trim();
+                        if (!trimmed.isBlank())
+                        {
+                            statesList.add(trimmed);
+                        }
+                    }
+                }
+
+                if (statesList.size() > 1)
+                {
+                    yield "ASSERT_ELEMENT_STATE";
+                }
+
+                final String singleState = statesList.isEmpty() ? rawState.toUpperCase(Locale.ROOT) : statesList.get(0).toUpperCase(Locale.ROOT);
+                final String baseType = switch (singleState)
                 {
                     case "VISIBLE" -> "ASSERT_VISIBLE";
                     case "HIDDEN" -> "ASSERT_HIDDEN";
@@ -1093,7 +1175,7 @@ public class Action
                     case "UNFOCUSED", "NOT_FOCUSED" -> "ASSERT_UNFOCUSED";
                     case "EXISTS", "PRESENT" -> "ASSERT_EXISTS";
                     case "ABSENT", "NOT_EXIST", "NOT_EXISTS", "NON-EXISTENT" -> "ASSERT_ABSENT";
-                    default -> "ASSERT";
+                    default -> "ASSERT_ELEMENT_STATE";
                 };
                 if (negated)
                 {
@@ -1167,6 +1249,10 @@ public class Action
                 {
                     target = args.path("target").asText();
                 }
+            }
+            else if ("fill_form".equals(name))
+            {
+                target = args.hasNonNull("form") ? args.path("form").asText() : "form";
             }
             else if (args.hasNonNull("selector") && !args.path("selector").asText().isBlank())
             {
@@ -1247,6 +1333,13 @@ public class Action
                     value = varName;
                 }
             }
+            else if ("fill_form".equals(name))
+            {
+                if (args.hasNonNull("fields"))
+                {
+                    value = args.path("fields").toString();
+                }
+            }
             else if (args.hasNonNull("text") && !args.path("text").asText().isBlank())
             {
                 value = args.path("text").asText();
@@ -1272,6 +1365,29 @@ public class Action
                 if (args.hasNonNull("state") && !args.path("state").asText().isBlank())
                 {
                     value = args.path("state").asText();
+                }
+                else if (args.hasNonNull("states") && args.path("states").isArray())
+                {
+                    final List<String> list = new ArrayList<>();
+                    for (final JsonNode n : args.path("states"))
+                    {
+                        if (n.isTextual() && !n.asText().isBlank())
+                        {
+                            list.add(n.asText().trim());
+                        }
+                    }
+                    if (!list.isEmpty())
+                    {
+                        value = String.join(", ", list);
+                    }
+                }
+                else if (args.hasNonNull("expectedState") && !args.path("expectedState").asText().isBlank())
+                {
+                    value = args.path("expectedState").asText();
+                }
+                else if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+                {
+                    value = args.path("value").asText();
                 }
             }
             else if ("assert_attribute".equals(name) || "assert_attr".equals(name))
@@ -1372,13 +1488,14 @@ public class Action
                 case "NAVIGATE" -> "Navigate to " + target;
                 case "CLICK" -> !target.isBlank() ? "Click " + target : "Click element";
                 case "TYPE" -> "Type '" + (value != null ? value : "") + "' into " + target;
+                case "FILL_FORM" -> "Fill form fields";
                 case "ASSERT_TEXT" -> "Assert text '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
                 case "ASSERT_URL" -> "Assert URL '" + (value != null ? value : "") + "'";
                 case "ASSERT_TITLE" -> "Assert page title '" + (value != null ? value : "") + "'";
                 case "ASSERT_VISIBLE", "ASSERT_HIDDEN", "ASSERT_ENABLED", "ASSERT_DISABLED",
                      "ASSERT_EDITABLE", "ASSERT_READONLY", "ASSERT_CHECKED", "ASSERT_UNCHECKED",
                      "ASSERT_SELECTED", "ASSERT_UNSELECTED", "ASSERT_FOCUSED", "ASSERT_UNFOCUSED", "ASSERT_EXISTS",
-                     "ASSERT_ABSENT" -> "Assert " + (!target.isBlank() ? target + " " : "") + "is " + (value != null ? value : type.substring("ASSERT_".length()).toLowerCase(Locale.ROOT));
+                     "ASSERT_ABSENT", "ASSERT_ELEMENT_STATE" -> "Assert " + (!target.isBlank() ? target + " " : "") + "is " + (value != null ? value : type.substring("ASSERT_".length()).toLowerCase(Locale.ROOT));
                 case "ASSERT_ATTRIBUTE" -> "Assert attribute '" + (value != null ? value : "") + "'" + (!target.isBlank() ? " on " + target : "");
                 case "SELECT" -> "Select '" + (value != null ? value : "") + "' on " + target;
                 case "HOVER" -> "Hover over " + target;
@@ -1505,6 +1622,11 @@ public class Action
             else if (action.getElseActions() != null && !action.getElseActions().isEmpty())
             {
                 action.setHasElse(true);
+            }
+
+            if (args.hasNonNull("fields"))
+            {
+                action.getParameters().put("fields", args.get("fields"));
             }
         }
 

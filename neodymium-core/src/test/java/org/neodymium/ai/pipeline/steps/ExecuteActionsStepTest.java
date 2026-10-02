@@ -41,7 +41,9 @@ import java.util.Base64;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
@@ -53,12 +55,17 @@ import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
+import org.neodymium.ai.executor.ActionDefinition;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.model.UnresolvableVariableException;
+import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -466,9 +473,7 @@ public final class ExecuteActionsStepTest
         final String baselineHash = ScreenshotHasher.computeSsimMatrix(blueBase64);
 
         final MockTargetExecutor executor = new MockTargetExecutor();
-        // 1. State captured during action replay (white)
-        executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "pre.png", whiteBase64)), "hash-pre"));
-        // 2. Post-action state capture (blue)
+        // Post-action state capture (blue)
         executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "post.png", blueBase64)), "hash-post"));
 
         final SessionData sessionData = new SessionData();
@@ -548,9 +553,7 @@ public final class ExecuteActionsStepTest
         final String baselineHash = ScreenshotHasher.computeSsimMatrix(blueBase64);
 
         final MockTargetExecutor executor = new MockTargetExecutor();
-        // 1. State captured during action replay (white)
-        executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "pre.png", whiteBase64)), "hash-pre"));
-        // 2. Post-action state capture (red != blue)
+        // Post-action state capture (red != blue)
         executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "post.png", redBase64)), "hash-post"));
 
         final SessionData sessionData = new SessionData();
@@ -702,11 +705,11 @@ public final class ExecuteActionsStepTest
     }
 
     /**
-     * Verifies that single leaf steps resolve available variables and preserve uncaptured runtime variables
-     * without throwing UnresolvableVariableException.
+     * Verifies that single leaf steps throw UnresolvableVariableException when a required variable is missing,
+     * and resolve cleanly once the runtime variable has been populated into session data.
      */
     @Test
-    public void testLeafStepWithRuntimeVariablesPreservesPlaceholdersWithoutFailing() throws Exception
+    public void testLeafStepWithMissingRuntimeVariableFailsStrictly() throws Exception
     {
         final MockTargetExecutor executor = new MockTargetExecutor();
         final SessionData sessionData = new SessionData();
@@ -719,11 +722,15 @@ public final class ExecuteActionsStepTest
         final PlaybookStep leaf = new PlaybookStep("Verify that the ${scope} item count is higher than ${lineItemCount}.");
 
         final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(leaf, session, context);
+        assertThrows(UnresolvableVariableException.class, () -> pipelineStep.execute(context));
+
+        // Once the on-the-fly runtime variable is populated, execution succeeds
+        sessionData.set("lineItemCount", "5");
         pipelineStep.execute(context);
 
         final String activeInstruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
         assertNotNull(activeInstruction);
-        assertEquals("Verify that the cart item count is higher than ${lineItemCount}.", activeInstruction);
+        assertEquals("Verify that the cart item count is higher than 5.", activeInstruction);
     }
 
     @Test
@@ -950,5 +957,384 @@ public final class ExecuteActionsStepTest
         assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
         assertEquals(1, context.getTransientData().get(ExecutionContext.KEY_TOTAL_REPLAYS));
     }
+
+    /**
+     * Verifies that in REPLAY_STRICT mode, executing a routine non-visual step bypasses
+     * both pre-action STANDARD DOM capture and post-action VISUAL screenshot capture.
+     */
+    @Test
+    public void testReplayStrictNonVisualStepBypassesStateCapture() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final AtomicInteger captureCalls = new AtomicInteger(0);
+        final MockTargetExecutor delegate = new MockTargetExecutor();
+        final TargetExecutor executor = new TargetExecutor()
+        {
+            @Override
+            public SutState captureState(final ContextLevel level) throws IOException
+            {
+                captureCalls.incrementAndGet();
+                return delegate.captureState(level);
+            }
+
+            @Override
+            public SutState captureState(final ContextLevel level, final boolean isFullPage) throws IOException
+            {
+                captureCalls.incrementAndGet();
+                return delegate.captureState(level, isFullPage);
+            }
+
+            @Override
+            public void execute(final Action action) throws IOException
+            {
+                delegate.execute(action);
+            }
+
+            @Override
+            public Set<ActionDefinition> getSupportedActions()
+            {
+                return delegate.getSupportedActions();
+            }
+        };
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final ToolRegistry registry = new ToolRegistry();
+        registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("click_button", "Click button", JsonNodeFactory.instance.objectNode());
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Clicked");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", registry);
+
+        final PlaybookStep step = new PlaybookStep("Click login button");
+        step.setToolCalls(List.of(new ToolCall("c1", "click_button", JsonNodeFactory.instance.objectNode())));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, null, context);
+        pipelineStep.execute(context);
+
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
+        assertEquals(0, captureCalls.get(), "Lean state capture must bypass captureState on non-visual steps in REPLAY_STRICT mode");
+    }
+
+    /**
+     * Verifies that in REPLAY_STRICT mode, executing a visual verification step
+     * still captures post-action visual state for baseline validation.
+     */
+    @Test
+    public void testReplayStrictVisualStepCapturesVisualState() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final AtomicInteger captureCalls = new AtomicInteger(0);
+        final MockTargetExecutor delegate = new MockTargetExecutor();
+        final TargetExecutor executor = new TargetExecutor()
+        {
+            @Override
+            public SutState captureState(final ContextLevel level) throws IOException
+            {
+                captureCalls.incrementAndGet();
+                return delegate.captureState(level);
+            }
+
+            @Override
+            public SutState captureState(final ContextLevel level, final boolean isFullPage) throws IOException
+            {
+                captureCalls.incrementAndGet();
+                return delegate.captureState(level, isFullPage);
+            }
+
+            @Override
+            public void execute(final Action action) throws IOException
+            {
+                delegate.execute(action);
+            }
+
+            @Override
+            public Set<ActionDefinition> getSupportedActions()
+            {
+                return delegate.getSupportedActions();
+            }
+        };
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final ToolRegistry registry = new ToolRegistry();
+        registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_visual", "Assert visual", JsonNodeFactory.instance.objectNode());
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Visual OK");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", registry);
+
+        final BufferedImage img = new BufferedImage(50, 50, BufferedImage.TYPE_INT_RGB);
+        final String imgBase64 = encodeToBase64(img);
+        final String hash = ScreenshotHasher.computeSsimMatrix(imgBase64);
+
+        final PlaybookStep step = new PlaybookStep("Verify logo banner (visual)");
+        step.setScreenshotHash(hash);
+        step.setToolCalls(List.of(new ToolCall("c1", "assert_visual", JsonNodeFactory.instance.objectNode())));
+
+        delegate.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "img.png", imgBase64)), "hash-img"));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, null, context);
+        pipelineStep.execute(context);
+
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
+        assertTrue(captureCalls.get() > 0, "Visual steps must capture visual state in REPLAY_STRICT mode");
+    }
+
+    /**
+     * Verifies that a leaf step with an unresolvable variable throws UnresolvableVariableException,
+     * failing immediately before visual baseline gating or action replay, while preserving
+     * the original template string on the PlaybookStep.
+     */
+    @Test
+    public void testLeafStepWithUnresolvableVariableThrowsExceptionAndPreservesTemplate()
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final PlaybookStep step = new PlaybookStep("Verify cart header is ${cartName}");
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+
+        final UnresolvableVariableException ex = assertThrows(UnresolvableVariableException.class, () ->
+        {
+            pipelineStep.execute(context);
+        });
+
+        assertEquals("cartName", ex.getVariableName());
+        assertEquals("Verify cart header is ${cartName}", step.getInstruction(),
+            "Original template on PlaybookStep must remain immutable");
+    }
+
+    /**
+     * Verifies that an unresolvable variable on a visual step throws UnresolvableVariableException
+     * rather than falsely bypassing execution due to a matching screenshot hash.
+     */
+    @Test
+    public void testLeafStepWithUnresolvableVariableFailsBeforeVisualBaselineGating() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        final BufferedImage img = new BufferedImage(50, 50, BufferedImage.TYPE_INT_RGB);
+        final String imgBase64 = encodeToBase64(img);
+        final String hash = ScreenshotHasher.computeSsimMatrix(imgBase64);
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        executor.enqueueState(new MockSutState("<html></html>", List.of(new SutAttachment("image/png", "img.png", imgBase64)), "hash-img"));
+
+        final PlaybookStep step = new PlaybookStep("The cart headline says ${cartName} (visual)");
+        step.setScreenshotHash(hash);
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+
+        final UnresolvableVariableException ex = assertThrows(UnresolvableVariableException.class, () ->
+        {
+            pipelineStep.execute(context);
+        });
+
+        assertEquals("cartName", ex.getVariableName());
+    }
+
+    /**
+     * Verifies that dynamically captured runtime variables resolve cleanly during step execution,
+     * populating ExecutionContext.KEY_CURRENT_INSTRUCTION while keeping the step template pristine.
+     */
+    @Test
+    public void testLeafStepResolvesDynamicallySetSessionVariableCleanly() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        sessionData.set("orderId", "V-12345-US");
+
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final PlaybookStep step = new PlaybookStep("Verify order ${orderId} is confirmed");
+        step.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+        pipelineStep.execute(context);
+
+        assertEquals("Verify order V-12345-US is confirmed", context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION));
+        assertEquals("Verify order ${orderId} is confirmed", step.getInstruction(),
+            "Original template on PlaybookStep must remain immutable");
+    }
+
+    /**
+     * Verifies that the exact same PlaybookStep instance executed across sequential dataset iterations
+     * preserves template immutability and isolates resolved instructions without cross-contamination.
+     */
+    @Test
+    public void testMultiDataSetSequentialExecutionPreservesTemplateIsolation() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final PlaybookStep step = new PlaybookStep("Add ${product} to cart");
+
+        // Iteration 1: product = Shoes
+        final SessionData sessionData1 = new SessionData();
+        sessionData1.set("product", "Shoes");
+        final AiSession session1 = AiSession.mock(sessionData1, new LlmRegistry(), new ExecutionEventBus(), executor);
+        final ExecutionContext context1 = session1.getExecutionContext();
+        context1.getTransientData().put(ExecutionContext.KEY_SESSION, session1);
+        context1.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context1.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final PipelineStep pipelineStep1 = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session1, context1);
+        pipelineStep1.execute(context1);
+
+        assertEquals("Add Shoes to cart", context1.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION));
+        assertEquals("Add ${product} to cart", step.getInstruction(),
+            "Template on PlaybookStep must remain unmodified after iteration 1");
+
+        // Iteration 2: product = Hat
+        final SessionData sessionData2 = new SessionData();
+        sessionData2.set("product", "Hat");
+        final AiSession session2 = AiSession.mock(sessionData2, new LlmRegistry(), new ExecutionEventBus(), executor);
+        final ExecutionContext context2 = session2.getExecutionContext();
+        context2.getTransientData().put(ExecutionContext.KEY_SESSION, session2);
+        context2.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context2.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final PipelineStep pipelineStep2 = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session2, context2);
+        pipelineStep2.execute(context2);
+
+        assertEquals("Add Hat to cart", context2.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION));
+        assertEquals("Add ${product} to cart", step.getInstruction(),
+            "Template on PlaybookStep must remain unmodified after iteration 2");
+    }
+
+    /**
+     * Verifies that when a parent step with recorded sub-steps is unrolled in replay mode,
+     * child 1 executes and child 2 containing an unresolvable variable fails strictly with UnresolvableVariableException.
+     */
+    @Test
+    public void testUnrolledSubStepWithUnresolvableVariableFailsStrictlyOnChild()
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        sessionData.set("scope", "cart");
+
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final AtomicBoolean toolExecuted = new AtomicBoolean(false);
+        toolRegistry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("open", "opens", JsonNodeFactory.instance.objectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                toolExecuted.set(true);
+                return ToolResult.success(call.callId(), "ok");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final PlaybookStep parent = new PlaybookStep("Perform checkout steps:");
+        final PlaybookStep child1 = new PlaybookStep("Open ${scope} view");
+        child1.setToolCalls(List.of(new ToolCall("call_1", "open", JsonNodeFactory.instance.objectNode())));
+        final PlaybookStep child2 = new PlaybookStep("Verify headline ${unmappedHeadline}");
+        child2.setToolCalls(List.of(new ToolCall("call_2", "open", JsonNodeFactory.instance.objectNode())));
+        parent.getSubSteps().addAll(List.of(child1, child2));
+
+        context.getTransientData().put("playbook.steps", List.of(parent));
+        context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(parent, session, context));
+
+        final StateMachineRunner runner = new StateMachineRunner(session);
+        final UnresolvableVariableException ex = assertThrows(UnresolvableVariableException.class, () -> runner.run());
+
+        assertEquals("unmappedHeadline", ex.getVariableName());
+        assertTrue(toolExecuted.get(), "Child 1 tool call must execute before child 2 fails");
+        assertEquals(PlaybookStepStatus.FAILED, child2.getStatus(), "Child 2 must be marked FAILED");
+    }
+
+    /**
+     * Verifies that StateMachineRunner propagates UnresolvableVariableException directly
+     * and marks the playbook step status as FAILED.
+     */
+    @Test
+    public void testStateMachineRunnerFailsConclusivelyOnUnresolvableVariable()
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final PlaybookStep step = new PlaybookStep("Verify headline ${missingHeadline}");
+        context.getTransientData().put("playbook.steps", List.of(step));
+        context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context));
+
+        final StateMachineRunner runner = new StateMachineRunner(session);
+        final UnresolvableVariableException ex = assertThrows(UnresolvableVariableException.class, () -> runner.run());
+
+        assertEquals("missingHeadline", ex.getVariableName());
+        assertEquals(PlaybookStepStatus.FAILED, step.getStatus(),
+            "Failing step status must be set to FAILED");
+    }
 }
+
 

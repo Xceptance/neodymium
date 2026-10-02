@@ -102,7 +102,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof ContextLevel cl
                 ? cl
                 : ContextLevel.MINIMAL;
-        final boolean isVisualExecution = (step != null && step.isVisualStep()) || (activeLevel != null && activeLevel.includesScreenshot());
+        final boolean isVisualExecution = (step != null && step.isVisualOrLayoutStep()) || (activeLevel != null && activeLevel.includesScreenshot());
 
         // 1. Calculate and record visual baseline hash (SSIM matrix) during live/recording execution for visual steps / escalated visual context
         if (executor != null && mode != null && !mode.isReplay() && step != null && isVisualExecution)
@@ -112,36 +112,58 @@ public final class VerifyOutcomeStep implements PipelineStep
                 final boolean isFullPageReq = Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
                     || step.isFullPageVisualStep();
                 SutState capturedState = null;
-                if (step.getActions() != null && !step.getActions().isEmpty())
+                if (step.isLayoutStep())
                 {
-                    capturedState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
-                }
-                else if (isFullPageReq && context.getTransientData().containsKey(ExecutionContext.KEY_POST_ACTION_STATE))
-                {
-                    capturedState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
-                }
-                else
-                {
-                    context.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
-                }
-                if (capturedState == null || capturedState.getAttachments() == null || capturedState.getAttachments().isEmpty())
-                {
-                    final SutState lastState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
-                    if (lastState != null && lastState.getAttachments() != null && !lastState.getAttachments().isEmpty())
+                    executor.applyColorWireframe();
+                    try
                     {
-                        capturedState = lastState;
-                    }
-                    else
-                    {
-                        final ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot()) 
-                            ? activeLevel 
-                            : (isFullPageReq 
-                                ? ContextLevel.VISUAL_LEAN 
-                                : ContextLevel.VISUAL);
+                        final ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot())
+                            ? activeLevel
+                            : (isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL);
                         capturedState = executor.captureState(level, isFullPageReq);
                         if (session != null && session.getEventBus() != null && capturedState != null)
                         {
                             session.getEventBus().dispatch(new StateCapturedEvent(capturedState));
+                        }
+                    }
+                    finally
+                    {
+                        executor.removeColorWireframe();
+                    }
+                }
+                else
+                {
+                    if (step.getActions() != null && !step.getActions().isEmpty())
+                    {
+                        capturedState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+                    }
+                    else if (isFullPageReq && context.getTransientData().containsKey(ExecutionContext.KEY_POST_ACTION_STATE))
+                    {
+                        capturedState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
+                    }
+                    else
+                    {
+                        context.getTransientData().remove(ExecutionContext.KEY_POST_ACTION_STATE);
+                    }
+                    if (capturedState == null || capturedState.getAttachments() == null || capturedState.getAttachments().isEmpty())
+                    {
+                        final SutState lastState = (SutState) context.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
+                        if (lastState != null && lastState.getAttachments() != null && !lastState.getAttachments().isEmpty())
+                        {
+                            capturedState = lastState;
+                        }
+                        else
+                        {
+                            final ContextLevel level = (activeLevel != null && activeLevel.includesScreenshot()) 
+                                ? activeLevel 
+                                : (isFullPageReq 
+                                    ? ContextLevel.VISUAL_LEAN 
+                                    : ContextLevel.VISUAL);
+                            capturedState = executor.captureState(level, isFullPageReq);
+                            if (session != null && session.getEventBus() != null && capturedState != null)
+                            {
+                                session.getEventBus().dispatch(new StateCapturedEvent(capturedState));
+                            }
                         }
                     }
                 }
@@ -170,7 +192,11 @@ public final class VerifyOutcomeStep implements PipelineStep
                         if (attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
                         {
                             final String ssimMatrix;
-                            if (coordinateTarget != null)
+                            if (step.isLayoutStep())
+                            {
+                                ssimMatrix = ScreenshotHasher.computeColorSsimMatrix(attachment.base64Data());
+                            }
+                            else if (coordinateTarget != null)
                             {
                                 if (step.getScreenshotHash() == null || step.getScreenshotHash().isBlank())
                                 {
@@ -188,6 +214,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                             if (ssimMatrix != null)
                             {
                                 step.setScreenshotHash(ssimMatrix);
+                                step.setScreenshotHashDim(coordinateTarget != null ? ScreenshotHasher.TILE_SSIM_MATRIX_DIM : ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM);
                                 if (isFullPageReq || (activeLevel != null && activeLevel.isFullPageScreenshot()))
                                 {
                                     step.setFullPage(true);
@@ -195,11 +222,12 @@ public final class VerifyOutcomeStep implements PipelineStep
                                 final String resolvedInstr = context.getSessionData() != null
                                     ? context.getSessionData().resolveAvailableVariables(step.getInstruction())
                                     : step.getInstruction();
-                                LOGGER.debug("📸 [Visual Hashing] Computed SSIM matrix for instruction: \"{}\"", resolvedInstr);
+                                LOGGER.debug("📸 [Visual Hashing] Computed {} SSIM matrix for instruction: \"{}\"",
+                                    step.isLayoutStep() ? "color layout" : "luminance", resolvedInstr);
 
                                 if (step.getActions().isEmpty())
                                 {
-                                    final Action noneAction = new Action("NONE", "", "Visual baseline check");
+                                    final Action noneAction = new Action("NONE", "", step.isLayoutStep() ? "Layout baseline check" : "Visual baseline check");
                                     noneAction.setStepInstruction(step.getInstruction());
                                     noneAction.setStepLine(step.getLineNumber());
                                     noneAction.setStepFile(step.getSourceFile());
@@ -313,7 +341,7 @@ public final class VerifyOutcomeStep implements PipelineStep
             {
                 finalState = preCapturedPostState;
             }
-            else if (step != null && (step.isVisualStep() || isFullPageReq))
+            else if (step != null && (step.isVisualOrLayoutStep() || isFullPageReq))
             {
                 LOGGER.debug("📸 [Capture] Capturing settled SUT state with temporal stability detection (fullPage: {}) AFTER executing actions", isFullPageReq);
                 finalState = VisualStabilityDetector.captureSettledState(executor, isFullPageReq);
@@ -535,14 +563,16 @@ public final class VerifyOutcomeStep implements PipelineStep
             context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, finalState);
 
             // 11. Calculate difference hash (dHash) for visual baselines when image attachment is available
-            if (finalState != null && finalState.getAttachments() != null && step != null && step.isVisualStep())
+            if (finalState != null && finalState.getAttachments() != null && step != null && step.isVisualOrLayoutStep() && step.getScreenshotHash() == null)
             {
                 String dHash = null;
                 for (final SutAttachment attachment : finalState.getAttachments())
                 {
                     if (attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
                     {
-                        dHash = ScreenshotHasher.computeSsimMatrix(attachment.base64Data());
+                        dHash = step.isLayoutStep()
+                            ? ScreenshotHasher.computeColorSsimMatrix(attachment.base64Data())
+                            : ScreenshotHasher.computeSsimMatrix(attachment.base64Data());
                         break;
                     }
                 }

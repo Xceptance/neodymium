@@ -116,9 +116,9 @@ public final class TokenBudgetGuard implements ExecutionListener
         if (activeCtx != null)
         {
             final Object ctxBudget = activeCtx.getTransientData().get(ExecutionContext.KEY_TOKEN_BUDGET_INPUT);
-            if (ctxBudget instanceof Integer i && i > 0)
+            if (ctxBudget instanceof Number num && num.intValue() > 0)
             {
-                return i;
+                return num.intValue();
             }
         }
         return AiConfiguration.getInstance().getTokenBudgetInput();
@@ -134,9 +134,9 @@ public final class TokenBudgetGuard implements ExecutionListener
         if (activeCtx != null)
         {
             final Object ctxBudget = activeCtx.getTransientData().get(ExecutionContext.KEY_TOKEN_BUDGET_OUTPUT);
-            if (ctxBudget instanceof Integer i && i > 0)
+            if (ctxBudget instanceof Number num && num.intValue() > 0)
             {
-                return i;
+                return num.intValue();
             }
         }
         return AiConfiguration.getInstance().getTokenBudgetOutput();

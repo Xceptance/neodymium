@@ -220,7 +220,7 @@ public final class AgentToolLoopStep implements PipelineStep
         final PlaybookStep step = stepObj instanceof PlaybookStep ps ? ps : null;
         final String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
         final String rawInstruction = (String) context.getTransientData().get("KEY_CURRENT_STEP_RAW_INSTRUCTION");
-        final boolean isVisual = (step != null && step.isVisualStep())
+        final boolean isVisual = (step != null && step.isVisualOrLayoutStep())
                 || (rawInstruction != null && (rawInstruction.toLowerCase().contains("(visual)") || rawInstruction.toLowerCase().contains("(layout)")))
                 || (instruction != null && (instruction.toLowerCase().contains("(visual)") || instruction.toLowerCase().contains("(layout)")));
 
@@ -293,7 +293,7 @@ public final class AgentToolLoopStep implements PipelineStep
         }
 
         userPrompt.append("### Test Instruction:\n").append(displayInstruction != null ? displayInstruction : "");
-        if (isVisual && displayInstruction != null && !displayInstruction.toLowerCase().contains("(visual)"))
+        if (isVisual && displayInstruction != null && !displayInstruction.toLowerCase().contains("(visual)") && !displayInstruction.toLowerCase().contains("(layout)"))
         {
             userPrompt.append(" (visual)");
         }
@@ -320,9 +320,10 @@ public final class AgentToolLoopStep implements PipelineStep
 
         List<SutAttachment> attachments = Collections.emptyList();
 
-        ContextLevel activeContextLevel = ContextLevel.LEAN;
+        final ContextLevel configuredDefault = AiConfiguration.getInstance().getContextLevel();
+        ContextLevel activeContextLevel = configuredDefault;
 
-        // Interactive Turn 1: Supply pierced DOM Light (LEAN) or configured context level
+        // Interactive Turn 1: Supply pierced DOM Light or configured context level
         if (executor != null)
         {
             try
@@ -330,11 +331,25 @@ public final class AgentToolLoopStep implements PipelineStep
                 final Object levelObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
                 final ContextLevel baseLevel = levelObj instanceof ContextLevel cl
                         ? cl
-                        : ContextLevel.LEAN;
+                        : configuredDefault;
                 activeContextLevel = ContextLevel.clean(baseLevel);
 
-                // Visual tag check
-                if (isVisual)
+                // Explicit step context level tag takes strict precedence
+                if (step != null && step.getContextLevel() != null && !step.getContextLevel().isBlank())
+                {
+                    activeContextLevel = ContextLevel.fromString(step.getContextLevel(), activeContextLevel);
+                }
+                else if (rawInstruction != null)
+                {
+                    final Matcher ctxMatcher = PlaybookStep.CONTEXT_LEVEL_PATTERN.matcher(rawInstruction);
+                    if (ctxMatcher.find())
+                    {
+                        activeContextLevel = ContextLevel.fromString(ctxMatcher.group(1), activeContextLevel);
+                    }
+                }
+
+                // Visual tag check (only applied when step did not explicitly override context level)
+                if (isVisual && (step == null || step.getContextLevel() == null || step.getContextLevel().isBlank()))
                 {
                     if (!activeContextLevel.includesScreenshot())
                     {
@@ -391,9 +406,9 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("You are an autonomous web testing agent. Execute the test instruction using available tools.\n\n");
         systemPrompt.append("### OPERATING RULES:\n");
         systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps.\n");
-        systemPrompt.append("2. GROUNDING & EXECUTION: Selectors are evaluated via Selenide (standard CSS, XPath, or text matching). Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Never propose the exact same failing tool call without changing selector or state.\n");
+        systemPrompt.append("2. GROUNDING & EXECUTION: Selectors are evaluated via Selenide (standard CSS, XPath, or text matching). Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Prior DOM snapshots are pruned after Turn 1 to minimize token context; if you need DOM details or element selectors in subsequent turns, invoke 'query_dom' (for specific element subtrees) or 'request_context' (for a fresh DOM snapshot). When querying DOM with 'query_dom', specify distinctive multi-word phrases or specific selectors from the instruction (rather than generic single words) to locate the exact target element directly. Never propose the exact same failing tool call without changing selector or state.\n");
         systemPrompt.append("3. ACTION STEPS: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, checking checkboxes/radios, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. When interacting with form controls, use 'fill' for text inputs, 'select' for dropdown menus, and 'check' for checkboxes and radio buttons (which is idempotent and sets the target state) rather than 'click'. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps. If an action fails (e.g., target element is disabled, missing, or non-interactable), DO NOT substitute uncommanded assertions (such as 'assert_element_state') and DO NOT call 'complete_step'; report the failure. Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
-        systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. You may perform non-destructive interactions (e.g. expanding dropdowns or switching tabs) if needed to reveal content to verify.\n");
+        systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. Propose [assertion, complete_step] in the same turn once the verification condition is satisfied. Directly assert the commanded property or content rather than splitting verification into separate intermediate visibility checks. To assert multiple states on the same element (e.g. 'displayed and enabled'), combine them into a single 'assert_element_state' call using compound states (e.g. state: 'visible, enabled' or states: ['visible', 'enabled']) rather than executing multiple separate tool calls. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. When validating that an option, setting, country, language, or currency is selected, first check if the active trigger or header element reflects this (via text, title, or attributes like aria-label); assert on it directly without opening menus. If you perform temporary interactions (such as expanding dropdowns, opening modals/dialogs, or switching tabs) to reveal hidden content to verify, you MUST restore the initial page state before completing the step: close the opened modal/dialog/overlay (e.g. clicking the close button or pressing Escape) or collapse the dropdown so that ephemeral dialogs and backdrops do not leak into and block subsequent steps. Never invoke 'complete_step' while a temporary verification modal or overlay remains open on screen. Cohesive multi-assertion operations: When an instruction commands verifying multiple elements or conditions, you may propose all commanded [assert_*, ..., complete_step] calls in the same turn to execute all verifications cohesively.\n");
         if (isVisual)
         {
             systemPrompt.append("5. VISUAL CHECKS: When verifying visual appearance or when a screenshot is provided, inspect the screenshot visually to verify whether the condition is met on screen, then invoke 'complete_step'. Do not query DOM for visual checks.\n");
@@ -424,6 +439,24 @@ public final class AgentToolLoopStep implements PipelineStep
         if (LOGGER.isDebugEnabled())
         {
             LOGGER.debug("🛠️ Available Native Tools ({}):\n{}", availableTools.size(), ToolDefinition.formatTools(availableTools));
+        }
+
+        ReasoningEffort reasoningEffort = AiConfiguration.getInstance().getReasoningEffort();
+        if (context.getSessionData() != null)
+        {
+            final Object dynamicEffort = context.getSessionData().get("neodymium.ai.execution.reasoningEffort") != null
+                ? context.getSessionData().get("neodymium.ai.execution.reasoningEffort")
+                : (context.getSessionData().get("neodymium.ai.reasoningEffort") != null
+                    ? context.getSessionData().get("neodymium.ai.reasoningEffort")
+                    : context.getSessionData().get("neodymium.ai.thinkingLevel"));
+            if (dynamicEffort != null)
+            {
+                final ReasoningEffort parsed = AiConfiguration.parseReasoningEffort(String.valueOf(dynamicEffort));
+                if (parsed != null)
+                {
+                    reasoningEffort = parsed;
+                }
+            }
         }
 
         turnLoop: while (true)
@@ -460,7 +493,7 @@ public final class AgentToolLoopStep implements PipelineStep
                     ResponseSchema.TEXT,
                     0.0,
                     30,
-                    ReasoningEffort.LOW
+                    reasoningEffort
             );
 
             // Query LLM
@@ -472,14 +505,6 @@ public final class AgentToolLoopStep implements PipelineStep
                 if (response != null && response.tokenUsage() != null)
                 {
                     stepCumulativeTokens += response.tokenUsage().totalTokenCount();
-                    if (this.maxTokens > 0 && stepCumulativeTokens > this.maxTokens)
-                    {
-                        throw new TokenBudgetExceededException(
-                                TokenBudgetExceededException.BudgetType.TOTAL,
-                                stepCumulativeTokens,
-                                this.maxTokens
-                        );
-                    }
                 }
             }
             catch (final TokenBudgetExceededException e)
@@ -524,6 +549,29 @@ public final class AgentToolLoopStep implements PipelineStep
                     proposedCalls = parsed.calls();
                     isSingleShotAction = parsed.isSingleShotAction();
                 }
+            }
+
+            // Stop Criterion 5: Step Token Budget Enforcement (with 20% grace for completing turns)
+            if (this.maxTokens > 0 && stepCumulativeTokens > this.maxTokens)
+            {
+                final boolean proposesCompletion = isSingleShotAction
+                        || (proposedCalls != null && !proposedCalls.isEmpty() && (
+                                "complete_step".equals(proposedCalls.get(0).toolName())
+                                || "include".equals(proposedCalls.get(0).toolName())
+                                || (proposedCalls.size() == 2 && "complete_step".equals(proposedCalls.get(1).toolName()))
+                                || (isCohesiveBatch(proposedCalls) && "complete_step".equals(proposedCalls.get(proposedCalls.size() - 1).toolName()))
+                        ));
+                final long graceLimit = (long) (this.maxTokens * 1.20);
+                if (!proposesCompletion || stepCumulativeTokens > graceLimit)
+                {
+                    throw new TokenBudgetExceededException(
+                            TokenBudgetExceededException.BudgetType.TOTAL,
+                            stepCumulativeTokens,
+                            this.maxTokens
+                    );
+                }
+                LOGGER.warn("⚠️ Turn #{} exceeded token budget ({} / {} tokens), but proposes step completion. Granting grace completion execution (grace limit: {}).",
+                        turn, stepCumulativeTokens, this.maxTokens, graceLimit);
             }
 
             // If no tool call could be parsed
@@ -681,12 +729,12 @@ public final class AgentToolLoopStep implements PipelineStep
                 break;
             }
 
-            // Cohesive form input batching vs single action handling
+            // Cohesive batch execution (form inputs and/or assertions) vs single action handling
             final List<ToolCall> callsToExecute = new ArrayList<>();
             final ToolCall coProposedComplete;
 
-            final boolean allCohesiveFormInputs = isCohesiveFormInputBatch(proposedCalls);
-            if (allCohesiveFormInputs)
+            final boolean allCohesiveBatch = isCohesiveBatch(proposedCalls);
+            if (allCohesiveBatch)
             {
                 final ToolCall last = proposedCalls.get(proposedCalls.size() - 1);
                 if ("complete_step".equals(last.toolName()))
@@ -723,9 +771,11 @@ public final class AgentToolLoopStep implements PipelineStep
             ToolCall lastEffectiveCall = null;
             ToolResult lastResult = null;
             boolean batchInterrupted = false;
+            int executedInBatchCount = 0;
 
             for (final ToolCall currentCall : callsToExecute)
             {
+                executedInBatchCount++;
                 logToolCall(currentCall);
 
                 // Stop Criterion 3: Thrashing / Stagnation Breaker (3 consecutive identical calls, including complete_step)
@@ -766,6 +816,14 @@ public final class AgentToolLoopStep implements PipelineStep
                                     + "(If all milestones have genuinely been achieved already, invoke complete_step again to confirm.)";
                             LOGGER.warn("Rejecting premature complete_step: compound instruction has {} milestones but only {} tool calls executed.",
                                     milestones.size(), executedCalls.size());
+                            if (this.maxTokens > 0 && stepCumulativeTokens > this.maxTokens)
+                            {
+                                throw new TokenBudgetExceededException(
+                                        TokenBudgetExceededException.BudgetType.TOTAL,
+                                        stepCumulativeTokens,
+                                        this.maxTokens
+                                );
+                            }
                             conversation.add(ChatMessage.tool(currentCall.callId(), currentCall.toolName(), rejectMsg));
                             continue turnLoop;
                         }
@@ -1038,6 +1096,19 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
             }
 
+            if (batchInterrupted || executedInBatchCount < callsToExecute.size())
+            {
+                for (int i = executedInBatchCount; i < callsToExecute.size(); i++)
+                {
+                    final ToolCall skippedCall = callsToExecute.get(i);
+                    conversation.add(ChatMessage.tool(
+                            skippedCall.callId(),
+                            skippedCall.toolName(),
+                            "{\"status\":\"SKIPPED\",\"error\":\"Batch execution interrupted by prior tool failure or transition\"}"
+                    ));
+                }
+            }
+
             // 1-Turn Atomic Step Completion
             if (lastResult != null && lastResult.status() == ToolResult.Status.SUCCESS && !batchInterrupted)
             {
@@ -1127,7 +1198,16 @@ public final class AgentToolLoopStep implements PipelineStep
                         tu.inputTokenCount(), tu.cachedTokenCount(), tu.outputTokenCount(), tu.totalTokenCount(), turn);
             }
 
-            // Always prune expired DOM snapshots from prior turn(s)
+            if (this.maxTokens > 0 && stepCumulativeTokens > this.maxTokens)
+            {
+                throw new TokenBudgetExceededException(
+                        TokenBudgetExceededException.BudgetType.TOTAL,
+                        stepCumulativeTokens,
+                        this.maxTokens
+                );
+            }
+
+            // Always prune expired DOM snapshots from prior turn(s) to minimize token context
             pruneExpiredDomFromConversation(conversation);
             attachments = Collections.emptyList();
 
@@ -1219,7 +1299,16 @@ public final class AgentToolLoopStep implements PipelineStep
                             }
                             else if (!executedCalls.isEmpty())
                             {
-                                turnPrompt.append("\n\nNote: If the step's requested action or goal has been executed and confirmed on screen, invoke 'complete_step' rather than repeating interactions.");
+                                final String stepText = instruction != null && !instruction.isBlank() ? instruction : rawInstruction;
+                                final boolean isVerify = stepText != null && VERIFICATION_PREFIX_PATTERN.matcher(stepText.trim()).find();
+                                if (isVerify)
+                                {
+                                    turnPrompt.append("\n\nNote: If this is a verification step, invoke an assertion tool to verify expected content, and ensure any opened modal or dropdown is closed to restore initial page state before completing. Otherwise, invoke 'complete_step' if the step goal has been achieved.");
+                                }
+                                else
+                                {
+                                    turnPrompt.append("\n\nNote: If the step's requested action or goal has been executed and confirmed on screen, invoke 'complete_step' rather than repeating interactions.");
+                                }
                             }
                             conversation.add(ChatMessage.user(turnPrompt.toString(), freshAttachments));
                             attachments = freshAttachments;
@@ -1299,11 +1388,11 @@ public final class AgentToolLoopStep implements PipelineStep
 
                         if (milestones != null && !milestones.isEmpty())
                         {
-                            turnPrompt.append("Note: An action has been executed. Attached is the current viewport screenshot. This step contains multiple actions or milestones. Continue executing the remaining actions/milestones requested in the instruction. Do not invoke 'complete_step' until all requested actions and commanded verifications in this step have been fulfilled. For assertion milestones, invoke the commanded assertion tool directly (do not retry prior actions if text is absent). Do not perform uncommanded assertions or anticipate subsequent steps.");
+                            turnPrompt.append("Note: An action has been executed. Attached is the current viewport screenshot (prior DOM snapshot omitted to minimize context). This step contains multiple actions or milestones. Continue executing the remaining actions/milestones requested in the instruction. Do not invoke 'complete_step' until all requested actions and commanded verifications in this step have been fulfilled. For assertion milestones, invoke the commanded assertion tool directly (do not retry prior actions if text is absent). If you need DOM element selectors or structure to continue interacting or asserting, invoke 'request_context' or 'query_dom'. Do not perform uncommanded assertions or anticipate subsequent steps.");
                         }
                         else
                         {
-                            turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot. If this was an action instruction and all actions/fields requested in the instruction have been executed, invoke 'complete_step' now without performing uncommanded assertions or anticipating subsequent steps. If the instruction explicitly requested additional fields or actions that have not yet been executed, continue executing the remaining actions. If the step explicitly requires verification, use an assertion tool before calling 'complete_step'.");
+                            turnPrompt.append("Note: The requested action has been executed. Attached is the current viewport screenshot (prior DOM snapshot omitted to minimize context). If this was an action instruction and all actions/fields requested in the instruction have been executed, invoke 'complete_step' now without performing uncommanded assertions or anticipating subsequent steps. If the instruction explicitly requested additional fields or actions that have not yet been executed, continue executing the remaining actions. If the step explicitly requires verification, use an assertion tool before calling 'complete_step', and ensure any opened modal or dropdown is closed to restore initial page state before completing. If you need DOM element selectors or structure to continue interacting or asserting, invoke 'request_context' or 'query_dom'.");
                         }
 
                         conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
@@ -1324,18 +1413,6 @@ public final class AgentToolLoopStep implements PipelineStep
 
     static void pruneExpiredDomFromConversation(final List<ChatMessage> conversation)
     {
-        pruneExpiredDomFromConversation(conversation, true);
-    }
-
-    /**
-     * Prunes stale DOM snapshots and attachments from all previous user messages
-     * in the active multi-turn conversation so only the latest ground-truth DOM is preserved.
-     *
-     * @param conversation the active multi-turn conversation
-     * @param hasFreshDomIncoming whether a new DOM snapshot will be appended for the upcoming turn
-     */
-    static void pruneExpiredDomFromConversation(final List<ChatMessage> conversation, final boolean hasFreshDomIncoming)
-    {
         if (conversation == null || conversation.size() <= 1)
         {
             return;
@@ -1344,22 +1421,6 @@ public final class AgentToolLoopStep implements PipelineStep
         final String domSectionHeader = "### Current Page State & Interactive Elements:\n";
         final String replacement = "### Current Page State & Interactive Elements:\n"
                 + "[Initial page state omitted after Turn 1 — use browser tools for current page state]\n\n";
-
-        // Find the index of the latest message containing an active DOM section
-        int latestDomIndex = -1;
-        for (int i = conversation.size() - 1; i >= 1; i--)
-        {
-            final ChatMessage msg = conversation.get(i);
-            if (msg != null && msg.role() == Role.USER && msg.content() != null)
-            {
-                final String content = msg.content();
-                if (content.indexOf(domSectionHeader) != -1 && !content.contains("[Initial page state omitted"))
-                {
-                    latestDomIndex = i;
-                    break;
-                }
-            }
-        }
 
         for (int i = 1; i < conversation.size(); i++)
         {
@@ -1373,12 +1434,6 @@ public final class AgentToolLoopStep implements PipelineStep
             final int domIdx = content.indexOf(domSectionHeader);
             final boolean isUnprunedDom = domIdx != -1 && !content.contains("[Initial page state omitted");
 
-            // If no fresh DOM is incoming and this is the latest DOM we have, do NOT prune it
-            if (isUnprunedDom && !hasFreshDomIncoming && i == latestDomIndex)
-            {
-                continue;
-            }
-
             if (isUnprunedDom)
             {
                 final int nextSectionIdx = content.indexOf("\n\n### ", domIdx + domSectionHeader.length());
@@ -1391,11 +1446,16 @@ public final class AgentToolLoopStep implements PipelineStep
                 LOGGER.debug("✂️ Pruned expired DOM from message index {} (saved ~{} chars / ~{} tokens)",
                         i, prunedChars, prunedChars / 4);
             }
-            else if (msg.attachments() != null && !msg.attachments().isEmpty() && (hasFreshDomIncoming || i != latestDomIndex))
+            else if (msg.attachments() != null && !msg.attachments().isEmpty())
             {
                 conversation.set(i, ChatMessage.user(content, Collections.emptyList()));
             }
         }
+    }
+
+    static void pruneExpiredDomFromConversation(final List<ChatMessage> conversation, final boolean hasFreshDomIncoming)
+    {
+        pruneExpiredDomFromConversation(conversation);
     }
 
     private void finishLoop(final ExecutionContext context, final List<ToolCall> executedCalls, final String summary)
@@ -1650,6 +1710,7 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         final String clean = toolName.startsWith("browser_") ? toolName.substring("browser_".length()) : toolName;
         return "fill".equals(clean)
+                || "fill_form".equals(clean)
                 || "type".equals(clean)
                 || "select".equals(clean)
                 || "check".equals(clean)
@@ -1683,7 +1744,12 @@ public final class AgentToolLoopStep implements PipelineStep
                 || "request_context".equals(clean);
     }
 
-    private static boolean isCohesiveFormInputBatch(final List<ToolCall> proposedCalls)
+    private static boolean isBatchableTool(final String toolName)
+    {
+        return isFormInputAction(toolName) || isAssertionTool(toolName);
+    }
+
+    private static boolean isCohesiveBatch(final List<ToolCall> proposedCalls)
     {
         if (proposedCalls == null || proposedCalls.size() <= 1)
         {
@@ -1698,12 +1764,17 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         for (int i = 0; i < limit; i++)
         {
-            if (!isFormInputAction(proposedCalls.get(i).toolName()))
+            if (!isBatchableTool(proposedCalls.get(i).toolName()))
             {
                 return false;
             }
         }
         return true;
+    }
+
+    private static boolean isCohesiveFormInputBatch(final List<ToolCall> proposedCalls)
+    {
+        return isCohesiveBatch(proposedCalls);
     }
 
     private static ToolCall sanitizeToolCall(final ToolCall call, final SessionData sessionData, final DefaultActionSanitizer sanitizer)
@@ -1994,10 +2065,19 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             return false;
         }
-        final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
+        String clean = name;
+        if (clean.startsWith("browser_"))
+        {
+            clean = clean.substring("browser_".length());
+        }
+        else if (clean.startsWith("mock_"))
+        {
+            clean = clean.substring("mock_".length());
+        }
         return "click".equals(clean)
                 || "hover".equals(clean)
                 || "fill".equals(clean)
+                || "fill_form".equals(clean)
                 || "type".equals(clean)
                 || "check".equals(clean)
                 || "upload_file".equals(clean)
@@ -2427,6 +2507,36 @@ public final class AgentToolLoopStep implements PipelineStep
                         }
                     }
                 }
+                if ("browser_store".equals(toolName) || "store".equalsIgnoreCase(toolName))
+                {
+                    if (!obj.hasNonNull("variableName") || obj.path("variableName").asText().isBlank())
+                    {
+                        if (obj.hasNonNull("variable") && !obj.path("variable").asText().isBlank())
+                        {
+                            obj.put("variableName", obj.path("variable").asText().trim());
+                        }
+                        else if (obj.hasNonNull("name") && !obj.path("name").asText().isBlank())
+                        {
+                            obj.put("variableName", obj.path("name").asText().trim());
+                        }
+                        else if (obj.hasNonNull("key") && !obj.path("key").asText().isBlank())
+                        {
+                            obj.put("variableName", obj.path("key").asText().trim());
+                        }
+                        else if (obj.hasNonNull("value") && !obj.path("value").asText().isBlank())
+                        {
+                            final boolean hasSelector = (obj.hasNonNull("selector") && !obj.path("selector").asText().isBlank())
+                                    || (obj.hasNonNull("locator") && !obj.path("locator").asText().isBlank())
+                                    || (obj.hasNonNull("target") && !obj.path("target").asText().isBlank());
+                            if (hasSelector)
+                            {
+                                obj.put("variableName", obj.path("value").asText().trim());
+                                obj.remove("value");
+                                obj.remove("text");
+                            }
+                        }
+                    }
+                }
                 args = obj;
             }
             else
@@ -2565,7 +2675,7 @@ public final class AgentToolLoopStep implements PipelineStep
         final String name = stripNamespacePrefix(rawName.trim()).toLowerCase(Locale.ROOT);
         final String clean = name.startsWith("browser_") ? name.substring("browser_".length()) : name;
         return "complete_step".equals(clean) || "click".equals(clean)
-                || "fill".equals(clean) || "type".equals(clean)
+                || "fill".equals(clean) || "fill_form".equals(clean) || "type".equals(clean)
                 || "upload".equals(clean) || "upload_file".equals(clean)
                 || "handle_alert".equals(clean) || "alert".equals(clean)
                 || "switch_window".equals(clean) || "switch_tab".equals(clean)
@@ -2603,6 +2713,7 @@ public final class AgentToolLoopStep implements PipelineStep
             case "click" -> "click";
             case "check", "uncheck" -> "check";
             case "fill" -> "fill";
+            case "fill_form" -> "fill_form";
             case "type" -> "type";
             case "upload", "upload_file" -> "upload_file";
             case "handle_alert", "alert" -> "handle_alert";

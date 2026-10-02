@@ -26,11 +26,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.resources.InMemoryResourceManager;
 
 /**
@@ -604,6 +605,105 @@ public class YamlPlaybookParserTest
 
         final PlaybookStep sub1 = parent.getSubSteps().get(1);
         assertTrue(sub1.isBug(), "sub1 must preserve its own bug flag");
+    }
+
+    @Test
+    public void testParsePlaybookWithRootProperties() throws IOException
+    {
+        final String yamlContent = """
+            _properties:
+              neodymium.ai.tokenBudget.input: 1500000
+              neodymium:
+                ai:
+                  tokenBudget:
+                    output: 75000
+              skipReplay: true
+
+            steps:
+              - "Open homepage"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("properties-playbook.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("properties-playbook.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getSteps().size());
+        assertEquals(1, playbook.getDataSets().size(), "Should generate a default dataset when _properties is present without data");
+
+        final Map<String, SessionData.DataEntry> dataset = playbook.getDataSets().get(0);
+        assertEquals("1500000", dataset.get("neodymium.ai.tokenBudget.input").value());
+        assertEquals("75000", dataset.get("neodymium.ai.tokenBudget.output").value());
+        assertEquals("true", dataset.get("neodymium.ai.skipReplay").value());
+    }
+
+    @Test
+    public void testParsePlaybookWithPropertiesAndDataRows() throws IOException
+    {
+        final String yamlContent = """
+            _properties:
+              neodymium.ai.tokenBudget.input: 1000000
+
+            steps:
+              - "Open homepage"
+
+            data:
+              - testId: "row1"
+                searchTerm: "Vitamin"
+              - testId: "row2"
+                searchTerm: "Moisturizer"
+                _properties:
+                  neodymium.ai.tokenBudget.input: 2500000
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("properties-data-playbook.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("properties-data-playbook.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getDataSets().size());
+
+        final Map<String, SessionData.DataEntry> row1 = playbook.getDataSets().get(0);
+        assertEquals("row1", row1.get("testId").value());
+        assertEquals("Vitamin", row1.get("searchTerm").value());
+        assertEquals("1000000", row1.get("neodymium.ai.tokenBudget.input").value(), "Row 1 should inherit root _properties");
+
+        final Map<String, SessionData.DataEntry> row2 = playbook.getDataSets().get(1);
+        assertEquals("row2", row2.get("testId").value());
+        assertEquals("Moisturizer", row2.get("searchTerm").value());
+        assertEquals("2500000", row2.get("neodymium.ai.tokenBudget.input").value(), "Row 2 should override root _properties");
+    }
+
+    @Test
+    public void testParsePlaybookWithPropertiesKeywordAndUnderscoreData() throws IOException
+    {
+        final String yamlContent = """
+            properties:
+              tokenBudget.input: 1200000
+
+            steps:
+              - "Open homepage"
+
+            _data:
+              - testId: "rowA"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("properties-alt-playbook.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("properties-alt-playbook.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getDataSets().size());
+
+        final Map<String, SessionData.DataEntry> row = playbook.getDataSets().get(0);
+        assertEquals("rowA", row.get("testId").value());
+        assertEquals("1200000", row.get("tokenBudget.input").value());
     }
 
     /**

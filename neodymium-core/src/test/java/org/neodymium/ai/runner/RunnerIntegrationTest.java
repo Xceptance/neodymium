@@ -68,6 +68,7 @@ import org.neodymium.ai.pipeline.structural.ConditionalBranchStep;
 import org.neodymium.ai.pipeline.structural.LoopStep;
 import org.neodymium.ai.pipeline.structural.SequenceStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
+import org.neodymium.ai.prompt.VerificationIssue;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.ToolCall;
@@ -339,6 +340,7 @@ public final class RunnerIntegrationTest
         final ExecutionContext context = session.getExecutionContext();
 
         context.getTransientData().put("semanticVerification.enabled", true);
+        context.getTransientData().put("neodymium.ai.semanticVerification.failOnError", true);
         context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
         context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
         context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
@@ -371,8 +373,8 @@ public final class RunnerIntegrationTest
         final List<Object> warnings = (List<Object>) context.getTransientData().get("verificationWarnings");
         assertNotNull(warnings);
         assertEquals(1, warnings.size());
-        assertTrue(warnings.get(0) instanceof org.neodymium.ai.prompt.VerificationIssue);
-        final org.neodymium.ai.prompt.VerificationIssue issue = (org.neodymium.ai.prompt.VerificationIssue) warnings.get(0);
+        assertTrue(warnings.get(0) instanceof VerificationIssue);
+        final VerificationIssue issue = (VerificationIssue) warnings.get(0);
         assertEquals("State did not change", issue.summary());
     }
 

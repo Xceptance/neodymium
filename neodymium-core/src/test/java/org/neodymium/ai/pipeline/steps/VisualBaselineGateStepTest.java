@@ -508,6 +508,173 @@ public class VisualBaselineGateStepTest
         assertTrue(customStep.getSsimScore() >= 0.85, "Score must be >= custom threshold 0.85");
     }
 
+    @Test
+    public void testReplayLayoutStep_passesOnMatchingLayout() throws Exception
+    {
+        final BufferedImage img1 = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = img1.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 300, 300);
+        g1.setColor(new Color(37, 99, 235)); // Header
+        g1.fillRect(0, 0, 300, 60);
+        g1.setColor(Color.LIGHT_GRAY);
+        g1.fillRect(20, 80, 120, 100);
+        g1.fillRect(160, 80, 120, 100);
+        g1.dispose();
+
+        // Replay has subtle internal variation (e.g. wireframed text bar slightly different)
+        final BufferedImage img2 = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = img2.createGraphics();
+        g2.setColor(Color.WHITE);
+        g2.fillRect(0, 0, 300, 300);
+        g2.setColor(new Color(37, 99, 235));
+        g2.fillRect(0, 0, 300, 60);
+        g2.setColor(Color.LIGHT_GRAY);
+        g2.fillRect(20, 80, 120, 100);
+        g2.fillRect(160, 80, 125, 100);
+        g2.dispose();
+
+        final String base64Png1 = encodeToBase64(img1);
+        final String base64Png2 = encodeToBase64(img2);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png2)),
+            "content_hash");
+        for (int i = 0; i < 6; i++)
+        {
+            executor.enqueueState(state);
+        }
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String colorMatrix = ScreenshotHasher.computeColorSsimMatrix(base64Png1);
+        final PlaybookStep layoutStep = new PlaybookStep("Check category page (layout)");
+        layoutStep.setScreenshotHash(colorMatrix);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(layoutStep, session);
+        final boolean matched = gateStep.executeGate(context);
+
+        assertTrue(matched, "Layout step matching baseline must pass visual gate");
+        assertEquals(0.92, layoutStep.getSsimMinScore(), 0.001, "Default layout threshold must be 0.92");
+        assertNotNull(layoutStep.getSsimScore());
+        assertTrue(layoutStep.getSsimScore() >= 0.92, "Score must meet or exceed 0.92 threshold");
+        assertTrue(executor.getWireframeAppliedCount() >= 1, "applyColorWireframe must be invoked");
+        assertTrue(executor.getWireframeRemovedCount() >= 1, "removeColorWireframe must be invoked");
+        assertEquals(executor.getWireframeAppliedCount(), executor.getWireframeRemovedCount(), "Wireframe must be cleaned up");
+    }
+
+    @Test
+    public void testReplayLayoutStep_failsOnStructuralCollapse() throws IOException
+    {
+        // 3-column layout baseline
+        final BufferedImage imgColumns = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = imgColumns.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 300, 300);
+        g1.setColor(Color.DARK_GRAY);
+        g1.fillRect(10, 10, 80, 280);
+        g1.fillRect(110, 10, 80, 280);
+        g1.fillRect(210, 10, 80, 280);
+        g1.dispose();
+
+        // Collapsed layout
+        final BufferedImage imgCollapsed = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = imgCollapsed.createGraphics();
+        g2.setColor(Color.WHITE);
+        g2.fillRect(0, 0, 300, 300);
+        g2.setColor(Color.DARK_GRAY);
+        g2.fillRect(10, 10, 280, 50);
+        g2.dispose();
+
+        final String base64Col = encodeToBase64(imgColumns);
+        final String base64Collapse = encodeToBase64(imgCollapsed);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Collapse)),
+            "content_hash");
+        for (int i = 0; i < 6; i++)
+        {
+            executor.enqueueState(state);
+        }
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String colorMatrix = ScreenshotHasher.computeColorSsimMatrix(base64Col);
+        final PlaybookStep layoutStep = new PlaybookStep("Check category grid (layout)");
+        layoutStep.setScreenshotHash(colorMatrix);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(layoutStep, session);
+        final DivergenceException ex = assertThrows(DivergenceException.class, () -> gateStep.execute(context));
+        assertTrue(ex.getMessage().contains("Layout SSIM score below threshold"), "Message must mention layout SSIM: " + ex.getMessage());
+        assertTrue(executor.getWireframeAppliedCount() >= 1);
+        assertEquals(executor.getWireframeAppliedCount(), executor.getWireframeRemovedCount(), "Wireframe must be safely removed even on failure");
+    }
+
+    @Test
+    public void testReplayLayoutStep_failsOnBrandColorShift() throws IOException
+    {
+        // Blue themed wireframe page
+        final BufferedImage imgBlue = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = imgBlue.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 300, 300);
+        g1.setColor(new Color(37, 99, 235));
+        g1.fillRect(0, 0, 300, 60);
+        g1.fillRect(20, 100, 100, 40);
+        g1.fillRect(140, 100, 100, 40);
+        g1.dispose();
+
+        // Red themed wireframe page (identical geometry, brand color regression)
+        final BufferedImage imgRed = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = imgRed.createGraphics();
+        g2.setColor(Color.WHITE);
+        g2.fillRect(0, 0, 300, 300);
+        g2.setColor(new Color(220, 38, 38));
+        g2.fillRect(0, 0, 300, 60);
+        g2.fillRect(20, 100, 100, 40);
+        g2.fillRect(140, 100, 100, 40);
+        g2.dispose();
+
+        final String base64Blue = encodeToBase64(imgBlue);
+        final String base64Red = encodeToBase64(imgRed);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Red)),
+            "content_hash");
+        for (int i = 0; i < 6; i++)
+        {
+            executor.enqueueState(state);
+        }
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String colorMatrix = ScreenshotHasher.computeColorSsimMatrix(base64Blue);
+        final PlaybookStep layoutStep = new PlaybookStep("Check category page styling (layout)");
+        layoutStep.setScreenshotHash(colorMatrix);
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(layoutStep, session);
+        final DivergenceException ex = assertThrows(DivergenceException.class, () -> gateStep.execute(context));
+        assertTrue(ex.getMessage().contains("Layout SSIM score below threshold"));
+    }
+
     private static String encodeToBase64(final BufferedImage image) throws IOException
     {
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())

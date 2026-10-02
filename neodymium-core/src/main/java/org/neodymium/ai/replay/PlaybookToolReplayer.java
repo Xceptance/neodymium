@@ -23,6 +23,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
@@ -150,6 +152,16 @@ public final class PlaybookToolReplayer
 
         LOGGER.info("▶ Replaying {} tool calls for step: \"{}\"", toolCalls.size(), step.getInstruction());
 
+        final ExecutionMode executionMode = effectiveContext.getVariable("neodymium.executionMode", ExecutionMode.class)
+                .orElseGet(() -> {
+                    final AiSession session = effectiveContext.getVariable("neodymium.session", AiSession.class).orElse(null);
+                    if (session != null && session.getExecutionMode() != null)
+                    {
+                        return session.getExecutionMode();
+                    }
+                    return AiConfiguration.getInstance().getExecutionMode();
+                });
+
         boolean anyHealed = false;
 
         for (int i = 0; i < toolCalls.size(); i++)
@@ -157,15 +169,19 @@ public final class PlaybookToolReplayer
             final ToolCall rawCall = toolCalls.get(i);
             final ToolCall variableResolvedCall = resolveVariables(rawCall, sessionData);
 
-            // Attempt locator self-healing if candidates or DomFeatureVector are available
+            // Attempt locator self-healing if candidates or DomFeatureVector are available,
+            // strictly bypassing in REPLAY_STRICT or when healing is unsupported
             ToolCall healedCall = null;
-            try
+            if (executionMode != ExecutionMode.REPLAY_STRICT && (executionMode == null || executionMode.supportsHealing()))
             {
-                healedCall = attemptHealing(variableResolvedCall, step, i, effectiveContext);
-            }
-            catch (final AssertionError | Exception e)
-            {
-                LOGGER.debug("Self-healing evaluation skipped due to exception: {}", e.getMessage());
+                try
+                {
+                    healedCall = attemptHealing(variableResolvedCall, step, i, effectiveContext);
+                }
+                catch (final AssertionError | Exception e)
+                {
+                    LOGGER.debug("Self-healing evaluation skipped due to exception: {}", e.getMessage());
+                }
             }
             final ToolCall intermediateCall;
             if (healedCall != null)
@@ -410,6 +426,14 @@ public final class PlaybookToolReplayer
             return null;
         }
 
+        final ExecutionMode executionMode = context != null
+                ? context.getVariable("neodymium.executionMode", ExecutionMode.class).orElse(null)
+                : null;
+        if (executionMode == ExecutionMode.REPLAY_STRICT || (executionMode != null && !executionMode.supportsHealing()))
+        {
+            return null;
+        }
+
         // Only interactive / actionable tools targeting an element can be healed.
         // Read-only inspection / navigation tools must never trigger locator healing.
         final String toolName = call.toolName() != null ? call.toolName().trim().toLowerCase() : "";
@@ -466,6 +490,12 @@ public final class PlaybookToolReplayer
         {
         }
 
+        // Optional steps (e.g. dismissible modals, cookie banners) must not perform heavy full-DOM healing scans
+        if (step != null && step.isOptional())
+        {
+            return null;
+        }
+
         // Check for live candidate vectors provided via context variable or dynamically extracted from active page
         List<DomFeatureVector> liveCandidates = null;
         final Object candidateObj = context != null ? context.getVariable("liveCandidates", Object.class).orElse(null) : null;
@@ -478,6 +508,28 @@ public final class PlaybookToolReplayer
         }
         else if (WebDriverRunner.hasWebDriverStarted())
         {
+            // For standard CSS or ID locators, do a brief poll (up to 300ms) in case an async element (e.g. dropdown) is currently rendering
+            if (!currentTarget.contains("data-ai=") && !currentTarget.contains("#xc"))
+            {
+                final long quickPollStart = System.currentTimeMillis();
+                while (System.currentTimeMillis() - quickPollStart < 300)
+                {
+                    try
+                    {
+                        Thread.sleep(50);
+                    }
+                    catch (final InterruptedException e)
+                    {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                    if (SelenideElementFinder.isDirectlyPresent(currentTarget))
+                    {
+                        return null;
+                    }
+                }
+            }
+
             try
             {
                 liveCandidates = new PageAnalyzer().extractFeatureVectors(WebDriverRunner.getWebDriver());

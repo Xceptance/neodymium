@@ -50,7 +50,7 @@ import org.neodymium.util.Neodymium;
 @Browser("Chrome_headless")
 @Tag("AuraIntegration")
 @NeodymiumAiTest
-@AiPlaybook(value = "programmatic", name = "custom_click_playbook")
+@AiPlaybook(value = "programmatic", recordingFileName = "custom_click_playbook")
 public class ClickIntegrationTest extends BaseAiTest
 {
 
@@ -117,8 +117,8 @@ public class ClickIntegrationTest extends BaseAiTest
 
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
-        final File recordingFile = new File("src/test/resources/playbooks/integration/programmatic/custom_click_playbook_" + browserProfile + ".json");
-        Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk");
+        final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_click_playbook_" + browserProfile + ".json");
+        Assertions.assertTrue(recordingFile.exists(), "Recorded playbook file should exist on disk: " + recordingFile.getPath());
         try
         {
             final String content = Files.readString(recordingFile.toPath(), StandardCharsets.UTF_8);

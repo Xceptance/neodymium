@@ -28,6 +28,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.probe.LocatorProbeResult;
 import org.neodymium.ai.model.ContextLevel;
@@ -58,6 +59,11 @@ public final class MockTargetExecutor implements TargetExecutor
     private final List<Boolean> capturedFullPageFlags = new CopyOnWriteArrayList<>();
 
     /**
+     * The thread-safe list of ContextLevel values passed into captureState.
+     */
+    private final List<ContextLevel> capturedContextLevels = new CopyOnWriteArrayList<>();
+
+    /**
      * Canned locator probe results for headless testing.
      */
     private final Map<String, LocatorProbeResult> cannedProbeResults = new ConcurrentHashMap<>();
@@ -66,6 +72,10 @@ public final class MockTargetExecutor implements TargetExecutor
      * Flag indicating whether this mock executor reports probing support.
      */
     private boolean probingSupported = true;
+
+    private final AtomicInteger wireframeAppliedCount = new AtomicInteger();
+
+    private final AtomicInteger wireframeRemovedCount = new AtomicInteger();
 
     /**
      * The set of supported actions declared by this executor.
@@ -181,6 +191,10 @@ public final class MockTargetExecutor implements TargetExecutor
     @Override
     public SutState captureState(final ContextLevel level) throws IOException
     {
+        if (level != null)
+        {
+            this.capturedContextLevels.add(level);
+        }
         final SutState next = this.stateQueue.poll();
         if (next != null)
         {
@@ -215,6 +229,16 @@ public final class MockTargetExecutor implements TargetExecutor
     }
 
     /**
+     * Retrieves the list of ContextLevel values recorded by captureState calls.
+     *
+     * @return the list of captured ContextLevels
+     */
+    public List<ContextLevel> getCapturedContextLevels()
+    {
+        return new ArrayList<>(this.capturedContextLevels);
+    }
+
+    /**
      * Records the action in the executed list.
      *
      * @param action the executable action instance
@@ -238,5 +262,27 @@ public final class MockTargetExecutor implements TargetExecutor
     public Set<ActionDefinition> getSupportedActions()
     {
         return this.supportedActions;
+    }
+
+    @Override
+    public void applyColorWireframe()
+    {
+        this.wireframeAppliedCount.incrementAndGet();
+    }
+
+    @Override
+    public void removeColorWireframe()
+    {
+        this.wireframeRemovedCount.incrementAndGet();
+    }
+
+    public int getWireframeAppliedCount()
+    {
+        return this.wireframeAppliedCount.get();
+    }
+
+    public int getWireframeRemovedCount()
+    {
+        return this.wireframeRemovedCount.get();
     }
 }
