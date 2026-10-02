@@ -660,4 +660,47 @@ public class LocatorResolverTest
         Assertions.assertTrue(xpath.contains("not(descendant::th)"));
         Assertions.assertTrue(xpath.contains("[2]"));
     }
+
+    @Test
+    public void testEmbeddedHasTextInDescendantChain()
+    {
+        final By resolved = LocatorResolver.resolveLocator("div[data-ai=\"xckdm47x\"] .flex.justify-between:has-text(\"Subtotal\") span:nth-child(2)");
+        Assertions.assertTrue(resolved instanceof By.ByXPath);
+        final String xpath = resolved.toString();
+        Assertions.assertTrue(xpath.contains("@data-ai='xckdm47x'"));
+        Assertions.assertTrue(xpath.contains("flex"));
+        Assertions.assertTrue(xpath.contains("justify-between"));
+        Assertions.assertTrue(xpath.contains("contains(normalize-space(.), 'Subtotal')"));
+        Assertions.assertTrue(xpath.contains("//span[position()=2]"));
+    }
+
+    @Test
+    public void testEmbeddedTextPseudoWithPunctuationAndQuotes()
+    {
+        final By resolved = LocatorResolver.resolveLocator("div.order-summary .item:has-text(\"Version 1.0 ($15.99)\") span.price");
+        Assertions.assertTrue(resolved instanceof By.ByXPath);
+        final String xpath = resolved.toString();
+        Assertions.assertTrue(xpath.contains("order-summary"));
+        Assertions.assertTrue(xpath.contains("item"));
+        Assertions.assertTrue(xpath.contains("contains(normalize-space(.), 'Version 1.0 ($15.99)')"));
+        Assertions.assertTrue(xpath.contains("price"));
+    }
+
+    @Test
+    public void testEmbeddedExactTextPseudoInDescendantChain()
+    {
+        final By resolved = LocatorResolver.resolveLocator("div .row:text-is(\"Total\") span:last-child");
+        Assertions.assertTrue(resolved instanceof By.ByXPath);
+        final String xpath = resolved.toString();
+        Assertions.assertTrue(xpath.contains("(normalize-space(.)='Total' or normalize-space(text())='Total')"));
+        Assertions.assertTrue(xpath.contains("//span[position()=last()]"));
+    }
+
+    @Test
+    public void testSpaceDelimitedPseudoEquivalentToChainedLocator()
+    {
+        final By spaceDelimited = LocatorResolver.resolveLocator("table tr:has-text(\"Alice\") button");
+        final By chevronDelimited = LocatorResolver.resolveLocator("table >> tr:has-text(\"Alice\") >> button");
+        Assertions.assertEquals(chevronDelimited, spaceDelimited);
+    }
 }

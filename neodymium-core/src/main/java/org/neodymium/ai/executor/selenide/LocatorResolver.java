@@ -49,7 +49,10 @@ public final class LocatorResolver
     private static final Logger LOG = LoggerFactory.getLogger(LocatorResolver.class);
 
     private static final Pattern PLAYWRIGHT_PSEUDO_PATTERN = Pattern.compile(
-            "^(.*?):(has-text|has-text\\*|has-text-is|contains|text|text\\*|text-is|exact-text)\\((.*?)\\)$", Pattern.CASE_INSENSITIVE);
+            "^(.*?):(has-text|has-text\\*|has-text-is|contains|text|text\\*|text-is|exact-text)\\(((?:[^()]|\"[^\"]*\"|'[^']*')*)\\)$", Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern EXTENDED_PSEUDO_PATTERN = Pattern.compile(
+            ":(has-text|has-text\\*|has-text-is|contains|text|text\\*|text-is|exact-text)\\(", Pattern.CASE_INSENSITIVE);
 
     private LocatorResolver()
     {
@@ -283,6 +286,11 @@ public final class LocatorResolver
             return buildPseudoSelectorXpath(tag, textVal, isExact);
         }
 
+        if (EXTENDED_PSEUDO_PATTERN.matcher(clean).find())
+        {
+            return buildPseudoSelectorXpath(clean, null, false);
+        }
+
         // 12. Explicit Shadow DOM targets (e.g. host-el ::shadow button)
         if (clean.contains("::shadow"))
         {
@@ -445,8 +453,40 @@ public final class LocatorResolver
 
         final String rest = segment.substring(cursor);
 
+        // Match substring text pseudo-classes: :has-text(...), :has-text*(...), :contains(...), :text(...), :text*(...)
+        final String[] subTextPseudos = {"has-text", "has-text*", "contains", "text", "text*"};
+        for (final String pseudo : subTextPseudos)
+        {
+            for (final String textArg : extractBalancedPseudoArgs(rest, pseudo))
+            {
+                final String textVal = unquote(textArg);
+                conditions.add("contains(normalize-space(.), " + escapeXpath(textVal) + ")");
+            }
+        }
+
+        // Match exact text pseudo-classes: :has-text-is(...), :text-is(...), :exact-text(...)
+        final String[] exactTextPseudos = {"has-text-is", "text-is", "exact-text"};
+        for (final String pseudo : exactTextPseudos)
+        {
+            for (final String textArg : extractBalancedPseudoArgs(rest, pseudo))
+            {
+                final String textVal = unquote(textArg);
+                conditions.add("(normalize-space(.)=" + escapeXpath(textVal) + " or normalize-space(text())=" + escapeXpath(textVal) + ")");
+            }
+        }
+
+        String cleanedRest = rest;
+        for (final String pseudo : subTextPseudos)
+        {
+            cleanedRest = stripBalancedPseudo(cleanedRest, pseudo);
+        }
+        for (final String pseudo : exactTextPseudos)
+        {
+            cleanedRest = stripBalancedPseudo(cleanedRest, pseudo);
+        }
+
         // Match attributes: [name='value'] or [required]
-        final Matcher attrMatcher = Pattern.compile("\\[([a-zA-Z0-9_-]+)(?:([*^$|~]?=)(['\"]?)(.*?)\\3)?\\]").matcher(rest);
+        final Matcher attrMatcher = Pattern.compile("\\[([a-zA-Z0-9_-]+)(?:([*^$|~]?=)(['\"]?)(.*?)\\3)?\\]").matcher(cleanedRest);
         while (attrMatcher.find())
         {
             final String attrName = attrMatcher.group(1);
@@ -476,45 +516,45 @@ public final class LocatorResolver
         }
 
         // Match IDs: #id
-        final Matcher idMatcher = Pattern.compile("#([a-zA-Z0-9_-]+)").matcher(rest);
+        final Matcher idMatcher = Pattern.compile("#([a-zA-Z0-9_-]+)").matcher(cleanedRest);
         while (idMatcher.find())
         {
             conditions.add("@id=" + escapeXpath(idMatcher.group(1)));
         }
 
         // Match classes: .class
-        final Matcher classMatcher = Pattern.compile("\\.([a-zA-Z0-9_-]+)").matcher(rest);
+        final Matcher classMatcher = Pattern.compile("\\.([a-zA-Z0-9_-]+)").matcher(cleanedRest);
         while (classMatcher.find())
         {
             conditions.add("contains(concat(' ', normalize-space(@class), ' '), ' " + classMatcher.group(1) + " ')");
         }
 
         // Match :nth-child(N)
-        final Matcher nthChildMatcher = Pattern.compile(":nth-child\\((\\d+)\\)").matcher(rest);
+        final Matcher nthChildMatcher = Pattern.compile(":nth-child\\((\\d+)\\)").matcher(cleanedRest);
         while (nthChildMatcher.find())
         {
             conditions.add("position()=" + nthChildMatcher.group(1));
         }
 
         // Match :nth-of-type(N)
-        final Matcher nthOfTypeMatcher = Pattern.compile(":nth-of-type\\((\\d+)\\)").matcher(rest);
+        final Matcher nthOfTypeMatcher = Pattern.compile(":nth-of-type\\((\\d+)\\)").matcher(cleanedRest);
         while (nthOfTypeMatcher.find())
         {
             conditions.add("position()=" + nthOfTypeMatcher.group(1));
         }
 
-        if (rest.contains(":first-child") || rest.contains(":first-of-type"))
+        if (cleanedRest.contains(":first-child") || cleanedRest.contains(":first-of-type"))
         {
             conditions.add("position()=1");
         }
 
-        if (rest.contains(":last-child") || rest.contains(":last-of-type"))
+        if (cleanedRest.contains(":last-child") || cleanedRest.contains(":last-of-type"))
         {
             conditions.add("position()=last()");
         }
 
         // Match :has(...) e.g. :has(td) or :has(.btn) or :has([role="cell"])
-        for (final String inner : extractBalancedPseudoArgs(rest, "has"))
+        for (final String inner : extractBalancedPseudoArgs(cleanedRest, "has"))
         {
             final String[] subInners = inner.split("\\s*,\\s*");
             final List<String> hasOrConditions = new ArrayList<>();
@@ -533,7 +573,7 @@ public final class LocatorResolver
         }
 
         // Match :not(...) e.g. :not(th) or :not(.header) or :not(:has(...))
-        for (final String inner : extractBalancedPseudoArgs(rest, "not"))
+        for (final String inner : extractBalancedPseudoArgs(cleanedRest, "not"))
         {
             if (inner.startsWith(":has(") && inner.endsWith(")"))
             {
@@ -989,6 +1029,49 @@ public final class LocatorResolver
             }
         }
         return results;
+    }
+
+    /**
+     * Strips balanced pseudo-classes such as {@code :has-text(...)} from a selector string so that
+     * embedded punctuation (e.g. dots in numbers, brackets, quotes) does not interfere with standard CSS matching.
+     *
+     * @param input the raw selector substring
+     * @param pseudoName the pseudo-class name without colon or parentheses
+     * @return the selector string with matching balanced pseudo occurrences removed
+     */
+    private static String stripBalancedPseudo(final String input, final String pseudoName)
+    {
+        if (input == null || input.isBlank())
+        {
+            return input;
+        }
+        final String prefix = ":" + pseudoName + "(";
+        final StringBuilder sb = new StringBuilder();
+        int lastEnd = 0;
+        int idx = 0;
+        while ((idx = input.indexOf(prefix, lastEnd)) != -1)
+        {
+            sb.append(input, lastEnd, idx);
+            final int start = idx + prefix.length();
+            int depth = 1;
+            int pos = start;
+            while (pos < input.length() && depth > 0)
+            {
+                final char c = input.charAt(pos);
+                if (c == '(')
+                {
+                    depth++;
+                }
+                else if (c == ')')
+                {
+                    depth--;
+                }
+                pos++;
+            }
+            lastEnd = pos;
+        }
+        sb.append(input.substring(lastEnd));
+        return sb.toString();
     }
 
     /**

@@ -41,15 +41,40 @@ public final class VisualRcaPrompt implements AiPrompt<String>
     private final String errorMessage;
 
     /**
-     * Constructs a VisualRcaPrompt.
+     * The active page URL at the time of failure, if available.
+     */
+    private final String pageUrl;
+
+    /**
+     * The active page title at the time of failure, if available.
+     */
+    private final String pageTitle;
+
+    /**
+     * Constructs a VisualRcaPrompt with instruction and error details.
      *
      * @param failedInstruction the instruction that failed
      * @param errorMessage the error message
      */
     public VisualRcaPrompt(final String failedInstruction, final String errorMessage)
     {
+        this(failedInstruction, errorMessage, null, null);
+    }
+
+    /**
+     * Constructs a VisualRcaPrompt with instruction, error details, and SUT page context.
+     *
+     * @param failedInstruction the instruction that failed
+     * @param errorMessage the error message
+     * @param pageUrl the URL of the page where failure occurred
+     * @param pageTitle the title of the page where failure occurred
+     */
+    public VisualRcaPrompt(final String failedInstruction, final String errorMessage, final String pageUrl, final String pageTitle)
+    {
         this.failedInstruction = failedInstruction;
         this.errorMessage = errorMessage;
+        this.pageUrl = pageUrl;
+        this.pageTitle = pageTitle;
     }
 
     @Override
@@ -62,13 +87,23 @@ public final class VisualRcaPrompt implements AiPrompt<String>
     @Override
     public String compileUserMessage(final ExecutionContext context)
     {
-        return String.format("""
+        final StringBuilder sb = new StringBuilder();
+        sb.append(String.format("""
             Failed Instruction: %s
             Failure Details: %s
             """,
             this.failedInstruction != null ? this.failedInstruction : "(Unknown instruction)",
             this.errorMessage != null ? this.errorMessage : "(No error message)"
-        );
+        ));
+        if (this.pageUrl != null && !this.pageUrl.isBlank())
+        {
+            sb.append("Current Page URL: ").append(this.pageUrl).append("\n");
+        }
+        if (this.pageTitle != null && !this.pageTitle.isBlank())
+        {
+            sb.append("Current Page Title: ").append(this.pageTitle).append("\n");
+        }
+        return sb.toString();
     }
 
     @Override
@@ -81,5 +116,25 @@ public final class VisualRcaPrompt implements AiPrompt<String>
     public String parseResponse(final String rawResponse, final ExecutionContext context)
     {
         return rawResponse != null ? rawResponse.trim() : "";
+    }
+
+    /**
+     * Returns the active page URL at the time of failure.
+     *
+     * @return the page URL, or null if not available
+     */
+    public String getPageUrl()
+    {
+        return this.pageUrl;
+    }
+
+    /**
+     * Returns the active page title at the time of failure.
+     *
+     * @return the page title, or null if not available
+     */
+    public String getPageTitle()
+    {
+        return this.pageTitle;
     }
 }
