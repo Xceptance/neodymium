@@ -1,8 +1,8 @@
 # [IDEA-20261004-0045] Replay guard for coordinate-based marker clicks
 
-- **Status:** `Proposed`
+- **Status:** `Implemented`
 - **Proposed:** 2026-10-04 00:45
-- **Resolved:** Pending
+- **Resolved:** 2026-10-04 01:31
 - **Component:** `neodymium-core`
 - **Category:** `AI & VLM`
 - **Author:** AI-generated: Claude Sonnet 5.5 / Xceptance GmbH 2026

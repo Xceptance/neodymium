@@ -44,6 +44,8 @@ import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.tool.ToolResult;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
+import org.neodymium.ai.tool.browser.ReanchoringBridge;
+import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -202,6 +204,11 @@ public final class PlaybookToolReplayer
             }
 
             final ToolCall finalCall = intermediateCall;
+
+            if (executionMode == ExecutionMode.REPLAY_STRICT)
+            {
+                verifyStrictReplayGuards(finalCall, step, i);
+            }
 
             final AiSession session = effectiveContext.getVariable("neodymium.session", AiSession.class).orElse(null);
 
@@ -445,49 +452,52 @@ public final class PlaybookToolReplayer
         }
 
         final String currentTarget = args.hasNonNull("target") ? args.path("target").asText().trim() : args.path("selector").asText().trim();
-        if (currentTarget.isBlank() || currentTarget.startsWith("coord:"))
+        final boolean isCoordinateTarget = currentTarget.startsWith("coord:")
+                || (args.hasNonNull("x") && args.hasNonNull("y") && (!args.hasNonNull("selector") || args.path("selector").asText().isBlank()));
+        if (currentTarget.isBlank() && !isCoordinateTarget)
         {
             return null;
         }
 
         // Check if DomFeatureVector is recorded
-        DomFeatureVector recordedVector = null;
-        if (callIndex < step.getActions().size())
-        {
-            final Action matchingAction = step.getActions().get(callIndex);
-            if (matchingAction != null)
-            {
-                recordedVector = matchingAction.getDomFeatureVector();
-            }
-        }
-
-        if (recordedVector == null && args.has("domFeatureVector"))
-        {
-            try
-            {
-                recordedVector = MAPPER.treeToValue(args.path("domFeatureVector"), DomFeatureVector.class);
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-
+        final DomFeatureVector recordedVector = extractRecordedVector(args, step, callIndex);
         if (recordedVector == null)
         {
             return null;
         }
 
-        // If the current target is already directly present and visible on the live page,
-        // no healing is needed. Never overwrite or corrupt an active, working locator.
-        try
+        if (isCoordinateTarget)
         {
-            if (WebDriverRunner.hasWebDriverStarted() && SelenideElementFinder.isDirectlyPresent(currentTarget))
+            if (WebDriverRunner.hasWebDriverStarted())
+            {
+                final int x = extractCoordinate(args, "x", currentTarget, 0);
+                final int y = extractCoordinate(args, "y", currentTarget, 1);
+                final WebDriver driver = WebDriverRunner.getWebDriver();
+                final ReanchoringBridge.ReanchoredElement liveEl = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
+                if (matchesRecordedIdentity(liveEl, recordedVector))
+                {
+                    return null;
+                }
+            }
+            else if (context == null || context.getVariable("liveCandidates", Object.class).isEmpty())
             {
                 return null;
             }
         }
-        catch (final AssertionError | Exception ignored)
+        else
         {
+            // If the current target is already directly present and visible on the live page,
+            // no healing is needed. Never overwrite or corrupt an active, working locator.
+            try
+            {
+                if (WebDriverRunner.hasWebDriverStarted() && SelenideElementFinder.isDirectlyPresent(currentTarget))
+                {
+                    return null;
+                }
+            }
+            catch (final AssertionError | Exception ignored)
+            {
+            }
         }
 
         // Optional steps (e.g. dismissible modals, cookie banners) must not perform heavy full-DOM healing scans
@@ -546,18 +556,34 @@ public final class PlaybookToolReplayer
             if (best != null)
             {
                 final String healedSelector = resolveSelectorForCandidate(best);
-                if (healedSelector != null && !currentTarget.equals(healedSelector))
+                final ObjectNode updatedArgs = args.deepCopy();
+                if (healedSelector != null && !currentTarget.equals(healedSelector) && (!isCoordinateTarget || !isBareGenericTag(healedSelector)))
                 {
                     LOGGER.info("🧬 Healed locator '{}' -> '{}' using DomFeatureVector similarity", currentTarget, healedSelector);
-                    final ObjectNode updatedArgs = args.deepCopy();
-                    if (args.hasNonNull("selector"))
+                    if (args.hasNonNull("selector") || isCoordinateTarget)
                     {
                         updatedArgs.put("selector", healedSelector);
                     }
-                    if (args.hasNonNull("target"))
+                    if (args.hasNonNull("target") || isCoordinateTarget)
                     {
                         updatedArgs.put("target", healedSelector);
                     }
+                    if (isCoordinateTarget)
+                    {
+                        updatedArgs.remove("x");
+                        updatedArgs.remove("y");
+                    }
+                    return new ToolCall(call.callId(), call.toolName(), updatedArgs);
+                }
+                else if (isCoordinateTarget)
+                {
+                    final int newX = best.getX() + (best.getWidth() / 2);
+                    final int newY = best.getY() + (best.getHeight() / 2);
+                    final String newTarget = "coord: " + newX + "," + newY;
+                    LOGGER.info("🧬 Relocated coordinate target '{}' -> '{}' using DomFeatureVector similarity", currentTarget, newTarget);
+                    updatedArgs.put("target", newTarget);
+                    updatedArgs.put("x", newX);
+                    updatedArgs.put("y", newY);
                     return new ToolCall(call.callId(), call.toolName(), updatedArgs);
                 }
             }
@@ -631,6 +657,17 @@ public final class PlaybookToolReplayer
      * @param identifier candidate identifier string
      * @return {@code true} if safe to use directly without CSS escaping
      */
+    private static boolean isBareGenericTag(final String selector)
+    {
+        if (selector == null)
+        {
+            return true;
+        }
+        final String s = selector.trim().toLowerCase();
+        return "div".equals(s) || "span".equals(s) || "section".equals(s) || "p".equals(s)
+                || "li".equals(s) || "ul".equals(s) || "ol".equals(s) || "body".equals(s);
+    }
+
     private static boolean isStandardCssIdentifier(final String identifier)
     {
         return identifier != null && identifier.matches("^-?[a-zA-Z_][a-zA-Z0-9_-]*$");
@@ -654,5 +691,121 @@ public final class PlaybookToolReplayer
         final ToolRegistry registry = new ToolRegistry();
         BrowserToolProvider.registerBrowserTools(registry);
         return registry;
+    }
+
+    private static void verifyStrictReplayGuards(final ToolCall call, final PlaybookStep step, final int callIndex)
+    {
+        final String toolName = call.toolName() != null ? call.toolName().trim().toLowerCase() : "";
+        if (!"click".equals(toolName) && !"browser_click".equals(toolName))
+        {
+            return;
+        }
+
+        final JsonNode args = call.arguments();
+        if (args == null)
+        {
+            return;
+        }
+
+        final String target = args.hasNonNull("target") ? args.path("target").asText().trim() : "";
+        final boolean isCoord = target.startsWith("coord:")
+                || (args.hasNonNull("x") && args.hasNonNull("y") && (!args.hasNonNull("selector") || args.path("selector").asText().isBlank()));
+        if (!isCoord)
+        {
+            return;
+        }
+
+        final DomFeatureVector recordedVector = extractRecordedVector(args, step, callIndex);
+        if (recordedVector != null && WebDriverRunner.hasWebDriverStarted())
+        {
+            final int x = extractCoordinate(args, "x", target, 0);
+            final int y = extractCoordinate(args, "y", target, 1);
+            final WebDriver driver = WebDriverRunner.getWebDriver();
+            final ReanchoringBridge.ReanchoredElement liveEl = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
+            if (!matchesRecordedIdentity(liveEl, recordedVector))
+            {
+                final String actualIdentity = liveEl != null
+                        ? liveEl.tagName() + (liveEl.text().isBlank() ? "" : " ['" + liveEl.text() + "']")
+                        : "none";
+                final String expectedIdentity = recordedVector.getTag()
+                        + (recordedVector.getText() == null || recordedVector.getText().isBlank() ? "" : " ['" + recordedVector.getText() + "']");
+                throw new AssertionError("Coordinate click target drifted in REPLAY_STRICT at (" + x + ", " + y + "): expected "
+                        + expectedIdentity + ", but found " + actualIdentity + " on the live page");
+            }
+        }
+    }
+
+    static DomFeatureVector extractRecordedVector(final JsonNode args, final PlaybookStep step, final int callIndex)
+    {
+        DomFeatureVector recordedVector = null;
+        if (step != null && callIndex >= 0 && callIndex < step.getActions().size())
+        {
+            final Action matchingAction = step.getActions().get(callIndex);
+            if (matchingAction != null)
+            {
+                recordedVector = matchingAction.getDomFeatureVector();
+            }
+        }
+        if (recordedVector == null && args != null && args.has("domFeatureVector"))
+        {
+            try
+            {
+                recordedVector = MAPPER.treeToValue(args.path("domFeatureVector"), DomFeatureVector.class);
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        return recordedVector;
+    }
+
+    static int extractCoordinate(final JsonNode args, final String prop, final String target, final int index)
+    {
+        if (args != null && args.hasNonNull(prop))
+        {
+            return args.path(prop).asInt();
+        }
+        if (target != null && target.startsWith("coord:"))
+        {
+            final String[] parts = target.substring(6).split(",");
+            if (parts.length > index)
+            {
+                try
+                {
+                    return Integer.parseInt(parts[index].trim());
+                }
+                catch (final NumberFormatException ignored)
+                {
+                }
+            }
+        }
+        return 0;
+    }
+
+    static boolean matchesRecordedIdentity(final ReanchoringBridge.ReanchoredElement liveEl, final DomFeatureVector recordedVector)
+    {
+        if (liveEl == null || recordedVector == null)
+        {
+            return false;
+        }
+        final String liveTag = liveEl.tagName();
+        final String recordedTag = recordedVector.getTag();
+        if (liveTag == null || recordedTag == null || !liveTag.equalsIgnoreCase(recordedTag))
+        {
+            return false;
+        }
+        final String recordedText = recordedVector.getText();
+        if (recordedText != null && !recordedText.isBlank())
+        {
+            final String liveText = liveEl.text();
+            if (liveText == null || liveText.isBlank())
+            {
+                return false;
+            }
+            final String normRecorded = recordedText.trim().toLowerCase();
+            final String normLive = liveText.trim().toLowerCase();
+            return normLive.contains(normRecorded) || normRecorded.contains(normLive);
+        }
+        return true;
     }
 }

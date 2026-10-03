@@ -499,6 +499,10 @@ public final class BrowserToolProvider
         if (reanchored != null)
         {
             res.put("selector", reanchored.selector());
+            if (reanchored.domFeatureVector() != null)
+            {
+                res.set("domFeatureVector", MAPPER.valueToTree(reanchored.domFeatureVector()));
+            }
             builder.withVariable("reanchoredSelector", reanchored.selector());
             builder.withVariable("reanchoredFeatureVector", reanchored.domFeatureVector());
         }
@@ -609,6 +613,7 @@ public final class BrowserToolProvider
                     {
                         final int bx = ((Number) coordsMap.get("x")).intValue();
                         final int by = ((Number) coordsMap.get("y")).intValue();
+                        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, bx, by);
                         final int[] clicked = performSafeCoordinateClick(driver, bx, by);
                         final int finalX = clicked[0];
                         final int finalY = clicked[1];
@@ -618,6 +623,12 @@ public final class BrowserToolProvider
                         res.put("target", "coord: " + finalX + "," + finalY);
                         res.put("x", finalX);
                         res.put("y", finalY);
+                        if (reanchored != null && reanchored.domFeatureVector() != null)
+                        {
+                            res.set("domFeatureVector", MAPPER.valueToTree(reanchored.domFeatureVector()));
+                            b.withVariable("reanchoredSelector", reanchored.selector());
+                            b.withVariable("reanchoredFeatureVector", reanchored.domFeatureVector());
+                        }
                         VisualBadgeInjector.removeMarkers(driver);
                         res.put("url", getSafeUrl(driver));
                         res.put("title", getSafeTitle(driver));

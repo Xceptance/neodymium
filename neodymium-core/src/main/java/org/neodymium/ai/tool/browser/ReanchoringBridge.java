@@ -60,10 +60,28 @@ public final class ReanchoringBridge
             var text = (el.innerText || el.textContent || '').trim().replace(/\\s+/g, ' ');
             if (text.length > 50) text = text.substring(0, 50);
 
+            var attrs = {};
+            if (el.attributes) {
+                for (var i = 0; i < el.attributes.length; i++) {
+                    var a = el.attributes[i];
+                    if (a.name !== 'data-m') {
+                        attrs[a.name] = a.value;
+                    }
+                }
+            }
+
+            var classes = [];
+            if (el.className && typeof el.className === 'string') {
+                classes = el.className.trim().split(/\\s+/).filter(Boolean);
+            }
+
             return {
                 selector: selector,
+                tag: el.tagName.toLowerCase(),
                 tagName: el.tagName.toLowerCase(),
                 text: text,
+                classes: classes,
+                attributes: attrs,
                 relX: Math.round(vx - rect.left),
                 relY: Math.round(vy - rect.top),
                 x: Math.round(rect.left),
@@ -126,8 +144,17 @@ public final class ReanchoringBridge
 
                     final Map<String, Object> featureVector = new LinkedHashMap<>();
                     featureVector.put("selector", selector);
+                    featureVector.put("tag", tagName);
                     featureVector.put("tagName", tagName);
                     featureVector.put("text", text);
+                    if (map.get("classes") != null)
+                    {
+                        featureVector.put("classes", map.get("classes"));
+                    }
+                    if (map.get("attributes") != null)
+                    {
+                        featureVector.put("attributes", map.get("attributes"));
+                    }
                     featureVector.put("x", map.get("x"));
                     featureVector.put("y", map.get("y"));
                     featureVector.put("width", map.get("width"));
