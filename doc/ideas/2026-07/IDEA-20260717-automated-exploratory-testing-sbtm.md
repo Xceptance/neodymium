@@ -1,11 +1,16 @@
 # [IDEA-20260717] Automated Exploratory Testing (SBTM)
 
-- **Status:** `Proposed`
+- **Status:** `Rejected` (Superseded)
 - **Proposed:** 2026-07-17
-- **Resolved:** Pending
+- **Resolved:** 2026-09-13
 - **Component:** `neodymium-core (AutonomousExplorer)`
 - **Category:** `Autonomous QA`
 - **Author:** Neodymium Core Team
+
+> [!NOTE]
+> **Superseded by Comprehensive Autonomous Exploration Specification:**
+> This early concept draft has been incorporated into and superseded by [IDEA-20260913-autonomous-exploratory-mode-executionmode-autonomous-exploration.md](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/ideas/2026-09/IDEA-20260913-autonomous-exploratory-mode-executionmode-autonomous-exploration.md), which specifies the full architecture for `ExecutionMode.AUTONOMOUS_EXPLORATION` with SBTM charters, dynamic state tracking, automated playbook synthesis, and CI/CD replay.
+
 
 ---
 

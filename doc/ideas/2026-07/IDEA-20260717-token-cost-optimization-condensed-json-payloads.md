@@ -1,11 +1,16 @@
 # [IDEA-20260717] Token & Cost Optimization: Condensed JSON Payloads
 
-- **Status:** `Proposed`
+- **Status:** `Rejected` (Superseded)
 - **Proposed:** 2026-07-17
-- **Resolved:** Pending
+- **Resolved:** 2026-10-03
 - **Component:** `neodymium-core (ActionExtractionPrompt, VerificationPrompt)`
 - **Category:** `Performance & Cost`
 - **Author:** Neodymium Core Team
+
+> [!NOTE]
+> **Superseded by Native Multi-Turn Tool Calling Architecture:**
+> Neodymium migrated away from raw JSON string action extraction (and completely removed `ActionExtractionPrompt.java`) in favor of native tool calling (`AgentToolLoopStep`, `AiTool`). With structured function definitions in tool schemas, token overhead from JSON formatting instructions was eliminated at the protocol level.
+
 
 ---
 

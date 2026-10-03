@@ -1,11 +1,16 @@
 # [IDEA-20260717] "Ultra" High-Strength Execution & Healing Mode
 
-- **Status:** `Proposed`
+- **Status:** `Rejected` (Superseded)
 - **Proposed:** 2026-07-17
-- **Resolved:** Pending
+- **Resolved:** 2026-10-01
 - **Component:** `neodymium-core (LocatorCascadeResolver, ExecutionMode)`
 - **Category:** `Architecture & Core`
 - **Author:** Neodymium Core Team
+
+> [!NOTE]
+> **Superseded by Deterministic Fast-Path Replay and Targeted Cascade:**
+> Runaway multi-model healing and unbounded reflection loops introduced 15–30s latency overhead and non-deterministic behavior during regression runs. As resolved in DEF-20261001-05, Neodymium adopted strict zero-token fast-path replay (`ExecutionMode.REPLAY_STRICT`) with a targeted 5-tier fallback cascade rather than an unbounded heavy-weight Ultra healing mode.
+
 
 ---
 

@@ -1,11 +1,16 @@
 # [IDEA-20260720] Configurable Overlay & Popup Dismissal Selectors
 
-- **Status:** `Proposed`
+- **Status:** `Rejected` (Superseded)
 - **Proposed:** 2026-07-20
-- **Resolved:** Pending
+- **Resolved:** 2026-10-03
 - **Component:** `neodymium-core (PrepareRetryStep)`
 - **Category:** `Architecture & Core`
 - **Author:** Neodymium Core Team
+
+> [!NOTE]
+> **Superseded by Native Playbook Flow and Modular Includes:**
+> Rather than maintaining a global hardcoded CSS selector regex or hidden dismisser in `PrepareRetryStep`, popup and overlay dismissal is modeled explicitly and declaratively via conditional playbook steps (e.g. `If cookie banner is visible, click Accept`) and reusable modular includes (e.g. `includes: - common/accept_cookies.yaml`).
+
 
 ---
 

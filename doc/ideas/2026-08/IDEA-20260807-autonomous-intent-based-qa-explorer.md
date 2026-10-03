@@ -1,11 +1,16 @@
 # [IDEA-20260807] Autonomous Intent-Based QA Explorer
 
-- **Status:** `Proposed`
+- **Status:** `Rejected` (Superseded)
 - **Proposed:** 2026-08-07
-- **Resolved:** Pending
+- **Resolved:** 2026-09-13
 - **Component:** `neodymium-core (AiPromptGenerator)`
 - **Category:** `Autonomous QA`
 - **Author:** Neodymium Core Team
+
+> [!NOTE]
+> **Superseded by Comprehensive Autonomous Exploration Specification:**
+> This high-level explorer concept has been incorporated into and superseded by [IDEA-20260913-autonomous-exploratory-mode-executionmode-autonomous-exploration.md](file:///home/rschwietzke/projects/GIT/neodymium-library/doc/ideas/2026-09/IDEA-20260913-autonomous-exploratory-mode-executionmode-autonomous-exploration.md), which details autonomous crawling, goal-directed exploration, and automated synthesis of `.yaml` test files and companion `.json` recordings.
+
 
 ---
 

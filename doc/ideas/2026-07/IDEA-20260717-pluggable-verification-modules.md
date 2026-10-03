@@ -1,11 +1,16 @@
 # [IDEA-20260717] Pluggable Verification Modules
 
-- **Status:** `Proposed`
+- **Status:** `Rejected` (Superseded)
 - **Proposed:** 2026-07-17
-- **Resolved:** Pending
+- **Resolved:** 2026-10-03
 - **Component:** `neodymium-core (VerificationRegistry, VerifyOutcomeStep)`
 - **Category:** `Architecture & Core`
 - **Author:** Neodymium Core Team
+
+> [!NOTE]
+> **Superseded by Native Assertion Tools in Tool Calling Registry:**
+> Non-functional and semantic verification modules are implemented as native tool calling actions (`assert_text`, `assert_element_state`, `assert_url`, `assert_title`) registered directly in `ToolRegistry` and executed within the multi-turn agent loop, rather than introducing a separate verification registry framework.
+
 
 ---
 
