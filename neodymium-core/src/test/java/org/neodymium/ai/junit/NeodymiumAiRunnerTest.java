@@ -275,9 +275,16 @@ public class NeodymiumAiRunnerTest
         // Verify report files were generated despite the early failure
         final Path targetResultsDir = Path.of("target/ai-results");
         final Path searchDir;
-        try (var stream = Files.list(reportDir))
+        if (Files.exists(reportDir))
         {
-            searchDir = stream.anyMatch(p -> p.getFileName().toString().endsWith(".html")) ? reportDir : targetResultsDir;
+            try (var stream = Files.list(reportDir))
+            {
+                searchDir = stream.anyMatch(p -> p.getFileName().toString().endsWith(".html")) ? reportDir : targetResultsDir;
+            }
+        }
+        else
+        {
+            searchDir = targetResultsDir;
         }
 
         try (var stream = Files.list(searchDir))

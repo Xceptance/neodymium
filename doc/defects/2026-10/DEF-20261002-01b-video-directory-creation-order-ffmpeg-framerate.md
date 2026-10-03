@@ -1,4 +1,4 @@
-# [DEF-20261002-01] Video Directory Creation Order & FFmpeg Framerate Adjustment Failures Prevent Video File Generation
+# [DEF-20261002-01b] Video Directory Creation Order & FFmpeg Framerate Adjustment Failures Prevent Video File Generation
 
 - **Status:** Resolved
 - **Opened:** 2026-10-02

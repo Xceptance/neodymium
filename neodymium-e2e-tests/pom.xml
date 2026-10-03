@@ -106,8 +106,14 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>${surefire.version}</version>
 				<configuration>
+					<systemPropertyVariables>
+						<java.util.logging.config.file>logging.properties</java.util.logging.config.file>
+						<allure.results.directory>${allure.results.directory}</allure.results.directory>
+						<selenide.headless>true</selenide.headless>
+					</systemPropertyVariables>
+					<workingDirectory>${session.executionRootDirectory}</workingDirectory>
 					<forkCount>${surefire.forkCount}</forkCount>
-					<reuseForks>true</reuseForks>
+					<reuseForks>false</reuseForks>
 					<excludedGroups>${e2e.excludedGroups}</excludedGroups>
 				</configuration>
 			</plugin>

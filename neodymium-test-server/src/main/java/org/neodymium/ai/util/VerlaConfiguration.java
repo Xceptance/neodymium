@@ -118,18 +118,39 @@ public final class VerlaConfiguration
      */
     private void loadFromFile(final String filePath)
     {
-        final File file = new File(filePath);
+        File file = new File(filePath);
+        if (!file.exists())
+        {
+            final String configDir = System.getProperty("neodymium.configDir");
+            if (configDir != null && !configDir.isBlank())
+            {
+                final File configDirFile = new File(configDir, filePath.startsWith("config/") ? filePath.substring(7) : filePath);
+                if (configDirFile.exists())
+                {
+                    file = configDirFile;
+                }
+            }
+        }
+        if (!file.exists())
+        {
+            final File parentFile = new File(".." + File.separator + filePath);
+            if (parentFile.exists())
+            {
+                file = parentFile;
+            }
+        }
+
         if (file.exists() && file.isFile())
         {
             try (final InputStream in = new FileInputStream(file))
             {
                 this.fileProperties.load(in);
-                LOG.debug("Loaded VÉRLA configuration from {}", filePath);
+                LOG.debug("Loaded VÉRLA configuration from {}", file.getAbsolutePath());
                 return;
             }
             catch (final IOException e)
             {
-                LOG.warn("Failed to load VÉRLA configuration from {}", filePath, e);
+                LOG.warn("Failed to load VÉRLA configuration from {}", file.getAbsolutePath(), e);
             }
         }
 

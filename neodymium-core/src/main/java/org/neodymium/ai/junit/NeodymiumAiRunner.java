@@ -865,13 +865,20 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             syncWebDriverWithSelenide();
 
-            // Automatically detect mock integration test package and apply thread-local overrides
-            if (context.getRequiredTestClass() != null)
+            // Resolve declarative AI provider override or preserve global system property
+            final Method testMethod = context.getTestMethod().orElse(null);
+            final Class<?> targetClass = context.getTestClass().orElse(null);
+            final AiProvider aiProvider = findAiProviderAnnotation(testMethod, targetClass);
+            if (aiProvider != null && !aiProvider.value().isBlank())
             {
-                final String fqcn = context.getRequiredTestClass().getName();
-                if (fqcn.contains(".integration.mock.") || fqcn.contains(".sandbox.mock.") || fqcn.contains(".integration.data."))
+                Neodymium.getData().put("neodymium.ai.global.provider", aiProvider.value().trim());
+            }
+            else
+            {
+                final String sysPropProvider = System.getProperty("neodymium.ai.global.provider");
+                if (sysPropProvider != null && !sysPropProvider.isBlank())
                 {
-                    Neodymium.getData().put("neodymium.ai.global.provider", "mock");
+                    Neodymium.getData().put("neodymium.ai.global.provider", sysPropProvider.trim());
                 }
             }
 
@@ -1914,7 +1921,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
     {
         final String recDir = (recordingDirectory != null && !recordingDirectory.trim().isEmpty())
             ? recordingDirectory.trim()
-            : org.neodymium.ai.config.AiConfiguration.getInstance().playbookRecordingDirectory();
+            : AiConfiguration.getInstance().playbookRecordingDirectory();
 
         if (recordingFileName != null && !recordingFileName.trim().isEmpty())
         {
@@ -2158,5 +2165,48 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             return packagePath + "/" + rawPath;
         }
         return rawPath;
+    }
+
+    /**
+     * Resolves the {@link AiProvider} annotation by inspecting the method, class hierarchy,
+     * or enclosing package.
+     *
+     * @param method the test method, if available
+     * @param testClass the test class, if available
+     * @return the resolved {@link AiProvider} annotation, or {@code null} if none is found
+     */
+    private static AiProvider findAiProviderAnnotation(final Method method, final Class<?> testClass)
+    {
+        if (method != null)
+        {
+            final AiProvider methodAnn = method.getAnnotation(AiProvider.class);
+            if (methodAnn != null)
+            {
+                return methodAnn;
+            }
+        }
+        if (testClass != null)
+        {
+            Class<?> current = testClass;
+            while (current != null && current != Object.class)
+            {
+                final AiProvider classAnn = current.getAnnotation(AiProvider.class);
+                if (classAnn != null)
+                {
+                    return classAnn;
+                }
+                current = current.getSuperclass();
+            }
+            final Package pkg = testClass.getPackage();
+            if (pkg != null)
+            {
+                final AiProvider pkgAnn = pkg.getAnnotation(AiProvider.class);
+                if (pkgAnn != null)
+                {
+                    return pkgAnn;
+                }
+            }
+        }
+        return null;
     }
 }

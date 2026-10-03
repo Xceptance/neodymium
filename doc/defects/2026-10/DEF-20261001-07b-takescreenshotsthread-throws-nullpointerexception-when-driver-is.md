@@ -1,4 +1,4 @@
-# [DEF-20261001-07] TakeScreenshotsThread Throws NullPointerException When Driver Is Not Yet Initialized at Thread Start
+# [DEF-20261001-07b] TakeScreenshotsThread Throws NullPointerException When Driver Is Not Yet Initialized at Thread Start
 
 - **Status:** Resolved
 - **Opened:** 2026-10-01
