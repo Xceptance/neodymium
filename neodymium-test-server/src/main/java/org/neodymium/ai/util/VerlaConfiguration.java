@@ -27,7 +27,6 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 
-import org.neodymium.util.Neodymium;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -167,9 +166,11 @@ public final class VerlaConfiguration
         // 1. Thread-local Neodymium test data override
         try
         {
-            if (Neodymium.getData() != null)
+            final Class<?> neoClz = Class.forName("org.neodymium.util.Neodymium");
+            final Object dataMap = neoClz.getMethod("getData").invoke(null);
+            if (dataMap instanceof final Map<?, ?> map)
             {
-                final Object threadVal = Neodymium.getData().get(key);
+                final Object threadVal = map.get(key);
                 if (threadVal != null)
                 {
                     return String.valueOf(threadVal).trim();

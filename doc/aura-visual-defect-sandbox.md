@@ -19,10 +19,10 @@ The **Aura Test Suite Hub** fulfills these constraints 100% locally with zero ex
 
 ## 2. Directory Layout & Structure
 
-All sandbox sub-applications and shared assets reside directly inside the library's test resources classpath:
+All sandbox sub-applications and shared assets reside directly inside the `neodymium-test-server` module classpath:
 
 ```
-src/test/resources/
+neodymium-test-server/src/main/resources/
 ├── keystore.p12                    # Self-signed PKCS12 localhost SSL certificate
 ├── ai-test-pages/
 │   └── AuraGlanceTest/             # Unified Sandbox Root
@@ -318,7 +318,7 @@ In addition to the complex Apparel storefront, dashboard, and SPA applications, 
 | **`TypeActionTest/`** | `/{className}/test*.html` | Text input typing validations and textarea submissions. |
 | **`WaitActionTest/`** | `/{className}/test*.html` | Timeout delays and loading transitions. |
 
-These simple pages are loaded dynamically by their corresponding integration tests (e.g. `ClickActionTest.java` or `TypeActionTest.java`) which extend `BaseAiTest.java` and resolve URLs using the pattern `http://localhost:<port>/<ClassName>/<methodName>.html`.
+These simple pages are loaded dynamically by their corresponding integration tests (e.g. `ClickActionTest.java` or `TypeActionTest.java` in `neodymium-e2e-tests`) which extend `BaseAiTest.java` and resolve URLs using the pattern `http://localhost:<port>/<ClassName>/<methodName>.html`.
 
 
 

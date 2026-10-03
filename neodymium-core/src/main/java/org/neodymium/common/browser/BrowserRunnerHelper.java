@@ -424,7 +424,15 @@ public class BrowserRunnerHelper
             else if (firefoxBrowsers.contains(browserName))
             {
                 final FirefoxOptions options = new FirefoxOptions();
-                final String driverInPathPath = new ExecutableFinder().find("geckodriver");
+                String driverInPathPath = Neodymium.configuration().getFirefoxDriverPath();
+                if (StringUtils.isBlank(driverInPathPath))
+                {
+                    final String inPath = new ExecutableFinder().find("geckodriver");
+                    if (StringUtils.isNotBlank(inPath) && !inPath.contains("/snap/"))
+                    {
+                        driverInPathPath = inPath;
+                    }
+                }
 
                 if (StringUtils.isNotBlank(Neodymium.configuration().getFirefoxBrowserPath()))
                 {
@@ -432,7 +440,12 @@ public class BrowserRunnerHelper
                 }
                 else
                 {
-                    if (new ExecutableFinder().find("firefox") != null)
+                    final File snapFirefox = new File("/snap/firefox/current/usr/lib/firefox/firefox");
+                    if (snapFirefox.exists())
+                    {
+                        options.setBinary(snapFirefox.toPath());
+                    }
+                    else if (new ExecutableFinder().find("firefox") != null)
                     {
                         options.setBinary(new ExecutableFinder().find("firefox"));
                     }

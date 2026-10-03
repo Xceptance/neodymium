@@ -260,28 +260,33 @@ public final class SelfHealingTest
 For tests requiring a physical browser engine (Chrome, Firefox, Safari) to scan layout grids, test CSS contrast, or verify shadow DOM boundaries:
 
 ### Sandbox Directory Layout
-Sandbox assets reside in the classpath under:
-`src/test/resources/ai-test-pages/AuraGlanceTest/`
+Sandbox assets reside in the classpath of `neodymium-test-server` under:
+`neodymium-test-server/src/main/resources/ai-test-pages/AuraGlanceTest/`
 
 * **Dashboard & Shop Apps**: `dashboard/` (SaaS administration) and `shop/` (Apparel storefront with `homepage-perfect.html`, `homepage-normal.html`, `homepage-bad.html`).
 * **Scenario Playground (`shop/sandbox/`)**: Isolated challenge pages testing SVG-only buttons (`svg-icons.html`), canvas clicks (`canvas-click.html`), Shadow DOM (`shadow-dom.html`), z-index click interception (`click-intercept.html`), AJAX table sorting (`table-sorting.html`), and cross-origin iframes (`cross-origin-iframe.html`).
 
 ### Embedded Server (`EmbeddedHtmlServer`)
-Tests extending `BaseAiTest` spin up an embedded HTTP + HTTPS server automatically on free random ports via `EmbeddedHtmlServer.java`. The server loads `keystore.p12` for local SSL testing and shuts down automatically after test execution.
+Tests extending `BaseAiTest` in `neodymium-e2e-tests` spin up an embedded HTTP + HTTPS server automatically on free random ports via `EmbeddedHtmlServer.java` (provided by `neodymium-test-server`). The server loads `keystore.p12` for local SSL testing and shuts down automatically after test execution.
 
 ---
 
 ## 6. How to Run AI Tests via Maven
 
-Execute the hermetic test suite via Maven:
+Execute the test suites via Maven's reactor:
 
 ```bash
-# Compile source and test classes
-mvn test-compile
+# Compile all modules
+mvn clean test-compile
 
-# Run hermetic JUnit 5 unit & state machine suite
-mvn test
+# Run core framework tests (hermetic JUnit 5 unit & state machine suite)
+mvn test -pl neodymium-core
 
+# Run test server tests (multi-port fallback and state reset suite)
+mvn test -pl neodymium-test-server
+
+# Run end-to-end integration and sandbox mock/live test suites
+mvn test -pl neodymium-e2e-tests -am
 # Run live integration tests (requires network & API keys configured)
-mvn test -PLiveAPI
+mvn test -pl neodymium-e2e-tests -PLiveAPI -am
 ```

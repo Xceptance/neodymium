@@ -37,7 +37,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.neodymium.ai.testing.BaseAiTest;
 import org.openqa.selenium.JavascriptExecutor;
 
 import com.codeborne.selenide.CollectionCondition;
@@ -62,7 +61,7 @@ import org.neodymium.junit5.NeodymiumTest;
 @Tag("ui")
 @Tag("interactive-view")
 @Browser("Chrome_headless")
-public class InteractiveViewStandaloneUiTest extends BaseAiTest
+public class InteractiveViewStandaloneUiTest
 {
     private InteractiveConsoleServer consoleServer;
     private InteractiveConsoleEngine consoleEngine;

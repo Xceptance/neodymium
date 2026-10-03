@@ -25,7 +25,6 @@ import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import org.neodymium.ai.client.MockLlmProvider;
-import org.neodymium.ai.testing.BaseAiTest;
 import com.xceptance.neodymium.aura.interactive.util.InteractiveHudTestUtils;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.common.testdata.util.YamlFileReader;
@@ -41,18 +40,16 @@ import org.neodymium.util.Neodymium;
 @Tag("unit")
 @Tag("interactive-view")
 @Browser("Chrome_headless")
-public class InteractiveViewSaveTest extends BaseAiTest
+public class InteractiveViewSaveTest
 {
     private File tempDatasetYaml;
     private Thread bgThread;
 
-    @Override
     @BeforeEach
-    public void setupPageUrl(final org.junit.jupiter.api.TestInfo testInfo)
+    public void setupConfig()
     {
         System.clearProperty("neodymium.ai.interactive");
         org.neodymium.ai.config.AiConfiguration.resetInstance();
-        super.setupPageUrl(testInfo);
     }
 
     @BeforeEach

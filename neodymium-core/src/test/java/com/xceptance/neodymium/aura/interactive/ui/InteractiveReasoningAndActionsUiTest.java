@@ -32,8 +32,6 @@ import java.io.IOException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
-import org.neodymium.ai.testing.BaseAiTest;
-
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
@@ -53,7 +51,7 @@ import org.neodymium.junit5.NeodymiumTest;
 @Tag("ui")
 @Tag("interactive-view")
 @Browser("Chrome_headless")
-public class InteractiveReasoningAndActionsUiTest extends BaseAiTest
+public class InteractiveReasoningAndActionsUiTest
 {
     private InteractiveConsoleServer consoleServer;
     private InteractiveConsoleEngine consoleEngine;

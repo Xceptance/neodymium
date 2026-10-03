@@ -42,8 +42,10 @@
 	</scm>
 
 	<modules>
+		<module>neodymium-test-server</module>
 		<module>neodymium-core</module>
 		<module>aura-manager</module>
+		<module>neodymium-e2e-tests</module>
 	</modules>
 
 	<properties>
