@@ -18,6 +18,7 @@
  */
 package org.neodymium.ai.integration.external;
 
+import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiInlinePlaybook;
 import org.neodymium.ai.junit.AiJudge;
@@ -38,6 +39,8 @@ import org.neodymium.common.browser.Browser;
 @NeodymiumAiTest
 @AiPlaybook(recordingDirectory = "target/playbooks/external")
 @Browser("Chrome_1500x1000_headless")
+@Tag("LiveAPI")
+@Tag("ExternalSite")
 public class BlogTest
 {
     // =========================================================================

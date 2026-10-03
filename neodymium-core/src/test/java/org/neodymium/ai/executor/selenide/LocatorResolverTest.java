@@ -18,6 +18,14 @@
  */
 package org.neodymium.ai.executor.selenide;
 
+import java.io.StringReader;
+import java.util.ArrayList;
+import java.util.List;
+
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.xpath.XPathConstants;
+import javax.xml.xpath.XPathFactory;
+
 import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.selector.ByRole;
@@ -25,6 +33,10 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.openqa.selenium.By;
 import org.openqa.selenium.InvalidSelectorException;
+import org.w3c.dom.Document;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 
 /**
  * Pure unit tests verifying locator resolution, Playwright selector translation,
@@ -702,5 +714,77 @@ public class LocatorResolverTest
         final By spaceDelimited = LocatorResolver.resolveLocator("table tr:has-text(\"Alice\") button");
         final By chevronDelimited = LocatorResolver.resolveLocator("table >> tr:has-text(\"Alice\") >> button");
         Assertions.assertEquals(chevronDelimited, spaceDelimited);
+    }
+
+    /**
+     * Small well-formed page used to evaluate generated XPath with the JDK XPath 1.0 engine.
+     * The {@code e2} input sits outside {@code #scope} and must never be matched by a scoped locator.
+     */
+    private static final String LABEL_FIXTURE = """
+            <html><body>
+              <div id="scope">
+                <label for="e1">Email</label><input id="e1"/>
+                <label>Phone <input id="p1"/></label>
+                <input id="a1" aria-label="Fax"/>
+                <input id="unrelated"/>
+              </div>
+              <label for="e2">Email</label><input id="e2"/>
+            </body></html>
+            """;
+
+    /**
+     * Evaluates the XPath of a resolved locator against {@link #LABEL_FIXTURE} and returns the ids of the matches.
+     * Any invalid XPath surfaces as an exception, which is exactly what this test class needs to detect.
+     *
+     * @param by the resolved locator, which must be XPath based
+     * @return the {@code id} attribute values of all matched elements, in document order
+     * @throws Exception if the fixture cannot be parsed or the XPath is invalid
+     */
+    private static List<String> matchedIds(final By by) throws Exception
+    {
+        Assertions.assertTrue(by instanceof By.ByXPath, "Expected an XPath locator but got: " + by);
+        final String xpath = by.toString().replaceFirst("^By\\.xpath:\\s*", "");
+
+        final Document doc = DocumentBuilderFactory.newInstance().newDocumentBuilder()
+                .parse(new InputSource(new StringReader(LABEL_FIXTURE)));
+        final NodeList nodes = (NodeList) XPathFactory.newInstance().newXPath().evaluate(xpath, doc, XPathConstants.NODESET);
+
+        final List<String> ids = new ArrayList<>();
+        for (int i = 0; i < nodes.getLength(); i++)
+        {
+            final Node id = nodes.item(i).getAttributes().getNamedItem("id");
+            ids.add(id == null ? "<none>" : id.getNodeValue());
+        }
+        return ids;
+    }
+
+    /**
+     * A {@code label=} segment inside a {@code >>} chain used to be wrapped as {@code //( a | b | c )},
+     * which is not valid XPath 1.0. Each association style (label/@for, wrapping label, aria-label)
+     * must resolve, and only inside the scope of the preceding segment.
+     */
+    @Test
+    public void testChainedLabelProducesValidXpathAndMatchesAllLabelStyles() throws Exception
+    {
+        // label[@for] association, the same-named input outside the scope must not match
+        Assertions.assertEquals(List.of("e1"), matchedIds(LocatorResolver.resolveLocator("#scope >> label=Email")));
+
+        // wrapping label association
+        Assertions.assertEquals(List.of("p1"), matchedIds(LocatorResolver.resolveLocator("#scope >> label=Phone")));
+
+        // aria-label association
+        Assertions.assertEquals(List.of("a1"), matchedIds(LocatorResolver.resolveLocator("#scope >> label=Fax")));
+
+        // no match is an empty result, not an exception
+        Assertions.assertEquals(List.of(), matchedIds(LocatorResolver.resolveLocator("#scope >> label=Nope")));
+    }
+
+    /**
+     * A {@code label=} segment followed by further chain segments must keep composing correctly.
+     */
+    @Test
+    public void testChainedLabelCanBeFollowedByFurtherSegments() throws Exception
+    {
+        Assertions.assertEquals(List.of("e1"), matchedIds(LocatorResolver.resolveLocator("body >> #scope >> label=Email")));
     }
 }

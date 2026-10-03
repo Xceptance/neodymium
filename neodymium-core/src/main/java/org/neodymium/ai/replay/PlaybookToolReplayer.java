@@ -546,7 +546,7 @@ public final class PlaybookToolReplayer
             if (best != null)
             {
                 final String healedSelector = resolveSelectorForCandidate(best);
-                if (!currentTarget.equals(healedSelector))
+                if (healedSelector != null && !currentTarget.equals(healedSelector))
                 {
                     LOGGER.info("🧬 Healed locator '{}' -> '{}' using DomFeatureVector similarity", currentTarget, healedSelector);
                     final ObjectNode updatedArgs = args.deepCopy();
@@ -566,47 +566,87 @@ public final class PlaybookToolReplayer
         return null;
     }
 
-    private static String resolveSelectorForCandidate(final DomFeatureVector candidate)
+    /**
+     * Derives a selector for a healed candidate element, in decreasing order of stability.
+     * <p>
+     * The result is written back into the replayed tool call, so it has to match the candidate: every
+     * attribute value is escaped, and no selector is invented from data the element does not carry.
+     * In particular the computed accessible name is <em>not</em> turned into an {@code aria-label}
+     * attribute selector (it usually comes from the element text or a label, so such a selector never
+     * matches), and raw viewport coordinates are never produced because they are not an element identity.
+     *
+     * @param candidate the best matching live element
+     * @return a CSS-style selector for the candidate, or {@code null} if none can be derived
+     */
+    static String resolveSelectorForCandidate(final DomFeatureVector candidate)
     {
         if (candidate.getAttributes().containsKey("id") && !candidate.getAttributes().get("id").isBlank())
         {
-            return "#" + candidate.getAttributes().get("id");
+            final String idVal = candidate.getAttributes().get("id").trim();
+            if (isStandardCssIdentifier(idVal))
+            {
+                return "#" + idVal;
+            }
+            final String tag = candidate.getTag() != null && !candidate.getTag().isBlank() ? candidate.getTag() : "";
+            return tag + "[id=\"" + escapeAttributeValue(idVal) + "\"]";
         }
         if (candidate.getAttributes().containsKey("data-testid") && !candidate.getAttributes().get("data-testid").isBlank())
         {
-            return candidate.getTag() + "[data-testid=\"" + candidate.getAttributes().get("data-testid") + "\"]";
+            return candidate.getTag() + "[data-testid=\"" + escapeAttributeValue(candidate.getAttributes().get("data-testid")) + "\"]";
         }
         if (candidate.getAttributes().containsKey("name") && !candidate.getAttributes().get("name").isBlank())
         {
-            return candidate.getTag() + "[name=\"" + candidate.getAttributes().get("name") + "\"]";
+            return candidate.getTag() + "[name=\"" + escapeAttributeValue(candidate.getAttributes().get("name")) + "\"]";
         }
+
+        final List<String> validClasses = candidate.getClasses() != null
+                ? candidate.getClasses().stream()
+                        .filter(PlaybookToolReplayer::isStandardCssIdentifier)
+                        .toList()
+                : List.of();
+
         if (candidate.getText() != null && !candidate.getText().isBlank())
         {
-            final String cleanText = candidate.getText().trim().replace("\"", "\\\"").replace("\n", " ");
-            final String base = !candidate.getClasses().isEmpty()
-                    ? candidate.getTag() + "." + String.join(".", candidate.getClasses())
+            final String cleanText = escapeAttributeValue(candidate.getText().trim());
+            final String base = !validClasses.isEmpty()
+                    ? candidate.getTag() + "." + String.join(".", validClasses)
                     : candidate.getTag();
             return base + ":has-text(\"" + cleanText + "\")";
         }
         if (candidate.getAttributes().containsKey("aria-label") && !candidate.getAttributes().get("aria-label").isBlank())
         {
-            return candidate.getTag() + "[aria-label=\"" + candidate.getAttributes().get("aria-label") + "\"]";
+            return candidate.getTag() + "[aria-label=\"" + escapeAttributeValue(candidate.getAttributes().get("aria-label")) + "\"]";
         }
-        if (candidate.getAccessibleName() != null && !candidate.getAccessibleName().isBlank())
+        if (!validClasses.isEmpty())
         {
-            return candidate.getTag() + "[aria-label=\"" + candidate.getAccessibleName() + "\"]";
+            return candidate.getTag() + "." + String.join(".", validClasses);
         }
-        if (!candidate.getClasses().isEmpty())
-        {
-            return candidate.getTag() + "." + String.join(".", candidate.getClasses());
-        }
-        if (candidate.getX() >= 0 && candidate.getY() >= 0 && candidate.getWidth() > 0 && candidate.getHeight() > 0)
-        {
-            final int cx = candidate.getX() + (candidate.getWidth() / 2);
-            final int cy = candidate.getY() + (candidate.getHeight() / 2);
-            return "coord: " + cx + "," + cy;
-        }
-        return candidate.getTag();
+        return candidate.getTag().isBlank() ? null : candidate.getTag();
+    }
+
+    /**
+     * Checks whether the given string is a standard, unescaped CSS identifier (letters, digits,
+     * underscores, and hyphens, not starting with a digit or a hyphen followed by a digit).
+     *
+     * @param identifier candidate identifier string
+     * @return {@code true} if safe to use directly without CSS escaping
+     */
+    private static boolean isStandardCssIdentifier(final String identifier)
+    {
+        return identifier != null && identifier.matches("^-?[a-zA-Z_][a-zA-Z0-9_-]*$");
+    }
+
+    /**
+     * Escapes a value for use inside a double-quoted CSS attribute selector string.
+     * Backslashes and double quotes are escaped; line breaks, which cannot appear unescaped in a CSS
+     * string, are replaced by a space.
+     *
+     * @param value the raw attribute value
+     * @return the value safe to embed between double quotes
+     */
+    private static String escapeAttributeValue(final String value)
+    {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", " ").replace("\n", " ");
     }
 
     private static ToolRegistry createDefaultRegistry()

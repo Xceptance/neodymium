@@ -59,6 +59,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.playbook.PlaybookParser;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
+import org.neodymium.ai.recorder.PlaybookRecorder;
 import org.neodymium.ai.resources.ClasspathResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.runner.StateMachineRunner;
@@ -1385,8 +1386,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     {
                     }
                 }
-                final org.neodymium.ai.recorder.PlaybookRecorder recorder = new org.neodymium.ai.recorder.PlaybookRecorder(manager, this.recordingPath, playbookSteps, this.mode);
-                eventBus.registerListener(recorder);
+                // LLM_ONLY and LINTER_ONLY must never write a recording (see ExecutionMode#persistsRecording)
+                if (this.mode.persistsRecording())
+                {
+                    final PlaybookRecorder recorder = new PlaybookRecorder(manager, this.recordingPath, playbookSteps, this.mode);
+                    eventBus.registerListener(recorder);
+                }
             }
 
             executionContext.getTransientData().put("playbook.mainSteps", playbookSteps);

@@ -1304,6 +1304,26 @@ public class BrowserToolsTest
                 mapper.createObjectNode().put("notEmpty", true));
         final ToolResult notEmptyFlagResult = tool.execute(notEmptyFlagCall, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyFlagResult.status());
+
+        // 6. A stray empty=false must NOT cancel the comparison when an expected URL is given (used to pass vacuously)
+        final long strayTimeout = Configuration.timeout;
+        try
+        {
+            Configuration.timeout = 50;
+            final ToolCall strayEmptyFalseCall = new ToolCall("call-url-6", "assert_url",
+                    mapper.createObjectNode().put("expectedUrl", "https://other-domain.com").put("exact", true).put("empty", false));
+            Assertions.assertThrows(AssertionError.class, () -> tool.execute(strayEmptyFalseCall, null),
+                    "empty=false together with an expected URL must still compare the URL");
+        }
+        finally
+        {
+            Configuration.timeout = strayTimeout;
+        }
+
+        // 7. empty=false without any expected URL stays an alias for 'not empty'
+        final ToolCall emptyFalseAloneCall = new ToolCall("call-url-7", "assert_url",
+                mapper.createObjectNode().put("empty", false));
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, tool.execute(emptyFalseAloneCall, null).status());
     }
 
     @Test
@@ -1356,6 +1376,26 @@ public class BrowserToolsTest
                 mapper.createObjectNode().put("notEmpty", true));
         final ToolResult notEmptyTitleFlagResult = tool.execute(notEmptyTitleFlagCall, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyTitleFlagResult.status());
+
+        // 6. A stray empty=false must NOT cancel the comparison when an expected title is given (used to pass vacuously)
+        final long strayTimeout = Configuration.timeout;
+        try
+        {
+            Configuration.timeout = 50;
+            final ToolCall strayEmptyFalseCall = new ToolCall("call-title-6", "assert_title",
+                    mapper.createObjectNode().put("expectedTitle", "Non-Existent Title").put("exact", true).put("empty", false));
+            Assertions.assertThrows(AssertionError.class, () -> tool.execute(strayEmptyFalseCall, null),
+                    "empty=false together with an expected title must still compare the title");
+        }
+        finally
+        {
+            Configuration.timeout = strayTimeout;
+        }
+
+        // 7. empty=false without any expected title stays an alias for 'not empty'
+        final ToolCall emptyFalseAloneCall = new ToolCall("call-title-7", "assert_title",
+                mapper.createObjectNode().put("empty", false));
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, tool.execute(emptyFalseAloneCall, null).status());
     }
 
     @Test

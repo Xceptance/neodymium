@@ -81,6 +81,11 @@ public final class PlaybookRecorder implements ExecutionListener
         if (event instanceof SessionFinishedEvent)
         {
             final SessionFinishedEvent sessionFinishedEvent = (SessionFinishedEvent) event;
+            if (!this.executionMode.persistsRecording())
+            {
+                LOGGER.debug("Execution mode {} does not persist recordings. Skipping playbook recording write to {}", this.executionMode, this.recordingPath);
+                return;
+            }
             if (!sessionFinishedEvent.isSuccess())
             {
                 LOGGER.info("Session finished with failure. Skipping playbook recording write to {}", this.recordingPath);

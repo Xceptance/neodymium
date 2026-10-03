@@ -90,6 +90,19 @@ public enum ExecutionMode
     }
 
     /**
+     * Returns true if a successful session in this mode may create or update the playbook recording file.
+     * <p>
+     * That is the case for the recording modes (new recording) and the replay modes (healed step updates).
+     * It is deliberately not the case for {@link #LLM_ONLY}, which is documented as not recording, and
+     * {@link #LINTER_ONLY}, which never executes steps: its freshly parsed steps are {@code PENDING} and
+     * carry no actions, so persisting them would replace a valid recording with an empty one.
+     */
+    public boolean persistsRecording()
+    {
+        return isRecording() || isReplay();
+    }
+
+    /**
      * Returns true if this mode supports replaying recorded actions.
      */
     public boolean isReplay()

@@ -205,9 +205,13 @@ Thanks to Maven's reactor, you can target individual modules using `-pl` (projec
   ```bash
   mvn test -pl neodymium-test-server
   ```
-* **Run end-to-end and SUT tests:**
+* **Run end-to-end and SUT tests** (tests tagged `LiveAPI`, `LiveLlm` or `ExternalSite` are excluded by default):
   ```bash
   mvn test -pl neodymium-e2e-tests -am
+  ```
+* **Run end-to-end tests including live LLM / external-site tests** (needs network access and API keys such as `GEMINI_API_KEY`):
+  ```bash
+  mvn test -pl neodymium-e2e-tests -PLiveAPI -am
   ```
 * **Run a single test in core library:**
   ```bash

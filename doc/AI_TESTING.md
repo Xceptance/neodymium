@@ -285,8 +285,17 @@ mvn test -pl neodymium-core
 # Run test server tests (multi-port fallback and state reset suite)
 mvn test -pl neodymium-test-server
 
-# Run end-to-end integration and sandbox mock/live test suites
+# Run end-to-end integration and sandbox mock suites (default: hermetic).
+# Tests tagged LiveAPI, LiveLlm or ExternalSite are excluded by default.
 mvn test -pl neodymium-e2e-tests -am
-# Run live integration tests (requires network & API keys configured)
+
+# Run everything including live LLM and external-site tests
+# (requires network access and API keys, e.g. GEMINI_API_KEY)
 mvn test -pl neodymium-e2e-tests -PLiveAPI -am
+
+# Run only the live tests
+mvn test -pl neodymium-e2e-tests -PLiveAPI -Dgroups=LiveAPI,LiveLlm -am
 ```
+
+Any test class that calls a real LLM (`FORCE_RECORDING`, `LLM_RECORDING`, `LLM_ONLY` without a mock) or an external
+site must carry `@Tag("LiveAPI")` (and `@Tag("ExternalSite")` where applicable), otherwise it runs in the default build.
