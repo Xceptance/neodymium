@@ -48,12 +48,11 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [6.4 Universal Candidate Playbook Capture & Invalidation Lifecycle](#64-universal-candidate-playbook-capture--invalidation-lifecycle)
    - [6.5 Visual Root Cause Analysis (RCA) & Failure Diagnostics](#65-visual-root-cause-analysis-rca--failure-diagnostics)
    - [6.6 Fuzzy Layout Snapshot Testing ((layout) & (layout: full))](#66-fuzzy-layout-snapshot-testing-layout--layout-full)
-7. [Performance, Caching, Telemetry & Assertions](#7-performance-caching-telemetry--assertions)
-   - [7.1 In-Memory LLM Request Caching (`@AiLlmCache`)](#71-in-memory-llm-request-caching-aillmcache)
-   - [7.2 Event-Driven Architecture, EventBus & HUD Overlays](#72-event-driven-architecture-eventbus--hud-overlays)
-   - [7.3 Real-Time Token Budget Guard, Step Limits & Turn Bounds](#73-real-time-token-budget-guard-step-limits--turn-bounds)
-   - [7.4 Per-Call-Type Telemetry Breakdown](#74-per-call-type-telemetry-breakdown)
-   - [7.5 Execution Data Access, Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)](#75-execution-data-access-telemetry-metrics--mode-conditional-asserters-verifymetrics)
+7. [Performance, Telemetry & Assertions](#7-performance-telemetry--assertions)
+   - [7.1 Event-Driven Architecture, EventBus & HUD Overlays](#71-event-driven-architecture-eventbus--hud-overlays)
+   - [7.2 Real-Time Token Budget Guard, Step Limits & Turn Bounds](#72-real-time-token-budget-guard-step-limits--turn-bounds)
+   - [7.3 Per-Call-Type Telemetry Breakdown](#73-per-call-type-telemetry-breakdown)
+   - [7.4 Execution Data Access, Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)](#74-execution-data-access-telemetry-metrics--mode-conditional-asserters-verifymetrics)
 8. [Configuration Reference](#8-configuration-reference)
    - [8.1 Core Execution Settings](#81-core-execution-settings)
    - [8.2 Provider and Model Configuration](#82-provider-and-model-configuration)
@@ -1392,37 +1391,16 @@ public void testHomepageLayout(final AiSession session) throws Exception
 
 ---
 
-## 7. Performance, Caching, Telemetry & Assertions
+## 7. Performance, Telemetry & Assertions
 
-### 7.1 In-Memory LLM Request Caching (`@AiLlmCache`)
-
-Provides an in-memory key-value prompt response caching mechanism (`@AiLlmCache`) to eliminate LLM API costs during replay verification and speed up integration tests:
-
-```java
-@Browser("Chrome_1500x1000")
-@AiLlmCache
-@NeodymiumAiTest
-public final class VerlaProgrammaticDemoTest
-{
-    @Test
-    @AiLlmCache
-    public void test1_CachedExecution() throws Exception
-    {
-        // First execution populates in-memory cache on MISS; subsequent calls HIT cache instantly
-    }
-}
-```
-
----
-
-### 7.2 Event-Driven Architecture, EventBus & HUD Overlays
+### 7.1 Event-Driven Architecture, EventBus & HUD Overlays
 
 * **`EventBus`**: Centrally coordinates all framework execution events (e.g., `ActionExecutedEvent`, `SessionFinishedEvent`).
 * **Heads-Up Display (HUD)**: Decoupled HUD listeners observe event streams to render interactive overlays and debug windows.
 
 ---
 
-### 7.3 Real-Time Token Budget Guard, Step Limits & Turn Bounds
+### 7.2 Real-Time Token Budget Guard, Step Limits & Turn Bounds
 
 Neodymium AI enforces two layers of budget protection during agent execution:
 
@@ -1455,7 +1433,7 @@ public void testWithStrictTokenLimits()
 
 ---
 
-### 7.4 Per-Call-Type Telemetry Breakdown
+### 7.3 Per-Call-Type Telemetry Breakdown
 
 Test completion stats report an exact breakdown across all pipeline call types:
 
@@ -1469,7 +1447,7 @@ Test completion stats report an exact breakdown across all pipeline call types:
 
 ---
 
-### 7.5 Execution Data Access, Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)
+### 7.4 Execution Data Access, Telemetry Metrics & Mode-Conditional Asserters (`verifyMetrics()`)
 
 To validate execution invariants across different `@AiMode` parameterized test runs, `PlaybookRecording` provides a fluent `MetricsAsserter`:
 

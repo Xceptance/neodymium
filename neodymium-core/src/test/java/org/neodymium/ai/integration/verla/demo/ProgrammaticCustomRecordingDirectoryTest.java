@@ -30,7 +30,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.junit.AiLlmCache;
 import org.neodymium.ai.junit.AiOutcomeVerification;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
@@ -52,7 +51,6 @@ import org.neodymium.util.Neodymium;
 @Browser("Chrome_1500x1000_headless")
 @Tag("integration")
 @Tag("verla")
-@AiLlmCache
 @NeodymiumAiTest
 @AiOutcomeVerification(failOnError = false)
 public class ProgrammaticCustomRecordingDirectoryTest

@@ -32,7 +32,6 @@ import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiInlinePlaybook;
 import org.neodymium.ai.junit.AiOutcomeVerification;
-import org.neodymium.ai.junit.AiLlmCache;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -53,7 +52,6 @@ import org.neodymium.util.Neodymium;
 @Browser("Chrome_1500x1000_headless")
 @Tag("integration")
 @Tag("verla")
-@AiLlmCache
 @NeodymiumAiTest
 @AiOutcomeVerification(failOnError = false)
 public final class ProgrammaticIncludesDemoTest
@@ -117,7 +115,6 @@ public final class ProgrammaticIncludesDemoTest
      * @throws Exception if execution fails
      */
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiLlmCache
     @AiPlaybook(AiPlaybook.PROGRAMMATIC)
     public void test1_FullyProgrammaticObjectsWithIncludes(final AiSession session) throws Exception
     {
@@ -139,7 +136,6 @@ public final class ProgrammaticIncludesDemoTest
      * @throws Exception if execution fails
      */
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiLlmCache
     @AiPlaybook(AiPlaybook.PROGRAMMATIC)
     public void test2a_ProgrammaticTextBlockWithIncludesAndEmbeddedYamlData(final AiSession session) throws Exception
     {
@@ -162,7 +158,6 @@ public final class ProgrammaticIncludesDemoTest
      * @throws Exception if execution fails
      */
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiLlmCache
     @AiPlaybook(AiPlaybook.PROGRAMMATIC)
     public void test2b_ProgrammaticTextBlockWithIncludesAndSessionData(final AiSession session) throws Exception
     {
@@ -183,7 +178,6 @@ public final class ProgrammaticIncludesDemoTest
      * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiLlmCache
     @AiInlinePlaybook("""
         steps: |
           _include: playbooks/integration/includes/verla_open_homepage.yaml
@@ -206,7 +200,6 @@ public final class ProgrammaticIncludesDemoTest
      * @throws Exception if execution fails
      */
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiLlmCache
     @AiPlaybook(AiPlaybook.PROGRAMMATIC)
     public void test4_StepByStepJavaDebuggingWithIncludes(final AiSession session) throws Exception
     {
@@ -224,7 +217,6 @@ public final class ProgrammaticIncludesDemoTest
      * @throws Exception if execution fails
      */
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiLlmCache
     @AiPlaybook(AiPlaybook.PROGRAMMATIC)
     public void test5_MixStepsAndSelenideCommandsWithIncludes(final AiSession session) throws Exception
     {
@@ -244,7 +236,6 @@ public final class ProgrammaticIncludesDemoTest
      * @param session the thread-isolated AiSession injected by NeodymiumAiRunner
      */
     @AiMode(ExecutionMode.FORCE_RECORDING)
-    @AiLlmCache
     @AiPlaybook("/playbooks/integration/verla-search-includes-demo.yaml")
     public void test6_AnnotationDrivenExternalMasterPlaybookWithIncludes(final AiSession session)
     {
