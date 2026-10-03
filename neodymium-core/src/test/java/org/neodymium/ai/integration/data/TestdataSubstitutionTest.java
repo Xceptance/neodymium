@@ -51,12 +51,14 @@ public class TestdataSubstitutionTest extends BaseAiTest
     @BeforeAll
     public static void configureMockLlm()
     {
+        System.setProperty("neodymium.ai.global.provider", "mock");
         Neodymium.getData().put("neodymium.ai.global.provider", "mock");
     }
 
     @AfterAll
     public static void clearMockLlm()
     {
+        System.clearProperty("neodymium.ai.global.provider");
         Neodymium.getData().remove("neodymium.ai.global.provider");
     }
 

@@ -370,7 +370,7 @@ public class PreliminaryReportListenerTest
         assertTrue(md.contains("❌"));
         assertTrue(md.contains("**FAILED**"));
         assertTrue(md.contains("Payment execution failed"));
-        assertTrue(md.contains("Visual RCA Diagnosis"));
+        assertTrue(md.contains("Visual Root Cause Analysis (RCA)"));
 
         final String json = Files.readString(jsonPath);
         final ObjectMapper mapper = new ObjectMapper();
@@ -1004,6 +1004,65 @@ public class PreliminaryReportListenerTest
         final String md = Files.readString(mdPath);
         assertTrue(md.contains("📸 Captured Visual Screenshots"), "Markdown report must have Screenshots section");
         assertTrue(md.contains("📸 true"), "Markdown report must mark step as visual");
+    }
+
+    @Test
+    @DisplayName("Verify marker step screenshots are properly captured, tagged, and rendered across all reports")
+    public void testMarkerStepScreenshotCaptureAndReporting() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-marker");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON, DiskReportFormat.MARKDOWN), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        listener.getReport().setTestClass("VisualMarkersTest");
+        listener.getReport().setTestMethod("testVisualMarkersReporting");
+
+        final PlaybookStep markerStep = new PlaybookStep("Click the quick view button with the eye icon (marker)");
+        assertTrue(markerStep.isMarker());
+        assertEquals("Click the quick view button with the eye icon", markerStep.getInstruction());
+        assertEquals("Click the quick view button with the eye icon (marker)", markerStep.getRawInstruction());
+
+        bus.dispatch(new StepStartedEvent(markerStep, 0));
+
+        final String dummyBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        final MockSutState markedState = new MockSutState(
+            "Visual Markers (proactive hint on " + markerStep.getInstruction() + ")",
+            List.of(new SutAttachment("image/png", null, dummyBase64)),
+            "hashMarker123"
+        );
+        bus.dispatch(new StateCapturedEvent(markedState));
+        bus.dispatch(new StepFinishedEvent(markerStep, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(2500, true));
+
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
+
+        assertTrue(Files.exists(jsonPath));
+        assertTrue(Files.exists(htmlPath));
+        assertTrue(Files.exists(mdPath));
+
+        final JsonNode root = new ObjectMapper().readTree(Files.readString(jsonPath));
+        final JsonNode stepNode = root.get("steps").get(0);
+        assertTrue(stepNode.get("marker").asBoolean(), "Step must be marked as marker");
+        assertEquals("Click the quick view button with the eye icon (marker)", stepNode.get("rawInstruction").asText());
+        assertEquals("Click the quick view button with the eye icon", stepNode.get("instruction").asText());
+        assertEquals(1, stepNode.get("screenshots").size(), "Step must have 1 attached screenshot");
+        assertTrue(stepNode.get("screenshots").get(0).get("name").asText().contains("Visual Markers Overlay"),
+            "Screenshot label must indicate Visual Markers Overlay");
+        assertEquals(1, root.get("screenshots").size(), "Global report must contain 1 screenshot");
+
+        final String html = Files.readString(htmlPath);
+        assertTrue(html.contains("🎯 MARKER"), "HTML report must include MARKER badge");
+        assertTrue(html.contains("marker-badge"), "HTML report must include marker-badge CSS class");
+        assertTrue(html.contains("Visual Markers Overlay"), "HTML report must contain Visual Markers Overlay label");
+        assertTrue(html.contains(dummyBase64), "HTML report must contain base64 image data");
+
+        final String md = Files.readString(mdPath);
+        assertTrue(md.contains("🎯 true"), "Markdown report must mark step as visual marker step");
+        assertTrue(md.contains("Visual Markers Overlay"), "Markdown report must contain Visual Markers Overlay label");
     }
 
     @Test
@@ -2040,6 +2099,37 @@ public class PreliminaryReportListenerTest
             "Index table row subtitle must display package path instead of duplicate simple class/method");
         assertFalse(indexHtml.contains(">SearchJudgeTest#liveAllDataSets<"),
             "Index table row subtitle must not redundantly duplicate simple class name and method");
+    }
+
+    @Test
+    @DisplayName("Verify HtmlIndexReportGenerator renders marker badge next to execution mode when test used markers")
+    public void testHtmlIndexReportGeneratorRendersMarkerBadge(@TempDir final Path testDir) throws Exception
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("org.neodymium.ai.integration.sandbox.mock.VisualMarkersSandboxMockTest");
+        report.setTestMethod("testVisualMarkersLive");
+        report.setTestName("Visual Markers Sandbox Test");
+        report.setExecutionMode("LIVE");
+        report.setStatus("PASSED");
+        report.setSuccess(true);
+        report.setStartTimeMs(System.currentTimeMillis());
+
+        final TestExecutionReport.ReportStepEntry step0 = new TestExecutionReport.ReportStepEntry(0, "Click marker button");
+        step0.setStatus("PASSED");
+        step0.setMarker(true);
+        report.addStep(step0);
+
+        final HtmlIndexReportGenerator generator = new HtmlIndexReportGenerator();
+        generator.updateIndex(testDir, report, "VisualMarkersSandboxMockTest_testVisualMarkersLive_20261003-120000");
+
+        final Path indexPath = testDir.resolve("index.html");
+        assertTrue(Files.exists(indexPath), "index.html must be generated");
+        final String indexHtml = Files.readString(indexPath, StandardCharsets.UTF_8);
+
+        assertTrue(indexHtml.contains("<span class=\"mode-badge\""),
+            "Index must contain execution mode badge");
+        assertTrue(indexHtml.contains("<span class=\"marker-badge\"") && indexHtml.contains("🎯 MARKER</span>"),
+            "Index must contain marker badge next to execution mode when test executed with markers");
     }
 
     @Test

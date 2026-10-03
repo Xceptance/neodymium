@@ -114,7 +114,7 @@ public final class ExecuteActionsStep
                 step.setStatus(PlaybookStepStatus.RUNNING);
                 final long parentStartTime = System.currentTimeMillis();
                 step.setStartTimeMs(parentStartTime);
-                final String rawInstruction = step.getInstruction();
+                final String rawInstruction = step.getRawInstruction();
                 final String resolvedInstruction = (contextState.getSessionData() != null && rawInstruction != null)
                     ? contextState.getSessionData().resolveAvailableVariables(rawInstruction)
                     : rawInstruction;
@@ -205,7 +205,7 @@ public final class ExecuteActionsStep
             final PlaybookStepStatus initialStepStatus = step.getStatus();
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
             step.setStatus(PlaybookStepStatus.RUNNING);
-            final String rawInstruction = step.hasSubSteps() ? step.getFullInstruction() : step.getInstruction();
+            final String rawInstruction = step.hasSubSteps() ? step.getFullInstruction() : step.getRawInstruction();
             final String resolvedInstruction;
             if (contextState.getSessionData() != null && rawInstruction != null)
             {
@@ -294,11 +294,18 @@ public final class ExecuteActionsStep
             final boolean hasLayout = PlaybookStep.LAYOUT_PATTERN.matcher(resolvedInstruction).find();
             final boolean hasVisual = PlaybookStep.VISUAL_PATTERN.matcher(resolvedInstruction).find();
             final boolean hasHint = PlaybookStep.HINT_PATTERN.matcher(resolvedInstruction).find();
+            final boolean hasMarker = (step != null && step.isMarker())
+                || PlaybookStep.MARKER_PATTERN.matcher(resolvedInstruction).find()
+                || (step != null && step.getRawInstruction() != null && PlaybookStep.MARKER_PATTERN.matcher(step.getRawInstruction()).find());
 
             final boolean isFullPageTag = hasVisualFull || hasLayout;
             contextState.getTransientData().put("KEY_IS_FULL_PAGE_SCREENSHOT", isFullPageTag);
 
-            if (hasVisualFull || hasVisual)
+            if (hasMarker)
+            {
+                initialLevel = ContextLevel.VISUAL_LEAN;
+            }
+            else if (hasVisualFull || hasVisual)
             {
                 initialLevel = ContextLevel.VISUAL;
             }

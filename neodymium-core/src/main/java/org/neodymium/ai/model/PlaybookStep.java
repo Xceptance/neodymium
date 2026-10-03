@@ -51,6 +51,13 @@ public final class PlaybookStep
     private String instruction;
 
     /**
+     * The raw, uncleaned natural language instruction including directive tags and templates.
+     */
+    @JsonProperty("rawInstruction")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String rawInstruction;
+
+    /**
      * Flag indicating that this step should bypass the replay cache and execute live.
      */
     @JsonProperty("noReplay")
@@ -85,6 +92,12 @@ public final class PlaybookStep
      */
     @JsonProperty("noHealing")
     private boolean noHealing;
+
+    /**
+     * Flag indicating that visual element markers should be activated proactively for this step.
+     */
+    @JsonProperty("marker")
+    private boolean marker;
 
     /**
      * Nested child steps in the composite hierarchy if this step was split or structured.
@@ -350,6 +363,7 @@ public final class PlaybookStep
     {
         if (instruction != null)
         {
+            this.rawInstruction = instruction;
             String cleaned = instruction;
 
             if (NO_REPLAY_PATTERN.matcher(cleaned).find())
@@ -382,6 +396,12 @@ public final class PlaybookStep
             {
                 this.noHealing = true;
                 cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*no-healing\\s*\\)\\s*", " ");
+            }
+
+            if (MARKER_PATTERN.matcher(cleaned).find())
+            {
+                this.marker = true;
+                cleaned = cleaned.replaceAll("(?i)\\s*\\(\\s*marker\\s*\\)\\s*", " ");
             }
 
             final Matcher timeoutMatcher = TIMEOUT_PATTERN.matcher(cleaned);
@@ -789,6 +809,46 @@ public final class PlaybookStep
     }
 
     /**
+     * Returns true if visual element markers should be activated proactively for this step.
+     *
+     * @return true if marker is enabled, false otherwise
+     */
+    public boolean isMarker()
+    {
+        return this.marker;
+    }
+
+    /**
+     * Sets the marker flag.
+     *
+     * @param marker the marker flag to set
+     */
+    public void setMarker(final boolean marker)
+    {
+        this.marker = marker;
+    }
+
+    /**
+     * Returns the raw, uncleaned natural language instruction including directive tags.
+     *
+     * @return the raw instruction, or the cleaned instruction if raw is null
+     */
+    public String getRawInstruction()
+    {
+        return this.rawInstruction != null ? this.rawInstruction : this.instruction;
+    }
+
+    /**
+     * Sets the raw instruction.
+     *
+     * @param rawInstruction the raw instruction to set
+     */
+    public void setRawInstruction(final String rawInstruction)
+    {
+        this.rawInstruction = rawInstruction;
+    }
+
+    /**
      * Returns the nested sub-steps collection of this step.
      *
      * @return the nested sub-steps list
@@ -942,6 +1002,7 @@ public final class PlaybookStep
     private static final Pattern BUG_PATTERN = Pattern.compile("(?i)\\(\\s*bug(?:\\s*:\\s*([^)]+))?\\s*\\)");
     private static final Pattern CONTINUE_ON_ERROR_PATTERN = Pattern.compile("(?i)\\(\\s*continue-on-error\\s*\\)");
     private static final Pattern NO_HEALING_PATTERN = Pattern.compile("(?i)\\(\\s*no-healing\\s*\\)");
+    public static final Pattern MARKER_PATTERN = Pattern.compile("(?i)\\(\\s*marker\\s*\\)");
     private static final Pattern TIMEOUT_PATTERN = Pattern.compile("(?i)\\(\\s*timeout\\s*:\\s*(\\d+)(ms|s)?\\s*\\)");
 
     public static final double DEFAULT_LAYOUT_SSIM_MIN_SCORE = 0.92;

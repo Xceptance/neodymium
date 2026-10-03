@@ -108,6 +108,10 @@ public final class HtmlReportGenerator
         {
             sb.append("<span class=\"meta-badge\">Mode: ").append(escapeHtml(report.getExecutionMode())).append("</span>");
         }
+        if (report.isMarker())
+        {
+            sb.append("<span class=\"meta-badge highlight marker-meta-badge\" title=\"Test executed with visual element markers\">🎯 Markers</span>");
+        }
         if (report.getStartTimeMs() > 0)
         {
             sb.append("<span class=\"meta-badge\">").append(TIME_FORMATTER.format(Instant.ofEpochMilli(report.getStartTimeMs()))).append("</span>");
@@ -427,6 +431,8 @@ public final class HtmlReportGenerator
             sb.append("                <span class=\"step-status-pill\" id=\"inspStatusPill\">SUCCESS</span>\n");
             sb.append("                <span class=\"inspector-meta\" id=\"inspDuration\">0 ms</span>\n");
             sb.append("                <span class=\"context-badge\" id=\"inspContextBadge\" style=\"display:none;\"></span>\n");
+            sb.append("                <span class=\"badge-flag\" id=\"inspModeBadge\" style=\"display:none;\"></span>\n");
+            sb.append("                <span class=\"badge-flag marker-badge\" id=\"inspMarkerBadge\" style=\"display:none;\" title=\"Step executed with proactive visual element markers\">🎯 MARKER</span>\n");
             sb.append("                <span class=\"badge-flag visual-badge\" id=\"inspVisualBadge\" style=\"display:none;\">📸 VISUAL</span>\n");
             sb.append("                <span class=\"badge-flag bug-badge\" id=\"inspBugBadge\" style=\"display:none;\">🐛 BUG EXPECTED</span>\n");
             sb.append("                <span class=\"badge-flag verification-badge-pass\" id=\"inspVerificationBadge\" style=\"display:none;\"></span>\n");
@@ -712,10 +718,21 @@ public final class HtmlReportGenerator
 
     private static void appendStepBadges(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step)
     {
+        final String stepMode = step.getStepMode();
+        if (stepMode != null)
+        {
+            final String modeClass = "LLM".equalsIgnoreCase(stepMode) ? "pill-mode-llm" : "pill-mode-replay";
+            final String modeIcon = "LLM".equalsIgnoreCase(stepMode) ? "🤖 " : "⚡ ";
+            sb.append("              <span class=\"badge-flag ").append(modeClass).append("\">").append(modeIcon).append(escapeHtml(stepMode)).append("</span>\n");
+        }
         if (step.isBug())
         {
             final String tooltip = step.getBugDetails() != null ? "Expected bug: " + escapeHtml(step.getBugDetails()) : "Expected bug";
             sb.append("              <span class=\"badge-flag bug-badge\" title=\"").append(tooltip).append("\">🐛 BUG EXPECTED</span>\n");
+        }
+        if (step.isMarker())
+        {
+            sb.append("              <span class=\"badge-flag marker-badge\" title=\"Step executed with proactive visual element markers\">🎯 MARKER</span>\n");
         }
         if (step.isVisual())
         {
@@ -1022,7 +1039,8 @@ public final class HtmlReportGenerator
         sb.append("<script id=\"stepDataPayload\" type=\"application/json\">\n");
         try
         {
-            sb.append(OBJECT_MAPPER.writeValueAsString(report.getSteps()));
+            final String json = OBJECT_MAPPER.writeValueAsString(report.getSteps());
+            sb.append(escapeJsonScriptPayload(json));
         }
         catch (final Exception e)
         {
@@ -1298,6 +1316,32 @@ public final class HtmlReportGenerator
                     bugBadge.textContent = step.bugDetails ? ('🐛 BUG: ' + step.bugDetails) : '🐛 BUG EXPECTED';
                 } else {
                     bugBadge.style.display = 'none';
+                }
+
+                var modeBadge = document.getElementById('inspModeBadge');
+                if (modeBadge) {
+                    var isLlm = (step.llmCalls && step.llmCalls.length > 0) || (step.standardCalls > 0) || (step.verificationCalls > 0) || (step.rcaCalls > 0);
+                    var isReplay = !isLlm && ((step.actions && step.actions.length > 0) || step.replayed);
+                    if (isLlm) {
+                        modeBadge.style.display = 'inline-block';
+                        modeBadge.className = 'badge-flag pill-mode-llm';
+                        modeBadge.textContent = '🤖 LLM';
+                    } else if (isReplay) {
+                        modeBadge.style.display = 'inline-block';
+                        modeBadge.className = 'badge-flag pill-mode-replay';
+                        modeBadge.textContent = '⚡ REPLAY';
+                    } else {
+                        modeBadge.style.display = 'none';
+                    }
+                }
+
+                var markerBadge = document.getElementById('inspMarkerBadge');
+                if (markerBadge) {
+                    if (step.marker) {
+                        markerBadge.style.display = 'inline-block';
+                    } else {
+                        markerBadge.style.display = 'none';
+                    }
                 }
 
                 var visBadge = document.getElementById('inspVisualBadge');
@@ -2037,6 +2081,12 @@ public final class HtmlReportGenerator
                 background: var(--accent-purple-light);
                 font-weight: 600;
             }
+            .meta-badge.marker-meta-badge {
+                color: #b45309;
+                border-color: #fde68a;
+                background: #fef3c7;
+                font-weight: 600;
+            }
             .status-pill {
                 font-size: 1rem;
                 font-weight: 800;
@@ -2341,6 +2391,16 @@ public final class HtmlReportGenerator
                 white-space: nowrap;
                 display: inline-block;
                 vertical-align: middle;
+            }
+            .badge-flag.pill-mode-llm {
+                background: #eff6ff;
+                color: #1d4ed8;
+                border-color: #bfdbfe;
+            }
+            .badge-flag.pill-mode-replay {
+                background: #f1f5f9;
+                color: #475569;
+                border-color: #cbd5e1;
             }
             .inspector-scope-context {
                 font-size: 0.82rem;
@@ -3231,6 +3291,11 @@ public final class HtmlReportGenerator
                 display: block;
                 cursor: pointer;
             }
+            .marker-badge {
+                background: #fef3c7;
+                color: #b45309;
+                border-color: #fde68a;
+            }
             .visual-badge {
                 background: #fdf2f8;
                 color: #db2777;
@@ -3477,6 +3542,31 @@ public final class HtmlReportGenerator
                    .replace("'", "&#39;");
     }
 
+    /**
+     * Sanitizes a JSON string payload intended to be embedded inside an HTML
+     * {@code <script id="stepDataPayload" type="application/json">} element.
+     * <p>
+     * Under the HTML 5 specification (HTML Standard § 13.2.5.4.10 "Script data state"),
+     * an HTML parser terminates a {@code <script>} element immediately upon encountering
+     * the sequence {@code </script>}, even if nested within a JSON string literal.
+     * Replacing {@code <} with the standard RFC 8259 JSON Unicode escape sequence
+     * {@code \u003c} prevents the HTML parser from breaking out or treating embedded
+     * scripts/comments as executable HTML/JS, while {@code JSON.parse()} in the browser
+     * seamlessly decodes {@code \u003c} back into {@code <}.
+     * </p>
+     *
+     * @param json the raw serialized JSON string
+     * @return the safely escaped JSON string suitable for inline script embedding
+     */
+    static String escapeJsonScriptPayload(final String json)
+    {
+        if (json == null)
+        {
+            return "[]";
+        }
+        return json.replace("<", "\\u003c");
+    }
+
     private static String escapeAttr(final String text)
     {
         if (text == null)
@@ -3487,6 +3577,8 @@ public final class HtmlReportGenerator
                    .replace("\"", "&quot;")
                    .replace("'", "\\'")
                    .replace("<", "&lt;")
-                   .replace(">", "&gt;");
+                   .replace(">", "&gt;")
+                   .replace("\r", " ")
+                   .replace("\n", " ");
     }
 }

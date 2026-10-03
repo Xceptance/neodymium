@@ -81,7 +81,8 @@ public final class MarkdownReportGenerator
         }
         if (report.getExecutionMode() != null)
         {
-            sb.append("| **Execution Mode** | `").append(report.getExecutionMode()).append("` |\n");
+            final String markerTag = report.isMarker() ? " 🎯 `MARKER`" : "";
+            sb.append("| **Execution Mode** | `").append(report.getExecutionMode()).append("`").append(markerTag).append(" |\n");
         }
         if (report.getPlaybookFile() != null)
         {
@@ -437,6 +438,10 @@ public final class MarkdownReportGenerator
 
         sb.append(headingPrefix).append(" Step ").append(stepLabel).append(": ").append(stepStatusEmoji).append(" ").append(escapeMarkdown(step.getInstruction())).append("\n\n");
         sb.append("- **Status:** `").append(step.getStatus()).append("`\n");
+        if (step.getStepMode() != null)
+        {
+            sb.append("- **Step Mode:** `").append(step.getStepMode()).append("`\n");
+        }
         if (step.isBug())
         {
             sb.append("- **Expected Bug:** `true`").append(step.getBugDetails() != null ? " (" + escapeMarkdown(step.getBugDetails()) + ")" : "").append("\n");
@@ -448,6 +453,10 @@ public final class MarkdownReportGenerator
         if (step.isNoHealing())
         {
             sb.append("- **No Healing:** `true`\n");
+        }
+        if (step.isMarker())
+        {
+            sb.append("- **Visual Marker Step:** `🎯 true`\n");
         }
         if (step.isVisual())
         {

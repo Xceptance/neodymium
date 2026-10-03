@@ -114,6 +114,7 @@ public class BrowserToolsTest
                 "inspect",
                 "screenshot",
                 "inspect_visual",
+                "mark_elements",
                 "request_context",
                 "store",
                 "list_tabs",
@@ -1291,6 +1292,18 @@ public class BrowserToolsTest
         {
             Configuration.timeout = originalTimeout;
         }
+
+        // 4. Assert URL not empty with expectedUrl="" and negated=true
+        final ToolCall notEmptyCall = new ToolCall("call-url-4", "assert_url",
+                mapper.createObjectNode().put("expectedUrl", "").put("exact", true).put("negated", true));
+        final ToolResult notEmptyResult = tool.execute(notEmptyCall, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyResult.status());
+
+        // 5. Assert URL not empty with notEmpty=true flag
+        final ToolCall notEmptyFlagCall = new ToolCall("call-url-5", "assert_url",
+                mapper.createObjectNode().put("notEmpty", true));
+        final ToolResult notEmptyFlagResult = tool.execute(notEmptyFlagCall, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyFlagResult.status());
     }
 
     @Test
@@ -1331,6 +1344,18 @@ public class BrowserToolsTest
         {
             Configuration.timeout = originalTimeout;
         }
+
+        // 4. Assert title not empty with expectedTitle="" and negated=true
+        final ToolCall notEmptyTitleCall = new ToolCall("call-title-4", "assert_title",
+                mapper.createObjectNode().put("expectedTitle", "").put("exact", true).put("negated", true));
+        final ToolResult notEmptyTitleResult = tool.execute(notEmptyTitleCall, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyTitleResult.status());
+
+        // 5. Assert title not empty with notEmpty=true flag
+        final ToolCall notEmptyTitleFlagCall = new ToolCall("call-title-5", "assert_title",
+                mapper.createObjectNode().put("notEmpty", true));
+        final ToolResult notEmptyTitleFlagResult = tool.execute(notEmptyTitleFlagCall, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyTitleFlagResult.status());
     }
 
     @Test
@@ -1578,6 +1603,115 @@ public class BrowserToolsTest
             Assertions.assertEquals("Smith", $("#lastName").getValue());
             Assertions.assertEquals("DE", $("#country").getSelectedOptionValue());
             Assertions.assertEquals("Deliver to porch", $("#notes").getValue());
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testCleanSelectorPreservesMarkersAndStripsNoise()
+    {
+        Assertions.assertEquals("marker:1", BrowserToolProvider.cleanSelector("marker:1"));
+        Assertions.assertEquals("marker:42", BrowserToolProvider.cleanSelector("marker:42"));
+        Assertions.assertEquals("badge:7", BrowserToolProvider.cleanSelector("badge:7"));
+        Assertions.assertEquals("[data-m=\"99\"]", BrowserToolProvider.cleanSelector("[data-m=\"99\"]"));
+        Assertions.assertEquals("#submit-btn", BrowserToolProvider.cleanSelector("#submit-btn, text: submit"));
+        Assertions.assertEquals("#submit-btn", BrowserToolProvider.cleanSelector("#submit-btn"));
+    }
+
+    @Test
+    public void testMarkElementsToolExecution() throws Exception
+    {
+        Configuration.headless = true;
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Marker Tool Test</title></head>
+            <body>
+                <button id="btn1">First Button</button>
+                <button id="btn2">Second Button</button>
+                <button id="btn3">Third Button</button>
+            </body>
+            </html>
+            """;
+        try
+        {
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            final AiTool tool = this.registry.getTool("mark_elements").orElseThrow();
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode args = mapper.createObjectNode();
+            args.put("action", "on");
+            args.put("maxCount", 10);
+
+            final ToolCall call = new ToolCall("call-mark-1", "mark_elements", args);
+            final ToolResult result = tool.execute(call, null);
+
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            final JsonNode res = mapper.readTree(result.content());
+            Assertions.assertEquals("SUCCESS", res.path("status").asText());
+            Assertions.assertTrue(res.path("markedCount").asInt() >= 3);
+            Assertions.assertFalse(result.artifacts().isEmpty(), "Visual marker tool must produce screenshot artifact");
+
+            // Verify DOM stamping
+            Assertions.assertTrue($("[data-m='1']").exists());
+
+            // Turn off markers
+            final ObjectNode offArgs = mapper.createObjectNode();
+            offArgs.put("action", "off");
+            final ToolResult offResult = tool.execute(new ToolCall("call-mark-2", "mark_elements", offArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, offResult.status());
+
+            // Verify purged
+            Assertions.assertFalse($("[data-m='1']").exists());
+            Assertions.assertFalse($("#__neo_som_badges__").exists());
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testClickToolWithMarkerSelector() throws Exception
+    {
+        Configuration.headless = true;
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Marker Click Test</title></head>
+            <body>
+                <div id="status">Idle</div>
+                <button id="target-btn" onclick="document.getElementById('status').innerText = 'Clicked!'">Click Me</button>
+            </body>
+            </html>
+            """;
+        try
+        {
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            // Stamp markers
+            final List<Map<String, Object>> markers = VisualBadgeInjector.injectMarkers(WebDriverRunner.getWebDriver(), null, 20);
+            Assertions.assertFalse(markers.isEmpty());
+            Assertions.assertTrue($("[data-m='1']").exists());
+            Assertions.assertTrue($("#__neo_som_badges__").exists());
+
+            final AiTool clickTool = this.registry.getTool("click").orElseThrow();
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode args = mapper.createObjectNode();
+            args.put("selector", "marker:1");
+
+            final ToolResult clickResult = clickTool.execute(new ToolCall("call-click-1", "click", args), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, clickResult.status());
+
+            // Verify action took effect
+            Assertions.assertEquals("Clicked!", $("#status").innerText());
+
+            // Verify auto-purge occurred upon action completion
+            Assertions.assertFalse($("[data-m='1']").exists(), "Markers must be auto-purged from DOM after click execution");
+            Assertions.assertFalse($("#__neo_som_badges__").exists(), "Badge overlay container must be purged after click execution");
         }
         finally
         {
