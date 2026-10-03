@@ -36,12 +36,13 @@ import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
+import org.neodymium.util.Neodymium;
 
 /**
  * Mock integration test verifying DOM vector self-healing and target resolution during replay.
  * In recording mode, standard selectors are used and DomFeatureVectors are captured.
- * In strict replay mode, the page DOM drifts (mangled IDs and class names), and SelenideElementFinder
- * resolves target elements purely via DomFeatureVector proximity matching without any LLM calls.
+ * In replay mode with healing, the page DOM drifts (mangled IDs, structural hierarchy, and class names),
+ * and PlaybookToolReplayer resolves target elements purely via DomFeatureVector proximity matching without any LLM calls.
  *
  * @author AI-generated: Gemini 3.7 Flash
  * @author Xceptance GmbH 2026
@@ -54,12 +55,12 @@ public class VectorHealingSandboxMockTest extends BaseAiTest
     @BeforeAll
     public static void disableLiveLlm()
     {
-        org.neodymium.util.Neodymium.getData().put("neodymium.ai.global.provider", "mock");
-        org.neodymium.util.Neodymium.getData().put("neodymium.ai.linter.enabled", "false");
+        Neodymium.getData().put("neodymium.ai.global.provider", "mock");
+        Neodymium.getData().put("neodymium.ai.linter.enabled", "false");
     }
 
     /**
-     * Sets up test page URLs and queues LLM mock responses before each test execution.
+     * Sets up mock LLM responses before each test recording execution.
      *
      * @param session the thread-isolated AiSession
      */
@@ -68,15 +69,6 @@ public class VectorHealingSandboxMockTest extends BaseAiTest
     {
         final String baseUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/vector-drift-healing.html", server.getPort());
         final boolean isReplay = session.getExecutionMode().isReplay();
-        final String attrUrl = isReplay ? (baseUrl + "?drift=attribute") : baseUrl;
-        final String wrapperUrl = isReplay ? (baseUrl + "?drift=wrapper") : baseUrl;
-        final String tagUrl = isReplay ? (baseUrl + "?drift=tag") : baseUrl;
-        final String disambigUrl = isReplay ? (baseUrl + "?drift=disambiguation") : baseUrl;
-
-        session.data().putDynamic("drift.attr.url", attrUrl, false);
-        session.data().putDynamic("drift.wrapper.url", wrapperUrl, false);
-        session.data().putDynamic("drift.tag.url", tagUrl, false);
-        session.data().putDynamic("drift.disambig.url", disambigUrl, false);
 
         LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
         if (!(provider instanceof MockLlmProvider))
@@ -147,15 +139,25 @@ public class VectorHealingSandboxMockTest extends BaseAiTest
         }
     }
 
+    private void setupDriftUrl(final AiSession session, final String key, final String driftParam)
+    {
+        final String baseUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/vector-drift-healing.html", server.getPort());
+        final boolean isReplay = session.getExecutionMode().isReplay();
+        final String url = isReplay ? (baseUrl + "?drift=" + driftParam) : baseUrl;
+        session.data().putDynamic(key, url, false);
+    }
+
     /**
-     * Tests recording on clean DOM and strict replay with vector self-healing on attribute/class drifted DOM.
+     * Tests recording on clean DOM and replay with vector self-healing on attribute/class drifted DOM.
      *
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook(value = "programmatic", recordingFileName = "custom_vector_attr_drift_playbook")
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_WITH_HEALING})
     public void testVectorAttributeDriftHealing(final AiSession session) throws Exception
     {
+        setupDriftUrl(session, "drift.attr.url", "attribute");
+
         session.execute("""
             steps: |
               Open ${drift.attr.url} in the browser
@@ -177,15 +179,17 @@ public class VectorHealingSandboxMockTest extends BaseAiTest
     }
 
     /**
-     * Tests recording on clean DOM and strict replay with vector self-healing on structural DOM hierarchy drift
+     * Tests recording on clean DOM and replay with vector self-healing on structural DOM hierarchy drift
      * (deeply wrapped input in nested containers and unwrapped standalone button).
      *
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook(value = "programmatic", recordingFileName = "custom_vector_wrapper_drift_playbook")
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_WITH_HEALING})
     public void testVectorStructuralWrapperDriftHealing(final AiSession session) throws Exception
     {
+        setupDriftUrl(session, "drift.wrapper.url", "wrapper");
+
         session.execute("""
             steps: |
               Open ${drift.wrapper.url} in the browser
@@ -207,15 +211,17 @@ public class VectorHealingSandboxMockTest extends BaseAiTest
     }
 
     /**
-     * Tests recording on clean DOM with a {@code <button>} and strict replay when the element migrated
+     * Tests recording on clean DOM with a {@code <button>} and replay when the element migrated
      * into an interactive {@code <a role="button">} link component.
      *
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook(value = "programmatic", recordingFileName = "custom_vector_tag_drift_playbook")
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_WITH_HEALING})
     public void testVectorTagMigrationDriftHealing(final AiSession session) throws Exception
     {
+        setupDriftUrl(session, "drift.tag.url", "tag");
+
         session.execute("""
             steps: |
               Open ${drift.tag.url} in the browser
@@ -243,9 +249,11 @@ public class VectorHealingSandboxMockTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook(value = "programmatic", recordingFileName = "custom_vector_disambig_drift_playbook")
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT})
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_WITH_HEALING})
     public void testVectorDisambiguationDriftHealing(final AiSession session) throws Exception
     {
+        setupDriftUrl(session, "drift.disambig.url", "disambiguation");
+
         session.execute("""
             steps: |
               Open ${drift.disambig.url} in the browser
