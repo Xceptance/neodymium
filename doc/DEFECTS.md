@@ -41,6 +41,80 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261003-03] Unescaped HTML/Script Tags in Embedded Step Data Payload Truncating Report JSON and Breaking Client JavaScript
+- **Date:** 2026-10-03
+- **Component:** `neodymium-core` (`HtmlReportGenerator`)
+- **Scope:** `Framework`
+- **Symptom:**
+  In HTML test execution reports containing DOM snapshots or scripts in step actions (e.g. `outerHtml` of `<script src="/shared/htmx.js"></script>`), step data and interactive details in the Step Inspector are completely missing or stuck on "Select a step". In the browser console, dozens of JavaScript syntax errors appear (`Uncaught SyntaxError: Invalid or unexpected token`), along with `Uncaught SyntaxError: Unterminated string in JSON` when parsing `#stepDataPayload`.
+- **Root Cause:**
+  `HtmlReportGenerator.appendClientScript` serialized `report.getSteps()` into raw JSON and appended it directly inside `<script id="stepDataPayload" type="application/json">` without escaping `<` characters. Under the HTML parser specification (HTML Standard § 13.2.5.4.10 "Script data state"), encountering `</script>` anywhere inside a `<script>` element immediately terminates the element, regardless of JSON string context. The remaining ~468 KB of JSON was ejected into the DOM as raw HTML markup, where embedded `<script>` tags were parsed as invalid executable JavaScript, and the truncated payload failed `JSON.parse`.
+- **Detection Gap ("What did we miss?"):**
+  Existing unit tests for `HtmlReportGenerator` only tested synthetic steps with plain text instructions, without DOM actions containing `<script>` tags or HTML markup in `outerHtml` or action targets.
+- **Resolution:**
+  Sanitized embedded JSON in `HtmlReportGenerator.escapeJsonScriptPayload` by replacing all `<` characters with standard JSON Unicode escapes `\u003c` (`replace("<", "\\u003c")`), ensuring HTML parsers never see `</script>` or HTML tags/comments while `JSON.parse` preserves the original `<` characters identically. In addition, sanitized newline characters in `escapeAttr` to prevent inline JS attribute syntax breakage.
+- **Safety Net Added:**
+  Added `HtmlReportGeneratorTest.testEscapeJsonScriptPayloadWithHtmlAndScriptTags` and `testReportWithEmbeddedScriptTagsInSteps` validating that embedded `<script>` and `<!--` tags in steps are cleanly escaped, parse without errors in JSON/JS, and produce exactly 2 script tags in generated reports.
+
+### [DEF-20261003-02] Visual Marker Click Causes Unrecorded Scroll Resulting in Coordinate Replay Drift
+- **Date:** 2026-10-03
+- **Component:** `neodymium-core` (`BrowserToolProvider`, `VisualBadgeInjector`)
+- **Scope:** `Framework`
+- **Symptom:**
+  Replaying recorded playbook steps that use visual markers (`marker:N` or `badge:N`) on elements below the fold failed because coordinate clicks missed the target element during `REPLAY_STRICT` and `REPLAY_WITH_HEALING` modes, leading to assertion timeouts on subsequent steps.
+- **Root Cause:**
+  `BrowserToolProvider.clickBadgeScript` invoked `el.scrollIntoView({ block: 'center', inline: 'center' })` when calculating marker coordinates. This performed an unrecorded page scroll during recording, capturing post-scroll coordinates. During replay, only recorded actions ran (e.g. `scroll` on parent card container), so the unrecorded element scroll never occurred, causing the recorded coordinate click to land off-target (e.g. y=313 instead of y=426).
+- **Detection Gap ("What did we miss?"):**
+  Earlier visual marker tests (`VisualMarkersSandboxLiveTest`) targeted controls at the top of the page (`#card-hoodie`) which were already inside the initial viewport, where `scrollIntoView` caused zero scroll offset.
+- **Resolution:**
+  Removed `scrollIntoView` calls from `clickBadgeScript` in `BrowserToolProvider.java`. Visual markers are already verified visible in the viewport when injected by `VisualBadgeInjector`. The element's current `getBoundingClientRect()` accurately represents its location without altering page scroll state.
+- **Safety Net Added:**
+  Dense layout multi-mode live test `VisualMarkersComplexSandboxLiveTest` exercising `FORCE_RECORDING`, `REPLAY_STRICT`, and `REPLAY_WITH_HEALING` across below-the-fold controls.
+
+### [DEF-20261003-01] Missing Visual Marker Proof in Reports and Text-Only Context Demotion for (marker) Steps
+- **Date:** 2026-10-03
+- **Component:** `neodymium-core` (`ExecuteActionsStep`, `AgentToolLoopStep`, `PreliminaryReportListener`, `HtmlReportGenerator`, `MarkdownReportGenerator`, `PlaybookStep`, `TestExecutionReport`)
+- **Scope:** `Framework`
+- **Symptom:**
+  Executing a playbook step with `(marker)` hint (e.g. `(marker) Click the quick view button with the eye icon on the Cyberpunk Neon Hoodie card`) failed to show any visual marker badge (`🎯 MARKER`) or marked screenshot overlay in the native HTML/Markdown execution reports. Furthermore, the step ran in `TEXT_ONLY` mode at `LEAN` context level over multiple turns instead of executing as a visual marker step with coordinate clicks.
+- **Root Cause:**
+  1. `ExecuteActionsStep.java` ignored `step.isMarker()`, defaulting `initialLevel` to `LEAN` and stamping `step.setContextLevel("LEAN")`.
+  2. `AgentToolLoopStep.java` checked `if (step.getContextLevel() == null)` before escalating `(marker)` steps to `VISUAL_LEAN`, preventing escalation when `LEAN` was already set.
+  3. Because the context remained `LEAN`, `captureState()` captured no screenshot, the marked screenshot `StateCapturedEvent` was never emitted, and the LLM was forced into text-only DOM querying.
+  4. `PlaybookStep.setInstruction()` stripped `(marker)` immediately without preserving `rawInstruction`.
+  5. `ReportStepEntry` and report generators lacked `marker` metadata, stripping marker indicators from the report UI.
+- **Detection Gap ("What did we miss?"):**
+  Unit tests mocked `LlmResponse` and `StepStartedEvent` in isolation without verifying full pipeline context level elevation and HTML/Markdown report artifact generation for `(marker)` steps.
+- **Resolution:**
+  1. Preserved `rawInstruction` in `PlaybookStep` and `ReportStepEntry`.
+  2. Elevated `initialLevel` to `ContextLevel.VISUAL_LEAN` in `ExecuteActionsStep` when `step.isMarker()` is true.
+  3. Relaxed escalation condition in `AgentToolLoopStep` to upgrade `LEAN` to `VISUAL_LEAN` for marker steps.
+  4. Labeled marker screenshots as `(Visual Markers Overlay)` and propagated `marker` flag to `ReportStepEntry`.
+  5. Rendered `🎯 MARKER` badge and CSS styling in HTML report card, inspector, and Markdown reports.
+- **Safety Net Added:**
+  `PreliminaryReportListenerTest.testMarkerStepScreenshotCaptureAndReporting`, `PlaybookStepTest.testIsMarkerStep`, `PlaybookStepTest.testMarkerSerialization`, and `VisualMarkersSandboxMockTest.testVisualMarkersDynamicFallbackWithoutHint`.
+
+### [DEF-20261002-09] Ephemeral Visual Badges Prematurely Stripped & Fragile DOM Selector Synthesis in Visual Mode
+- **Date:** 2026-10-02
+- **Component:** `neodymium-core` (`VisualBadgeInjector`, `BrowserToolProvider`, `AgentToolLoopStep`, `PlaybookToolReplayer`, `PlaybookStep`)
+- **Scope:** `Framework`
+- **Symptom:**
+  1. AI agent attempting to click or interact with marked elements (`badge:N` or `[data-m="N"]`) after a visual marking screenshot encountered `NoSuchElementException` or failed selector resolution due to premature DOM badge cleanup.
+  2. In CI replay, steps executed in visual mode failed with `NoSuchElementException` when searching for `[data-m="N"]` (or clicked the wrong element when attempting heuristic CSS selector synthesis from generic class soup like `button._btn_ghost`).
+- **Root Cause:**
+  1. `screenshot(markInteractive=true)` destroyed the badge overlay DOM nodes in a `finally` block before returning the image to the LLM turn loop. The visual badges visible in the screenshot no longer existed in the DOM when the subsequent action tool was invoked.
+  2. Visual markers (`marker:N`) were erroneously normalized into CSS selectors (`[data-m="N"]`) and recorded as DOM queries. Because visual mode exists specifically to bypass inaccessible or chaotic DOM structures, forcing visual targets into the CSS selector domain caused replay failures when markers were absent.
+- **Detection Gap ("What did we miss?"):**
+  Existing unit tests verified screenshot generation with mocks rather than testing multi-turn interaction loops where an agent acts upon previously marked visual targets and replaying those recorded playbooks across `REPLAY_STRICT` and `REPLAY_WITH_HEALING` modes against messy DOM fixtures.
+- **Resolution:**
+  1. Decoupled visual marking into an explicit, stateful `mark_elements` tool and proactive `(marker)` step hint that maintains both screen overlays and compact `data-m="N"` attributes in the DOM.
+  2. Pure Visual Coordinate Grounding: In visual mode (`(marker)` / `marker:N`), resolved markers directly to screen coordinates `(x, y)` and executed native coordinate clicks (`performSafeCoordinateClick`).
+  3. Recorded visual interactions in the playbook as pure coordinate actions (`target: "coord: x,y"`, `x`, `y`), completely eliminating synthetic CSS selectors, DOM querying, and live DOM stamping during CI replay.
+  4. Dispatched native `StateCapturedEvent` to embed the marked screenshot into Neodymium's native HTML/Markdown execution reports (zero Allure dependency).
+  5. Auto-purged markers after action execution to keep the SUT pristine.
+- **Safety Net Added:**
+  Regression tests in `BrowserToolsTest.java`, `VisualBadgeInjectorTest.java`, and Aura AI sandbox end-to-end suite `VisualMarkersSandboxMockTest.java` verifying marker retention across turns, pure coordinate execution, zero CSS selector generation, report screenshot emission, post-action cleanup, and flawless replay across `FORCE_RECORDING`, `REPLAY_STRICT`, and `REPLAY_WITH_HEALING`.
+
 ### [DEF-20261002-08] Visual Root Cause Analysis (RCA) Blind Spot on Browser Form Validation and Missing Rubrics Architecture
 - **Date:** 2026-10-02
 - **Component:** `neodymium-core` (`VisualRcaPrompt`, `VisualRcaResult`, `VisualRcaStep`, `StateMachineRunner`, `HtmlReportGenerator`, `MarkdownReportGenerator`, `visual-rca-prompt.md`)

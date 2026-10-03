@@ -68,6 +68,7 @@ import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
+import org.neodymium.ai.tool.browser.VisualBadgeInjector;
 import org.neodymium.ai.tool.guard.InterceptionVerdict;
 import org.neodymium.ai.tool.guard.QualityJudgeToolInterceptor;
 import org.neodymium.ai.tool.guard.ToolInterceptor;
@@ -224,6 +225,9 @@ public final class AgentToolLoopStep implements PipelineStep
         final boolean isVisual = (step != null && step.isVisualOrLayoutStep())
                 || (rawInstruction != null && (rawInstruction.toLowerCase().contains("(visual)") || rawInstruction.toLowerCase().contains("(layout)")))
                 || (instruction != null && (instruction.toLowerCase().contains("(visual)") || instruction.toLowerCase().contains("(layout)")));
+        final boolean isMarker = (step != null && step.isMarker())
+                || (rawInstruction != null && rawInstruction.toLowerCase(Locale.ROOT).contains("(marker)"))
+                || (instruction != null && instruction.toLowerCase(Locale.ROOT).contains("(marker)"));
         final boolean hasInteractive = hasInteractiveMilestones(context);
         final boolean isVisualAssertion = isVisual && !hasInteractive;
 
@@ -311,6 +315,13 @@ public final class AgentToolLoopStep implements PipelineStep
                     .append("If the visual condition is not met or expected elements are missing/off-screen, conclude the visual check with an appropriate summary or fail — do NOT repeatedly scroll or attempt DOM recovery.\n\n");
         }
 
+        if (isMarker)
+        {
+            userPrompt.append("### Visual Marker Directive:\n")
+                    .append("This instruction is marked with (marker). Visual element markers [1..N] have been activated on screen. ")
+                    .append("A marked screenshot is attached. Target the intended element using its marker index (e.g. click(target: \"marker:3\")).\n\n");
+        }
+
         if (milestones != null && !milestones.isEmpty())
         {
             userPrompt.append("### Compound Instruction Milestones:\n");
@@ -352,13 +363,18 @@ public final class AgentToolLoopStep implements PipelineStep
                     }
                 }
 
-                // Visual tag check (only applied when step did not explicitly override context level)
-                if (isVisual && (step == null || step.getContextLevel() == null || step.getContextLevel().isBlank()))
+                // Visual or marker tag check (only applied when step did not explicitly override context level)
+                if ((isVisual || isMarker) && (step == null || step.getContextLevel() == null || step.getContextLevel().isBlank() || ContextLevel.LEAN.name().equalsIgnoreCase(step.getContextLevel())))
                 {
                     if (!activeContextLevel.includesScreenshot())
                     {
                         activeContextLevel = ContextLevel.VISUAL_LEAN;
                     }
+                }
+
+                if (isMarker && WebDriverRunner.hasWebDriverStarted())
+                {
+                    VisualBadgeInjector.injectMarkers(WebDriverRunner.getWebDriver());
                 }
 
                 context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
@@ -382,6 +398,16 @@ public final class AgentToolLoopStep implements PipelineStep
                 if (initialState.getAttachments() != null)
                 {
                     attachments = initialState.getAttachments();
+                }
+                if (isMarker && attachments != null && !attachments.isEmpty())
+                {
+                    final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                    if (session != null && session.getEventBus() != null)
+                    {
+                        final String stepDesc = step != null ? step.getInstruction() : "step";
+                        final SutState markedState = new BrowserSutState("Visual Markers (proactive hint on " + stepDesc + ")", attachments, "screenshot");
+                        session.getEventBus().dispatch(new StateCapturedEvent(markedState));
+                    }
                 }
             }
             catch (final Exception e)
@@ -663,12 +689,31 @@ public final class AgentToolLoopStep implements PipelineStep
                             try
                             {
                                 final JsonNode resJson = MAPPER.readTree(result.content());
+                                final ObjectNode updatedArgs = effectiveCall.arguments() instanceof ObjectNode on
+                                        ? on.deepCopy()
+                                        : MAPPER.createObjectNode();
+                                boolean updated = false;
                                 if (resJson.hasNonNull("domFeatureVector"))
                                 {
-                                    final ObjectNode updatedArgs = effectiveCall.arguments() instanceof ObjectNode on
-                                            ? on.deepCopy()
-                                            : MAPPER.createObjectNode();
                                     updatedArgs.set("domFeatureVector", resJson.path("domFeatureVector"));
+                                    updated = true;
+                                }
+                                if (resJson.hasNonNull("target") && resJson.path("target").asText().startsWith("coord:"))
+                                {
+                                    updatedArgs.put("target", resJson.path("target").asText());
+                                    if (resJson.hasNonNull("x"))
+                                    {
+                                        updatedArgs.put("x", resJson.path("x").asInt());
+                                    }
+                                    if (resJson.hasNonNull("y"))
+                                    {
+                                        updatedArgs.put("y", resJson.path("y").asInt());
+                                    }
+                                    updatedArgs.remove("selector");
+                                    updated = true;
+                                }
+                                if (updated)
+                                {
                                     callToRecord = new ToolCall(effectiveCall.callId(), effectiveCall.toolName(), updatedArgs);
                                 }
                             }
@@ -1011,12 +1056,31 @@ public final class AgentToolLoopStep implements PipelineStep
                         try
                         {
                             final JsonNode resJson = MAPPER.readTree(result.content());
+                            final ObjectNode updatedArgs = effectiveCall.arguments() instanceof ObjectNode on
+                                    ? on.deepCopy()
+                                    : MAPPER.createObjectNode();
+                            boolean updated = false;
                             if (resJson.hasNonNull("domFeatureVector"))
                             {
-                                final ObjectNode updatedArgs = effectiveCall.arguments() instanceof ObjectNode on
-                                        ? on.deepCopy()
-                                        : MAPPER.createObjectNode();
                                 updatedArgs.set("domFeatureVector", resJson.path("domFeatureVector"));
+                                updated = true;
+                            }
+                            if (resJson.hasNonNull("target") && resJson.path("target").asText().startsWith("coord:"))
+                            {
+                                updatedArgs.put("target", resJson.path("target").asText());
+                                if (resJson.hasNonNull("x"))
+                                {
+                                    updatedArgs.put("x", resJson.path("x").asInt());
+                                }
+                                if (resJson.hasNonNull("y"))
+                                {
+                                    updatedArgs.put("y", resJson.path("y").asInt());
+                                }
+                                updatedArgs.remove("selector");
+                                updated = true;
+                            }
+                            if (updated)
+                            {
                                 callToRecord = new ToolCall(effectiveCall.callId(), effectiveCall.toolName(), updatedArgs);
                             }
                         }
@@ -1097,6 +1161,38 @@ public final class AgentToolLoopStep implements PipelineStep
                             {
                                 final SutState cropState = new BrowserSutState("Visual Crop: " + selector, cropAttachments, "crop");
                                 session.getEventBus().dispatch(new StateCapturedEvent(cropState));
+                            }
+                        }
+                    }
+                    else if ("mark_elements".equals(effectiveCall.toolName()) || "browser_mark_elements".equals(effectiveCall.toolName()))
+                    {
+                        final Object base64Obj = result.variables().get("screenshotBase64");
+                        if (base64Obj != null)
+                        {
+                            final String base64 = String.valueOf(base64Obj);
+                            final String rawBase64 = base64.startsWith("data:") ? base64.substring(base64.indexOf(',') + 1) : base64;
+                            final int markedCount = result.variables().containsKey("markedCount")
+                                    ? ((Number) result.variables().get("markedCount")).intValue()
+                                    : 0;
+                            final List<SutAttachment> markAttachments = List.of(new SutAttachment("image/png", "marked_screenshot", rawBase64));
+                            pendingVisualAttachments = markAttachments;
+                            activeContextLevel = activeContextLevel == ContextLevel.RICH ? ContextLevel.VISUAL_RICH : ContextLevel.VISUAL_LEAN;
+                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+
+                            final PlaybookStep currentPbStep = (PlaybookStep) context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+                            if (currentPbStep != null)
+                            {
+                                currentPbStep.setMarker(true);
+                            }
+
+                            pendingVisualNote = "Visual markers [1.." + markedCount + "] are active on screen. "
+                                    + "A marked screenshot is attached. Target the intended element using its marker index (e.g. click(target: \"marker:3\")).";
+
+                            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                            if (session != null && session.getEventBus() != null)
+                            {
+                                final SutState markedState = new BrowserSutState("Visual Markers (" + markedCount + " elements marked)", markAttachments, "screenshot");
+                                session.getEventBus().dispatch(new StateCapturedEvent(markedState));
                             }
                         }
                     }
@@ -1799,6 +1895,7 @@ public final class AgentToolLoopStep implements PipelineStep
         return "query_dom".equals(clean)
                 || "inspect".equals(clean)
                 || "inspect_visual".equals(clean)
+                || "mark_elements".equals(clean)
                 || "request_context".equals(clean);
     }
 
@@ -2752,7 +2849,7 @@ public final class AgentToolLoopStep implements PipelineStep
                 || "check".equals(clean) || "store".equals(clean) || "branch".equals(clean)
                 || "include".equals(clean) || "java_method".equals(clean)
                 || "screenshot".equals(clean) || "take_screenshot".equals(clean)
-                || "inspect_visual".equals(clean) || "request_context".equals(clean)
+                || "inspect_visual".equals(clean) || "mark_elements".equals(clean) || "request_context".equals(clean)
                 || "query_dom".equals(clean) || "inspect".equals(clean) || "execute_script".equals(clean)
                 || this.toolRegistry.hasTool(name) || this.toolRegistry.hasTool(rawName.trim())
                 || this.toolRegistry.hasTool(clean);
@@ -2800,6 +2897,7 @@ public final class AgentToolLoopStep implements PipelineStep
             case "key_press", "press_key" -> "press_key";
             case "take_screenshot", "screenshot" -> "screenshot";
             case "inspect_visual" -> "inspect_visual";
+            case "mark_elements", "mark" -> "mark_elements";
             case "request_context" -> "request_context";
             case "query_dom" -> "query_dom";
             case "inspect" -> "inspect";

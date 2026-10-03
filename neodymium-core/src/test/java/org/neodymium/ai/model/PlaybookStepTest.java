@@ -510,4 +510,44 @@ public class PlaybookStepTest
         Assertions.assertEquals("Check layout", stepShortHyphen.getInstruction());
         Assertions.assertEquals("VISUAL_LEAN", stepShortHyphen.getContextLevel());
     }
+
+    @Test
+    public void testIsMarkerStep()
+    {
+        final PlaybookStep standardStep = new PlaybookStep("Click on the login button");
+        Assertions.assertFalse(standardStep.isMarker());
+
+        final PlaybookStep markerStep = new PlaybookStep("Click the save icon (marker)");
+        Assertions.assertTrue(markerStep.isMarker());
+        Assertions.assertEquals("Click the save icon", markerStep.getInstruction());
+        Assertions.assertEquals("Click the save icon (marker)", markerStep.getRawInstruction());
+
+        final PlaybookStep spacedMarker = new PlaybookStep("Click the profile menu ( marker )");
+        Assertions.assertTrue(spacedMarker.isMarker());
+        Assertions.assertEquals("Click the profile menu", spacedMarker.getInstruction());
+        Assertions.assertEquals("Click the profile menu ( marker )", spacedMarker.getRawInstruction());
+
+        final PlaybookStep uppercaseMarker = new PlaybookStep("Click the bell (MARKER)");
+        Assertions.assertTrue(uppercaseMarker.isMarker());
+        Assertions.assertEquals("Click the bell", uppercaseMarker.getInstruction());
+        Assertions.assertEquals("Click the bell (MARKER)", uppercaseMarker.getRawInstruction());
+    }
+
+    @Test
+    public void testMarkerSerialization() throws Exception
+    {
+        final ObjectMapper mapper = new ObjectMapper();
+        final PlaybookStep original = new PlaybookStep("Click the icon (marker)");
+        Assertions.assertTrue(original.isMarker());
+        Assertions.assertEquals("Click the icon (marker)", original.getRawInstruction());
+
+        final String json = mapper.writeValueAsString(original);
+        Assertions.assertTrue(json.contains("\"marker\":true"));
+        Assertions.assertTrue(json.contains("\"rawInstruction\":\"Click the icon (marker)\""));
+
+        final PlaybookStep deserialized = mapper.readValue(json, PlaybookStep.class);
+        Assertions.assertTrue(deserialized.isMarker());
+        Assertions.assertEquals("Click the icon", deserialized.getInstruction());
+        Assertions.assertEquals("Click the icon (marker)", deserialized.getRawInstruction());
+    }
 }

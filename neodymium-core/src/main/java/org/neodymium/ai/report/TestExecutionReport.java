@@ -334,6 +334,26 @@ public final class TestExecutionReport
     }
 
     /**
+     * Checks if any step in this report executed with visual element markers.
+     *
+     * @return true if at least one step or sub-step used markers, false otherwise
+     */
+    public boolean isMarker()
+    {
+        if (this.steps != null)
+        {
+            for (final ReportStepEntry step : this.steps)
+            {
+                if (step.isMarker())
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
      * Record of a single executed or planned playbook step.
      */
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -375,6 +395,7 @@ public final class TestExecutionReport
         private boolean continueOnError;
         private boolean noHealing;
         private boolean visual;
+        private boolean marker;
         private boolean multiStage;
         private Double ssimScore;
         private Double ssimMinScore;
@@ -735,6 +756,59 @@ public final class TestExecutionReport
         public void setVisual(final boolean visual)
         {
             this.visual = visual;
+        }
+
+        public boolean isMarker()
+        {
+            if (this.marker)
+            {
+                return true;
+            }
+            if (this.subSteps != null)
+            {
+                for (final ReportStepEntry sub : this.subSteps)
+                {
+                    if (sub.isMarker())
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        public void setMarker(final boolean marker)
+        {
+            this.marker = marker;
+        }
+
+        /**
+         * Returns the execution mode for this step ("LLM" or "REPLAY"), or null if indeterminate.
+         *
+         * @return "LLM" if step executed LLM completion calls, "REPLAY" if actions were executed without LLM, or null
+         */
+        public String getStepMode()
+        {
+            if ((this.llmCalls != null && !this.llmCalls.isEmpty()) || this.standardCalls > 0 || this.verificationCalls > 0 || this.rcaCalls > 0)
+            {
+                return "LLM";
+            }
+            if (this.actions != null && !this.actions.isEmpty())
+            {
+                return "REPLAY";
+            }
+            if (this.subSteps != null && !this.subSteps.isEmpty())
+            {
+                for (final ReportStepEntry sub : this.subSteps)
+                {
+                    final String subMode = sub.getStepMode();
+                    if (subMode != null)
+                    {
+                        return subMode;
+                    }
+                }
+            }
+            return null;
         }
 
         public boolean isMultiStage()

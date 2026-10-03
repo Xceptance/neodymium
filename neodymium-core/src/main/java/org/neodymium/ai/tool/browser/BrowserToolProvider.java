@@ -158,6 +158,7 @@ public final class BrowserToolProvider
         registry.register(createQueryDomTool());
         registry.register(createInspectTool());
         registry.register(createTakeScreenshotTool());
+        registry.register(createMarkElementsTool());
         registry.register(createInspectVisualTool());
         registry.register(createPressKeyTool());
         registry.register(createRequestContextTool());
@@ -441,6 +442,7 @@ public final class BrowserToolProvider
         }
         if (driver != null)
         {
+            VisualBadgeInjector.removeMarkers(driver);
             res.put("url", getSafeUrl(driver));
             res.put("title", getSafeTitle(driver));
         }
@@ -502,6 +504,7 @@ public final class BrowserToolProvider
         }
         if (driver != null)
         {
+            VisualBadgeInjector.removeMarkers(driver);
             res.put("url", getSafeUrl(driver));
             res.put("title", getSafeTitle(driver));
         }
@@ -572,27 +575,36 @@ public final class BrowserToolProvider
                     }
                 }
 
-                if (sel.isBlank() && !target.isBlank() && !target.startsWith("coord:") && !target.startsWith("badge:"))
+                if (sel.isBlank() && !target.isBlank() && !target.startsWith("coord:"))
                 {
                     sel = cleanSelector(target);
                 }
 
-                // Case 1: Target is badge:N
-                if (target.startsWith("badge:") && driver != null)
+                // Case 1: Target or selector is badge:N or marker:N -> pure visual coordinate click
+                final String markerTarget = target.toLowerCase(Locale.ROOT).startsWith("marker:") || target.toLowerCase(Locale.ROOT).startsWith("badge:")
+                        ? target
+                        : (sel.toLowerCase(Locale.ROOT).startsWith("marker:") || sel.toLowerCase(Locale.ROOT).startsWith("badge:") ? sel : "");
+                if (!markerTarget.isBlank() && driver != null)
                 {
-                    final String badgeNum = target.substring("badge:".length()).trim();
+                    final String markerNum = markerTarget.toLowerCase(Locale.ROOT).startsWith("marker:")
+                            ? markerTarget.substring("marker:".length()).trim()
+                            : markerTarget.substring("badge:".length()).trim();
                     final String clickBadgeScript = """
-                        var badges = document.querySelectorAll('#__neo_som_badges__ > div');
+                        var badges = document.querySelectorAll('#_neo_som_badges_ > div');
                         for (var i = 0; i < badges.length; i++) {
-                            if (badges[i].innerText.trim() === arguments[0]) {
-                                badges[i].scrollIntoView({ block: 'center', inline: 'center' });
+                            if (badges[i].getAttribute('data-badge-id') === arguments[0] || badges[i].innerText.trim() === arguments[0]) {
                                 var rect = badges[i].getBoundingClientRect();
                                 return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
                             }
                         }
+                        var el = document.querySelector('[data-m="' + arguments[0] + '"]');
+                        if (el) {
+                            var rect = el.getBoundingClientRect();
+                            return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+                        }
                         return null;
                         """;
-                    final Object coordsObj = ((JavascriptExecutor) driver).executeScript(clickBadgeScript, badgeNum);
+                    final Object coordsObj = ((JavascriptExecutor) driver).executeScript(clickBadgeScript, markerNum);
                     if (coordsObj instanceof Map<?, ?> coordsMap)
                     {
                         final int bx = ((Number) coordsMap.get("x")).intValue();
@@ -601,25 +613,18 @@ public final class BrowserToolProvider
                         final int finalX = clicked[0];
                         final int finalY = clicked[1];
 
-                        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, finalX, finalY);
                         final ToolResult.Builder b = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
                         final ObjectNode res = successNode("click");
-                        res.put("target", "badge:" + badgeNum);
+                        res.put("target", "coord: " + finalX + "," + finalY);
                         res.put("x", finalX);
                         res.put("y", finalY);
-                        if (reanchored != null)
-                        {
-                            res.put("selector", reanchored.selector());
-                            b.withVariable("reanchoredSelector", reanchored.selector());
-                        }
-                        if (driver != null)
-                        {
-                            res.put("url", getSafeUrl(driver));
-                            res.put("title", getSafeTitle(driver));
-                        }
+                        VisualBadgeInjector.removeMarkers(driver);
+                        res.put("url", getSafeUrl(driver));
+                        res.put("title", getSafeTitle(driver));
                         b.withContent(res.toString());
                         return b.build();
                     }
+                    throw new IllegalArgumentException("Visual marker '" + markerTarget + "' not found on the active page");
                 }
 
                 // Case 2: Element resolution via selector and text fallback (prioritized over raw coordinates unless explicit coord: target)
@@ -4010,7 +4015,7 @@ public final class BrowserToolProvider
                 List<Map<String, Object>> badges = null;
                 if (markInteractive)
                 {
-                    badges = VisualBadgeInjector.injectBadges(driver);
+                    badges = VisualBadgeInjector.injectMarkers(driver);
                 }
 
                 final byte[] screenshotBytes;
@@ -4018,12 +4023,9 @@ public final class BrowserToolProvider
                 {
                     screenshotBytes = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
                 }
-                finally
+                catch (final Exception e)
                 {
-                    if (markInteractive)
-                    {
-                        VisualBadgeInjector.removeBadges(driver);
-                    }
+                    return ToolResult.error(call.callId(), errorNode("Failed to capture screenshot: " + e.getMessage()).toString());
                 }
 
                 final String base64 = Base64.getEncoder().encodeToString(screenshotBytes);
@@ -4043,6 +4045,74 @@ public final class BrowserToolProvider
                 {
                     builder.withVariable("visualBadges", badges);
                 }
+
+                return builder.build();
+            }
+        };
+    }
+
+    private static AiTool createMarkElementsTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("action").put("type", "string").put("description", "Action to perform: 'on' to inject visual markers, 'off' to purge them (default: 'on')");
+        props.putObject("scope").put("type", "string").put("description", "Optional CSS selector to restrict marker injection to a container");
+        props.putObject("maxCount").put("type", "integer").put("description", "Maximum number of elements to mark (default: 50)");
+
+        final ToolDefinition def = new ToolDefinition("mark_elements", "Activates or deactivates high-contrast visual marker overlays on screen and stamps compact [data-m=\"N\"] attributes into the DOM for visual multimodal grounding", schema);
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final String action = call.arguments().path("action").asText("on").trim().toLowerCase(Locale.ROOT);
+                final String scope = call.arguments().hasNonNull("scope") ? call.arguments().path("scope").asText().trim() : null;
+                final int maxCount = call.arguments().path("maxCount").asInt(50);
+
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                if (driver == null)
+                {
+                    return ToolResult.error(call.callId(), errorNode("WebDriver is not running; cannot manage visual markers").toString());
+                }
+
+                if ("off".equals(action))
+                {
+                    VisualBadgeInjector.removeMarkers(driver);
+                    final ObjectNode res = successNode("mark_elements");
+                    res.put("action", "off");
+                    res.put("status", "Markers removed");
+                    return ToolResult.success(call.callId(), res.toString());
+                }
+
+                final List<Map<String, Object>> markers = VisualBadgeInjector.injectMarkers(driver, scope, maxCount);
+                final byte[] screenshotBytes;
+                try
+                {
+                    screenshotBytes = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
+                }
+                catch (final Exception e)
+                {
+                    return ToolResult.error(call.callId(), errorNode("Failed to capture marked screenshot: " + e.getMessage()).toString());
+                }
+
+                final String base64 = Base64.getEncoder().encodeToString(screenshotBytes);
+                final ObjectNode res = successNode("mark_elements");
+                res.put("action", "on");
+                res.put("markedCount", markers.size());
+
+                final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS)
+                        .withContent(res.toString())
+                        .withArtifact("screenshot", "image/png", screenshotBytes)
+                        .withVariable("screenshotBase64", "data:image/png;base64," + base64)
+                        .withVariable("markedCount", markers.size())
+                        .withVariable("markers", markers);
 
                 return builder.build();
             }

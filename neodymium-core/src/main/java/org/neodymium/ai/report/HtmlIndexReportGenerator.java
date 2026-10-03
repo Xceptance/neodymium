@@ -97,6 +97,7 @@ public final class HtmlIndexReportGenerator
         private String failureReason;
         private boolean bug;
         private String bugDetails;
+        private boolean marker;
 
         public IndexEntry()
         {
@@ -158,6 +159,11 @@ public final class HtmlIndexReportGenerator
                         break;
                     }
                 }
+                entry.setMarker(report.isMarker());
+            }
+            else
+            {
+                entry.setMarker(report.isMarker());
             }
 
             return entry;
@@ -277,6 +283,16 @@ public final class HtmlIndexReportGenerator
         public void setExecutionMode(final String executionMode)
         {
             this.executionMode = executionMode;
+        }
+
+        public boolean isMarker()
+        {
+            return this.marker;
+        }
+
+        public void setMarker(final boolean marker)
+        {
+            this.marker = marker;
         }
 
         public long getTimestamp()
@@ -844,6 +860,10 @@ public final class HtmlIndexReportGenerator
                 {
                     sb.append("              <span class=\"mode-badge mode-muted\">-</span>\n");
                 }
+                if (entry.isMarker())
+                {
+                    sb.append("              <span class=\"marker-badge\" style=\"display:inline-block; font-size:0.7rem; padding: 2px 6px; border-radius: 4px; margin-left: 0.35rem; vertical-align: middle;\" title=\"Test executed with visual element markers\">🎯 MARKER</span>\n");
+                }
                 sb.append("            </td>\n");
 
                 // 4. Steps Count
@@ -1235,6 +1255,15 @@ public final class HtmlIndexReportGenerator
                 background: #fef2f2;
                 color: #b91c1c;
                 border: 1px solid #fca5a5;
+                font-size: 0.7rem;
+                font-weight: 700;
+                padding: 0.1rem 0.35rem;
+                border-radius: 4px;
+            }
+            .marker-badge {
+                background: #fef3c7;
+                color: #b45309;
+                border: 1px solid #fde68a;
                 font-size: 0.7rem;
                 font-weight: 700;
                 padding: 0.1rem 0.35rem;

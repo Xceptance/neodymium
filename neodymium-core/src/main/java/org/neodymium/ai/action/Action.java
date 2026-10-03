@@ -1254,6 +1254,10 @@ public class Action
             {
                 target = args.hasNonNull("form") ? args.path("form").asText() : "form";
             }
+            else if (args.hasNonNull("target") && args.path("target").asText().startsWith("coord:"))
+            {
+                target = args.path("target").asText();
+            }
             else if (args.hasNonNull("selector") && !args.path("selector").asText().isBlank())
             {
                 target = args.path("selector").asText();

@@ -445,7 +445,7 @@ public final class PlaybookToolReplayer
         }
 
         final String currentTarget = args.hasNonNull("target") ? args.path("target").asText().trim() : args.path("selector").asText().trim();
-        if (currentTarget.isBlank() || currentTarget.startsWith("coord:") || currentTarget.startsWith("badge:"))
+        if (currentTarget.isBlank() || currentTarget.startsWith("coord:"))
         {
             return null;
         }
@@ -588,9 +588,23 @@ public final class PlaybookToolReplayer
                     : candidate.getTag();
             return base + ":has-text(\"" + cleanText + "\")";
         }
+        if (candidate.getAttributes().containsKey("aria-label") && !candidate.getAttributes().get("aria-label").isBlank())
+        {
+            return candidate.getTag() + "[aria-label=\"" + candidate.getAttributes().get("aria-label") + "\"]";
+        }
+        if (candidate.getAccessibleName() != null && !candidate.getAccessibleName().isBlank())
+        {
+            return candidate.getTag() + "[aria-label=\"" + candidate.getAccessibleName() + "\"]";
+        }
         if (!candidate.getClasses().isEmpty())
         {
             return candidate.getTag() + "." + String.join(".", candidate.getClasses());
+        }
+        if (candidate.getX() >= 0 && candidate.getY() >= 0 && candidate.getWidth() > 0 && candidate.getHeight() > 0)
+        {
+            final int cx = candidate.getX() + (candidate.getWidth() / 2);
+            final int cy = candidate.getY() + (candidate.getHeight() / 2);
+            return "coord: " + cx + "," + cy;
         }
         return candidate.getTag();
     }

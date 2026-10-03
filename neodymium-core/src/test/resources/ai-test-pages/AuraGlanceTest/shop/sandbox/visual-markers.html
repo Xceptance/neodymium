@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Markers & DOM Soup Challenge - Aura AI Sandbox</title>
+    <link rel="stylesheet" href="../../shared/style.css">
+    <link rel="stylesheet" href="../../shared/controls.css">
+    <style>
+        .sticky-bar {
+            position: sticky;
+            top: 0;
+            background: rgba(15, 23, 42, 0.9);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .dom-soup-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        /* Anonymous / hashed utility classes mimicking modern CSS-in-JS soup */
+        ._c9a2x {
+            background: rgba(30, 41, 59, 0.7);
+            border-radius: 12px;
+            padding: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            position: relative;
+        }
+        ._8f1q {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        ._btn_ghost {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 10px;
+            cursor: pointer;
+            color: #cbd5e1;
+            transition: all 0.2s ease;
+        }
+        ._btn_ghost:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+        ._status_banner {
+            margin-top: 2rem;
+            padding: 1.25rem;
+            background: rgba(15, 23, 42, 0.8);
+            border: 1px solid rgba(56, 189, 248, 0.3);
+            border-radius: 8px;
+            text-align: center;
+        }
+        ._status_banner span {
+            font-weight: 700;
+            color: #38bdf8;
+        }
+    </style>
+</head>
+<body class="aura-theme-dark">
+    <header class="sticky-bar">
+        <div class="aura-logo">Aura AI <span>Visual Markers</span></div>
+        <div style="display: flex; gap: 1rem;">
+            <button id="header-bell" class="_btn_ghost" title="Notifications">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+                    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
+                </svg>
+            </button>
+            <button id="header-cart" class="_btn_ghost" title="Cart">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="8" cy="21" r="1"></circle>
+                    <circle cx="19" cy="21" r="1"></circle>
+                    <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"></path>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <div class="aura-container">
+        <main class="aura-main">
+            <section class="aura-card" style="margin-top: 2rem;">
+                <h1>DOM Mess & Visual Markers Sandbox</h1>
+                <p class="aura-desc">
+                    This scenario emulates real-world production DOM soup: obfuscated dynamic classnames, 
+                    deeply nested anonymous div wrappers, and textless icon buttons. Visual markers bridge 
+                    screen recognition with DOM interaction through compact <code>[data-m]</code> indexing.
+                </p>
+
+                <div class="_status_banner">
+                    Action Result: <span id="action-feedback">No action taken yet</span>
+                </div>
+
+                <div class="dom-soup-container">
+                    <!-- Product Card 1: Deep anonymous wrapper hierarchy -->
+                    <div class="_c9a2x">
+                        <div class="_wrap_anon_1">
+                            <div class="_wrap_anon_2">
+                                <h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Cyberpunk Neon Hoodie</h3>
+                                <p style="color: #94a3b8; font-size: 0.9rem; margin: 0;">Weatherproof futuristic streetwear</p>
+                                <div class="_8f1q">
+                                    <!-- Favorite button: anonymous SVG with no text -->
+                                    <button class="_btn_ghost" data-action="favorite-1" onclick="updateFeedback('Favorite added for Hoodie')">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>
+                                        </svg>
+                                    </button>
+                                    <!-- Quick View button -->
+                                    <button class="_btn_ghost" data-action="quickview-1" onclick="updateFeedback('Quick View opened for Hoodie')">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                                            <circle cx="12" cy="12" r="3"></circle>
+                                        </svg>
+                                    </button>
+                                    <!-- Add to Cart button -->
+                                    <button class="_btn_ghost" data-action="addcart-1" onclick="updateFeedback('Hoodie added to Cart')">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M5 12h14"></path>
+                                            <path d="M12 5v14"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Product Card 2 -->
+                    <div class="_c9a2x">
+                        <div class="_wrap_anon_1">
+                            <div class="_wrap_anon_2">
+                                <h3 style="margin: 0 0 0.5rem 0; font-size: 1.1rem;">Quantum Noise Cancelling Buds</h3>
+                                <p style="color: #94a3b8; font-size: 0.9rem; margin: 0;">Ultra-low latency spatial audio</p>
+                                <div class="_8f1q">
+                                    <button class="_btn_ghost" data-action="favorite-2" onclick="updateFeedback('Favorite added for Buds')">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"></path>
+                                        </svg>
+                                    </button>
+                                    <button class="_btn_ghost" data-action="quickview-2" onclick="updateFeedback('Quick View opened for Buds')">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"></path>
+                                            <circle cx="12" cy="12" r="3"></circle>
+                                        </svg>
+                                    </button>
+                                    <button class="_btn_ghost" data-action="addcart-2" onclick="updateFeedback('Buds added to Cart')">
+                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M5 12h14"></path>
+                                            <path d="M12 5v14"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        function updateFeedback(msg) {
+            var fb = document.getElementById('action-feedback');
+            fb.innerText = msg;
+            fb.style.color = '#10b981';
+        }
+        document.getElementById('header-bell').onclick = function() {
+            updateFeedback('Notifications checked');
+        };
+        document.getElementById('header-cart').onclick = function() {
+            updateFeedback('Header cart opened');
+        };
+    </script>
+    <script src="../../shared/controls.js"></script>
+</body>
+</html>

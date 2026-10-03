@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
@@ -107,27 +108,25 @@ public class HtmlReportGeneratorTest
     @DisplayName("Verify live report file has valid script syntax after regeneration")
     public void testExistingReportFileScriptSyntax() throws Exception
     {
-        final File liveJson = new File("target/ai-results/VerlaGuestCheckout_Us_English_Normal_testCheckoutLive_normal_20260909-135452.json");
-        final File liveHtml = new File("target/ai-results/VerlaGuestCheckout_Us_English_Normal_testCheckoutLive_normal_20260909-135452.html");
-
-        if (liveJson.exists())
+        final File resultsDir = new File("target/ai-results");
+        if (resultsDir.exists() && resultsDir.isDirectory())
         {
-            final ObjectMapper mapper = new ObjectMapper();
-            final TestExecutionReport report = mapper.readValue(liveJson, TestExecutionReport.class);
-            final String regeneratedHtml = new HtmlReportGenerator().generate(report);
-            Files.writeString(liveHtml.toPath(), regeneratedHtml);
-
-            final Matcher matcher = SCRIPT_PATTERN.matcher(regeneratedHtml);
-            Assertions.assertTrue(matcher.find(), "Regenerated HTML must contain client script");
-            verifyScriptWithNodeIfAvailable(matcher.group(1));
-        }
-        else if (liveHtml.exists())
-        {
-            final String originalHtml = Files.readString(liveHtml.toPath());
-            final Matcher matcher = SCRIPT_PATTERN.matcher(originalHtml);
-            if (matcher.find())
+            final File[] jsonFiles = resultsDir.listFiles((dir, name) -> name.endsWith(".json") && !name.startsWith("index"));
+            if (jsonFiles != null)
             {
-                verifyScriptWithNodeIfAvailable(matcher.group(1));
+                final ObjectMapper mapper = new ObjectMapper();
+                for (final File liveJson : jsonFiles)
+                {
+                    final String htmlName = liveJson.getName().substring(0, liveJson.getName().length() - 5) + ".html";
+                    final File liveHtml = new File(resultsDir, htmlName);
+                    final TestExecutionReport report = mapper.readValue(liveJson, TestExecutionReport.class);
+                    final String regeneratedHtml = new HtmlReportGenerator().generate(report);
+                    Files.writeString(liveHtml.toPath(), regeneratedHtml);
+
+                    final Matcher matcher = SCRIPT_PATTERN.matcher(regeneratedHtml);
+                    Assertions.assertTrue(matcher.find(), "Regenerated HTML must contain client script for " + liveJson.getName());
+                    verifyScriptWithNodeIfAvailable(matcher.group(1));
+                }
             }
         }
     }
@@ -436,6 +435,136 @@ public class HtmlReportGeneratorTest
         // Step 3 fallback stats check
         Assertions.assertTrue(html.contains("🤖 1 LLM call(s), 5,000 in/ 250 out"),
             "Step 3 must display fallback standard token counts when direct LLM calls list is empty");
+    }
+
+    @Test
+    @DisplayName("Verify HTML report renders visual marker meta badge, step mode pills, and markers in step cards")
+    public void testVisualMarkersAndStepModeRendering() throws Exception
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("VisualMarkersSandboxTest");
+        report.setTestName("testMarkersLive");
+        report.setExecutionMode("LIVE");
+
+        final TestExecutionReport.ReportStepEntry step0 = new TestExecutionReport.ReportStepEntry(0, "Click marker element");
+        step0.setStatus("PASSED");
+        step0.setMarker(true);
+        final TestExecutionReport.ReportLlmCallEntry llmCall = new TestExecutionReport.ReportLlmCallEntry();
+        llmCall.setStepIndex(0);
+        llmCall.setCapability("VISION");
+        step0.addLlmCall(llmCall);
+        report.addStep(step0);
+
+        final TestExecutionReport.ReportStepEntry step1 = new TestExecutionReport.ReportStepEntry(1, "Replay element click");
+        step1.setStatus("PASSED");
+        final TestExecutionReport.ReportActionEntry action = new TestExecutionReport.ReportActionEntry(
+            "CLICK", "button#submit", null, "Click submit", "Replay", true);
+        step1.addAction(action);
+        report.addStep(step1);
+
+        final HtmlReportGenerator generator = new HtmlReportGenerator();
+        final String html = generator.generate(report);
+        Assertions.assertNotNull(html);
+
+        // Header meta badge check
+        Assertions.assertTrue(html.contains("<span class=\"meta-badge\">Mode: LIVE</span>"),
+            "Header must contain Mode badge");
+        Assertions.assertTrue(html.contains("<span class=\"meta-badge highlight marker-meta-badge\" title=\"Test executed with visual element markers\">🎯 Markers</span>"),
+            "Header must contain Marker meta badge when report used markers");
+
+        // Step 0 header badges (LLM and MARKER)
+        Assertions.assertTrue(html.contains("<span class=\"badge-flag pill-mode-llm\">🤖 LLM</span>"),
+            "Step 0 must display LLM mode pill");
+        Assertions.assertTrue(html.contains("<span class=\"badge-flag marker-badge\" title=\"Step executed with proactive visual element markers\">🎯 MARKER</span>"),
+            "Step 0 must display MARKER badge");
+
+        // Step 1 header badge (REPLAY)
+        Assertions.assertTrue(html.contains("<span class=\"badge-flag pill-mode-replay\">⚡ REPLAY</span>"),
+            "Step 1 must display REPLAY mode pill");
+
+        // Verify inspector modal element
+        Assertions.assertTrue(html.contains("id=\"inspModeBadge\""),
+            "Inspector header must include inspModeBadge element");
+
+        // Verify script syntax cleanly with Node.js VM
+        final Matcher matcher = SCRIPT_PATTERN.matcher(html);
+        Assertions.assertTrue(matcher.find(), "Report must contain client-side script");
+        verifyScriptWithNodeIfAvailable(matcher.group(1));
+    }
+
+    @Test
+    @DisplayName("Verify escapeJsonScriptPayload converts '<' to '\\u003c' while preserving valid JSON")
+    public void testEscapeJsonScriptPayloadWithHtmlAndScriptTags() throws Exception
+    {
+        final ObjectMapper mapper = new ObjectMapper();
+        final String rawJson = """
+            {"script":"<script src=\\"/shared/htmx.js\\"></script>","comment":"<!-- HTML comment -->","nested":"</script><script>alert(1)</script>"}
+            """.trim();
+
+        final String escaped = HtmlReportGenerator.escapeJsonScriptPayload(rawJson);
+        Assertions.assertFalse(escaped.contains("<"), "Escaped JSON must not contain literal '<'");
+        Assertions.assertTrue(escaped.contains("\\u003c"), "Escaped JSON must contain '\\u003c' unicode escape sequence");
+
+        // Verify JSON deserialization preserves original content
+        final JsonNode node = mapper.readTree(escaped);
+        Assertions.assertEquals("<script src=\"/shared/htmx.js\"></script>", node.get("script").asText());
+        Assertions.assertEquals("<!-- HTML comment -->", node.get("comment").asText());
+        Assertions.assertEquals("</script><script>alert(1)</script>", node.get("nested").asText());
+
+        // Verify null returns empty array string
+        Assertions.assertEquals("[]", HtmlReportGenerator.escapeJsonScriptPayload(null));
+    }
+
+    @Test
+    @DisplayName("Verify generated HTML report with embedded script tags in actions has exactly 2 script elements and valid JSON")
+    public void testReportWithEmbeddedScriptTagsInSteps() throws Exception
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("ScriptEscapeTest");
+        report.setTestName("testScriptEscapeInSteps");
+        report.setExecutionMode("LIVE");
+
+        final TestExecutionReport.ReportStepEntry step0 = new TestExecutionReport.ReportStepEntry(0, "Execute action with DOM script tag");
+        step0.setStatus("PASSED");
+        final TestExecutionReport.ReportActionEntry action = new TestExecutionReport.ReportActionEntry(
+            "CLICK", "<script src=\"/shared/htmx.js\"></script>", "</script><script>alert(1)</script>",
+            "Click element containing script", "LLM", true);
+        step0.addAction(action);
+        report.addStep(step0);
+
+        final HtmlReportGenerator generator = new HtmlReportGenerator();
+        final String html = generator.generate(report);
+        Assertions.assertNotNull(html);
+
+        // Count <script occurrences in HTML - must be exactly 2:
+        // 1. <script id="stepDataPayload" type="application/json">
+        // 2. <script> (client report script)
+        final Matcher allScriptsMatcher = Pattern.compile("<script\\b", Pattern.CASE_INSENSITIVE).matcher(html);
+        int scriptTagCount = 0;
+        while (allScriptsMatcher.find())
+        {
+            scriptTagCount++;
+        }
+        Assertions.assertEquals(2, scriptTagCount,
+            "HTML report must contain exactly 2 script elements; embedded script tags in step data must not break out");
+
+        // Extract JSON payload and verify it parses cleanly
+        final Pattern payloadPattern = Pattern.compile("<script id=\"stepDataPayload\" type=\"application/json\">([\\s\\S]*?)</script>");
+        final Matcher payloadMatcher = payloadPattern.matcher(html);
+        Assertions.assertTrue(payloadMatcher.find(), "HTML must contain stepDataPayload script element");
+
+        final ObjectMapper mapper = new ObjectMapper();
+        final JsonNode stepsNode = mapper.readTree(payloadMatcher.group(1));
+        Assertions.assertTrue(stepsNode.isArray(), "Payload must be a JSON array");
+        Assertions.assertEquals(1, stepsNode.size(), "Payload must contain exactly 1 step");
+        final JsonNode actionNode = stepsNode.get(0).get("actions").get(0);
+        Assertions.assertEquals("<script src=\"/shared/htmx.js\"></script>", actionNode.get("target").asText());
+        Assertions.assertEquals("</script><script>alert(1)</script>", actionNode.get("value").asText());
+
+        // Verify client script syntax with Node.js
+        final Matcher clientScriptMatcher = SCRIPT_PATTERN.matcher(html);
+        Assertions.assertTrue(clientScriptMatcher.find(), "Report must contain client-side script");
+        verifyScriptWithNodeIfAvailable(clientScriptMatcher.group(1));
     }
 
     private static void verifyScriptWithNodeIfAvailable(final String script)

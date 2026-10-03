@@ -132,4 +132,43 @@ public class MarkdownReportGeneratorTest
         Assertions.assertFalse(md.contains("| **Tags** |"),
             "Markdown Overview table must omit tags for compact overview layout");
     }
+
+    @Test
+    @DisplayName("Verify Markdown report displays visual marker tag next to mode and step mode on steps")
+    public void testVisualMarkerAndStepModeInMarkdown()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestClass("VisualMarkersTest");
+        report.setTestName("testMarkers");
+        report.setExecutionMode("LIVE");
+
+        final TestExecutionReport.ReportStepEntry step0 = new TestExecutionReport.ReportStepEntry(0, "Click marked element");
+        step0.setStatus("PASSED");
+        step0.setMarker(true);
+        final TestExecutionReport.ReportLlmCallEntry llmCall = new TestExecutionReport.ReportLlmCallEntry();
+        llmCall.setStepIndex(0);
+        llmCall.setCapability("VISION");
+        step0.addLlmCall(llmCall);
+        report.addStep(step0);
+
+        final TestExecutionReport.ReportStepEntry step1 = new TestExecutionReport.ReportStepEntry(1, "Replay element click");
+        step1.setStatus("PASSED");
+        final TestExecutionReport.ReportActionEntry action = new TestExecutionReport.ReportActionEntry(
+            "CLICK", "button#submit", null, "Click submit", "Replay", true);
+        step1.addAction(action);
+        report.addStep(step1);
+
+        final MarkdownReportGenerator generator = new MarkdownReportGenerator();
+        final String md = generator.generate(report);
+
+        Assertions.assertNotNull(md);
+        Assertions.assertTrue(md.contains("| **Execution Mode** | `LIVE` 🎯 `MARKER` |"),
+            "Markdown execution mode row must display marker badge when report has visual marker steps");
+        Assertions.assertTrue(md.contains("- **Step Mode:** `LLM`"),
+            "Step 0 must display LLM step mode");
+        Assertions.assertTrue(md.contains("- **Visual Marker Step:** `🎯 true`"),
+            "Step 0 must display visual marker step flag");
+        Assertions.assertTrue(md.contains("- **Step Mode:** `REPLAY`"),
+            "Step 1 must display REPLAY step mode");
+    }
 }

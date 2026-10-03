@@ -195,14 +195,15 @@ public final class PreliminaryReportListener implements ExecutionListener
             }
 
             final PlaybookStep pbStep = stepStarted.getStep();
-            final String rawInstruction = pbStep != null ? pbStep.getInstruction() : null;
-            String resolvedInstruction = rawInstruction;
+            final String rawInstruction = pbStep != null ? pbStep.getRawInstruction() : null;
+            final String stepInstruction = pbStep != null ? pbStep.getInstruction() : rawInstruction;
+            String resolvedInstruction = stepInstruction;
 
-            if (activeCtx != null && activeCtx.getSessionData() != null && rawInstruction != null)
+            if (activeCtx != null && activeCtx.getSessionData() != null && stepInstruction != null)
             {
                 try
                 {
-                    resolvedInstruction = activeCtx.getSessionData().resolveAvailableVariables(rawInstruction);
+                    resolvedInstruction = activeCtx.getSessionData().resolveAvailableVariables(stepInstruction);
                 }
                 catch (final Exception ignored)
                 {
@@ -224,6 +225,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                 stepEntry.setContinueOnError(pbStep.isContinueOnError());
                 stepEntry.setNoHealing(pbStep.isNoHealing());
                 stepEntry.setVisual(pbStep.isVisualOrLayoutStep());
+                stepEntry.setMarker(pbStep.isMarker());
 
                 if (pbStep.getReasoning() != null)
                 {
@@ -239,6 +241,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                 final boolean isVisualInstruction = PlaybookStep.VISUAL_PATTERN.matcher(rawInstruction).find()
                     || PlaybookStep.LAYOUT_PATTERN.matcher(rawInstruction).find();
                 stepEntry.setVisual(isVisualInstruction);
+                final boolean isMarkerInstruction = PlaybookStep.MARKER_PATTERN.matcher(rawInstruction).find();
+                stepEntry.setMarker(isMarkerInstruction);
             }
 
             if (pbStep != null && pbStep.getParent() != null)
@@ -287,6 +291,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     parentEntry.setContinueOnError(rootPb.isContinueOnError());
                     parentEntry.setNoHealing(rootPb.isNoHealing());
                     parentEntry.setVisual(rootPb.isVisualOrLayoutStep());
+                    parentEntry.setMarker(rootPb.isMarker());
                     this.report.addStep(parentEntry);
                 }
 
@@ -356,6 +361,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     childEntry.setContinueOnError(childStep.isContinueOnError());
                     childEntry.setNoHealing(childStep.isNoHealing());
                     childEntry.setVisual(childStep.isVisualOrLayoutStep());
+                    childEntry.setMarker(childStep.isMarker());
                     stepEntry.addSubStep(childEntry);
                 }
             }
@@ -552,6 +558,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                             childEntry.setContinueOnError(childStep.isContinueOnError());
                             childEntry.setNoHealing(childStep.isNoHealing());
                             childEntry.setVisual(childStep.isVisualOrLayoutStep());
+                            childEntry.setMarker(childStep.isMarker());
                             targetStep.addSubStep(childEntry);
                         }
                     }
@@ -857,10 +864,14 @@ public final class PreliminaryReportListener implements ExecutionListener
                 }
 
                 final boolean isVisual = this.currentStep != null && this.currentStep.isVisual();
+                final boolean isMarker = (stateCaptured.getState() != null
+                    && stateCaptured.getState().getTextContent() != null
+                    && stateCaptured.getState().getTextContent().startsWith("Visual Markers"))
+                    || (this.currentStep != null && this.currentStep.isMarker());
                 final String stepLabel = (stepIdx >= 0)
                     ? (subStepIdx >= 0 ? "Step #" + (stepIdx + 1) + "." + (subStepIdx + 1) : "Step #" + (stepIdx + 1))
                     : "Step";
-                final String label = stepLabel + (isVisual ? " (Visual Verification)" : " Capture");
+                final String label = stepLabel + (isMarker ? " (Visual Markers Overlay)" : (isVisual ? " (Visual Verification)" : " Capture"));
 
                 for (final SutAttachment attachment : stateCaptured.getState().getAttachments())
                 {
