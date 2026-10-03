@@ -2264,3 +2264,139 @@ body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none 
     max-height: calc(100vh - 64px);
     overflow-y: auto;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   LLM COMMUNICATIONS & CALL CARDS (Interactive Mode View)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.llm-call-card {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.15);
+    overflow: hidden;
+    margin-top: 6px;
+}
+
+.llm-call-header {
+    background: rgba(255, 255, 255, 0.04);
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    user-select: none;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.llm-call-card:not(.expanded) .llm-call-body {
+    display: none !important;
+}
+
+.llm-call-card .llm-subsection-chevron {
+    transition: transform 0.2s ease;
+}
+
+.llm-call-card.expanded > .llm-call-header .llm-subsection-chevron {
+    transform: rotate(90deg);
+}
+
+.llm-cap-badge {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    letter-spacing: 0.5px;
+}
+
+.llm-cap-badge.text {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+    border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.llm-cap-badge.judge {
+    background: rgba(234, 179, 8, 0.15);
+    color: #fde047;
+    border: 1px solid rgba(234, 179, 8, 0.3);
+}
+
+.llm-cap-badge.verification {
+    background: rgba(34, 197, 94, 0.15);
+    color: #4ade80;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.llm-cap-badge.rca {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.llm-cap-badge.linter {
+    background: rgba(59, 130, 246, 0.15);
+    color: #60a5fa;
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.llm-cap-badge.vision {
+    background: rgba(236, 72, 153, 0.15);
+    color: #f472b6;
+    border: 1px solid rgba(236, 72, 153, 0.3);
+}
+
+.llm-subsection-card {
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.llm-subsection-header {
+    padding: 6px 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+    user-select: none;
+    font-size: 12px;
+}
+
+.llm-subsection-card:not(.expanded) .llm-subsection-body {
+    display: none !important;
+}
+
+.llm-subsection-card.expanded .llm-subsection-header .llm-subsection-chevron {
+    transform: rotate(90deg);
+}
+
+.llm-subsection-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 600;
+    color: var(--text-main);
+}
+
+.llm-subsection-tag {
+    font-size: 10px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.llm-subsection-body {
+    padding: 10px;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    line-height: 1.5;
+    color: var(--text-main);
+    background: rgba(0, 0, 0, 0.3);
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 350px;
+    overflow-y: auto;
+    border-top: 1px solid var(--border-color);
+}
+

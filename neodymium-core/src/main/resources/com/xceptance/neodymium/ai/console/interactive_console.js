@@ -694,7 +694,7 @@ function renderBlock(blockName, steps) {
 
     // Enhanced signature to include selection, breakpoints, and other UI state
     const sig = JSON.stringify({
-        steps: steps.map(s => `${s.index}|${s.status}|${s.instruction}|${s.source || ''}|${s.reasoning ? s.reasoning.length : 0}|${s.actions ? s.actions.length : 0}|${s.errorMessage ? s.errorMessage.length : 0}`),
+        steps: steps.map(s => `${s.index}|${s.status}|${s.instruction}|${s.source || ''}|${s.reasoning ? s.reasoning.length : 0}|${s.actions ? s.actions.length : 0}|${s.errorMessage ? s.errorMessage.length : 0}|${s.llmCalls ? s.llmCalls.length : 0}`),
         selected: selectedStepIndexForDetails,
         breakpoints: Array.from(activeBreakpoints),
         paused: currentPauseId !== null,
@@ -819,11 +819,12 @@ function buildStepDetailsHtml(step, isActiveStep) {
         })()
         : '';
 
-    const hasSecondary = timingRow || domBlock || screenshotBlock || breadcrumbBlock;
+    const llmCommsHtml = buildLlmCallsHtml(step);
+    const hasSecondary = timingRow || domBlock || screenshotBlock || breadcrumbBlock || llmCommsHtml;
 
     if (isActiveStep) {
         // Active step: primary (actions) always open;
-        // secondary (timing/DOM/screenshot/breadcrumb) behind a More details toggle.
+        // secondary (timing/DOM/screenshot/breadcrumb/LLM) behind a More details toggle.
         const secondaryHtml = hasSecondary ? `
                     <button class="step-more-details-btn" onclick="toggleStepSecondary(event, this)" aria-expanded="false">
                         <span class="material-symbols-outlined" style="font-size:14px;transition:transform 0.2s;">chevron_right</span>
@@ -834,6 +835,7 @@ function buildStepDetailsHtml(step, isActiveStep) {
                         ${timingRow}
                         ${domBlock}
                         ${screenshotBlock}
+                        ${llmCommsHtml}
                     </div>` : '';
 
         return `<div class="step-details-wrapper" style="display:flex;flex-direction:column;gap:10px;">
@@ -862,8 +864,224 @@ function buildStepDetailsHtml(step, isActiveStep) {
                     ${substepWarning}
                     <div style="display:flex;gap:12px;flex-wrap:wrap;">${domBlock}</div>
                     ${screenshotBlock}
+                    ${llmCommsHtml}
                 </div>
             </div>`;
+}
+
+function toggleLlmCallCard(headerEl) {
+    const card = headerEl.closest('.llm-call-card');
+    if (card) {
+        card.classList.toggle('expanded');
+    }
+}
+
+function toggleLlmSubsection(headerEl) {
+    const card = headerEl.closest('.llm-subsection-card');
+    if (card) {
+        card.classList.toggle('expanded');
+    }
+}
+
+window.applyState = applyState;
+window.toggleLlmCallCard = toggleLlmCallCard;
+window.toggleLlmSubsection = toggleLlmSubsection;
+
+function buildLlmCallsHtml(step) {
+    let calls = Array.isArray(step.llmCalls) ? step.llmCalls : [];
+    if (calls.length === 0 && currentState && Array.isArray(currentState.llmCalls)) {
+        calls = currentState.llmCalls.filter(c => c && (c.stepIndex === step.index - 1 || c.stepIndex === step.index));
+    }
+
+    if (calls.length > 0) {
+        const callsHtml = calls.map((call, idx) => {
+            const cap = (call.capability || 'TEXT').toUpperCase();
+            let capClass = 'text';
+            let capLabel = 'LLM Agent';
+            if (cap === 'VERIFICATION') {
+                capClass = 'verification';
+                capLabel = 'Verification';
+            } else if (cap === 'JUDGE' || cap === 'JUDGE_DISCUSSION') {
+                capClass = 'judge';
+                capLabel = 'Quality Judge';
+            } else if (cap === 'VISUAL_RCA') {
+                capClass = 'rca';
+                capLabel = 'Visual RCA';
+            } else if (cap === 'LINTER' || cap === 'POST_FLIGHT_LINTER') {
+                capClass = 'linter';
+                capLabel = 'Linter';
+            } else if (cap === 'VISION') {
+                capClass = 'vision';
+                capLabel = 'Vision 📸';
+            }
+            const capBadge = `<span class="llm-cap-badge ${capClass}">${capLabel}</span>`;
+
+            const modelStr = escHtml(call.modelName || 'default');
+            const durStr = call.durationMs ? `${call.durationMs.toLocaleString()}ms` : '';
+            const inTok = call.inputTokens || 0;
+            const outTok = call.outputTokens || 0;
+            const cachedTok = call.cachedTokens || 0;
+            const totalTok = call.totalTokens || (inTok + outTok);
+            const costStr = (call.estimatedCostUsd !== undefined && call.estimatedCostUsd !== null && call.estimatedCostUsd > 0)
+                ? `$${call.estimatedCostUsd.toFixed(4)}`
+                : '';
+
+            const metaParts = [];
+            if (durStr) metaParts.push(durStr);
+            if (totalTok > 0) metaParts.push(`${totalTok.toLocaleString()} tokens (${inTok} in / ${outTok} out${cachedTok > 0 ? `, cached: ${cachedTok}` : ''})`);
+            if (costStr) metaParts.push(costStr);
+            const metaStr = metaParts.join(' • ');
+
+            const sysPrompt = call.systemPrompt;
+            const userPrompt = call.userPrompt;
+            const respContent = call.responseContent || call.rawResponse;
+            const tools = Array.isArray(call.availableTools) ? call.availableTools : [];
+
+            const sysBlock = sysPrompt ? `
+                <div class="llm-subsection-card">
+                    <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                        <div class="llm-subsection-title">
+                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                            <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-primary);">tune</span>
+                            <span>System Prompt</span>
+                        </div>
+                        <span class="llm-subsection-tag">Instruction &amp; Persona</span>
+                    </div>
+                    <div class="llm-subsection-body">${escHtml(sysPrompt)}</div>
+                </div>` : '';
+
+            const toolsBlock = tools.length > 0 ? `
+                <div class="llm-subsection-card">
+                    <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                        <div class="llm-subsection-title">
+                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                            <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-warning);">build</span>
+                            <span>Available Native Tools (${tools.length})</span>
+                        </div>
+                        <span class="llm-subsection-tag">Tool Definitions</span>
+                    </div>
+                    <div class="llm-subsection-body">${escHtml(tools.join('\n'))}</div>
+                </div>` : '';
+
+            const userBlock = userPrompt ? `
+                <div class="llm-subsection-card">
+                    <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                        <div class="llm-subsection-title">
+                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                            <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-warning);">code</span>
+                            <span>User Prompt &amp; DOM Context (Plain Text)</span>
+                        </div>
+                        <span class="llm-subsection-tag">User Query &amp; Page Snapshot</span>
+                    </div>
+                    <div class="llm-subsection-body">${escHtml(userPrompt)}</div>
+                </div>` : '';
+
+            const respBlock = respContent ? `
+                <div class="llm-subsection-card">
+                    <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                        <div class="llm-subsection-title">
+                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                            <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-success);">terminal</span>
+                            <span>Raw Model Response</span>
+                        </div>
+                        <span class="llm-subsection-tag">AI Completion Payload</span>
+                    </div>
+                    <div class="llm-subsection-body">${escHtml(respContent)}</div>
+                </div>` : '';
+
+            return `
+                <div class="llm-call-card expanded" style="margin-top:6px;">
+                    <div class="llm-call-header" onclick="event.stopPropagation(); toggleLlmCallCard(this)">
+                        <div style="display:flex;align-items:center;gap:6px;font-weight:600;font-size:12px;color:var(--text-main);">
+                            <span class="material-symbols-outlined llm-subsection-chevron" style="font-size:0.9rem;">chevron_right</span>
+                            <span class="material-symbols-outlined" style="font-size:1rem;color:var(--accent-purple);">smart_toy</span>
+                            <span>Call #${idx + 1}</span>
+                            ${capBadge}
+                            <code style="font-size:11px;color:var(--text-secondary);background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;">${modelStr}</code>
+                        </div>
+                        <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);">${metaStr}</span>
+                    </div>
+                    <div class="llm-call-body" style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+                        ${sysBlock}
+                        ${toolsBlock}
+                        ${userBlock}
+                        ${respBlock}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="llm-communications-section" style="margin-top:10px;">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+                    <span class="material-symbols-outlined" style="color:var(--accent-purple);font-size:16px;">forum</span>
+                    <span>LLM Communications (${calls.length} call${calls.length > 1 ? 's' : ''})</span>
+                </div>
+                ${callsHtml}
+            </div>
+        `;
+    }
+
+    // Fallback: direct properties on step object if prompt / response exist
+    const promptSnippet = step.userPrompt || step.prompt || step.llmPrompt;
+    const responseSnippet = step.responseContent || step.rawResponse || step.llmResponse;
+    const systemSnippet = step.systemPrompt;
+
+    if (promptSnippet || responseSnippet || systemSnippet) {
+        const sysBlock = systemSnippet ? `
+            <div class="llm-subsection-card">
+                <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                    <div class="llm-subsection-title">
+                        <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                        <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-primary);">tune</span>
+                        <span>System Prompt</span>
+                    </div>
+                </div>
+                <div class="llm-subsection-body">${escHtml(systemSnippet)}</div>
+            </div>` : '';
+
+        const userBlock = promptSnippet ? `
+            <div class="llm-subsection-card">
+                <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                    <div class="llm-subsection-title">
+                        <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                        <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-warning);">code</span>
+                        <span>User Prompt &amp; DOM Context (Plain Text)</span>
+                    </div>
+                </div>
+                <div class="llm-subsection-body">${escHtml(promptSnippet)}</div>
+            </div>` : '';
+
+        const respBlock = responseSnippet ? `
+            <div class="llm-subsection-card">
+                <div class="llm-subsection-header" onclick="event.stopPropagation(); toggleLlmSubsection(this)">
+                    <div class="llm-subsection-title">
+                        <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
+                        <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-success);">terminal</span>
+                        <span>Raw Model Response</span>
+                    </div>
+                </div>
+                <div class="llm-subsection-body">${escHtml(responseSnippet)}</div>
+            </div>` : '';
+
+        return `
+            <div class="llm-communications-section" style="margin-top:10px;">
+                <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+                    <span class="material-symbols-outlined" style="color:var(--accent-purple);font-size:16px;">forum</span>
+                    <span>LLM Prompt &amp; Response</span>
+                </div>
+                <div class="llm-call-card expanded">
+                    <div class="llm-call-body" style="padding:8px;display:flex;flex-direction:column;gap:6px;">
+                        ${sysBlock}
+                        ${userBlock}
+                        ${respBlock}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    return '';
 }
 
 function getUsedVariableKeys(state) {
@@ -1092,7 +1310,9 @@ function renderStepCard(step) {
         || step.screenshot
         || step.thinkingTimeMs
         || step.simplifiedDom
-        || step.reasoning;
+        || step.reasoning
+        || (Array.isArray(step.llmCalls) && step.llmCalls.length > 0)
+        || step.userPrompt || step.prompt || step.llmPrompt || step.responseContent || step.rawResponse;
     const isPendingNoDetails = (status === 'pending') && !hasDetails;
     const noDetailsPendingClass = isPendingNoDetails ? ' no-details-pending' : '';
 

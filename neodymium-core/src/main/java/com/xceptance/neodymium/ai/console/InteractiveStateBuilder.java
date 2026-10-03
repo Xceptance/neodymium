@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.ai.console;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -744,6 +745,22 @@ public final class InteractiveStateBuilder
         else
         {
             obj.add("actions", actionsArray);
+        }
+
+        if (!obj.has("llmCalls") && report != null && report.getLlmCalls() != null)
+        {
+            final List<ReportLlmCallEntry> matchingCalls = new ArrayList<>();
+            for (final ReportLlmCallEntry call : report.getLlmCalls())
+            {
+                if (call != null && call.getStepIndex() == stepIndex)
+                {
+                    matchingCalls.add(call);
+                }
+            }
+            if (!matchingCalls.isEmpty())
+            {
+                obj.add("llmCalls", serializeLlmCalls(matchingCalls));
+            }
         }
 
         if (step.getReasoning() != null && !step.getReasoning().isBlank())

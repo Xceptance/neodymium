@@ -20,19 +20,31 @@ package org.neodymium.ai.pipeline.steps;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.google.gson.JsonObject;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import java.lang.reflect.Field;
+import java.util.HashMap;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.ChatMessage;
 import org.neodymium.ai.client.ChatMessage.Role;
+import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
+import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.event.InteractiveConsoleListener;
+import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.BrowserSutState;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.tool.guard.InterceptionVerdict;
 import org.neodymium.ai.tool.guard.ToolInterceptor;
 import org.neodymium.ai.pipeline.AgentThrashingException;
@@ -3566,6 +3578,120 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals(2, executor.getCapturedContextLevels().size(),
                 "captureState should have been called twice because scroll modifies viewport visibility.");
         Assertions.assertEquals(ContextLevel.VISUAL, executor.getCapturedContextLevels().get(1));
+    }
+
+    @Test
+    public void testAgentToolLoopPausesWithProposedActionsAndReasoningInInteractiveMode() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("open_url", "Opens URL", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Opened URL");
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Done");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Open https://www.wikipedia.org");
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY, sessionData, new LlmRegistry(), eventBus, (TargetExecutor) null);
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-123");
+
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(engine, session, true);
+        eventBus.registerListener(listener);
+
+        final Thread submitThread = new Thread(() -> {
+            try
+            {
+                final Field pauseField = InteractiveConsoleEngine.class.getDeclaredField("currentPauseId");
+                pauseField.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                final AtomicReference<String> currentPause =
+                    (AtomicReference<String>) pauseField.get(engine);
+
+                int attempts = 0;
+                while (currentPause.get() == null && attempts < 100)
+                {
+                    Thread.sleep(50);
+                    attempts++;
+                }
+
+                final JsonObject actionObj = new JsonObject();
+                actionObj.addProperty("action", "RUN");
+
+                final Field pendingField = InteractiveConsoleEngine.class.getDeclaredField("pendingAction");
+                pendingField.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                final AtomicReference<JsonObject> pending =
+                    (AtomicReference<JsonObject>) pendingField.get(engine);
+                pending.set(actionObj);
+
+                final Field lockField = InteractiveConsoleEngine.class.getDeclaredField("lock");
+                lockField.setAccessible(true);
+                final Object lock = lockField.get(engine);
+                synchronized (lock)
+                {
+                    lock.notifyAll();
+                }
+            }
+            catch (final Exception e)
+            {
+                e.printStackTrace();
+            }
+        });
+        submitThread.setDaemon(true);
+        submitThread.start();
+
+        this.context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Open https://www.wikipedia.org");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Navigating to Wikipedia homepage", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-1", "open_url", MAPPER.createObjectNode().put("url", "https://www.wikipedia.org"))));
+            }
+            return new LlmResponse("Step completed", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("call-2", "complete_step", MAPPER.createObjectNode().put("summary", "Page opened"))));
+        };
+
+        final AgentToolLoopStep loopStep = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 10);
+        loopStep.execute(this.context);
+
+        Assertions.assertEquals("Navigating to Wikipedia homepage", step.getReasoning());
+        Assertions.assertFalse(step.getActions().isEmpty(), "Step should contain populated proposed actions when executed");
+        final Action firstAction = step.getActions().get(0);
+        Assertions.assertEquals("OPEN_URL", firstAction.getType());
     }
 }
 

@@ -69,6 +69,7 @@ import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.common.browser.BrowserData;
 import org.neodymium.common.browser.BrowserMethodData;
+import org.neodymium.common.recording.FilmTestExecution;
 import org.neodymium.common.testdata.DataFile;
 import org.neodymium.junit5.browser.BrowserExecutionCallback;
 import org.neodymium.util.Neodymium;
@@ -1018,14 +1019,20 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 final InteractiveConsoleListener interactiveListener = new InteractiveConsoleListener(consoleEngine, this.session, isInteractive);
                 eventBus.registerListener(interactiveListener);
             }
-            
-            final PlaybookParser parser = new YamlPlaybookParser();
-            final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
-            this.resourceManager = manager;
-            
+
             final Class<?> testClass = context.getRequiredTestClass();
             final Method method = context.getRequiredTestMethod();
             final String browserProfile = Neodymium.getBrowserProfileName();
+            final PlaybookParser parser = new YamlPlaybookParser();
+            final PlaybookResourceManager manager = new HybridResourceManager(new ClasspathResourceManager());
+            this.resourceManager = manager;
+
+            if (FilmTestExecution.getContextVideo().enableFilming())
+            {
+                final String recordingID = (testClass != null ? testClass.getSimpleName() + "_" : "") + java.util.UUID.randomUUID().toString();
+                executionContext.getTransientData().put("recordingID", recordingID);
+                FilmTestExecution.startVideoRecording(recordingID);
+            }
 
             if (testClass != null)
             {
@@ -1575,6 +1582,23 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 if (this.session != null)
                 {
                     final ExecutionContext execCtx = this.session.getExecutionContext();
+                    if (execCtx != null)
+                    {
+                        final String recordingID = (String) execCtx.getTransientData().get("recordingID");
+                        if (recordingID != null)
+                        {
+                            final boolean testFailed = context.getExecutionException().isPresent()
+                                || execCtx.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                            try
+                            {
+                                FilmTestExecution.finishVideoFilming(recordingID, testFailed);
+                            }
+                            catch (final Exception e)
+                            {
+                                org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).warn("Failed to finish video recording: {}", e.getMessage());
+                            }
+                        }
+                    }
                     if (execCtx != null && execCtx.getTransientData().get("interactiveConsoleServer") instanceof InteractiveConsoleServer consoleServer)
                     {
                         try

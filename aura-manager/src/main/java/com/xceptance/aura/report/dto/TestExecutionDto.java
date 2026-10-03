@@ -76,10 +76,11 @@ public final class TestExecutionDto
     private final String visualRcaExplanation;
     private final JsonNode llmResponsibility;
     private final JsonNode metrics;
+    private final String videoUrl;
 
     public TestExecutionDto()
     {
-        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null);
+        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "");
     }
 
     @JsonCreator
@@ -126,7 +127,8 @@ public final class TestExecutionDto
         @JsonProperty("failureStackTrace") @JsonAlias({"failureStacktrace", "stackTrace", "stacktrace", "trace"}) final String failureStackTrace,
         @JsonProperty("visualRcaExplanation") final String visualRcaExplanation,
         @JsonProperty("llmResponsibility") final JsonNode llmResponsibility,
-        @JsonProperty("metrics") final JsonNode metrics)
+        @JsonProperty("metrics") final JsonNode metrics,
+        @JsonProperty("videoUrl") @JsonAlias({"videoPath", "video"}) final String videoUrl)
     {
         final String effectiveTestClass;
         if (testClass != null && !testClass.trim().isEmpty())
@@ -277,6 +279,7 @@ public final class TestExecutionDto
         this.visualRcaExplanation = visualRcaExplanation != null ? visualRcaExplanation : "";
         this.llmResponsibility = llmResponsibility;
         this.metrics = metrics;
+        this.videoUrl = videoUrl != null ? videoUrl : "";
     }
 
     public TestExecutionDto(
@@ -318,7 +321,7 @@ public final class TestExecutionDto
         final Double llmCost,
         final String failureSnippet)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, "", "", "", null, null);
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, "", "", "", null, null, "");
     }
 
     public TestExecutionDto(
@@ -363,7 +366,7 @@ public final class TestExecutionDto
         final String failureStackTrace,
         final String visualRcaExplanation)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, null, null);
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, null, null, "");
     }
 
     public TestExecutionDto(
@@ -389,7 +392,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null);
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "");
     }
 
     public TestExecutionDto(
@@ -414,7 +417,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null);
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "");
     }
 
     public TestExecutionDto(
@@ -428,7 +431,7 @@ public final class TestExecutionDto
         final String failure,
         final List<String> bugs)
     {
-        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null);
+        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "");
     }
 
     public String getId()
@@ -828,9 +831,14 @@ public final class TestExecutionDto
         return false;
     }
 
+    public String getVideoUrl()
+    {
+        return videoUrl != null ? videoUrl : "";
+    }
+
     public String getVideoPath()
     {
-        return "";
+        return videoUrl != null ? videoUrl : "";
     }
 
     public String getLogPath()

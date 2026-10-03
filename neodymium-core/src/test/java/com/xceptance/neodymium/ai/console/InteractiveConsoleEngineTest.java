@@ -362,4 +362,58 @@ public class InteractiveConsoleEngineTest
         assertTrue(alphaLog.exists(), "AlphaTestClass should start execution indexing at 1 (console-execution-1.json)");
         assertTrue(betaLog.exists(), "BetaTestClass should independently start execution indexing at 1 (console-execution-1.json)");
     }
+
+    @Test
+    public void testAttachVideoToLatestExecutionLog(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-attach-video");
+
+        engine.pushState("{\"testName\":\"VideoTestClass · ds1\",\"testFile\":\"com.xceptance.VideoTestClass#execute\",\"status\":\"passed\",\"steps\":[]}");
+
+        final File dummyVideo = new File(tempResultsDir, "recording-dummy.mp4");
+        Files.writeString(dummyVideo.toPath(), "dummy-mp4-data");
+
+        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(dummyVideo, "VideoTestClass");
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File targetVideo = new File(customDir.toFile(), runFolder + "/VideoTestClass/video-1.mp4");
+        final File updatedJson = new File(customDir.toFile(), runFolder + "/VideoTestClass/console-execution-1.json");
+
+        assertTrue(targetVideo.exists(), "Video file should be copied to run storage folder as video-1.mp4");
+        assertTrue(updatedJson.exists(), "console-execution-1.json should exist");
+        final String jsonContent = Files.readString(updatedJson.toPath());
+        assertTrue(jsonContent.contains("\"videoUrl\":\"video-1.mp4\""), "JSON should contain videoUrl attribute");
+    }
+
+    @Test
+    public void testAttachVideoToCustomNamedExecutionLog(@TempDir final Path customDir) throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        System.setProperty("neodymium.ai.consoleExecutionLogs.directory", customDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        final String runFolder = InteractiveConsoleEngine.getRunFolder();
+        final File targetTestDir = new File(customDir.toFile(), runFolder + "/Aura_my_test_yaml_Test");
+        targetTestDir.mkdirs();
+
+        final File customJson = new File(targetTestDir, "Aura_my_test_yaml_Test#executeYamlTest#en#Chrome_1920x1080.json");
+        Files.writeString(customJson.toPath(), "{\"testName\":\"Aura_my_test_yaml_Test :: executeYamlTest\",\"status\":\"failed\"}");
+
+        final File dummyVideo = new File(tempResultsDir, "custom-recording-dummy.mp4");
+        Files.writeString(dummyVideo.toPath(), "custom-mp4-data");
+
+        InteractiveConsoleEngine.attachVideoToLatestExecutionLog(dummyVideo, "Aura_my_test_yaml_Test :: executeYamlTest");
+
+        final File targetVideo = new File(targetTestDir, "video-1.mp4");
+        assertTrue(targetVideo.exists(), "Video file should be copied to run storage folder as video-1.mp4");
+        assertTrue(customJson.exists(), "Custom execution log JSON should exist");
+
+        final String updatedJsonContent = Files.readString(customJson.toPath());
+        assertTrue(updatedJsonContent.contains("\"videoUrl\":\"video-1.mp4\""), "Custom execution JSON should contain videoUrl attribute");
+        assertTrue(updatedJsonContent.contains("\"videoPath\":\"video-1.mp4\""), "Custom execution JSON should contain videoPath attribute");
+    }
 }

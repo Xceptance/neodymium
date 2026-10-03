@@ -66,8 +66,12 @@ public abstract class AbstractRecordingDeletionTest extends NeodymiumTest
     @AfterClass
     public static void assertRecordingFileWasDeleted()
     {
-        File recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + uuid + "."
+        final String runFolder = com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.getRunFolder();
+        File recordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + runFolder + "/" + uuid.get(Thread.currentThread()) + "."
             + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
         Assert.assertFalse("the recording file wasn't deleted", recordingFile.exists());
+        File baseRecordingFile = new File(FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).tempFolderToStoreRecording() + uuid.get(Thread.currentThread()) + "."
+            + FilmTestExecution.getContext(configurationsClass.get(Thread.currentThread())).format());
+        Assert.assertFalse("the base recording file wasn't deleted", baseRecordingFile.exists());
     }
 }

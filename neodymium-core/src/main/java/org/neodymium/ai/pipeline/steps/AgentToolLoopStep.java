@@ -34,10 +34,13 @@ import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.event.ExecutionListener;
+import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.llm.LlmRequestSentEvent;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
+import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.BrowserSutState;
@@ -645,6 +648,105 @@ public final class AgentToolLoopStep implements PipelineStep
                             turn,
                             invalidResponseCount + 1
                     );
+                }
+            }
+
+            final List<ToolCall> sanitizedCalls = new ArrayList<>();
+            final List<Action> proposedActions = new ArrayList<>();
+            if (step != null)
+            {
+                final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                final SessionData sessionData = context.getSessionData();
+                for (final ToolCall call : proposedCalls)
+                {
+                    if (!"complete_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
+                    {
+                        final ToolCall sanitizedCall = sanitizeToolCall(call, sessionData, sanitizer);
+                        sanitizedCalls.add(sanitizedCall);
+                        Action mappedAction = mapToolCallToAction(call);
+                        if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                        {
+                            mappedAction = mappedAction.withReasoning(thought.trim());
+                        }
+                        final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                        proposedActions.add(canonicalAction);
+                    }
+                }
+                if (thought != null && !thought.isBlank() && (!proposedActions.isEmpty() || step.getReasoning() == null || step.getReasoning().isBlank()))
+                {
+                    step.setReasoning(thought.trim());
+                }
+                if (!proposedActions.isEmpty() || !sanitizedCalls.isEmpty())
+                {
+                    step.setToolCalls(sanitizedCalls);
+                    step.setActions(proposedActions);
+                }
+            }
+
+            InteractiveConsoleListener interactiveListener = null;
+            final AiSession activeSession = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+            if (activeSession != null && activeSession.getEventBus() != null)
+            {
+                for (final ExecutionListener listener : activeSession.getEventBus().getListeners())
+                {
+                    if (listener instanceof InteractiveConsoleListener icl && icl.isInteractive())
+                    {
+                        interactiveListener = icl;
+                        break;
+                    }
+                }
+            }
+
+            final boolean hasProposedActions = !proposedActions.isEmpty() || !sanitizedCalls.isEmpty();
+            if (hasProposedActions && interactiveListener != null && !interactiveListener.isAutoRun())
+            {
+                final String userAction = interactiveListener.pauseBeforeActionExecution(context, step);
+                if ("SKIP".equalsIgnoreCase(userAction) || (step != null && step.getStatus() == PlaybookStepStatus.SKIPPED))
+                {
+                    LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", instruction);
+                    if (activeSession != null && activeSession.getEventBus() != null && step != null)
+                    {
+                        activeSession.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SKIPPED));
+                    }
+                    finishLoop(context, executedCalls, "Skipped by user");
+                    return;
+                }
+                if ("ABORT".equalsIgnoreCase(userAction))
+                {
+                    throw new ConclusiveFailureException("Step execution aborted by user in interactive console.");
+                }
+                if ("EDIT".equalsIgnoreCase(userAction) || "UPDATE_STEP".equalsIgnoreCase(userAction) || "SAVE_STEP".equalsIgnoreCase(userAction))
+                {
+                    LOGGER.info("   ✏️ Prompt updated during interactive pause — re-evaluating instruction and re-querying LLM");
+                    final String updatedRaw = step != null ? step.getInstruction() : null;
+                    final String updatedInstruction = (context.getSessionData() != null && updatedRaw != null)
+                        ? context.getSessionData().resolveVariables(updatedRaw)
+                        : updatedRaw;
+                    final String preparedInstruction = ExecuteActionsStep.prepareInstruction(updatedInstruction);
+                    context.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", updatedInstruction);
+                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
+
+                    if (step != null)
+                    {
+                        try
+                        {
+                            step.getActions().clear();
+                        }
+                        catch (final UnsupportedOperationException e)
+                        {
+                            step.setActions(new ArrayList<>());
+                        }
+                        try
+                        {
+                            step.getToolCalls().clear();
+                        }
+                        catch (final UnsupportedOperationException e)
+                        {
+                            step.setToolCalls(new ArrayList<>());
+                        }
+                    }
+                    conversation.add(ChatMessage.user("Updated Test Instruction:\n" + preparedInstruction));
+                    continue turnLoop;
                 }
             }
 
