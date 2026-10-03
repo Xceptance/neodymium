@@ -42,6 +42,10 @@
 - **Specification & Quality Rubrics:** Strictly follow the lifecycle statuses, scope taxonomy, root-cause depth, detection gap analysis, and regression safety net standards documented in [doc/DEFECT_TEMPLATE.md](doc/DEFECT_TEMPLATE.md).
 - **Exclusions:** Do NOT log expected failures during normal TDD red-green cycles, work-in-progress compile errors, or transient external network/quota outages.
 
+## Ideas & Architectural Proposals (doc/ideas/)
+- **Distributed Idea Records:** When proposing architectural enhancements, optimization strategies, or future roadmap concepts, document them in a dedicated file under `doc/ideas/YYYY-MM/IDEA-YYYYMMDD-HHmm-<slug>.md` following [doc/IDEA_TEMPLATE.md](doc/IDEA_TEMPLATE.md). Never use or edit a monolithic ideas file.
+- **Lifecycle & Categorization:** Assign appropriate lifecycle statuses (`Proposed`, `Under Review`, `Accepted`, `In Progress`, `Implemented`, `Deferred`, `Rejected`) and categories as specified in [doc/IDEA_TEMPLATE.md](doc/IDEA_TEMPLATE.md).
+
 ## Coding Standards
 - **TDD:** Write unit/integration tests before implementing new functionality. Ensure full coverage.
 - **Style:** Allman code style (new line braces), document non-obvious logic and all public API, JDK 21 features.
