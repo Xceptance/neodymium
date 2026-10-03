@@ -166,7 +166,9 @@ public class ClassicTest
 ## 🏗️ Building Neodymium
 
 Neodymium is organized as a standard Maven multi-module monorepo:
-* **`neodymium-core`**: The core automation framework (Classic + Aura AI).
+* **`neodymium-core`**: The core automation framework (Classic + Aura AI engine).
+* **`neodymium-test-server`**: Embedded HTTP/HTTPS test server and web fixtures (`ai-test-pages`, SSL keystore).
+* **`neodymium-e2e-tests`**: End-to-end integration test suite, SUT scenarios, and VÉRLA storefront tests.
 * **`aura-manager`**: The unified Spring Boot Neodymium Aura Manager (Execution Hub, Visual Playbook Editor, and Reporting Dashboard).
 
 ### Prerequisites
@@ -198,6 +200,14 @@ Thanks to Maven's reactor, you can target individual modules using `-pl` (projec
 * **Run core library tests:**
   ```bash
   mvn test -pl neodymium-core
+  ```
+* **Run test server unit tests:**
+  ```bash
+  mvn test -pl neodymium-test-server
+  ```
+* **Run end-to-end and SUT tests:**
+  ```bash
+  mvn test -pl neodymium-e2e-tests -am
   ```
 * **Run a single test in core library:**
   ```bash

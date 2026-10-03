@@ -63,7 +63,7 @@
 - **Maintenance:** Tests MUST be created/updated for any logic or UI changes (reinforces TDD).
 
 ## Aura AI Test Sandbox
-- **Aura Glance Sandbox:** To test any Neodymium Aura AI features (such as visual audits, dHash baselines, parameterizations, multi-port, offline replays, or dynamic visual defects), utilize our self-contained **Aura Test Suite Hub** under `neodymium-core/src/test/resources/ai-test-pages/AuraGlanceTest/`.
-- **Server Ports:** Served dynamically on random free ports (HTTP + HTTPS self-signed cert `keystore.p12`) via `EmbeddedHtmlServer.java` (no external running app required!).
-- **How to Use:** Write tests in `neodymium-core/src/test/java/org/neodymium/ai/integration/sandbox/` (e.g. `*SandboxMockTest.java`, `*SandboxLiveTest.java`) extending `BaseAiTest`.
+- **Aura Glance Sandbox:** To test any Neodymium Aura AI features (such as visual audits, dHash baselines, parameterizations, multi-port, offline replays, or dynamic visual defects), utilize our self-contained **Aura Test Suite Hub** under `neodymium-test-server/src/main/resources/ai-test-pages/AuraGlanceTest/`.
+- **Server Ports:** Served dynamically on random free ports (HTTP + HTTPS self-signed cert `keystore.p12`) via `EmbeddedHtmlServer.java` in `neodymium-test-server` (no external running app required!).
+- **How to Use:** Write tests in `neodymium-e2e-tests/src/test/java/org/neodymium/ai/integration/sandbox/` (e.g. `*SandboxMockTest.java`, `*SandboxLiveTest.java`) extending `BaseAiTest`.
 - **Extensive Documentation:** For detailed guidelines, directory layouts, and step replays instructions, refer to [doc/aura-visual-defect-sandbox.md](doc/aura-visual-defect-sandbox.md).
