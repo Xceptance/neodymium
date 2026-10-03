@@ -8,12 +8,12 @@
 >    - You MAY read files (`view_file`, `grep_search`), inspect logs, or use `code-review-graph` tools.
 >    - You MUST re-interpret requests like "Fix X" or "Implement Y" as "Diagnose/Plan X and propose a solution".
 >    - Present your diagnosis and detailed implementation plan to the user.
->    - When diagnosing a bug or regression, include the planned [doc/DEFECTS.md](doc/DEFECTS.md) entry (root cause, symptom, detection gap, and safety net) directly in the proposal.
+>    - When diagnosing a bug or regression, include the planned defect entry (root cause, symptom, detection gap, and safety net) directly in the proposal following [doc/DEFECT_TEMPLATE.md](doc/DEFECT_TEMPLATE.md).
 >    - **HARD STOP:** End your turn with a clear request for approval (e.g. *"Do you approve this plan to proceed with implementation?"*) without invoking any edit tools.
 > 
 > 2. **Phase 2 — Implementation:**
 >    - Do NOT call editing tools (`replace_file_content`, `multi_replace_file_content`, `write_to_file`) or run state-mutating shell commands until the user responds with explicit approval in a subsequent turn.
->    - When resolving a defect, record the post-mortem entry in [doc/DEFECTS.md](doc/DEFECTS.md) alongside the code and test changes.
+>    - When resolving a defect, record the post-mortem entry in a dedicated file under `doc/defects/YYYY-MM/DEF-YYYYMMDD-HHmm-<slug>.md` following [doc/DEFECT_TEMPLATE.md](doc/DEFECT_TEMPLATE.md) alongside the code and test changes.
 
 > [!CRITICAL]
 > ## POST-EDIT CLEAN CODE AUDIT (MANDATORY ON EVERY JAVA EDIT)
@@ -36,15 +36,21 @@
 - **Secrets & Security:** You must never directly store any secrets, such as API keys, in source code, configuration files (e.g. `neodymium.properties`, `ai.properties`), or templates. All API keys and credentials must be injected dynamically via environment variables (such as `GEMINI_API_KEY`) or passed at run-time as JVM arguments (e.g., `-Dneodymium.ai.apiKey=...`). Before you commit anything, verify your staged changes do not contain keys by running `git diff --cached | grep -E "(apiKey|API_KEY|AQ\.[a-zA-Z0-9_\-]{10,})"`. If a secret is accidentally committed, notify the user immediately.
 - **Universal & Domain-Neutral Framework (No SUT / Locale / Currency Hardcoding):** Neodymium is strictly universal, application-agnostic, and language-neutral. We must never hardcode domain concepts like currencies (e.g., CAD, USD, EUR, ¥, £), locales, date/number formats, or SUT-specific heuristics and assumptions in Java code (including the core engine and AI modules). All domain- or site-specific behavior must remain configurable or dynamically evaluated.
 
-## Defect Tracking & Post-Mortem Logging (doc/DEFECTS.md)
-- **Mandatory Defect Logging:** Whenever a confirmed defect (in Neodymium framework, test harness/fixtures, or SUT behavior) is diagnosed and fixed, it MUST be recorded in [doc/DEFECTS.md](doc/DEFECTS.md). Even if fixed immediately, log it to capture root causes and detection gaps.
-- **Entry Structure:** Prepend entries to `doc/DEFECTS.md` in reverse-chronological order using the format:
-  - ID (`[DEF-YYYYMMDD-01]`), Date, Component, Scope (`Framework` | `Test/Harness` | `SUT`)
-  - Symptom (observed error or unexpected behavior)
-  - Root Cause (underlying technical cause)
-  - Detection Gap ("What did we miss?" — why existing tests, linters, or type systems failed to catch it)
-  - Resolution (summary of fix)
-  - Safety Net Added (regression test, assertion, or linter preventing recurrence)
+## Defect Tracking & Post-Mortem Logging (doc/defects/)
+- **Mandatory Defect Logging:** Whenever a confirmed defect (in Neodymium framework, test harness/fixtures, SUT behavior, AI prompts, or build tooling) is diagnosed and fixed, it MUST be recorded in a dedicated file under `doc/defects/YYYY-MM/DEF-YYYYMMDD-HHmm-<slug>.md` following [doc/DEFECT_TEMPLATE.md](doc/DEFECT_TEMPLATE.md). Never edit a shared monolithic defect file.
+- **File Naming & Path:** `doc/defects/YYYY-MM/DEF-YYYYMMDD-HHmm-<slug>.md` where `HHmm` is the local creation time and `<slug>` is a concise kebab-case summary of the failure mechanism.
+- **Entry Structure:** Follow the specification in [doc/DEFECT_TEMPLATE.md](doc/DEFECT_TEMPLATE.md):
+  - `# [DEF-YYYYMMDD-HHmm] Concise Description`
+  - `- **Status:**` `Open` | `Partially Resolved` | `Resolved` | `WontFix`
+  - `- **Opened:**` YYYY-MM-DD HH:mm
+  - `- **Closed:**` YYYY-MM-DD HH:mm
+  - `- **Component:**` e.g. `neodymium-core`, `aura-manager`
+  - `- **Scope:**` `Framework` | `AI/Prompt` | `Test/Harness` | `SUT` | `Infra/Build` | `Config/Environment` | `Doc/Spec`
+  - `- **Symptom:**` Observed error or unexpected behavior.
+  - `- **Root Cause:**` In-depth technical explanation of why the defect occurred.
+  - `- **Detection Gap ("What did we miss?"):` Why existing tests, linters, or type systems failed to catch it.
+  - `- **Resolution:**` Summary of fix.
+  - `- **Safety Net Added:**` Reference to regression test class and method preventing recurrence.
 - **Exclusions:** Do NOT log expected failures during normal TDD red-green cycles, work-in-progress compile errors, or transient external network/quota outages.
 
 ## Coding Standards
