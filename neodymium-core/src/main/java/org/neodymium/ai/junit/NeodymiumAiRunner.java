@@ -883,7 +883,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (context.getRequiredTestClass() != null)
             {
                 final String fqcn = context.getRequiredTestClass().getName();
-                if (fqcn.contains(".integration.mock.") || fqcn.contains(".sandbox.mock."))
+                if (fqcn.contains(".integration.mock.") || fqcn.contains(".sandbox.mock.") || fqcn.contains(".integration.data."))
                 {
                     Neodymium.getData().put("neodymium.ai.global.provider", "mock");
                 }

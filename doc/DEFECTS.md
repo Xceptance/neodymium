@@ -41,6 +41,36 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261003-05] Missing Data Integration Package Filter in NeodymiumAiRunner Leading to ClassCastException in Mock Tests
+- **Date:** 2026-10-03
+- **Component:** `neodymium-core` (`NeodymiumAiRunner`, `ProgrammaticTestDataYamlTest`, `TestdataSubstitutionTest`)
+- **Scope:** `Framework` / `Test/Harness`
+- **Symptom:**
+  Executing `ProgrammaticTestDataYamlTest` or `TestdataSubstitutionTest` fails during test step execution with `ClassCastException: class org.neodymium.ai.client.GeminiLlmProvider cannot be cast to class org.neodymium.ai.client.MockLlmProvider`.
+- **Root Cause:**
+  `NeodymiumAiRunner$AiInvocationExtension.executeBeforeEach` purges thread-local context (`Neodymium.clearThreadContext()`) at the start of each test invocation. It re-injected `neodymium.ai.global.provider = mock` into thread data only if the test class FQCN contained `.integration.mock.` or `.sandbox.mock.`. Tests located in `org.neodymium.ai.integration.data.*` had their `@BeforeAll` data configuration wiped, falling back to the default `gemini` provider which cannot be cast to `MockLlmProvider`.
+- **Detection Gap ("What did we miss?"):**
+  Integration data tests were previously executed in environments where `neodymium.ai.global.provider` or mock configuration was set globally via system properties or config files rather than relying solely on test package naming heuristics.
+- **Resolution:**
+  Updated `NeodymiumAiRunner` to recognize `.integration.data.` packages alongside `.integration.mock.` and `.sandbox.mock.`. In addition, updated `ProgrammaticTestDataYamlTest` and `TestdataSubstitutionTest` to set and clear `System.setProperty("neodymium.ai.global.provider", "mock")` in `@BeforeAll` and `@AfterAll` as a robust fallback.
+- **Safety Net Added:**
+  Ran `mvn test -Dtest=ProgrammaticTestDataYamlTest,TestdataSubstitutionTest,AiDataFileProgrammaticIntegrationTest` verifying all mock data integration tests pass cleanly.
+
+### [DEF-20261003-04] Premature Blank String Validation in assert_url and assert_title Rejecting Negated Non-Empty Assertions
+- **Date:** 2026-10-03
+- **Component:** `neodymium-core` (`BrowserToolProvider`)
+- **Scope:** `Framework`
+- **Symptom:**
+  In `AssertIntegrationTest.testAssertUrl`, Step 8 ("Url is not empty") caused the LLM to emit `{ name: "assert_url", arguments: { expectedUrl: "", exact: true, negated: true } }`. The step failed with `AssertionError: assert_url requires an 'expectedUrl' argument`. Because the initial recording failed, subsequent replay execution modes also failed with `FileNotFoundException: No recorded companion JSON file found`.
+- **Root Cause:**
+  In `BrowserToolProvider.java`, `createAssertUrlTool` and `createAssertTitleTool` checked `rawExpectedUrl.isBlank()` before inspecting boolean modifiers like `negated`, `notEmpty`, or `empty`. Because the tool schema marked `expectedUrl` as required, models passed an empty string `""` together with `negated: true` to assert that the URL/title is not empty. The tool prematurely rejected the argument as missing without checking if a non-empty assertion was intended.
+- **Detection Gap ("What did we miss?"):**
+  Unit tests for `assert_url` and `assert_title` only tested assertions with non-empty expected strings (matching or not matching explicit text/regex). There were no unit tests verifying empty or non-empty assertions where `expectedUrl` was blank with `negated: true` or `notEmpty: true`.
+- **Resolution:**
+  Refactored argument parsing in `createAssertUrlTool` and `createAssertTitleTool` to evaluate `notEmpty` and `negated` before rejecting blank values. When asserting not-empty (`(negated && rawExpected.isBlank()) || notEmpty`), the tool waits until `url != null && !url.trim().isEmpty()`. When asserting empty (`(!negated && exact && rawExpected.isBlank()) || empty`), the tool waits until `url == null || url.trim().isEmpty()`.
+- **Safety Net Added:**
+  Added unit test cases 4 & 5 to `BrowserToolsTest.testBrowserAssertUrlExecutionAndSchema` and `BrowserToolsTest.testBrowserAssertTitleExecutionAndSchema` explicitly asserting non-empty URL and title behavior with `{ expectedUrl: "", negated: true }` and `{ notEmpty: true }`.
+
 ### [DEF-20261003-03] Unescaped HTML/Script Tags in Embedded Step Data Payload Truncating Report JSON and Breaking Client JavaScript
 - **Date:** 2026-10-03
 - **Component:** `neodymium-core` (`HtmlReportGenerator`)

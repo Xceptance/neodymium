@@ -1292,6 +1292,18 @@ public class BrowserToolsTest
         {
             Configuration.timeout = originalTimeout;
         }
+
+        // 4. Assert URL not empty with expectedUrl="" and negated=true
+        final ToolCall notEmptyCall = new ToolCall("call-url-4", "assert_url",
+                mapper.createObjectNode().put("expectedUrl", "").put("exact", true).put("negated", true));
+        final ToolResult notEmptyResult = tool.execute(notEmptyCall, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyResult.status());
+
+        // 5. Assert URL not empty with notEmpty=true flag
+        final ToolCall notEmptyFlagCall = new ToolCall("call-url-5", "assert_url",
+                mapper.createObjectNode().put("notEmpty", true));
+        final ToolResult notEmptyFlagResult = tool.execute(notEmptyFlagCall, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyFlagResult.status());
     }
 
     @Test
@@ -1332,6 +1344,18 @@ public class BrowserToolsTest
         {
             Configuration.timeout = originalTimeout;
         }
+
+        // 4. Assert title not empty with expectedTitle="" and negated=true
+        final ToolCall notEmptyTitleCall = new ToolCall("call-title-4", "assert_title",
+                mapper.createObjectNode().put("expectedTitle", "").put("exact", true).put("negated", true));
+        final ToolResult notEmptyTitleResult = tool.execute(notEmptyTitleCall, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyTitleResult.status());
+
+        // 5. Assert title not empty with notEmpty=true flag
+        final ToolCall notEmptyTitleFlagCall = new ToolCall("call-title-5", "assert_title",
+                mapper.createObjectNode().put("notEmpty", true));
+        final ToolResult notEmptyTitleFlagResult = tool.execute(notEmptyTitleFlagCall, null);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyTitleFlagResult.status());
     }
 
     @Test

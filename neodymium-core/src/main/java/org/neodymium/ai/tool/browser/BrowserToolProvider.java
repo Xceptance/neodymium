@@ -2781,6 +2781,15 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
+                final boolean exact = call.arguments().path("exact").asBoolean(false);
+                final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false)
+                        || call.arguments().path("invert").asBoolean(false);
+                final boolean notEmpty = call.arguments().path("notEmpty").asBoolean(false)
+                        || (call.arguments().hasNonNull("empty") && !call.arguments().path("empty").asBoolean());
+                final boolean empty = call.arguments().path("empty").asBoolean(false);
+
                 final String rawExpectedUrl = call.arguments().hasNonNull("expectedUrl")
                         ? call.arguments().path("expectedUrl").asText()
                         : (call.arguments().hasNonNull("url")
@@ -2790,17 +2799,14 @@ public final class BrowserToolProvider
                                         : (call.arguments().hasNonNull("target")
                                                 ? call.arguments().path("target").asText()
                                                 : null)));
-                if (rawExpectedUrl == null || rawExpectedUrl.isBlank())
+
+                final boolean isAssertNotEmpty = notEmpty || (negated && (rawExpectedUrl == null || rawExpectedUrl.isBlank()));
+                final boolean isAssertEmpty = empty || (!negated && exact && rawExpectedUrl != null && rawExpectedUrl.isBlank());
+
+                if (!isAssertNotEmpty && !isAssertEmpty && (rawExpectedUrl == null || rawExpectedUrl.isBlank()))
                 {
                     throw new AssertionError("assert_url requires an 'expectedUrl' argument");
                 }
-
-                final boolean exact = call.arguments().path("exact").asBoolean(false);
-                final boolean regex = call.arguments().path("regex").asBoolean(false);
-                final boolean negated = call.arguments().path("negated").asBoolean(false)
-                        || call.arguments().path("not").asBoolean(false)
-                        || call.arguments().path("invert").asBoolean(false);
-                final String expectedUrl = regex ? cleanRegexPattern(rawExpectedUrl) : unescapeLiteralText(rawExpectedUrl);
 
                 if (!WebDriverRunner.hasWebDriverStarted())
                 {
@@ -2809,53 +2815,74 @@ public final class BrowserToolProvider
 
                 try
                 {
-                    if (regex)
+                    if (isAssertNotEmpty)
                     {
-                        Pattern compiledPattern;
-                        try
-                        {
-                            compiledPattern = Pattern.compile(expectedUrl, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-                        }
-                        catch (final PatternSyntaxException e)
-                        {
-                            compiledPattern = Pattern.compile(Pattern.quote(expectedUrl), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-                        }
-                        final Pattern finalPattern = compiledPattern;
-                        if (negated)
-                        {
-                            Selenide.Wait().until(d -> d.getCurrentUrl() == null || !finalPattern.matcher(d.getCurrentUrl()).find());
-                        }
-                        else
-                        {
-                            Selenide.Wait().until(d -> d.getCurrentUrl() != null && finalPattern.matcher(d.getCurrentUrl()).find());
-                        }
+                        Selenide.Wait().until(d -> d.getCurrentUrl() != null && !d.getCurrentUrl().trim().isEmpty());
                     }
-                    else if (exact)
+                    else if (isAssertEmpty)
                     {
-                        if (negated)
-                        {
-                            Selenide.Wait().until(d -> d.getCurrentUrl() == null || !d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
-                        }
-                        else
-                        {
-                            Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
-                        }
+                        Selenide.Wait().until(d -> d.getCurrentUrl() == null || d.getCurrentUrl().trim().isEmpty());
                     }
                     else
                     {
-                        if (negated)
+                        final String expectedUrl = regex ? cleanRegexPattern(rawExpectedUrl) : unescapeLiteralText(rawExpectedUrl);
+                        if (regex)
                         {
-                            Selenide.Wait().until(d -> d.getCurrentUrl() == null || !d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                            Pattern compiledPattern;
+                            try
+                            {
+                                compiledPattern = Pattern.compile(expectedUrl, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                            }
+                            catch (final PatternSyntaxException e)
+                            {
+                                compiledPattern = Pattern.compile(Pattern.quote(expectedUrl), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                            }
+                            final Pattern finalPattern = compiledPattern;
+                            if (negated)
+                            {
+                                Selenide.Wait().until(d -> d.getCurrentUrl() == null || !finalPattern.matcher(d.getCurrentUrl()).find());
+                            }
+                            else
+                            {
+                                Selenide.Wait().until(d -> d.getCurrentUrl() != null && finalPattern.matcher(d.getCurrentUrl()).find());
+                            }
+                        }
+                        else if (exact)
+                        {
+                            if (negated)
+                            {
+                                Selenide.Wait().until(d -> d.getCurrentUrl() == null || !d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
+                            }
+                            else
+                            {
+                                Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().trim().equalsIgnoreCase(expectedUrl.trim()));
+                            }
                         }
                         else
                         {
-                            Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                            if (negated)
+                            {
+                                Selenide.Wait().until(d -> d.getCurrentUrl() == null || !d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                            }
+                            else
+                            {
+                                Selenide.Wait().until(d -> d.getCurrentUrl() != null && d.getCurrentUrl().toLowerCase(Locale.ROOT).contains(expectedUrl.toLowerCase(Locale.ROOT)));
+                            }
                         }
                     }
                 }
                 catch (final TimeoutException e)
                 {
                     final String actualUrl = WebDriverRunner.url();
+                    if (isAssertNotEmpty)
+                    {
+                        throw new AssertionError("Assertion failed: Expected URL to not be empty within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
+                    }
+                    if (isAssertEmpty)
+                    {
+                        throw new AssertionError("Assertion failed: Expected URL to be empty within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
+                    }
+                    final String expectedUrl = regex ? cleanRegexPattern(rawExpectedUrl) : unescapeLiteralText(rawExpectedUrl);
                     if (regex)
                     {
                         throw new AssertionError("Assertion failed: Expected URL to " + (negated ? "not match" : "match") + " regex \"" + expectedUrl + "\" within " + Configuration.timeout + "ms, but was \"" + actualUrl + "\"");
@@ -2901,6 +2928,15 @@ public final class BrowserToolProvider
             @Override
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
+                final boolean exact = call.arguments().path("exact").asBoolean(false);
+                final boolean regex = call.arguments().path("regex").asBoolean(false);
+                final boolean negated = call.arguments().path("negated").asBoolean(false)
+                        || call.arguments().path("not").asBoolean(false)
+                        || call.arguments().path("invert").asBoolean(false);
+                final boolean notEmpty = call.arguments().path("notEmpty").asBoolean(false)
+                        || (call.arguments().hasNonNull("empty") && !call.arguments().path("empty").asBoolean());
+                final boolean empty = call.arguments().path("empty").asBoolean(false);
+
                 final String rawExpectedTitle = call.arguments().hasNonNull("expectedTitle")
                         ? call.arguments().path("expectedTitle").asText()
                         : (call.arguments().hasNonNull("title")
@@ -2910,17 +2946,14 @@ public final class BrowserToolProvider
                                         : (call.arguments().hasNonNull("target")
                                                 ? call.arguments().path("target").asText()
                                                 : null)));
-                if (rawExpectedTitle == null || rawExpectedTitle.isBlank())
+
+                final boolean isAssertNotEmpty = notEmpty || (negated && (rawExpectedTitle == null || rawExpectedTitle.isBlank()));
+                final boolean isAssertEmpty = empty || (!negated && exact && rawExpectedTitle != null && rawExpectedTitle.isBlank());
+
+                if (!isAssertNotEmpty && !isAssertEmpty && (rawExpectedTitle == null || rawExpectedTitle.isBlank()))
                 {
                     throw new AssertionError("assert_title requires an 'expectedTitle' argument");
                 }
-
-                final boolean exact = call.arguments().path("exact").asBoolean(false);
-                final boolean regex = call.arguments().path("regex").asBoolean(false);
-                final boolean negated = call.arguments().path("negated").asBoolean(false)
-                        || call.arguments().path("not").asBoolean(false)
-                        || call.arguments().path("invert").asBoolean(false);
-                final String expectedTitle = regex ? cleanRegexPattern(rawExpectedTitle) : unescapeLiteralText(rawExpectedTitle);
 
                 if (!WebDriverRunner.hasWebDriverStarted())
                 {
@@ -2929,53 +2962,74 @@ public final class BrowserToolProvider
 
                 try
                 {
-                    if (regex)
+                    if (isAssertNotEmpty)
                     {
-                        Pattern compiledPattern;
-                        try
-                        {
-                            compiledPattern = Pattern.compile(expectedTitle, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-                        }
-                        catch (final PatternSyntaxException e)
-                        {
-                            compiledPattern = Pattern.compile(Pattern.quote(expectedTitle), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-                        }
-                        final Pattern finalPattern = compiledPattern;
-                        if (negated)
-                        {
-                            Selenide.Wait().until(d -> d.getTitle() == null || !finalPattern.matcher(d.getTitle()).find());
-                        }
-                        else
-                        {
-                            Selenide.Wait().until(d -> d.getTitle() != null && finalPattern.matcher(d.getTitle()).find());
-                        }
+                        Selenide.Wait().until(d -> d.getTitle() != null && !d.getTitle().trim().isEmpty());
                     }
-                    else if (exact)
+                    else if (isAssertEmpty)
                     {
-                        if (negated)
-                        {
-                            Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
-                        }
-                        else
-                        {
-                            Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
-                        }
+                        Selenide.Wait().until(d -> d.getTitle() == null || d.getTitle().trim().isEmpty());
                     }
                     else
                     {
-                        if (negated)
+                        final String expectedTitle = regex ? cleanRegexPattern(rawExpectedTitle) : unescapeLiteralText(rawExpectedTitle);
+                        if (regex)
                         {
-                            Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                            Pattern compiledPattern;
+                            try
+                            {
+                                compiledPattern = Pattern.compile(expectedTitle, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                            }
+                            catch (final PatternSyntaxException e)
+                            {
+                                compiledPattern = Pattern.compile(Pattern.quote(expectedTitle), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                            }
+                            final Pattern finalPattern = compiledPattern;
+                            if (negated)
+                            {
+                                Selenide.Wait().until(d -> d.getTitle() == null || !finalPattern.matcher(d.getTitle()).find());
+                            }
+                            else
+                            {
+                                Selenide.Wait().until(d -> d.getTitle() != null && finalPattern.matcher(d.getTitle()).find());
+                            }
+                        }
+                        else if (exact)
+                        {
+                            if (negated)
+                            {
+                                Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
+                            }
+                            else
+                            {
+                                Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().trim().equalsIgnoreCase(expectedTitle.trim()));
+                            }
                         }
                         else
                         {
-                            Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                            if (negated)
+                            {
+                                Selenide.Wait().until(d -> d.getTitle() == null || !d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                            }
+                            else
+                            {
+                                Selenide.Wait().until(d -> d.getTitle() != null && d.getTitle().toLowerCase(Locale.ROOT).contains(expectedTitle.toLowerCase(Locale.ROOT)));
+                            }
                         }
                     }
                 }
                 catch (final TimeoutException e)
                 {
                     final String actualTitle = Selenide.title();
+                    if (isAssertNotEmpty)
+                    {
+                        throw new AssertionError("Assertion failed: Expected page title to not be empty within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
+                    }
+                    if (isAssertEmpty)
+                    {
+                        throw new AssertionError("Assertion failed: Expected page title to be empty within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
+                    }
+                    final String expectedTitle = regex ? cleanRegexPattern(rawExpectedTitle) : unescapeLiteralText(rawExpectedTitle);
                     if (regex)
                     {
                         throw new AssertionError("Assertion failed: Expected page title to " + (negated ? "not match" : "match") + " regex \"" + expectedTitle + "\" within " + Configuration.timeout + "ms, but was \"" + actualTitle + "\"");
