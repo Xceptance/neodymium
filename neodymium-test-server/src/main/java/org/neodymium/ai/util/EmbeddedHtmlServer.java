@@ -29,6 +29,8 @@ import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -50,6 +52,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
@@ -976,7 +979,7 @@ public final class EmbeddedHtmlServer
         final int targetPort = requestedPort < 0 ? DEFAULT_HTTP_PORT : requestedPort;
         try
         {
-            return HttpServer.create(new InetSocketAddress(targetPort), 0);
+            return HttpServer.create(new InetSocketAddress("127.0.0.1", targetPort), 0);
         }
         catch (final IOException e)
         {
@@ -984,7 +987,7 @@ public final class EmbeddedHtmlServer
             {
                 LOG.warn("Target HTTP port {} is unavailable ({}), falling back to random available free port (0).",
                     targetPort, e.getMessage());
-                return HttpServer.create(new InetSocketAddress(0), 0);
+                return HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             }
             throw e;
         }
@@ -1003,7 +1006,7 @@ public final class EmbeddedHtmlServer
         final int targetPort = requestedPort < 0 ? DEFAULT_HTTPS_PORT : requestedPort;
         try
         {
-            return HttpsServer.create(new InetSocketAddress(targetPort), 0);
+            return HttpsServer.create(new InetSocketAddress("127.0.0.1", targetPort), 0);
         }
         catch (final IOException e)
         {
@@ -1011,7 +1014,7 @@ public final class EmbeddedHtmlServer
             {
                 LOG.warn("Target HTTPS port {} is unavailable ({}), falling back to random available free port (0).",
                     targetPort, e.getMessage());
-                return HttpsServer.create(new InetSocketAddress(0), 0);
+                return HttpsServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             }
             throw e;
         }
@@ -1135,6 +1138,11 @@ public final class EmbeddedHtmlServer
     public int getPort()
     {
         return port;
+    }
+
+    public InetSocketAddress getAddress()
+    {
+        return this.server != null ? this.server.getAddress() : null;
     }
 
     public int getHttpsPort()
@@ -5115,9 +5123,14 @@ public final class EmbeddedHtmlServer
             loadCatalogData();
             if (args.length > 0 && "generate".equals(args[0]))
             {
-                final String jsonStr = new com.google.gson.GsonBuilder().setPrettyPrinting().create().toJson(catalogProducts);
-                java.nio.file.Files.writeString(java.nio.file.Path.of("src/test/resources/ai-test-pages/verla-products.json"), jsonStr, StandardCharsets.UTF_8);
-                System.out.println("Successfully regenerated verla-products.json with " + catalogProducts.size() + " products.");
+                final String jsonStr = new GsonBuilder().setPrettyPrinting().create().toJson(catalogProducts);
+                Path targetPath = Path.of("neodymium-test-server/src/main/resources/ai-test-pages/verla-products.json");
+                if (!Files.exists(targetPath.getParent()))
+                {
+                    targetPath = Path.of("src/main/resources/ai-test-pages/verla-products.json");
+                }
+                Files.writeString(targetPath, jsonStr, StandardCharsets.UTF_8);
+                System.out.println("Successfully regenerated verla-products.json with " + catalogProducts.size() + " products at " + targetPath);
                 return;
             }
 

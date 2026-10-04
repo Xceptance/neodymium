@@ -18,7 +18,9 @@
  */
 package org.neodymium.ai.util;
 
+import java.io.File;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -122,5 +124,42 @@ public class EmbeddedHtmlServerTest
         {
             server.stop();
         }
+    }
+
+    /**
+     * Tests that the HTTP server binds to a loopback address (127.0.0.1) by default.
+     *
+     * @throws IOException if server fails to initialize
+     */
+    @Test
+    public void testLoopbackBinding() throws IOException
+    {
+        final EmbeddedHtmlServer server = new EmbeddedHtmlServer();
+        server.start();
+
+        try
+        {
+            final InetSocketAddress address = server.getAddress();
+            Assertions.assertNotNull(address, "Server address should not be null");
+            Assertions.assertTrue(address.getAddress().isLoopbackAddress(), "Server should bind to a loopback address");
+            Assertions.assertEquals("127.0.0.1", address.getAddress().getHostAddress(), "Host address should be 127.0.0.1");
+        }
+        finally
+        {
+            server.stop();
+        }
+    }
+
+    /**
+     * Tests that StorefrontPatcher resolves an existing shop directory dynamically rather than failing on personal paths.
+     */
+    @Test
+    public void testStorefrontPatcherResolveBaseDir()
+    {
+        final String resolvedPath = StorefrontPatcher.resolveBaseDir();
+        Assertions.assertNotNull(resolvedPath, "StorefrontPatcher baseDir should be resolved");
+        final File resolvedDir = new File(resolvedPath);
+        Assertions.assertTrue(resolvedDir.exists(), "Resolved baseDir should exist on disk: " + resolvedDir.getAbsolutePath());
+        Assertions.assertTrue(resolvedDir.isDirectory(), "Resolved baseDir should be a directory: " + resolvedDir.getAbsolutePath());
     }
 }

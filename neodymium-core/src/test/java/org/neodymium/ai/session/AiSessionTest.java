@@ -18,14 +18,16 @@
  */
 package org.neodymium.ai.session;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.config.ExecutionMode;
-import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.rest.RestTargetExecutor;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
@@ -34,6 +36,8 @@ import org.neodymium.ai.model.PlaybookRecording;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
+import org.neodymium.ai.pipeline.ExecutionContext;
 
 /**
  * Unit tests verifying static factory methods and execution on {@link AiSession}.
@@ -170,7 +174,7 @@ public class AiSessionTest
         try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
         {
             final PlaybookStep step = new PlaybookStep("Verify user ${user}");
-            step.setActions(List.of(new org.neodymium.ai.action.Action("NONE", null, null, null, null, null)));
+            step.setActions(List.of(new Action("NONE", null, null, null, null, null)));
             final Playbook playbook = new Playbook(List.of(step), Collections.emptyList());
 
             final PlaybookRecording recording = session.execute(playbook, customData);
@@ -221,7 +225,7 @@ public class AiSessionTest
         try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
         {
             final PlaybookStep step = new PlaybookStep("Open homepage");
-            step.setActions(List.of(new org.neodymium.ai.action.Action("NONE", null, null, null, null, null)));
+            step.setActions(List.of(new Action("NONE", null, null, null, null, null)));
             final Playbook playbook = new Playbook(List.of(step), Collections.emptyList());
             final PlaybookRecording recording = session.execute(playbook);
             Assertions.assertNotNull(recording);
@@ -229,7 +233,7 @@ public class AiSessionTest
             Assertions.assertTrue(recording.isStrictReplay());
             Assertions.assertEquals(1, recording.getStepCount());
 
-            final java.util.concurrent.atomic.AtomicBoolean strictLambdaCalled = new java.util.concurrent.atomic.AtomicBoolean(false);
+            final AtomicBoolean strictLambdaCalled = new AtomicBoolean(false);
 
             recording.verifyMetrics()
                 .hasStepCount(1)
@@ -250,7 +254,7 @@ public class AiSessionTest
         try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
         {
             final PlaybookStep step = new PlaybookStep("Search for ${searchTerm}");
-            step.setActions(List.of(new org.neodymium.ai.action.Action("NONE", null, null, null, null, null)));
+            step.setActions(List.of(new Action("NONE", null, null, null, null, null)));
 
             final Map<String, SessionData.DataEntry> ds1 = Map.of(
                 "testId", new SessionData.DataEntry("first_ds", false),
@@ -310,6 +314,103 @@ public class AiSessionTest
             Assertions.assertNotNull(recording);
             Assertions.assertEquals(1, recording.getStepCount());
             Assertions.assertEquals(PlaybookStepStatus.SUCCESS, recording.getRecordedSteps().get(0).getStatus());
+        }
+    }
+
+    @Test
+    @DisplayName("execute(String) in programmatic mode accumulates steps across multiple calls")
+    public void testProgrammaticMultiExecuteAccumulatesStepsAcrossCalls() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            final PlaybookRecording rec1 = session.execute("Step 1");
+            Assertions.assertNotNull(rec1);
+            Assertions.assertEquals(1, rec1.getStepCount());
+
+            final PlaybookRecording rec2 = session.execute("Step 2");
+            Assertions.assertNotNull(rec2);
+            Assertions.assertEquals(1, rec2.getStepCount());
+
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> accumulatedSteps = (List<PlaybookStep>) session.getExecutionContext().getTransientData().get("playbook.steps");
+            Assertions.assertNotNull(accumulatedSteps);
+            Assertions.assertEquals(2, accumulatedSteps.size(), "playbook.steps must accumulate all steps across execute() calls");
+            Assertions.assertEquals("Step 1", accumulatedSteps.get(0).getInstruction());
+            Assertions.assertEquals("Step 2", accumulatedSteps.get(1).getInstruction());
+
+            Assertions.assertEquals(2, session.getMetrics().getStepCount(), "session metrics must report total steps across calls");
+        }
+    }
+
+    @Test
+    @DisplayName("execute(String) in REPLAY_STRICT matches steps sequentially and aligns instructions")
+    public void testProgrammaticMultiExecuteReplayAlignsInstructionsSequentially() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
+        {
+            final PlaybookStep recordedStep1 = new PlaybookStep("Step 1");
+            recordedStep1.setStatus(PlaybookStepStatus.SUCCESS);
+            recordedStep1.setActions(List.of(new Action("NONE", null, "val1", "desc1", null, null)));
+
+            final PlaybookStep recordedStep2 = new PlaybookStep("Step 2");
+            recordedStep2.setStatus(PlaybookStepStatus.SUCCESS);
+            recordedStep2.setActions(List.of(new Action("NONE", null, "val2", "desc2", null, null)));
+
+            session.getExecutionContext().getTransientData().put("playbook.steps", new ArrayList<>(List.of(recordedStep1, recordedStep2)));
+
+            final PlaybookRecording rec1 = session.execute("Step 1");
+            Assertions.assertNotNull(rec1);
+            Assertions.assertEquals("desc1", rec1.getRecordedSteps().get(0).getActions().get(0).getDescription());
+
+            final PlaybookRecording rec2 = session.execute("Step 2");
+            Assertions.assertNotNull(rec2);
+            Assertions.assertEquals("desc2", rec2.getRecordedSteps().get(0).getActions().get(0).getDescription());
+
+            Assertions.assertEquals(2, session.getExecutionContext().getTransientData().get("playbook.replayCursor"));
+        }
+    }
+
+    @Test
+    @DisplayName("execute(String) in REPLAY_STRICT throws ConclusiveFailureException on instruction mismatch")
+    public void testProgrammaticMultiExecuteReplayFailsOnInstructionMismatch() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
+        {
+            final PlaybookStep recordedStep = new PlaybookStep("Expected Step");
+            recordedStep.setStatus(PlaybookStepStatus.SUCCESS);
+            recordedStep.setActions(List.of(new Action("NONE", null, null, null, null, null)));
+
+            session.getExecutionContext().getTransientData().put("playbook.steps", new ArrayList<>(List.of(recordedStep)));
+
+            final ConclusiveFailureException ex = Assertions.assertThrows(
+                ConclusiveFailureException.class,
+                () -> session.execute("Unexpected Different Step")
+            );
+            Assertions.assertTrue(ex.getMessage().contains("Replay step mismatch at index 0"), "Exception should report mismatch index");
+            Assertions.assertTrue(ex.getMessage().contains("Expected Step"), "Exception should cite expected step");
+            Assertions.assertTrue(ex.getMessage().contains("Unexpected Different Step"), "Exception should cite actual step");
+        }
+    }
+
+    @Test
+    @DisplayName("execute(String) in REPLAY_STRICT throws ConclusiveFailureException when calls exceed recorded steps")
+    public void testProgrammaticMultiExecuteReplayFailsInStrictModeWhenStepsExceeded() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.REPLAY_STRICT))
+        {
+            final PlaybookStep recordedStep = new PlaybookStep("Step 1");
+            recordedStep.setStatus(PlaybookStepStatus.SUCCESS);
+            recordedStep.setActions(List.of(new Action("NONE", null, null, null, null, null)));
+
+            session.getExecutionContext().getTransientData().put("playbook.steps", new ArrayList<>(List.of(recordedStep)));
+
+            session.execute("Step 1");
+
+            final ConclusiveFailureException ex = Assertions.assertThrows(
+                ConclusiveFailureException.class,
+                () -> session.execute("Unexpected Extra Step")
+            );
+            Assertions.assertTrue(ex.getMessage().contains("Replay step count mismatch"), "Exception should report count mismatch");
         }
     }
 }

@@ -32,7 +32,22 @@ import java.nio.file.Paths;
  */
 public final class StorefrontPatcher
 {
-    private static final String BASE_DIR = "/home/rschwietzke/projects/GIT/neodymium-library/src/test/resources/ai-test-pages/AuraGlanceTest/shop";
+    private static final String BASE_DIR = resolveBaseDir();
+
+    static String resolveBaseDir()
+    {
+        final Path targetPath = Path.of("neodymium-test-server/src/main/resources/ai-test-pages/AuraGlanceTest/shop");
+        if (Files.exists(targetPath))
+        {
+            return targetPath.toAbsolutePath().toString();
+        }
+        final Path fallbackPath = Path.of("src/main/resources/ai-test-pages/AuraGlanceTest/shop");
+        if (Files.exists(fallbackPath))
+        {
+            return fallbackPath.toAbsolutePath().toString();
+        }
+        return targetPath.toAbsolutePath().toString();
+    }
 
     private StorefrontPatcher()
     {

@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -486,61 +487,178 @@ public abstract class AiSession implements AutoCloseable
         final List<PlaybookStep> playbookSteps = playbook.getSteps();
 
         @SuppressWarnings("unchecked")
-        final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.steps");
-
-        if (this.executionMode != null && this.executionMode.isReplay() && sessionSteps != null && !sessionSteps.isEmpty())
+        List<PlaybookStep> sessionSteps = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.steps");
+        if (sessionSteps != null && !(sessionSteps instanceof ArrayList))
         {
-            for (int i = 0; i < playbookSteps.size() && i < sessionSteps.size(); i++)
+            sessionSteps = new ArrayList<>(sessionSteps);
+            this.executionContext.getTransientData().put("playbook.steps", sessionSteps);
+        }
+
+        if (this.executionMode != null && this.executionMode.isReplay())
+        {
+            @SuppressWarnings("unchecked")
+            List<PlaybookStep> recordedSteps = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.recordedSteps");
+            if (recordedSteps == null && sessionSteps != null && !sessionSteps.isEmpty())
             {
-                final PlaybookStep parsed = playbookSteps.get(i);
-                final PlaybookStep recorded = sessionSteps.get(i);
-                if (recorded.getActions() != null)
+                recordedSteps = new ArrayList<>(sessionSteps);
+                this.executionContext.getTransientData().put("playbook.recordedSteps", recordedSteps);
+                this.executionContext.getTransientData().put("playbook.replayCursor", 0);
+            }
+
+            if (recordedSteps != null)
+            {
+                int cursor = (Integer) this.executionContext.getTransientData().getOrDefault("playbook.replayCursor", 0);
+
+                for (final PlaybookStep parsed : playbookSteps)
                 {
-                    parsed.setActions(recorded.getActions());
+                    if (cursor < recordedSteps.size())
+                    {
+                        final PlaybookStep recorded = recordedSteps.get(cursor);
+                        final String parsedNorm = normalizeInstruction(parsed.getInstruction());
+                        final String recordedNorm = normalizeInstruction(recorded.getInstruction());
+                        boolean matches = parsedNorm.equals(recordedNorm);
+                        if (!matches && this.executionContext.getSessionData() != null)
+                        {
+                            final String parsedResolved = normalizeInstruction(this.executionContext.getSessionData().resolveAvailableVariables(parsed.getInstruction()));
+                            final String recordedResolved = normalizeInstruction(this.executionContext.getSessionData().resolveAvailableVariables(recorded.getInstruction()));
+                            matches = parsedResolved.equals(recordedResolved) || parsedNorm.equals(recordedResolved) || parsedResolved.equals(recordedNorm);
+                        }
+
+                        if (!matches)
+                        {
+                            throw new ConclusiveFailureException(String.format(
+                                "Replay step mismatch at index %d: expected recorded step '%s', but current execution provided '%s'.",
+                                cursor,
+                                recorded.getInstruction(),
+                                parsed.getInstruction()
+                            ));
+                        }
+
+                        if (recorded.getActions() != null)
+                        {
+                            parsed.setActions(recorded.getActions());
+                        }
+                        if (recorded.getToolCalls() != null && !recorded.getToolCalls().isEmpty())
+                        {
+                            parsed.setToolCalls(recorded.getToolCalls());
+                        }
+                        if (recorded.getSchemaVersion() != null)
+                        {
+                            parsed.setSchemaVersion(recorded.getSchemaVersion());
+                        }
+                        if (recorded.getBaselineState() != null)
+                        {
+                            parsed.setBaselineState(recorded.getBaselineState());
+                        }
+                        if (recorded.getScreenshotHash() != null)
+                        {
+                            parsed.setScreenshotHash(recorded.getScreenshotHash());
+                        }
+                        if (recorded.getScreenshotHashDim() != null)
+                        {
+                            parsed.setScreenshotHashDim(recorded.getScreenshotHashDim());
+                        }
+                        if (recorded.getStatus() != null)
+                        {
+                            parsed.setStatus(recorded.getStatus());
+                        }
+                        parsed.setFailed(recorded.isFailed());
+                        if (recorded.getFailureReason() != null)
+                        {
+                            parsed.setFailureReason(recorded.getFailureReason());
+                        }
+                        if (recorded.getSubSteps() != null && !recorded.getSubSteps().isEmpty() && (parsed.getSubSteps() == null || parsed.getSubSteps().isEmpty()))
+                        {
+                            parsed.setSubSteps(recorded.getSubSteps());
+                        }
+
+                        if (sessionSteps != null && cursor < sessionSteps.size())
+                        {
+                            sessionSteps.set(cursor, parsed);
+                        }
+                        else if (sessionSteps != null)
+                        {
+                            sessionSteps.add(parsed);
+                        }
+                        cursor++;
+                    }
+                    else
+                    {
+                        if (isStrictReplay())
+                        {
+                            throw new ConclusiveFailureException(String.format(
+                                "Replay step count mismatch: unexpected step '%s' at index %d, but recording only has %d steps.",
+                                parsed.getInstruction(),
+                                cursor,
+                                recordedSteps.size()
+                            ));
+                        }
+                        if (sessionSteps != null)
+                        {
+                            sessionSteps.add(parsed);
+                        }
+                        cursor++;
+                    }
                 }
-                if (recorded.getToolCalls() != null && !recorded.getToolCalls().isEmpty())
+
+                this.executionContext.getTransientData().put("playbook.replayCursor", cursor);
+            }
+            else
+            {
+                if (sessionSteps == null)
                 {
-                    parsed.setToolCalls(recorded.getToolCalls());
+                    sessionSteps = new ArrayList<>(playbookSteps);
+                    this.executionContext.getTransientData().put("playbook.steps", sessionSteps);
                 }
-                if (recorded.getSchemaVersion() != null)
+                else if (sessionSteps != playbookSteps)
                 {
-                    parsed.setSchemaVersion(recorded.getSchemaVersion());
+                    try
+                    {
+                        sessionSteps.addAll(playbookSteps);
+                    }
+                    catch (final UnsupportedOperationException uoe)
+                    {
+                        final List<PlaybookStep> mutableSteps = new ArrayList<>(sessionSteps);
+                        mutableSteps.addAll(playbookSteps);
+                        sessionSteps = mutableSteps;
+                        this.executionContext.getTransientData().put("playbook.steps", sessionSteps);
+                    }
                 }
-                if (recorded.getBaselineState() != null)
+            }
+        }
+        else
+        {
+            if (sessionSteps == null)
+            {
+                sessionSteps = new ArrayList<>(playbookSteps);
+                this.executionContext.getTransientData().put("playbook.steps", sessionSteps);
+            }
+            else if (sessionSteps != playbookSteps)
+            {
+                try
                 {
-                    parsed.setBaselineState(recorded.getBaselineState());
+                    sessionSteps.addAll(playbookSteps);
                 }
-                if (recorded.getScreenshotHash() != null)
+                catch (final UnsupportedOperationException uoe)
                 {
-                    parsed.setScreenshotHash(recorded.getScreenshotHash());
-                }
-                if (recorded.getScreenshotHashDim() != null)
-                {
-                    parsed.setScreenshotHashDim(recorded.getScreenshotHashDim());
-                }
-                if (recorded.getStatus() != null)
-                {
-                    parsed.setStatus(recorded.getStatus());
-                }
-                parsed.setFailed(recorded.isFailed());
-                if (recorded.getFailureReason() != null)
-                {
-                    parsed.setFailureReason(recorded.getFailureReason());
+                    final List<PlaybookStep> mutableSteps = new ArrayList<>(sessionSteps);
+                    mutableSteps.addAll(playbookSteps);
+                    sessionSteps = mutableSteps;
+                    this.executionContext.getTransientData().put("playbook.steps", sessionSteps);
                 }
             }
         }
 
-        if (sessionSteps != null && sessionSteps != playbookSteps)
+        @SuppressWarnings("unchecked")
+        List<PlaybookStep> flatSteps = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.flatSteps");
+        if (flatSteps == null)
         {
-            try
-            {
-                sessionSteps.clear();
-                sessionSteps.addAll(playbookSteps);
-            }
-            catch (final UnsupportedOperationException uoe)
-            {
-                this.executionContext.getTransientData().put("playbook.steps", new ArrayList<>(playbookSteps));
-            }
+            flatSteps = new ArrayList<>();
+            this.executionContext.getTransientData().put("playbook.flatSteps", flatSteps);
+        }
+        if (flatSteps != playbookSteps)
+        {
+            flattenSteps(playbookSteps, flatSteps);
         }
 
         for (int i = playbookSteps.size() - 1; i >= 0; i--)
@@ -624,6 +742,31 @@ public abstract class AiSession implements AutoCloseable
             escalations += aggregateStepStats(child, contextLevelCounts);
         }
         return escalations;
+    }
+
+    private static void flattenSteps(final List<PlaybookStep> source, final List<PlaybookStep> target)
+    {
+        if (source == null || target == null)
+        {
+            return;
+        }
+        for (final PlaybookStep s : source)
+        {
+            target.add(s);
+            if (s.getSubSteps() != null && !s.getSubSteps().isEmpty())
+            {
+                flattenSteps(s.getSubSteps(), target);
+            }
+        }
+    }
+
+    private static String normalizeInstruction(final String instruction)
+    {
+        if (instruction == null)
+        {
+            return "";
+        }
+        return instruction.trim().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
     }
 
     /**
