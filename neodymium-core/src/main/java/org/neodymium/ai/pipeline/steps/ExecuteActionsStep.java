@@ -228,6 +228,7 @@ public final class ExecuteActionsStep
             contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", resolvedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
             contextState.getTransientData().remove("KEY_IN_CONTINUATION_LOOP");
+            contextState.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP);
             if (step.hasSubSteps())
             {
                 final List<String> milestones = new ArrayList<>();
@@ -703,9 +704,9 @@ public final class ExecuteActionsStep
             // Push end-hook step first, so it runs AFTER tryCatch executes
             contextState.pushStep(c ->
             {
+                final Object isHealed = c.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP);
                 if (!step.isFailed() && step.getStatus() != PlaybookStepStatus.SKIPPED)
                 {
-                    final Boolean isHealed = (Boolean) c.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP);
                     if (Boolean.TRUE.equals(isHealed))
                     {
                         step.setStatus(PlaybookStepStatus.HEALED);

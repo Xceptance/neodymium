@@ -118,11 +118,13 @@ public class PlaybookRecorderTest
     }
 
     /**
-     * Modes that must never touch a recording: {@code LLM_ONLY} documents that it does not record, and
-     * {@code LINTER_ONLY} never executes steps, so its freshly parsed {@code PENDING} steps carry no actions.
-     * A successful session in either mode used to overwrite a good recording with those empty steps.
+     * Modes that must never touch a recording: {@code LLM_ONLY} documents that it does not record,
+     * {@code LINTER_ONLY} never executes steps, and {@code REPLAY_STRICT} is strictly read-only.
      */
-    private static final EnumSet<ExecutionMode> NON_PERSISTING_MODES = EnumSet.of(ExecutionMode.LLM_ONLY, ExecutionMode.LINTER_ONLY);
+    private static final EnumSet<ExecutionMode> NON_PERSISTING_MODES = EnumSet.of(
+            ExecutionMode.LLM_ONLY,
+            ExecutionMode.LINTER_ONLY,
+            ExecutionMode.REPLAY_STRICT);
 
     @Test
     public void testNonPersistingModesNeverOverwriteExistingRecording() throws IOException

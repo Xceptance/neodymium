@@ -1439,6 +1439,59 @@ public final class ExecuteActionsStepTest
         assertEquals("Edited prompt by user", step.getInstruction());
         assertEquals("Edited prompt by user", context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION));
     }
+
+    @Test
+    public void testHealedStepFlagDoesNotLeakToSubsequentReplaySteps() throws Exception
+    {
+        final SessionData sessionData = new SessionData(Collections.emptyMap());
+        final AiSession session = AiSession.mock(
+                ExecutionMode.REPLAY_WITH_HEALING,
+                sessionData,
+                new LlmRegistry(),
+                new ExecutionEventBus(),
+                (TargetExecutor) null);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+
+        // Step 1: simulated healed step
+        final PlaybookStep step1 = new PlaybookStep("Step 1 with healing");
+        step1.setStatus(PlaybookStepStatus.RUNNING);
+        final PipelineStep pipelineStep1 = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step1, session, context);
+        pipelineStep1.execute(context);
+
+        // Simulate online healing triggering and marking the transient flag
+        context.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
+
+        // Drain pipeline steps for step 1 (executing TryCatch and step end hook)
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.HEALED, step1.getStatus(), "Step 1 should be marked HEALED");
+        assertFalse(context.getTransientData().containsKey(ExecutionContext.KEY_IS_HEALED_STEP),
+                "KEY_IS_HEALED_STEP must be removed after step 1 end hook");
+
+        // Step 2: normal recorded replay step
+        final PlaybookStep step2 = new PlaybookStep("Step 2 normal replay");
+        step2.setStatus(PlaybookStepStatus.SUCCESS);
+        final PipelineStep pipelineStep2 = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step2, session, context);
+        pipelineStep2.execute(context);
+
+        assertFalse(context.getTransientData().containsKey(ExecutionContext.KEY_IS_HEALED_STEP),
+                "KEY_IS_HEALED_STEP must not be present when step 2 starts");
+
+        // Drain pipeline steps for step 2
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.SUCCESS, step2.getStatus(), "Step 2 should remain SUCCESS, not falsely marked HEALED");
+        assertFalse(context.getTransientData().containsKey(ExecutionContext.KEY_IS_HEALED_STEP),
+                "KEY_IS_HEALED_STEP must remain absent from transient data");
+    }
 }
 
 

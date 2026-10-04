@@ -1383,7 +1383,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.recordingPath = computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile, recMethod, recFileName, recDir);
             if (this.recordingPath != null)
             {
-                if (this.mode.isRecording())
+                // FORCE_RECORDING wipes out any pre-existing recording upfront so failure never leaves stale traces
+                if (this.mode == ExecutionMode.FORCE_RECORDING)
                 {
                     try
                     {
@@ -1621,7 +1622,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
                 final boolean hasFailed = context.getExecutionException().isPresent()
                     || (this.session != null && this.session.getExecutionContext() != null && this.session.getExecutionContext().getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR));
-                if (hasFailed && this.mode.isRecording() && this.recordingPath != null && this.resourceManager != null)
+                if (hasFailed && this.mode == ExecutionMode.FORCE_RECORDING && this.recordingPath != null && this.resourceManager != null)
                 {
                     try
                     {
