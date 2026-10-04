@@ -1974,6 +1974,93 @@ public class AgentToolLoopStepTest
     }
 
     @Test
+    public void testRetryWithFeedbackInterceptorFeedsErrorResultWithoutThrowingAssertionError()
+    {
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click icon button");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int currentTurn = turn.incrementAndGet();
+            if (currentTurn == 1)
+            {
+                return new LlmResponse("{\"thought\":\"attempting click with soup selector\",\"tool_call\":{\"name\":\"browser_click\",\"arguments\":{\"selector\":\".css-soup:nth-child(2)\"}}}",
+                        new TokenUsage(10, 10, 20), "mock");
+            }
+            else if (currentTurn == 2)
+            {
+                return new LlmResponse("{\"thought\":\"received marker recommendation, marking elements\",\"tool_call\":{\"name\":\"mark_elements\",\"arguments\":{}}}",
+                        new TokenUsage(10, 10, 20), "mock");
+            }
+            else
+            {
+                return new LlmResponse("{\"thought\":\"clicking marker and completing step\",\"tool_calls\":[{\"name\":\"browser_click\",\"arguments\":{\"target\":\"marker:1\"}},{\"name\":\"complete_step\",\"arguments\":{\"summary\":\"Icon clicked successfully\"}}]}",
+                        new TokenUsage(10, 10, 20), "mock");
+            }
+        };
+
+        this.registry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("browser_click", "Click", MAPPER.createObjectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext toolContext)
+            {
+                return ToolResult.success(call.callId(), "Clicked: " + call.arguments().path("target").asText());
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("mark_elements", "Mark Elements", MAPPER.createObjectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext toolContext)
+            {
+                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\",\"markedCount\":5}");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return new ToolDefinition("complete_step", "Complete", MAPPER.createObjectNode());
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext toolContext)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final ToolInterceptor feedbackInterceptor = (call, ctx) -> {
+            final String sel = call.arguments().hasNonNull("selector") ? call.arguments().path("selector").asText() : call.arguments().path("target").asText();
+            if ((".css-soup:nth-child(2)".equals(sel)) && ("browser_click".equals(call.toolName()) || "click".equals(call.toolName())))
+            {
+                return InterceptionVerdict.retryWithFeedback(call.callId(), "Proposed locator is fragile", "Invoke tool 'mark_elements'");
+            }
+            return InterceptionVerdict.allow("Allowed");
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, feedbackInterceptor, caller, 30);
+
+        Assertions.assertDoesNotThrow(() -> step.execute(this.context));
+        Assertions.assertEquals(3, turn.get());
+        Assertions.assertEquals("Icon clicked successfully", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
+
+    @Test
     public void testExtractElementSignaturesNormalizesVolatileAttributes()
     {
         final String domText = """

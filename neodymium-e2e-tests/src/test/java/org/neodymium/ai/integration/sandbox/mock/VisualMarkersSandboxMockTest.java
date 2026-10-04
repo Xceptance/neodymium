@@ -216,4 +216,82 @@ public class VisualMarkersSandboxMockTest extends BaseAiTest
         $("#action-feedback").shouldHave(text("Quick View opened for Hoodie"));
         Assertions.assertEquals(0, $$("[data-m]").size(), "Visual markers must be completely purged from live DOM");
     }
+
+    /**
+     * Tests Quality Judge interception of fragile/volatile locators (score < 4) with zero DOM matches,
+     * issuing non-fatal RETRY_WITH_FEEDBACK advising mark_elements.
+     * The model reads the feedback on Turn 2, calls mark_elements(), and successfully clicks marker:4 on Turn 3.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook
+    @AiMode(ExecutionMode.FORCE_RECORDING)
+    public void testVisualMarkersQualityJudgeInterceptionAndRecovery(final AiSession session) throws Exception
+    {
+        final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/visual-markers.html", server.getPort());
+        final MockLlmProvider mock = (MockLlmProvider) session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+        mock.clearResponses();
+
+        // 1. Open SUT
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "NAVIGATE",
+                  "locator": "",
+                  "value": "%s",
+                  "reasoning": "Navigate to Visual Markers challenge page"
+                }
+              ]
+            }
+            """.formatted(pageUrl), null, "mock"));
+
+        // 2. Action step where Turn 1 proposes a fragile soup selector:
+        final ObjectMapper mapper = new ObjectMapper();
+
+        // Turn 1: Model proposes fragile selector with nth-child and 0 matches (score: 2 < 4)
+        final ObjectNode badClickArgs = mapper.createObjectNode();
+        badClickArgs.put("selector", "div:nth-child(99) > .anonymous-icon-soup");
+        final ToolCall badClickCall = new ToolCall("call_bad_click", "click", badClickArgs);
+        mock.addResponse(new LlmResponse("", null, "mock", List.of(badClickCall), "Attempting click with fragile CSS hierarchy"));
+
+        // Turn 2: Model receives Quality Judge advisory and invokes mark_elements
+        final ToolCall markCall = new ToolCall("call_mark", "mark_elements", mapper.createObjectNode());
+        mock.addResponse(new LlmResponse("", null, "mock", List.of(markCall), "Quality judge flagged fragile selector; invoking mark_elements to overlay visual markers"));
+
+        // Turn 3: Model invokes click with marker:4 and co-proposed complete_step
+        final ObjectNode markerClickArgs = mapper.createObjectNode();
+        markerClickArgs.put("target", "marker:4");
+        final ToolCall markerClickCall = new ToolCall("call_marker_click", "click", markerClickArgs);
+
+        final ObjectNode completeArgs = mapper.createObjectNode();
+        completeArgs.put("summary", "Clicked quick view button via marker:4 after judge advisory");
+        final ToolCall completeCall = new ToolCall("call_complete", "complete_step", completeArgs);
+
+        mock.addResponse(new LlmResponse("", null, "mock", List.of(markerClickCall, completeCall), "Clicking quick view icon via visual marker coordinates"));
+
+        // 3. Verify status
+        mock.addResponse(new LlmResponse("""
+            {
+              "actions": [
+                {
+                  "action": "ASSERT",
+                  "locator": "#action-feedback",
+                  "value": "Quick View opened for Hoodie",
+                  "reasoning": "Verify action feedback banner"
+                }
+              ]
+            }
+            """, null, "mock"));
+
+        session.execute("""
+            steps: |
+              Open ${visual.markers.test.url} in the browser
+              Click the quick view button for hoodie
+              Verify that #action-feedback shows "Quick View opened for Hoodie"
+            """);
+
+        $("#action-feedback").shouldHave(text("Quick View opened for Hoodie"));
+        Assertions.assertEquals(0, $$("[data-m]").size(), "Visual markers must be completely purged from live DOM");
+    }
 }

@@ -541,6 +541,17 @@ public final class AiConfiguration
         return getBoolean("neodymium.ai.judge.enabled", false);
     }
 
+    /**
+     * Checks if the Quality Judge or selector evaluation recommends visual markers
+     * when encountering fragile or volatile locators.
+     *
+     * @return true if visual marker recommendation on bad selectors is enabled (default: true), false otherwise
+     */
+    public boolean isJudgeRecommendMarkerEnabled()
+    {
+        return getBoolean("neodymium.ai.judge.recommendMarker", true);
+    }
+
 
     /**
      * Checks if replay execution should respect recorded delays and pacing.
