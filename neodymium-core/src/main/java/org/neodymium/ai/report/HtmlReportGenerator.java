@@ -1575,17 +1575,19 @@ public final class HtmlReportGenerator
                     var tbody = document.createElement('tbody');
                     actions.forEach(function(a, ai) {
                         var tr = document.createElement('tr');
-                        var resClass = a.success ? 'status-pass' : 'status-fail';
-                        var resText = a.success ? 'SUCCESS' : 'FAILED';
+                        var resClass = a.success ? (a.healed ? 'status-heal' : 'status-pass') : 'status-fail';
+                        var resText = a.success ? (a.healed ? 'HEALED' : 'SUCCESS') : 'FAILED';
 
                         var displayTarget = a.resolvedTarget || a.target || '-';
-                        var hasTargetTpl = a.target && a.resolvedTarget && a.target !== a.resolvedTarget;
+                        var hasTargetTpl = !a.healed && a.target && a.resolvedTarget && a.target !== a.resolvedTarget;
                         var targetHtml;
                         if (displayTarget === '-') {
                             targetHtml = '<span class="text-muted">-</span>';
                         } else {
                             targetHtml = '<code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + escapeHtml(displayTarget) + '</code>';
-                            if (hasTargetTpl) {
+                            if (a.healed && a.target && a.target !== displayTarget) {
+                                targetHtml += '<div class="action-healed-note" title="Original Recorded Selector">🧬 Healed from: <code>' + escapeHtml(a.target) + '</code></div>';
+                            } else if (hasTargetTpl) {
                                 targetHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.target) + '</code></div>';
                             }
                         }
@@ -2097,6 +2099,7 @@ public final class HtmlReportGenerator
             }
             .status-pass { background: var(--accent-success-light); color: var(--accent-success); border: 1px solid var(--accent-success); }
             .status-fail { background: var(--accent-danger-light); color: var(--accent-danger); border: 1px solid var(--accent-danger); }
+            .status-heal { background: var(--accent-purple-light); color: var(--accent-purple); border: 1px solid rgba(124, 58, 237, 0.4); }
             .metrics-grid {
                 display: grid;
                 grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -2921,6 +2924,21 @@ public final class HtmlReportGenerator
                 background: #f1f5f9;
                 padding: 1px 4px;
                 border-radius: 3px;
+            }
+            .action-healed-note {
+                font-size: 0.72rem;
+                color: var(--accent-purple, #7c3aed);
+                margin-top: 3px;
+                font-weight: 500;
+            }
+            .action-healed-note code {
+                font-size: 0.7rem;
+                background: var(--accent-purple-light, #f5f3ff);
+                color: var(--accent-purple, #7c3aed);
+                border: 1px solid rgba(124, 58, 237, 0.25);
+                padding: 1px 4px;
+                border-radius: 3px;
+                text-decoration: line-through;
             }
             .reasoning-card {
                 background: var(--accent-primary-light);

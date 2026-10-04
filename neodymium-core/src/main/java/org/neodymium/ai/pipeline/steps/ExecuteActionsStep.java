@@ -719,7 +719,7 @@ public final class ExecuteActionsStep
                 final Object isHealed = c.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP);
                 if (!step.isFailed() && step.getStatus() != PlaybookStepStatus.SKIPPED)
                 {
-                    if (Boolean.TRUE.equals(isHealed))
+                    if (Boolean.TRUE.equals(isHealed) || step.getStatus() == PlaybookStepStatus.HEALED)
                     {
                         step.setStatus(PlaybookStepStatus.HEALED);
                         step.setSchemaVersion(PlaybookStep.CURRENT_SCHEMA_VERSION);

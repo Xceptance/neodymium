@@ -1496,6 +1496,74 @@ public final class ExecuteActionsStepTest
     }
 
     @Test
+    public void testOfflineReplayHealedStepPreservedThroughPipelineAndDispatchesHealedEvent() throws Exception
+    {
+        final SessionData sessionData = new SessionData(Collections.emptyMap());
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final List<StepFinishedEvent> finishedEvents = new ArrayList<>();
+        eventBus.registerListener(event ->
+        {
+            if (event instanceof StepFinishedEvent sfe)
+            {
+                finishedEvents.add(sfe);
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(
+                ExecutionMode.REPLAY_WITH_HEALING,
+                sessionData,
+                new LlmRegistry(),
+                eventBus,
+                executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+
+        final PlaybookStep step = new PlaybookStep("Healed step during offline replay");
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final ObjectNode schema = JsonNodeFactory.instance.objectNode().put("type", "object");
+        toolRegistry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("test_tool", "Test tool", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                // Simulate PlaybookToolReplayer marking the step as HEALED during offline replay
+                step.setStatus(PlaybookStepStatus.HEALED);
+                return ToolResult.success(call.callId(), "ok");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final ObjectNode args = JsonNodeFactory.instance.objectNode();
+        step.addToolCall(new ToolCall("call-1", "test_tool", args));
+
+        // Step mapped to pipeline step
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+        pipelineStep.execute(context);
+
+        // Drain pipeline steps (TryCatch and step end hook)
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.HEALED, step.getStatus(), "Offline healed step must retain HEALED status");
+        assertEquals(PlaybookStep.CURRENT_SCHEMA_VERSION, step.getSchemaVersion(), "Schema version must be updated on healed step");
+        assertEquals(1, finishedEvents.size(), "One StepFinishedEvent must be dispatched");
+        assertEquals(PlaybookStepStatus.HEALED, finishedEvents.get(0).getStatus(), "StepFinishedEvent status must be HEALED");
+    }
+
+    @Test
     public void testReplayWithHealingFailsConclusivelyOnAssertionFailureWithoutEscalatingToAgentLoop() throws Exception
     {
         final SessionData sessionData = new SessionData(Collections.emptyMap());

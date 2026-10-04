@@ -443,6 +443,11 @@ public final class TestExecutionReport
             this.status = status;
         }
 
+        public boolean isHealed()
+        {
+            return "HEALED".equalsIgnoreCase(this.status);
+        }
+
         public long getStartTimeMs()
         {
             return this.startTimeMs;
@@ -978,6 +983,7 @@ public final class TestExecutionReport
         private String reasoning;
         private boolean success;
         private String phase;
+        private boolean healed;
 
         public ReportActionEntry()
         {
@@ -1012,6 +1018,21 @@ public final class TestExecutionReport
         {
             this(type, target, value, description, reasoning, success);
             this.phase = phase;
+        }
+
+        public ReportActionEntry(
+            final String type,
+            final String target,
+            final String value,
+            final String description,
+            final String reasoning,
+            final boolean success,
+            final String phase,
+            final boolean healed
+        )
+        {
+            this(type, target, value, description, reasoning, success, phase);
+            this.healed = healed;
         }
 
         public String getType()
@@ -1102,6 +1123,16 @@ public final class TestExecutionReport
         public void setPhase(final String phase)
         {
             this.phase = phase;
+        }
+
+        public boolean isHealed()
+        {
+            return this.healed;
+        }
+
+        public void setHealed(final boolean healed)
+        {
+            this.healed = healed;
         }
     }
 

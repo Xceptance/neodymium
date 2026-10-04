@@ -159,9 +159,9 @@ public final class PlaybookToolReplayer
 
         LOGGER.info("▶ Replaying {} tool calls for step: \"{}\"", toolCalls.size(), step.getInstruction());
 
+        final AiSession session = effectiveContext.getVariable("neodymium.session", AiSession.class).orElse(null);
         final ExecutionMode executionMode = effectiveContext.getVariable("neodymium.executionMode", ExecutionMode.class)
                 .orElseGet(() -> {
-                    final AiSession session = effectiveContext.getVariable("neodymium.session", AiSession.class).orElse(null);
                     if (session != null && session.getExecutionMode() != null)
                     {
                         return session.getExecutionMode();
@@ -209,13 +209,12 @@ public final class PlaybookToolReplayer
             }
 
             final ToolCall finalCall = intermediateCall;
+            final boolean isToolHealed = healedCall != null;
 
             if (executionMode == ExecutionMode.REPLAY_STRICT)
             {
                 verifyStrictReplayGuards(finalCall, step, i);
             }
-
-            final AiSession session = effectiveContext.getVariable("neodymium.session", AiSession.class).orElse(null);
 
             // Check if tool is registered
             final Optional<AiTool> toolOpt = effectiveRegistry.getTool(finalCall.toolName());
@@ -225,19 +224,11 @@ public final class PlaybookToolReplayer
                 try
                 {
                     result = toolOpt.get().execute(finalCall, effectiveContext);
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, true));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, true);
                 }
                 catch (final AssertionError e)
                 {
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
@@ -249,11 +240,7 @@ public final class PlaybookToolReplayer
                 }
                 catch (final Exception e)
                 {
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
@@ -271,17 +258,11 @@ public final class PlaybookToolReplayer
                 {
                     effectiveExecutor.execute(mapped);
                     result = ToolResult.success(finalCall.callId(), "Action executed via TargetExecutor");
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, true));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, true);
                 }
                 catch (final AssertionError e)
                 {
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
@@ -293,10 +274,7 @@ public final class PlaybookToolReplayer
                 }
                 catch (final Exception e)
                 {
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
@@ -329,10 +307,16 @@ public final class PlaybookToolReplayer
             }
         }
 
-        if (anyHealed)
+        final boolean isTransientHealed = session != null && session.getExecutionContext() != null
+                && Boolean.TRUE.equals(session.getExecutionContext().getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP));
+        if (anyHealed || step.getStatus() == PlaybookStepStatus.HEALED || isTransientHealed)
         {
             step.setStatus(PlaybookStepStatus.HEALED);
             step.setSchemaVersion(PlaybookStep.CURRENT_SCHEMA_VERSION);
+            if (session != null && session.getExecutionContext() != null && session.getExecutionContext().getTransientData() != null)
+            {
+                session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, Boolean.TRUE);
+            }
             LOGGER.info("✨ Step successfully replayed with self-healing: \"{}\"", step.getInstruction());
         }
         else
@@ -342,6 +326,29 @@ public final class PlaybookToolReplayer
         }
 
         return ToolResult.success(UUID.randomUUID().toString(), "Successfully replayed " + toolCalls.size() + " tool calls");
+    }
+
+    private static void dispatchActionEvent(
+        final AiSession session,
+        final ToolCall canonicalCall,
+        final ToolCall finalCall,
+        final boolean isHealed,
+        final boolean success
+    )
+    {
+        if (session != null && session.getEventBus() != null)
+        {
+            final Action resolvedAction = AgentToolLoopStep.mapToolCallToAction(finalCall);
+            if (isHealed && canonicalCall != null)
+            {
+                final Action canonicalAction = AgentToolLoopStep.mapToolCallToAction(canonicalCall);
+                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, resolvedAction, success, null, true));
+            }
+            else
+            {
+                session.getEventBus().dispatch(new ActionExecutedEvent(resolvedAction, success));
+            }
+        }
     }
 
     /**

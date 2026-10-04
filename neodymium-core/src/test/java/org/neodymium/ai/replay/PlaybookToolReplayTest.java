@@ -25,11 +25,16 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.event.structural.ActionExecutedEvent;
+import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
+import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
@@ -215,6 +220,23 @@ public class PlaybookToolReplayTest
 
         this.context.setVariable("liveCandidates", List.of(liveCandidate));
 
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final List<ActionExecutedEvent> actionEvents = new ArrayList<>();
+        eventBus.registerListener(event ->
+        {
+            if (event instanceof ActionExecutedEvent aee)
+            {
+                actionEvents.add(aee);
+            }
+        });
+        final AiSession session = AiSession.mock(
+                ExecutionMode.REPLAY_WITH_HEALING,
+                new SessionData(Map.of()),
+                new LlmRegistry(),
+                eventBus,
+                (TargetExecutor) null);
+        this.context.setVariable("neodymium.session", session);
+
         final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
 
         Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
@@ -222,6 +244,12 @@ public class PlaybookToolReplayTest
         Assertions.assertEquals(1, this.executedCalls.size());
         // Target was healed to the live candidate selector #submit-order!
         Assertions.assertEquals("#submit-order", this.executedCalls.get(0).arguments().path("target").asText());
+
+        Assertions.assertEquals(1, actionEvents.size(), "ActionExecutedEvent must be dispatched");
+        final ActionExecutedEvent aee = actionEvents.get(0);
+        Assertions.assertTrue(aee.isHealed(), "ActionExecutedEvent must be marked as healed");
+        Assertions.assertEquals("button.old-class", aee.getAction().getTarget(), "Canonical target must be recorded selector");
+        Assertions.assertEquals("#submit-order", aee.getResolvedAction().getTarget(), "Resolved target must be healed selector");
     }
 
     @Test
