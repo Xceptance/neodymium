@@ -570,6 +570,18 @@ public final class ExecuteActionsStep
                         {
                             throw schemaErr;
                         }
+                        if (t instanceof final ConclusiveFailureException conclusive)
+                        {
+                            throw conclusive;
+                        }
+                        if (t.getCause() instanceof final ConclusiveFailureException conclusive)
+                        {
+                            throw conclusive;
+                        }
+                        if (step != null && step.isAssertionStep())
+                        {
+                            throw new ConclusiveFailureException("Assertion step failed during replay: " + t.getMessage(), t);
+                        }
                         if (mode.supportsHealing() && !step.isNoHealing())
                         {
                             throw new HealingRequiredException("Replay step execution failed against SUT: " + t.getMessage(), t);

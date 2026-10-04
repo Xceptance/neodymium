@@ -28,6 +28,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
@@ -458,5 +459,205 @@ public class PlaybookToolReplayTest
         Assertions.assertEquals(1, this.executedCalls.size());
         // In REPLAY_STRICT mode, healing MUST be bypassed completely; selector remains button.old-class!
         Assertions.assertEquals("button.old-class", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testAssertionLocatorHealsWhenElementTextMatchesExpected() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                final String target = call.arguments().hasNonNull("selector")
+                        ? call.arguments().path("selector").asText()
+                        : call.arguments().path("target").asText();
+                if ("#subtotal".equals(target))
+                {
+                    throw new AssertionError("Element #subtotal not found on page");
+                }
+                return ToolResult.success(call.callId(), "Subtotal verified: " + target);
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert subtotal is 35");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("target", "#subtotal")
+                .put("expectedText", "35");
+        step.addToolCall(new ToolCall("call-assert-1", "assert_text", assertArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "span",
+                "35",
+                Set.of("subtotal", "amount"),
+                Map.of("id", "subtotal", "data-test", "subtotal"),
+                "text",
+                "Subtotal: 35",
+                "div",
+                1
+        );
+        final Action recordedAction = new Action("ASSERT_TEXT", "#subtotal", List.of("35"), "Verify subtotal", "");
+        recordedAction.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(recordedAction));
+
+        // Candidate on live page moved to #cart-subtotal and still has text "35"
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "span",
+                "35",
+                Set.of("cart-subtotal", "amount"),
+                Map.of("id", "cart-subtotal", "data-test", "subtotal"),
+                "text",
+                "Subtotal: 35",
+                "div",
+                1
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals(1, this.executedCalls.size());
+        Assertions.assertEquals("#cart-subtotal", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testAssertionLocatorHealingRejectedWhenElementTextDoesNotMatchExpected()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                final String target = call.arguments().hasNonNull("selector")
+                        ? call.arguments().path("selector").asText()
+                        : call.arguments().path("target").asText();
+                if ("#subtotal".equals(target))
+                {
+                    throw new AssertionError("Element #subtotal not found on page");
+                }
+                return ToolResult.success(call.callId(), "Subtotal verified: " + target);
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert subtotal is 35");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("target", "#subtotal")
+                .put("expectedText", "35");
+        step.addToolCall(new ToolCall("call-assert-2", "assert_text", assertArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "span",
+                "35",
+                Set.of("subtotal", "amount"),
+                Map.of("id", "subtotal", "data-test", "subtotal"),
+                "text",
+                "Subtotal: 35",
+                "div",
+                1
+        );
+        final Action recordedAction = new Action("ASSERT_TEXT", "#subtotal", List.of("35"), "Verify subtotal", "");
+        recordedAction.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(recordedAction));
+
+        // Candidate on live page has changed value "40" (data regression / price mismatch!)
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "span",
+                "40",
+                Set.of("cart-subtotal", "amount"),
+                Map.of("id", "cart-subtotal", "data-test", "subtotal"),
+                "text",
+                "Subtotal: 40",
+                "div",
+                1
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        // Healing must be rejected because candidate text "40" does not match expected "35".
+        // As a result, the tool runs with unhealed "#subtotal" and fails conclusively.
+        final ConclusiveFailureException ex = Assertions.assertThrows(
+                ConclusiveFailureException.class,
+                () -> PlaybookToolReplayer.replayStep(step, this.registry, this.context)
+        );
+
+        Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
+        Assertions.assertEquals(PlaybookStepStatus.FAILED, step.getStatus());
+        Assertions.assertEquals(1, this.executedCalls.size());
+        Assertions.assertEquals("#subtotal", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testPageLevelAssertionBypassesLocatorHealing() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_count", "Asserts count", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "Count verified");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert count of items is 2");
+        final ObjectNode countArgs = MAPPER.createObjectNode()
+                .put("selector", ".cart-item")
+                .put("count", 2);
+        step.addToolCall(new ToolCall("call-count-1", "assert_count", countArgs));
+
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "div",
+                "Item",
+                Set.of("new-cart-item"),
+                Map.of("class", "new-cart-item"),
+                "item",
+                "Item",
+                "div",
+                1
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
+        Assertions.assertEquals(1, this.executedCalls.size());
+        // Page-level assert_count must not heal locator via single DomFeatureVector
+        Assertions.assertEquals(".cart-item", this.executedCalls.get(0).arguments().path("selector").asText());
     }
 }

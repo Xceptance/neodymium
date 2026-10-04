@@ -33,6 +33,7 @@ import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
 import org.neodymium.ai.session.AiSession;
@@ -52,8 +53,12 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Replay engine executing recorded {@link ToolCall}s directly via {@link ToolRegistry}
@@ -236,6 +241,10 @@ public final class PlaybookToolReplayer
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
+                    if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                    {
+                        throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                    }
                     throw e;
                 }
                 catch (final Exception e)
@@ -248,6 +257,10 @@ public final class PlaybookToolReplayer
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
+                    if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                    {
+                        throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                    }
                     throw e;
                 }
             }
@@ -272,6 +285,10 @@ public final class PlaybookToolReplayer
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
+                    if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                    {
+                        throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                    }
                     throw e;
                 }
                 catch (final Exception e)
@@ -283,6 +300,10 @@ public final class PlaybookToolReplayer
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
+                    if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                    {
+                        throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                    }
                     throw e;
                 }
             }
@@ -293,11 +314,15 @@ public final class PlaybookToolReplayer
 
             if (result != null && result.status() == ToolResult.Status.ERROR)
             {
+                step.setStatus(PlaybookStepStatus.FAILED);
+                step.setFailed(true);
+                step.setFailureReason(result.content());
+                if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                {
+                    throw new ConclusiveFailureException("Assertion failed during replay: " + result.content());
+                }
                 if (result.content() != null && result.content().startsWith("AssertionError"))
                 {
-                    step.setStatus(PlaybookStepStatus.FAILED);
-                    step.setFailed(true);
-                    step.setFailureReason(result.content());
                     throw new AssertionError(result.content());
                 }
                 throw new RuntimeException("Tool execution error in '" + finalCall.toolName() + "': " + result.content());
@@ -443,10 +468,13 @@ public final class PlaybookToolReplayer
 
         // Only interactive / actionable tools targeting an element can be healed.
         // Read-only inspection / navigation tools must never trigger locator healing.
-        final String toolName = call.toolName() != null ? call.toolName().trim().toLowerCase() : "";
+        final String toolName = call.toolName() != null ? call.toolName().trim().toLowerCase(Locale.ROOT) : "";
         if ("query_dom".equals(toolName) || "inspect_element".equals(toolName) || "execute_script".equals(toolName)
                 || "take_screenshot".equals(toolName) || "screenshot".equals(toolName) || "navigate".equals(toolName)
-                || "browser_navigate".equals(toolName) || "get_page_source".equals(toolName))
+                || "browser_navigate".equals(toolName) || "get_page_source".equals(toolName)
+                || "assert_url".equals(toolName) || "browser_assert_url".equals(toolName)
+                || "assert_title".equals(toolName) || "browser_assert_title".equals(toolName)
+                || "assert_count".equals(toolName) || "browser_assert_count".equals(toolName))
         {
             return null;
         }
@@ -555,6 +583,11 @@ public final class PlaybookToolReplayer
             final DomFeatureVector best = LocatorCascadeResolver.findBestMatch(recordedVector, liveCandidates, 0.70);
             if (best != null)
             {
+                if (PlaybookStep.isAssertionToolName(toolName) && !candidateMatchesAssertionExpectation(best, toolName, args))
+                {
+                    LOGGER.info("🚫 Rejected locator healing for assertion tool '{}': candidate element did not match assertion criteria", toolName);
+                    return null;
+                }
                 final String healedSelector = resolveSelectorForCandidate(best);
                 final ObjectNode updatedArgs = args.deepCopy();
                 if (healedSelector != null && !currentTarget.equals(healedSelector) && (!isCoordinateTarget || !isBareGenericTag(healedSelector)))
@@ -807,5 +840,247 @@ public final class PlaybookToolReplayer
             return normLive.contains(normRecorded) || normRecorded.contains(normLive);
         }
         return true;
+    }
+
+    private static boolean candidateMatchesAssertionExpectation(
+            final DomFeatureVector candidate,
+            final String toolName,
+            final JsonNode args)
+    {
+        if (candidate == null || toolName == null || args == null)
+        {
+            return false;
+        }
+
+        final String cleanTool = stripNamespacePrefix(toolName).toLowerCase(Locale.ROOT);
+
+        if ("assert_text".equals(cleanTool) || "browser_assert_text".equals(cleanTool))
+        {
+            final String rawExpectedText = args.hasNonNull("expectedText")
+                    ? args.path("expectedText").asText()
+                    : args.path("text").asText("");
+            final boolean exact = args.path("exact").asBoolean(false);
+            final boolean regex = args.path("regex").asBoolean(false);
+            final boolean negated = args.path("negated").asBoolean(false)
+                    || args.path("not").asBoolean(false)
+                    || args.path("invert").asBoolean(false);
+
+            final List<String> textCandidates = new ArrayList<>();
+            if (candidate.getText() != null && !candidate.getText().isBlank())
+            {
+                textCandidates.add(candidate.getText());
+            }
+            if (candidate.getAccessibleName() != null && !candidate.getAccessibleName().isBlank())
+            {
+                textCandidates.add(candidate.getAccessibleName());
+            }
+            final String valAttr = candidate.getAttributes().get("value");
+            if (valAttr != null && !valAttr.isBlank())
+            {
+                textCandidates.add(valAttr);
+            }
+            final String placeholder = candidate.getAttributes().get("placeholder");
+            if (placeholder != null && !placeholder.isBlank())
+            {
+                textCandidates.add(placeholder);
+            }
+            final String title = candidate.getAttributes().get("title");
+            if (title != null && !title.isBlank())
+            {
+                textCandidates.add(title);
+            }
+
+            boolean matched = false;
+            if (regex)
+            {
+                Pattern pattern;
+                try
+                {
+                    pattern = Pattern.compile(rawExpectedText, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                }
+                catch (final PatternSyntaxException e)
+                {
+                    pattern = Pattern.compile(Pattern.quote(rawExpectedText), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                }
+                for (final String text : textCandidates)
+                {
+                    if (pattern.matcher(text).find() || pattern.matcher(text.replaceAll("\\s+", " ")).find())
+                    {
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                final String normExpected = rawExpectedText.replaceAll("\\s+", " ").trim();
+                for (final String text : textCandidates)
+                {
+                    if (exact)
+                    {
+                        if (text.trim().equalsIgnoreCase(rawExpectedText.trim())
+                                || text.replaceAll("\\s+", " ").trim().equalsIgnoreCase(normExpected))
+                        {
+                            matched = true;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        if (text.toLowerCase(Locale.ROOT).contains(rawExpectedText.toLowerCase(Locale.ROOT))
+                                || text.replaceAll("\\s+", " ").toLowerCase(Locale.ROOT).contains(normExpected.toLowerCase(Locale.ROOT)))
+                        {
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            return negated ? !matched : matched;
+        }
+
+        if ("assert_attribute".equals(cleanTool) || "browser_assert_attribute".equals(cleanTool))
+        {
+            final String attrName = args.hasNonNull("attribute")
+                    ? args.path("attribute").asText()
+                    : args.path("attributeName").asText("");
+            if (attrName.isBlank())
+            {
+                return false;
+            }
+
+            final boolean hasExpectedVal = args.hasNonNull("expectedValue") || args.hasNonNull("value");
+            final String expectedVal = args.hasNonNull("expectedValue")
+                    ? args.path("expectedValue").asText()
+                    : args.path("value").asText("");
+            final boolean exact = args.path("exact").asBoolean(false);
+            final boolean regex = args.path("regex").asBoolean(false);
+            final boolean negated = args.path("negated").asBoolean(false)
+                    || args.path("not").asBoolean(false);
+
+            String actualVal = null;
+            for (final Map.Entry<String, String> entry : candidate.getAttributes().entrySet())
+            {
+                if (entry.getKey().equalsIgnoreCase(attrName))
+                {
+                    actualVal = entry.getValue();
+                    break;
+                }
+            }
+
+            if (actualVal == null)
+            {
+                return negated;
+            }
+
+            if (!hasExpectedVal)
+            {
+                return !negated;
+            }
+
+            boolean matched = false;
+            if (regex)
+            {
+                Pattern pattern;
+                try
+                {
+                    pattern = Pattern.compile(expectedVal, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                }
+                catch (final PatternSyntaxException e)
+                {
+                    pattern = Pattern.compile(Pattern.quote(expectedVal), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                }
+                matched = pattern.matcher(actualVal).find();
+            }
+            else if (exact)
+            {
+                matched = actualVal.equalsIgnoreCase(expectedVal);
+            }
+            else
+            {
+                matched = actualVal.toLowerCase(Locale.ROOT).contains(expectedVal.toLowerCase(Locale.ROOT));
+            }
+
+            return negated ? !matched : matched;
+        }
+
+        if ("assert_element_state".equals(cleanTool) || "browser_assert_element_state".equals(cleanTool))
+        {
+            final List<String> states = new ArrayList<>();
+            if (args.has("states") && args.path("states").isArray())
+            {
+                for (final JsonNode s : args.path("states"))
+                {
+                    if (s.isTextual() && !s.asText().isBlank())
+                    {
+                        states.add(s.asText().trim().toLowerCase(Locale.ROOT));
+                    }
+                }
+            }
+            if (states.isEmpty())
+            {
+                final String rawState = args.hasNonNull("state")
+                        ? args.path("state").asText()
+                        : (args.hasNonNull("expectedState")
+                                ? args.path("expectedState").asText()
+                                : args.path("value").asText(""));
+                for (final String part : rawState.split("[,&]|\\band\\b"))
+                {
+                    final String trimmed = part.trim().toLowerCase(Locale.ROOT);
+                    if (!trimmed.isBlank())
+                    {
+                        states.add(trimmed);
+                    }
+                }
+            }
+
+            final boolean negated = args.path("negated").asBoolean(false)
+                    || args.path("not").asBoolean(false);
+
+            for (final String state : states)
+            {
+                final boolean satisfies = switch (state)
+                {
+                    case "visible", "displayed" -> candidate.getWidth() > 0 && candidate.getHeight() > 0;
+                    case "hidden", "invisible" -> candidate.getWidth() <= 0 || candidate.getHeight() <= 0;
+                    case "disabled" -> candidate.getAttributes().containsKey("disabled")
+                            || "true".equalsIgnoreCase(candidate.getAttributes().get("aria-disabled"));
+                    case "enabled" -> !candidate.getAttributes().containsKey("disabled")
+                            && !"true".equalsIgnoreCase(candidate.getAttributes().get("aria-disabled"));
+                    case "checked" -> candidate.getAttributes().containsKey("checked")
+                            || "true".equalsIgnoreCase(candidate.getAttributes().get("aria-checked"));
+                    case "unchecked" -> !candidate.getAttributes().containsKey("checked")
+                            && !"true".equalsIgnoreCase(candidate.getAttributes().get("aria-checked"));
+                    case "readonly" -> candidate.getAttributes().containsKey("readonly")
+                            || "true".equalsIgnoreCase(candidate.getAttributes().get("aria-readonly"));
+                    case "editable" -> !candidate.getAttributes().containsKey("readonly")
+                            && !candidate.getAttributes().containsKey("disabled");
+                    case "exists" -> true;
+                    case "absent" -> false;
+                    default -> true;
+                };
+
+                final boolean stateMatched = negated ? !satisfies : satisfies;
+                if (!stateMatched)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // For any other assertion tools, do not allow healing without exact validation
+        return false;
+    }
+
+    private static String stripNamespacePrefix(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return "";
+        }
+        final int colonIdx = toolName.indexOf(':');
+        return colonIdx >= 0 ? toolName.substring(colonIdx + 1) : toolName;
     }
 }
