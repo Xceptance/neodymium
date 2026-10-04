@@ -1017,6 +1017,9 @@ public final class PlaybookStep
     public static final Pattern LAYOUT_FULL_PATTERN = Pattern.compile("(?i)\\(\\s*(?:layout\\s*:[^)]*\\bfull\\b[^)]*|layout[-_]full)\\)");
     private static final Pattern LAYOUT_TAG_PARAM_PATTERN = Pattern.compile("(?i)\\(\\s*layout(?:\\s*:\\s*([^)]+))?\\s*\\)");
     public static final Pattern HINT_PATTERN = Pattern.compile("(?i)\\(\\s*hint\\s*:\\s*[^)]+\\)");
+    public static final Pattern VERIFICATION_PREFIX_PATTERN =
+        Pattern.compile("(?i)^(assert|verify|confirm|validate|ensure|check\\s+that)\\b");
+
     public static final Pattern INTERACTIVE_ACTION_PATTERN =
         Pattern.compile("(?i)\\b(type|click|select|clear|submit|fill|press|enter|hover|drag|drop|scroll|check|uncheck|choose)\\b");
 
@@ -1139,6 +1142,50 @@ public final class PlaybookStep
             return false;
         }
         return VISUAL_FULL_PATTERN.matcher(this.instruction).find() || LAYOUT_FULL_PATTERN.matcher(this.instruction).find();
+    }
+
+    /**
+     * Checks if this step represents an assertion or verification milestone.
+     *
+     * @return true if the step has recorded assertion tool calls or its instruction indicates a verification
+     */
+    @JsonIgnore
+    public boolean isAssertionStep()
+    {
+        for (final ToolCall tc : this.toolCalls)
+        {
+            if (tc != null && isAssertionToolName(tc.toolName()))
+            {
+                return true;
+            }
+        }
+        if (this.instruction != null && VERIFICATION_PREFIX_PATTERN.matcher(this.instruction.trim()).find())
+        {
+            return true;
+        }
+        if (this.rawInstruction != null && VERIFICATION_PREFIX_PATTERN.matcher(this.rawInstruction.trim()).find())
+        {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Determines whether a given tool name is an assertion or verification tool.
+     *
+     * @param toolName the tool name to evaluate
+     * @return true if the tool represents an assertion
+     */
+    public static boolean isAssertionToolName(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return false;
+        }
+        final int colonIdx = toolName.indexOf(':');
+        final String rawName = colonIdx >= 0 ? toolName.substring(colonIdx + 1) : toolName;
+        final String name = rawName.trim().toLowerCase(Locale.ROOT);
+        return name.startsWith("assert") || name.startsWith("browser_assert");
     }
 
     /**

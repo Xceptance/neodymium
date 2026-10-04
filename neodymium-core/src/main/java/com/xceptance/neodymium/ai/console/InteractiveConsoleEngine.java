@@ -1009,8 +1009,7 @@ public final class InteractiveConsoleEngine {
         @Override
         public void handle(final HttpExchange exchange) throws IOException
         {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+            InteractiveConsoleServer.applyCorsHeaders(exchange, "GET, HEAD, OPTIONS");
 
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod()))
             {
@@ -1113,9 +1112,7 @@ public final class InteractiveConsoleEngine {
     private final class ActionHandler implements HttpHandler {
         @Override
         public void handle(final HttpExchange exchange) throws IOException {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, OPTIONS");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+            InteractiveConsoleServer.applyCorsHeaders(exchange, "POST, OPTIONS");
 
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod())) {
                 exchange.sendResponseHeaders(204, -1);

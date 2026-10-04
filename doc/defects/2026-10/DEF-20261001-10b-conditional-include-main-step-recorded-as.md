@@ -1,4 +1,4 @@
-# [DEF-20261001-10] Conditional Include Main Step Recorded as Substep in Console Execution Reports
+# [DEF-20261001-10b] Conditional Include Main Step Recorded as Substep in Console Execution Reports
 
 - **Status:** Resolved
 - **Opened:** 2026-10-01

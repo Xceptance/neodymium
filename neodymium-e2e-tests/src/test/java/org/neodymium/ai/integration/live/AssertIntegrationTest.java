@@ -36,6 +36,7 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiLinter;
@@ -56,6 +57,7 @@ import org.neodymium.common.browser.Browser;
 @NeodymiumAiTest
 @AiLinter(false)
 @AiJudge({false, true})
+@Tag("LiveAPI")
 public class AssertIntegrationTest extends BaseAiTest
 {
 

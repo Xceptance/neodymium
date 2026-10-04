@@ -32,13 +32,21 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.action.Action;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.model.DomFeatureVector;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.replay.PlaybookToolReplayer;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.AiTool;
+import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
@@ -1304,6 +1312,26 @@ public class BrowserToolsTest
                 mapper.createObjectNode().put("notEmpty", true));
         final ToolResult notEmptyFlagResult = tool.execute(notEmptyFlagCall, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyFlagResult.status());
+
+        // 6. A stray empty=false must NOT cancel the comparison when an expected URL is given (used to pass vacuously)
+        final long strayTimeout = Configuration.timeout;
+        try
+        {
+            Configuration.timeout = 50;
+            final ToolCall strayEmptyFalseCall = new ToolCall("call-url-6", "assert_url",
+                    mapper.createObjectNode().put("expectedUrl", "https://other-domain.com").put("exact", true).put("empty", false));
+            Assertions.assertThrows(AssertionError.class, () -> tool.execute(strayEmptyFalseCall, null),
+                    "empty=false together with an expected URL must still compare the URL");
+        }
+        finally
+        {
+            Configuration.timeout = strayTimeout;
+        }
+
+        // 7. empty=false without any expected URL stays an alias for 'not empty'
+        final ToolCall emptyFalseAloneCall = new ToolCall("call-url-7", "assert_url",
+                mapper.createObjectNode().put("empty", false));
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, tool.execute(emptyFalseAloneCall, null).status());
     }
 
     @Test
@@ -1356,6 +1384,26 @@ public class BrowserToolsTest
                 mapper.createObjectNode().put("notEmpty", true));
         final ToolResult notEmptyTitleFlagResult = tool.execute(notEmptyTitleFlagCall, null);
         Assertions.assertEquals(ToolResult.Status.SUCCESS, notEmptyTitleFlagResult.status());
+
+        // 6. A stray empty=false must NOT cancel the comparison when an expected title is given (used to pass vacuously)
+        final long strayTimeout = Configuration.timeout;
+        try
+        {
+            Configuration.timeout = 50;
+            final ToolCall strayEmptyFalseCall = new ToolCall("call-title-6", "assert_title",
+                    mapper.createObjectNode().put("expectedTitle", "Non-Existent Title").put("exact", true).put("empty", false));
+            Assertions.assertThrows(AssertionError.class, () -> tool.execute(strayEmptyFalseCall, null),
+                    "empty=false together with an expected title must still compare the title");
+        }
+        finally
+        {
+            Configuration.timeout = strayTimeout;
+        }
+
+        // 7. empty=false without any expected title stays an alias for 'not empty'
+        final ToolCall emptyFalseAloneCall = new ToolCall("call-title-7", "assert_title",
+                mapper.createObjectNode().put("empty", false));
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, tool.execute(emptyFalseAloneCall, null).status());
     }
 
     @Test
@@ -1712,6 +1760,143 @@ public class BrowserToolsTest
             // Verify auto-purge occurred upon action completion
             Assertions.assertFalse($("[data-m='1']").exists(), "Markers must be auto-purged from DOM after click execution");
             Assertions.assertFalse($("#__neo_som_badges__").exists(), "Badge overlay container must be purged after click execution");
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testAssertTextLiveDomHealsWhenTextMatchesAndFailsOnMismatch() throws Exception
+    {
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Assert Live DOM Test</title></head>
+            <body>
+                <div id="cart">
+                    <span id="cart-total-dyn" role="status" class="total-amount">35.00</span>
+                </div>
+            </body>
+            </html>
+            """;
+        try
+        {
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            final List<DomFeatureVector> liveCandidates = new PageAnalyzer().extractFeatureVectors(WebDriverRunner.getWebDriver());
+            Assertions.assertFalse(liveCandidates.isEmpty(), "Live DOM vectors must be extracted from browser");
+
+            final SimpleToolContext ctx = new SimpleToolContext(this.registry);
+            ctx.setVariable("liveCandidates", liveCandidates);
+            ctx.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+            final PlaybookStep step = new PlaybookStep("Assert cart subtotal is 35.00");
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode assertArgs = mapper.createObjectNode()
+                    .put("target", "#cart-total")
+                    .put("expectedText", "35.00");
+            step.addToolCall(new ToolCall("call-assert-text", "assert_text", assertArgs));
+
+            final DomFeatureVector recordedVector = new DomFeatureVector(
+                    "span",
+                    "35.00",
+                    Set.of("total-amount"),
+                    Map.of("id", "cart-total"),
+                    "text",
+                    "total",
+                    "div",
+                    1
+            );
+            final Action recordedAction = new Action("ASSERT_TEXT", "#cart-total", List.of("35.00"), "Verify subtotal", "");
+            recordedAction.setDomFeatureVector(recordedVector);
+            step.setActions(List.of(recordedAction));
+
+            // 1. Replay when DOM text matches 35.00 -> heals locator to #cart-total-dyn
+            final ToolResult healResult = PlaybookToolReplayer.replayStep(step, this.registry, ctx);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, healResult.status());
+            Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+
+            // 2. Mutate DOM to introduce data mismatch (price regression)
+            Selenide.executeJavaScript("document.getElementById('cart-total-dyn').innerText = '42.00';");
+            final List<DomFeatureVector> mutatedCandidates = new PageAnalyzer().extractFeatureVectors(WebDriverRunner.getWebDriver());
+            ctx.setVariable("liveCandidates", mutatedCandidates);
+
+            final PlaybookStep mismatchStep = new PlaybookStep("Assert cart subtotal is 35.00");
+            final ObjectNode mismatchArgs = mapper.createObjectNode()
+                    .put("target", "#cart-total")
+                    .put("expectedText", "35.00");
+            mismatchStep.addToolCall(new ToolCall("call-assert-mismatch", "assert_text", mismatchArgs));
+            mismatchStep.setActions(List.of(recordedAction));
+
+            // Replay with original expectation: healing must be rejected and fail conclusively
+            final ConclusiveFailureException ex = Assertions.assertThrows(
+                    ConclusiveFailureException.class,
+                    () -> PlaybookToolReplayer.replayStep(mismatchStep, this.registry, ctx)
+            );
+            Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
+            Assertions.assertEquals(PlaybookStepStatus.FAILED, mismatchStep.getStatus());
+        }
+        finally
+        {
+            Selenide.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testAssertElementStateLiveDomRejectsDisabledCandidateWhenExpectingEnabled() throws Exception
+    {
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><title>Element State Live DOM Test</title></head>
+            <body>
+                <form id="checkout-form">
+                    <button id="checkout-btn-dyn" disabled class="btn-primary">Checkout</button>
+                </form>
+            </body>
+            </html>
+            """;
+        try
+        {
+            Selenide.open("data:text/html;charset=utf-8," + html);
+
+            final List<DomFeatureVector> liveCandidates = new PageAnalyzer().extractFeatureVectors(WebDriverRunner.getWebDriver());
+            Assertions.assertFalse(liveCandidates.isEmpty());
+
+            final SimpleToolContext ctx = new SimpleToolContext(this.registry);
+            ctx.setVariable("liveCandidates", liveCandidates);
+            ctx.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+            final PlaybookStep step = new PlaybookStep("Assert checkout button is enabled");
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode assertArgs = mapper.createObjectNode()
+                    .put("target", "#checkout-btn");
+            assertArgs.putArray("states").add("visible").add("enabled");
+            step.addToolCall(new ToolCall("call-assert-state", "assert_element_state", assertArgs));
+
+            final DomFeatureVector recordedVector = new DomFeatureVector(
+                    "button",
+                    "Checkout",
+                    Set.of("btn-primary"),
+                    Map.of("id", "checkout-btn"),
+                    "button",
+                    "Checkout",
+                    "form",
+                    1
+            );
+            final Action recordedAction = new Action("ASSERT_ELEMENT_STATE", "#checkout-btn", List.of("visible", "enabled"), "Verify button", "");
+            recordedAction.setDomFeatureVector(recordedVector);
+            step.setActions(List.of(recordedAction));
+
+            // Candidate on live DOM has 'disabled' attribute, so healing must be rejected
+            final ConclusiveFailureException ex = Assertions.assertThrows(
+                    ConclusiveFailureException.class,
+                    () -> PlaybookToolReplayer.replayStep(step, this.registry, ctx)
+            );
+            Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
+            Assertions.assertEquals(PlaybookStepStatus.FAILED, step.getStatus());
         }
         finally
         {

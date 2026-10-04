@@ -28,8 +28,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.resources.InMemoryResourceManager;
@@ -112,6 +114,76 @@ public class PlaybookRecorderTest
             final String json = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
             assertTrue(json.contains("\"sourceYamlHash\" : \"abc123def456\""), "JSON output should serialize sourceYamlHash.");
             assertTrue(json.contains("\"schemaVersion\" : \"" + PlaybookStep.CURRENT_SCHEMA_VERSION + "\""), "JSON output should serialize schemaVersion.");
+        }
+    }
+
+    /**
+     * Modes that must never touch a recording: {@code LLM_ONLY} documents that it does not record,
+     * {@code LINTER_ONLY} never executes steps, and {@code REPLAY_STRICT} is strictly read-only.
+     */
+    private static final EnumSet<ExecutionMode> NON_PERSISTING_MODES = EnumSet.of(
+            ExecutionMode.LLM_ONLY,
+            ExecutionMode.LINTER_ONLY,
+            ExecutionMode.REPLAY_STRICT);
+
+    @Test
+    public void testNonPersistingModesNeverOverwriteExistingRecording() throws IOException
+    {
+        for (final ExecutionMode mode : NON_PERSISTING_MODES)
+        {
+            final InMemoryResourceManager manager = new InMemoryResourceManager();
+            final String existingContent = "{\"existing\":\"data\"}";
+            manager.write("recordings/test.json", existingContent);
+
+            final List<PlaybookStep> steps = new ArrayList<>();
+            steps.add(new PlaybookStep("Freshly parsed pending step"));
+
+            final PlaybookRecorder recorder = new PlaybookRecorder(manager, "recordings/test.json", steps, mode);
+            recorder.onEvent(new SessionFinishedEvent(100L, true));
+
+            try (final InputStream inputStream = manager.read("recordings/test.json"))
+            {
+                final String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+                assertEquals(existingContent, content, "Existing recording must stay untouched in mode " + mode);
+            }
+        }
+    }
+
+    @Test
+    public void testNonPersistingModesNeverCreateRecording()
+    {
+        for (final ExecutionMode mode : NON_PERSISTING_MODES)
+        {
+            final InMemoryResourceManager manager = new InMemoryResourceManager();
+            final List<PlaybookStep> steps = new ArrayList<>();
+            steps.add(new PlaybookStep("Freshly parsed pending step"));
+
+            final PlaybookRecorder recorder = new PlaybookRecorder(manager, "recordings/test.json", steps, mode);
+            recorder.onEvent(new SessionFinishedEvent(100L, true));
+
+            assertThrows(FileNotFoundException.class, () -> manager.read("recordings/test.json"),
+                "No recording file may be created in mode " + mode);
+        }
+    }
+
+    @Test
+    public void testPersistingModesStillWriteRecording() throws IOException
+    {
+        final EnumSet<ExecutionMode> persistingModes = EnumSet.complementOf(NON_PERSISTING_MODES);
+        for (final ExecutionMode mode : persistingModes)
+        {
+            final InMemoryResourceManager manager = new InMemoryResourceManager();
+            final List<PlaybookStep> steps = new ArrayList<>();
+            steps.add(new PlaybookStep("Recorded step"));
+
+            final PlaybookRecorder recorder = new PlaybookRecorder(manager, "recordings/test.json", steps, mode);
+            recorder.onEvent(new SessionFinishedEvent(100L, true));
+
+            try (final InputStream inputStream = manager.read("recordings/test.json"))
+            {
+                final String content = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+                assertTrue(content.contains("Recorded step"), "Recording must be written in mode " + mode);
+            }
         }
     }
 }

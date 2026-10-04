@@ -3693,6 +3693,47 @@ public class AgentToolLoopStepTest
         final Action firstAction = step.getActions().get(0);
         Assertions.assertEquals("OPEN_URL", firstAction.getType());
     }
+
+    @Test
+    public void testAgentToolLoopDoesNotCommitUnexecutedProposalsOnFailure()
+    {
+        final PlaybookStep step = new PlaybookStep("Step that fails during execution");
+        step.setStatus(PlaybookStepStatus.RUNNING);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Click button");
+
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("exploding_tool", "Throws exception", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new RuntimeException("Fatal tool failure during execution");
+            }
+        });
+
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+                new LlmResponse("Try clicking", new TokenUsage(10, 10, 20), "mock",
+                        List.of(
+                                new ToolCall("c-1", "exploding_tool", MAPPER.createObjectNode()),
+                                new ToolCall("c-2", "click", MAPPER.createObjectNode().put("selector", "#btn"))
+                        ));
+
+        final AgentToolLoopStep loopStep = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+        Assertions.assertThrows(Exception.class, () -> loopStep.execute(this.context));
+
+        Assertions.assertTrue(step.getActions() == null || step.getActions().isEmpty(),
+                "Step actions must not contain unexecuted proposals when execution fails");
+    }
 }
 
 

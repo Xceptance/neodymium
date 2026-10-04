@@ -53,6 +53,7 @@ import org.neodymium.util.Neodymium;
 @Browser("Chrome_1500x1000_headless")
 @Tag("integration")
 @Tag("verla")
+@Tag("LiveAPI")
 @NeodymiumAiTest
 @AiOutcomeVerification(failOnError = false)
 public final class ProgrammaticDemoTest

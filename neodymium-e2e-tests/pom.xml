@@ -28,6 +28,12 @@
 		<junit.jupiter.version>6.1.0-M1</junit.jupiter.version>
 		<junit.vintage.version>6.1.0-M1</junit.vintage.version>
 		<surefire.forkCount>1</surefire.forkCount>
+		<!--
+			JUnit tags excluded from the default run. LiveAPI/LiveLlm tests call a real LLM provider (cost, API key,
+			non-determinism), ExternalSite tests need internet access to third-party sites.
+			Activate -PLiveAPI (or pass -De2e.excludedGroups=) to run everything.
+		-->
+		<e2e.excludedGroups>LiveAPI,LiveLlm,ExternalSite</e2e.excludedGroups>
 	</properties>
 
 	<dependencies>
@@ -100,10 +106,31 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>${surefire.version}</version>
 				<configuration>
+					<systemPropertyVariables>
+						<java.util.logging.config.file>logging.properties</java.util.logging.config.file>
+						<allure.results.directory>${allure.results.directory}</allure.results.directory>
+						<selenide.headless>true</selenide.headless>
+					</systemPropertyVariables>
+					<workingDirectory>${session.executionRootDirectory}</workingDirectory>
 					<forkCount>${surefire.forkCount}</forkCount>
-					<reuseForks>true</reuseForks>
+					<reuseForks>false</reuseForks>
+					<excludedGroups>${e2e.excludedGroups}</excludedGroups>
 				</configuration>
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!--
+			Lifts the default tag exclusion so live-LLM and external-site tests run as well.
+			Requires network access and API keys (e.g. GEMINI_API_KEY). To run only the live tests,
+			combine with -Dgroups=LiveAPI,LiveLlm.
+		-->
+		<profile>
+			<id>LiveAPI</id>
+			<properties>
+				<e2e.excludedGroups></e2e.excludedGroups>
+			</properties>
+		</profile>
+	</profiles>
 </project>

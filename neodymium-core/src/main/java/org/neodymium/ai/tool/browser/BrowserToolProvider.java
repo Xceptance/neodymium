@@ -499,6 +499,10 @@ public final class BrowserToolProvider
         if (reanchored != null)
         {
             res.put("selector", reanchored.selector());
+            if (reanchored.domFeatureVector() != null)
+            {
+                res.set("domFeatureVector", MAPPER.valueToTree(reanchored.domFeatureVector()));
+            }
             builder.withVariable("reanchoredSelector", reanchored.selector());
             builder.withVariable("reanchoredFeatureVector", reanchored.domFeatureVector());
         }
@@ -609,6 +613,7 @@ public final class BrowserToolProvider
                     {
                         final int bx = ((Number) coordsMap.get("x")).intValue();
                         final int by = ((Number) coordsMap.get("y")).intValue();
+                        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, bx, by);
                         final int[] clicked = performSafeCoordinateClick(driver, bx, by);
                         final int finalX = clicked[0];
                         final int finalY = clicked[1];
@@ -618,6 +623,12 @@ public final class BrowserToolProvider
                         res.put("target", "coord: " + finalX + "," + finalY);
                         res.put("x", finalX);
                         res.put("y", finalY);
+                        if (reanchored != null && reanchored.domFeatureVector() != null)
+                        {
+                            res.set("domFeatureVector", MAPPER.valueToTree(reanchored.domFeatureVector()));
+                            b.withVariable("reanchoredSelector", reanchored.selector());
+                            b.withVariable("reanchoredFeatureVector", reanchored.domFeatureVector());
+                        }
                         VisualBadgeInjector.removeMarkers(driver);
                         res.put("url", getSafeUrl(driver));
                         res.put("title", getSafeTitle(driver));
@@ -2786,8 +2797,6 @@ public final class BrowserToolProvider
                 final boolean negated = call.arguments().path("negated").asBoolean(false)
                         || call.arguments().path("not").asBoolean(false)
                         || call.arguments().path("invert").asBoolean(false);
-                final boolean notEmpty = call.arguments().path("notEmpty").asBoolean(false)
-                        || (call.arguments().hasNonNull("empty") && !call.arguments().path("empty").asBoolean());
                 final boolean empty = call.arguments().path("empty").asBoolean(false);
 
                 final String rawExpectedUrl = call.arguments().hasNonNull("expectedUrl")
@@ -2800,6 +2809,11 @@ public final class BrowserToolProvider
                                                 ? call.arguments().path("target").asText()
                                                 : null)));
 
+                // 'empty: false' only means 'not empty' when no expected URL was given. Next to an expected URL it must not
+                // cancel the comparison, otherwise a recorded call would replay as a check that always passes.
+                final boolean notEmpty = call.arguments().path("notEmpty").asBoolean(false)
+                        || (call.arguments().hasNonNull("empty") && !call.arguments().path("empty").asBoolean()
+                                && (rawExpectedUrl == null || rawExpectedUrl.isBlank()));
                 final boolean isAssertNotEmpty = notEmpty || (negated && (rawExpectedUrl == null || rawExpectedUrl.isBlank()));
                 final boolean isAssertEmpty = empty || (!negated && exact && rawExpectedUrl != null && rawExpectedUrl.isBlank());
 
@@ -2933,8 +2947,6 @@ public final class BrowserToolProvider
                 final boolean negated = call.arguments().path("negated").asBoolean(false)
                         || call.arguments().path("not").asBoolean(false)
                         || call.arguments().path("invert").asBoolean(false);
-                final boolean notEmpty = call.arguments().path("notEmpty").asBoolean(false)
-                        || (call.arguments().hasNonNull("empty") && !call.arguments().path("empty").asBoolean());
                 final boolean empty = call.arguments().path("empty").asBoolean(false);
 
                 final String rawExpectedTitle = call.arguments().hasNonNull("expectedTitle")
@@ -2947,6 +2959,11 @@ public final class BrowserToolProvider
                                                 ? call.arguments().path("target").asText()
                                                 : null)));
 
+                // 'empty: false' only means 'not empty' when no expected title was given. Next to an expected title it must not
+                // cancel the comparison, otherwise a recorded call would replay as a check that always passes.
+                final boolean notEmpty = call.arguments().path("notEmpty").asBoolean(false)
+                        || (call.arguments().hasNonNull("empty") && !call.arguments().path("empty").asBoolean()
+                                && (rawExpectedTitle == null || rawExpectedTitle.isBlank()));
                 final boolean isAssertNotEmpty = notEmpty || (negated && (rawExpectedTitle == null || rawExpectedTitle.isBlank()));
                 final boolean isAssertEmpty = empty || (!negated && exact && rawExpectedTitle != null && rawExpectedTitle.isBlank());
 

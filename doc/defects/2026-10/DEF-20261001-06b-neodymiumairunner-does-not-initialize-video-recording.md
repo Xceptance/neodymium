@@ -1,4 +1,4 @@
-# [DEF-20261001-06] NeodymiumAiRunner Does Not Initialize Video Recording During AI Test Execution
+# [DEF-20261001-06b] NeodymiumAiRunner Does Not Initialize Video Recording During AI Test Execution
 
 - **Status:** Resolved
 - **Opened:** 2026-10-01

@@ -20,6 +20,7 @@ package org.neodymium.ai.integration.data;
 
 import java.util.Map;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiDataFile;
 import org.neodymium.ai.junit.AiMode;
@@ -37,6 +38,7 @@ import org.neodymium.util.Neodymium;
  * @author Xceptance GmbH 2026
  */
 @NeodymiumAiTest
+@Tag("LiveAPI")
 public class AiDataFileProgrammaticIntegrationTest
 {
     /**

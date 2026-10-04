@@ -33,6 +33,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.testing.BaseAiTest;
 import org.neodymium.common.browser.Browser;
@@ -271,6 +272,84 @@ public class VectorHealingSandboxMockTest extends BaseAiTest
             {
                 Assertions.assertFalse(mock.hasQueuedResponses(), "Mock provider response queue should remain empty");
             }
+        }
+    }
+
+    /**
+     * Tests recording on clean DOM and replay with DOM vector self-healing on an assertion target whose ID
+     * and class have drifted, but whose live text matches the assertion expectation.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", recordingFileName = "custom_vector_assertion_drift_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testVectorAssertionDriftHealing(final AiSession session) throws Exception
+    {
+        setupDriftUrl(session, "drift.assertion.url", "assertion_drift");
+
+        session.execute("""
+            steps: |
+              Open ${drift.assertion.url} in the browser
+              Type "SAVE20" into #coupon-input
+              Click #apply-coupon-btn
+              Verify that #status-message shows "Coupon APPLIED successfully!"
+            """);
+
+        if (session.getExecutionMode().isReplay())
+        {
+            $("#status_msg_dyn_5541").shouldHave(text("Coupon APPLIED successfully!"));
+        }
+        else
+        {
+            $("#status-message").shouldHave(text("Coupon APPLIED successfully!"));
+        }
+
+        if (session.getExecutionMode().isReplay())
+        {
+            final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+            if (provider instanceof MockLlmProvider mock)
+            {
+                Assertions.assertFalse(mock.hasQueuedResponses(), "Mock provider response queue should remain empty");
+            }
+        }
+    }
+
+    /**
+     * Tests recording on clean DOM and replay when an assertion target element exhibits a functional
+     * data regression on the live page, verifying that locator healing is rejected and execution
+     * fails conclusively without invoking the LLM to rewrite the test oracle.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(value = "programmatic", recordingFileName = "custom_vector_assert_mismatch_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testVectorAssertionDataMismatchFailsConclusively(final AiSession session) throws Exception
+    {
+        setupDriftUrl(session, "drift.assert_mismatch.url", "assertion_mismatch");
+
+        final String script = """
+            steps: |
+              Open ${drift.assert_mismatch.url} in the browser
+              Type "SAVE20" into #coupon-input
+              Click #apply-coupon-btn
+              Verify that #status-message shows "Coupon APPLIED successfully!"
+            """;
+
+        if (session.getExecutionMode().isReplay())
+        {
+            final Throwable ex = Assertions.assertThrows(Throwable.class, () -> session.execute(script));
+            Assertions.assertTrue(ex instanceof ConclusiveFailureException || ex instanceof AssertionError,
+                    "Expected ConclusiveFailureException or AssertionError, but got " + ex.getClass().getName());
+            final LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
+            if (provider instanceof MockLlmProvider mock)
+            {
+                Assertions.assertFalse(mock.hasQueuedResponses(), "Mock provider response queue should remain empty");
+            }
+        }
+        else
+        {
+            session.execute(script);
+            $("#status-message").shouldHave(text("Coupon APPLIED successfully!"));
         }
     }
 }

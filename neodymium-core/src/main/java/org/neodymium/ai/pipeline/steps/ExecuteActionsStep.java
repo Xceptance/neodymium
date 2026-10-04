@@ -228,6 +228,7 @@ public final class ExecuteActionsStep
             contextState.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", resolvedInstruction);
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
             contextState.getTransientData().remove("KEY_IN_CONTINUATION_LOOP");
+            contextState.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP);
             if (step.hasSubSteps())
             {
                 final List<String> milestones = new ArrayList<>();
@@ -569,6 +570,18 @@ public final class ExecuteActionsStep
                         {
                             throw schemaErr;
                         }
+                        if (t instanceof final ConclusiveFailureException conclusive)
+                        {
+                            throw conclusive;
+                        }
+                        if (t.getCause() instanceof final ConclusiveFailureException conclusive)
+                        {
+                            throw conclusive;
+                        }
+                        if (step != null && step.isAssertionStep())
+                        {
+                            throw new ConclusiveFailureException("Assertion step failed during replay: " + t.getMessage(), t);
+                        }
                         if (mode.supportsHealing() && !step.isNoHealing())
                         {
                             throw new HealingRequiredException("Replay step execution failed against SUT: " + t.getMessage(), t);
@@ -703,10 +716,10 @@ public final class ExecuteActionsStep
             // Push end-hook step first, so it runs AFTER tryCatch executes
             contextState.pushStep(c ->
             {
+                final Object isHealed = c.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP);
                 if (!step.isFailed() && step.getStatus() != PlaybookStepStatus.SKIPPED)
                 {
-                    final Boolean isHealed = (Boolean) c.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP);
-                    if (Boolean.TRUE.equals(isHealed))
+                    if (Boolean.TRUE.equals(isHealed) || step.getStatus() == PlaybookStepStatus.HEALED)
                     {
                         step.setStatus(PlaybookStepStatus.HEALED);
                         step.setSchemaVersion(PlaybookStep.CURRENT_SCHEMA_VERSION);

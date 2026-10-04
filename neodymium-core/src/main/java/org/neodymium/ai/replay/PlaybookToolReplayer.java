@@ -33,6 +33,7 @@ import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
 import org.neodymium.ai.session.AiSession;
@@ -44,14 +45,20 @@ import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.tool.ToolResult;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
+import org.neodymium.ai.tool.browser.ReanchoringBridge;
+import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 /**
  * Replay engine executing recorded {@link ToolCall}s directly via {@link ToolRegistry}
@@ -152,9 +159,9 @@ public final class PlaybookToolReplayer
 
         LOGGER.info("▶ Replaying {} tool calls for step: \"{}\"", toolCalls.size(), step.getInstruction());
 
+        final AiSession session = effectiveContext.getVariable("neodymium.session", AiSession.class).orElse(null);
         final ExecutionMode executionMode = effectiveContext.getVariable("neodymium.executionMode", ExecutionMode.class)
                 .orElseGet(() -> {
-                    final AiSession session = effectiveContext.getVariable("neodymium.session", AiSession.class).orElse(null);
                     if (session != null && session.getExecutionMode() != null)
                     {
                         return session.getExecutionMode();
@@ -202,8 +209,12 @@ public final class PlaybookToolReplayer
             }
 
             final ToolCall finalCall = intermediateCall;
+            final boolean isToolHealed = healedCall != null;
 
-            final AiSession session = effectiveContext.getVariable("neodymium.session", AiSession.class).orElse(null);
+            if (executionMode == ExecutionMode.REPLAY_STRICT)
+            {
+                verifyStrictReplayGuards(finalCall, step, i);
+            }
 
             // Check if tool is registered
             final Optional<AiTool> toolOpt = effectiveRegistry.getTool(finalCall.toolName());
@@ -213,34 +224,30 @@ public final class PlaybookToolReplayer
                 try
                 {
                     result = toolOpt.get().execute(finalCall, effectiveContext);
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, true));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, true);
                 }
                 catch (final AssertionError e)
                 {
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
+                    if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                    {
+                        throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                    }
                     throw e;
                 }
                 catch (final Exception e)
                 {
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        final Action mapped = AgentToolLoopStep.mapToolCallToAction(finalCall);
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
+                    if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                    {
+                        throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                    }
                     throw e;
                 }
             }
@@ -251,31 +258,30 @@ public final class PlaybookToolReplayer
                 {
                     effectiveExecutor.execute(mapped);
                     result = ToolResult.success(finalCall.callId(), "Action executed via TargetExecutor");
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, true));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, true);
                 }
                 catch (final AssertionError e)
                 {
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
+                    if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                    {
+                        throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                    }
                     throw e;
                 }
                 catch (final Exception e)
                 {
-                    if (session != null && session.getEventBus() != null)
-                    {
-                        session.getEventBus().dispatch(new ActionExecutedEvent(mapped, false));
-                    }
+                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
                     step.setStatus(PlaybookStepStatus.FAILED);
                     step.setFailed(true);
                     step.setFailureReason(e.getMessage());
+                    if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                    {
+                        throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                    }
                     throw e;
                 }
             }
@@ -286,21 +292,31 @@ public final class PlaybookToolReplayer
 
             if (result != null && result.status() == ToolResult.Status.ERROR)
             {
+                step.setStatus(PlaybookStepStatus.FAILED);
+                step.setFailed(true);
+                step.setFailureReason(result.content());
+                if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                {
+                    throw new ConclusiveFailureException("Assertion failed during replay: " + result.content());
+                }
                 if (result.content() != null && result.content().startsWith("AssertionError"))
                 {
-                    step.setStatus(PlaybookStepStatus.FAILED);
-                    step.setFailed(true);
-                    step.setFailureReason(result.content());
                     throw new AssertionError(result.content());
                 }
                 throw new RuntimeException("Tool execution error in '" + finalCall.toolName() + "': " + result.content());
             }
         }
 
-        if (anyHealed)
+        final boolean isTransientHealed = session != null && session.getExecutionContext() != null
+                && Boolean.TRUE.equals(session.getExecutionContext().getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP));
+        if (anyHealed || step.getStatus() == PlaybookStepStatus.HEALED || isTransientHealed)
         {
             step.setStatus(PlaybookStepStatus.HEALED);
             step.setSchemaVersion(PlaybookStep.CURRENT_SCHEMA_VERSION);
+            if (session != null && session.getExecutionContext() != null && session.getExecutionContext().getTransientData() != null)
+            {
+                session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, Boolean.TRUE);
+            }
             LOGGER.info("✨ Step successfully replayed with self-healing: \"{}\"", step.getInstruction());
         }
         else
@@ -310,6 +326,29 @@ public final class PlaybookToolReplayer
         }
 
         return ToolResult.success(UUID.randomUUID().toString(), "Successfully replayed " + toolCalls.size() + " tool calls");
+    }
+
+    private static void dispatchActionEvent(
+        final AiSession session,
+        final ToolCall canonicalCall,
+        final ToolCall finalCall,
+        final boolean isHealed,
+        final boolean success
+    )
+    {
+        if (session != null && session.getEventBus() != null)
+        {
+            final Action resolvedAction = AgentToolLoopStep.mapToolCallToAction(finalCall);
+            if (isHealed && canonicalCall != null)
+            {
+                final Action canonicalAction = AgentToolLoopStep.mapToolCallToAction(canonicalCall);
+                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, resolvedAction, success, null, true));
+            }
+            else
+            {
+                session.getEventBus().dispatch(new ActionExecutedEvent(resolvedAction, success));
+            }
+        }
     }
 
     /**
@@ -436,58 +475,64 @@ public final class PlaybookToolReplayer
 
         // Only interactive / actionable tools targeting an element can be healed.
         // Read-only inspection / navigation tools must never trigger locator healing.
-        final String toolName = call.toolName() != null ? call.toolName().trim().toLowerCase() : "";
+        final String toolName = call.toolName() != null ? call.toolName().trim().toLowerCase(Locale.ROOT) : "";
         if ("query_dom".equals(toolName) || "inspect_element".equals(toolName) || "execute_script".equals(toolName)
                 || "take_screenshot".equals(toolName) || "screenshot".equals(toolName) || "navigate".equals(toolName)
-                || "browser_navigate".equals(toolName) || "get_page_source".equals(toolName))
+                || "browser_navigate".equals(toolName) || "get_page_source".equals(toolName)
+                || "assert_url".equals(toolName) || "browser_assert_url".equals(toolName)
+                || "assert_title".equals(toolName) || "browser_assert_title".equals(toolName)
+                || "assert_count".equals(toolName) || "browser_assert_count".equals(toolName))
         {
             return null;
         }
 
         final String currentTarget = args.hasNonNull("target") ? args.path("target").asText().trim() : args.path("selector").asText().trim();
-        if (currentTarget.isBlank() || currentTarget.startsWith("coord:"))
+        final boolean isCoordinateTarget = currentTarget.startsWith("coord:")
+                || (args.hasNonNull("x") && args.hasNonNull("y") && (!args.hasNonNull("selector") || args.path("selector").asText().isBlank()));
+        if (currentTarget.isBlank() && !isCoordinateTarget)
         {
             return null;
         }
 
         // Check if DomFeatureVector is recorded
-        DomFeatureVector recordedVector = null;
-        if (callIndex < step.getActions().size())
-        {
-            final Action matchingAction = step.getActions().get(callIndex);
-            if (matchingAction != null)
-            {
-                recordedVector = matchingAction.getDomFeatureVector();
-            }
-        }
-
-        if (recordedVector == null && args.has("domFeatureVector"))
-        {
-            try
-            {
-                recordedVector = MAPPER.treeToValue(args.path("domFeatureVector"), DomFeatureVector.class);
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-
+        final DomFeatureVector recordedVector = extractRecordedVector(args, step, callIndex);
         if (recordedVector == null)
         {
             return null;
         }
 
-        // If the current target is already directly present and visible on the live page,
-        // no healing is needed. Never overwrite or corrupt an active, working locator.
-        try
+        if (isCoordinateTarget)
         {
-            if (WebDriverRunner.hasWebDriverStarted() && SelenideElementFinder.isDirectlyPresent(currentTarget))
+            if (WebDriverRunner.hasWebDriverStarted())
+            {
+                final int x = extractCoordinate(args, "x", currentTarget, 0);
+                final int y = extractCoordinate(args, "y", currentTarget, 1);
+                final WebDriver driver = WebDriverRunner.getWebDriver();
+                final ReanchoringBridge.ReanchoredElement liveEl = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
+                if (matchesRecordedIdentity(liveEl, recordedVector))
+                {
+                    return null;
+                }
+            }
+            else if (context == null || context.getVariable("liveCandidates", Object.class).isEmpty())
             {
                 return null;
             }
         }
-        catch (final AssertionError | Exception ignored)
+        else
         {
+            // If the current target is already directly present and visible on the live page,
+            // no healing is needed. Never overwrite or corrupt an active, working locator.
+            try
+            {
+                if (WebDriverRunner.hasWebDriverStarted() && SelenideElementFinder.isDirectlyPresent(currentTarget))
+                {
+                    return null;
+                }
+            }
+            catch (final AssertionError | Exception ignored)
+            {
+            }
         }
 
         // Optional steps (e.g. dismissible modals, cookie banners) must not perform heavy full-DOM healing scans
@@ -545,19 +590,40 @@ public final class PlaybookToolReplayer
             final DomFeatureVector best = LocatorCascadeResolver.findBestMatch(recordedVector, liveCandidates, 0.70);
             if (best != null)
             {
+                if (PlaybookStep.isAssertionToolName(toolName) && !candidateMatchesAssertionExpectation(best, toolName, args))
+                {
+                    LOGGER.info("🚫 Rejected locator healing for assertion tool '{}': candidate element did not match assertion criteria", toolName);
+                    return null;
+                }
                 final String healedSelector = resolveSelectorForCandidate(best);
-                if (!currentTarget.equals(healedSelector))
+                final ObjectNode updatedArgs = args.deepCopy();
+                if (healedSelector != null && !currentTarget.equals(healedSelector) && (!isCoordinateTarget || !isBareGenericTag(healedSelector)))
                 {
                     LOGGER.info("🧬 Healed locator '{}' -> '{}' using DomFeatureVector similarity", currentTarget, healedSelector);
-                    final ObjectNode updatedArgs = args.deepCopy();
-                    if (args.hasNonNull("selector"))
+                    if (args.hasNonNull("selector") || isCoordinateTarget)
                     {
                         updatedArgs.put("selector", healedSelector);
                     }
-                    if (args.hasNonNull("target"))
+                    if (args.hasNonNull("target") || isCoordinateTarget)
                     {
                         updatedArgs.put("target", healedSelector);
                     }
+                    if (isCoordinateTarget)
+                    {
+                        updatedArgs.remove("x");
+                        updatedArgs.remove("y");
+                    }
+                    return new ToolCall(call.callId(), call.toolName(), updatedArgs);
+                }
+                else if (isCoordinateTarget)
+                {
+                    final int newX = best.getX() + (best.getWidth() / 2);
+                    final int newY = best.getY() + (best.getHeight() / 2);
+                    final String newTarget = "coord: " + newX + "," + newY;
+                    LOGGER.info("🧬 Relocated coordinate target '{}' -> '{}' using DomFeatureVector similarity", currentTarget, newTarget);
+                    updatedArgs.put("target", newTarget);
+                    updatedArgs.put("x", newX);
+                    updatedArgs.put("y", newY);
                     return new ToolCall(call.callId(), call.toolName(), updatedArgs);
                 }
             }
@@ -566,47 +632,98 @@ public final class PlaybookToolReplayer
         return null;
     }
 
-    private static String resolveSelectorForCandidate(final DomFeatureVector candidate)
+    /**
+     * Derives a selector for a healed candidate element, in decreasing order of stability.
+     * <p>
+     * The result is written back into the replayed tool call, so it has to match the candidate: every
+     * attribute value is escaped, and no selector is invented from data the element does not carry.
+     * In particular the computed accessible name is <em>not</em> turned into an {@code aria-label}
+     * attribute selector (it usually comes from the element text or a label, so such a selector never
+     * matches), and raw viewport coordinates are never produced because they are not an element identity.
+     *
+     * @param candidate the best matching live element
+     * @return a CSS-style selector for the candidate, or {@code null} if none can be derived
+     */
+    static String resolveSelectorForCandidate(final DomFeatureVector candidate)
     {
         if (candidate.getAttributes().containsKey("id") && !candidate.getAttributes().get("id").isBlank())
         {
-            return "#" + candidate.getAttributes().get("id");
+            final String idVal = candidate.getAttributes().get("id").trim();
+            if (isStandardCssIdentifier(idVal))
+            {
+                return "#" + idVal;
+            }
+            final String tag = candidate.getTag() != null && !candidate.getTag().isBlank() ? candidate.getTag() : "";
+            return tag + "[id=\"" + escapeAttributeValue(idVal) + "\"]";
         }
         if (candidate.getAttributes().containsKey("data-testid") && !candidate.getAttributes().get("data-testid").isBlank())
         {
-            return candidate.getTag() + "[data-testid=\"" + candidate.getAttributes().get("data-testid") + "\"]";
+            return candidate.getTag() + "[data-testid=\"" + escapeAttributeValue(candidate.getAttributes().get("data-testid")) + "\"]";
         }
         if (candidate.getAttributes().containsKey("name") && !candidate.getAttributes().get("name").isBlank())
         {
-            return candidate.getTag() + "[name=\"" + candidate.getAttributes().get("name") + "\"]";
+            return candidate.getTag() + "[name=\"" + escapeAttributeValue(candidate.getAttributes().get("name")) + "\"]";
         }
+
+        final List<String> validClasses = candidate.getClasses() != null
+                ? candidate.getClasses().stream()
+                        .filter(PlaybookToolReplayer::isStandardCssIdentifier)
+                        .toList()
+                : List.of();
+
         if (candidate.getText() != null && !candidate.getText().isBlank())
         {
-            final String cleanText = candidate.getText().trim().replace("\"", "\\\"").replace("\n", " ");
-            final String base = !candidate.getClasses().isEmpty()
-                    ? candidate.getTag() + "." + String.join(".", candidate.getClasses())
+            final String cleanText = escapeAttributeValue(candidate.getText().trim());
+            final String base = !validClasses.isEmpty()
+                    ? candidate.getTag() + "." + String.join(".", validClasses)
                     : candidate.getTag();
             return base + ":has-text(\"" + cleanText + "\")";
         }
         if (candidate.getAttributes().containsKey("aria-label") && !candidate.getAttributes().get("aria-label").isBlank())
         {
-            return candidate.getTag() + "[aria-label=\"" + candidate.getAttributes().get("aria-label") + "\"]";
+            return candidate.getTag() + "[aria-label=\"" + escapeAttributeValue(candidate.getAttributes().get("aria-label")) + "\"]";
         }
-        if (candidate.getAccessibleName() != null && !candidate.getAccessibleName().isBlank())
+        if (!validClasses.isEmpty())
         {
-            return candidate.getTag() + "[aria-label=\"" + candidate.getAccessibleName() + "\"]";
+            return candidate.getTag() + "." + String.join(".", validClasses);
         }
-        if (!candidate.getClasses().isEmpty())
+        return candidate.getTag().isBlank() ? null : candidate.getTag();
+    }
+
+    /**
+     * Checks whether the given string is a standard, unescaped CSS identifier (letters, digits,
+     * underscores, and hyphens, not starting with a digit or a hyphen followed by a digit).
+     *
+     * @param identifier candidate identifier string
+     * @return {@code true} if safe to use directly without CSS escaping
+     */
+    private static boolean isBareGenericTag(final String selector)
+    {
+        if (selector == null)
         {
-            return candidate.getTag() + "." + String.join(".", candidate.getClasses());
+            return true;
         }
-        if (candidate.getX() >= 0 && candidate.getY() >= 0 && candidate.getWidth() > 0 && candidate.getHeight() > 0)
-        {
-            final int cx = candidate.getX() + (candidate.getWidth() / 2);
-            final int cy = candidate.getY() + (candidate.getHeight() / 2);
-            return "coord: " + cx + "," + cy;
-        }
-        return candidate.getTag();
+        final String s = selector.trim().toLowerCase();
+        return "div".equals(s) || "span".equals(s) || "section".equals(s) || "p".equals(s)
+                || "li".equals(s) || "ul".equals(s) || "ol".equals(s) || "body".equals(s);
+    }
+
+    private static boolean isStandardCssIdentifier(final String identifier)
+    {
+        return identifier != null && identifier.matches("^-?[a-zA-Z_][a-zA-Z0-9_-]*$");
+    }
+
+    /**
+     * Escapes a value for use inside a double-quoted CSS attribute selector string.
+     * Backslashes and double quotes are escaped; line breaks, which cannot appear unescaped in a CSS
+     * string, are replaced by a space.
+     *
+     * @param value the raw attribute value
+     * @return the value safe to embed between double quotes
+     */
+    private static String escapeAttributeValue(final String value)
+    {
+        return value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\r", " ").replace("\n", " ");
     }
 
     private static ToolRegistry createDefaultRegistry()
@@ -614,5 +731,363 @@ public final class PlaybookToolReplayer
         final ToolRegistry registry = new ToolRegistry();
         BrowserToolProvider.registerBrowserTools(registry);
         return registry;
+    }
+
+    private static void verifyStrictReplayGuards(final ToolCall call, final PlaybookStep step, final int callIndex)
+    {
+        final String toolName = call.toolName() != null ? call.toolName().trim().toLowerCase() : "";
+        if (!"click".equals(toolName) && !"browser_click".equals(toolName))
+        {
+            return;
+        }
+
+        final JsonNode args = call.arguments();
+        if (args == null)
+        {
+            return;
+        }
+
+        final String target = args.hasNonNull("target") ? args.path("target").asText().trim() : "";
+        final boolean isCoord = target.startsWith("coord:")
+                || (args.hasNonNull("x") && args.hasNonNull("y") && (!args.hasNonNull("selector") || args.path("selector").asText().isBlank()));
+        if (!isCoord)
+        {
+            return;
+        }
+
+        final DomFeatureVector recordedVector = extractRecordedVector(args, step, callIndex);
+        if (recordedVector != null && WebDriverRunner.hasWebDriverStarted())
+        {
+            final int x = extractCoordinate(args, "x", target, 0);
+            final int y = extractCoordinate(args, "y", target, 1);
+            final WebDriver driver = WebDriverRunner.getWebDriver();
+            final ReanchoringBridge.ReanchoredElement liveEl = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
+            if (!matchesRecordedIdentity(liveEl, recordedVector))
+            {
+                final String actualIdentity = liveEl != null
+                        ? liveEl.tagName() + (liveEl.text().isBlank() ? "" : " ['" + liveEl.text() + "']")
+                        : "none";
+                final String expectedIdentity = recordedVector.getTag()
+                        + (recordedVector.getText() == null || recordedVector.getText().isBlank() ? "" : " ['" + recordedVector.getText() + "']");
+                throw new AssertionError("Coordinate click target drifted in REPLAY_STRICT at (" + x + ", " + y + "): expected "
+                        + expectedIdentity + ", but found " + actualIdentity + " on the live page");
+            }
+        }
+    }
+
+    static DomFeatureVector extractRecordedVector(final JsonNode args, final PlaybookStep step, final int callIndex)
+    {
+        DomFeatureVector recordedVector = null;
+        if (step != null && callIndex >= 0 && callIndex < step.getActions().size())
+        {
+            final Action matchingAction = step.getActions().get(callIndex);
+            if (matchingAction != null)
+            {
+                recordedVector = matchingAction.getDomFeatureVector();
+            }
+        }
+        if (recordedVector == null && args != null && args.has("domFeatureVector"))
+        {
+            try
+            {
+                recordedVector = MAPPER.treeToValue(args.path("domFeatureVector"), DomFeatureVector.class);
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        return recordedVector;
+    }
+
+    static int extractCoordinate(final JsonNode args, final String prop, final String target, final int index)
+    {
+        if (args != null && args.hasNonNull(prop))
+        {
+            return args.path(prop).asInt();
+        }
+        if (target != null && target.startsWith("coord:"))
+        {
+            final String[] parts = target.substring(6).split(",");
+            if (parts.length > index)
+            {
+                try
+                {
+                    return Integer.parseInt(parts[index].trim());
+                }
+                catch (final NumberFormatException ignored)
+                {
+                }
+            }
+        }
+        return 0;
+    }
+
+    static boolean matchesRecordedIdentity(final ReanchoringBridge.ReanchoredElement liveEl, final DomFeatureVector recordedVector)
+    {
+        if (liveEl == null || recordedVector == null)
+        {
+            return false;
+        }
+        final String liveTag = liveEl.tagName();
+        final String recordedTag = recordedVector.getTag();
+        if (liveTag == null || recordedTag == null || !liveTag.equalsIgnoreCase(recordedTag))
+        {
+            return false;
+        }
+        final String recordedText = recordedVector.getText();
+        if (recordedText != null && !recordedText.isBlank())
+        {
+            final String liveText = liveEl.text();
+            if (liveText == null || liveText.isBlank())
+            {
+                return false;
+            }
+            final String normRecorded = recordedText.trim().toLowerCase();
+            final String normLive = liveText.trim().toLowerCase();
+            return normLive.contains(normRecorded) || normRecorded.contains(normLive);
+        }
+        return true;
+    }
+
+    private static boolean candidateMatchesAssertionExpectation(
+            final DomFeatureVector candidate,
+            final String toolName,
+            final JsonNode args)
+    {
+        if (candidate == null || toolName == null || args == null)
+        {
+            return false;
+        }
+
+        final String cleanTool = stripNamespacePrefix(toolName).toLowerCase(Locale.ROOT);
+
+        if ("assert_text".equals(cleanTool) || "browser_assert_text".equals(cleanTool))
+        {
+            final String rawExpectedText = args.hasNonNull("expectedText")
+                    ? args.path("expectedText").asText()
+                    : args.path("text").asText("");
+            final boolean exact = args.path("exact").asBoolean(false);
+            final boolean regex = args.path("regex").asBoolean(false);
+            final boolean negated = args.path("negated").asBoolean(false)
+                    || args.path("not").asBoolean(false)
+                    || args.path("invert").asBoolean(false);
+
+            final List<String> textCandidates = new ArrayList<>();
+            if (candidate.getText() != null && !candidate.getText().isBlank())
+            {
+                textCandidates.add(candidate.getText());
+            }
+            if (candidate.getAccessibleName() != null && !candidate.getAccessibleName().isBlank())
+            {
+                textCandidates.add(candidate.getAccessibleName());
+            }
+            final String valAttr = candidate.getAttributes().get("value");
+            if (valAttr != null && !valAttr.isBlank())
+            {
+                textCandidates.add(valAttr);
+            }
+            final String placeholder = candidate.getAttributes().get("placeholder");
+            if (placeholder != null && !placeholder.isBlank())
+            {
+                textCandidates.add(placeholder);
+            }
+            final String title = candidate.getAttributes().get("title");
+            if (title != null && !title.isBlank())
+            {
+                textCandidates.add(title);
+            }
+
+            boolean matched = false;
+            if (regex)
+            {
+                Pattern pattern;
+                try
+                {
+                    pattern = Pattern.compile(rawExpectedText, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                }
+                catch (final PatternSyntaxException e)
+                {
+                    pattern = Pattern.compile(Pattern.quote(rawExpectedText), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                }
+                for (final String text : textCandidates)
+                {
+                    if (pattern.matcher(text).find() || pattern.matcher(text.replaceAll("\\s+", " ")).find())
+                    {
+                        matched = true;
+                        break;
+                    }
+                }
+            }
+            else
+            {
+                final String normExpected = rawExpectedText.replaceAll("\\s+", " ").trim();
+                for (final String text : textCandidates)
+                {
+                    if (exact)
+                    {
+                        if (text.trim().equalsIgnoreCase(rawExpectedText.trim())
+                                || text.replaceAll("\\s+", " ").trim().equalsIgnoreCase(normExpected))
+                        {
+                            matched = true;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        if (text.toLowerCase(Locale.ROOT).contains(rawExpectedText.toLowerCase(Locale.ROOT))
+                                || text.replaceAll("\\s+", " ").toLowerCase(Locale.ROOT).contains(normExpected.toLowerCase(Locale.ROOT)))
+                        {
+                            matched = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            return negated ? !matched : matched;
+        }
+
+        if ("assert_attribute".equals(cleanTool) || "browser_assert_attribute".equals(cleanTool))
+        {
+            final String attrName = args.hasNonNull("attribute")
+                    ? args.path("attribute").asText()
+                    : args.path("attributeName").asText("");
+            if (attrName.isBlank())
+            {
+                return false;
+            }
+
+            final boolean hasExpectedVal = args.hasNonNull("expectedValue") || args.hasNonNull("value");
+            final String expectedVal = args.hasNonNull("expectedValue")
+                    ? args.path("expectedValue").asText()
+                    : args.path("value").asText("");
+            final boolean exact = args.path("exact").asBoolean(false);
+            final boolean regex = args.path("regex").asBoolean(false);
+            final boolean negated = args.path("negated").asBoolean(false)
+                    || args.path("not").asBoolean(false);
+
+            String actualVal = null;
+            for (final Map.Entry<String, String> entry : candidate.getAttributes().entrySet())
+            {
+                if (entry.getKey().equalsIgnoreCase(attrName))
+                {
+                    actualVal = entry.getValue();
+                    break;
+                }
+            }
+
+            if (actualVal == null)
+            {
+                return negated;
+            }
+
+            if (!hasExpectedVal)
+            {
+                return !negated;
+            }
+
+            boolean matched = false;
+            if (regex)
+            {
+                Pattern pattern;
+                try
+                {
+                    pattern = Pattern.compile(expectedVal, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                }
+                catch (final PatternSyntaxException e)
+                {
+                    pattern = Pattern.compile(Pattern.quote(expectedVal), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+                }
+                matched = pattern.matcher(actualVal).find();
+            }
+            else if (exact)
+            {
+                matched = actualVal.equalsIgnoreCase(expectedVal);
+            }
+            else
+            {
+                matched = actualVal.toLowerCase(Locale.ROOT).contains(expectedVal.toLowerCase(Locale.ROOT));
+            }
+
+            return negated ? !matched : matched;
+        }
+
+        if ("assert_element_state".equals(cleanTool) || "browser_assert_element_state".equals(cleanTool))
+        {
+            final List<String> states = new ArrayList<>();
+            if (args.has("states") && args.path("states").isArray())
+            {
+                for (final JsonNode s : args.path("states"))
+                {
+                    if (s.isTextual() && !s.asText().isBlank())
+                    {
+                        states.add(s.asText().trim().toLowerCase(Locale.ROOT));
+                    }
+                }
+            }
+            if (states.isEmpty())
+            {
+                final String rawState = args.hasNonNull("state")
+                        ? args.path("state").asText()
+                        : (args.hasNonNull("expectedState")
+                                ? args.path("expectedState").asText()
+                                : args.path("value").asText(""));
+                for (final String part : rawState.split("[,&]|\\band\\b"))
+                {
+                    final String trimmed = part.trim().toLowerCase(Locale.ROOT);
+                    if (!trimmed.isBlank())
+                    {
+                        states.add(trimmed);
+                    }
+                }
+            }
+
+            final boolean negated = args.path("negated").asBoolean(false)
+                    || args.path("not").asBoolean(false);
+
+            for (final String state : states)
+            {
+                final boolean satisfies = switch (state)
+                {
+                    case "visible", "displayed" -> candidate.getWidth() > 0 && candidate.getHeight() > 0;
+                    case "hidden", "invisible" -> candidate.getWidth() <= 0 || candidate.getHeight() <= 0;
+                    case "disabled" -> candidate.getAttributes().containsKey("disabled")
+                            || "true".equalsIgnoreCase(candidate.getAttributes().get("aria-disabled"));
+                    case "enabled" -> !candidate.getAttributes().containsKey("disabled")
+                            && !"true".equalsIgnoreCase(candidate.getAttributes().get("aria-disabled"));
+                    case "checked" -> candidate.getAttributes().containsKey("checked")
+                            || "true".equalsIgnoreCase(candidate.getAttributes().get("aria-checked"));
+                    case "unchecked" -> !candidate.getAttributes().containsKey("checked")
+                            && !"true".equalsIgnoreCase(candidate.getAttributes().get("aria-checked"));
+                    case "readonly" -> candidate.getAttributes().containsKey("readonly")
+                            || "true".equalsIgnoreCase(candidate.getAttributes().get("aria-readonly"));
+                    case "editable" -> !candidate.getAttributes().containsKey("readonly")
+                            && !candidate.getAttributes().containsKey("disabled");
+                    case "exists" -> true;
+                    case "absent" -> false;
+                    default -> true;
+                };
+
+                final boolean stateMatched = negated ? !satisfies : satisfies;
+                if (!stateMatched)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // For any other assertion tools, do not allow healing without exact validation
+        return false;
+    }
+
+    private static String stripNamespacePrefix(final String toolName)
+    {
+        if (toolName == null)
+        {
+            return "";
+        }
+        final int colonIdx = toolName.indexOf(':');
+        return colonIdx >= 0 ? toolName.substring(colonIdx + 1) : toolName;
     }
 }

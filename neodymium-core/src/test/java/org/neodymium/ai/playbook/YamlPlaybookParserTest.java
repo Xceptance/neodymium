@@ -415,12 +415,56 @@ public class YamlPlaybookParserTest
         assertEquals("Click submit search", playbook.getSteps().get(2).getInstruction());
     }
 
+    /**
+     * Anchor/alias reuse across three site variants with data sets. This mirrors the structure of
+     * {@code verla/SearchTest_German.yaml} in the e2e module, but is kept inline because the core module
+     * must not depend on resources that live in {@code neodymium-e2e-tests}.
+     */
     @Test
     public void testParseSearchTestGermanYaml() throws IOException
     {
-        final org.neodymium.ai.resources.ClasspathResourceManager manager = new org.neodymium.ai.resources.ClasspathResourceManager();
+        final String yamlContent = """
+            search: &search
+              - Gib "${searchQuery}" in das Suchfeld ein.
+              - Ein Suchvorschlag-Dropdown ist sichtbar und enthält mindestens 6 Einträge.
+              - Klicke auf "View All", um alle Suchergebnisse zu sehen.
+              - Eine Suchergebnisseite wird angezeigt und zeigt die Suchergebnisse für "${searchQuery}".
+              - Ein Feld für die Anzahl der Suchergebnisse wird angezeigt.
+              - Die Anzahl der Ergebnisse '${resultCount}' ist zu sehen.
+              - Auf der linken Seite wird eine Box mit Kategorien, Farben, Preis und Angebot angezeigt (visual-full).
+
+            steps:
+              - Öffne ${verla.url}/verla-perfect/index.html
+              - Öffne das Länder-Dropdown.
+              - Klicke "${country}".
+              - Die gezeigte Landesflagge ist die Flagge von "${country}" (visual).
+              - *search
+
+              - Öffne ${verla.url}/verla-normal/index.html
+              - *search
+
+              - Öffne ${verla.url}/verla-bad/index.html
+              - *search
+
+            data:
+              - testId: "US"
+                country: "United States"
+                searchQuery: "minimalist"
+                resultCount: 33
+              - testId: "DE"
+                country: "Germany"
+                searchQuery: "sandfarben"
+                resultCount: 41
+              - testId: "FIN"
+                country: "Finland"
+                searchQuery: "moderni"
+                resultCount: 35
+            """;
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("SearchTest_German.yaml", yamlContent);
+
         final YamlPlaybookParser parser = new YamlPlaybookParser();
-        final Playbook playbook = parser.parse("verla/SearchTest_German.yaml", manager);
+        final Playbook playbook = parser.parse("SearchTest_German.yaml", manager);
 
         assertNotNull(playbook);
         // 4 initial steps + 7 search steps + 1 open step + 7 search steps + 1 open step + 7 search steps = 27 steps

@@ -31,7 +31,15 @@ if [ -f "$INPUT" ]; then
   cd "$PROJECT_DIR" || exit 1
   echo "Project directory resolved to: $PROJECT_DIR"
   
-  mvn test -pl neodymium-core -Dneodymium.testFileFilter="$ABS_PATH" "${@:2}"
+  TARGET_MODULE="neodymium-core"
+  if [[ "$ABS_PATH" == *"/neodymium-e2e-tests/"* ]]; then
+    TARGET_MODULE="neodymium-e2e-tests"
+  fi
+  if [ -n "$NEO_MODULE" ]; then
+    TARGET_MODULE="$NEO_MODULE"
+  fi
+  
+  mvn test -pl "$TARGET_MODULE" -Dneodymium.testFileFilter="$ABS_PATH" "${@:2}"
 else
   # Assume it's a test ID
   echo "Running Neodymium tests with testId: $INPUT"
@@ -41,5 +49,7 @@ else
   cd "$PROJECT_DIR" || exit 1
   echo "Project directory resolved to: $PROJECT_DIR"
   
-  mvn test -pl neodymium-core -Dneodymium.testIdFilter="$INPUT" "${@:2}"
+  TARGET_MODULE="${NEO_MODULE:-neodymium-core}"
+  
+  mvn test -pl "$TARGET_MODULE" -Dneodymium.testIdFilter="$INPUT" "${@:2}"
 fi

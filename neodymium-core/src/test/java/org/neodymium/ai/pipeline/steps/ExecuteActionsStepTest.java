@@ -72,8 +72,10 @@ import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.DivergenceException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.HealingRequiredException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.report.DiskReportFormat;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.runner.StateMachineRunner;
@@ -1438,6 +1440,324 @@ public final class ExecuteActionsStepTest
 
         assertEquals("Edited prompt by user", step.getInstruction());
         assertEquals("Edited prompt by user", context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION));
+    }
+
+    @Test
+    public void testHealedStepFlagDoesNotLeakToSubsequentReplaySteps() throws Exception
+    {
+        final SessionData sessionData = new SessionData(Collections.emptyMap());
+        final AiSession session = AiSession.mock(
+                ExecutionMode.REPLAY_WITH_HEALING,
+                sessionData,
+                new LlmRegistry(),
+                new ExecutionEventBus(),
+                (TargetExecutor) null);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+
+        // Step 1: simulated healed step
+        final PlaybookStep step1 = new PlaybookStep("Step 1 with healing");
+        step1.setStatus(PlaybookStepStatus.RUNNING);
+        final PipelineStep pipelineStep1 = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step1, session, context);
+        pipelineStep1.execute(context);
+
+        // Simulate online healing triggering and marking the transient flag
+        context.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
+
+        // Drain pipeline steps for step 1 (executing TryCatch and step end hook)
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.HEALED, step1.getStatus(), "Step 1 should be marked HEALED");
+        assertFalse(context.getTransientData().containsKey(ExecutionContext.KEY_IS_HEALED_STEP),
+                "KEY_IS_HEALED_STEP must be removed after step 1 end hook");
+
+        // Step 2: normal recorded replay step
+        final PlaybookStep step2 = new PlaybookStep("Step 2 normal replay");
+        step2.setStatus(PlaybookStepStatus.SUCCESS);
+        final PipelineStep pipelineStep2 = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step2, session, context);
+        pipelineStep2.execute(context);
+
+        assertFalse(context.getTransientData().containsKey(ExecutionContext.KEY_IS_HEALED_STEP),
+                "KEY_IS_HEALED_STEP must not be present when step 2 starts");
+
+        // Drain pipeline steps for step 2
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.SUCCESS, step2.getStatus(), "Step 2 should remain SUCCESS, not falsely marked HEALED");
+        assertFalse(context.getTransientData().containsKey(ExecutionContext.KEY_IS_HEALED_STEP),
+                "KEY_IS_HEALED_STEP must remain absent from transient data");
+    }
+
+    @Test
+    public void testOfflineReplayHealedStepPreservedThroughPipelineAndDispatchesHealedEvent() throws Exception
+    {
+        final SessionData sessionData = new SessionData(Collections.emptyMap());
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final List<StepFinishedEvent> finishedEvents = new ArrayList<>();
+        eventBus.registerListener(event ->
+        {
+            if (event instanceof StepFinishedEvent sfe)
+            {
+                finishedEvents.add(sfe);
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(
+                ExecutionMode.REPLAY_WITH_HEALING,
+                sessionData,
+                new LlmRegistry(),
+                eventBus,
+                executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+
+        final PlaybookStep step = new PlaybookStep("Healed step during offline replay");
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final ObjectNode schema = JsonNodeFactory.instance.objectNode().put("type", "object");
+        toolRegistry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("test_tool", "Test tool", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                // Simulate PlaybookToolReplayer marking the step as HEALED during offline replay
+                step.setStatus(PlaybookStepStatus.HEALED);
+                return ToolResult.success(call.callId(), "ok");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final ObjectNode args = JsonNodeFactory.instance.objectNode();
+        step.addToolCall(new ToolCall("call-1", "test_tool", args));
+
+        // Step mapped to pipeline step
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+        pipelineStep.execute(context);
+
+        // Drain pipeline steps (TryCatch and step end hook)
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.HEALED, step.getStatus(), "Offline healed step must retain HEALED status");
+        assertEquals(PlaybookStep.CURRENT_SCHEMA_VERSION, step.getSchemaVersion(), "Schema version must be updated on healed step");
+        assertEquals(1, finishedEvents.size(), "One StepFinishedEvent must be dispatched");
+        assertEquals(PlaybookStepStatus.HEALED, finishedEvents.get(0).getStatus(), "StepFinishedEvent status must be HEALED");
+    }
+
+    @Test
+    public void testReplayWithHealingFailsConclusivelyOnAssertionFailureWithoutEscalatingToAgentLoop() throws Exception
+    {
+        final SessionData sessionData = new SessionData(Collections.emptyMap());
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry llmRegistry = new LlmRegistry();
+        llmRegistry.setDefaultProvider(mockProvider);
+
+        final AiSession session = AiSession.mock(
+                ExecutionMode.REPLAY_WITH_HEALING,
+                sessionData,
+                llmRegistry,
+                new ExecutionEventBus(),
+                executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+
+        // Register custom mock assert_text tool in ToolRegistry
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final ObjectNode schema = JsonNodeFactory.instance.objectNode().put("type", "object");
+        toolRegistry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new AssertionError("Price mismatch: expected $35.00 but found $40.00");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final PlaybookStep assertionStep = new PlaybookStep("Assert subtotal is 35.00");
+        final ObjectNode args = JsonNodeFactory.instance.objectNode().put("target", "#subtotal").put("expectedText", "35.00");
+        assertionStep.addToolCall(new ToolCall("call-assert", "assert_text", args));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(assertionStep, session, context);
+
+        // Executing the step pipeline must conclusively fail with ConclusiveFailureException
+        // and NOT throw HealingRequiredException or launch AgentToolLoopStep.
+        final ConclusiveFailureException ex = assertThrows(ConclusiveFailureException.class, () ->
+        {
+            pipelineStep.execute(context);
+            while (context.hasSteps())
+            {
+                context.popStep().execute(context);
+            }
+        });
+
+        assertTrue(ex.getMessage().contains("Assertion failed during replay") || ex.getMessage().contains("Price mismatch"));
+        assertNull(mockProvider.getLastRequest(), "LLM must NEVER be invoked to heal or overwrite an assertion oracle");
+        assertFalse(context.getTransientData().containsKey(ExecutionContext.KEY_IS_HEALED_STEP));
+    }
+
+    @Test
+    public void testReplayWithHealingEscalatesActionFailureToAgentLoop() throws Exception
+    {
+        final SessionData sessionData = new SessionData(Collections.emptyMap());
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry llmRegistry = new LlmRegistry();
+        llmRegistry.setDefaultProvider(mockProvider);
+
+        final AiSession session = AiSession.mock(
+                ExecutionMode.REPLAY_WITH_HEALING,
+                sessionData,
+                llmRegistry,
+                new ExecutionEventBus(),
+                executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+
+        // Register custom mock click tool that fails because the button moved
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final ObjectNode schema = JsonNodeFactory.instance.objectNode().put("type", "object");
+        toolRegistry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("click", "Clicks target", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new RuntimeException("Element not found: #checkout");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final PlaybookStep actionStep = new PlaybookStep("Click the checkout button");
+        final ObjectNode args = JsonNodeFactory.instance.objectNode().put("target", "#checkout");
+        actionStep.addToolCall(new ToolCall("call-click", "click", args));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(actionStep, session, context);
+
+        // Executing standardFlow directly without runner throws HealingRequiredException,
+        // which must be handled by the registered TryCatchStep handler.
+        final HealingRequiredException ex = assertThrows(HealingRequiredException.class, () ->
+        {
+            pipelineStep.execute(context);
+            while (context.hasSteps())
+            {
+                context.popStep().execute(context);
+            }
+        });
+
+        assertTrue(ex.getMessage().contains("Element not found: #checkout"));
+        assertNotNull(context.peekTryCatch(), "TryCatch scope must be active on context");
+        final TryCatchStep tryCatch = (TryCatchStep) context.popTryCatch();
+        final PipelineStep handler = tryCatch.getHandlerFor(ex);
+        assertNotNull(handler, "TryCatchStep must have a handler for HealingRequiredException");
+        handler.execute(context);
+
+        assertTrue(Boolean.TRUE.equals(context.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP)),
+            "Handler must flag the step as healed");
+        assertTrue(context.hasSteps(), "Handler must push step(s) onto context");
+        final PipelineStep next = context.popStep();
+        assertTrue(next instanceof AgentToolLoopStep, "Handler must push AgentToolLoopStep for online healing");
+    }
+
+    @Test
+    public void testReplayWithHealingFailsConclusivelyOnNaturalLanguageVerificationPrefix() throws Exception
+    {
+        final SessionData sessionData = new SessionData(Collections.emptyMap());
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry llmRegistry = new LlmRegistry();
+        llmRegistry.setDefaultProvider(mockProvider);
+
+        final AiSession session = AiSession.mock(
+                ExecutionMode.REPLAY_WITH_HEALING,
+                sessionData,
+                llmRegistry,
+                new ExecutionEventBus(),
+                executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+
+        // Tool name does NOT start with "assert", but step instruction begins with "Verify that"
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final ObjectNode schema = JsonNodeFactory.instance.objectNode().put("type", "object");
+        toolRegistry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("check_banner", "Checks banner", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new RuntimeException("Banner condition failed");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final PlaybookStep verificationStep = new PlaybookStep("Verify that order confirmation banner is displayed");
+        final ObjectNode args = JsonNodeFactory.instance.objectNode().put("target", "#banner");
+        verificationStep.addToolCall(new ToolCall("call-verify", "check_banner", args));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(verificationStep, session, context);
+
+        final ConclusiveFailureException ex = assertThrows(ConclusiveFailureException.class, () ->
+        {
+            pipelineStep.execute(context);
+            while (context.hasSteps())
+            {
+                context.popStep().execute(context);
+            }
+        });
+
+        assertTrue(ex.getMessage().contains("Assertion failed during replay"));
+        assertTrue(ex.getMessage().contains("Banner condition failed"));
+        assertNull(mockProvider.getLastRequest(), "LLM must NOT be invoked when natural language verification step fails");
+        assertFalse(context.getTransientData().containsKey(ExecutionContext.KEY_IS_HEALED_STEP));
     }
 }
 

@@ -805,20 +805,18 @@ public final class LocatorResolver
             }
             else if (lowerPart.startsWith("label="))
             {
-                final By labelBy = resolveLocator(part);
-                if (labelBy instanceof By.ByXPath byXPath)
-                {
-                    String labelXpath = byXPath.toString();
-                    if (labelXpath.startsWith("By.xpath: "))
-                    {
-                        labelXpath = labelXpath.substring(10).trim();
-                    }
-                    if (labelXpath.startsWith("//"))
-                    {
-                        labelXpath = labelXpath.substring(2);
-                    }
-                    xpath.append(prefix).append("(").append(labelXpath).append(")");
-                }
+                // The standalone label= locator is a union of three location paths. A union cannot be
+                // appended to a scope with "//" (the former "//( a | b | c )" is invalid XPath 1.0),
+                // so the same three associations are expressed as one predicate on the descendant axis:
+                //   1. form control referenced by label/@for
+                //   2. form control nested in a matching label (ancestor axis replaces //label//control)
+                //   3. any element carrying a matching aria-label
+                final String labelVal = unquote(part.substring(6).trim());
+                final String escaped = escapeXpath(labelVal);
+                xpath.append(prefix).append("*[((self::input or self::select or self::textarea or self::button)")
+                        .append(" and (@id=//label[normalize-space(.)=").append(escaped).append("]/@for")
+                        .append(" or ancestor::label[normalize-space(.)=").append(escaped).append("]))")
+                        .append(" or @aria-label=").append(escaped).append("]");
             }
             else
             {

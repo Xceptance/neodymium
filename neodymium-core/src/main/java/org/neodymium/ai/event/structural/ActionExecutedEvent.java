@@ -51,6 +51,11 @@ public final class ActionExecutedEvent extends ExecutionEvent
     private final String phase;
 
     /**
+     * Indicates whether this action was self-healed.
+     */
+    private final boolean healed;
+
+    /**
      * Constructs an ActionExecutedEvent without explicit resolved action.
      *
      * @param action the executed action
@@ -58,7 +63,7 @@ public final class ActionExecutedEvent extends ExecutionEvent
      */
     public ActionExecutedEvent(final Action action, final boolean success)
     {
-        this(action, null, success, null);
+        this(action, null, success, null, false);
     }
 
     /**
@@ -70,7 +75,20 @@ public final class ActionExecutedEvent extends ExecutionEvent
      */
     public ActionExecutedEvent(final Action action, final Action resolvedAction, final boolean success)
     {
-        this(action, resolvedAction, success, null);
+        this(action, resolvedAction, success, null, false);
+    }
+
+    /**
+     * Constructs an ActionExecutedEvent with canonical action, resolved action, and healing status.
+     *
+     * @param action the canonical executed action
+     * @param resolvedAction the runtime resolved action
+     * @param success the execution outcome status
+     * @param healed whether this action was self-healed
+     */
+    public ActionExecutedEvent(final Action action, final Action resolvedAction, final boolean success, final boolean healed)
+    {
+        this(action, resolvedAction, success, null, healed);
     }
 
     /**
@@ -83,11 +101,42 @@ public final class ActionExecutedEvent extends ExecutionEvent
      */
     public ActionExecutedEvent(final Action action, final Action resolvedAction, final boolean success, final String phase)
     {
+        this(action, resolvedAction, success, phase, false);
+    }
+
+    /**
+     * Constructs an ActionExecutedEvent with canonical action, resolved action, outcome, phase, and healing status.
+     *
+     * @param action the canonical executed action
+     * @param resolvedAction the runtime resolved action
+     * @param success the execution outcome status
+     * @param phase the execution phase (e.g. "PRELUDE", "CONTINUATION")
+     * @param healed whether this action was self-healed
+     */
+    public ActionExecutedEvent(
+        final Action action,
+        final Action resolvedAction,
+        final boolean success,
+        final String phase,
+        final boolean healed
+    )
+    {
         super();
         this.action = action;
         this.resolvedAction = resolvedAction;
         this.success = success;
         this.phase = phase;
+        this.healed = healed;
+    }
+
+    /**
+     * Gets whether this action was self-healed.
+     *
+     * @return true if healed, false otherwise
+     */
+    public boolean isHealed()
+    {
+        return this.healed;
     }
 
     /**

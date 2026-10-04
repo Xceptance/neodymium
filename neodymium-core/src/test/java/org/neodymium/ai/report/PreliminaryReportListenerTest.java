@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -2234,5 +2235,49 @@ public class PreliminaryReportListenerTest
         assertEquals("FAILED", subEntry4.getStatus());
         assertNotNull(subEntry4.getFailureReason());
         assertTrue(subEntry4.getFailureReason().contains("Token budget exceeded"));
+    }
+
+    @Test
+    public void testHealedActionEventWithCanonicalAndResolvedSelectors() throws IOException
+    {
+        final Path reportDir = this.tempFolder.resolve("healed-action-report");
+        Files.createDirectories(reportDir);
+
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN, DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Apply discount code");
+        bus.dispatch(new StepStartedEvent(step, 0));
+
+        final Action canonicalAction = new Action("FILL", "#coupon-input", List.of("SAVE10"), "Enter coupon", "Target original coupon field");
+        final Action healedAction = new Action("FILL", "#input_dyn_84920", List.of("SAVE10"), "Enter coupon", "Target original coupon field");
+
+        bus.dispatch(new ActionExecutedEvent(canonicalAction, healedAction, true, true));
+        bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.HEALED));
+        bus.dispatch(new SessionFinishedEvent(1200, true));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getMetrics().getHealedSteps(), "Metrics must count 1 healed step");
+        assertEquals(1, report.getSteps().size());
+
+        final TestExecutionReport.ReportStepEntry stepEntry = report.getSteps().get(0);
+        assertEquals("HEALED", stepEntry.getStatus());
+        assertTrue(stepEntry.isHealed());
+        assertEquals(1, stepEntry.getActions().size());
+
+        final TestExecutionReport.ReportActionEntry actionEntry = stepEntry.getActions().get(0);
+        assertTrue(actionEntry.isHealed(), "Action entry must be flagged as healed");
+        assertEquals("#coupon-input", actionEntry.getTarget(), "Target must be canonical recorded selector");
+        assertEquals("#input_dyn_84920", actionEntry.getResolvedTarget(), "Resolved target must be runtime healed selector");
+
+        // Verify HTML report rendering contains the healed intel marker and status-heal class
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        assertTrue(Files.exists(htmlPath), "HTML report file must be written");
+        final String htmlContent = Files.readString(htmlPath, StandardCharsets.UTF_8);
+        assertTrue(htmlContent.contains("action-healed-note"), "HTML must contain action-healed-note CSS class");
+        assertTrue(htmlContent.contains("🧬 Healed from:"), "HTML must contain healed marker label");
+        assertTrue(htmlContent.contains("status-heal"), "HTML must contain status-heal styling");
     }
 }

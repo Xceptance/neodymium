@@ -59,6 +59,7 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.playbook.PlaybookParser;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
+import org.neodymium.ai.recorder.PlaybookRecorder;
 import org.neodymium.ai.resources.ClasspathResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.runner.StateMachineRunner;
@@ -864,13 +865,20 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             syncWebDriverWithSelenide();
 
-            // Automatically detect mock integration test package and apply thread-local overrides
-            if (context.getRequiredTestClass() != null)
+            // Resolve declarative AI provider override or preserve global system property
+            final Method testMethod = context.getTestMethod().orElse(null);
+            final Class<?> targetClass = context.getTestClass().orElse(null);
+            final AiProvider aiProvider = findAiProviderAnnotation(testMethod, targetClass);
+            if (aiProvider != null && !aiProvider.value().isBlank())
             {
-                final String fqcn = context.getRequiredTestClass().getName();
-                if (fqcn.contains(".integration.mock.") || fqcn.contains(".sandbox.mock.") || fqcn.contains(".integration.data."))
+                Neodymium.getData().put("neodymium.ai.global.provider", aiProvider.value().trim());
+            }
+            else
+            {
+                final String sysPropProvider = System.getProperty("neodymium.ai.global.provider");
+                if (sysPropProvider != null && !sysPropProvider.isBlank())
                 {
-                    Neodymium.getData().put("neodymium.ai.global.provider", "mock");
+                    Neodymium.getData().put("neodymium.ai.global.provider", sysPropProvider.trim());
                 }
             }
 
@@ -1375,7 +1383,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.recordingPath = computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile, recMethod, recFileName, recDir);
             if (this.recordingPath != null)
             {
-                if (this.mode.isRecording())
+                // FORCE_RECORDING wipes out any pre-existing recording upfront so failure never leaves stale traces
+                if (this.mode == ExecutionMode.FORCE_RECORDING)
                 {
                     try
                     {
@@ -1385,8 +1394,12 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     {
                     }
                 }
-                final org.neodymium.ai.recorder.PlaybookRecorder recorder = new org.neodymium.ai.recorder.PlaybookRecorder(manager, this.recordingPath, playbookSteps, this.mode);
-                eventBus.registerListener(recorder);
+                // LLM_ONLY and LINTER_ONLY must never write a recording (see ExecutionMode#persistsRecording)
+                if (this.mode.persistsRecording())
+                {
+                    final PlaybookRecorder recorder = new PlaybookRecorder(manager, this.recordingPath, playbookSteps, this.mode);
+                    eventBus.registerListener(recorder);
+                }
             }
 
             executionContext.getTransientData().put("playbook.mainSteps", playbookSteps);
@@ -1609,7 +1622,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
                 final boolean hasFailed = context.getExecutionException().isPresent()
                     || (this.session != null && this.session.getExecutionContext() != null && this.session.getExecutionContext().getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR));
-                if (hasFailed && this.mode.isRecording() && this.recordingPath != null && this.resourceManager != null)
+                if (hasFailed && this.mode == ExecutionMode.FORCE_RECORDING && this.recordingPath != null && this.resourceManager != null)
                 {
                     try
                     {
@@ -1909,7 +1922,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
     {
         final String recDir = (recordingDirectory != null && !recordingDirectory.trim().isEmpty())
             ? recordingDirectory.trim()
-            : org.neodymium.ai.config.AiConfiguration.getInstance().playbookRecordingDirectory();
+            : AiConfiguration.getInstance().playbookRecordingDirectory();
 
         if (recordingFileName != null && !recordingFileName.trim().isEmpty())
         {
@@ -2153,5 +2166,48 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             return packagePath + "/" + rawPath;
         }
         return rawPath;
+    }
+
+    /**
+     * Resolves the {@link AiProvider} annotation by inspecting the method, class hierarchy,
+     * or enclosing package.
+     *
+     * @param method the test method, if available
+     * @param testClass the test class, if available
+     * @return the resolved {@link AiProvider} annotation, or {@code null} if none is found
+     */
+    private static AiProvider findAiProviderAnnotation(final Method method, final Class<?> testClass)
+    {
+        if (method != null)
+        {
+            final AiProvider methodAnn = method.getAnnotation(AiProvider.class);
+            if (methodAnn != null)
+            {
+                return methodAnn;
+            }
+        }
+        if (testClass != null)
+        {
+            Class<?> current = testClass;
+            while (current != null && current != Object.class)
+            {
+                final AiProvider classAnn = current.getAnnotation(AiProvider.class);
+                if (classAnn != null)
+                {
+                    return classAnn;
+                }
+                current = current.getSuperclass();
+            }
+            final Package pkg = testClass.getPackage();
+            if (pkg != null)
+            {
+                final AiProvider pkgAnn = pkg.getAnnotation(AiProvider.class);
+                if (pkgAnn != null)
+                {
+                    return pkgAnn;
+                }
+            }
+        }
+        return null;
     }
 }

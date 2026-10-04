@@ -69,6 +69,8 @@ chat-history/
 **/src/test/java/com/xceptance/neodymium/aura/sandbox/
 target/aura-sandbox/
 # Neodymium Aura storage and runtime database
-storage/
-data/
+/storage/
+/data/
+**/aura-manager/data/
+**/aura-manager/storage/
 *.db

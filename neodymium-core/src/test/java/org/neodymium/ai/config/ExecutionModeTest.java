@@ -40,6 +40,7 @@ public final class ExecutionModeTest
         assertFalse(mode.isReplay(), "LLM_RECORDING must not be classified as a replay mode");
         assertFalse(mode.isLinterOnly(), "LLM_RECORDING is not linter-only");
         assertFalse(mode.supportsHealing(), "LLM_RECORDING does not use replay healing");
+        assertTrue(mode.persistsRecording(), "LLM_RECORDING persists newly recorded actions");
     }
 
     @Test
@@ -51,6 +52,7 @@ public final class ExecutionModeTest
         assertFalse(mode.isReplay(), "FORCE_RECORDING must not be classified as a replay mode");
         assertFalse(mode.isLinterOnly(), "FORCE_RECORDING is not linter-only");
         assertFalse(mode.supportsHealing(), "FORCE_RECORDING does not use replay healing");
+        assertTrue(mode.persistsRecording(), "FORCE_RECORDING persists newly recorded actions");
     }
 
     @Test
@@ -62,6 +64,7 @@ public final class ExecutionModeTest
         assertFalse(mode.isReplay(), "LLM_ONLY must not be replay");
         assertFalse(mode.isLinterOnly(), "LLM_ONLY is not linter-only");
         assertFalse(mode.supportsHealing(), "LLM_ONLY does not use replay healing");
+        assertFalse(mode.persistsRecording(), "LLM_ONLY must not persist recording files to disk");
     }
 
     @Test
@@ -73,6 +76,7 @@ public final class ExecutionModeTest
         assertTrue(mode.isReplay(), "REPLAY_WITH_HEALING must be replay mode");
         assertFalse(mode.isLinterOnly(), "REPLAY_WITH_HEALING is not linter-only");
         assertTrue(mode.supportsHealing(), "REPLAY_WITH_HEALING supports healing");
+        assertTrue(mode.persistsRecording(), "REPLAY_WITH_HEALING persists healed step updates to disk");
     }
 
     @Test
@@ -84,6 +88,7 @@ public final class ExecutionModeTest
         assertTrue(mode.isReplay(), "REPLAY_STRICT must be replay mode");
         assertFalse(mode.isLinterOnly(), "REPLAY_STRICT is not linter-only");
         assertFalse(mode.supportsHealing(), "REPLAY_STRICT does not support healing");
+        assertFalse(mode.persistsRecording(), "REPLAY_STRICT is strictly read-only and must never touch disk");
     }
 
     @Test
@@ -95,5 +100,6 @@ public final class ExecutionModeTest
         assertFalse(mode.isReplay(), "LINTER_ONLY is not replay");
         assertTrue(mode.isLinterOnly(), "LINTER_ONLY must return true for isLinterOnly()");
         assertFalse(mode.supportsHealing(), "LINTER_ONLY does not support healing");
+        assertFalse(mode.persistsRecording(), "LINTER_ONLY must never persist recordings");
     }
 }

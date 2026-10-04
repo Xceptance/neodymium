@@ -676,11 +676,6 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     step.setReasoning(thought.trim());
                 }
-                if (!proposedActions.isEmpty() || !sanitizedCalls.isEmpty())
-                {
-                    step.setToolCalls(sanitizedCalls);
-                    step.setActions(proposedActions);
-                }
             }
 
             InteractiveConsoleListener interactiveListener = null;
@@ -700,7 +695,30 @@ public final class AgentToolLoopStep implements PipelineStep
             final boolean hasProposedActions = !proposedActions.isEmpty() || !sanitizedCalls.isEmpty();
             if (hasProposedActions && interactiveListener != null && !interactiveListener.isAutoRun())
             {
-                final String userAction = interactiveListener.pauseBeforeActionExecution(context, step);
+                final List<Action> origActions = step != null && step.getActions() != null
+                        ? new ArrayList<>(step.getActions())
+                        : new ArrayList<>();
+                final List<ToolCall> origCalls = step != null && step.getToolCalls() != null
+                        ? new ArrayList<>(step.getToolCalls())
+                        : new ArrayList<>();
+                if (step != null)
+                {
+                    step.setToolCalls(sanitizedCalls);
+                    step.setActions(proposedActions);
+                }
+                final String userAction;
+                try
+                {
+                    userAction = interactiveListener.pauseBeforeActionExecution(context, step);
+                }
+                finally
+                {
+                    if (step != null)
+                    {
+                        step.setActions(origActions);
+                        step.setToolCalls(origCalls);
+                    }
+                }
                 if ("SKIP".equalsIgnoreCase(userAction) || (step != null && step.getStatus() == PlaybookStepStatus.SKIPPED))
                 {
                     LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", instruction);

@@ -275,9 +275,16 @@ public class NeodymiumAiRunnerTest
         // Verify report files were generated despite the early failure
         final Path targetResultsDir = Path.of("target/ai-results");
         final Path searchDir;
-        try (var stream = Files.list(reportDir))
+        if (Files.exists(reportDir))
         {
-            searchDir = stream.anyMatch(p -> p.getFileName().toString().endsWith(".html")) ? reportDir : targetResultsDir;
+            try (var stream = Files.list(reportDir))
+            {
+                searchDir = stream.anyMatch(p -> p.getFileName().toString().endsWith(".html")) ? reportDir : targetResultsDir;
+            }
+        }
+        else
+        {
+            searchDir = targetResultsDir;
         }
 
         try (var stream = Files.list(searchDir))
@@ -399,5 +406,89 @@ public class NeodymiumAiRunnerTest
 
         // Cleanup
         Neodymium.getData().remove("neodymium.ai.ssim.minScore");
+    }
+
+    /**
+     * Sample test class decorated with FORCE_RECORDING mode and specific recordingFileName.
+     */
+    public static class ForceRecordingUpfrontDeletionTestClass
+    {
+        @Test
+        @AiMode(ExecutionMode.FORCE_RECORDING)
+        @AiInlinePlaybook("name: force_recording_sample\nsteps:\n  - step: Click search button\n")
+        @AiPlaybook(recordingFileName = "force_recording_file")
+        public void testForceRecording()
+        {
+        }
+    }
+
+    /**
+     * Sample test class decorated with LLM_RECORDING mode and specific recordingFileName.
+     */
+    public static class LlmRecordingPreservesExistingFileTestClass
+    {
+        @Test
+        @AiMode(ExecutionMode.LLM_RECORDING)
+        @AiInlinePlaybook("name: llm_recording_sample\nsteps:\n  - step: Click search button\n")
+        @AiPlaybook(recordingFileName = "llm_recording_file")
+        public void testLlmRecording()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that FORCE_RECORDING deletes pre-existing recordings upfront in beforeEach,
+     * while LLM_RECORDING preserves pre-existing recordings upfront.
+     */
+    @Test
+    public void testForceRecordingDeletesUpfrontWhileLlmRecordingPreserves(@TempDir final Path tempDir) throws Exception
+    {
+        final Path forceFile = tempDir.resolve("force_recording_file.json");
+        final Path llmFile = tempDir.resolve("llm_recording_file.json");
+        Files.writeString(forceFile, "{\"existing\":\"data\"}");
+        Files.writeString(llmFile, "{\"existing\":\"data\"}");
+
+        System.setProperty("neodymium.ai.playbook.recordingDirectory", tempDir.toString());
+        AiConfiguration.resetInstance();
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+
+            // 1. Verify FORCE_RECORDING deletes upfront in beforeEach
+            final Method forceMethod = ForceRecordingUpfrontDeletionTestClass.class.getMethod("testForceRecording");
+            final ExtensionContext forceContext = createMockExtensionContext(ForceRecordingUpfrontDeletionTestClass.class, forceMethod);
+            final List<TestTemplateInvocationContext> forceInvocations =
+                runner.provideTestTemplateInvocationContexts(forceContext).toList();
+            Assertions.assertFalse(forceInvocations.isEmpty());
+
+            final BeforeEachCallback forceBeforeEach = (BeforeEachCallback) forceInvocations.get(0).getAdditionalExtensions().stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            forceBeforeEach.beforeEach(forceContext);
+            Assertions.assertFalse(Files.exists(forceFile), "FORCE_RECORDING must delete pre-existing recording upfront");
+
+            // 2. Verify LLM_RECORDING does NOT delete upfront in beforeEach
+            final Method llmMethod = LlmRecordingPreservesExistingFileTestClass.class.getMethod("testLlmRecording");
+            final ExtensionContext llmContext = createMockExtensionContext(LlmRecordingPreservesExistingFileTestClass.class, llmMethod);
+            final List<TestTemplateInvocationContext> llmInvocations =
+                runner.provideTestTemplateInvocationContexts(llmContext).toList();
+            Assertions.assertFalse(llmInvocations.isEmpty());
+
+            final BeforeEachCallback llmBeforeEach = (BeforeEachCallback) llmInvocations.get(0).getAdditionalExtensions().stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            llmBeforeEach.beforeEach(llmContext);
+            Assertions.assertTrue(Files.exists(llmFile), "LLM_RECORDING must NOT delete pre-existing recording upfront");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.playbook.recordingDirectory");
+            AiConfiguration.resetInstance();
+        }
     }
 }

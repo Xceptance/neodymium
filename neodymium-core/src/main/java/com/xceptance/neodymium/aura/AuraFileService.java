@@ -93,6 +93,11 @@ public final class AuraFileService
         {
             return managerDir;
         }
+        final File e2eDir = new File("neodymium-e2e-tests/src/test/resources").getAbsoluteFile();
+        if (e2eDir.exists() && e2eDir.isDirectory())
+        {
+            return e2eDir;
+        }
         return defaultDir;
     }
 

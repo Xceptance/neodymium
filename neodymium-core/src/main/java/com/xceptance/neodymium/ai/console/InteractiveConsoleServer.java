@@ -214,6 +214,26 @@ public final class InteractiveConsoleServer
         LOG.info("[InteractiveConsoleServer] Stopped.");
     }
 
+    /**
+     * Retrieves the socket address this server is bound to.
+     *
+     * @return the bound socket address
+     */
+    public InetSocketAddress getAddress()
+    {
+        return this.server.getAddress();
+    }
+
+    /**
+     * Retrieves the local port this server is listening on.
+     *
+     * @return the port number
+     */
+    public int getPort()
+    {
+        return this.port;
+    }
+
     // -------------------------------------------------------------------------
     // Private helpers
     // -------------------------------------------------------------------------
@@ -232,11 +252,12 @@ public final class InteractiveConsoleServer
     {
         HttpServer httpServer = null;
         int port = DEFAULT_START_PORT;
+        final String bindHost = AiConfiguration.getInstance().getProperty("neodymium.ai.console.bindAddress", "127.0.0.1");
         while (port < DEFAULT_START_PORT + 100)
         {
             try
             {
-                httpServer = HttpServer.create(new InetSocketAddress("0.0.0.0", port), 0);
+                httpServer = HttpServer.create(new InetSocketAddress(bindHost, port), 0);
                 break;
             }
             catch (final IOException e)
@@ -274,6 +295,36 @@ public final class InteractiveConsoleServer
     // Inner handlers
     // -------------------------------------------------------------------------
 
+    static void applyCorsHeaders(final HttpExchange exchange, final String allowedMethods)
+    {
+        final String origin = exchange.getRequestHeaders().getFirst("Origin");
+        if (origin != null && isLocalhostOrigin(origin))
+        {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", origin);
+            exchange.getResponseHeaders().set("Vary", "Origin");
+        }
+        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", allowedMethods);
+        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+    }
+
+    static boolean isLocalhostOrigin(final String origin)
+    {
+        if (origin == null)
+        {
+            return false;
+        }
+        if ("null".equalsIgnoreCase(origin))
+        {
+            return true;
+        }
+        return origin.startsWith("http://localhost:")
+            || origin.startsWith("https://localhost:")
+            || origin.startsWith("http://127.0.0.1:")
+            || origin.startsWith("https://127.0.0.1:")
+            || "http://localhost".equalsIgnoreCase(origin)
+            || "http://127.0.0.1".equalsIgnoreCase(origin);
+    }
+
     /**
      * Stop handler that terminates the local execution process.
      */
@@ -282,9 +333,7 @@ public final class InteractiveConsoleServer
         @Override
         public void handle(final HttpExchange exchange) throws IOException
         {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "POST, OPTIONS");
-            exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
+            applyCorsHeaders(exchange, "POST, OPTIONS");
 
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod()))
             {
@@ -409,11 +458,9 @@ public final class InteractiveConsoleServer
         @Override
         public void handle(final HttpExchange exchange) throws IOException
         {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            applyCorsHeaders(exchange, "GET, OPTIONS");
             if ("OPTIONS".equalsIgnoreCase(exchange.getRequestMethod()))
             {
-                exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, OPTIONS");
-                exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type");
                 exchange.sendResponseHeaders(204, -1);
                 return;
             }
@@ -474,7 +521,7 @@ public final class InteractiveConsoleServer
         @Override
         public void handle(final HttpExchange exchange) throws IOException
         {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            applyCorsHeaders(exchange, "GET, OPTIONS");
             exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
             final byte[] bytes = Files.readAllBytes(this.jsonPath);
             exchange.sendResponseHeaders(200, bytes.length);
@@ -496,7 +543,7 @@ public final class InteractiveConsoleServer
         @Override
         public void handle(final HttpExchange exchange) throws IOException
         {
-            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
+            applyCorsHeaders(exchange, "GET, OPTIONS");
             exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
             try (final InputStream is = InteractiveConsoleServer.class.getClassLoader()
                                                                       .getResourceAsStream(JSON_RESOURCE))
