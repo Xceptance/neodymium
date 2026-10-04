@@ -39,7 +39,7 @@
                 </div>
 
                 <div class="aura-status-box" style="margin-top: 2rem; padding: 1.5rem; background: rgba(0,0,0,0.2); border-radius: 8px; text-align: center;">
-                    Status: <span id="status-message" style="font-weight: bold; color: #ffcc00;">Waiting for coupon...</span>
+                    Status: <span id="status-message" role="status" style="font-weight: bold; color: #ffcc00;">Waiting for coupon...</span>
                 </div>
             </section>
         </main>
@@ -135,6 +135,19 @@
             btn.id = 'btn_rand_1';
             giftCardBtn.id = 'btn_rand_2';
             cancelBtn.id = 'btn_rand_3';
+        } else if (driftMode === 'assertion_drift') {
+            // Assertion target drift: Status element ID and class drift, but status remains valid upon apply
+            status.id = 'status_msg_dyn_5541';
+            status.className = 'aura-status-pill custom-status-dyn';
+        } else if (driftMode === 'assertion_mismatch') {
+            // Assertion target drift AND data regression: Status element ID drifts and coupon verification yields mismatch
+            status.id = 'status_msg_dyn_5541';
+            status.className = 'aura-status-pill custom-status-dyn';
+            btn.removeEventListener('click', handleApplyCoupon);
+            btn.addEventListener('click', function() {
+                status.innerText = 'Coupon EXPIRED';
+                status.style.color = '#ff3366';
+            });
         }
     </script>
     <script src="../../shared/controls.js"></script>

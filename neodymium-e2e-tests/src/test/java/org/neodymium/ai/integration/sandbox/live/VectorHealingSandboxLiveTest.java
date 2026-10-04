@@ -87,4 +87,36 @@ public class VectorHealingSandboxLiveTest extends BaseAiTest
 
         $("#status-message").shouldHave(text("Coupon APPLIED successfully!"));
     }
+
+    /**
+     * Tests live recording on clean DOM and replay with DOM vector self-healing on an assertion-drifted DOM.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(recordingFileName = "live_vector_assertion_drift_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testVectorAssertionDriftHealingLive(final AiSession session) throws Exception
+    {
+        final String baseUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/vector-drift-healing.html", server.getPort());
+        final boolean isReplay = session.getExecutionMode().isReplay();
+        final String assertUrl = isReplay ? (baseUrl + "?drift=assertion_drift") : baseUrl;
+        session.data().putDynamic("drift.live.assert.url", assertUrl, false);
+
+        session.execute("""
+            steps: |
+              Open ${drift.live.assert.url} in the browser
+              Type "SAVE20" into the coupon input field
+              Click the apply coupon button
+              Verify that #status-message shows "Coupon APPLIED successfully!"
+            """);
+
+        if (session.getExecutionMode().isReplay())
+        {
+            $("#status_msg_dyn_5541").shouldHave(text("Coupon APPLIED successfully!"));
+        }
+        else
+        {
+            $("#status-message").shouldHave(text("Coupon APPLIED successfully!"));
+        }
+    }
 }

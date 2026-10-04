@@ -28,6 +28,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
@@ -41,7 +42,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 
 /**
  * Unit tests validating {@link PlaybookToolReplayer}, PlaybookStep tool call serialization,
@@ -659,5 +659,762 @@ public class PlaybookToolReplayTest
         Assertions.assertEquals(1, this.executedCalls.size());
         // Page-level assert_count must not heal locator via single DomFeatureVector
         Assertions.assertEquals(".cart-item", this.executedCalls.get(0).arguments().path("selector").asText());
+    }
+
+    @Test
+    public void testAssertionLocatorHealsInputFieldMatchingValueAttribute() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "Value verified");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert coupon code input has value SAVE20");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("target", "#coupon")
+                .put("expectedText", "SAVE20");
+        step.addToolCall(new ToolCall("call-assert-val", "assert_text", assertArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "input",
+                "",
+                Set.of("coupon-field", "coupon-input"),
+                Map.of("id", "coupon", "value", "SAVE20"),
+                "input",
+                "Coupon",
+                "form",
+                1
+        );
+        final Action recordedAction = new Action("ASSERT_TEXT", "#coupon", List.of("SAVE20"), "Verify coupon", "");
+        recordedAction.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(recordedAction));
+
+        // Candidate has empty text but matches via value attribute
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "input",
+                "",
+                Set.of("coupon-field-dyn", "coupon-input"),
+                Map.of("id", "coupon-dyn", "value", "SAVE20"),
+                "input",
+                "Coupon",
+                "form",
+                1
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals(1, this.executedCalls.size());
+        Assertions.assertEquals("#coupon-dyn", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testAssertionLocatorHealingNormalizesWhitespaceDifferences() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "Text verified");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert item status");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("target", "#status")
+                .put("expectedText", "Order status: confirmed");
+        step.addToolCall(new ToolCall("call-ws-1", "assert_text", assertArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "div",
+                "Order status: confirmed",
+                Set.of("order-status", "order-status-box"),
+                Map.of("id", "status", "data-box", "status"),
+                "text",
+                "status",
+                "main",
+                1
+        );
+        final Action recordedAction = new Action("ASSERT_TEXT", "#status", List.of("Order status: confirmed"), "Verify status", "");
+        recordedAction.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(recordedAction));
+
+        // Candidate on live page contains multiline and multiple whitespace spacing
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "div",
+                "Order   status:\n   confirmed",
+                Set.of("order-status-dyn", "order-status-box"),
+                Map.of("id", "status-dyn", "data-box", "status"),
+                "text",
+                "status",
+                "main",
+                1
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals(1, this.executedCalls.size());
+        Assertions.assertEquals("#status-dyn", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testAssertionLocatorHealsRegexTextMatchAndFallsBackOnInvalidRegex() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "Regex verified");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert order code format");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("target", "#order-code")
+                .put("expectedText", "[A-Z]{3}-\\d{4}")
+                .put("regex", true);
+        step.addToolCall(new ToolCall("call-reg-1", "assert_text", assertArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "span",
+                "ABC-1234",
+                Set.of("code-badge", "code-badge-common"),
+                Map.of("id", "order-code", "data-code", "order"),
+                "code",
+                "code",
+                "div",
+                1
+        );
+        final Action recordedAction = new Action("ASSERT_TEXT", "#order-code", List.of("[A-Z]{3}-\\d{4}"), "Verify code", "");
+        recordedAction.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(recordedAction));
+
+        // Candidate matches regex [A-Z]{3}-\\d{4}
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "span",
+                "XYZ-9876",
+                Set.of("code-badge-new", "code-badge-common"),
+                Map.of("id", "order-code-new", "data-code", "order"),
+                "code",
+                "code",
+                "div",
+                1
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals(1, this.executedCalls.size());
+        Assertions.assertEquals("#order-code-new", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testAssertionLocatorHealingNegatedTextExcludesMatchingCandidates() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                final String target = call.arguments().path("target").asText();
+                if ("#badge".equals(target))
+                {
+                    throw new AssertionError("Element #badge not found");
+                }
+                return ToolResult.success(call.callId(), "Negated text verified: " + target);
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert out of stock is not displayed");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("target", "#badge")
+                .put("expectedText", "Out of Stock")
+                .put("negated", true);
+        step.addToolCall(new ToolCall("call-neg-1", "assert_text", assertArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "span",
+                "In Stock",
+                Set.of("badge", "status-badge"),
+                Map.of("id", "badge", "data-badge", "true"),
+                "badge",
+                "badge",
+                "div",
+                1
+        );
+        final Action recordedAction = new Action("ASSERT_TEXT", "#badge", List.of("Out of Stock"), "Verify badge", "");
+        recordedAction.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(recordedAction));
+
+        // Candidate on live page contains the forbidden text "Out of Stock"
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "span",
+                "Out of Stock",
+                Set.of("badge-dyn", "status-badge"),
+                Map.of("id", "badge-dyn", "data-badge", "true"),
+                "badge",
+                "badge",
+                "div",
+                1
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        // Healing must be rejected because candidate text matches the forbidden negated text
+        final ConclusiveFailureException ex = Assertions.assertThrows(
+                ConclusiveFailureException.class,
+                () -> PlaybookToolReplayer.replayStep(step, this.registry, this.context)
+        );
+
+        Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
+        Assertions.assertEquals(PlaybookStepStatus.FAILED, step.getStatus());
+        Assertions.assertEquals("#badge", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testAssertionAttributeHealingAcceptsMatchingAndRejectsMismatchedAttribute() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_attribute", "Asserts attribute", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                final String target = call.arguments().path("target").asText();
+                if ("#account-status".equals(target))
+                {
+                    throw new AssertionError("Element #account-status not found");
+                }
+                return ToolResult.success(call.callId(), "Attribute verified");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert account status is active");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("target", "#account-status")
+                .put("attribute", "data-status")
+                .put("expectedValue", "active");
+        step.addToolCall(new ToolCall("call-attr-1", "assert_attribute", assertArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "div",
+                "Active User",
+                Set.of("user-status", "status-card"),
+                Map.of("id", "account-status", "data-status", "active"),
+                "status",
+                "status",
+                "div",
+                1
+        );
+        final Action recordedAction = new Action("ASSERT_ATTRIBUTE", "#account-status", List.of("data-status", "active"), "Verify status", "");
+        recordedAction.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(recordedAction));
+
+        // 1. Candidate with matching attribute heals
+        final DomFeatureVector matchingCandidate = new DomFeatureVector(
+                "div",
+                "Active User",
+                Set.of("user-status-new", "status-card"),
+                Map.of("id", "account-status-new", "data-status", "active"),
+                "status",
+                "status",
+                "div",
+                1
+        );
+
+        this.context.setVariable("liveCandidates", List.of(matchingCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals("#account-status-new", this.executedCalls.get(0).arguments().path("target").asText());
+
+        // 2. Candidate with mismatched attribute is rejected and fails conclusively
+        this.executedCalls.clear();
+        final DomFeatureVector mismatchedCandidate = new DomFeatureVector(
+                "div",
+                "Suspended User",
+                Set.of("user-status-new", "status-card"),
+                Map.of("id", "account-status-new", "data-status", "suspended"),
+                "status",
+                "status",
+                "div",
+                1
+        );
+        this.context.setVariable("liveCandidates", List.of(mismatchedCandidate));
+
+        final ConclusiveFailureException ex = Assertions.assertThrows(
+                ConclusiveFailureException.class,
+                () -> PlaybookToolReplayer.replayStep(step, this.registry, this.context)
+        );
+        Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
+        Assertions.assertEquals("#account-status", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testAssertionAttributePresenceOnlyHealing() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_attribute", "Asserts attribute presence", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "Attribute presence verified");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert aria-expanded exists on toggle");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("target", "#menu-toggle")
+                .put("attribute", "aria-expanded");
+        step.addToolCall(new ToolCall("call-attr-pres", "assert_attribute", assertArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "button",
+                "Menu",
+                Set.of("toggle-btn", "nav-item", "btn"),
+                Map.of("id", "menu-toggle", "aria-expanded", "true", "type", "button"),
+                "button",
+                "Menu",
+                "nav",
+                1
+        );
+        final Action recordedAction = new Action("ASSERT_ATTRIBUTE", "#menu-toggle", List.of("aria-expanded"), "Verify toggle", "");
+        recordedAction.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(recordedAction));
+
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "button",
+                "Menu",
+                Set.of("toggle-btn-dyn", "nav-item", "btn"),
+                Map.of("id", "menu-toggle-dyn", "aria-expanded", "false", "type", "button"),
+                "button",
+                "Menu",
+                "nav",
+                1
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals("#menu-toggle-dyn", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testAssertionElementStateHealingValidatesMultipleStates() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts state", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                final String target = call.arguments().path("target").asText();
+                if ("#submit-order".equals(target))
+                {
+                    throw new AssertionError("Element #submit-order not found");
+                }
+                return ToolResult.success(call.callId(), "States verified");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert submit button is visible and enabled");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("target", "#submit-order");
+        assertArgs.putArray("states").add("visible").add("enabled");
+        step.addToolCall(new ToolCall("call-state-1", "assert_element_state", assertArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "button",
+                "Submit",
+                Set.of("btn-primary", "btn-order"),
+                Map.of("id", "submit-order", "data-type", "submit"),
+                "button",
+                "Submit",
+                "form",
+                1,
+                10, 20, 100, 40
+        );
+        final Action recordedAction = new Action("ASSERT_ELEMENT_STATE", "#submit-order", List.of("visible", "enabled"), "Verify button", "");
+        recordedAction.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(recordedAction));
+
+        // 1. Candidate is visible and enabled -> heals
+        final DomFeatureVector enabledCandidate = new DomFeatureVector(
+                "button",
+                "Submit",
+                Set.of("btn-primary-dyn", "btn-order"),
+                Map.of("id", "submit-order-dyn", "data-type", "submit"),
+                "button",
+                "Submit",
+                "form",
+                1,
+                10, 20, 100, 40
+        );
+
+        this.context.setVariable("liveCandidates", List.of(enabledCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals("#submit-order-dyn", this.executedCalls.get(0).arguments().path("target").asText());
+
+        // 2. Candidate is disabled -> rejected for healing
+        this.executedCalls.clear();
+        final DomFeatureVector disabledCandidate = new DomFeatureVector(
+                "button",
+                "Submit",
+                Set.of("btn-primary-dyn", "btn-order"),
+                Map.of("id", "submit-order-dyn", "disabled", "true", "data-type", "submit"),
+                "button",
+                "Submit",
+                "form",
+                1,
+                10, 20, 100, 40
+        );
+        this.context.setVariable("liveCandidates", List.of(disabledCandidate));
+
+        final ConclusiveFailureException ex = Assertions.assertThrows(
+                ConclusiveFailureException.class,
+                () -> PlaybookToolReplayer.replayStep(step, this.registry, this.context)
+        );
+        Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
+        Assertions.assertEquals("#submit-order", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testAssertionElementStateHealingRejectsZeroDimensionCandidateWhenExpectingVisible() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts state", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                throw new AssertionError("Element #notification not found");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert notification is visible");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("target", "#notification")
+                .put("state", "visible");
+        step.addToolCall(new ToolCall("call-vis-1", "assert_element_state", assertArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "div",
+                "Notification",
+                Set.of("alert-box", "banner-box"),
+                Map.of("id", "notification", "data-box", "alert"),
+                "alert",
+                "alert",
+                "div",
+                1,
+                10, 20, 200, 50
+        );
+        final Action recordedAction = new Action("ASSERT_ELEMENT_STATE", "#notification", List.of("visible"), "Verify alert", "");
+        recordedAction.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(recordedAction));
+
+        // Candidate has 0 width and 0 height (hidden element)
+        final DomFeatureVector hiddenCandidate = new DomFeatureVector(
+                "div",
+                "Notification",
+                Set.of("alert-box-dyn", "banner-box"),
+                Map.of("id", "notification-dyn", "data-box", "alert"),
+                "alert",
+                "alert",
+                "div",
+                1,
+                0, 0, 0, 0
+        );
+
+        this.context.setVariable("liveCandidates", List.of(hiddenCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ConclusiveFailureException ex = Assertions.assertThrows(
+                ConclusiveFailureException.class,
+                () -> PlaybookToolReplayer.replayStep(step, this.registry, this.context)
+        );
+        Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
+        Assertions.assertEquals("#notification", this.executedCalls.get(0).arguments().path("target").asText());
+    }
+
+    @Test
+    public void testPageLevelAssertUrlAndTitleBypassLocatorHealing() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition defUrl = new ToolDefinition("assert_url", "Asserts url", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.defUrl;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "URL verified");
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition defTitle = new ToolDefinition("assert_title", "Asserts title", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.defTitle;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "Title verified");
+            }
+        });
+
+        final PlaybookStep urlStep = new PlaybookStep("Assert current URL contains cart");
+        urlStep.addToolCall(new ToolCall("call-url", "assert_url", MAPPER.createObjectNode().put("expectedUrl", "/cart")));
+
+        final PlaybookStep titleStep = new PlaybookStep("Assert page title is Shopping Cart");
+        titleStep.addToolCall(new ToolCall("call-title", "assert_title", MAPPER.createObjectNode().put("expectedTitle", "Shopping Cart")));
+
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "div",
+                "/cart",
+                Set.of("cart-link"),
+                Map.of("id", "cart-link"),
+                "cart",
+                "cart",
+                "nav",
+                1
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult urlResult = PlaybookToolReplayer.replayStep(urlStep, this.registry, this.context);
+        final ToolResult titleResult = PlaybookToolReplayer.replayStep(titleStep, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, urlResult.status());
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, titleResult.status());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, urlStep.getStatus());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, titleStep.getStatus());
+        Assertions.assertEquals(2, this.executedCalls.size());
+    }
+
+    @Test
+    public void testAssertionLocatorHealingResolvesVariablesBeforeValidatingCandidate() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                PlaybookToolReplayTest.this.executedCalls.add(call);
+                return ToolResult.success(call.callId(), "Resolved text verified: " + call.arguments().path("expectedText").asText());
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert total matches expected variable");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("target", "#total")
+                .put("expectedText", "${expectedAmount}");
+        step.addToolCall(new ToolCall("call-var-1", "assert_text", assertArgs));
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+                "span",
+                "100.00",
+                Set.of("total-box", "price-text"),
+                Map.of("id", "total", "data-type", "amount"),
+                "total",
+                "total",
+                "div",
+                1
+        );
+        final Action recordedAction = new Action("ASSERT_TEXT", "#total", List.of("100.00"), "Verify total", "");
+        recordedAction.setDomFeatureVector(recordedVector);
+        step.setActions(List.of(recordedAction));
+
+        // Live candidate has text "100.00"
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+                "span",
+                "100.00",
+                Set.of("total-box-dyn", "price-text"),
+                Map.of("id", "total-dyn", "data-type", "amount"),
+                "total",
+                "total",
+                "div",
+                1
+        );
+
+        final SessionData sessionData = new SessionData();
+        sessionData.set("expectedAmount", "100.00");
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context, sessionData, null);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        Assertions.assertEquals("#total-dyn", this.executedCalls.get(0).arguments().path("target").asText());
+        Assertions.assertEquals("100.00", this.executedCalls.get(0).arguments().path("expectedText").asText());
+    }
+
+    @Test
+    public void testAssertionToolErrorResultThrowsConclusiveFailureException() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode().put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.error(call.callId(), "Text mismatch: expected 'OK' but got 'ERROR'");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Assert status is OK");
+        final ObjectNode assertArgs = MAPPER.createObjectNode()
+                .put("target", "#status")
+                .put("expectedText", "OK");
+        step.addToolCall(new ToolCall("call-err-1", "assert_text", assertArgs));
+
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_WITH_HEALING);
+
+        final ConclusiveFailureException ex = Assertions.assertThrows(
+                ConclusiveFailureException.class,
+                () -> PlaybookToolReplayer.replayStep(step, this.registry, this.context)
+        );
+
+        Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
+        Assertions.assertTrue(ex.getMessage().contains("Text mismatch"));
+        Assertions.assertEquals(PlaybookStepStatus.FAILED, step.getStatus());
     }
 }

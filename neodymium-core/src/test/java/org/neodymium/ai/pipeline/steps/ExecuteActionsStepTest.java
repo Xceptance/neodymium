@@ -1629,6 +1629,68 @@ public final class ExecuteActionsStepTest
         final PipelineStep next = context.popStep();
         assertTrue(next instanceof AgentToolLoopStep, "Handler must push AgentToolLoopStep for online healing");
     }
+
+    @Test
+    public void testReplayWithHealingFailsConclusivelyOnNaturalLanguageVerificationPrefix() throws Exception
+    {
+        final SessionData sessionData = new SessionData(Collections.emptyMap());
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry llmRegistry = new LlmRegistry();
+        llmRegistry.setDefaultProvider(mockProvider);
+
+        final AiSession session = AiSession.mock(
+                ExecutionMode.REPLAY_WITH_HEALING,
+                sessionData,
+                llmRegistry,
+                new ExecutionEventBus(),
+                executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+
+        // Tool name does NOT start with "assert", but step instruction begins with "Verify that"
+        final ToolRegistry toolRegistry = new ToolRegistry();
+        final ObjectNode schema = JsonNodeFactory.instance.objectNode().put("type", "object");
+        toolRegistry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("check_banner", "Checks banner", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new RuntimeException("Banner condition failed");
+            }
+        });
+        context.getTransientData().put("KEY_TOOL_REGISTRY", toolRegistry);
+
+        final PlaybookStep verificationStep = new PlaybookStep("Verify that order confirmation banner is displayed");
+        final ObjectNode args = JsonNodeFactory.instance.objectNode().put("target", "#banner");
+        verificationStep.addToolCall(new ToolCall("call-verify", "check_banner", args));
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(verificationStep, session, context);
+
+        final ConclusiveFailureException ex = assertThrows(ConclusiveFailureException.class, () ->
+        {
+            pipelineStep.execute(context);
+            while (context.hasSteps())
+            {
+                context.popStep().execute(context);
+            }
+        });
+
+        assertTrue(ex.getMessage().contains("Assertion failed during replay"));
+        assertTrue(ex.getMessage().contains("Banner condition failed"));
+        assertNull(mockProvider.getLastRequest(), "LLM must NOT be invoked when natural language verification step fails");
+        assertFalse(context.getTransientData().containsKey(ExecutionContext.KEY_IS_HEALED_STEP));
+    }
 }
 
 
