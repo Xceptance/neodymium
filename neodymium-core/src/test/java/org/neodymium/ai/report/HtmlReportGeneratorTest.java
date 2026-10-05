@@ -586,5 +586,34 @@ public class HtmlReportGeneratorTest
             // Node not installed or execution prevented, string validation already passed
         }
     }
+
+    @Test
+    public void testChildSubStepDoesNotRenderReplayBadgeWhenParentIsLlm()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestName("Compound Step Test");
+        report.setTestClass("org.neodymium.ai.integration.CheckoutTest");
+        report.setTestMethod("testCheckout");
+        report.setStatus("PASSED");
+        report.setSuccess(true);
+        report.setStartTimeMs(System.currentTimeMillis());
+        report.setEndTimeMs(System.currentTimeMillis() + 1000);
+
+        final TestExecutionReport.ReportStepEntry parentStep = new TestExecutionReport.ReportStepEntry(1, "Fill out the shipping address form:");
+        parentStep.setStatus("PASSED");
+        parentStep.setStandardCalls(1);
+
+        final TestExecutionReport.ReportStepEntry childStep = new TestExecutionReport.ReportStepEntry(2, "Country");
+        childStep.setStatus("PASSED");
+
+        parentStep.addSubStep(childStep);
+        report.addStep(parentStep);
+
+        final HtmlReportGenerator generator = new HtmlReportGenerator();
+        final String html = generator.generate(report);
+
+        Assertions.assertTrue(html.contains("🤖 LLM"), "Parent step must render LLM badge");
+        Assertions.assertFalse(html.contains("<span class=\"badge-flag pill-mode-replay\">"), "Child sub-step must NOT render fallback REPLAY badge");
+    }
 }
 

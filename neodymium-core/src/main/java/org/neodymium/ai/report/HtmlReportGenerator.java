@@ -718,12 +718,19 @@ public final class HtmlReportGenerator
 
     private static void appendStepBadges(final StringBuilder sb, final TestExecutionReport.ReportStepEntry step)
     {
-        final String stepMode = step.getStepMode();
-        if (stepMode != null)
+        if (step.getParent() == null)
         {
-            final String modeClass = "LLM".equalsIgnoreCase(stepMode) ? "pill-mode-llm" : "pill-mode-replay";
-            final String modeIcon = "LLM".equalsIgnoreCase(stepMode) ? "🤖 " : "⚡ ";
-            sb.append("              <span class=\"badge-flag ").append(modeClass).append("\">").append(modeIcon).append(escapeHtml(stepMode)).append("</span>\n");
+            final String stepMode = step.getStepMode();
+            if (stepMode != null)
+            {
+                final String modeClass = "LLM".equalsIgnoreCase(stepMode) ? "pill-mode-llm" : "pill-mode-replay";
+                final String modeIcon = "LLM".equalsIgnoreCase(stepMode) ? "🤖 " : "⚡ ";
+                sb.append("              <span class=\"badge-flag ").append(modeClass).append("\">").append(modeIcon).append(escapeHtml(stepMode)).append("</span>\n");
+            }
+        }
+        else if (step.getLlmCalls() != null && !step.getLlmCalls().isEmpty())
+        {
+            sb.append("              <span class=\"badge-flag pill-mode-llm\">🤖 LLM</span>\n");
         }
         if (step.isBug())
         {

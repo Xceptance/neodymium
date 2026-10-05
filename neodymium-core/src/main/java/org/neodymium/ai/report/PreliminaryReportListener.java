@@ -443,6 +443,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                 if (pbStep != null)
                 {
                     targetStep.setBug(pbStep.isBug());
+                    targetStep.setMarker(pbStep.isMarker());
+                    targetStep.setVisual(pbStep.isVisualOrLayoutStep());
                     if (pbStep.getBugDetails() != null)
                     {
                         targetStep.setBugDetails(pbStep.getBugDetails());
@@ -548,10 +550,6 @@ public final class PreliminaryReportListener implements ExecutionListener
                                     ));
                                 }
                             }
-                            else if (targetStep.getActions().size() == pbStep.getSubSteps().size())
-                            {
-                                childEntry.addAction(targetStep.getActions().get(s));
-                            }
                             childEntry.setBug(childStep.isBug());
                             childEntry.setBugDetails(childStep.getBugDetails());
                             childEntry.setOptional(childStep.isOptional());
@@ -582,10 +580,6 @@ public final class PreliminaryReportListener implements ExecutionListener
                                         null
                                     ));
                                 }
-                            }
-                            else if (childEntry.getActions().isEmpty() && targetStep.getActions().size() == pbStep.getSubSteps().size())
-                            {
-                                childEntry.addAction(targetStep.getActions().get(s));
                             }
                             if (childStep.getDurationMs() != null && childStep.getDurationMs() > 0 && childEntry.getDurationMs() <= 0)
                             {

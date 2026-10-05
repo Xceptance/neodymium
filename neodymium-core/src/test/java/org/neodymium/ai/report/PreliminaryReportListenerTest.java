@@ -2280,4 +2280,37 @@ public class PreliminaryReportListenerTest
         assertTrue(htmlContent.contains("🧬 Healed from:"), "HTML must contain healed marker label");
         assertTrue(htmlContent.contains("status-heal"), "HTML must contain status-heal styling");
     }
+
+    @Test
+    public void testOnStepFinishedPropagatesDynamicMarkerAndVisualFlags() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-dynamic-markers");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Select size via visual marker");
+        bus.dispatch(new StepStartedEvent(step, 0));
+
+        // Dynamically toggle marker and visual flags mid-step (e.g. LLM invoked mark_elements)
+        step.setMarker(true);
+        step.setFullPage(true);
+
+        bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(500, true));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getSteps().size());
+
+        final TestExecutionReport.ReportStepEntry entry = report.getSteps().get(0);
+        assertTrue(entry.isMarker(), "Step entry must propagate dynamic marker flag from PlaybookStep onStepFinished");
+        assertTrue(entry.isVisual(), "Step entry must propagate dynamic visual flag from PlaybookStep onStepFinished");
+
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        assertTrue(Files.exists(htmlPath), "HTML report file must be written");
+        final String htmlContent = Files.readString(htmlPath, StandardCharsets.UTF_8);
+        assertTrue(htmlContent.contains("🎯 MARKER"), "HTML report must display 🎯 MARKER badge for dynamically marked steps");
+    }
 }

@@ -1819,8 +1819,11 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         child.setParent(currentStep);
                     }
+                    if (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING)
+                    {
+                        child.setStatus(currentStep.getStatus() != null ? currentStep.getStatus() : PlaybookStepStatus.SUCCESS);
+                    }
                 }
-                partitionToolCallsAndActions(children, sanitizedCalls, actions);
 
                 final Long parentDuration = currentStep.getDurationMs();
                 if (parentDuration != null && parentDuration > 0 && !children.isEmpty())
@@ -1949,7 +1952,7 @@ public final class AgentToolLoopStep implements PipelineStep
         }
     }
 
-    private static boolean matchesSubStep(final PlaybookStep subStep, final String rawToolName)
+    static boolean matchesSubStep(final PlaybookStep subStep, final String rawToolName)
     {
         if (subStep == null || subStep.getInstruction() == null || rawToolName == null)
         {
@@ -1977,9 +1980,13 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             return inst.contains("check") || inst.contains("uncheck") || inst.contains("tick");
         }
-        if (toolName.contains("click") || toolName.contains("select"))
+        if (toolName.contains("select"))
         {
-            return inst.contains("click") || inst.contains("press") || inst.contains("select") || inst.contains("choose") || inst.contains("add") || inst.contains("submit");
+            return inst.contains("select") || inst.contains("choose");
+        }
+        if (toolName.contains("click"))
+        {
+            return inst.contains("click") || inst.contains("press") || inst.contains("choose") || inst.matches(".*\\badd\\b.*") || inst.contains("submit");
         }
         if (toolName.contains("type") || toolName.contains("fill") || toolName.contains("clear"))
         {

@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Predicate;
 
 import javax.imageio.ImageIO;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -388,6 +389,8 @@ public final class TestExecutionReport
         private final List<ReportStepEntry> subSteps = new ArrayList<>();
         private final List<ReportLlmCallEntry> llmCalls = new ArrayList<>();
         private final List<ReportScreenshotEntry> screenshots = new ArrayList<>();
+        @JsonIgnore
+        private ReportStepEntry parent;
         private String rawInstruction;
         private boolean bug;
         private String bugDetails;
@@ -612,11 +615,23 @@ public final class TestExecutionReport
         {
             if (subStep != null)
             {
+                subStep.setParent(this);
                 this.subSteps.add(subStep);
             }
         }
 
-        public void removeSubStepIf(final java.util.function.Predicate<ReportStepEntry> filter)
+        @JsonIgnore
+        public ReportStepEntry getParent()
+        {
+            return this.parent;
+        }
+
+        public void setParent(final ReportStepEntry parent)
+        {
+            this.parent = parent;
+        }
+
+        public void removeSubStepIf(final Predicate<ReportStepEntry> filter)
         {
             if (filter != null)
             {
@@ -806,10 +821,13 @@ public final class TestExecutionReport
             {
                 for (final ReportStepEntry sub : this.subSteps)
                 {
-                    final String subMode = sub.getStepMode();
-                    if (subMode != null)
+                    if ((sub.llmCalls != null && !sub.llmCalls.isEmpty()) || sub.standardCalls > 0 || sub.verificationCalls > 0 || sub.rcaCalls > 0)
                     {
-                        return subMode;
+                        return "LLM";
+                    }
+                    if (sub.actions != null && !sub.actions.isEmpty())
+                    {
+                        return "REPLAY";
                     }
                 }
             }

@@ -281,11 +281,10 @@ public class AgentToolLoopStepTest
         final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
         Assertions.assertThrows(TokenBudgetExceededException.class, () -> step.execute(this.context));
 
-        // Verify that despite the TokenBudgetExceededException, actions and durations were partitioned
+        // Verify that despite the TokenBudgetExceededException, actions remain on parent and durations were assigned
         Assertions.assertNotNull(parent.getActions());
         Assertions.assertEquals(1, parent.getActions().size());
-        Assertions.assertEquals(1, sub1.getActions().size());
-        Assertions.assertEquals("TYPE", sub1.getActions().get(0).getType());
+        Assertions.assertEquals("TYPE", parent.getActions().get(0).getType());
         Assertions.assertNotNull(parent.getDurationMs());
         Assertions.assertTrue(parent.getDurationMs() > 0);
         Assertions.assertNotNull(sub1.getDurationMs());
@@ -2954,6 +2953,19 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals(1, sub3.getToolCalls().size());
         Assertions.assertEquals("click", sub3.getToolCalls().get(0).toolName());
         Assertions.assertEquals(PlaybookStepStatus.SUCCESS, sub3.getStatus());
+    }
+
+    @Test
+    public void testMatchesSubStepDoesNotMatchAddressAsAdd()
+    {
+        Assertions.assertFalse(AgentToolLoopStep.matchesSubStep(new PlaybookStep("fill out shipping address"), "click"),
+            "Word 'address' must not match 'add' keyword for click tool");
+        Assertions.assertTrue(AgentToolLoopStep.matchesSubStep(new PlaybookStep("add to cart"), "click"),
+            "Word 'add' must match 'add' keyword for click tool");
+        Assertions.assertFalse(AgentToolLoopStep.matchesSubStep(new PlaybookStep("fill out shipping address"), "select"),
+            "Select tool must not match 'address'");
+        Assertions.assertTrue(AgentToolLoopStep.matchesSubStep(new PlaybookStep("select country US"), "select"),
+            "Select tool must match 'select'");
     }
 
     @Test
