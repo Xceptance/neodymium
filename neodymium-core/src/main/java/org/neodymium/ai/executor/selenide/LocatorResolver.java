@@ -475,6 +475,51 @@ public final class LocatorResolver
             }
         }
 
+        // Match :has(...) e.g. :has(td) or :has(.btn) or :has([role="cell"]) or :has(> h3:text-is("Order Summary"))
+        for (final String inner : extractBalancedPseudoArgs(rest, "has"))
+        {
+            final List<String> subInners = splitSelectorList(inner);
+            final List<String> hasOrConditions = new ArrayList<>();
+            for (final String sub : subInners)
+            {
+                String target = sub.trim();
+                String axis = "descendant::";
+                if (target.startsWith(">"))
+                {
+                    axis = "child::";
+                    target = target.substring(1).trim();
+                }
+                hasOrConditions.add(axis + toXPathSegment(target));
+            }
+            if (hasOrConditions.size() == 1)
+            {
+                conditions.add(hasOrConditions.get(0));
+            }
+            else if (!hasOrConditions.isEmpty())
+            {
+                conditions.add("(" + String.join(" or ", hasOrConditions) + ")");
+            }
+        }
+
+        // Match :not(...) e.g. :not(th) or :not(.header) or :not(:has(...))
+        for (final String inner : extractBalancedPseudoArgs(rest, "not"))
+        {
+            if (inner.startsWith(":has(") && inner.endsWith(")"))
+            {
+                final String nested = inner.substring(5, inner.length() - 1).trim();
+                conditions.add("not(descendant::" + toXPathSegment(nested) + ")");
+            }
+            else if (inner.startsWith("."))
+            {
+                conditions.add("not(contains(concat(' ', normalize-space(@class), ' '), ' " + inner.substring(1) + " '))");
+            }
+            else
+            {
+                final String target = toXPathSegment(inner);
+                conditions.add("not(self::" + target + " or descendant::" + target + ")");
+            }
+        }
+
         String cleanedRest = rest;
         for (final String pseudo : subTextPseudos)
         {
@@ -484,6 +529,8 @@ public final class LocatorResolver
         {
             cleanedRest = stripBalancedPseudo(cleanedRest, pseudo);
         }
+        cleanedRest = stripBalancedPseudo(cleanedRest, "has");
+        cleanedRest = stripBalancedPseudo(cleanedRest, "not");
 
         // Match attributes: [name='value'] or [required]
         final Matcher attrMatcher = Pattern.compile("\\[([a-zA-Z0-9_-]+)(?:([*^$|~]?=)(['\"]?)(.*?)\\3)?\\]").matcher(cleanedRest);
@@ -551,44 +598,6 @@ public final class LocatorResolver
         if (cleanedRest.contains(":last-child") || cleanedRest.contains(":last-of-type"))
         {
             conditions.add("position()=last()");
-        }
-
-        // Match :has(...) e.g. :has(td) or :has(.btn) or :has([role="cell"])
-        for (final String inner : extractBalancedPseudoArgs(cleanedRest, "has"))
-        {
-            final String[] subInners = inner.split("\\s*,\\s*");
-            final List<String> hasOrConditions = new ArrayList<>();
-            for (final String sub : subInners)
-            {
-                hasOrConditions.add("descendant::" + toXPathSegment(sub));
-            }
-            if (hasOrConditions.size() == 1)
-            {
-                conditions.add(hasOrConditions.get(0));
-            }
-            else
-            {
-                conditions.add("(" + String.join(" or ", hasOrConditions) + ")");
-            }
-        }
-
-        // Match :not(...) e.g. :not(th) or :not(.header) or :not(:has(...))
-        for (final String inner : extractBalancedPseudoArgs(cleanedRest, "not"))
-        {
-            if (inner.startsWith(":has(") && inner.endsWith(")"))
-            {
-                final String nested = inner.substring(5, inner.length() - 1).trim();
-                conditions.add("not(descendant::" + toXPathSegment(nested) + ")");
-            }
-            else if (inner.startsWith("."))
-            {
-                conditions.add("not(contains(concat(' ', normalize-space(@class), ' '), ' " + inner.substring(1) + " '))");
-            }
-            else
-            {
-                final String target = toXPathSegment(inner);
-                conditions.add("not(self::" + target + " or descendant::" + target + ")");
-            }
         }
 
         if (extraCondition != null && !extraCondition.isBlank())
@@ -983,7 +992,8 @@ public final class LocatorResolver
 
     /**
      * Extracts argument contents of balanced pseudo-classes such as {@code :has(...)} or {@code :not(...)}
-     * from a CSS selector substring.
+     * from a CSS selector substring, respecting parenthesis, bracket, and quote nesting so inner
+     * pseudo-classes are not misidentified as top-level arguments.
      *
      * @param input the raw selector substring
      * @param pseudoName the pseudo-class name without colon or parentheses
@@ -997,33 +1007,80 @@ public final class LocatorResolver
             return results;
         }
         final String prefix = ":" + pseudoName + "(";
-        int idx = 0;
-        while ((idx = input.indexOf(prefix, idx)) != -1)
+        int parenDepth = 0;
+        int bracketDepth = 0;
+        boolean inQuote = false;
+        char quoteChar = 0;
+
+        for (int i = 0; i < input.length(); i++)
         {
-            final int start = idx + prefix.length();
-            int depth = 1;
-            int pos = start;
-            while (pos < input.length() && depth > 0)
+            final char c = input.charAt(i);
+            if (inQuote)
             {
-                final char c = input.charAt(pos);
-                if (c == '(')
+                if (c == quoteChar)
                 {
-                    depth++;
+                    inQuote = false;
                 }
-                else if (c == ')')
+            }
+            else if (c == '"' || c == '\'')
+            {
+                inQuote = true;
+                quoteChar = c;
+            }
+            else if (c == '(')
+            {
+                parenDepth++;
+            }
+            else if (c == ')')
+            {
+                parenDepth = Math.max(0, parenDepth - 1);
+            }
+            else if (c == '[')
+            {
+                bracketDepth++;
+            }
+            else if (c == ']')
+            {
+                bracketDepth = Math.max(0, bracketDepth - 1);
+            }
+            else if (parenDepth == 0 && bracketDepth == 0 && i + prefix.length() <= input.length()
+                    && input.regionMatches(true, i, prefix, 0, prefix.length()))
+            {
+                final int start = i + prefix.length();
+                int depth = 1;
+                int pos = start;
+                boolean innerQuote = false;
+                char innerQuoteChar = 0;
+                while (pos < input.length() && depth > 0)
                 {
-                    depth--;
+                    final char ic = input.charAt(pos);
+                    if (innerQuote)
+                    {
+                        if (ic == innerQuoteChar)
+                        {
+                            innerQuote = false;
+                        }
+                    }
+                    else if (ic == '"' || ic == '\'')
+                    {
+                        innerQuote = true;
+                        innerQuoteChar = ic;
+                    }
+                    else if (ic == '(')
+                    {
+                        depth++;
+                    }
+                    else if (ic == ')')
+                    {
+                        depth--;
+                    }
+                    pos++;
                 }
-                pos++;
-            }
-            if (depth == 0)
-            {
-                results.add(input.substring(start, pos - 1).trim());
-                idx = pos;
-            }
-            else
-            {
-                idx = start;
+                if (depth == 0)
+                {
+                    results.add(input.substring(start, pos - 1).trim());
+                    i = pos - 1;
+                }
             }
         }
         return results;
@@ -1032,6 +1089,7 @@ public final class LocatorResolver
     /**
      * Strips balanced pseudo-classes such as {@code :has-text(...)} from a selector string so that
      * embedded punctuation (e.g. dots in numbers, brackets, quotes) does not interfere with standard CSS matching.
+     * Respects parenthesis, bracket, and quote nesting so nested pseudo-classes are not prematurely stripped.
      *
      * @param input the raw selector substring
      * @param pseudoName the pseudo-class name without colon or parentheses
@@ -1045,31 +1103,173 @@ public final class LocatorResolver
         }
         final String prefix = ":" + pseudoName + "(";
         final StringBuilder sb = new StringBuilder();
-        int lastEnd = 0;
-        int idx = 0;
-        while ((idx = input.indexOf(prefix, lastEnd)) != -1)
+        int parenDepth = 0;
+        int bracketDepth = 0;
+        boolean inQuote = false;
+        char quoteChar = 0;
+
+        for (int i = 0; i < input.length(); i++)
         {
-            sb.append(input, lastEnd, idx);
-            final int start = idx + prefix.length();
-            int depth = 1;
-            int pos = start;
-            while (pos < input.length() && depth > 0)
+            final char c = input.charAt(i);
+            if (inQuote)
             {
-                final char c = input.charAt(pos);
-                if (c == '(')
+                sb.append(c);
+                if (c == quoteChar)
                 {
-                    depth++;
+                    inQuote = false;
                 }
-                else if (c == ')')
-                {
-                    depth--;
-                }
-                pos++;
             }
-            lastEnd = pos;
+            else if (c == '"' || c == '\'')
+            {
+                inQuote = true;
+                quoteChar = c;
+                sb.append(c);
+            }
+            else if (c == '(')
+            {
+                parenDepth++;
+                sb.append(c);
+            }
+            else if (c == ')')
+            {
+                parenDepth = Math.max(0, parenDepth - 1);
+                sb.append(c);
+            }
+            else if (c == '[')
+            {
+                bracketDepth++;
+                sb.append(c);
+            }
+            else if (c == ']')
+            {
+                bracketDepth = Math.max(0, bracketDepth - 1);
+                sb.append(c);
+            }
+            else if (parenDepth == 0 && bracketDepth == 0 && i + prefix.length() <= input.length()
+                    && input.regionMatches(true, i, prefix, 0, prefix.length()))
+            {
+                final int start = i + prefix.length();
+                int depth = 1;
+                int pos = start;
+                boolean innerQuote = false;
+                char innerQuoteChar = 0;
+                while (pos < input.length() && depth > 0)
+                {
+                    final char ic = input.charAt(pos);
+                    if (innerQuote)
+                    {
+                        if (ic == innerQuoteChar)
+                        {
+                            innerQuote = false;
+                        }
+                    }
+                    else if (ic == '"' || ic == '\'')
+                    {
+                        innerQuote = true;
+                        innerQuoteChar = ic;
+                    }
+                    else if (ic == '(')
+                    {
+                        depth++;
+                    }
+                    else if (ic == ')')
+                    {
+                        depth--;
+                    }
+                    pos++;
+                }
+                if (depth == 0)
+                {
+                    i = pos - 1;
+                }
+                else
+                {
+                    sb.append(c);
+                }
+            }
+            else
+            {
+                sb.append(c);
+            }
         }
-        sb.append(input.substring(lastEnd));
         return sb.toString();
+    }
+
+    /**
+     * Splits a comma-separated list of selector strings, respecting quotes, attribute brackets,
+     * and parentheses.
+     *
+     * @param input the raw selector list
+     * @return list of split selectors
+     */
+    private static List<String> splitSelectorList(final String input)
+    {
+        final List<String> results = new ArrayList<>();
+        if (input == null || input.isBlank())
+        {
+            return results;
+        }
+        final StringBuilder current = new StringBuilder();
+        int parenDepth = 0;
+        int bracketDepth = 0;
+        boolean inQuote = false;
+        char quoteChar = 0;
+
+        for (int i = 0; i < input.length(); i++)
+        {
+            final char c = input.charAt(i);
+            if (inQuote)
+            {
+                current.append(c);
+                if (c == quoteChar)
+                {
+                    inQuote = false;
+                }
+            }
+            else if (c == '"' || c == '\'')
+            {
+                inQuote = true;
+                quoteChar = c;
+                current.append(c);
+            }
+            else if (c == '(')
+            {
+                parenDepth++;
+                current.append(c);
+            }
+            else if (c == ')')
+            {
+                parenDepth = Math.max(0, parenDepth - 1);
+                current.append(c);
+            }
+            else if (c == '[')
+            {
+                bracketDepth++;
+                current.append(c);
+            }
+            else if (c == ']')
+            {
+                bracketDepth = Math.max(0, bracketDepth - 1);
+                current.append(c);
+            }
+            else if (c == ',' && parenDepth == 0 && bracketDepth == 0)
+            {
+                if (!current.toString().isBlank())
+                {
+                    results.add(current.toString().trim());
+                }
+                current.setLength(0);
+            }
+            else
+            {
+                current.append(c);
+            }
+        }
+        if (!current.toString().isBlank())
+        {
+            results.add(current.toString().trim());
+        }
+        return results;
     }
 
     /**
@@ -1193,6 +1393,10 @@ public final class LocatorResolver
     private static String toXPathSegment(final String segment)
     {
         final String cleanSeg = segment.trim();
+        if (cleanSeg.startsWith(">"))
+        {
+            return "child::" + toXPathSegment(cleanSeg.substring(1).trim());
+        }
         if (cleanSeg.startsWith("xpath="))
         {
             String xp = cleanSeg.substring(6).trim();

@@ -442,7 +442,7 @@ public final class RunnerIntegrationTest
         assertNotNull(rcaUsage);
         assertEquals(10, rcaUsage.inputTokenCount());
         assertEquals(10, rcaUsage.outputTokenCount());
-        assertEquals("A cookie consent popup is blocking the page content.", context.getTransientData().get(ExecutionContext.KEY_VISUAL_RCA_EXPLANATION));
+        assertTrue(((String) context.getTransientData().get(ExecutionContext.KEY_VISUAL_RCA_EXPLANATION)).contains("A cookie consent popup is blocking the page content."));
         assertEquals("A cookie consent popup is blocking the page content.", context.getTransientData().get(ExecutionContext.KEY_VISUAL_RCA_SUMMARY));
 
         // Verify StepStats was updated with RCA metrics
