@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.function.Predicate;
 
 import javax.imageio.ImageIO;
@@ -69,6 +70,7 @@ public final class TestExecutionReport
     private final List<ReportStepEntry> steps = new ArrayList<>();
     private final List<ReportLlmCallEntry> llmCalls = new ArrayList<>();
     private final List<ReportScreenshotEntry> screenshots = new ArrayList<>();
+    private final Map<String, String> activeProperties = new TreeMap<>();
     private ReportMetrics metrics = new ReportMetrics();
 
     /**
@@ -332,6 +334,44 @@ public final class TestExecutionReport
     public void setMetrics(final ReportMetrics metrics)
     {
         this.metrics = metrics != null ? metrics : new ReportMetrics();
+    }
+
+    /**
+     * Gets an unmodifiable map of active run properties.
+     *
+     * @return unmodifiable map of active properties
+     */
+    public Map<String, String> getActiveProperties()
+    {
+        return Collections.unmodifiableMap(this.activeProperties);
+    }
+
+    /**
+     * Sets the active run properties.
+     *
+     * @param properties the properties map to set
+     */
+    public void setActiveProperties(final Map<String, String> properties)
+    {
+        this.activeProperties.clear();
+        if (properties != null)
+        {
+            this.activeProperties.putAll(properties);
+        }
+    }
+
+    /**
+     * Adds an active property entry.
+     *
+     * @param key property name
+     * @param value property value
+     */
+    public void addActiveProperty(final String key, final String value)
+    {
+        if (key != null)
+        {
+            this.activeProperties.put(key, value != null ? value : "");
+        }
     }
 
     /**

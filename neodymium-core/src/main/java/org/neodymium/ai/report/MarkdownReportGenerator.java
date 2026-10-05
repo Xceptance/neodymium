@@ -409,6 +409,25 @@ public final class MarkdownReportGenerator
             sb.append("\n");
         }
 
+        // Active Properties
+        final Map<String, String> activeProperties = report.getActiveProperties();
+        sb.append("## ⚙️ Active Properties\n\n");
+        if (activeProperties.isEmpty())
+        {
+            sb.append("_No active properties recorded._\n\n");
+        }
+        else
+        {
+            sb.append("| Property | Value |\n");
+            sb.append("| :--- | :--- |\n");
+            for (final Map.Entry<String, String> entry : activeProperties.entrySet())
+            {
+                sb.append("| `").append(escapeMarkdown(entry.getKey())).append("` | `")
+                  .append(escapeMarkdown(entry.getValue())).append("` |\n");
+            }
+            sb.append("\n");
+        }
+
         return sb.toString();
     }
 

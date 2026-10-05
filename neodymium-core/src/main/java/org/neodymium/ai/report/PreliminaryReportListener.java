@@ -34,8 +34,11 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.aeonbits.owner.Accessible;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
@@ -1310,6 +1313,124 @@ public final class PreliminaryReportListener implements ExecutionListener
                 this.report.setTestName("AI_Test_Run");
             }
         }
+
+        populateActiveProperties();
+    }
+
+    private void populateActiveProperties()
+    {
+        final Map<String, String> propertiesMap = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+
+        // 1. Neodymium configuration properties via Accessible
+        try
+        {
+            if (Neodymium.configuration() instanceof Accessible acc)
+            {
+                for (final String propName : acc.propertyNames())
+                {
+                    final String val = acc.getProperty(propName, null);
+                    if (val != null)
+                    {
+                        propertiesMap.put(propName, maskIfSensitive(propName, val));
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 2. AiConfiguration properties
+        try
+        {
+            final AiConfiguration aiConfig = AiConfiguration.getInstance();
+            if (aiConfig != null)
+            {
+                for (final Map.Entry<String, String> entry : aiConfig.getAllProperties().entrySet())
+                {
+                    if (entry.getKey() != null && entry.getValue() != null)
+                    {
+                        propertiesMap.put(entry.getKey(), maskIfSensitive(entry.getKey(), entry.getValue()));
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 3. Neodymium test data properties
+        try
+        {
+            if (Neodymium.getData() != null)
+            {
+                for (final Map.Entry<String, String> entry : Neodymium.getData().entrySet())
+                {
+                    if (entry.getKey() != null && entry.getValue() != null)
+                    {
+                        propertiesMap.put(entry.getKey(), maskIfSensitive(entry.getKey(), entry.getValue()));
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        // 4. System properties (filtering standard JVM internals)
+        try
+        {
+            final Properties sysProps = System.getProperties();
+            if (sysProps != null)
+            {
+                for (final String key : sysProps.stringPropertyNames())
+                {
+                    if (isRelevantSystemProperty(key))
+                    {
+                        final String val = sysProps.getProperty(key);
+                        if (val != null)
+                        {
+                            propertiesMap.put(key, maskIfSensitive(key, val));
+                        }
+                    }
+                }
+            }
+        }
+        catch (final Throwable ignored)
+        {
+        }
+
+        this.report.setActiveProperties(propertiesMap);
+    }
+
+    private static boolean isRelevantSystemProperty(final String key)
+    {
+        if (key == null || key.isBlank())
+        {
+            return false;
+        }
+        final String lower = key.toLowerCase(Locale.ROOT);
+        return !lower.startsWith("java.") && !lower.startsWith("sun.") && !lower.startsWith("jdk.")
+            && !lower.startsWith("user.") && !lower.startsWith("os.") && !lower.startsWith("file.")
+            && !lower.startsWith("path.") && !lower.startsWith("line.") && !lower.startsWith("awt.")
+            && !lower.startsWith("org.gradle.") && !lower.startsWith("idea.") && !lower.startsWith("surefire.");
+    }
+
+    private static String maskIfSensitive(final String key, final String value)
+    {
+        if (key == null || value == null || value.isEmpty())
+        {
+            return value;
+        }
+        final String lower = key.toLowerCase(Locale.ROOT);
+        if (lower.contains("apikey") || lower.contains("api_key") || lower.contains("api.key")
+            || lower.contains("secret") || lower.contains("password") || lower.contains("token")
+            || lower.contains("credential") || lower.contains("privatekey") || lower.contains("private_key")
+            || lower.contains("passphrase") || lower.contains("authorization"))
+        {
+            return "••••••••";
+        }
+        return value;
     }
 
     private void recalculateMetrics()

@@ -615,5 +615,45 @@ public class HtmlReportGeneratorTest
         Assertions.assertTrue(html.contains("🤖 LLM"), "Parent step must render LLM badge");
         Assertions.assertFalse(html.contains("<span class=\"badge-flag pill-mode-replay\">"), "Child sub-step must NOT render fallback REPLAY badge");
     }
+
+    @Test
+    public void testActivePropertiesSectionRendered()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestName("Properties Test");
+        report.setStatus("PASSED");
+        report.setSuccess(true);
+        report.addActiveProperty("neodymium.browser", "Chrome_1500x1000");
+        report.addActiveProperty("neodymium.url", "https://example.com");
+        report.addActiveProperty("neodymium.ai.apiKey", "••••••••");
+
+        final HtmlReportGenerator generator = new HtmlReportGenerator();
+        final String html = generator.generate(report);
+
+        Assertions.assertTrue(html.contains("⚙️ Active Run Properties (3)"), "HTML must contain active properties header with count");
+        Assertions.assertTrue(html.contains("class=\"card-section properties-section\""), "HTML must contain properties-section card");
+        Assertions.assertTrue(html.contains("id=\"propertiesTable\""), "HTML must contain propertiesTable table");
+        Assertions.assertTrue(html.contains("id=\"propSearchInput\""), "HTML must contain propSearchInput filter input");
+        Assertions.assertTrue(html.contains("filterProperties()"), "HTML must contain filterProperties client call");
+        Assertions.assertTrue(html.contains("neodymium.browser"), "HTML must list neodymium.browser property key");
+        Assertions.assertTrue(html.contains("Chrome_1500x1000"), "HTML must list Chrome_1500x1000 property value");
+        Assertions.assertTrue(html.contains("neodymium.ai.apiKey"), "HTML must list neodymium.ai.apiKey property key");
+        Assertions.assertTrue(html.contains("••••••••"), "HTML must display masked secret value");
+    }
+
+    @Test
+    public void testActivePropertiesEmptyState()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestName("Empty Properties Test");
+        report.setStatus("PASSED");
+        report.setSuccess(true);
+
+        final HtmlReportGenerator generator = new HtmlReportGenerator();
+        final String html = generator.generate(report);
+
+        Assertions.assertTrue(html.contains("⚙️ Active Run Properties (0)"), "HTML must show 0 count when no active properties exist");
+        Assertions.assertTrue(html.contains("No active configuration properties were recorded for this execution."), "HTML must show empty message");
+    }
 }
 
