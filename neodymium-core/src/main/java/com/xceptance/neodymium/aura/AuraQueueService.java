@@ -49,6 +49,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -86,7 +87,7 @@ public final class AuraQueueService
     private final AtomicBoolean cancelledCurrentTest = new AtomicBoolean(false);
     private final AtomicReference<String> activeFile = new AtomicReference<>("");
     private final AtomicReference<String> currentRunId = new AtomicReference<>("");
-    private volatile Consumer<String> onRunCompletedListener;
+    private final List<Consumer<String>> onRunCompletedListeners = new CopyOnWriteArrayList<>();
 
     /** Wall-clock start time in ms of the current (or most recent) queue run. */
     private final AtomicLong runStartTimeMs = new AtomicLong(0);
@@ -129,9 +130,25 @@ public final class AuraQueueService
         return currentRunId.get();
     }
 
+    public void addRunCompletedListener(final Consumer<String> onRunCompletedListener)
+    {
+        if (onRunCompletedListener != null && !this.onRunCompletedListeners.contains(onRunCompletedListener))
+        {
+            this.onRunCompletedListeners.add(onRunCompletedListener);
+        }
+    }
+
+    public void removeRunCompletedListener(final Consumer<String> onRunCompletedListener)
+    {
+        if (onRunCompletedListener != null)
+        {
+            this.onRunCompletedListeners.remove(onRunCompletedListener);
+        }
+    }
+
     public void setOnRunCompletedListener(final Consumer<String> onRunCompletedListener)
     {
-        this.onRunCompletedListener = onRunCompletedListener;
+        addRunCompletedListener(onRunCompletedListener);
     }
 
     public void setQueueRunProgressListener(final QueueRunProgressListener listener)
@@ -418,7 +435,9 @@ public final class AuraQueueService
                 interactiveService.resetExecutionIndexes();
 
                 runStartTimeMs.set(System.currentTimeMillis());
-                final String generatedRunId = "run_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date(runStartTimeMs.get()));
+                final String generatedRunId = (req.targetRunId != null && !req.targetRunId.isBlank())
+                        ? req.targetRunId
+                        : "run_" + new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date(runStartTimeMs.get()));
                 currentRunId.set(generatedRunId);
                 lastRunRequest.set(req);
 
@@ -970,12 +989,12 @@ public final class AuraQueueService
                 }
 
                 final String completedRunId = currentRunId.get();
-                if (onRunCompletedListener != null)
+                for (final Consumer<String> listener : onRunCompletedListeners)
                 {
                     try
                     {
                         LOGGER.info("[Aura Server] Notifying run completion listener for runId: {}", completedRunId);
-                        onRunCompletedListener.accept(completedRunId);
+                        listener.accept(completedRunId);
                     }
                     catch (final Exception e)
                     {

@@ -26,6 +26,9 @@
                 <button type="button" class="settings-tab-btn" id="tabBtnBrowser" th:classappend="${activeTab == 'browser' ? 'active' : ''}" onclick="switchSettingsTab('browser')">
                     <span class="material-symbols-outlined">language</span> Browser Configuration
                 </button>
+                <button type="button" class="settings-tab-btn" id="tabBtnMcp" th:classappend="${activeTab == 'mcp' ? 'active' : ''}" onclick="switchSettingsTab('mcp')">
+                    <span class="material-symbols-outlined">hub</span> MCP Server
+                </button>
             </div>
         </div>
 
@@ -257,6 +260,224 @@
                         </div>
                     </th:block>
                 </div>
+
+                <!-- TAB 3: MCP SERVER CONFIGURATION -->
+                <div class="settings-tab-pane" id="tabContentMcp" th:classappend="${activeTab == 'mcp' ? 'active' : ''}" th:style="${activeTab == 'mcp' ? 'display: block;' : 'display: none;'}">
+                    <div class="settings-group-card" id="group-mcp-server">
+                        <div class="settings-group-header" onclick="toggleSettingsGroup(this)">
+                            <div class="settings-group-title">
+                                <span class="material-symbols-outlined">hub</span>
+                                <span>Model Context Protocol (MCP) Server</span>
+                            </div>
+                            <span class="material-symbols-outlined accordion-arrow open">keyboard_arrow_down</span>
+                        </div>
+
+                        <div class="settings-group-content" style="display: block;">
+                            <!-- Live MCP Server Status Summary Card -->
+                            <div class="settings-section" style="border-top: none; background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid var(--border);">
+                                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                                    <div style="display: flex; align-items: center; gap: 10px;">
+                                        <span th:if="${mcpEnabled == true}" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; color: var(--success);">
+                                            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 8px var(--success);"></span>
+                                            <span th:text="'Server Active (' + ${mcpProtocol} + ' on Port ' + ${mcpServerPort} + ')'">Server Active (STREAMABLE on Port 8080)</span>
+                                        </span>
+                                        <span th:if="${mcpEnabled == false}" style="display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; color: var(--text-secondary);">
+                                            <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--text-secondary);"></span>
+                                            Server Disabled
+                                        </span>
+                                    </div>
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                        <span style="font-size: 12px; font-family: var(--font-sans); background: rgba(59, 130, 246, 0.12); color: var(--accent); padding: 3px 10px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.25);"
+                                              th:text="'Tools: ' + ${mcpToolsCount}">
+                                            Tools: 7
+                                        </span>
+                                        <button type="button" class="btn-secondary" style="font-size: 12px; padding: 4px 10px; height: auto;" onclick="toggleMcpToolsReference()">
+                                            <span class="material-symbols-outlined" style="font-size: 14px;">build</span> Tools
+                                        </button>
+                                        <span id="mcpActiveSessionsBadge" style="font-size: 12px; font-family: var(--font-sans); background: rgba(16, 185, 129, 0.12); color: var(--success); padding: 3px 10px; border-radius: 12px; border: 1px solid rgba(16, 185, 129, 0.25);"
+                                              th:text="'Active Clients: ' + ${mcpActiveSessionsCount}">
+                                            Active Clients: 0
+                                        </span>
+                                        <button type="button" class="btn-secondary" style="font-size: 12px; padding: 4px 10px; height: auto;" onclick="toggleMcpSessionDetails()">
+                                            <span class="material-symbols-outlined" style="font-size: 14px;">group</span> Clients
+                                        </button>
+                                        <button type="button" class="btn-secondary" style="font-size: 12px; padding: 4px 10px; height: auto;" onclick="testMcpHandshake()">
+                                            <span class="material-symbols-outlined" style="font-size: 14px;">network_check</span> Self Test
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Collapsible Tools Reference List (closed by default) -->
+                                <div id="mcpToolsReferenceContainer" style="display: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 12px;">
+                                    <div class="settings-section-title" style="margin-bottom: 8px;">Registered MCP Tools Reference</div>
+                                    <div style="max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px;">
+                                        <div th:each="tool : ${mcpToolsList}" style="background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; padding: 10px 12px;">
+                                            <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px;">
+                                                <code style="font-size: 12px; font-weight: 600; font-family: var(--font-mono); color: var(--accent);" th:text="${tool.name}">run_test</code>
+                                                <span style="font-size: 11px; color: var(--text-secondary);" th:text="${tool.description}">Description</span>
+                                            </div>
+                                            <div style="margin-top: 6px; font-size: 11px; color: var(--text-secondary); line-height: 1.4;">
+                                                <span style="font-weight: 500; color: var(--text-primary);">Parameters: </span><span style="font-family: var(--font-mono); font-size: 11px;" th:text="${tool.parameters}">params</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- On-demand session details container (lazy-loaded on click) -->
+                                <div id="mcpSessionDetailsContainer" style="display: none; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); font-size: 12px;">
+                                    <div class="settings-section-title" style="margin-bottom: 6px;">Connected Sessions</div>
+                                    <div id="mcpSessionDetailsList" style="max-height: 120px; overflow-y: auto; font-family: var(--font-mono); color: var(--text-primary); font-size: 11px;">
+                                        Loading session details...
+                                    </div>
+                                </div>
+
+                                <!-- Handshake test result message container -->
+                                <div id="mcpTestResultContainer" style="display: none; margin-top: 12px; padding: 8px 12px; border-radius: 6px; font-size: 12px; font-family: var(--font-sans);"></div>
+                            </div>
+
+                            <!-- Standard Property Rows Section -->
+                            <div class="settings-section">
+                                <div class="settings-section-title">Protocol &amp; Security Settings</div>
+
+                                <div class="settings-entry-row">
+                                    <div class="settings-entry-label-col">
+                                        <div class="settings-entry-key">MCP Server Enabled</div>
+                                        <div class="settings-entry-desc">Enable or disable remote AI agent interaction via Model Context Protocol.</div>
+                                    </div>
+                                    <div class="settings-entry-input-col">
+                                        <select class="modal-select" name="mcpEnabled">
+                                            <option value="true" th:selected="${mcpEnabled == true}">true</option>
+                                            <option value="false" th:selected="${mcpEnabled == false}">false</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="settings-entry-row">
+                                    <div class="settings-entry-label-col">
+                                        <div class="settings-entry-key">MCP Endpoint URL</div>
+                                        <div class="settings-entry-desc" th:text="${mcpEndpointDesc}">Streamable HTTP endpoint URL for Claude Desktop, Cursor, or Antigravity agents.</div>
+                                    </div>
+                                    <div class="settings-entry-input-col">
+                                        <input type="text" class="modal-input" readonly="readonly" th:value="${mcpEndpointUrl}"/>
+                                    </div>
+                                </div>
+
+                                <div class="settings-entry-row">
+                                    <div class="settings-entry-label-col">
+                                        <div class="settings-entry-key">Authentication Bearer Token</div>
+                                        <div class="settings-entry-desc">Security token required in Authorization header (leave empty to allow local-only access).</div>
+                                    </div>
+                                    <div class="settings-entry-input-col">
+                                        <input type="text" class="modal-input" name="mcpToken" th:value="${mcpToken != null ? mcpToken : ''}" placeholder="Secret token..."/>
+                                    </div>
+                                </div>
+
+                                <div class="settings-entry-row">
+                                    <div class="settings-entry-label-col">
+                                        <div class="settings-entry-key">Transport Heartbeat (Seconds)</div>
+                                        <div class="settings-entry-desc">Ping interval to keep reverse proxies (NGINX/ALB) and agent connections alive.</div>
+                                    </div>
+                                    <div class="settings-entry-input-col">
+                                        <input type="number" class="modal-input" name="mcpHeartbeat" th:value="${mcpHeartbeat != null ? mcpHeartbeat : 45}"/>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- JSON Client Configuration Snippet Section -->
+                            <div class="settings-section">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <div class="settings-section-title" style="margin-bottom: 0;">Claude Desktop / Cursor / Antigravity Configuration</div>
+                                    <button type="button" class="btn-secondary" style="font-size: 11px; padding: 3px 8px; height: auto;" onclick="copyMcpSnippet(this)">
+                                        <span class="material-symbols-outlined" style="font-size: 13px;">content_copy</span> Copy JSON
+                                    </button>
+                                </div>
+                                <div style="background: var(--bg-main); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-top: 6px;">
+                                    <pre id="mcpConfigPre" style="margin: 0; font-family: var(--font-mono); font-size: 12px; color: var(--text-primary); background: transparent; overflow-x: auto; white-space: pre-wrap;" th:text="${mcpClientConfigSnippet}">
+{
+  "mcpServers": {
+    "neodymium": {
+      "serverUrl": "http://localhost:8080/mcp"
+    }
+  }
+}
+                                    </pre>
+                                </div>
+                            </div>
+
+                            <script>
+                                function copyMcpSnippet(btn) {
+                                    const text = document.getElementById('mcpConfigPre').innerText.trim();
+                                    navigator.clipboard.writeText(text).then(() => {
+                                        const orig = btn.innerHTML;
+                                        btn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 13px;">check</span> Copied!';
+                                        setTimeout(() => { btn.innerHTML = orig; }, 2000);
+                                    });
+                                }
+
+                                function toggleMcpToolsReference() {
+                                    const container = document.getElementById('mcpToolsReferenceContainer');
+                                    container.style.display = (container.style.display === 'none') ? 'block' : 'none';
+                                }
+
+                                function toggleMcpSessionDetails() {
+                                    const container = document.getElementById('mcpSessionDetailsContainer');
+                                    const list = document.getElementById('mcpSessionDetailsList');
+                                    if (container.style.display === 'none') {
+                                        container.style.display = 'block';
+                                        list.innerHTML = '<em>Fetching sessions...</em>';
+                                        fetch('/api/settings/mcp/sessions')
+                                            .then(res => res.json())
+                                            .then(data => {
+                                                if (!data.sessions || data.sessions.length === 0) {
+                                                    list.innerHTML = '<em>No clients currently connected.</em>';
+                                                } else {
+                                                    list.innerHTML = data.sessions.map(s => `<div>• ID: <code>${s.sessionId}</code> (active: ${s.lastActive})</div>`).join('');
+                                                }
+                                                document.getElementById('mcpActiveSessionsBadge').innerText = 'Active Clients: ' + data.activeCount;
+                                            })
+                                            .catch(err => {
+                                                list.innerHTML = '<span style="color: var(--danger);">Failed to load sessions: ' + err.message + '</span>';
+                                            });
+                                    } else {
+                                        container.style.display = 'none';
+                                    }
+                                }
+
+                                function testMcpHandshake() {
+                                    const resDiv = document.getElementById('mcpTestResultContainer');
+                                    resDiv.style.display = 'block';
+                                    resDiv.style.background = 'rgba(59, 130, 246, 0.12)';
+                                    resDiv.style.color = 'var(--accent)';
+                                    resDiv.style.border = '1px solid rgba(59, 130, 246, 0.3)';
+                                    resDiv.innerText = 'Testing local MCP handshake...';
+
+                                    fetch('/api/settings/mcp/self-test', { method: 'POST' })
+                                        .then(res => res.json())
+                                        .then(data => {
+                                            if (data.status === 'HEALTHY') {
+                                                resDiv.style.background = 'rgba(16, 185, 129, 0.12)';
+                                                resDiv.style.color = 'var(--success)';
+                                                resDiv.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                                                resDiv.innerText = '✓ ' + data.message;
+                                            } else {
+                                                resDiv.style.background = 'rgba(239, 68, 68, 0.12)';
+                                                resDiv.style.color = 'var(--danger)';
+                                                resDiv.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                                                resDiv.innerText = '✗ ' + data.message;
+                                            }
+                                        })
+                                        .catch(err => {
+                                            resDiv.style.background = 'rgba(239, 68, 68, 0.12)';
+                                            resDiv.style.color = 'var(--danger)';
+                                            resDiv.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                                            resDiv.innerText = '✗ Handshake failed: ' + err.message;
+                                        });
+                                }
+                            </script>
+                        </div>
+                    </div>
+                </div>
+
 
             </div>
 

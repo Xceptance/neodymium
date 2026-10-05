@@ -95,4 +95,35 @@ public final class AuraQueueServiceTest
         runningQueue.set(true);
         Assertions.assertTrue(runningQueue.get());
     }
+
+    @Test
+    public void testAddRunCompletedListenerMulticast() throws Exception
+    {
+        final java.util.concurrent.atomic.AtomicInteger count1 = new java.util.concurrent.atomic.AtomicInteger(0);
+        final java.util.concurrent.atomic.AtomicInteger count2 = new java.util.concurrent.atomic.AtomicInteger(0);
+
+        final java.util.function.Consumer<String> l1 = id -> count1.incrementAndGet();
+        final java.util.function.Consumer<String> l2 = id -> count2.incrementAndGet();
+
+        queueService.addRunCompletedListener(l1);
+        queueService.addRunCompletedListener(l2);
+
+        final Field listenersField = AuraQueueService.class.getDeclaredField("onRunCompletedListeners");
+        listenersField.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        final java.util.List<java.util.function.Consumer<String>> listeners =
+                (java.util.List<java.util.function.Consumer<String>>) listenersField.get(queueService);
+
+        Assertions.assertEquals(2, listeners.size());
+        for (final java.util.function.Consumer<String> listener : listeners)
+        {
+            listener.accept("run_123");
+        }
+
+        Assertions.assertEquals(1, count1.get());
+        Assertions.assertEquals(1, count2.get());
+
+        queueService.removeRunCompletedListener(l1);
+        Assertions.assertEquals(1, listeners.size());
+    }
 }

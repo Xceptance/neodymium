@@ -91,7 +91,34 @@ To solve this, Aura Manager is implementing a native **Model Context Protocol (M
  +-----------------------------+
 ```
 
-### 2.2 Tech Stack & Dependencies
+### 2.2 Architecture Topology
+The architecture separates protocol ingress, security, orchestration, and automation execution into clear boundaries:
+
+| Layer                 | Component Key                                           | Responsibilities                                                                                                  |
+|-----------------------|---------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
+| Agent Ingress         | External AI Agents (Antigravity, Cursor, Claude)        | Send JSON-RPC 2.0 requests over Streamable HTTP with Bearer tokens.                                               |
+| Perimeter Security    | McpSecurityConfiguration & McpTokenAuthenticationFilter | Servlet-level token verification (MessageDigest.isEqual), RBAC assignment, SSRF guardrails.                       |
+| Session & Lifecycle   | McpSubscriptionManager                                  | 45-second keep-alive heartbeats, 120-second idle eviction, graceful disconnect handling.                          |
+| MCP Protocol Adapter  | Spring AI WebMVC Server (@McpTool, @McpResource)        | Declarative schema generation, JSON-RPC dispatch, protocol discovery support.                                     |
+| Cross-Thread Bridge   | McpContextTaskDecorator                                 | Propagates SecurityContext, tenant metadata, and MDC logging across asynchronous worker boundaries.               |
+| Application Services  | Shared In-Memory Services                               | Direct in-memory invocation of AuraQueueService, AuraFileService, AuraSettingsService, and AuraReportDataService. |
+| Telemetry & Artifacts | SeleniumErrorDistiller & AdaptivePayloadReporter        | Framework stack-trace pruning, credential scrubbing, failure clustering, and token capping.                       |
+| Execution Engine      | Subprocess Execution Engine                             | Isolated subprocess execution of Neodymium Selenium test runs.                                                    |
+
+### 2.3 Subsystem API Boundary & Coarse-Grained Facade Pattern
+To maintain high execution speed and minimize LLM token consumption, the MCP layer acts as a coarse-grained facade:
+- In-Memory Core Services: Interactions with AuraFileService, AuraQueueService, and AuraSettingsService occur via direct method calls in the same JVM memory space. Internal HTTP REST calls are strictly avoided.
+- Remote Subsystems (Selenium Grid, Remote Nodes): Outbound calls to remote WebDriver hubs or remote reporting stores use a configured Spring RestClient with explicit timeouts (connectTimeout = 3s, readTimeout = 10s).
+- Defensive Circuit Breaking & Degradation: If an external dependency (such as Selenium Grid or report storage) is unreachable, the tool layer catches connection exceptions (ResourceAccessException, ConnectException) and returns an informative JSON payload instead of failing with an unhandled exception:
+```JSON
+{
+    "status": "UNAVAILABLE",
+    "dependency": "SELENIUM_GRID",
+    "message": "The remote Selenium Grid hub at http://grid:4444 is currently unreachable. No tests were dispatched.",
+    "retryable": true
+}
+```
+### 2.4 Tech Stack & Dependencies
 - **Java Baseline**: Java 21 LTS (`<java.version>21</java.version>`).
 - **Spring Boot Baseline**: Spring Boot 4.1.0 (`spring-boot-starter-parent`).
 - **MCP Framework**: Spring AI 2.0.0 GA (`org.springframework.ai:spring-ai-starter-mcp-server-webmvc:2.0.0`), verified available on Maven Central.
@@ -101,7 +128,7 @@ To solve this, Aura Manager is implementing a native **Model Context Protocol (M
 - **Validation**: Jakarta Validation / Hibernate Validator (`jakarta.validation-api`).
 - **JSON Handling**: Jackson 3 / Jackson 2 compatibility (aligning with Spring Boot 4 WebMVC).
 
-### 2.3 File Structure & Package Layout
+### 2.5 File Structure & Package Layout
 
 ```
 aura-manager/
@@ -161,6 +188,7 @@ aura-manager/
 - **RBAC Roles**:
   - `ROLE_MCP_READ`: Granted to read-only tools (`list_tests`, `get_status`) and resources (`test://*`).
   - `ROLE_MCP_EXECUTE`: Required for execution and mutating tools (`run_test`, `create_test`, `delete_test`, `cancel_run`).
+  - Calling functions with unsufficient privileges will return JSON-RPC error -32001 (Unauthorized)
 - **Universal Destructive Operation Safety Handshake (`delete_test`, `cancel_run`)**:
   - All destructive or disruptive operations enforce a two-step confirmation token pattern before mutating or terminating resources:
   - **For `delete_test(path)`**:
@@ -187,6 +215,99 @@ aura-manager/
 - **SSRF & Path Allowlist**:
   - All test paths must be normalized and reside strictly inside the project test folder (`tests/` or playbooks directory). Relative traversal (`..`) is rejected.
   - Target URLs in parameters are verified to ensure they do not target cloud metadata endpoints (`169.254.169.254`) or loopback addresses (`127.0.0.1`, `localhost`) unless explicitly allowed.
+
+#### 3.2.1 Perimeter Security Architecture (McpSecurityConfiguration)
+Authentication is enforced at the servlet filter level prior to MCP transport evaluation:   
+- Endpoint Scope: All requests to /mcp and /mcp/** require authentication.   
+- Token Authentication Scheme: Requests must supply an Authorization: Bearer <token> header.   
+- Configuration Properties:
+  - neodymium.aura.mcp.auth.read-token: Grants ROLE_MCP_READ.
+  - neodymium.aura.mcp.auth.admin-token: Grants ROLE_MCP_READ and ROLE_MCP_EXECUTE.
+  - neodymium.aura.mcp.auth.token: Master token granting all roles (ROLE_MCP_READ, ROLE_MCP_EXECUTE).
+- Timing-Attack Resistance: Token validation utilizes constant-time byte comparisons via MessageDigest.isEqual().
+
+```java
+package com.xceptance.aura.mcp.security;
+
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+@Configuration
+@EnableWebSecurity
+@EnableMethodSecurity(prePostEnabled = true)
+public class McpSecurityConfiguration {
+
+    private final McpTokenAuthenticationFilter tokenAuthFilter;
+
+    public McpSecurityConfiguration(McpTokenAuthenticationFilter tokenAuthFilter) {
+        this.tokenAuthFilter = tokenAuthFilter;
+    }
+
+    @Bean
+    public SecurityFilterChain mcpSecurityFilterChain(HttpSecurity http) throws Exception {
+        http
+            .securityMatcher("/mcp", "/mcp/**")
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/mcp", "/mcp/**").authenticated()
+                .anyRequest().denyAll()
+            )
+            .addFilterBefore(tokenAuthFilter, UsernamePasswordAuthenticationFilter.class);
+
+        return http.build();
+    }
+}
+```
+
+#### 3.2.2 Credential Shielding & Zero-Trust Parameter Rules
+- No Secret Exposure: Raw passwords, API tokens, and database credentials are never accepted as parameters in tools or returned in responses.
+- Ambient Environment Profiles: Agents supply symbolic identifiers (e.g., environment: "STAGING" or browserProfile: "chrome-headless").
+- Server-Side Secret Resolution: AuraMcpToolService maps symbolic identifiers to server-side encrypted credentials managed by AuraSettingsService.
+- Sanitization in Distiller: SeleniumErrorDistiller automatically scrubs URL query parameters matching sensitive keys (token=, password=, key=, secret=) before returning summaries to the LLM.
+
+#### 3.2.3 Asynchronous Context Propagation
+When run_test dispatches execution to AuraQueueService worker threads, security context and MDC logging information are preserved across thread boundaries using a TaskDecorator:
+```java
+package com.xceptance.aura.mcp.security;
+
+import org.slf4j.MDC;
+import org.springframework.core.task.TaskDecorator;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+
+import java.util.Map;
+
+@Component
+public class McpContextTaskDecorator implements TaskDecorator {
+
+    @Override
+    public Runnable decorate(Runnable runnable) {
+        SecurityContext securityContext = SecurityContextHolder.getContext();
+        Map<String, String> loggingMdc = MDC.getCopyOfContextMap();
+
+        return () -> {
+            try {
+                SecurityContextHolder.setContext(securityContext);
+                if (loggingMdc != null) {
+                    MDC.setContextMap(loggingMdc);
+                }
+                runnable.run();
+            } finally {
+                SecurityContextHolder.clearContext();
+                MDC.clear();
+            }
+        };
+    }
+}
+```
 
 ### 3.3 Execution Lifecycle & Core MCP Tools (`@McpTool`)
 

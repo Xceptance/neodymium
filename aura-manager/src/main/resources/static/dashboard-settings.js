@@ -150,33 +150,41 @@ window.removeDevNeoRow = removeDevNeoRow;
 function switchSettingsTab(tabName) {
     const btnGeneral = document.getElementById('tabBtnGeneral');
     const btnBrowser = document.getElementById('tabBtnBrowser');
+    const btnMcp = document.getElementById('tabBtnMcp');
     const contentGeneral = document.getElementById('tabContentGeneral');
     const contentBrowser = document.getElementById('tabContentBrowser');
+    const contentMcp = document.getElementById('tabContentMcp');
     const activeTabInput = document.getElementById('activeTabInput');
 
     if (activeTabInput) activeTabInput.value = tabName;
 
-    if (tabName === 'browser') {
-        if (btnGeneral) btnGeneral.classList.remove('active');
-        if (btnBrowser) btnBrowser.classList.add('active');
-        if (contentGeneral) {
-            contentGeneral.classList.remove('active');
-            contentGeneral.style.display = 'none';
+    [btnGeneral, btnBrowser, btnMcp].forEach(btn => {
+        if (btn) btn.classList.remove('active');
+    });
+    [contentGeneral, contentBrowser, contentMcp].forEach(pane => {
+        if (pane) {
+            pane.classList.remove('active');
+            pane.style.display = 'none';
         }
+    });
+
+    if (tabName === 'browser') {
+        if (btnBrowser) btnBrowser.classList.add('active');
         if (contentBrowser) {
             contentBrowser.classList.add('active');
             contentBrowser.style.display = 'block';
         }
+    } else if (tabName === 'mcp') {
+        if (btnMcp) btnMcp.classList.add('active');
+        if (contentMcp) {
+            contentMcp.classList.add('active');
+            contentMcp.style.display = 'block';
+        }
     } else {
         if (btnGeneral) btnGeneral.classList.add('active');
-        if (btnBrowser) btnBrowser.classList.remove('active');
         if (contentGeneral) {
             contentGeneral.classList.add('active');
             contentGeneral.style.display = 'block';
-        }
-        if (contentBrowser) {
-            contentBrowser.classList.remove('active');
-            contentBrowser.style.display = 'none';
         }
     }
 }

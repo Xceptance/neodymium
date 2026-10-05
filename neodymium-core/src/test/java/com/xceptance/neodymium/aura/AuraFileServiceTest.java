@@ -18,6 +18,8 @@
  */
 package com.xceptance.neodymium.aura;
 
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -367,5 +369,19 @@ public class AuraFileServiceTest
 
         Assertions.assertEquals(0, result.updatedFileCount());
         Assertions.assertTrue(result.updatedFiles().isEmpty());
+    }
+
+    @Test
+    public void testGetResourcesDirectoryResolvesDirectoryWithYamlFiles()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final File resolvedDir = fileService.getResourcesDirectory();
+
+        Assertions.assertNotNull(resolvedDir);
+        Assertions.assertTrue(resolvedDir.exists());
+        Assertions.assertTrue(resolvedDir.isDirectory());
+
+        final List<YamlFileDto> yamlFiles = fileService.getYamlFilesList();
+        Assertions.assertFalse(yamlFiles.isEmpty(), "Expected to discover YAML playbooks in resolved resources directory");
     }
 }

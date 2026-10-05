@@ -78,22 +78,68 @@ public final class AuraFileService
         {
             return customResourcesDir.getAbsoluteFile();
         }
-        final File defaultDir = new File("src/test/resources").getAbsoluteFile();
-        if (defaultDir.exists() && defaultDir.isDirectory())
+
+        final String configuredPath = System.getProperty("neodymium.aura.tests.directory");
+        if (configuredPath != null && !configuredPath.isBlank())
         {
-            return defaultDir;
+            final File configuredDir = new File(configuredPath).getAbsoluteFile();
+            if (configuredDir.exists() && configuredDir.isDirectory())
+            {
+                return configuredDir;
+            }
         }
-        final File coreDir = new File("neodymium-core/src/test/resources").getAbsoluteFile();
-        if (coreDir.exists() && coreDir.isDirectory())
+
+        final List<File> candidates = List.of(
+                new File("src/test/resources").getAbsoluteFile(),
+                new File("neodymium-core/src/test/resources").getAbsoluteFile(),
+                new File("aura-manager/src/test/resources").getAbsoluteFile()
+        );
+
+        for (final File candidate : candidates)
         {
-            return coreDir;
+            if (candidate.exists() && candidate.isDirectory() && containsYamlFiles(candidate))
+            {
+                return candidate;
+            }
         }
-        final File managerDir = new File("aura-manager/src/test/resources").getAbsoluteFile();
-        if (managerDir.exists() && managerDir.isDirectory())
+
+        for (final File candidate : candidates)
         {
-            return managerDir;
+            if (candidate.exists() && candidate.isDirectory())
+            {
+                return candidate;
+            }
         }
-        return defaultDir;
+
+        return candidates.getFirst();
+    }
+
+    private boolean containsYamlFiles(final File dir)
+    {
+        final File[] files = dir.listFiles();
+        if (files == null)
+        {
+            return false;
+        }
+        for (final File file : files)
+        {
+            if (file.isDirectory())
+            {
+                if (containsYamlFiles(file))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                final String name = file.getName().toLowerCase();
+                if (name.endsWith(".yaml") || name.endsWith(".yml"))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public String getActiveEditingFile()

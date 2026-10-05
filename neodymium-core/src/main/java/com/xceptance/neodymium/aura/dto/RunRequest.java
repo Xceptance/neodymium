@@ -35,6 +35,7 @@ public final class RunRequest
     public boolean video;
     public String executionMode = "LLM_RECORDING";
     public List<String> globalBrowserProfiles;
+    public String targetRunId;
 
     public RunRequest()
     {
@@ -43,11 +44,18 @@ public final class RunRequest
     public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
             final boolean allure, final boolean video, final String executionMode)
     {
-        this(datasets, headless, interactive, allure, video, executionMode, null);
+        this(datasets, headless, interactive, allure, video, executionMode, null, null);
     }
 
     public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
             final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles)
+    {
+        this(datasets, headless, interactive, allure, video, executionMode, globalBrowserProfiles, null);
+    }
+
+    public RunRequest(final List<DatasetSelection> datasets, final boolean headless, final boolean interactive,
+            final boolean allure, final boolean video, final String executionMode, final List<String> globalBrowserProfiles,
+            final String targetRunId)
     {
         this.datasets = datasets;
         this.headless = headless;
@@ -56,5 +64,6 @@ public final class RunRequest
         this.video = video;
         this.executionMode = executionMode != null ? executionMode : "LLM_RECORDING";
         this.globalBrowserProfiles = globalBrowserProfiles;
+        this.targetRunId = targetRunId;
     }
 }
