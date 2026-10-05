@@ -18,6 +18,8 @@
  */
 package org.neodymium.ai.replay;
 
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,6 +31,8 @@ import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction.CoordinateTarget;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
 import org.neodymium.ai.model.PlaybookStep;
@@ -505,8 +509,9 @@ public final class PlaybookToolReplayer
         {
             if (WebDriverRunner.hasWebDriverStarted())
             {
-                final int x = extractCoordinate(args, "x", currentTarget, 0);
-                final int y = extractCoordinate(args, "y", currentTarget, 1);
+                final int[] resolvedCoords = resolveCoordinatePoint(args, currentTarget);
+                final int x = resolvedCoords[0];
+                final int y = resolvedCoords[1];
                 final WebDriver driver = WebDriverRunner.getWebDriver();
                 final ReanchoringBridge.ReanchoredElement liveEl = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
                 if (matchesRecordedIdentity(liveEl, recordedVector))
@@ -758,8 +763,9 @@ public final class PlaybookToolReplayer
         final DomFeatureVector recordedVector = extractRecordedVector(args, step, callIndex);
         if (recordedVector != null && WebDriverRunner.hasWebDriverStarted())
         {
-            final int x = extractCoordinate(args, "x", target, 0);
-            final int y = extractCoordinate(args, "y", target, 1);
+            final int[] resolvedCoords = resolveCoordinatePoint(args, target);
+            final int x = resolvedCoords[0];
+            final int y = resolvedCoords[1];
             final WebDriver driver = WebDriverRunner.getWebDriver();
             final ReanchoringBridge.ReanchoredElement liveEl = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
             if (!matchesRecordedIdentity(liveEl, recordedVector))
@@ -799,8 +805,45 @@ public final class PlaybookToolReplayer
         return recordedVector;
     }
 
+    static int[] resolveCoordinatePoint(final JsonNode args, final String target)
+    {
+        final CoordinateTarget coordTarget = ClickAction.parseCoordinateTarget(target);
+        if (coordTarget != null && coordTarget.anchorSelector() != null && !coordTarget.anchorSelector().isBlank())
+        {
+            try
+            {
+                final SelenideElement anchorEl = SelenideElementFinder.findElement(coordTarget.anchorSelector());
+                if (anchorEl != null && anchorEl.exists())
+                {
+                    SelenideElementFinder.scrollIntoViewIfNeeded(anchorEl);
+                    final Object rectObj = Selenide.executeJavaScript(
+                        "var r = arguments[0].getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)];",
+                        anchorEl);
+                    if (rectObj instanceof List<?> list && list.size() >= 2)
+                    {
+                        final int cx = ((Number) list.get(0)).intValue() + coordTarget.x();
+                        final int cy = ((Number) list.get(1)).intValue() + coordTarget.y();
+                        return new int[]{cx, cy};
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+            return new int[]{coordTarget.x(), coordTarget.y()};
+        }
+        final int x = extractCoordinate(args, "x", target, 0);
+        final int y = extractCoordinate(args, "y", target, 1);
+        return new int[]{x, y};
+    }
+
     static int extractCoordinate(final JsonNode args, final String prop, final String target, final int index)
     {
+        final CoordinateTarget coordTarget = ClickAction.parseCoordinateTarget(target);
+        if (coordTarget != null)
+        {
+            return index == 0 ? coordTarget.x() : coordTarget.y();
+        }
         if (args != null && args.hasNonNull(prop))
         {
             return args.path(prop).asInt();

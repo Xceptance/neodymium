@@ -18,9 +18,12 @@
  */
 package org.neodymium.ai.tool.guard;
 
+import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
@@ -43,6 +46,8 @@ import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.tool.ToolRegistry;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 
 /**
  * Unit tests verifying {@link QualityJudgeToolInterceptor} candidate locator
@@ -778,5 +783,70 @@ public class QualityJudgeToolInterceptorTest
         Assertions.assertTrue(unmarkVerdict.isAllowed());
         Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, unmarkVerdict.decision());
         Assertions.assertTrue(unmarkVerdict.reason().contains("exempt"));
+    }
+
+    @Test
+    public void testFragileSelectorWithoutCandidatesWhenLocatorImproverDisabledRecommendsMarker()
+    {
+        final WebElement mockElement = (WebElement) Proxy.newProxyInstance(
+                WebElement.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (final Object proxy, final Method method, final Object[] args) ->
+                {
+                    if ("getTagName".equals(method.getName()))
+                    {
+                        return "button";
+                    }
+                    if ("getAttribute".equals(method.getName()) && args != null && args.length > 0)
+                    {
+                        if ("data-ai".equals(args[0]))
+                        {
+                            return "xc_anon_btn";
+                        }
+                        return null;
+                    }
+                    return null;
+                }
+        );
+
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+                WebDriver.class.getClassLoader(),
+                new Class<?>[]{WebDriver.class},
+                (final Object proxy, final Method method, final Object[] args) ->
+                {
+                    if ("findElements".equals(method.getName()))
+                    {
+                        return List.of(mockElement);
+                    }
+                    return List.of();
+                }
+        );
+
+        WebDriverRunner.setWebDriver(mockDriver);
+        try
+        {
+            System.setProperty("neodymium.ai.locatorImprover.enabled", "false");
+            System.setProperty("neodymium.ai.judge.enabled", "true");
+            System.setProperty("neodymium.ai.judge.recommendMarker", "true");
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "div._wrap_anon_2 button:nth-child(2)");
+
+            final ToolCall call = new ToolCall("call-deck-anon", "click", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+            Assertions.assertFalse(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.RETRY_WITH_FEEDBACK, verdict.decision());
+            Assertions.assertNotNull(verdict.rejectionResult());
+            Assertions.assertTrue(verdict.rejectionResult().content().contains("mark_elements"));
+            Assertions.assertTrue(verdict.rejectionResult().content().contains("marker:N"));
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.locatorImprover.enabled");
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.recommendMarker");
+            WebDriverRunner.closeWebDriver();
+        }
     }
 }

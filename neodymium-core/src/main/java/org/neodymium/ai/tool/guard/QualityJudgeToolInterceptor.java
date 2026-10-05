@@ -207,19 +207,18 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             // If ambiguous (multiple elements) or volatile (score < 6), generate candidate alternatives
             if (candidates.isEmpty() && !matchedElements.isEmpty() && (matchedElements.size() > 1 || score < 6))
             {
-                if (!this.config.isLocatorImproverEnabled())
-                {
-                    return InterceptionVerdict.allow("Locator Improver disabled; skipping candidate generation");
-                }
-                final List<String> generated = LocatorImprover.generateCandidates(matchedElements.get(0));
                 candidates = new ArrayList<>();
                 candidates.add(new LocatorCandidate(selector, determineStrategy(selector), (double) score / 10.0, "Original proposed selector"));
-                for (final String gen : generated)
+                if (this.config.isLocatorImproverEnabled())
                 {
-                    if (!gen.equals(selector))
+                    final List<String> generated = LocatorImprover.generateCandidates(matchedElements.get(0));
+                    for (final String gen : generated)
                     {
-                        final int genScore = LocatorImprover.scoreLocator(gen);
-                        candidates.add(new LocatorCandidate(gen, determineStrategy(gen), (double) genScore / 10.0, "Generated DOM attribute candidate"));
+                        if (!gen.equals(selector))
+                        {
+                            final int genScore = LocatorImprover.scoreLocator(gen);
+                            candidates.add(new LocatorCandidate(gen, determineStrategy(gen), (double) genScore / 10.0, "Generated DOM attribute candidate"));
+                        }
                     }
                 }
             }

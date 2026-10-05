@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
@@ -41,6 +42,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockSutState;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
@@ -490,5 +492,51 @@ public class VerifyOutcomeStepTest
         Assertions.assertEquals(expectedFullPageHash, fullPageVisualStep.getScreenshotHash(), "Baseline hash MUST match full-page state from KEY_POST_ACTION_STATE.");
         Assertions.assertNotEquals(expectedViewportHash, fullPageVisualStep.getScreenshotHash(), "Baseline hash must NOT match viewport state.");
         Assertions.assertTrue(fullPageVisualStep.isFullPage(), "Step must be marked as fullPage.");
+    }
+
+    /**
+     * Verifies that when a playbook step executes a coordinate action (e.g. coord:.container@10,20),
+     * VerifyOutcomeStep forces fullPage to false and does not serialize fullPage=true even if
+     * context level is VISUAL_LEAN.
+     */
+    @Test
+    public void testCoordinateStepEnforcesViewportScreenshotAndClearsFullPage() throws Exception
+    {
+        final BufferedImage img = new BufferedImage(300, 300, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(Color.BLUE);
+        g.fillRect(0, 0, 300, 300);
+        g.dispose();
+
+        final String base64;
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
+        {
+            ImageIO.write(img, "png", baos);
+            base64 = Base64.getEncoder().encodeToString(baos.toByteArray());
+        }
+
+        final MockSutState state = new MockSutState(
+            "<html><body><button class='btn'>Add</button></body></html>",
+            List.of(new SutAttachment("image/png", "viewport.png", base64)),
+            "content_hash");
+
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, state);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_LEAN);
+
+        final PlaybookStep coordStep = new PlaybookStep("Click add to cart button via coordinate");
+        coordStep.setFullPage(true);
+        final Action clickAction = new Action("CLICK", "coord:.container@50,50", List.of(), "Add to cart", "");
+        coordStep.setActions(List.of(clickAction));
+
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, coordStep);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final VerifyOutcomeStep step = new VerifyOutcomeStep();
+        step.execute(context);
+
+        Assertions.assertNotNull(coordStep.getScreenshotHash(), "Screenshot hash should be recorded.");
+        Assertions.assertEquals(ScreenshotHasher.TILE_SSIM_MATRIX_DIM, coordStep.getScreenshotHashDim(), "Coordinate target must use tile SSIM dimension (32).");
+        Assertions.assertFalse(coordStep.isFullPage(), "Coordinate step must explicitly enforce fullPage=false.");
     }
 }
