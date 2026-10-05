@@ -552,6 +552,17 @@ public final class AiConfiguration
         return getBoolean("neodymium.ai.judge.recommendMarker", true);
     }
 
+    /**
+     * Checks if synthetic automation ID attributes (data-ai) should be stamped into the DOM
+     * and included in structural DOM tree captures.
+     *
+     * @return true if data-ai stamping is enabled, false otherwise (default: false)
+     */
+    public boolean isDataAiEnabled()
+    {
+        return getBoolean("neodymium.ai.dataAi.enabled", false);
+    }
+
 
     /**
      * Checks if replay execution should respect recorded delays and pacing.
