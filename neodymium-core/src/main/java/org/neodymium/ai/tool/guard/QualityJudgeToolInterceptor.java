@@ -296,10 +296,21 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         // Fragile locator: top candidate (< 0.40) and all candidate alternatives score poorly (< 0.40)
         if (score1 < 0.40 && (candidates.size() == 1 || allCandidatesScoreBelow(candidates, 0.40)) && this.config.isJudgeRecommendMarkerEnabled())
         {
+            // If LLM Quality Judge is enabled (@AiJudge(true)), route to judge deliberation first before falling back to visual markers
+            if (this.config.isJudgeEnabled())
+            {
+                LOGGER.info("⚖️ Quality Judge flagged poor locator '{}' (score: {} < 0.40), but judge is enabled; proceeding to judge deliberation first", top.getLocator(), score1);
+                return deliberate(call, selector, candidates, activeContext,
+                        "Top candidate confidence is below threshold (" + score1 + " < 0.40)");
+            }
+
             LOGGER.info("⚖️ Quality Judge flagged poor locator '{}' and all candidates (score: {} < 0.40); recommending mark_elements", top.getLocator(), score1);
+            final String feedbackSuffix = this.config.isLocatorImproverEnabled()
+                    ? " and no resilient alternative could be generated from the DOM."
+                    : ".";
             return InterceptionVerdict.retryWithFeedback(
                     call.callId(),
-                    "Proposed locator '" + top.getLocator() + "' is fragile (locator quality score: " + Math.round(score1 * 10) + "/10) and no resilient alternative could be generated from the DOM.",
+                    "Proposed locator '" + top.getLocator() + "' is fragile (locator quality score: " + Math.round(score1 * 10) + "/10)" + feedbackSuffix,
                     "Invoke tool 'mark_elements' to overlay high-contrast visual markers on screen and target the control visually via marker index (e.g. click(target: \"marker:N\"))."
             );
         }

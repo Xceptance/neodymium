@@ -849,4 +849,63 @@ public class QualityJudgeToolInterceptorTest
             WebDriverRunner.closeWebDriver();
         }
     }
+
+    @Test
+    public void testTextPseudoSelector_allowedWhenUniqueWithJudgeEnabled()
+    {
+        final WebElement mockElement = (WebElement) Proxy.newProxyInstance(
+                WebElement.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (final Object proxy, final Method method, final Object[] args) ->
+                {
+                    if ("getTagName".equals(method.getName()))
+                    {
+                        return "a";
+                    }
+                    if ("getText".equals(method.getName()))
+                    {
+                        return "Tops";
+                    }
+                    return null;
+                }
+        );
+
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+                WebDriver.class.getClassLoader(),
+                new Class<?>[]{WebDriver.class},
+                (final Object proxy, final Method method, final Object[] args) ->
+                {
+                    if ("findElements".equals(method.getName()))
+                    {
+                        return List.of(mockElement);
+                    }
+                    return List.of();
+                }
+        );
+
+        WebDriverRunner.setWebDriver(mockDriver);
+        try
+        {
+            System.setProperty("neodymium.ai.locatorImprover.enabled", "false");
+            System.setProperty("neodymium.ai.judge.enabled", "true");
+            System.setProperty("neodymium.ai.judge.recommendMarker", "true");
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", ".plp-sidebar a:text-is(\"Tops\")");
+
+            final ToolCall call = new ToolCall("call-text-exact", "click", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+            Assertions.assertTrue(verdict.isAllowed(), "Exact text pseudo-selector with unique match must be allowed without marker recommendation");
+            Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.locatorImprover.enabled");
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.recommendMarker");
+            WebDriverRunner.closeWebDriver();
+        }
+    }
 }
+
