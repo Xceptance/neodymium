@@ -463,6 +463,14 @@ public final class BrowserToolProvider
             final String rectScript = """
                 var el = document.querySelector(arguments[0]);
                 if (!el) return null;
+                try {
+                    var vh = window.innerHeight || document.documentElement.clientHeight;
+                    var vw = window.innerWidth || document.documentElement.clientWidth;
+                    var r0 = el.getBoundingClientRect();
+                    if (r0.top < 0 || r0.bottom > vh || r0.left < 0 || r0.right > vw) {
+                        el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });
+                    }
+                } catch (e) {}
                 var r = el.getBoundingClientRect();
                 return { x: Math.round(r.left), y: Math.round(r.top) };
                 """;
@@ -550,19 +558,27 @@ public final class BrowserToolProvider
                 String sel = args.hasNonNull("selector") ? cleanSelector(args.path("selector").asText().trim()) : "";
                 final String text = args.hasNonNull("text") ? args.path("text").asText().trim() : "";
 
-                if ((parsedX == Integer.MIN_VALUE || parsedY == Integer.MIN_VALUE) && (target.startsWith("coord:") || target.contains("@")))
+                if (sel.isBlank() && args.hasNonNull("anchorSelector"))
+                {
+                    sel = cleanSelector(args.path("anchorSelector").asText().trim());
+                }
+
+                if (target.startsWith("coord:") || target.contains("@"))
                 {
                     final ClickAction.CoordinateTarget coord = ClickAction.parseCoordinateTarget(target);
                     if (coord != null)
                     {
-                        parsedX = coord.x();
-                        parsedY = coord.y();
+                        if (parsedX == Integer.MIN_VALUE || parsedY == Integer.MIN_VALUE)
+                        {
+                            parsedX = coord.x();
+                            parsedY = coord.y();
+                        }
                         if (sel.isBlank() && coord.anchorSelector() != null && !coord.anchorSelector().isBlank())
                         {
                             sel = cleanSelector(coord.anchorSelector());
                         }
                     }
-                    else if (target.startsWith("coord:"))
+                    else if (target.startsWith("coord:") && (parsedX == Integer.MIN_VALUE || parsedY == Integer.MIN_VALUE))
                     {
                         final String[] parts = target.substring("coord:".length()).split(",");
                         if (parts.length == 2)
@@ -594,25 +610,85 @@ public final class BrowserToolProvider
                             ? markerTarget.substring("marker:".length()).trim()
                             : markerTarget.substring("badge:".length()).trim();
                     final String clickBadgeScript = """
-                        var badges = document.querySelectorAll('#_neo_som_badges_ > div');
+                        var badges = document.querySelectorAll('#_neo_som_badges_ > div, #__neo_som_badges__ > div');
+                        var container = document.getElementById('__neo_som_badges__') || document.getElementById('_neo_som_badges_');
+                        var activeScope = container ? container.getAttribute('data-scope') : (arguments[1] || null);
+
+                        var el = null;
                         for (var i = 0; i < badges.length; i++) {
                             if (badges[i].getAttribute('data-badge-id') === arguments[0] || badges[i].innerText.trim() === arguments[0]) {
-                                var rect = badges[i].getBoundingClientRect();
-                                return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+                                el = badges[i];
+                                break;
                             }
                         }
-                        var el = document.querySelector('[data-m="' + arguments[0] + '"]');
+                        if (!el || el.id === '__neo_som_badges__' || (el.parentElement && el.parentElement.id === '__neo_som_badges__')) {
+                            el = document.querySelector('[data-m="' + arguments[0] + '"]');
+                        }
                         if (el) {
                             var rect = el.getBoundingClientRect();
-                            return { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) };
+                            var centerX = Math.round(rect.left + rect.width / 2);
+                            var centerY = Math.round(rect.top + rect.height / 2);
+                            var anchor = null;
+                            var anchorSelector = null;
+                            if (activeScope) {
+                                try {
+                                    var sc = document.querySelector(activeScope);
+                                    if (sc && (sc === el || sc.contains(el))) {
+                                        anchor = sc;
+                                        anchorSelector = activeScope;
+                                    }
+                                } catch (e) {}
+                            }
+                            if (!anchor) {
+                                var curr = el.parentElement;
+                                while (curr && curr !== document.body && curr !== document.documentElement) {
+                                    if (curr.id) {
+                                        try {
+                                            var sel = /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(curr.id) ? ('#' + curr.id) : ('[id="' + curr.id.replace(/"/g, '\\\\"') + '"]');
+                                            if (document.querySelectorAll(sel).length === 1) {
+                                                anchor = curr;
+                                                anchorSelector = sel;
+                                                break;
+                                            }
+                                        } catch (e) {}
+                                    }
+                                    var tag = curr.tagName ? curr.tagName.toLowerCase() : '';
+                                    if (['form', 'main', 'nav', 'header', 'footer', 'section', 'article', 'table'].indexOf(tag) !== -1) {
+                                        try {
+                                            if (document.querySelectorAll(tag).length === 1) {
+                                                anchor = curr;
+                                                anchorSelector = tag;
+                                                break;
+                                            }
+                                        } catch (e) {}
+                                    }
+                                    curr = curr.parentElement;
+                                }
+                            }
+                            if (anchor) {
+                                var ar = anchor.getBoundingClientRect();
+                                return {
+                                    x: centerX,
+                                    y: centerY,
+                                    anchorSelector: anchorSelector,
+                                    relX: Math.round(centerX - ar.left),
+                                    relY: Math.round(centerY - ar.top)
+                                };
+                            }
+                            return { x: centerX, y: centerY };
                         }
                         return null;
                         """;
-                    final Object coordsObj = ((JavascriptExecutor) driver).executeScript(clickBadgeScript, markerNum);
+                    final String activeScope = VisualBadgeInjector.getActiveScope();
+                    final Object coordsObj = ((JavascriptExecutor) driver).executeScript(clickBadgeScript, markerNum, activeScope);
                     if (coordsObj instanceof Map<?, ?> coordsMap)
                     {
                         final int bx = ((Number) coordsMap.get("x")).intValue();
                         final int by = ((Number) coordsMap.get("y")).intValue();
+                        final String anchorSelector = coordsMap.get("anchorSelector") instanceof String s && !s.isBlank() ? s : null;
+                        final Integer relX = coordsMap.get("relX") instanceof Number n ? n.intValue() : null;
+                        final Integer relY = coordsMap.get("relY") instanceof Number n ? n.intValue() : null;
+
                         final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, bx, by);
                         final int[] clicked = performSafeCoordinateClick(driver, bx, by);
                         final int finalX = clicked[0];
@@ -620,9 +696,21 @@ public final class BrowserToolProvider
 
                         final ToolResult.Builder b = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
                         final ObjectNode res = successNode("click");
-                        res.put("target", "coord: " + finalX + "," + finalY);
-                        res.put("x", finalX);
-                        res.put("y", finalY);
+                        if (anchorSelector != null && relX != null && relY != null)
+                        {
+                            final String anchoredTarget = "coord:" + anchorSelector + "@" + relX + "," + relY;
+                            res.put("target", anchoredTarget);
+                            res.put("x", relX);
+                            res.put("y", relY);
+                            res.put("selector", anchorSelector);
+                            res.put("anchorSelector", anchorSelector);
+                        }
+                        else
+                        {
+                            res.put("target", "coord: " + finalX + "," + finalY);
+                            res.put("x", finalX);
+                            res.put("y", finalY);
+                        }
                         if (reanchored != null && reanchored.domFeatureVector() != null)
                         {
                             res.set("domFeatureVector", MAPPER.valueToTree(reanchored.domFeatureVector()));

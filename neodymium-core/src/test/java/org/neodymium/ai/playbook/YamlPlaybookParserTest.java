@@ -941,4 +941,52 @@ public class YamlPlaybookParserTest
         assertEquals("Generate random email address (hint: use java method)", steps.get(0).getInstruction());
         assertEquals("Enter email ${randomEmail} address and continue.", steps.get(1).getInstruction());
     }
+
+    @Test
+    public void testParseMultilineStringWithBulletedInclude() throws IOException
+    {
+        final String hostYaml = """
+            steps: |
+              - _include: fragments/open-pdp.yaml
+              - Verify the product name headline is visible.
+            """;
+
+        final String fragmentYaml = """
+            steps:
+              - Open homepage in the browser
+              - Click on the first product card.
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("host.yaml", hostYaml);
+        manager.write("fragments/open-pdp.yaml", fragmentYaml);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("host.yaml", manager);
+
+        final List<PlaybookStep> steps = playbook.getSteps();
+        assertEquals(3, steps.size(), "Should expand bulleted include inside multiline string scalar into 3 inlined steps");
+        assertEquals("Open homepage in the browser", steps.get(0).getInstruction());
+        assertEquals("Click on the first product card.", steps.get(1).getInstruction());
+        assertEquals("Verify the product name headline is visible.", steps.get(2).getInstruction());
+    }
+
+    @Test
+    public void testUnresolvedIncludeDirectiveThrowsException() throws IOException
+    {
+        final String badIncludeYaml = """
+            steps:
+              - "_include: fragments/missing-file.yaml"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("bad-include.yaml", badIncludeYaml);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Exception ex = assertThrows(Exception.class, () -> {
+            parser.parse("bad-include.yaml", manager);
+        });
+
+        assertNotNull(ex.getMessage());
+    }
 }

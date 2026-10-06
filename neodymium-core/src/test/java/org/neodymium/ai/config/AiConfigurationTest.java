@@ -24,8 +24,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -307,6 +309,27 @@ public class AiConfigurationTest
         assertNull(AiConfiguration.parseReasoningEffort("invalid-value"));
         assertNull(AiConfiguration.parseReasoningEffort(null));
         assertNull(AiConfiguration.parseReasoningEffort("   "));
+    }
+
+    @Test
+    public void testGetAllProperties()
+    {
+        System.setProperty("neodymium.ai.testCustomProp", "activeValue123");
+        AiConfiguration.resetInstance();
+        final AiConfiguration config = AiConfiguration.getInstance();
+        final Map<String, String> all = config.getAllProperties();
+
+        assertNotNull(all, "Properties snapshot should not be null.");
+        assertTrue(all.containsKey("neodymium.ai.testCustomProp"), "Should contain testCustomProp.");
+        assertEquals("activeValue123", all.get("neodymium.ai.testCustomProp"));
+
+        // Verify unmodifiable
+        assertThrows(UnsupportedOperationException.class, () -> all.put("neodymium.ai.illegal", "val"),
+                     "Returned map must be unmodifiable.");
+        assertThrows(UnsupportedOperationException.class, () -> all.remove("neodymium.ai.testCustomProp"),
+                     "Returned map must be unmodifiable.");
+
+        System.clearProperty("neodymium.ai.testCustomProp");
     }
 }
 

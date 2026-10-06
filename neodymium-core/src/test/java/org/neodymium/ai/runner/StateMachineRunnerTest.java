@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,8 +31,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.executor.MockTargetExecutor;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
@@ -124,9 +127,34 @@ public class StateMachineRunnerTest
         session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_SESSION, session);
         session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, new MockTargetExecutor());
         session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, recordedStep);
-        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, org.neodymium.ai.config.ExecutionMode.REPLAY_STRICT);
+        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
 
         final PipelineStep step = ExecuteActionsStep.mapPlaybookStepToPipelineStep(recordedStep, session, session.getExecutionContext());
         assertDoesNotThrow(() -> step.execute(session.getExecutionContext()));
+    }
+
+    @Test
+    public void testStateMachineRunnerCapturesVisualRichOnFailureForVisualRca()
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final MockTargetExecutor mockExecutor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), mockExecutor);
+        final StateMachineRunner runner = new StateMachineRunner(session);
+
+        final ExecutionContext innerContext = session.getExecutionContext();
+        innerContext.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, mockExecutor);
+        innerContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify order summary shows $31.98");
+        innerContext.pushStep(ctx -> {
+            throw new ConclusiveFailureException("Verification assertion failed");
+        });
+
+        assertThrows(ConclusiveFailureException.class, () -> runner.run());
+
+        final List<ContextLevel> capturedLevels = mockExecutor.getCapturedContextLevels();
+        assertTrue(capturedLevels.contains(ContextLevel.VISUAL_RICH),
+                "StateMachineRunner must capture state with ContextLevel.VISUAL_RICH during failure Visual RCA analysis");
     }
 }

@@ -28,6 +28,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
@@ -48,6 +50,7 @@ import org.slf4j.LoggerFactory;
 import org.neodymium.common.ScreenshotWriter;
 import org.neodymium.common.browser.WebDriverStateContainer;
 import org.neodymium.util.Neodymium;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.LocatorCascadeResolver;
@@ -129,7 +132,7 @@ public class PageAnalyzer
      * fallback.
      */
     static final String CAPTURE_SCRIPT = """
-            return (function(level, includesText, includesRich, isMinimal, volatilePatterns) {
+            return (function(level, includesText, includesRich, isMinimal, volatilePatterns, isDataAiEnabled) {
                 // Configuration constants to prevent payload bloat
                 var MAX_PER_SELECTOR = 150; // Safeguard against massive list rendering
                 var MAX_TEXT = 200;         // Max characters captured for element text labels
@@ -157,25 +160,37 @@ public class PageAnalyzer
 
                 var seenRefs = {};
 
-                // Pre-populate registry from IDs already stamped on this page
-                // (handles repeated script injections on the same page)
-                // Also detects duplicates caused by JS cloning and removes the attribute so a unique one is generated.
-                for (var i = 0; i < allRoots.length; i++) {
-                    allRoots[i].querySelectorAll('[data-ai]').forEach(function(el) {
-                        var ref = el.getAttribute('data-ai');
-                        if (seenRefs[ref]) {
+                // If data-ai is disabled, strip any existing synthetic data-ai attributes from all roots
+                if (!isDataAiEnabled) {
+                    for (var i = 0; i < allRoots.length; i++) {
+                        allRoots[i].querySelectorAll('[data-ai]').forEach(function(el) {
                             el.removeAttribute('data-ai');
-                        } else {
-                            seenRefs[ref] = true;
-                            usedIds[ref] = true;
-                        }
-                    });
+                        });
+                    }
+                } else {
+                    // Pre-populate registry from IDs already stamped on this page
+                    // (handles repeated script injections on the same page)
+                    // Also detects duplicates caused by JS cloning and removes the attribute so a unique one is generated.
+                    for (var i = 0; i < allRoots.length; i++) {
+                        allRoots[i].querySelectorAll('[data-ai]').forEach(function(el) {
+                            var ref = el.getAttribute('data-ai');
+                            if (seenRefs[ref]) {
+                                el.removeAttribute('data-ai');
+                            } else {
+                                seenRefs[ref] = true;
+                                usedIds[ref] = true;
+                            }
+                        });
+                    }
                 }
             """
             + FINGERPRINT_JS_FUNCTIONS
             + """
                 // Retrieves or generates and stamps a unique 'data-ai' ID on the DOM element
                 function assignId(el) {
+                    if (!isDataAiEnabled) {
+                        return null;
+                    }
                     if (el.hasAttribute('data-ai')) {
                         return el.getAttribute('data-ai');
                     }
@@ -1060,11 +1075,13 @@ public class PageAnalyzer
         int elementCount = 0;
         try {
             final long scriptStart = System.nanoTime();
+            final boolean dataAiEnabled = AiConfiguration.getInstance().isDataAiEnabled();
             final Map<String, Object> data = (Map<String, Object>) js
                     .executeScript(CAPTURE_SCRIPT, level.ordinal(), level.includesTextContent(), level.includesRichMetadata(),
                             level == ContextLevel.MINIMAL,
-                            this.volatileIdDetector.getPatterns().stream().map(java.util.regex.Pattern::pattern).toList());
-            final long scriptMs = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - scriptStart);
+                            this.volatileIdDetector.getPatterns().stream().map(Pattern::pattern).toList(),
+                            dataAiEnabled);
+            final long scriptMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - scriptStart);
 
             // Render element tree
             final List<Map<String, Object>> tree = (List<Map<String, Object>>) data.get("tree");
@@ -1246,7 +1263,10 @@ public class PageAnalyzer
             appendAttribute(dom, "contenteditable", node.get("contenteditable"));
             appendAttribute(dom, "aria-label", ariaLabel);
             appendAttribute(dom, "data-testid", dataTestId);
-            appendAttribute(dom, "data-ai", autoId);
+            if (AiConfiguration.getInstance().isDataAiEnabled())
+            {
+                appendAttribute(dom, "data-ai", autoId);
+            }
             dom.append(">\n");
 
             final List<Map<String, Object>> children = (List<Map<String, Object>>) node.get("children");
@@ -1331,7 +1351,10 @@ public class PageAnalyzer
         appendAttribute(dom, "value", el.get("value"));
         appendAttribute(dom, "options", el.get("options"));
 
-        appendAttribute(dom, "data-ai", el.get("automationId"));
+        if (AiConfiguration.getInstance().isDataAiEnabled())
+        {
+            appendAttribute(dom, "data-ai", el.get("automationId"));
+        }
 
         appendAttribute(dom, "frameId", el.get("frameId"));
 

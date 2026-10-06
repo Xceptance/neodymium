@@ -439,7 +439,7 @@ public final class AgentToolLoopStep implements PipelineStep
         systemPrompt.append("You are an autonomous web testing agent. Execute the test instruction using available tools.\n\n");
         systemPrompt.append("### OPERATING RULES:\n");
         systemPrompt.append("1. SCOPE: Execute only the explicit action or assertion described in the instruction or milestones. Do not anticipate subsequent workflow steps.\n");
-        systemPrompt.append("2. GROUNDING & EXECUTION: Selectors are evaluated via Selenide (standard CSS, XPath, or text matching). Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Prior DOM snapshots are pruned after Turn 1 to minimize token context; if you need DOM details or element selectors in subsequent turns, invoke 'query_dom' (for specific element subtrees) or 'request_context' (for a fresh DOM snapshot). When querying DOM with 'query_dom', specify distinctive multi-word phrases or specific selectors from the instruction (rather than generic single words) to locate the exact target element directly. Never propose the exact same failing tool call without changing selector or state.\n");
+        systemPrompt.append("2. GROUNDING & EXECUTION: Selectors are evaluated via Selenide (standard CSS, XPath, or text matching). Selenide auto-scrolls elements into view during actions; use 'scroll' only to trigger lazy-loaded content or to reposition elements for visual verification. To inspect DOM, use 'query_dom'. Prior DOM snapshots are pruned after Turn 1 to minimize token context; if you need DOM details or element selectors in subsequent turns, invoke 'query_dom' (for specific element subtrees) or 'request_context' (for a fresh DOM snapshot). When querying DOM with 'query_dom', specify distinctive multi-word phrases or specific selectors from the instruction (rather than generic single words) to locate the exact target element directly. If target elements lack distinctive text, IDs, or stable classes (e.g. icon-only buttons, SVG/canvas controls, or CSS-in-JS obfuscated soup), invoke 'mark_elements' to overlay visual markers and target by marker index (e.g. click(target: \"marker:3\")). Never propose the exact same failing tool call without changing selector or state.\n");
         systemPrompt.append("3. ACTION STEPS: For action instructions (such as clicking buttons or links, filling fields, selecting dropdowns, checking checkboxes/radios, or navigating), once all actions and field values explicitly requested by the instruction are executed, the step goal is completely satisfied. When interacting with form controls, use 'fill' for text inputs, 'select' for dropdown menus, and 'check' for checkboxes and radio buttons (which is idempotent and sets the target state) rather than 'click'. Propose [action, complete_step] in the same turn if only a single action was requested, or call 'complete_step' once all requested actions have succeeded. DO NOT execute uncommanded assertions, probe unrelated elements, or verify downstream side-effects that belong to subsequent steps. If an action fails (e.g., target element is disabled, missing, or non-interactable), DO NOT substitute uncommanded assertions (such as 'assert_element_state') and DO NOT call 'complete_step'; report the failure. Cohesive multi-field operations: When an instruction commands setting multiple form fields or values (e.g. entering card number, expiry date, and CVV), you may propose the sequential [fill/type, ..., complete_step] calls in the same turn to execute all requested fields cohesively. Do not batch actions across navigation or state-changing page transitions.\n");
         systemPrompt.append("4. VERIFICATION STEPS: For verification or check instructions (such as asserting text, checking counts, validating attributes/values, or confirming expected state like visible, editable, readonly, checked, disabled), you MUST invoke an assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', 'assert_url', 'assert_title') before calling 'complete_step'. Propose [assertion, complete_step] in the same turn once the verification condition is satisfied. Directly assert the commanded property or content rather than splitting verification into separate intermediate visibility checks. To assert multiple states on the same element (e.g. 'displayed and enabled'), combine them into a single 'assert_element_state' call using compound states (e.g. state: 'visible, enabled' or states: ['visible', 'enabled']) rather than executing multiple separate tool calls. If 'query_dom' returns 0 matches for an expected verification element or text, DO NOT repeatedly re-execute previous action milestones (such as re-submitting forms). Immediately invoke the commanded assertion tool on the expected target/text so that any verification failure or expected defect is definitively asserted and recorded. When validating that an option, setting, country, language, or currency is selected, first check if the active trigger or header element reflects this (via text, title, or attributes like aria-label); assert on it directly without opening menus. If you perform temporary interactions (such as expanding dropdowns, opening modals/dialogs, or switching tabs) to reveal hidden content to verify, you MUST restore the initial page state before completing the step: close the opened modal/dialog/overlay (e.g. clicking the close button or pressing Escape) or collapse the dropdown so that ephemeral dialogs and backdrops do not leak into and block subsequent steps. Never invoke 'complete_step' while a temporary verification modal or overlay remains open on screen. Cohesive multi-assertion operations: When an instruction commands verifying multiple elements or conditions, you may propose all commanded [assert_*, ..., complete_step] calls in the same turn to execute all verifications cohesively.\n");
         if (isVisual)
@@ -806,6 +806,13 @@ public final class AgentToolLoopStep implements PipelineStep
                     final ToolCall effectiveCall = verdict.getEffectiveCall(singleShotCall);
                     if (!verdict.isAllowed())
                     {
+                        if (verdict.decision() == InterceptionVerdict.Decision.RETRY_WITH_FEEDBACK)
+                        {
+                            LOGGER.info("⚖️ Quality Judge requested retry with feedback for single-shot action '{}'; falling back to interactive agent loop", singleShotCall.toolName());
+                            isSingleShotAction = false;
+                            executedCalls.clear();
+                            break;
+                        }
                         throw new ConclusiveFailureException("Tool call rejected by guard: " + verdict.reason());
                     }
                     final java.util.Optional<AiTool> toolOpt = this.toolRegistry.getTool(effectiveCall.toolName());
@@ -1054,86 +1061,101 @@ public final class AgentToolLoopStep implements PipelineStep
                 final ToolCall effectiveCall = verdict.getEffectiveCall(currentCall);
                 lastEffectiveCall = effectiveCall;
 
+                final ToolResult result;
                 if (!verdict.isAllowed())
                 {
-                    final ToolResult rejResult = verdict.rejectionResult();
-                    final String rejContent = rejResult != null ? rejResult.content() : verdict.reason();
-                    LOGGER.error("❌ Guard rejected tool call {} due to policy violation: {}",
-                            currentCall.toolName(), rejContent);
-                    throw new AssertionError("Policy violation: " + rejContent);
-                }
-
-                if (isVisualAssertion && !hasInteractive && ("scroll".equals(effectiveCall.toolName()) || "browser_scroll".equals(effectiveCall.toolName())))
-                {
-                    visualScrollCount++;
-                    if (visualScrollCount > 3)
+                    if (verdict.decision() == InterceptionVerdict.Decision.RETRY_WITH_FEEDBACK)
                     {
-                        throw new ConclusiveFailureException(String.format(
-                                "Visual verification exceeded maximum scroll repositioning attempts (%d). Target visual condition could not be brought into view.",
-                                visualScrollCount - 1));
+                        result = verdict.rejectionResult() != null
+                                ? verdict.rejectionResult()
+                                : ToolResult.error(currentCall.callId(), verdict.reason());
+                        LOGGER.warn("⚠️ Quality Judge advised retry with feedback for tool {}: {}",
+                                currentCall.toolName(), result.content());
+                    }
+                    else
+                    {
+                        final ToolResult rejResult = verdict.rejectionResult();
+                        final String rejContent = rejResult != null ? rejResult.content() : verdict.reason();
+                        LOGGER.error("❌ Guard rejected tool call {} due to policy violation: {}",
+                                currentCall.toolName(), rejContent);
+                        throw new AssertionError("Policy violation: " + rejContent);
                     }
                 }
-
-                // Execute the tool
-                ToolResult result;
-                try
+                else
                 {
-                    final AiTool tool = this.toolRegistry.getTool(effectiveCall.toolName())
-                            .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + effectiveCall.toolName()));
-                    result = tool.execute(effectiveCall, toolContext);
-                }
-                catch (final AssertionError e)
-                {
-                    if (effectiveCall.toolName().startsWith("assert") || effectiveCall.toolName().startsWith("browser_assert"))
+                    if (isVisualAssertion && !hasInteractive && ("scroll".equals(effectiveCall.toolName()) || "browser_scroll".equals(effectiveCall.toolName())))
                     {
-                        // Stop Criterion 2: Immediate fail on real defects!
-                        LOGGER.error("❌ Stop Criterion 2 triggered: Assertion failure: {}", e.getMessage());
-                        executedCalls.add(effectiveCall);
-                        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
-                        if (session != null && session.getEventBus() != null)
+                        visualScrollCount++;
+                        if (visualScrollCount > 3)
                         {
-                            Action mappedAction = mapToolCallToAction(effectiveCall);
-                            if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
-                            {
-                                mappedAction = mappedAction.withReasoning(thought.trim());
-                            }
-                            final SessionData sessionData = context.getSessionData();
-                            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
-                            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
-                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, false));
+                            throw new ConclusiveFailureException(String.format(
+                                    "Visual verification exceeded maximum scroll repositioning attempts (%d). Target visual condition could not be brought into view.",
+                                    visualScrollCount - 1));
                         }
-                        throw e;
                     }
-                    LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), e.getMessage());
-                    result = ToolResult.error(effectiveCall.callId(), "Tool failed with error: " + e.getMessage());
-                    if (activeContextLevel.escalate() != null)
+
+                    // Execute the tool
+                    ToolResult toolExecResult;
+                    try
                     {
-                        activeContextLevel = activeContextLevel.escalate();
-                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-                        LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
+                        final AiTool tool = this.toolRegistry.getTool(effectiveCall.toolName())
+                                .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + effectiveCall.toolName()));
+                        toolExecResult = tool.execute(effectiveCall, toolContext);
                     }
-                }
-                catch (final JavascriptException | InvalidSelectorException | InvalidElementStateException e)
-                {
-                    LOGGER.warn("Tool syntax error in '{}': {}", effectiveCall.toolName(), e.getMessage());
-                    result = ToolResult.error(effectiveCall.callId(), "Tool failed with syntax error: " + e.getMessage());
-                    if (activeContextLevel.escalate() != null)
+                    catch (final AssertionError e)
                     {
-                        activeContextLevel = activeContextLevel.escalate();
-                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-                        LOGGER.warn("⚠️ Tool syntax error; escalating active context depth to: {}", activeContextLevel);
+                        if (effectiveCall.toolName().startsWith("assert") || effectiveCall.toolName().startsWith("browser_assert"))
+                        {
+                            // Stop Criterion 2: Immediate fail on real defects!
+                            LOGGER.error("❌ Stop Criterion 2 triggered: Assertion failure: {}", e.getMessage());
+                            executedCalls.add(effectiveCall);
+                            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+                            if (session != null && session.getEventBus() != null)
+                            {
+                                Action mappedAction = mapToolCallToAction(effectiveCall);
+                                if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                                {
+                                    mappedAction = mappedAction.withReasoning(thought.trim());
+                                }
+                                final SessionData sessionData = context.getSessionData();
+                                final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                                final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, false));
+                            }
+                            throw e;
+                        }
+                        LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), e.getMessage());
+                        toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool failed with error: " + e.getMessage());
+                        if (activeContextLevel.escalate() != null)
+                        {
+                            activeContextLevel = activeContextLevel.escalate();
+                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                            LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
+                        }
                     }
-                }
-                catch (final WebDriverException e)
-                {
-                    // Stop Criterion 6: Fatal Environment Failure
-                    LOGGER.error("💀 Stop Criterion 6 triggered: Fatal environment failure: {}", e.getMessage());
-                    throw new ConclusiveFailureException("Fatal environment failure: " + e.getMessage(), e);
-                }
-                catch (final Exception e)
-                {
-                    LOGGER.warn("Unexpected exception executing tool '{}': {}", effectiveCall.toolName(), e.getMessage(), e);
-                    result = ToolResult.error(effectiveCall.callId(), "Tool error: " + e.getMessage());
+                    catch (final JavascriptException | InvalidSelectorException | InvalidElementStateException e)
+                    {
+                        LOGGER.warn("Tool syntax error in '{}': {}", effectiveCall.toolName(), e.getMessage());
+                        toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool failed with syntax error: " + e.getMessage());
+                        if (activeContextLevel.escalate() != null)
+                        {
+                            activeContextLevel = activeContextLevel.escalate();
+                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                            LOGGER.warn("⚠️ Tool syntax error; escalating active context depth to: {}", activeContextLevel);
+                        }
+                    }
+                    catch (final WebDriverException e)
+                    {
+                        // Stop Criterion 6: Fatal Environment Failure
+                        LOGGER.error("💀 Stop Criterion 6 triggered: Fatal environment failure: {}", e.getMessage());
+                        throw new ConclusiveFailureException("Fatal environment failure: " + e.getMessage(), e);
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("Unexpected exception executing tool '{}': {}", effectiveCall.toolName(), e.getMessage(), e);
+                        toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool error: " + e.getMessage());
+                    }
+                    result = toolExecResult;
                 }
 
                 lastResult = result;
@@ -1826,8 +1848,11 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         child.setParent(currentStep);
                     }
+                    if (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING)
+                    {
+                        child.setStatus(currentStep.getStatus() != null ? currentStep.getStatus() : PlaybookStepStatus.SUCCESS);
+                    }
                 }
-                partitionToolCallsAndActions(children, sanitizedCalls, actions);
 
                 final Long parentDuration = currentStep.getDurationMs();
                 if (parentDuration != null && parentDuration > 0 && !children.isEmpty())
@@ -1956,7 +1981,7 @@ public final class AgentToolLoopStep implements PipelineStep
         }
     }
 
-    private static boolean matchesSubStep(final PlaybookStep subStep, final String rawToolName)
+    static boolean matchesSubStep(final PlaybookStep subStep, final String rawToolName)
     {
         if (subStep == null || subStep.getInstruction() == null || rawToolName == null)
         {
@@ -1984,9 +2009,13 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             return inst.contains("check") || inst.contains("uncheck") || inst.contains("tick");
         }
-        if (toolName.contains("click") || toolName.contains("select"))
+        if (toolName.contains("select"))
         {
-            return inst.contains("click") || inst.contains("press") || inst.contains("select") || inst.contains("choose") || inst.contains("add") || inst.contains("submit");
+            return inst.contains("select") || inst.contains("choose");
+        }
+        if (toolName.contains("click"))
+        {
+            return inst.contains("click") || inst.contains("press") || inst.contains("choose") || inst.matches(".*\\badd\\b.*") || inst.contains("submit");
         }
         if (toolName.contains("type") || toolName.contains("fill") || toolName.contains("clear"))
         {
@@ -2323,6 +2352,10 @@ public final class AgentToolLoopStep implements PipelineStep
     private static boolean matchesTarget(final String instruction, final String failedTarget, final String callSelector)
     {
         if (failedTarget == null || callSelector == null)
+        {
+            return true;
+        }
+        if (callSelector.startsWith("marker:") || callSelector.startsWith("coord:"))
         {
             return true;
         }

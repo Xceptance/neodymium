@@ -20,6 +20,8 @@ package org.neodymium.ai.util;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.regex.Pattern;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.executor.selenide.VolatileIdDetector;
 import org.openqa.selenium.By;
@@ -52,11 +54,155 @@ public final class LocatorImprover
     private static final Logger LOGGER = LoggerFactory.getLogger(LocatorImprover.class);
     private static final VolatileIdDetector VOLATILE_ID_DETECTOR = new VolatileIdDetector();
 
+    private static final Pattern POSITIONAL_PSEUDO_PATTERN = Pattern.compile(
+            ":(nth-child|nth-of-type|nth-last-child|nth-last-of-type|first-child|last-child|first-of-type|last-of-type|only-child|only-of-type)\\b",
+            Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern XPATH_INDEXED_PATTERN = Pattern.compile("\\[\\d+\\]");
+
+    private static final Pattern PLAYWRIGHT_NTH_PATTERN = Pattern.compile(">>\\s*nth\\s*=", Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern EXACT_TEXT_PSEUDO_PATTERN = Pattern.compile(
+            ":(text-is|exact-text|has-text-is)\\(",
+            Pattern.CASE_INSENSITIVE);
+
+    private static final Pattern PARTIAL_TEXT_PSEUDO_PATTERN = Pattern.compile(
+            ":(has-text|contains|text)\\(",
+            Pattern.CASE_INSENSITIVE);
+
     /**
      * Private constructor to prevent instantiation.
      */
     private LocatorImprover()
     {
+    }
+
+    /**
+     * Strips the contents of single- and double-quoted strings from the selector.
+     * Replaces quoted contents with empty quotes ("" or '') to ensure that combinators, colons,
+     * or spaces within text arguments (e.g. :text-is("Next > Step: 1")) do not contaminate parsing.
+     *
+     * @param input the raw selector
+     * @return the selector with string literal contents stripped
+     */
+    public static String stripQuotedStrings(final String input)
+    {
+        if (input == null || input.isEmpty())
+        {
+            return "";
+        }
+        final StringBuilder sb = new StringBuilder(input.length());
+        boolean inDouble = false;
+        boolean inSingle = false;
+        for (int i = 0; i < input.length(); i++)
+        {
+            final char c = input.charAt(i);
+            if (c == '"' && !inSingle)
+            {
+                inDouble = !inDouble;
+                sb.append('"');
+            }
+            else if (c == '\'' && !inDouble)
+            {
+                inSingle = !inSingle;
+                sb.append('\'');
+            }
+            else if (!inDouble && !inSingle)
+            {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
+    }
+
+    private static boolean hasChildCombinatorOutsideBrackets(final String input)
+    {
+        int bracketDepth = 0;
+        int parenDepth = 0;
+        for (int i = 0; i < input.length(); i++)
+        {
+            final char c = input.charAt(i);
+            if (c == '[')
+            {
+                bracketDepth++;
+            }
+            else if (c == ']')
+            {
+                bracketDepth = Math.max(0, bracketDepth - 1);
+            }
+            else if (c == '(')
+            {
+                parenDepth++;
+            }
+            else if (c == ')')
+            {
+                parenDepth = Math.max(0, parenDepth - 1);
+            }
+            else if (c == '>' && bracketDepth == 0 && parenDepth == 0)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean isExactTextXPath(final String unquoted)
+    {
+        return (unquoted.startsWith("//") || unquoted.startsWith(".//"))
+                && (unquoted.contains("normalize-space()=")
+                || unquoted.contains("normalize-space(.)=")
+                || unquoted.contains("text()="));
+    }
+
+    private static boolean isPartialTextXPath(final String unquoted)
+    {
+        return (unquoted.startsWith("//") || unquoted.startsWith(".//"))
+                && (unquoted.contains("contains(normalize-space(")
+                || unquoted.contains("contains(text("));
+    }
+
+    private static boolean hasUnrecognizedPseudoClass(final String unquoted)
+    {
+        int bracketDepth = 0;
+        for (int i = 0; i < unquoted.length(); i++)
+        {
+            final char c = unquoted.charAt(i);
+            if (c == '[')
+            {
+                bracketDepth++;
+            }
+            else if (c == ']')
+            {
+                bracketDepth = Math.max(0, bracketDepth - 1);
+            }
+            else if (c == ':' && bracketDepth == 0)
+            {
+                final String rest = unquoted.substring(i);
+                if (!startsWithRecognizedPseudo(rest))
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static boolean startsWithRecognizedPseudo(final String rest)
+    {
+        final String lower = rest.toLowerCase(Locale.ROOT);
+        return lower.startsWith(":text-is(")
+                || lower.startsWith(":exact-text(")
+                || lower.startsWith(":has-text-is(")
+                || lower.startsWith(":has-text(")
+                || lower.startsWith(":contains(")
+                || lower.startsWith(":text(")
+                || lower.startsWith(":has(")
+                || lower.startsWith(":not(")
+                || lower.startsWith(":checked")
+                || lower.startsWith(":disabled")
+                || lower.startsWith(":enabled")
+                || lower.startsWith(":selected")
+                || lower.startsWith(":focus");
     }
 
     /**
@@ -74,11 +220,32 @@ public final class LocatorImprover
         }
 
         final String trimmed = locator.trim();
+        final String unquoted = stripQuotedStrings(trimmed);
 
-        // Unique ID selector (#my-id or tag#my-id without descendant combinators or multiple tokens)
-        if (!trimmed.contains(" ") && !trimmed.contains(">") && (trimmed.startsWith("#") || (trimmed.contains("#") && !trimmed.contains("."))))
+        // 1. Structural / Positional Fragility Check (Priority Rule: Score 2)
+        // Positional pseudo-classes, raw indexed XPath, or Playwright nth= ordinals are always fragile,
+        // even if combined with IDs, classes, or text (e.g. #id:nth-child(2) or div:nth-child(2) a:text-is("Tops")).
+        if (POSITIONAL_PSEUDO_PATTERN.matcher(unquoted).find()
+                || XPATH_INDEXED_PATTERN.matcher(unquoted).find()
+                || PLAYWRIGHT_NTH_PATTERN.matcher(unquoted).find()
+                || unquoted.startsWith("/html")
+                || unquoted.startsWith("/body"))
         {
-            final String idVal = trimmed.substring(trimmed.indexOf('#') + 1);
+            return 2;
+        }
+
+        // Child combinators (outside Playwright >> chains and :has(...) containers): e.g. header > div > form > input
+        final String withoutChains = unquoted.replace(">>", "  ");
+        if (hasChildCombinatorOutsideBrackets(withoutChains))
+        {
+            return 2;
+        }
+
+        // 2. Unique ID selector (#my-id or tag#my-id without descendant combinators, pseudo-classes, or multiple tokens)
+        if (!unquoted.contains(" ") && !unquoted.contains(">") && !unquoted.contains(":") && !unquoted.contains("[")
+                && (unquoted.startsWith("#") || (unquoted.contains("#") && !unquoted.contains("."))))
+        {
+            final String idVal = unquoted.substring(unquoted.indexOf('#') + 1);
             if (VOLATILE_ID_DETECTOR.isVolatile(idVal))
             {
                 return 0;
@@ -86,43 +253,74 @@ public final class LocatorImprover
             return 10;
         }
 
-        // Test ID attributes (data-testid / data-test)
-        if (trimmed.contains("[data-testid=") || trimmed.contains("[data-test="))
+        // 3. Test ID attributes (data-testid / data-test)
+        if (unquoted.contains("[data-testid=") || unquoted.contains("[data-test="))
         {
             return 10;
         }
 
-        // Standard attributes (name, aria-label, placeholder)
-        if (trimmed.contains("[name=") || trimmed.contains("[aria-label=") || trimmed.contains("[placeholder="))
-        {
-            return 8;
-        }
-
-        // Semantic data attributes (data-country, data-value, data-code, data-lang, data-qa, data-id)
-        if (trimmed.contains("[data-country=") || trimmed.contains("[data-value=") || trimmed.contains("[data-code=")
-            || trimmed.contains("[data-lang=") || trimmed.contains("[data-qa=") || trimmed.contains("[data-id="))
+        // 4. Semantic data attributes (data-country, data-value, data-code, data-lang, data-qa, data-id)
+        if (unquoted.contains("[data-country=") || unquoted.contains("[data-value=") || unquoted.contains("[data-code=")
+                || unquoted.contains("[data-lang=") || unquoted.contains("[data-qa=") || unquoted.contains("[data-id="))
         {
             return 9;
         }
 
-        // Single clean CSS class (.btn-primary)
-        if (trimmed.startsWith(".") && !trimmed.contains(" ") && !trimmed.contains(">") && !trimmed.contains(":"))
+        // 5. Standard attributes (name, aria-label, placeholder)
+        if (unquoted.contains("[name=") || unquoted.contains("[aria-label=") || unquoted.contains("[placeholder="))
+        {
+            return 8;
+        }
+
+        // 6. Neodymium Exact Text Pseudo-Selectors and Semantic XPath Exact Text
+        if (EXACT_TEXT_PSEUDO_PATTERN.matcher(unquoted).find() || isExactTextXPath(unquoted))
+        {
+            return 7;
+        }
+
+        // 7. Neodymium Partial Text Pseudo-Selectors, Semantic XPath Substring, Clean Classes, and Clean Playwright Chaining
+        if (PARTIAL_TEXT_PSEUDO_PATTERN.matcher(unquoted).find() || isPartialTextXPath(unquoted))
         {
             return 6;
         }
 
-        // Synthetic Neodymium data-ai tag
-        if (trimmed.contains("data-ai"))
+        // Single clean CSS class (.btn-primary)
+        if (unquoted.startsWith(".") && !unquoted.contains(" ") && !unquoted.contains(">") && !unquoted.contains(":"))
+        {
+            return 6;
+        }
+
+        // Clean Playwright relational chaining without positional ordinals (container >> child)
+        if (unquoted.contains(">>") && !unquoted.contains(">"))
+        {
+            return 6;
+        }
+
+        // 8. Container pseudo-classes (:has, etc.)
+        if (unquoted.contains(":has("))
+        {
+            return 6;
+        }
+
+        // 9. Synthetic Neodymium data-ai tag
+        if (unquoted.contains("data-ai"))
         {
             return 4;
         }
 
-        // Complex combinators, nth-child, or raw XPath expressions
-        if (trimmed.contains(">") || trimmed.contains(":") || trimmed.startsWith("/"))
+        // 10. Raw XPath without text predicates (e.g. //div/span/a)
+        if (unquoted.startsWith("/"))
         {
             return 2;
         }
 
+        // 11. Remaining pseudo-classes or pseudo-elements not recognized above (e.g. ::before, :root)
+        if (hasUnrecognizedPseudoClass(unquoted))
+        {
+            return 2;
+        }
+
+        // 12. Standard fallback (e.g. bare tags 'button', simple compound 'header a')
         return 5;
     }
 

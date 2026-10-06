@@ -136,7 +136,8 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                 || "forward".equals(toolName) || "refresh".equals(toolName)
                 || "list_tabs".equals(toolName) || "switch_tab".equals(toolName)
                 || "close_tab".equals(toolName) || "store".equals(toolName)
-                || "request_context".equals(toolName))
+                || "request_context".equals(toolName) || "mark_elements".equals(toolName)
+                || "unmark_elements".equals(toolName))
         {
             return InterceptionVerdict.allow("Tool " + rawName + " is exempt from locator quality judging");
         }
@@ -148,7 +149,15 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         }
 
         // 3. Extract target selector and candidate locators from call arguments
-        final String selector = call.arguments().path("selector").asText("").trim();
+        final String selector = (call.arguments().hasNonNull("selector") && !call.arguments().path("selector").asText().isBlank()
+                ? call.arguments().path("selector").asText("")
+                : call.arguments().path("target").asText("")).trim();
+
+        if (selector.startsWith("marker:") || selector.startsWith("coord:"))
+        {
+            return InterceptionVerdict.allow("Visual marker / coordinate locator is exempt from CSS quality judging");
+        }
+
         List<LocatorCandidate> candidates = extractCandidates(call, context);
 
         // 4. Fast bypass: If candidates are empty and neither LLM judge nor locator improver is enabled in configuration, bypass DOM inspection
@@ -183,25 +192,33 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
             // If selector does not match any element in DOM and no candidates exist, defer to normal execution
             if (matchedElements.isEmpty() && candidates.isEmpty())
             {
+                if (score < 4 && this.config.isJudgeRecommendMarkerEnabled())
+                {
+                    LOGGER.info("⚖️ Quality Judge flagged poor locator '{}' (score: {} < 4) with 0 DOM matches; recommending mark_elements", selector, score);
+                    return InterceptionVerdict.retryWithFeedback(
+                            call.callId(),
+                            "Target element not found in DOM for selector '" + selector + "' (locator quality score: " + score + "/10). No stable text, ID, or semantic attributes exist in DOM.",
+                            "Invoke tool 'mark_elements' to overlay high-contrast visual markers on screen and target the control visually via marker index (e.g. click(target: \"marker:N\"))."
+                    );
+                }
                 return InterceptionVerdict.allow("Element not currently matched in DOM; proceeding to execution");
             }
 
             // If ambiguous (multiple elements) or volatile (score < 6), generate candidate alternatives
             if (candidates.isEmpty() && !matchedElements.isEmpty() && (matchedElements.size() > 1 || score < 6))
             {
-                if (!this.config.isLocatorImproverEnabled())
-                {
-                    return InterceptionVerdict.allow("Locator Improver disabled; skipping candidate generation");
-                }
-                final List<String> generated = LocatorImprover.generateCandidates(matchedElements.get(0));
                 candidates = new ArrayList<>();
                 candidates.add(new LocatorCandidate(selector, determineStrategy(selector), (double) score / 10.0, "Original proposed selector"));
-                for (final String gen : generated)
+                if (this.config.isLocatorImproverEnabled())
                 {
-                    if (!gen.equals(selector))
+                    final List<String> generated = LocatorImprover.generateCandidates(matchedElements.get(0));
+                    for (final String gen : generated)
                     {
-                        final int genScore = LocatorImprover.scoreLocator(gen);
-                        candidates.add(new LocatorCandidate(gen, determineStrategy(gen), (double) genScore / 10.0, "Generated DOM attribute candidate"));
+                        if (!gen.equals(selector))
+                        {
+                            final int genScore = LocatorImprover.scoreLocator(gen);
+                            candidates.add(new LocatorCandidate(gen, determineStrategy(gen), (double) genScore / 10.0, "Generated DOM attribute candidate"));
+                        }
                     }
                 }
             }
@@ -274,6 +291,28 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         {
             LOGGER.debug("Quality Judge passed high-confidence locator '{}' (score: {})", top.getLocator(), score1);
             return InterceptionVerdict.allow("Decisive high-confidence locator (score: " + score1 + " >= 0.95)");
+        }
+
+        // Fragile locator: top candidate (< 0.40) and all candidate alternatives score poorly (< 0.40)
+        if (score1 < 0.40 && (candidates.size() == 1 || allCandidatesScoreBelow(candidates, 0.40)) && this.config.isJudgeRecommendMarkerEnabled())
+        {
+            // If LLM Quality Judge is enabled (@AiJudge(true)), route to judge deliberation first before falling back to visual markers
+            if (this.config.isJudgeEnabled())
+            {
+                LOGGER.info("⚖️ Quality Judge flagged poor locator '{}' (score: {} < 0.40), but judge is enabled; proceeding to judge deliberation first", top.getLocator(), score1);
+                return deliberate(call, selector, candidates, activeContext,
+                        "Top candidate confidence is below threshold (" + score1 + " < 0.40)");
+            }
+
+            LOGGER.info("⚖️ Quality Judge flagged poor locator '{}' and all candidates (score: {} < 0.40); recommending mark_elements", top.getLocator(), score1);
+            final String feedbackSuffix = this.config.isLocatorImproverEnabled()
+                    ? " and no resilient alternative could be generated from the DOM."
+                    : ".";
+            return InterceptionVerdict.retryWithFeedback(
+                    call.callId(),
+                    "Proposed locator '" + top.getLocator() + "' is fragile (locator quality score: " + Math.round(score1 * 10) + "/10)" + feedbackSuffix,
+                    "Invoke tool 'mark_elements' to overlay high-contrast visual markers on screen and target the control visually via marker index (e.g. click(target: \"marker:N\"))."
+            );
         }
 
         final String judgeMode = this.config.getJudgeMode();
@@ -643,6 +682,15 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                                 "LLM Quality Judge selected refined locator: " + chosen + " (" + judgeResult.getReasoning() + ")"
                         );
                     }
+                    if ("REJECTED".equalsIgnoreCase(judgeResult.getJudgment()) && this.config.isJudgeRecommendMarkerEnabled())
+                    {
+                        LOGGER.info("⚖️ Quality Judge rejected proposed locator '{}' ({}); recommending mark_elements", selector, judgeResult.getReasoning());
+                        return InterceptionVerdict.retryWithFeedback(
+                                call.callId(),
+                                "LLM Quality Judge rejected proposed locator '" + selector + "': " + judgeResult.getReasoning(),
+                                "Invoke tool 'mark_elements' to overlay high-contrast visual markers on screen and target the control visually via marker index (e.g. click(target: \"marker:N\"))."
+                        );
+                    }
                     return InterceptionVerdict.allow(
                             "LLM Quality Judge confirmed locator: " + selector + " (" + judgeResult.getReasoning() + ")"
                     );
@@ -675,6 +723,16 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                 bestCandidate = cand;
                 bestWeight = weight;
             }
+        }
+
+        if (bestCandidate.getScore() < 0.40 && this.config.isJudgeRecommendMarkerEnabled())
+        {
+            LOGGER.info("⚖️ Quality Judge heuristic deliberation found no resilient candidate (best score: {} < 0.40); recommending mark_elements", bestCandidate.getScore());
+            return InterceptionVerdict.retryWithFeedback(
+                    call.callId(),
+                    "No resilient locator candidate found (best score: " + Math.round(bestCandidate.getScore() * 10) + "/10 for '" + bestCandidate.getLocator() + "').",
+                    "Invoke tool 'mark_elements' to overlay high-contrast visual markers on screen and target the control visually via marker index (e.g. click(target: \"marker:N\"))."
+            );
         }
 
         final String chosenLocator = bestCandidate.getLocator();
@@ -849,5 +907,17 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         }
 
         return false;
+    }
+
+    private static boolean allCandidatesScoreBelow(final List<LocatorCandidate> candidates, final double threshold)
+    {
+        for (final LocatorCandidate candidate : candidates)
+        {
+            if (candidate.getScore() >= threshold)
+            {
+                return false;
+            }
+        }
+        return true;
     }
 }

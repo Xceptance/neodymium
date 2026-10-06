@@ -26,6 +26,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.junit.AiJudge;
 import org.neodymium.ai.junit.AiMode;
 import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
@@ -76,6 +77,49 @@ public class VisualMarkersSandboxLiveTest extends BaseAiTest
             """);
 
         $("#action-feedback").shouldHave(text("Quick View opened for Hoodie"));
+        Assertions.assertEquals(0, $$("[data-m]").size(), "DOM must remain pristine without marker tags after execution");
+    }
+
+    /**
+     * Tests autonomous Visual Markers discovery and recovery without the proactive '(marker)' hint.
+     * The LLM either calls mark_elements autonomously or is redirected by QualityJudgeToolInterceptor.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(recordingFileName = "live_visual_markers_autonomous_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testVisualMarkersAutonomousLive(final AiSession session) throws Exception
+    {
+        session.execute("""
+            steps: |
+              Open ${visual.markers.test.url} in the browser
+              Click the quick view button with the eye icon on the Cyberpunk Neon Hoodie card
+              Verify that #action-feedback shows "Quick View opened for Hoodie"
+            """);
+
+        $("#action-feedback").shouldHave(text("Quick View opened for Hoodie"));
+        Assertions.assertEquals(0, $$("[data-m]").size(), "DOM must remain pristine without marker tags after execution");
+    }
+
+    /**
+     * Tests autonomous Visual Markers discovery and recovery on completely anonymous DOM soup (no data-action,
+     * no title, no id, no text). Forces the LLM to either autonomously mark elements or receive Quality Judge feedback.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(recordingFileName = "live_visual_markers_anonymous_soup_playbook")
+    @AiJudge(true)
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testVisualMarkersAnonymousSoupLive(final AiSession session) throws Exception
+    {
+        session.execute("""
+            steps: |
+              Open ${visual.markers.test.url} in the browser
+              Click the quick view button with the eye icon on the Stealth Cyber Deck card
+              Verify that #action-feedback shows "Quick View opened for Deck"
+            """);
+
+        $("#action-feedback").shouldHave(text("Quick View opened for Deck"));
         Assertions.assertEquals(0, $$("[data-m]").size(), "DOM must remain pristine without marker tags after execution");
     }
 }

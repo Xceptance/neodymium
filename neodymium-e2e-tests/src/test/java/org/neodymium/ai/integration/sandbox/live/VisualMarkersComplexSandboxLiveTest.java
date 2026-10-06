@@ -78,4 +78,24 @@ public class VisualMarkersComplexSandboxLiveTest extends BaseAiTest
         $("#action-feedback").shouldHave(text("Quick View opened for Holographic Glasses"));
         Assertions.assertEquals(0, $$("[data-m]").size(), "DOM must remain pristine without marker tags after execution");
     }
+
+    /**
+     * Tests autonomous Visual Markers discovery and recovery on dense UI without the proactive '(marker)' hint.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(recordingFileName = "live_visual_markers_complex_autonomous_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testComplexVisualMarkersAutonomousLive(final AiSession session) throws Exception
+    {
+        session.execute("""
+            steps: |
+              Open ${visual.markers.complex.url} in the browser
+              Click the quick view button with the eye icon on the Holographic Smart Glasses card
+              Verify that #action-feedback shows "Quick View opened for Holographic Glasses"
+            """);
+
+        $("#action-feedback").shouldHave(text("Quick View opened for Holographic Glasses"));
+        Assertions.assertEquals(0, $$("[data-m]").size(), "DOM must remain pristine without marker tags after execution");
+    }
 }

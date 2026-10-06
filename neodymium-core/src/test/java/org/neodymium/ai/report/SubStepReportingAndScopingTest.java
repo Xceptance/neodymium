@@ -36,9 +36,11 @@ import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
+import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -336,5 +338,49 @@ public final class SubStepReportingAndScopingTest
         assertEquals(2, subSteps.size(), "subSteps should contain exactly 2 items from included fragment");
         assertEquals("Set quantity of the product to 1.", subSteps.get(0).getInstruction());
         assertEquals("Click add to cart button.", subSteps.get(1).getInstruction());
+    }
+
+    @Test
+    @DisplayName("Verify compound step retains actions and tool calls on parent without slicing into sub-steps")
+    public void testCompoundStepRetainsActionsOnParentWithoutArtificialPartitioning() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-compound-retention");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep parentStep = new PlaybookStep("Fill out shipping address form:");
+        final PlaybookStep subStep1 = new PlaybookStep("First Name");
+        subStep1.setParent(parentStep);
+        final PlaybookStep subStep2 = new PlaybookStep("Country");
+        subStep2.setParent(parentStep);
+        parentStep.setSubSteps(List.of(subStep1, subStep2));
+
+        bus.dispatch(new StepStartedEvent(parentStep, 0));
+
+        // Actions executed during the compound turn belong to the parent step
+        final Action action1 = new Action("TYPE", "#firstName", List.of("Alice"), "Type Alice", "Type Alice");
+        final Action action2 = new Action("SELECT", "#shipping-country", List.of("US"), "Select US", "Select US");
+        bus.dispatch(new ActionExecutedEvent(action1, true));
+        bus.dispatch(new ActionExecutedEvent(action2, true));
+
+        bus.dispatch(new StepFinishedEvent(parentStep, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(1000, true));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getSteps().size());
+
+        final TestExecutionReport.ReportStepEntry parentEntry = report.getSteps().get(0);
+        assertEquals("Fill out shipping address form:", parentEntry.getInstruction());
+        assertEquals(2, parentEntry.getSubSteps().size());
+
+        // Child sub-steps do not receive false replay actions
+        for (final TestExecutionReport.ReportStepEntry child : parentEntry.getSubSteps())
+        {
+            assertTrue(child.getActions().isEmpty(), "Child sub-steps should not have sliced actions");
+            assertNotNull(child.getParent(), "Parent linkage must be established");
+        }
     }
 }

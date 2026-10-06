@@ -63,7 +63,20 @@ public enum ExecutionMode
      * Static playbook pre-flight linting only.
      * Executes upfront pre-flight linter analysis and generates quality reports, skipping browser/target step execution.
      */
-    LINTER_ONLY;
+    LINTER_ONLY,
+
+    /**
+     * Smart execution mode.
+     * <p>
+     * Dynamically determines whether to execute in {@link #REPLAY_WITH_HEALING} or {@link #LLM_RECORDING} mode:
+     * <ul>
+     *   <li>If a recorded companion JSON file exists on disk, it executes as {@link #REPLAY_WITH_HEALING}
+     *       (replaying recorded actions and using the LLM only to heal failures, persisting any updates).</li>
+     *   <li>If no recorded companion JSON file exists on disk, it executes as {@link #LLM_RECORDING}
+     *       (generating actions live via the LLM and saving the new companion recording to disk upon success).</li>
+     * </ul>
+     */
+    AUTO;
 
     /**
      * Returns true if this mode performs live LLM action generation or live LLM linting.
@@ -82,6 +95,15 @@ public enum ExecutionMode
     }
 
     /**
+     * Returns true if this mode automatically selects between replay with healing and live recording
+     * based on whether a companion recording file exists on disk.
+     */
+    public boolean isAuto()
+    {
+        return this == AUTO;
+    }
+
+    /**
      * Returns true if this mode automatically records executed actions.
      */
     public boolean isRecording()
@@ -92,13 +114,14 @@ public enum ExecutionMode
     /**
      * Returns true if a successful session in this mode may create or update the playbook recording file.
      * <p>
-     * That is the case for the recording modes (new recording) and {@link #REPLAY_WITH_HEALING} (healed step updates).
+     * That is the case for the recording modes (new recording), {@link #REPLAY_WITH_HEALING} (healed step updates),
+     * and {@link #AUTO} (which resolves dynamically to one of those modes).
      * It is deliberately not the case for {@link #LLM_ONLY} (documented as not recording), {@link #LINTER_ONLY}
      * (pre-flight linting only), or {@link #REPLAY_STRICT} (strictly read-only replay that never touches recordings on disk).
      */
     public boolean persistsRecording()
     {
-        return isRecording() || this == REPLAY_WITH_HEALING;
+        return isRecording() || this == REPLAY_WITH_HEALING || this == AUTO;
     }
 
     /**
@@ -114,6 +137,6 @@ public enum ExecutionMode
      */
     public boolean supportsHealing()
     {
-        return this == REPLAY_WITH_HEALING;
+        return this == REPLAY_WITH_HEALING || this == AUTO;
     }
 }

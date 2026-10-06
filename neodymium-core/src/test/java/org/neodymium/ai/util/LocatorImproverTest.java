@@ -117,6 +117,52 @@ public final class LocatorImproverTest
     }
 
     @Test
+    public void testScoreLocator_exactTextPseudoSelectors()
+    {
+        assertEquals(7, LocatorImprover.scoreLocator(".plp-sidebar a:text-is(\"Tops\")"));
+        assertEquals(7, LocatorImprover.scoreLocator("a:exact-text('Tops')"));
+        assertEquals(7, LocatorImprover.scoreLocator("button:has-text-is(\"Apply\")"));
+        assertEquals(7, LocatorImprover.scoreLocator("button:text-is(\"Next > Step: 1\")"));
+    }
+
+    @Test
+    public void testScoreLocator_partialTextPseudoSelectors()
+    {
+        assertEquals(6, LocatorImprover.scoreLocator("button:has-text(\"Submit\")"));
+        assertEquals(6, LocatorImprover.scoreLocator("a:contains('More info')"));
+        assertEquals(6, LocatorImprover.scoreLocator("span:text(\"Hello\")"));
+    }
+
+    @Test
+    public void testScoreLocator_semanticXPath()
+    {
+        assertEquals(7, LocatorImprover.scoreLocator("//a[normalize-space()='Tops']"));
+        assertEquals(7, LocatorImprover.scoreLocator("//button[normalize-space(.)='Submit']"));
+        assertEquals(7, LocatorImprover.scoreLocator("//span[text()='Welcome']"));
+        assertEquals(6, LocatorImprover.scoreLocator("//button[contains(normalize-space(),'Submit')]"));
+        assertEquals(6, LocatorImprover.scoreLocator("//a[contains(text(),'Order')]"));
+        assertEquals(2, LocatorImprover.scoreLocator("//div/span/a"));
+    }
+
+    @Test
+    public void testScoreLocator_positionalFragilityOverridesTextAndIds()
+    {
+        assertEquals(2, LocatorImprover.scoreLocator("div:nth-child(2) > a:text-is(\"Tops\")"));
+        assertEquals(2, LocatorImprover.scoreLocator("#foo:nth-child(2)"));
+        assertEquals(2, LocatorImprover.scoreLocator("table >> nth=2 >> button"));
+        assertEquals(2, LocatorImprover.scoreLocator("//div[1]/input"));
+    }
+
+    @Test
+    public void testScoreLocator_chainedLocatorsAndContainers()
+    {
+        assertEquals(6, LocatorImprover.scoreLocator("table >> tr:has-text(\"Alice\") >> button"));
+        assertEquals(6, LocatorImprover.scoreLocator("div:has(> h3)"));
+        assertEquals(7, LocatorImprover.scoreLocator("div:has(> h3:text-is(\"Order Summary\"))"));
+        assertEquals(5, LocatorImprover.scoreLocator("a[href=\"https://example.com/c/tops.html\"]"));
+    }
+
+    @Test
     public void testScoreLocator_emptyAndNull()
     {
         assertEquals(0, LocatorImprover.scoreLocator(null));

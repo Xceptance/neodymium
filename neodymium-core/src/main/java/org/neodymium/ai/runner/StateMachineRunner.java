@@ -21,12 +21,14 @@ package org.neodymium.ai.runner;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.MockLlmProvider;
 import org.neodymium.ai.client.ResponseSchema;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
@@ -39,6 +41,7 @@ import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StateCapturedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
+import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.model.ContextLevel;
@@ -865,7 +868,7 @@ public final class StateMachineRunner
                 return;
             }
 
-            final SutState state = executor.captureState();
+            final SutState state = executor.captureState(ContextLevel.VISUAL_RICH);
             if (state == null)
             {
                 return;
@@ -897,26 +900,39 @@ public final class StateMachineRunner
             LOGGER.trace("System Prompt:\n{}", system);
             LOGGER.trace("User Prompt:\n{}", user);
 
+            final List<SutAttachment> imageAttachments = new ArrayList<>();
+            if (state.getAttachments() != null)
+            {
+                for (final SutAttachment attachment : state.getAttachments())
+                {
+                    if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/"))
+                    {
+                        imageAttachments.add(attachment);
+                    }
+                }
+            }
+
+            final LlmCapability requiredCap = imageAttachments.isEmpty() ? LlmCapability.TEXT_ONLY : LlmCapability.VISION;
+            final LlmProvider provider = this.session.getLlmRegistry().getProvider(requiredCap);
+            if (provider == null)
+            {
+                return;
+            }
+            if (provider instanceof MockLlmProvider mlp && !mlp.hasQueuedResponses())
+            {
+                return;
+            }
+
             final LlmRequest request = new LlmRequest(
                 system,
                 user,
-                state.getAttachments() != null ? state.getAttachments() : Collections.emptyList(),
+                imageAttachments,
                 rcaPrompt.getResponseSchema(),
                 0.0,
                 60
             );
 
-            final LlmProvider provider = this.session.getLlmRegistry().getProvider(LlmCapability.VISION);
-            if (provider == null)
-            {
-                return;
-            }
-            if (provider instanceof org.neodymium.ai.client.MockLlmProvider mlp && !mlp.hasQueuedResponses())
-            {
-                return;
-            }
-
-            LOGGER.debug("Calling LLM provider '{}' via capability: VISION (Visual RCA)", provider.getClass().getSimpleName());
+            LOGGER.debug("Calling LLM provider '{}' via capability: {} (Visual RCA)", provider.getClass().getSimpleName(), requiredCap);
             this.session.getEventBus().dispatch(new LlmRequestSentEvent(request, "VISUAL_RCA"));
             final long startTime = System.currentTimeMillis();
             final ExecutionContext previousContext = ExecutionContext.getActiveContext();

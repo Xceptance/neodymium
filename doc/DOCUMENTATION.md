@@ -227,6 +227,9 @@ Instead of executing LLM calls dynamically on every run, the framework uses **St
 
 * **JSON Companion**: A recording compiled automatically during the initial `FORCE_RECORDING` run. It maps each natural language step to a list of concrete structured SUT actions (e.g., `NAVIGATE`, `CLICK`, `TYPE`, `ASSERT`) along with visual `screenshotHash` baselines.
 * **Offline Replay**: Subsequent test runs (`REPLAY_STRICT` or `REPLAY_WITH_HEALING`) load the companion JSON file directly, executing recorded browser interactions in milliseconds without making any LLM calls.
+* **Automatic / Hybrid Execution (`AUTO`)**: Smart execution mode that inspects the filesystem/classpath for an existing companion JSON recording:
+  - If a recording exists, it executes dynamically in `REPLAY_WITH_HEALING` mode (fast offline replay, triggering LLM healing and persisting updates only if a step heals).
+  - If no recording exists, it automatically executes in live `LLM_RECORDING` mode to discover elements via LLM and write the companion JSON recording upon success.
 * **Recording Directory Configuration**: Companion `.json` recording output locations can be configured at the test class/method level or globally:
   - **Annotation-driven (`@AiPlaybook`)**: `@AiPlaybook(recordingDirectory = "target/playbooks/integration")` directs generated companion recordings to build output target directories to keep `src/` clean.
   - **Property-driven (`neodymium.ai.playbook.recordingDirectory`)**: Configured in `ai.properties` or JVM arguments (`-Dneodymium.ai.playbook.recordingDirectory=...`).
@@ -591,8 +594,27 @@ Neodymium AI provides two complementary visual snapshot testing modes: **pixel-e
 * **Persistent Full-Page Flag During Escalation**: Stored in step transient data as `KEY_IS_FULL_PAGE_SCREENSHOT = true`. Escalation (`VISUAL` $\rightarrow$ `VISUAL_LEAN` $\rightarrow$ `VISUAL_RICH`) **continuously preserves full-page screenshot capture**.
 * **Author Tag Protection**: Explicit `(visual)`, `(visual: full)`, and `(layout)` tags set by the test author are strictly protected from being overwritten or downgraded.
 
+##### `(marker)` Visual Marker Grounding Directive
+
+The `(marker)` directive activates Neodymium's proactive **Set-of-Marks (SoM) visual grounding engine** for the annotated step.
+
+* **Purpose**: Solves interaction challenges on modern web interfaces where standard CSS/XPath selectors are brittle, volatile, or completely absent—such as textless icon buttons, anonymous container hierarchies, complex toolbars, canvas components, or obfuscated CSS-in-JS classes (`.css-1a2b3c`, `.emotion-rt8oam`).
+* **Syntax**: Append `(marker)` case-insensitively to any playbook step instruction:
+  - `Click the shopping cart icon (marker)`
+  - `Click the user avatar profile button (MARKER)`
+  - `Click the filter toggle button ( marker )`
+* **Execution Lifecycle**:
+  1. **Visual Context Escalation**: Automatically ensures visual perception by elevating initial step context to at least `ContextLevel.VISUAL_LEAN` so the model receives both DOM and screenshot.
+  2. **Proactive Badge Superimposition**: Invokes `VisualBadgeInjector.injectMarkers(driver)` on Turn 1, superimposing high-contrast, numbered visual badges (`[1..N]`) over interactive elements currently in the viewport.
+  3. **Visual Grounding Prompt**: The model receives the marked screenshot with instructions to target the intended element by its marker index (e.g., `click(target: "marker:3")` or `badge:3`).
+  4. **Spatial Anchor Pinning**: The action executor intercepts the marker target, determines the element's offset relative to its nearest enclosing DOM container, and serializes a resilient container-anchored coordinate (`coord: <container-selector>@x,y`).
+  5. **DOM Hygiene**: Automatically cleans all injected marker overlays and synthetic DOM badges (`unmark_elements`) post-action to leave the application in a clean state.
+  6. **Zero-Token Deterministic Replay**: During `REPLAY_STRICT` and `REPLAY_WITH_HEALING`, the step executes natively in sub-milliseconds without LLM calls via Selenium `Actions.moveToElement(anchor, x, y).click()`.
+  7. **Reporting**: Displays the `🎯 MARKER` badge in HTML and Markdown test reports.
+* **Autonomous Escalation**: Even without an explicit `(marker)` tag, when `neodymium.ai.judge.recommendMarker=true` (default: `true`), if the agent proposes a fragile or volatile locator (`score < 4`) and no resilient DOM alternative exists, `QualityJudgeToolInterceptor` interceptively advises the agent via soft retry (`RETRY_WITH_FEEDBACK`) to invoke `mark_elements` to visually ground the element instead of guessing fragile selectors.
+
 #### Runtime Instruction Preparation
-Before compiling prompts or sending request payloads to the LLM, the framework executes a dedicated instruction preparation step (`ExecuteActionsStep.prepareInstruction`). It dynamically strips internal runtime control tags case-insensitively (`(no-replay)`, `(bug)`, `(continue-on-error)`, `(no-healing)`, `(optional)`, `(timeout: ...)`, `(contextlevel=...)`, `(context: ...)`, `(visual)`, `(visual: full)`, `(visual-full)`), preventing internal test configurations from polluting natural language prompts sent to the LLM.
+Before compiling prompts or sending request payloads to the LLM, the framework executes a dedicated instruction preparation step (`ExecuteActionsStep.prepareInstruction`). It dynamically strips internal runtime control tags case-insensitively (`(no-replay)`, `(bug)`, `(continue-on-error)`, `(no-healing)`, `(marker)`, `(optional)`, `(timeout: ...)`, `(contextlevel=...)`, `(context: ...)`, `(visual)`, `(visual: full)`, `(visual-full)`), preventing internal test configurations from polluting natural language prompts sent to the LLM.
 
 *(Note: The `(hint: <selector>)` and `(layout)` / `(layout: full)` directives are intentionally **not** stripped, as the LLM uses their presence and context to verify structural composition and avoid DOM micro-assertions.)*
 
@@ -1536,7 +1558,7 @@ Neodymium AI uses hierarchical property loading (`AiConfiguration`):
 6. `config/neodymium.properties`
 
 ### 8.1 Core Execution Settings
-* `neodymium.ai.executionMode` - Defines global fallback execution mode (`REPLAY_WITH_HEALING`, `LIVE`, `REPLAY_STRICT`, `LLM_ONLY`, `FORCE_RECORDING`, `LINTER_ONLY`). (Default: `REPLAY_WITH_HEALING`)
+* `neodymium.ai.executionMode` - Defines global fallback execution mode (`AUTO`, `REPLAY_WITH_HEALING`, `LIVE`, `REPLAY_STRICT`, `LLM_ONLY`, `FORCE_RECORDING`, `LINTER_ONLY`). (Default: `REPLAY_WITH_HEALING`)
 * `neodymium.ai.playbook.recordingDirectory` - Primary directory for saving and loading Playbook JSON execution recordings.
 * `neodymium.ai.replay.delayScale` - (Double) Scale multiplier applied to recorded delays. When `0.0`, pacing is disabled for maximum CI/CD speed. (Default: `0.0`)
 * `neodymium.ai.replay.useRecordedDelays` - (Boolean, Legacy) Replay actions at human speed utilizing recorded sleep intervals. (Default: `false`)
@@ -1569,6 +1591,7 @@ mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-g
 * `neodymium.ai.locatorImprover.enabled` - (Boolean) Automatic locator upgrading for recorded playbooks. (Default: `true`)
 * `neodymium.ai.judge.enabled` - (Boolean) LLM Quality Judge second-opinion evaluation. (Default: `false`)
 * `neodymium.ai.judge.mode` - Mode of Quality Judge (`ON_AMBIGUITY`, `ALWAYS`, `ON_FAIL`). (Default: `ON_AMBIGUITY`)
+* `neodymium.ai.judge.recommendMarker` - (Boolean) Whether Quality Judge and selector evaluation recommend invoking visual element markers (`mark_elements`) when proposed locators are fragile with no resilient DOM alternatives. (Default: `true`)
 
 ### 8.4 Network and Budget Limits
 * `neodymium.ai.step.maxTokens` - Maximum cumulative token budget per individual step loop. Throws `TokenBudgetExceededException` if exceeded. Aliases: `neodymium.ai.tokenBudget.step`, `neodymium.ai.step.tokenBudget`, `tokenBudget.step`. (Default: `100000`, recommended `250000` when `contextLevel = STANDARD`)
