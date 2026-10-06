@@ -160,6 +160,7 @@ public final class YamlPlaybookParser implements PlaybookParser
         }
 
         setParentReferences(steps, null);
+        validateNoUnresolvedIncludeDirectives(steps, "inline string");
         return new Playbook(steps, Collections.emptyList());
     }
 
@@ -398,6 +399,8 @@ public final class YamlPlaybookParser implements PlaybookParser
             throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
         }
 
+        validateNoUnresolvedIncludeDirectives(steps, identifier);
+
         return new Playbook(steps, dataSets, promptAddons, description);
     }
 
@@ -589,10 +592,18 @@ public final class YamlPlaybookParser implements PlaybookParser
             {
                 if (stepItem instanceof String)
                 {
-                    final String str = (String) stepItem;
+                    final String str = ((String) stepItem).trim();
                     if (str.contains("\n"))
                     {
                         parseStepBlock(str, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+                    }
+                    else if (str.startsWith("_include:") || str.startsWith("include:"))
+                    {
+                        final int colonIdx = str.indexOf(':');
+                        final String includeRelativePath = str.substring(colonIdx + 1).trim();
+                        final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
+
+                        parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
                     }
                     else
                     {
@@ -727,10 +738,19 @@ public final class YamlPlaybookParser implements PlaybookParser
                     indent++;
                 }
 
-                if (trimmed.startsWith("_include:") || trimmed.startsWith("include:"))
+                final String unbulleted = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                    ? trimmed.substring(2).trim()
+                    : trimmed;
+
+                if (unbulleted.isEmpty() || unbulleted.startsWith("#"))
                 {
-                    final int colonIdx = trimmed.indexOf(':');
-                    final String includeRelativePath = trimmed.substring(colonIdx + 1).trim();
+                    continue;
+                }
+
+                if (unbulleted.startsWith("_include:") || unbulleted.startsWith("include:"))
+                {
+                    final int colonIdx = unbulleted.indexOf(':');
+                    final String includeRelativePath = unbulleted.substring(colonIdx + 1).trim();
                     final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
 
                     parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
@@ -741,18 +761,13 @@ public final class YamlPlaybookParser implements PlaybookParser
                 {
                     if (currentParentStep != null && indent > parentIndent)
                     {
-                        String childInstruction = trimmed;
-                        if (childInstruction.startsWith("- ") || childInstruction.startsWith("* "))
-                        {
-                            childInstruction = childInstruction.substring(2).trim();
-                        }
-                        final PlaybookStep childStep = new PlaybookStep(childInstruction);
+                        final PlaybookStep childStep = new PlaybookStep(unbulleted);
                         initStepLocation(childStep, fileName, fileContent, line, searchOffset);
                         currentParentStep.getSubSteps().add(childStep);
                     }
                     else
                     {
-                        String parentInstruction = trimmed;
+                        String parentInstruction = unbulleted;
                         if (parentInstruction.endsWith(":") && !parentInstruction.startsWith("http:") && !parentInstruction.startsWith("https:"))
                         {
                             parentInstruction = parentInstruction.substring(0, parentInstruction.length() - 1).trim();
@@ -764,6 +779,36 @@ public final class YamlPlaybookParser implements PlaybookParser
                         parentIndent = indent;
                     }
                 }
+            }
+        }
+    }
+
+    private void validateNoUnresolvedIncludeDirectives(final List<PlaybookStep> stepList, final String identifier)
+    {
+        if (stepList == null)
+        {
+            return;
+        }
+
+        for (final PlaybookStep step : stepList)
+        {
+            final String instruction = step.getInstruction();
+            if (instruction != null)
+            {
+                final String trimmed = instruction.trim();
+                final String unbulleted = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                    ? trimmed.substring(2).trim()
+                    : trimmed;
+                if (unbulleted.startsWith("_include:") || unbulleted.startsWith("include:"))
+                {
+                    throw new IllegalArgumentException("Unresolved include directive in playbook '" + identifier
+                        + "' at line " + step.getLineNumber() + ": " + instruction
+                        + ". Check file path, file extension (.yaml), and YAML syntax.");
+                }
+            }
+            if (step.hasSubSteps())
+            {
+                validateNoUnresolvedIncludeDirectives(step.getSubSteps(), identifier);
             }
         }
     }
