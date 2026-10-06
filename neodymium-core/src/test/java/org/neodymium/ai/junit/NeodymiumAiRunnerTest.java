@@ -32,6 +32,8 @@ import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.io.TempDir;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.session.AiSession;
 import org.neodymium.util.Neodymium;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -484,6 +486,125 @@ public class NeodymiumAiRunnerTest
 
             llmBeforeEach.beforeEach(llmContext);
             Assertions.assertTrue(Files.exists(llmFile), "LLM_RECORDING must NOT delete pre-existing recording upfront");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.playbook.recordingDirectory");
+            AiConfiguration.resetInstance();
+        }
+    }
+
+    /**
+     * Sample test class decorated with AUTO mode without existing recording file.
+     */
+    public static class AutoModeNoRecordingTestClass
+    {
+        @Test
+        @AiMode(ExecutionMode.AUTO)
+        @AiInlinePlaybook("name: auto_mode_sample\nsteps:\n  - step: Click search button\n")
+        @AiPlaybook(recordingFileName = "nonexistent_auto_recording")
+        public void testAutoWithoutRecording()
+        {
+        }
+    }
+
+    /**
+     * Sample test class decorated with AUTO mode with pre-existing recording file.
+     */
+    public static class AutoModeWithExistingRecordingTestClass
+    {
+        @Test
+        @AiMode(ExecutionMode.AUTO)
+        @AiInlinePlaybook("name: auto_mode_sample\nsteps:\n  - step: Click search button\n")
+        @AiPlaybook(recordingFileName = "existing_auto_recording")
+        public void testAutoWithRecording()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that AUTO mode dynamically resolves to LLM_RECORDING when no companion
+     * JSON recording exists on disk, without throwing FileNotFoundException.
+     */
+    @Test
+    public void testAutoModeResolvesToLlmRecordingWhenRecordingMissing(@TempDir final Path tempDir) throws Exception
+    {
+        System.setProperty("neodymium.ai.playbook.recordingDirectory", tempDir.toString());
+        AiConfiguration.resetInstance();
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = AutoModeNoRecordingTestClass.class.getMethod("testAutoWithoutRecording");
+            final ExtensionContext extensionContext = createMockExtensionContext(AutoModeNoRecordingTestClass.class, method);
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final BeforeEachCallback beforeEach = (BeforeEachCallback) invocations.get(0).getAdditionalExtensions().stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            // Must NOT throw FileNotFoundException
+            beforeEach.beforeEach(extensionContext);
+
+            final ExecutionContext execCtx = (ExecutionContext) extensionContext.getStore(null).get(ExecutionContext.class);
+            Assertions.assertNotNull(execCtx);
+            Assertions.assertEquals(ExecutionMode.LLM_RECORDING, execCtx.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE));
+            Assertions.assertEquals(ExecutionMode.AUTO, execCtx.getTransientData().get(ExecutionContext.KEY_CONFIGURED_EXECUTION_MODE));
+
+            final AiSession session = (AiSession) extensionContext.getStore(null).get(AiSession.class);
+            Assertions.assertNotNull(session);
+            Assertions.assertEquals(ExecutionMode.LLM_RECORDING, session.getExecutionMode());
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.playbook.recordingDirectory");
+            AiConfiguration.resetInstance();
+        }
+    }
+
+    /**
+     * Goal: Verifies that AUTO mode dynamically resolves to REPLAY_WITH_HEALING when a companion
+     * JSON recording exists on disk, setting playbookRecordingFile accordingly.
+     */
+    @Test
+    public void testAutoModeResolvesToReplayWithHealingWhenRecordingExists(@TempDir final Path tempDir) throws Exception
+    {
+        final Path recordingFile = tempDir.resolve("existing_auto_recording.json");
+        Files.writeString(recordingFile, "[{\"step\":\"Click search button\",\"actions\":[]}]");
+
+        System.setProperty("neodymium.ai.playbook.recordingDirectory", tempDir.toString());
+        AiConfiguration.resetInstance();
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = AutoModeWithExistingRecordingTestClass.class.getMethod("testAutoWithRecording");
+            final ExtensionContext extensionContext = createMockExtensionContext(AutoModeWithExistingRecordingTestClass.class, method);
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final BeforeEachCallback beforeEach = (BeforeEachCallback) invocations.get(0).getAdditionalExtensions().stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            beforeEach.beforeEach(extensionContext);
+
+            final ExecutionContext execCtx = (ExecutionContext) extensionContext.getStore(null).get(ExecutionContext.class);
+            Assertions.assertNotNull(execCtx);
+            Assertions.assertEquals(ExecutionMode.REPLAY_WITH_HEALING, execCtx.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE));
+            Assertions.assertEquals(ExecutionMode.AUTO, execCtx.getTransientData().get(ExecutionContext.KEY_CONFIGURED_EXECUTION_MODE));
+            final Object recPath = execCtx.getTransientData().get("playbookRecordingFile");
+            Assertions.assertNotNull(recPath);
+            Assertions.assertTrue(recPath.toString().endsWith("existing_auto_recording.json"));
+
+            final AiSession session = (AiSession) extensionContext.getStore(null).get(AiSession.class);
+            Assertions.assertNotNull(session);
+            Assertions.assertEquals(ExecutionMode.REPLAY_WITH_HEALING, session.getExecutionMode());
         }
         finally
         {

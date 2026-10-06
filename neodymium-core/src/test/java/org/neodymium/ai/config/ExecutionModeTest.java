@@ -102,4 +102,17 @@ public final class ExecutionModeTest
         assertFalse(mode.supportsHealing(), "LINTER_ONLY does not support healing");
         assertFalse(mode.persistsRecording(), "LINTER_ONLY must never persist recordings");
     }
+
+    @Test
+    public final void testAutoFlags()
+    {
+        final ExecutionMode mode = ExecutionMode.AUTO;
+        assertFalse(mode.isLive(), "AUTO is unresolved before execution and not statically live");
+        assertFalse(mode.isRecording(), "AUTO is unresolved before execution and not statically recording");
+        assertFalse(mode.isReplay(), "AUTO is unresolved before execution and not statically replay");
+        assertFalse(mode.isLinterOnly(), "AUTO is not linter-only");
+        assertTrue(mode.isAuto(), "AUTO must return true for isAuto()");
+        assertTrue(mode.supportsHealing(), "AUTO supports healing if resolved to replay");
+        assertTrue(mode.persistsRecording(), "AUTO persists recordings upon successful completion");
+    }
 }

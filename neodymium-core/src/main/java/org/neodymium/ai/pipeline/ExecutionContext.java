@@ -97,6 +97,7 @@ public final class ExecutionContext
     public static final String KEY_VISUAL_RCA_SUMMARY = "visualRcaSummary";
     public static final String KEY_VISUAL_RCA_RESULT = "visualRcaResult";
     public static final String KEY_EXECUTION_MODE = "executionMode";
+    public static final String KEY_CONFIGURED_EXECUTION_MODE = "configuredExecutionMode";
     public static final String KEY_LAST_EXECUTION_ERROR = "lastExecutionError";
     public static final String KEY_ACTIVE_DATASET_LABEL = "activeDatasetLabel";
     public static final String KEY_PLAYBOOK = "playbook";

@@ -89,7 +89,7 @@ public abstract class AiSession implements AutoCloseable
     /**
      * The execution mode governing this session.
      */
-    private final ExecutionMode executionMode;
+    private ExecutionMode executionMode;
 
     /**
      * Sequential pre-execution boundary hooks.
@@ -156,6 +156,16 @@ public abstract class AiSession implements AutoCloseable
     public final ExecutionMode getExecutionMode()
     {
         return this.executionMode;
+    }
+
+    /**
+     * Updates the execution mode governing this session.
+     *
+     * @param executionMode the execution mode to set
+     */
+    public void setExecutionMode(final ExecutionMode executionMode)
+    {
+        this.executionMode = executionMode != null ? executionMode : ExecutionMode.LLM_ONLY;
     }
 
     /**

@@ -778,6 +778,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         private final String playbookPath;
         private final Map<String, SessionData.DataEntry> dataset;
         private final ExecutionMode mode;
+        private ExecutionMode effectiveMode;
         private final String datasetId;
         private final BrowserMethodData browser;
         private final Boolean judgeEnabled;
@@ -810,6 +811,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             this.playbookPath = playbookPath;
             this.dataset = dataset;
             this.mode = mode;
+            this.effectiveMode = mode;
             this.datasetId = datasetId;
             this.browser = browser;
             this.judgeEnabled = judgeEnabled;
@@ -1142,9 +1144,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
 
             String resolvedPlaybookPath = playbookPath;
-            if (this.mode.isReplay())
+            if (this.mode == ExecutionMode.AUTO || this.mode.isReplay())
             {
-                // Replay modes: try candidate paths using recordingMethod / recordingFileName, then method defaults
+                // Replay or AUTO modes: try candidate paths using recordingMethod / recordingFileName, then method defaults
                 final List<String> candidatePaths = new ArrayList<>();
                 candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, browserProfile, recMethod, recFileName, recDir));
                 candidatePaths.add(computeRecordingPath(playbookPath, testClass, method, this.datasetId, null, recMethod, recFileName, recDir));
@@ -1172,26 +1174,50 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     }
                 }
 
-                if (companionJsonPath != null)
+                if (this.mode == ExecutionMode.AUTO)
                 {
-                    executionContext.getTransientData().put("playbookRecordingFile", companionJsonPath);
-                    resolvedPlaybookPath = companionJsonPath;
+                    if (companionJsonPath != null)
+                    {
+                        this.effectiveMode = ExecutionMode.REPLAY_WITH_HEALING;
+                        resolvedPlaybookPath = companionJsonPath;
+                        executionContext.getTransientData().put("playbookRecordingFile", companionJsonPath);
+                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).info(
+                            "AUTO mode: Found recorded companion JSON at '{}'. Executing in REPLAY_WITH_HEALING mode.", companionJsonPath);
+                    }
+                    else
+                    {
+                        this.effectiveMode = ExecutionMode.LLM_RECORDING;
+                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).info(
+                            "AUTO mode: No recorded companion JSON found for '{}.{}'. Falling back to live LLM_RECORDING mode.",
+                            testClass != null ? testClass.getSimpleName() : "UnknownClass",
+                            method != null ? method.getName() : "unknownMethod"
+                        );
+                    }
+                    this.session.setExecutionMode(this.effectiveMode);
                 }
                 else
                 {
-                    final String msg = String.format(
-                        "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s\n"
-                        + "Please run the live recording test first to generate the recording.",
-                        this.mode,
-                        testClass != null ? testClass.getSimpleName() : "UnknownClass",
-                        method != null ? method.getName() : "unknownMethod",
-                        String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
-                    );
-                    org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
-                    throw new java.io.FileNotFoundException(msg);
+                    if (companionJsonPath != null)
+                    {
+                        executionContext.getTransientData().put("playbookRecordingFile", companionJsonPath);
+                        resolvedPlaybookPath = companionJsonPath;
+                    }
+                    else
+                    {
+                        final String msg = String.format(
+                            "Replay mode '%s' failed for test '%s.%s': No recorded companion JSON file found. Candidate paths searched:\n  - %s\n"
+                            + "Please run the live recording test first to generate the recording.",
+                            this.mode,
+                            testClass != null ? testClass.getSimpleName() : "UnknownClass",
+                            method != null ? method.getName() : "unknownMethod",
+                            String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
+                        );
+                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
+                        throw new java.io.FileNotFoundException(msg);
+                    }
                 }
             }
-            else if (this.mode.isLive())
+            if (this.effectiveMode.isLive())
             {
                 // Live/recording modes: automatically prefer companion YAML file if present (so we start from original instructions)
                 String companionYamlPath = playbookPath;
@@ -1230,7 +1256,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
 
             Playbook playbook;
-            if (isProgrammatic && !this.mode.isReplay())
+            if (isProgrammatic && !this.effectiveMode.isReplay())
             {
                 final String dataFilePath = resolveDataFilePath(testClass, method, manager);
                 if (dataFilePath != null)
@@ -1250,7 +1276,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             final String companionYamlPath = (playbookPath != null && !playbookPath.isEmpty()) ? playbookPath : resolvedPlaybookPath;
             String yamlHash = null;
-            if (this.mode.isReplay() && !isProgrammatic)
+            if (this.effectiveMode.isReplay() && !isProgrammatic)
             {
                 yamlHash = computeResourceSha256(manager, companionYamlPath);
                 if (yamlHash == null && companionYamlPath.endsWith(".json"))
@@ -1266,7 +1292,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 executionContext.getTransientData().put("playbookFile", resolvedPlaybookPath);
             }
 
-            if (this.mode.isRecording() && !playbookSteps.isEmpty())
+            if (this.effectiveMode.isRecording() && !playbookSteps.isEmpty())
             {
                 final String freshYamlHash = computeResourceSha256(manager, companionYamlPath);
                 if (freshYamlHash != null)
@@ -1367,7 +1393,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_MODEL, Neodymium.aiConfiguration().aiModel());
             executionContext.getTransientData().put(ExecutionContext.KEY_RESOURCE_MANAGER, manager);
             executionContext.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_PARSER, parser);
-            executionContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, mode);
+            executionContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, this.effectiveMode);
+            executionContext.getTransientData().put(ExecutionContext.KEY_CONFIGURED_EXECUTION_MODE, this.mode);
             executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId != null ? this.datasetId : "default");
             executionContext.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.model.ContextLevel.MINIMAL);
             executionContext.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
@@ -1384,7 +1411,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (this.recordingPath != null)
             {
                 // FORCE_RECORDING wipes out any pre-existing recording upfront so failure never leaves stale traces
-                if (this.mode == ExecutionMode.FORCE_RECORDING)
+                if (this.effectiveMode == ExecutionMode.FORCE_RECORDING)
                 {
                     try
                     {
@@ -1395,9 +1422,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     }
                 }
                 // LLM_ONLY and LINTER_ONLY must never write a recording (see ExecutionMode#persistsRecording)
-                if (this.mode.persistsRecording())
+                if (this.effectiveMode.persistsRecording())
                 {
-                    final PlaybookRecorder recorder = new PlaybookRecorder(manager, this.recordingPath, playbookSteps, this.mode);
+                    final PlaybookRecorder recorder = new PlaybookRecorder(manager, this.recordingPath, playbookSteps, this.effectiveMode);
                     eventBus.registerListener(recorder);
                 }
             }
@@ -1622,7 +1649,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
                 final boolean hasFailed = context.getExecutionException().isPresent()
                     || (this.session != null && this.session.getExecutionContext() != null && this.session.getExecutionContext().getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR));
-                if (hasFailed && this.mode == ExecutionMode.FORCE_RECORDING && this.recordingPath != null && this.resourceManager != null)
+                if (hasFailed && this.effectiveMode == ExecutionMode.FORCE_RECORDING && this.recordingPath != null && this.resourceManager != null)
                 {
                     try
                     {
@@ -1666,13 +1693,14 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
             try
             {
+                final ExecutionMode activeMode = this.effectiveMode != null ? this.effectiveMode : this.mode;
                 if (this.session == null)
                 {
                     final SessionData sessionData = new SessionData(this.dataset != null ? new HashMap<>(this.dataset) : new HashMap<>());
                     final LlmRegistry registry = new LlmRegistry();
                     final ExecutionEventBus eventBus = new ExecutionEventBus();
                     final SelenideTargetExecutor executor = new SelenideTargetExecutor();
-                    this.session = AiSession.mock(this.mode, sessionData, registry, eventBus, executor);
+                    this.session = AiSession.mock(activeMode, sessionData, registry, eventBus, executor);
                 }
 
                 final ExecutionContext execCtx = this.session.getExecutionContext();
@@ -1704,7 +1732,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     execCtx.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId);
                 }
-                execCtx.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, this.mode);
+                execCtx.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, activeMode);
+                execCtx.getTransientData().put(ExecutionContext.KEY_CONFIGURED_EXECUTION_MODE, this.mode);
                 execCtx.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, t);
 
                 final ExecutionContext prev = ExecutionContext.getActiveContext();
