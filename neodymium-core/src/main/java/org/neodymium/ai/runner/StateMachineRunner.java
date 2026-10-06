@@ -404,13 +404,6 @@ public final class StateMachineRunner
                             }
                         }
 
-                        if (playbookStep.getParent() != null)
-                        {
-                            playbookStep.getParent().setStatus(PlaybookStepStatus.FAILED);
-                            playbookStep.getParent().setFailed(true);
-                            playbookStep.getParent().setFailureReason(playbookStep.getFailureReason());
-                        }
-
                         context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
 
                         // Add failure to warnings/reporting list

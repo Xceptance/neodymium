@@ -310,7 +310,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                 TestExecutionReport.ReportStepEntry existingSub = null;
                 for (final TestExecutionReport.ReportStepEntry sub : parentEntry.getSubSteps())
                 {
-                    if (rawInstruction != null && (rawInstruction.equals(sub.getRawInstruction()) || rawInstruction.equals(sub.getInstruction())))
+                    if ((rawInstruction != null && (rawInstruction.equals(sub.getRawInstruction()) || rawInstruction.equals(sub.getInstruction())))
+                        || (pbStep.getInstruction() != null && (pbStep.getInstruction().equals(sub.getRawInstruction()) || pbStep.getInstruction().equals(sub.getInstruction()))))
                     {
                         existingSub = sub;
                         break;
@@ -337,17 +338,17 @@ public final class PreliminaryReportListener implements ExecutionListener
                 for (int s = 0; s < pbStep.getSubSteps().size(); s++)
                 {
                     final PlaybookStep childStep = pbStep.getSubSteps().get(s);
-                    final String cRaw = childStep.getInstruction();
+                    final String cRaw = childStep.getRawInstruction() != null ? childStep.getRawInstruction() : childStep.getInstruction();
                     if (cRaw != null && cRaw.contains("_include:"))
                     {
                         continue;
                     }
-                    String cResolved = cRaw;
-                    if (activeCtx != null && activeCtx.getSessionData() != null && cRaw != null)
+                    String cResolved = childStep.getInstruction() != null ? childStep.getInstruction() : cRaw;
+                    if (activeCtx != null && activeCtx.getSessionData() != null && cResolved != null)
                     {
                         try
                         {
-                            cResolved = activeCtx.getSessionData().resolveAvailableVariables(cRaw);
+                            cResolved = activeCtx.getSessionData().resolveAvailableVariables(cResolved);
                         }
                         catch (final Exception ignored)
                         {
@@ -513,13 +514,13 @@ public final class PreliminaryReportListener implements ExecutionListener
                         for (int s = 0; s < pbStep.getSubSteps().size(); s++)
                         {
                             final PlaybookStep childStep = pbStep.getSubSteps().get(s);
-                            final String cRaw = childStep.getInstruction();
-                            String cResolved = cRaw;
-                            if (activeCtx != null && activeCtx.getSessionData() != null && cRaw != null)
+                            final String cRaw = childStep.getRawInstruction() != null ? childStep.getRawInstruction() : childStep.getInstruction();
+                            String cResolved = childStep.getInstruction() != null ? childStep.getInstruction() : cRaw;
+                            if (activeCtx != null && activeCtx.getSessionData() != null && cResolved != null)
                             {
                                 try
                                 {
-                                    cResolved = activeCtx.getSessionData().resolveAvailableVariables(cRaw);
+                                    cResolved = activeCtx.getSessionData().resolveAvailableVariables(cResolved);
                                 }
                                 catch (final Exception ignored)
                                 {
@@ -696,8 +697,13 @@ public final class PreliminaryReportListener implements ExecutionListener
                     if (!isStepSuccess && targetStep.getSubSteps().stream().noneMatch(sub -> "FAILED".equalsIgnoreCase(sub.getStatus())))
                     {
                         final TestExecutionReport.ReportStepEntry lastSub = targetStep.getSubSteps().get(targetStep.getSubSteps().size() - 1);
-                        lastSub.setStatus("FAILED");
-                        lastSub.setFailureReason(targetStep.getFailureReason());
+                        final boolean lastSubSucceeded = "SUCCESS".equalsIgnoreCase(lastSub.getStatus())
+                            && (!lastSub.getActions().isEmpty() && lastSub.getActions().stream().allMatch(TestExecutionReport.ReportActionEntry::isSuccess));
+                        if (!lastSubSucceeded)
+                        {
+                            lastSub.setStatus("FAILED");
+                            lastSub.setFailureReason(targetStep.getFailureReason());
+                        }
                     }
                 }
                 this.currentStep = targetStep;
@@ -994,11 +1000,12 @@ public final class PreliminaryReportListener implements ExecutionListener
         }
         else
         {
-            // The session failed. Find the failing leaf step.
+            // The session failed. Find the failing leaf step that caused the session failure.
             int failedIndex = -1;
             for (int i = 0; i < leafSteps.size(); i++)
             {
-                if ("FAILED".equalsIgnoreCase(leafSteps.get(i).getStatus()))
+                final TestExecutionReport.ReportStepEntry leaf = leafSteps.get(i);
+                if ("FAILED".equalsIgnoreCase(leaf.getStatus()) && !leaf.isOptional())
                 {
                     failedIndex = i;
                     break;
@@ -1110,12 +1117,19 @@ public final class PreliminaryReportListener implements ExecutionListener
             final String subStatus = sub.getStatus();
             if ("FAILED".equalsIgnoreCase(subStatus))
             {
-                anyFailed = true;
-                allSuccess = false;
-                allSkipped = false;
-                if (firstFailedReason == null && sub.getFailureReason() != null)
+                if (!sub.isOptional())
                 {
-                    firstFailedReason = sub.getFailureReason();
+                    anyFailed = true;
+                    allSuccess = false;
+                    allSkipped = false;
+                    if (firstFailedReason == null && sub.getFailureReason() != null)
+                    {
+                        firstFailedReason = sub.getFailureReason();
+                    }
+                }
+                else
+                {
+                    allSkipped = false;
                 }
             }
             else if ("SUCCESS".equalsIgnoreCase(subStatus) || "PASSED".equalsIgnoreCase(subStatus) || "HEALED".equalsIgnoreCase(subStatus))

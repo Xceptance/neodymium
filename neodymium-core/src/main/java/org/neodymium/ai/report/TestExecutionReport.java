@@ -770,15 +770,9 @@ public final class TestExecutionReport
             {
                 return true;
             }
-            if (this.subSteps != null)
+            if (this.parent != null && this.parent.isOptional())
             {
-                for (final ReportStepEntry sub : this.subSteps)
-                {
-                    if (sub.isOptional())
-                    {
-                        return true;
-                    }
-                }
+                return true;
             }
             return false;
         }
@@ -824,15 +818,9 @@ public final class TestExecutionReport
             {
                 return true;
             }
-            if (this.subSteps != null)
+            if (this.parent != null && this.parent.isMarker())
             {
-                for (final ReportStepEntry sub : this.subSteps)
-                {
-                    if (sub.isMarker())
-                    {
-                        return true;
-                    }
-                }
+                return true;
             }
             return false;
         }

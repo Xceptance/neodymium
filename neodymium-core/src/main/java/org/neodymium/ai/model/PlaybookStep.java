@@ -580,14 +580,14 @@ public final class PlaybookStep
 
     /**
      * Checks if this step is marked as optional.
-     * If this step, any of its parent steps, or any child sub-step is optional, returns true.
+     * If this step or any of its parent steps is optional, returns true.
      *
      * @return true if optional, false otherwise
      */
     @JsonIgnore
     public boolean isOptional()
     {
-        return hasOptionalRecursive(true, true);
+        return hasOptionalRecursive(true, false);
     }
 
     private boolean hasOptionalRecursive(final boolean checkAncestors, final boolean checkDescendants)

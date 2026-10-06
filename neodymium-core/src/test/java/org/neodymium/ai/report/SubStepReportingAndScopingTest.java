@@ -21,6 +21,7 @@ package org.neodymium.ai.report;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -382,5 +383,198 @@ public final class SubStepReportingAndScopingTest
             assertTrue(child.getActions().isEmpty(), "Child sub-steps should not have sliced actions");
             assertNotNull(child.getParent(), "Parent linkage must be established");
         }
+    }
+
+    @Test
+    @DisplayName("Verify that optional flag in child sub-step is not promoted to parent include or composite step")
+    public void testOptionalChildStepNotPromotedToParent() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-opt-not-promoted");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep parentStep = new PlaybookStep("Open product detail page");
+        final PlaybookStep subStep1 = new PlaybookStep("Navigate to URL");
+        final PlaybookStep subStep2 = new PlaybookStep("Close cookie consent banner if present (optional)");
+        subStep2.setOptional(true);
+        final PlaybookStep subStep3 = new PlaybookStep("Wait until product details loaded");
+
+        subStep1.setParent(parentStep);
+        subStep2.setParent(parentStep);
+        subStep3.setParent(parentStep);
+        parentStep.setSubSteps(List.of(subStep1, subStep2, subStep3));
+
+        assertFalse(parentStep.isOptional(), "Parent playbook step must not be optional just because a child is optional");
+        assertTrue(subStep2.isOptional(), "Sub-step 2 must retain its optional flag");
+        assertFalse(subStep3.isOptional(), "Sub-step 3 must not inherit optional from sibling");
+
+        bus.dispatch(new StepStartedEvent(parentStep, 0));
+        bus.dispatch(new StepStartedEvent(subStep1, 0));
+        bus.dispatch(new StepFinishedEvent(subStep1, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new StepStartedEvent(subStep2, 1));
+        bus.dispatch(new StepFinishedEvent(subStep2, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new StepStartedEvent(subStep3, 2));
+        bus.dispatch(new StepFinishedEvent(subStep3, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new StepFinishedEvent(parentStep, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(1000, true));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getSteps().size());
+
+        final TestExecutionReport.ReportStepEntry parentEntry = report.getSteps().get(0);
+        assertFalse(parentEntry.isOptional(), "Parent report entry must not evaluate to optional");
+        assertEquals(3, parentEntry.getSubSteps().size());
+        assertFalse(parentEntry.getSubSteps().get(0).isOptional());
+        assertTrue(parentEntry.getSubSteps().get(1).isOptional());
+        assertFalse(parentEntry.getSubSteps().get(2).isOptional());
+    }
+
+    @Test
+    @DisplayName("Verify tolerated optional sub-step failure does not mark parent or subsequent sub-steps as failed")
+    public void testToleratedOptionalSubStepFailureDoesNotMarkParentOrSubsequentSubStepsAsFailed() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-opt-failure-isolation");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep parentStep = new PlaybookStep("Execute include fragment");
+        final PlaybookStep subStep1 = new PlaybookStep("Navigate to page");
+        final PlaybookStep subStep2 = new PlaybookStep("Close cookie consent banner (optional)");
+        subStep2.setOptional(true);
+        final PlaybookStep subStep3 = new PlaybookStep("Wait for product details");
+
+        subStep1.setParent(parentStep);
+        subStep2.setParent(parentStep);
+        subStep3.setParent(parentStep);
+        parentStep.setSubSteps(List.of(subStep1, subStep2, subStep3));
+
+        bus.dispatch(new StepStartedEvent(parentStep, 0));
+
+        bus.dispatch(new StepStartedEvent(subStep1, 0));
+        bus.dispatch(new ActionExecutedEvent(new Action("NAVIGATE", "https://example.org", List.of(), "Open URL", "Open URL"), true));
+        bus.dispatch(new StepFinishedEvent(subStep1, PlaybookStepStatus.SUCCESS));
+
+        // Sub-step 2 fails, but is optional
+        bus.dispatch(new StepStartedEvent(subStep2, 1));
+        subStep2.setStatus(PlaybookStepStatus.FAILED);
+        subStep2.setFailed(true);
+        subStep2.setFailureReason("Element not found: #cookie-banner");
+        bus.dispatch(new StepFinishedEvent(subStep2, PlaybookStepStatus.FAILED));
+
+        // Sub-step 3 succeeds
+        bus.dispatch(new StepStartedEvent(subStep3, 2));
+        bus.dispatch(new ActionExecutedEvent(new Action("ASSERT_VISIBLE", ".product-detail", List.of(), "Wait visible", "Wait visible"), true));
+        subStep3.setStatus(PlaybookStepStatus.SUCCESS);
+        bus.dispatch(new StepFinishedEvent(subStep3, PlaybookStepStatus.SUCCESS));
+
+        // Parent step finishes with SUCCESS because optional child failure was tolerated
+        bus.dispatch(new StepFinishedEvent(parentStep, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(1000, true));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getSteps().size());
+
+        final TestExecutionReport.ReportStepEntry parentEntry = report.getSteps().get(0);
+        assertEquals("SUCCESS", parentEntry.getStatus(), "Parent step status must be SUCCESS");
+        assertFalse(parentEntry.isOptional(), "Parent step must not be optional");
+
+        final List<TestExecutionReport.ReportStepEntry> subs = parentEntry.getSubSteps();
+        assertEquals(3, subs.size());
+        assertEquals("SUCCESS", subs.get(0).getStatus());
+        assertEquals("FAILED", subs.get(1).getStatus(), "Optional sub-step should preserve its soft failure");
+        assertTrue(subs.get(1).isOptional());
+        assertEquals("SUCCESS", subs.get(2).getStatus(), "Sub-step 3 must remain SUCCESS and not be falsely blamed for sub-step 2 failure");
+        assertNull(subs.get(2).getFailureReason());
+    }
+
+    @Test
+    @DisplayName("Verify subsequent step failure does not overwrite earlier composite step or its sub-steps")
+    public void testSubsequentStepFailureDoesNotLeakOntoPrecedingCompositeStepOrItsSubSteps() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-opt-leak-prevention");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        // Step 1: Composite include step
+        final PlaybookStep step1 = new PlaybookStep("Include open-pdp.yaml");
+        final PlaybookStep sub11 = new PlaybookStep("Open PDP");
+        final PlaybookStep sub12 = new PlaybookStep("Close cookie consent (optional)");
+        sub12.setOptional(true);
+        final PlaybookStep sub19 = new PlaybookStep("Wait until product details loaded");
+
+        sub11.setParent(step1);
+        sub12.setParent(step1);
+        sub19.setParent(step1);
+        step1.setSubSteps(List.of(sub11, sub12, sub19));
+
+        // Step 2: Regular step
+        final PlaybookStep step2 = new PlaybookStep("Select product size");
+
+        // Step 3: Failing step
+        final PlaybookStep step3 = new PlaybookStep("Validate visual checkout baseline (visual)");
+
+        // Execution of Step 1
+        bus.dispatch(new StepStartedEvent(step1, 0));
+        bus.dispatch(new StepStartedEvent(sub11, 0));
+        bus.dispatch(new ActionExecutedEvent(new Action("NAVIGATE", "https://example.org", List.of(), "Open URL", "Open URL"), true));
+        bus.dispatch(new StepFinishedEvent(sub11, PlaybookStepStatus.SUCCESS));
+
+        bus.dispatch(new StepStartedEvent(sub12, 1));
+        sub12.setStatus(PlaybookStepStatus.FAILED);
+        sub12.setFailed(true);
+        sub12.setFailureReason("Banner not present");
+        bus.dispatch(new StepFinishedEvent(sub12, PlaybookStepStatus.FAILED));
+
+        bus.dispatch(new StepStartedEvent(sub19, 2));
+        bus.dispatch(new ActionExecutedEvent(new Action("ASSERT_VISIBLE", ".product-detail", List.of(), "Wait visible", "Wait visible"), true));
+        sub19.setStatus(PlaybookStepStatus.SUCCESS);
+        bus.dispatch(new StepFinishedEvent(sub19, PlaybookStepStatus.SUCCESS));
+
+        bus.dispatch(new StepFinishedEvent(step1, PlaybookStepStatus.SUCCESS));
+
+        // Execution of Step 2
+        bus.dispatch(new StepStartedEvent(step2, 1));
+        bus.dispatch(new ActionExecutedEvent(new Action("CLICK", "#size-M", List.of(), "Select size M", "Select size M"), true));
+        bus.dispatch(new StepFinishedEvent(step2, PlaybookStepStatus.SUCCESS));
+
+        // Execution of Step 3 - fails visual comparison
+        bus.dispatch(new StepStartedEvent(step3, 2));
+        step3.setStatus(PlaybookStepStatus.FAILED);
+        step3.setFailed(true);
+        final String visualErrorMessage = "Visual SSIM score below threshold (score: 0.9870 < 0.99)";
+        step3.setFailureReason(visualErrorMessage);
+        bus.dispatch(new StepFinishedEvent(step3, PlaybookStepStatus.FAILED));
+
+        listener.getReport().setFailureReason(visualErrorMessage);
+        bus.dispatch(new SessionFinishedEvent(3000, false));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertFalse(report.isSuccess());
+        assertEquals(3, report.getSteps().size());
+
+        final TestExecutionReport.ReportStepEntry step1Entry = report.getSteps().get(0);
+        assertEquals("SUCCESS", step1Entry.getStatus(), "Step 1 must remain SUCCESS");
+        assertFalse(step1Entry.isOptional(), "Step 1 must not be marked optional");
+        assertNull(step1Entry.getFailureReason(), "Step 1 must not receive Step 3's failure reason");
+
+        final TestExecutionReport.ReportStepEntry sub19Entry = step1Entry.getSubSteps().get(2);
+        assertEquals("SUCCESS", sub19Entry.getStatus(), "Step 1.9 must remain SUCCESS");
+        assertNull(sub19Entry.getFailureReason(), "Step 1.9 must not receive Step 3's visual error message");
+
+        final TestExecutionReport.ReportStepEntry step2Entry = report.getSteps().get(1);
+        assertEquals("SUCCESS", step2Entry.getStatus(), "Step 2 must remain SUCCESS");
+
+        final TestExecutionReport.ReportStepEntry step3Entry = report.getSteps().get(2);
+        assertEquals("FAILED", step3Entry.getStatus(), "Step 3 must be FAILED");
+        assertEquals(visualErrorMessage, step3Entry.getFailureReason(), "Step 3 must contain the visual error");
     }
 }

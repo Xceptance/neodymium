@@ -312,10 +312,17 @@ public class PlaybookStepTest
 
         Assertions.assertTrue(parent.isBug());
         Assertions.assertEquals("PROMO-101", parent.getBugDetails());
-        Assertions.assertTrue(parent.isOptional());
+        Assertions.assertFalse(parent.isOptional(), "Parent container must not inherit optional from child sub-step");
         Assertions.assertTrue(parent.isContinueOnError());
         Assertions.assertTrue(parent.isNoHealing());
         Assertions.assertTrue(parent.isNoReplay());
+
+        final PlaybookStep optParent = new PlaybookStep("Optional container (optional)");
+        final PlaybookStep optChild = new PlaybookStep("sub action");
+        optParent.getSubSteps().add(optChild);
+        optChild.setParent(optParent);
+        Assertions.assertTrue(optParent.isOptional());
+        Assertions.assertTrue(optChild.isOptional(), "Child step must inherit optional from parent container");
 
         final PlaybookStep cleanParent = new PlaybookStep("Standard step:");
         cleanParent.getSubSteps().add(new PlaybookStep("click search button"));
@@ -357,7 +364,7 @@ public class PlaybookStepTest
 
         Assertions.assertTrue(deserialized.isBug());
         Assertions.assertEquals("PROMO-101", deserialized.getBugDetails());
-        Assertions.assertTrue(deserialized.isOptional());
+        Assertions.assertFalse(deserialized.isOptional(), "Deserialized parent must not inherit optional from child sub-step");
         Assertions.assertTrue(deserialized.isNoReplay());
 
         final PlaybookStep deserializedSubAction = deserialized.getSubSteps().get(0);
