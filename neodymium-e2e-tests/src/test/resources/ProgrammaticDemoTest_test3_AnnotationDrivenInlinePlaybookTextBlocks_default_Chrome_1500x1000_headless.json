@@ -40,11 +40,11 @@
   "semanticContext" : null,
   "domFeatureVector" : null,
   "schemaVersion" : "4.0",
-  "contextLevel" : "LEAN",
+  "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 6754,
-  "startTimeMs" : 1791052542180,
+  "durationMs" : 2614,
+  "startTimeMs" : 1791244039263,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -57,7 +57,7 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_964620",
+    "callId" : "call_235145",
     "toolName" : "navigate",
     "arguments" : {
       "url" : "${verla.url}/verla-perfect/index.html"
@@ -155,11 +155,11 @@
     "tileSsim" : ""
   },
   "schemaVersion" : "4.0",
-  "contextLevel" : "LEAN",
+  "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 2802,
-  "startTimeMs" : 1791052549013,
+  "durationMs" : 2095,
+  "startTimeMs" : 1791244041963,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -172,11 +172,12 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_1095436",
+    "callId" : "call_280251",
     "toolName" : "fill",
     "arguments" : {
-      "text" : "${searchTerm}",
+      "pressEnter" : false,
       "selector" : "#search-input",
+      "text" : "${searchTerm}",
       "domFeatureVector" : {
         "tag" : "input",
         "text" : "Search products...",
@@ -247,11 +248,11 @@
   "semanticContext" : null,
   "domFeatureVector" : null,
   "schemaVersion" : "4.0",
-  "contextLevel" : "LEAN",
+  "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 4883,
-  "startTimeMs" : 1791052551881,
+  "durationMs" : 2529,
+  "startTimeMs" : 1791244044205,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -264,7 +265,7 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_299038",
+    "callId" : "call_288960",
     "toolName" : "press_key",
     "arguments" : {
       "key" : "Enter",
