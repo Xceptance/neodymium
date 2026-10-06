@@ -2270,15 +2270,15 @@ body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none 
    ═══════════════════════════════════════════════════════════════════════════ */
 .llm-call-card {
     border: 1px solid var(--border-color);
-    border-radius: 8px;
-    background: rgba(0, 0, 0, 0.15);
+    border-radius: 10px;
+    background: var(--bg-surface, rgba(0, 0, 0, 0.15));
     overflow: hidden;
     margin-top: 6px;
 }
 
 .llm-call-header {
     background: rgba(255, 255, 255, 0.04);
-    padding: 8px 12px;
+    padding: 10px 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -2286,7 +2286,11 @@ body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none 
     cursor: pointer;
     user-select: none;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 8px;
+}
+
+:root.force-light .llm-call-header {
+    background: #f8fafc;
 }
 
 .llm-call-card:not(.expanded) .llm-call-body {
@@ -2348,13 +2352,13 @@ body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none 
 
 .llm-subsection-card {
     border: 1px solid var(--border-color);
-    border-radius: 6px;
+    border-radius: 8px;
     overflow: hidden;
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--bg-surface, rgba(0, 0, 0, 0.2));
 }
 
 .llm-subsection-header {
-    padding: 6px 10px;
+    padding: 8px 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -2362,6 +2366,10 @@ body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none 
     cursor: pointer;
     user-select: none;
     font-size: 12px;
+}
+
+:root.force-light .llm-subsection-header {
+    background: #ffffff;
 }
 
 .llm-subsection-card:not(.expanded) .llm-subsection-body {
@@ -2375,13 +2383,13 @@ body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none 
 .llm-subsection-title {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
     font-weight: 600;
     color: var(--text-main);
 }
 
 .llm-subsection-tag {
-    font-size: 10px;
+    font-size: 11px;
     color: var(--text-secondary);
     font-weight: 500;
 }
@@ -2398,5 +2406,9 @@ body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none 
     max-height: 350px;
     overflow-y: auto;
     border-top: 1px solid var(--border-color);
+}
+
+:root.force-light .llm-subsection-body {
+    background: #f8fafc;
 }
 

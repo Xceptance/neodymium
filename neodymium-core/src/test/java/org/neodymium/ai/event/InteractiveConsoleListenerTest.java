@@ -21,6 +21,7 @@ package org.neodymium.ai.event;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -40,6 +41,7 @@ import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.session.AiSession;
@@ -66,6 +68,7 @@ public class InteractiveConsoleListenerTest
         consoleEngine = new InteractiveConsoleEngine("test-run-123");
         final SessionData sessionData = new SessionData(new HashMap<>());
         session = AiSession.mock(ExecutionMode.LLM_ONLY, sessionData, new LlmRegistry(), eventBus, (TargetExecutor) null);
+        org.neodymium.ai.pipeline.ExecutionContext.setActiveContext(session.getExecutionContext());
     }
 
     @Test
@@ -235,7 +238,46 @@ public class InteractiveConsoleListenerTest
         final String resultAction = listener.pauseOnStepFailure(session.getExecutionContext(), step, new RuntimeException("Element not found"));
         assertEquals("EDIT", resultAction);
         assertEquals("Updated instruction via edit", step.getInstruction());
+        assertEquals(PlaybookStepStatus.RUNNING, step.getStatus());
+        assertFalse(step.isFailed());
+        assertNull(step.getFailureReason());
         assertTrue(Boolean.TRUE.equals(session.getExecutionContext().getTransientData().get("KEY_STEP_EDITED")));
+    }
+
+    @Test
+    public void testMultiEditPreservesValidLlmConversationSchema()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Initial instruction");
+        step.setLineNumber(15);
+        step.setSourceFile("test.yaml");
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+
+        // First Edit
+        final JsonObject edit1 = new JsonObject();
+        edit1.addProperty("action", "EDIT");
+        edit1.addProperty("instruction", "First edit instruction");
+        submitActionAsynchronously(edit1);
+
+        final String res1 = listener.pauseOnStepFailure(session.getExecutionContext(), step, new RuntimeException("First fail"));
+        assertEquals("EDIT", res1);
+        assertEquals("First edit instruction", step.getInstruction());
+        assertEquals(PlaybookStepStatus.RUNNING, step.getStatus());
+        assertFalse(step.isFailed());
+
+        // Second Edit
+        final JsonObject edit2 = new JsonObject();
+        edit2.addProperty("action", "EDIT");
+        edit2.addProperty("instruction", "Second edit instruction");
+        submitActionAsynchronously(edit2);
+
+        final String res2 = listener.pauseBeforeActionExecution(session.getExecutionContext(), step);
+        assertEquals("EDIT", res2);
+        assertEquals("Second edit instruction", step.getInstruction());
+        assertEquals(PlaybookStepStatus.RUNNING, step.getStatus());
+        assertFalse(step.isFailed());
     }
 
     @Test
@@ -265,6 +307,36 @@ public class InteractiveConsoleListenerTest
         assertTrue(stateJson.contains("\"tokenUsageInput\":150"));
         assertTrue(stateJson.contains("\"tokenUsageOutput\":50"));
         assertTrue(stateJson.contains("\"gemini-2.5-flash\""));
+    }
+
+    @Test
+    public void testSubStepPauseAndSkipLogging()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep parent = new PlaybookStep("Include login flow");
+        parent.setLineNumber(10);
+        parent.setSourceFile("login.yaml");
+
+        final PlaybookStep subStep = new PlaybookStep("Enter username 'guest'");
+        subStep.setLineNumber(15);
+        subStep.setSourceFile("fragments/login.yaml");
+        subStep.setParent(parent);
+        parent.setSubSteps(List.of(subStep));
+
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(parent, subStep));
+
+        final JsonObject skipAction = new JsonObject();
+        skipAction.addProperty("action", "SKIP");
+        submitActionAsynchronously(skipAction);
+
+        final String actionResult = listener.pauseBeforeActionExecution(session.getExecutionContext(), subStep);
+
+        assertEquals("SKIP", actionResult);
+        assertEquals(PlaybookStepStatus.SKIPPED, subStep.getStatus());
+        assertNotNull(consoleEngine.getCurrentStateJson());
+        assertTrue(consoleEngine.getCurrentStateJson().contains("test-run-123"));
     }
 
     private void submitActionAsynchronously(final JsonObject actionObj)

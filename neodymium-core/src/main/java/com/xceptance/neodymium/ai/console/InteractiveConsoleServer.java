@@ -1387,6 +1387,10 @@ public final class InteractiveConsoleServer
                                     if (stepObj.has("index") && stepObj.get("index").getAsInt() == targetIdx)
                                     {
                                         stepObj.addProperty("instruction", instruction);
+                                        stepObj.addProperty("status", "running");
+                                        stepObj.remove("errorMessage");
+                                        stepObj.remove("actions");
+                                        stepObj.remove("reasoning");
                                         break;
                                     }
                                 }
@@ -1399,6 +1403,10 @@ public final class InteractiveConsoleServer
                         if (s.has("index") && s.get("index").getAsInt() == targetIdx)
                         {
                             s.addProperty("instruction", instruction);
+                            s.addProperty("status", "running");
+                            s.remove("errorMessage");
+                            s.remove("actions");
+                            s.remove("reasoning");
                             break;
                         }
                     }

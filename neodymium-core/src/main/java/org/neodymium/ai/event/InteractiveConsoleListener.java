@@ -307,7 +307,19 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
         this.consoleEngine.pushState(stateJson);
 
-        LOG.info("[InteractiveConsoleListener] Step failure encountered at step {}. Pausing for user recovery action (pauseId={})", stepIndex, pauseId);
+        if (step != null && step.getParent() != null)
+        {
+            final PlaybookStep parent = step.getParent();
+            final String parentInst = parent.getInstruction();
+            final String incFile = step.getSourceFile();
+            final int subIdx = parent.getSubSteps().indexOf(step) + 1;
+            LOG.warn("[InteractiveConsoleListener] Sub-step failure encountered at sub-step #{}/{} (\"{}\") inside parent include step \"{}\" (includeFile={}). Sub-steps cannot be skipped individually. Skip the parent include to skip this step.",
+                subIdx, parent.getSubSteps().size(), step.getInstruction(), parentInst, incFile);
+        }
+        else
+        {
+            LOG.info("[InteractiveConsoleListener] Step failure encountered at step {}. Pausing for user recovery action (pauseId={})", stepIndex, pauseId);
+        }
         try
         {
             final JsonObject userAction = this.consoleEngine.waitForAction(pauseId);
@@ -373,7 +385,19 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
         this.consoleEngine.pushState(stateJson);
 
-        LOG.info("[InteractiveConsoleListener] Pausing for user action review at step {} (pauseId={})", stepIndex, pauseId);
+        if (step != null && step.getParent() != null)
+        {
+            final PlaybookStep parent = step.getParent();
+            final String parentInst = parent.getInstruction();
+            final String incFile = step.getSourceFile();
+            final int subIdx = parent.getSubSteps().indexOf(step) + 1;
+            LOG.info("[InteractiveConsoleListener] Pausing for user action review at sub-step #{}/{} (\"{}\") of parent include \"{}\" (includeFile={}, pauseId={})",
+                subIdx, parent.getSubSteps().size(), step.getInstruction(), parentInst, incFile, pauseId);
+        }
+        else
+        {
+            LOG.info("[InteractiveConsoleListener] Pausing for user action review at step {} (pauseId={})", stepIndex, pauseId);
+        }
         try
         {
             final JsonObject userAction = this.consoleEngine.waitForAction(pauseId);
@@ -386,6 +410,36 @@ public final class InteractiveConsoleListener implements ExecutionListener
             Thread.currentThread().interrupt();
             return "ABORT";
         }
+    }
+
+    /**
+     * Pushes an immediate RUNNING state snapshot for the given step to all connected SSE console clients.
+     *
+     * @param context active execution context
+     * @param step playbook step currently being processed
+     */
+    public void pushCurrentState(final ExecutionContext context, final PlaybookStep step)
+    {
+        if (this.consoleEngine == null)
+        {
+            return;
+        }
+
+        int stepIndex = 0;
+        if (context != null && step != null)
+        {
+            @SuppressWarnings("unchecked")
+            final java.util.List<PlaybookStep> flatSteps = (java.util.List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+            if (flatSteps != null && flatSteps.contains(step))
+            {
+                stepIndex = flatSteps.indexOf(step);
+            }
+        }
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(
+            this.session, context, this.consoleEngine.getRunId(), stepIndex, "running", null, getReport());
+
+        this.consoleEngine.pushState(stateJson);
     }
 
     private void handleUserAction(final JsonObject userAction, final PlaybookStep currentStep, final ExecutionContext context)
@@ -411,7 +465,29 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 if (currentStep != null)
                 {
                     currentStep.setStatus(PlaybookStepStatus.SKIPPED);
-                    LOG.info("[InteractiveConsoleListener] Step marked as SKIPPED per user request");
+                    if (currentStep.getParent() != null)
+                    {
+                        final PlaybookStep parent = currentStep.getParent();
+                        final String parentInst = parent.getInstruction();
+                        final String incFile = currentStep.getSourceFile();
+                        final int subIdx = parent.getSubSteps().indexOf(currentStep) + 1;
+                        LOG.warn("[InteractiveConsoleListener] Step marked as SKIPPED per user request on sub-step #{}/{} (\"{}\") inside parent include \"{}\" (includeFile={}). Note: Sub-steps cannot be skipped individually; skip the parent include to skip this fragment.",
+                            subIdx, parent.getSubSteps().size(), currentStep.getInstruction(), parentInst, incFile);
+                    }
+                    else if (currentStep.hasSubSteps())
+                    {
+                        LOG.info("[InteractiveConsoleListener] Parent include step marked as SKIPPED per user request: \"{}\" containing {} sub-steps",
+                            currentStep.getInstruction(), currentStep.getSubSteps().size());
+                        for (final PlaybookStep sub : currentStep.getSubSteps())
+                        {
+                            sub.setStatus(PlaybookStepStatus.SKIPPED);
+                        }
+                    }
+                    else
+                    {
+                        LOG.info("[InteractiveConsoleListener] Step marked as SKIPPED per user request: \"{}\"", currentStep.getInstruction());
+                    }
+                    pushCurrentState(context, currentStep);
                 }
                 break;
 
@@ -432,6 +508,9 @@ public final class InteractiveConsoleListener implements ExecutionListener
                     if (newInst != null && !newInst.isBlank())
                     {
                         currentStep.setInstruction(newInst);
+                        currentStep.setStatus(PlaybookStepStatus.RUNNING);
+                        currentStep.setFailed(false);
+                        currentStep.setFailureReason(null);
                         if (currentStep.getActions() != null)
                         {
                             try
@@ -459,6 +538,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
                         {
                             context.getTransientData().put("KEY_STEP_EDITED", true);
                         }
+                        pushCurrentState(context, currentStep);
                         LOG.info("[InteractiveConsoleListener] Step instruction updated to: \"{}\"", newInst);
                     }
                 }

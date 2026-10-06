@@ -486,6 +486,15 @@ public final class StateMachineRunner
                                 if (playbookStep != null)
                                 {
                                     playbookStep.setStatus(PlaybookStepStatus.SKIPPED);
+                                    if (playbookStep.getParent() != null)
+                                    {
+                                        LOGGER.warn("   ⏭️ Sub-step marked as SKIPPED per user interactive request: \"{}\" (Parent include: \"{}\", includeFile={}). Note: Sub-steps cannot be skipped individually without skipping the parent include block.",
+                                            playbookStep.getInstruction(), playbookStep.getParent().getInstruction(), playbookStep.getSourceFile());
+                                    }
+                                    else
+                                    {
+                                        LOGGER.info("   ⏭️ Step marked as SKIPPED per user interactive request: \"{}\"", playbookStep.getInstruction());
+                                    }
                                 }
                                 continue mainLoop;
                             }

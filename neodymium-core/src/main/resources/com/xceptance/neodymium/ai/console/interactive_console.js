@@ -736,20 +736,26 @@ function buildStepDetailsHtml(step, isActiveStep) {
 
     // ---- Actions: compact one-line chips ----
     const actionsList = Array.isArray(step.actions) ? step.actions : [];
-    const actionsHtml = actionsList.length > 0
-        ? actionsList.map((a) => {
-            const parts = [];
-            if (a.target) parts.push(`<span style="color:var(--text-main);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;">${escHtml(a.target)}</span>`);
-            if (a.value) parts.push(`<span style="color:var(--text-secondary);font-size:11px;">= <code style="background:rgba(255,255,255,0.06);padding:0 4px;border-radius:3px;">${escHtml(a.value)}</code></span>`);
-            if (a.durationMs) parts.push(`<span style="color:var(--text-muted);font-size:10px;margin-left:auto;white-space:nowrap;"><span class="material-symbols-outlined" style="color:var(--accent-warning);">bolt</span> ${(a.durationMs / 1000).toFixed(2)}s</span>`);
-            return `<div class="acc-action-row">
-                        <span class="acc-action-type-badge" data-type="${escAttr(a.type || 'unknown')}">${escHtml(a.type || 'unknown')}</span>
-                        ${parts.join('')}
-                    </div>`;
-        }).join('')
-        : '<div style="color:var(--text-muted); font-size:12px; padding:8px 0;">No actions recorded yet.</div>';
+    const isLlmProcessing = step.isLlmProcessing || (step.status === 'running' && actionsList.length === 0 && !step.reasoning);
+    const actionsHtml = isLlmProcessing
+        ? `<div style="display:flex; align-items:center; gap:8px; padding:10px 0; color:var(--text-secondary); font-size:12px;">
+                <span class="material-symbols-outlined spinner" style="color:var(--accent-primary);" aria-hidden="true">progress_activity</span>
+                <span>Processing step with LLM...</span>
+           </div>`
+        : actionsList.length > 0
+            ? actionsList.map((a) => {
+                const parts = [];
+                if (a.target) parts.push(`<span style="color:var(--text-main);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;">${escHtml(a.target)}</span>`);
+                if (a.value) parts.push(`<span style="color:var(--text-secondary);font-size:11px;">= <code style="background:rgba(255,255,255,0.06);padding:0 4px;border-radius:3px;">${escHtml(a.value)}</code></span>`);
+                if (a.durationMs) parts.push(`<span style="color:var(--text-muted);font-size:10px;margin-left:auto;white-space:nowrap;"><span class="material-symbols-outlined" style="color:var(--accent-warning);">bolt</span> ${(a.durationMs / 1000).toFixed(2)}s</span>`);
+                return `<div class="acc-action-row">
+                            <span class="acc-action-type-badge" data-type="${escAttr(a.type || 'unknown')}">${escHtml(a.type || 'unknown')}</span>
+                            ${parts.join('')}
+                        </div>`;
+            }).join('')
+            : '<div style="color:var(--text-muted); font-size:12px; padding:8px 0;">No actions recorded yet.</div>';
 
-    const actionsLabel = isActiveStep
+    const actionsLabel = (isActiveStep || isLlmProcessing)
         ? `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><span class="material-symbols-outlined" style="color:var(--accent-primary);">checklist</span> Proposed Actions</div>`
         : `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><span class="material-symbols-outlined">checklist</span> Actions performed</div>`;
 
@@ -761,10 +767,10 @@ function buildStepDetailsHtml(step, isActiveStep) {
                     <button class="copy-btn" onclick="copyError('err-text-detail-${step.index}')" title="Copy to clipboard"><span class="material-symbols-outlined" aria-hidden="true">content_copy</span></button>
                 </div>` : '';
 
-    // When a step fails, remind the user that individual sub-steps inside an
-    // include block cannot be skipped — the entire include block must be managed
-    // as a unit. Displayed for any failed step to guide the user on recovery.
-    const substepWarning = isFailed
+    // When a sub-step fails, remind the user that individual sub-steps inside an
+    // include block cannot be skipped — the entire include block must be managed as a unit.
+    const isSubstep = Boolean(step.isSubStep || step.includeFile || (Array.isArray(step.includeChain) && step.includeChain.length > 0));
+    const substepWarning = (isFailed && isSubstep)
         ? `<div class="substep-warning-info" style="font-size:11px;padding:6px 10px;border-radius:6px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.25);color:var(--accent-warning);"><span class="material-symbols-outlined" aria-hidden="true">warning</span> Sub-steps cannot be skipped individually. Skip the parent include to skip this step.</div>`
         : '';
 
@@ -897,7 +903,7 @@ function buildLlmCallsHtml(step) {
         const callsHtml = calls.map((call, idx) => {
             const cap = (call.capability || 'TEXT').toUpperCase();
             let capClass = 'text';
-            let capLabel = 'LLM Agent';
+            let capLabel = '';
             if (cap === 'VERIFICATION') {
                 capClass = 'verification';
                 capLabel = 'Verification';
@@ -914,23 +920,33 @@ function buildLlmCallsHtml(step) {
                 capClass = 'vision';
                 capLabel = 'Vision 📸';
             }
-            const capBadge = `<span class="llm-cap-badge ${capClass}">${capLabel}</span>`;
+            const capBadge = capLabel ? `<span class="llm-cap-badge ${capClass}">${capLabel}</span>` : '';
 
             const modelStr = escHtml(call.modelName || 'default');
-            const durStr = call.durationMs ? `${call.durationMs.toLocaleString()}ms` : '';
             const inTok = call.inputTokens || 0;
             const outTok = call.outputTokens || 0;
-            const cachedTok = call.cachedTokens || 0;
             const totalTok = call.totalTokens || (inTok + outTok);
-            const costStr = (call.estimatedCostUsd !== undefined && call.estimatedCostUsd !== null && call.estimatedCostUsd > 0)
-                ? `$${call.estimatedCostUsd.toFixed(4)}`
-                : '';
+
+            const costVal = (call.estimatedCostUsd !== undefined && call.estimatedCostUsd !== null && call.estimatedCostUsd > 0)
+                ? call.estimatedCostUsd
+                : (call.costUsd !== undefined && call.costUsd !== null && call.costUsd > 0)
+                    ? call.costUsd
+                    : null;
+            const costStr = (costVal !== null) ? `$${costVal.toFixed(4)}` : '';
+
+            let durStr = '';
+            if (call.durationMs !== undefined && call.durationMs !== null) {
+                const totalSec = Math.round(call.durationMs / 1000);
+                const mins = Math.floor(totalSec / 60);
+                const secs = totalSec % 60;
+                durStr = `${mins} min ${secs} s`;
+            }
 
             const metaParts = [];
-            if (durStr) metaParts.push(durStr);
-            if (totalTok > 0) metaParts.push(`${totalTok.toLocaleString()} tokens (${inTok} in / ${outTok} out${cachedTok > 0 ? `, cached: ${cachedTok}` : ''})`);
-            if (costStr) metaParts.push(costStr);
-            const metaStr = metaParts.join(' • ');
+            if (totalTok > 0) metaParts.push(`Tokens: ${totalTok.toLocaleString()}`);
+            if (costStr) metaParts.push(`Cost: ${costStr}`);
+            if (durStr) metaParts.push(`Duration: ${durStr}`);
+            const metaStr = metaParts.join(' | ');
 
             const sysPrompt = call.systemPrompt;
             const userPrompt = call.userPrompt;
@@ -992,12 +1008,11 @@ function buildLlmCallsHtml(step) {
             return `
                 <div class="llm-call-card expanded" style="margin-top:6px;">
                     <div class="llm-call-header" onclick="event.stopPropagation(); toggleLlmCallCard(this)">
-                        <div style="display:flex;align-items:center;gap:6px;font-weight:600;font-size:12px;color:var(--text-main);">
+                        <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:12px;color:var(--text-main);">
                             <span class="material-symbols-outlined llm-subsection-chevron" style="font-size:0.9rem;">chevron_right</span>
                             <span class="material-symbols-outlined" style="font-size:1rem;color:var(--accent-purple);">smart_toy</span>
-                            <span>Call #${idx + 1}</span>
+                            <span>Call #${idx + 1}: ${modelStr}</span>
                             ${capBadge}
-                            <code style="font-size:11px;color:var(--text-secondary);background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px;">${modelStr}</code>
                         </div>
                         <span style="font-family:var(--font-mono);font-size:11px;color:var(--text-secondary);">${metaStr}</span>
                     </div>
@@ -1036,6 +1051,7 @@ function buildLlmCallsHtml(step) {
                         <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-primary);">tune</span>
                         <span>System Prompt</span>
                     </div>
+                    <span class="llm-subsection-tag">Instruction &amp; Persona</span>
                 </div>
                 <div class="llm-subsection-body">${escHtml(systemSnippet)}</div>
             </div>` : '';
@@ -1048,6 +1064,7 @@ function buildLlmCallsHtml(step) {
                         <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-warning);">code</span>
                         <span>User Prompt &amp; DOM Context (Plain Text)</span>
                     </div>
+                    <span class="llm-subsection-tag">User Query &amp; Page Snapshot</span>
                 </div>
                 <div class="llm-subsection-body">${escHtml(promptSnippet)}</div>
             </div>` : '';
@@ -1060,6 +1077,7 @@ function buildLlmCallsHtml(step) {
                         <span class="material-symbols-outlined" style="font-size:0.9rem;color:var(--accent-success);">terminal</span>
                         <span>Raw Model Response</span>
                     </div>
+                    <span class="llm-subsection-tag">AI Completion Payload</span>
                 </div>
                 <div class="llm-subsection-body">${escHtml(responseSnippet)}</div>
             </div>` : '';
@@ -1967,6 +1985,7 @@ function saveEdit(btnElement) {
     let isTemp = false;
     let oldVal = '';
     let blockName = 'steps';
+    let targetStep = null;
 
     if (currentState && currentState.blocks) {
         for (const bKey of ['before', 'steps', 'after']) {
@@ -1977,6 +1996,7 @@ function saveEdit(btnElement) {
                     isTemp = !!found.isTempAdd;
                     oldVal = found.instruction;
                     blockName = bKey;
+                    targetStep = found;
                     break;
                 }
             }
@@ -1986,16 +2006,43 @@ function saveEdit(btnElement) {
     const activePauseId = currentPauseId || window.currentPauseId || currentState?.pauseId;
     if (isTemp) {
         if (newVal && activePauseId) {
+            if (targetStep) {
+                targetStep.instruction = newVal;
+                targetStep.rawInstruction = newVal;
+                targetStep.status = 'running';
+                targetStep.isLlmProcessing = true;
+                targetStep.actions = [];
+                targetStep.reasoning = null;
+                targetStep.errorMessage = null;
+            }
             sendAction('ADD', { instruction: newVal, block: blockName });
         } else {
             cancelEdit(btnElement);
+            return;
         }
+        window.currentlyEditingStepIndex = null;
+        window.currentEditText = null;
         card.classList.remove('editing');
+        const bindingsDiv = card.querySelector('.inline-edit-bindings');
+        if (bindingsDiv) bindingsDiv.style.display = 'none';
+        selectedStepIndexForDetails = idx;
         setButtonsEnabled(true);
+        applyState(currentState);
     } else {
         console.error('Found step in state blocks:', blockName, idx, 'oldVal:', oldVal, 'newVal:', newVal, 'activePauseId:', activePauseId);
-        // We always want to send an EDIT action if the user clicks Save, even if the text didn't change, 
-        // because the user might have changed dataBindings.
+        if (targetStep && newVal) {
+            targetStep.instruction = newVal;
+            targetStep.rawInstruction = newVal;
+            targetStep.status = 'running';
+            targetStep.isLlmProcessing = true;
+            targetStep.actions = [];
+            targetStep.reasoning = null;
+            targetStep.errorMessage = null;
+        }
+        selectedStepIndexForDetails = idx;
+        window.currentlyEditingStepIndex = null;
+        window.currentEditText = null;
+
         if (activePauseId) {
             console.error('Sending EDIT action');
             userEditedFailedStep = true;
@@ -2004,7 +2051,10 @@ function saveEdit(btnElement) {
             sendAction('EDIT', { index: idx, instruction: newVal, bindings: currentState?.dataBindings });
         }
         card.classList.remove('editing');
+        const bindingsDiv = card.querySelector('.inline-edit-bindings');
+        if (bindingsDiv) bindingsDiv.style.display = 'none';
         setButtonsEnabled(true);
+        applyState(currentState);
     }
 }
 

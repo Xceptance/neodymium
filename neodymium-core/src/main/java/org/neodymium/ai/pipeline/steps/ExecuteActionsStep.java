@@ -359,7 +359,15 @@ public final class ExecuteActionsStep
                 final String userAction = interactiveListener.pauseBeforeActionExecution(contextState, step);
                 if ("SKIP".equalsIgnoreCase(userAction) || step.getStatus() == PlaybookStepStatus.SKIPPED)
                 {
-                    LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", resolvedInstruction);
+                    if (step.getParent() != null)
+                    {
+                        LOGGER.warn("   ⏭️ Skipping sub-step execution per user request: \"{}\" (Parent include: \"{}\", includeFile={})",
+                            resolvedInstruction, step.getParent().getInstruction(), step.getSourceFile());
+                    }
+                    else
+                    {
+                        LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", resolvedInstruction);
+                    }
                     if (session != null && session.getEventBus() != null)
                     {
                         session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SKIPPED));
@@ -377,7 +385,15 @@ public final class ExecuteActionsStep
 
             if (step.getStatus() == PlaybookStepStatus.SKIPPED)
             {
-                LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", resolvedInstruction);
+                if (step.getParent() != null)
+                {
+                    LOGGER.warn("   ⏭️ Skipping sub-step execution per user request: \"{}\" (Parent include: \"{}\", includeFile={})",
+                        resolvedInstruction, step.getParent().getInstruction(), step.getSourceFile());
+                }
+                else
+                {
+                    LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", resolvedInstruction);
+                }
                 if (session != null && session.getEventBus() != null)
                 {
                     session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SKIPPED));

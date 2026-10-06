@@ -706,14 +706,14 @@ public final class AgentToolLoopStep implements PipelineStep
                     step.setToolCalls(sanitizedCalls);
                     step.setActions(proposedActions);
                 }
-                final String userAction;
+                String userAction = null;
                 try
                 {
                     userAction = interactiveListener.pauseBeforeActionExecution(context, step);
                 }
                 finally
                 {
-                    if (step != null)
+                    if (step != null && userAction != null && !("EDIT".equalsIgnoreCase(userAction) || "UPDATE_STEP".equalsIgnoreCase(userAction) || "SAVE_STEP".equalsIgnoreCase(userAction)))
                     {
                         step.setActions(origActions);
                         step.setToolCalls(origCalls);
@@ -721,7 +721,15 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
                 if ("SKIP".equalsIgnoreCase(userAction) || (step != null && step.getStatus() == PlaybookStepStatus.SKIPPED))
                 {
-                    LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", instruction);
+                    if (step != null && step.getParent() != null)
+                    {
+                        LOGGER.warn("   ⏭️ Skipping sub-step execution per user request: \"{}\" (Parent include: \"{}\", includeFile={})",
+                            instruction, step.getParent().getInstruction(), step.getSourceFile());
+                    }
+                    else
+                    {
+                        LOGGER.info("   ⏭️ Skipping step execution per user request: \"{}\"", instruction);
+                    }
                     if (activeSession != null && activeSession.getEventBus() != null && step != null)
                     {
                         activeSession.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SKIPPED));
@@ -746,6 +754,9 @@ public final class AgentToolLoopStep implements PipelineStep
 
                     if (step != null)
                     {
+                        step.setStatus(PlaybookStepStatus.RUNNING);
+                        step.setFailed(false);
+                        step.setFailureReason(null);
                         try
                         {
                             step.getActions().clear();
@@ -763,7 +774,25 @@ public final class AgentToolLoopStep implements PipelineStep
                             step.setToolCalls(new ArrayList<>());
                         }
                     }
+
+                    // Prune trailing unfulfilled assistant tool calls message to maintain valid LLM provider conversation schema
+                    if (!conversation.isEmpty())
+                    {
+                        final ChatMessage lastMsg = conversation.get(conversation.size() - 1);
+                        if (lastMsg.role() == Role.ASSISTANT && lastMsg.toolCalls() != null && !lastMsg.toolCalls().isEmpty())
+                        {
+                            conversation.remove(conversation.size() - 1);
+                        }
+                    }
+
                     conversation.add(ChatMessage.user("Updated Test Instruction:\n" + preparedInstruction));
+
+                    if (interactiveListener != null && step != null)
+                    {
+                        interactiveListener.pushCurrentState(context, step);
+                    }
+
+                    turn--;
                     continue turnLoop;
                 }
             }

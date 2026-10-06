@@ -211,10 +211,15 @@ public class InteractiveReasoningAndActionsUiTest
 
         $("#bigScreenStepDetails .llm-call-card")
             .shouldBe(Condition.visible)
-            .shouldHave(Condition.text("gemini-3.6-flash"));
+            .shouldHave(Condition.text("Call #1: gemini-3.6-flash"));
 
         $("#bigScreenStepDetails .llm-subsection-card")
             .shouldBe(Condition.visible);
+
+        $("#bigScreenStepDetails")
+            .shouldHave(Condition.text("Instruction & Persona"))
+            .shouldHave(Condition.text("User Query & Page Snapshot"))
+            .shouldHave(Condition.text("AI Completion Payload"));
 
         $("#bigScreenStepDetails .llm-subsection-header").click();
 

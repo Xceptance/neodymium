@@ -543,12 +543,25 @@ public final class InteractiveStateBuilder
         obj.addProperty("id", source + "_" + stepIndex);
         obj.addProperty("index", stepIndex + 1);
         final String rawInstruction = step.getInstruction() != null ? step.getInstruction() : "";
-        final String resolvedInstruction = (ExecutionContext.getActiveContext() != null && ExecutionContext.getActiveContext().getSessionData() != null)
-            ? ExecutionContext.getActiveContext().getSessionData().resolveAvailableVariables(rawInstruction)
+        final ExecutionContext effContext = context != null ? context : ExecutionContext.getActiveContext();
+        final String resolvedInstruction = (effContext != null && effContext.getSessionData() != null)
+            ? effContext.getSessionData().resolveAvailableVariables(rawInstruction)
             : rawInstruction;
         obj.addProperty("instruction", resolvedInstruction);
         obj.addProperty("line", step.getLineNumber());
         obj.addProperty("file", step.getSourceFile() != null ? step.getSourceFile() : "");
+        if (step.getParent() != null)
+        {
+            obj.addProperty("isSubStep", true);
+            if (step.getParent().getInstruction() != null)
+            {
+                obj.addProperty("parentInstruction", step.getParent().getInstruction());
+            }
+        }
+        if (step.hasSubSteps())
+        {
+            obj.addProperty("hasSubSteps", true);
+        }
 
         final ExecutionMode mode = context != null
             ? (ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE)
@@ -745,6 +758,29 @@ public final class InteractiveStateBuilder
         else
         {
             obj.add("actions", actionsArray);
+        }
+
+        if (step.hasSubSteps() && !obj.has("subSteps") && step.getSubSteps() != null && !step.getSubSteps().isEmpty())
+        {
+            final JsonArray subStepsArr = new JsonArray();
+            for (int sIdx = 0; sIdx < step.getSubSteps().size(); sIdx++)
+            {
+                final PlaybookStep sub = step.getSubSteps().get(sIdx);
+                if (sub != null)
+                {
+                    final JsonObject subObj = new JsonObject();
+                    subObj.addProperty("index", sIdx + 1);
+                    final String subRaw = sub.getInstruction() != null ? sub.getInstruction() : "";
+                    final String subResolved = (effContext != null && effContext.getSessionData() != null)
+                        ? effContext.getSessionData().resolveAvailableVariables(subRaw)
+                        : subRaw;
+                    subObj.addProperty("instruction", subResolved);
+                    subObj.addProperty("file", sub.getSourceFile() != null ? sub.getSourceFile() : "");
+                    subObj.addProperty("status", sub.getStatus() != null ? sub.getStatus().name().toLowerCase() : "pending");
+                    subStepsArr.add(subObj);
+                }
+            }
+            obj.add("subSteps", subStepsArr);
         }
 
         if (!obj.has("llmCalls") && report != null && report.getLlmCalls() != null)
