@@ -227,6 +227,9 @@ Instead of executing LLM calls dynamically on every run, the framework uses **St
 
 * **JSON Companion**: A recording compiled automatically during the initial `FORCE_RECORDING` run. It maps each natural language step to a list of concrete structured SUT actions (e.g., `NAVIGATE`, `CLICK`, `TYPE`, `ASSERT`) along with visual `screenshotHash` baselines.
 * **Offline Replay**: Subsequent test runs (`REPLAY_STRICT` or `REPLAY_WITH_HEALING`) load the companion JSON file directly, executing recorded browser interactions in milliseconds without making any LLM calls.
+* **Automatic / Hybrid Execution (`AUTO`)**: Smart execution mode that inspects the filesystem/classpath for an existing companion JSON recording:
+  - If a recording exists, it executes dynamically in `REPLAY_WITH_HEALING` mode (fast offline replay, triggering LLM healing and persisting updates only if a step heals).
+  - If no recording exists, it automatically executes in live `LLM_RECORDING` mode to discover elements via LLM and write the companion JSON recording upon success.
 * **Recording Directory Configuration**: Companion `.json` recording output locations can be configured at the test class/method level or globally:
   - **Annotation-driven (`@AiPlaybook`)**: `@AiPlaybook(recordingDirectory = "target/playbooks/integration")` directs generated companion recordings to build output target directories to keep `src/` clean.
   - **Property-driven (`neodymium.ai.playbook.recordingDirectory`)**: Configured in `ai.properties` or JVM arguments (`-Dneodymium.ai.playbook.recordingDirectory=...`).
@@ -1555,7 +1558,7 @@ Neodymium AI uses hierarchical property loading (`AiConfiguration`):
 6. `config/neodymium.properties`
 
 ### 8.1 Core Execution Settings
-* `neodymium.ai.executionMode` - Defines global fallback execution mode (`REPLAY_WITH_HEALING`, `LIVE`, `REPLAY_STRICT`, `LLM_ONLY`, `FORCE_RECORDING`, `LINTER_ONLY`). (Default: `REPLAY_WITH_HEALING`)
+* `neodymium.ai.executionMode` - Defines global fallback execution mode (`AUTO`, `REPLAY_WITH_HEALING`, `LIVE`, `REPLAY_STRICT`, `LLM_ONLY`, `FORCE_RECORDING`, `LINTER_ONLY`). (Default: `REPLAY_WITH_HEALING`)
 * `neodymium.ai.playbook.recordingDirectory` - Primary directory for saving and loading Playbook JSON execution recordings.
 * `neodymium.ai.replay.delayScale` - (Double) Scale multiplier applied to recorded delays. When `0.0`, pacing is disabled for maximum CI/CD speed. (Default: `0.0`)
 * `neodymium.ai.replay.useRecordedDelays` - (Boolean, Legacy) Replay actions at human speed utilizing recorded sleep intervals. (Default: `false`)
