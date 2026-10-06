@@ -787,4 +787,41 @@ public class LocatorResolverTest
     {
         Assertions.assertEquals(List.of("e1"), matchedIds(LocatorResolver.resolveLocator("body >> #scope >> label=Email")));
     }
+
+    @Test
+    public void testHasWithChildCombinatorAndTextIs()
+    {
+        final By resolved = LocatorResolver.resolveLocator("div:has(> h3:text-is(\"Order Summary\"))");
+        Assertions.assertTrue(resolved instanceof By.ByXPath);
+        final String xpath = resolved.toString();
+        Assertions.assertTrue(xpath.contains("child::h3"));
+        Assertions.assertTrue(xpath.contains("normalize-space(.)='Order Summary'"));
+        // Ensure div itself does NOT require the text "Order Summary"
+        Assertions.assertFalse(xpath.startsWith("By.xpath: //div[(normalize-space(.)='Order Summary'"));
+    }
+
+    @Test
+    public void testHasAndNotDoNotLeakInnerClassesOrIdsToOuterElement()
+    {
+        final By chainedHas = LocatorResolver.resolveLocator("section >> div:has(h3.title) >> nth=0");
+        Assertions.assertTrue(chainedHas instanceof By.ByXPath);
+        final String xpathHas = chainedHas.toString();
+        Assertions.assertTrue(xpathHas.contains("descendant::h3[contains(concat(' ', normalize-space(@class), ' '), ' title ')]"));
+        Assertions.assertFalse(xpathHas.contains("//div[contains(concat(' ', normalize-space(@class), ' '), ' title ')"));
+
+        final By chainedNot = LocatorResolver.resolveLocator("section >> div:not(.active) >> nth=0");
+        Assertions.assertTrue(chainedNot instanceof By.ByXPath);
+        final String xpathNot = chainedNot.toString();
+        Assertions.assertTrue(xpathNot.contains("not(contains(concat(' ', normalize-space(@class), ' '), ' active '))"));
+        Assertions.assertFalse(xpathNot.contains("contains(concat(' ', normalize-space(@class), ' '), ' active ') and not("));
+    }
+
+    @Test
+    public void testHasWithMultipleCommaSeparatedSelectorsWithAttributes()
+    {
+        final By chained = LocatorResolver.resolveLocator("section >> div:has(span[data-type=\"a,b\"], p.intro) >> nth=0");
+        Assertions.assertTrue(chained instanceof By.ByXPath);
+        final String xpath = chained.toString();
+        Assertions.assertTrue(xpath.contains("descendant::span[@data-type='a,b'] or descendant::p[contains(concat(' ', normalize-space(@class), ' '), ' intro ')]"));
+    }
 }

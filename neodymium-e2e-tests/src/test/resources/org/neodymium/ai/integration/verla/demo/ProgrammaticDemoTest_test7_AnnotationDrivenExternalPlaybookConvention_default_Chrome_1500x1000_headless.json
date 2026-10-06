@@ -40,11 +40,11 @@
   "semanticContext" : null,
   "domFeatureVector" : null,
   "schemaVersion" : "4.0",
-  "contextLevel" : "LEAN",
+  "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 5250,
-  "startTimeMs" : 1791052513903,
+  "durationMs" : 2497,
+  "startTimeMs" : 1791244005624,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -57,7 +57,7 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_1065644",
+    "callId" : "call_293561",
     "toolName" : "navigate",
     "arguments" : {
       "url" : "${verla.url}/verla-perfect/index.html"
@@ -155,11 +155,11 @@
     "tileSsim" : ""
   },
   "schemaVersion" : "4.0",
-  "contextLevel" : "LEAN",
+  "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 2890,
-  "startTimeMs" : 1791052519233,
+  "durationMs" : 2429,
+  "startTimeMs" : 1791244008205,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -172,11 +172,12 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_1369537",
+    "callId" : "call_267811",
     "toolName" : "fill",
     "arguments" : {
-      "selector" : "#search-input",
       "text" : "${searchTerm}",
+      "selector" : "#search-input",
+      "pressEnter" : false,
       "domFeatureVector" : {
         "tag" : "input",
         "text" : "Search products...",
@@ -247,11 +248,11 @@
   "semanticContext" : null,
   "domFeatureVector" : null,
   "schemaVersion" : "4.0",
-  "contextLevel" : "LEAN",
+  "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 4789,
-  "startTimeMs" : 1791052522289,
+  "durationMs" : 2446,
+  "startTimeMs" : 1791244010774,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -264,11 +265,11 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_970229",
+    "callId" : "call_309547",
     "toolName" : "press_key",
     "arguments" : {
-      "key" : "Enter",
-      "selector" : "#search-input"
+      "selector" : "#search-input",
+      "key" : "Enter"
     }
   } ]
 } ]

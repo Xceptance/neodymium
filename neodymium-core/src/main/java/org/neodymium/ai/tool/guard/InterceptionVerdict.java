@@ -18,18 +18,20 @@
  */
 package org.neodymium.ai.tool.guard;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolResult;
 
 /**
  * Result of intercepting a proposed tool call by a guard or quality judge.
  *
- * @param decision outcome decision (ALLOW, REJECT, or DELIBERATED)
+ * @param decision outcome decision (ALLOW, REJECT, DELIBERATED, or RETRY_WITH_FEEDBACK)
  * @param reason explanation or rationale for the verdict
  * @param adjustedCall optional adjusted tool call if deliberation modified targets or parameters
- * @param rejectionResult immediate error result to return if rejected
+ * @param rejectionResult immediate error result to return if rejected or feedback requested
  *
- * @author AI-generated: Gemini 3.7 Flash
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 public record InterceptionVerdict(
@@ -38,6 +40,8 @@ public record InterceptionVerdict(
         ToolCall adjustedCall,
         ToolResult rejectionResult)
 {
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
     /**
      * Categorical decision type for tool interception.
      */
@@ -45,7 +49,8 @@ public record InterceptionVerdict(
     {
         ALLOW,
         REJECT,
-        DELIBERATED
+        DELIBERATED,
+        RETRY_WITH_FEEDBACK
     }
 
     /**
@@ -81,6 +86,27 @@ public record InterceptionVerdict(
     public static InterceptionVerdict deliberated(final ToolCall adjustedCall, final String reason)
     {
         return new InterceptionVerdict(Decision.DELIBERATED, reason, adjustedCall, null);
+    }
+
+    /**
+     * Creates a RETRY_WITH_FEEDBACK verdict advising the agent of a fragile/poor locator and providing recovery guidance.
+     *
+     * @param callId tool call id
+     * @param reason explanation of locator quality issue
+     * @param recommendation actionable recovery tip (e.g. recommend mark_elements)
+     * @return retry with feedback verdict
+     */
+    public static InterceptionVerdict retryWithFeedback(final String callId, final String reason, final String recommendation)
+    {
+        final ObjectNode node = MAPPER.createObjectNode();
+        node.put("status", "ERROR");
+        node.put("error", reason);
+        if (recommendation != null && !recommendation.isBlank())
+        {
+            node.put("recommendation", recommendation);
+        }
+        final ToolResult result = ToolResult.error(callId, node.toString());
+        return new InterceptionVerdict(Decision.RETRY_WITH_FEEDBACK, reason, null, result);
     }
 
     /**

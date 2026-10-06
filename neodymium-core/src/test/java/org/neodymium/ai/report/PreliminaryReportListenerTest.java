@@ -2280,4 +2280,85 @@ public class PreliminaryReportListenerTest
         assertTrue(htmlContent.contains("🧬 Healed from:"), "HTML must contain healed marker label");
         assertTrue(htmlContent.contains("status-heal"), "HTML must contain status-heal styling");
     }
+
+    @Test
+    public void testOnStepFinishedPropagatesDynamicMarkerAndVisualFlags() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-dynamic-markers");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Select size via visual marker");
+        bus.dispatch(new StepStartedEvent(step, 0));
+
+        // Dynamically toggle marker and visual flags mid-step (e.g. LLM invoked mark_elements)
+        step.setMarker(true);
+        step.setFullPage(true);
+
+        bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(500, true));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getSteps().size());
+
+        final TestExecutionReport.ReportStepEntry entry = report.getSteps().get(0);
+        assertTrue(entry.isMarker(), "Step entry must propagate dynamic marker flag from PlaybookStep onStepFinished");
+        assertTrue(entry.isVisual(), "Step entry must propagate dynamic visual flag from PlaybookStep onStepFinished");
+
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        assertTrue(Files.exists(htmlPath), "HTML report file must be written");
+        final String htmlContent = Files.readString(htmlPath, StandardCharsets.UTF_8);
+        assertTrue(htmlContent.contains("🎯 MARKER"), "HTML report must display 🎯 MARKER badge for dynamically marked steps");
+    }
+
+    @Test
+    public void testActivePropertiesPopulatedAndMasked() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-active-properties");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        // Set a custom property and a secret property
+        System.setProperty("neodymium.test.customKey", "testValue123");
+        System.setProperty("neodymium.ai.apiKey.mockTest", "mock-secret-key-123");
+
+        try
+        {
+            final PlaybookStep step = new PlaybookStep("Simple step");
+            bus.dispatch(new StepStartedEvent(step, 0));
+            bus.dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SUCCESS));
+            bus.dispatch(new SessionFinishedEvent(200, true));
+
+            final TestExecutionReport report = listener.getReport();
+            assertNotNull(report);
+            final Map<String, String> props = report.getActiveProperties();
+            assertNotNull(props);
+            assertFalse(props.isEmpty(), "Active properties should be populated from Neodymium/System properties");
+
+            assertTrue(props.containsKey("neodymium.test.customKey"), "Must contain neodymium.test.customKey");
+            assertEquals("testValue123", props.get("neodymium.test.customKey"));
+
+            assertTrue(props.containsKey("neodymium.ai.apiKey.mockTest"), "Must contain sensitive property key");
+            assertEquals("••••••••", props.get("neodymium.ai.apiKey.mockTest"), "Sensitive apiKey value must be masked");
+
+            final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+            assertTrue(Files.exists(htmlPath), "HTML report file must exist");
+            final String html = Files.readString(htmlPath, StandardCharsets.UTF_8);
+            assertTrue(html.contains("⚙️ Active Run Properties ("), "HTML report must contain active properties section");
+            assertTrue(html.contains("neodymium.test.customKey"), "HTML report must list property key");
+            assertTrue(html.contains("testValue123"), "HTML report must list property value");
+            assertTrue(html.contains("••••••••"), "HTML report must display masked value for apiKey");
+            assertFalse(html.contains("mock-secret-key-123"), "HTML report must NEVER leak raw secret value");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.test.customKey");
+            System.clearProperty("neodymium.ai.apiKey.mockTest");
+        }
+    }
 }

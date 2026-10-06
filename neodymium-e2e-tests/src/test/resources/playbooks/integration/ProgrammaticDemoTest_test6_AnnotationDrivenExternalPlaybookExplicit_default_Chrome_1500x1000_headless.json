@@ -40,11 +40,11 @@
   "semanticContext" : null,
   "domFeatureVector" : null,
   "schemaVersion" : "4.0",
-  "contextLevel" : "LEAN",
+  "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 5848,
-  "startTimeMs" : 1791052479928,
+  "durationMs" : 2405,
+  "startTimeMs" : 1791243973782,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -57,7 +57,7 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_1667294",
+    "callId" : "call_205932",
     "toolName" : "navigate",
     "arguments" : {
       "url" : "${verla.url}/verla-perfect/index.html"
@@ -155,11 +155,11 @@
     "tileSsim" : ""
   },
   "schemaVersion" : "4.0",
-  "contextLevel" : "LEAN",
+  "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 2827,
-  "startTimeMs" : 1791052485844,
+  "durationMs" : 2504,
+  "startTimeMs" : 1791243976273,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -172,9 +172,10 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_1091526",
+    "callId" : "call_290148",
     "toolName" : "fill",
     "arguments" : {
+      "pressEnter" : false,
       "text" : "${searchTerm}",
       "selector" : "#search-input",
       "domFeatureVector" : {
@@ -247,11 +248,11 @@
   "semanticContext" : null,
   "domFeatureVector" : null,
   "schemaVersion" : "4.0",
-  "contextLevel" : "LEAN",
+  "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 4238,
-  "startTimeMs" : 1791052488805,
+  "durationMs" : 2744,
+  "startTimeMs" : 1791243978923,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -264,7 +265,7 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_1195838",
+    "callId" : "call_337802",
     "toolName" : "press_key",
     "arguments" : {
       "selector" : "#search-input",

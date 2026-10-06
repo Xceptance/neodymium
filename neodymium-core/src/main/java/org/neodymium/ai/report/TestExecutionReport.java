@@ -27,6 +27,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
+import java.util.function.Predicate;
 
 import javax.imageio.ImageIO;
 import com.fasterxml.jackson.annotation.JsonIgnore;
@@ -68,6 +70,7 @@ public final class TestExecutionReport
     private final List<ReportStepEntry> steps = new ArrayList<>();
     private final List<ReportLlmCallEntry> llmCalls = new ArrayList<>();
     private final List<ReportScreenshotEntry> screenshots = new ArrayList<>();
+    private final Map<String, String> activeProperties = new TreeMap<>();
     private ReportMetrics metrics = new ReportMetrics();
 
     /**
@@ -334,6 +337,44 @@ public final class TestExecutionReport
     }
 
     /**
+     * Gets an unmodifiable map of active run properties.
+     *
+     * @return unmodifiable map of active properties
+     */
+    public Map<String, String> getActiveProperties()
+    {
+        return Collections.unmodifiableMap(this.activeProperties);
+    }
+
+    /**
+     * Sets the active run properties.
+     *
+     * @param properties the properties map to set
+     */
+    public void setActiveProperties(final Map<String, String> properties)
+    {
+        this.activeProperties.clear();
+        if (properties != null)
+        {
+            this.activeProperties.putAll(properties);
+        }
+    }
+
+    /**
+     * Adds an active property entry.
+     *
+     * @param key property name
+     * @param value property value
+     */
+    public void addActiveProperty(final String key, final String value)
+    {
+        if (key != null)
+        {
+            this.activeProperties.put(key, value != null ? value : "");
+        }
+    }
+
+    /**
      * Checks if any step in this report executed with visual element markers.
      *
      * @return true if at least one step or sub-step used markers, false otherwise
@@ -388,6 +429,8 @@ public final class TestExecutionReport
         private final List<ReportStepEntry> subSteps = new ArrayList<>();
         private final List<ReportLlmCallEntry> llmCalls = new ArrayList<>();
         private final List<ReportScreenshotEntry> screenshots = new ArrayList<>();
+        @JsonIgnore
+        private ReportStepEntry parent;
         private String rawInstruction;
         private boolean bug;
         private String bugDetails;
@@ -612,11 +655,23 @@ public final class TestExecutionReport
         {
             if (subStep != null)
             {
+                subStep.setParent(this);
                 this.subSteps.add(subStep);
             }
         }
 
-        public void removeSubStepIf(final java.util.function.Predicate<ReportStepEntry> filter)
+        @JsonIgnore
+        public ReportStepEntry getParent()
+        {
+            return this.parent;
+        }
+
+        public void setParent(final ReportStepEntry parent)
+        {
+            this.parent = parent;
+        }
+
+        public void removeSubStepIf(final Predicate<ReportStepEntry> filter)
         {
             if (filter != null)
             {
@@ -806,10 +861,13 @@ public final class TestExecutionReport
             {
                 for (final ReportStepEntry sub : this.subSteps)
                 {
-                    final String subMode = sub.getStepMode();
-                    if (subMode != null)
+                    if ((sub.llmCalls != null && !sub.llmCalls.isEmpty()) || sub.standardCalls > 0 || sub.verificationCalls > 0 || sub.rcaCalls > 0)
                     {
-                        return subMode;
+                        return "LLM";
+                    }
+                    if (sub.actions != null && !sub.actions.isEmpty())
+                    {
+                        return "REPLAY";
                     }
                 }
             }

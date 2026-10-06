@@ -73,7 +73,6 @@ public class RegisterTest extends BaseAiTest
             server.resetInventory();
         }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
-        Neodymium.getData().put("neodymium.ai.visualRca.enabled", "false");
         AiConfiguration.resetInstance();
     
         Neodymium.getData().put("random", String.valueOf(System.currentTimeMillis()));

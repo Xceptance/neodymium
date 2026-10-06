@@ -48,7 +48,14 @@ public final class VisualBadgeInjector
             var root = document;
             if (scopeSelector && typeof scopeSelector === 'string' && scopeSelector.trim()) {
                 var scopedEl = document.querySelector(scopeSelector.trim());
-                if (scopedEl) root = scopedEl;
+                if (scopedEl) {
+                    try {
+                        scopedEl.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' });
+                    } catch (e) {
+                        try { scopedEl.scrollIntoView(true); } catch (e2) {}
+                    }
+                    root = scopedEl;
+                }
             }
 
             var interactiveSelectors = 'a, button, input, select, textarea, summary, label[for], [contenteditable="true"], [tabindex="0"], '
@@ -56,7 +63,10 @@ public final class VisualBadgeInjector
                 + '[role="switch"], [role="combobox"], [role="option"], [role="slider"], [role="spinbutton"], [role="searchbox"], [role="treeitem"], '
                 + '[onclick], [data-action], [data-clickable], '
                 + '[class*="btn"], [class*="clickable"], [class*="swatch"], [class*="chip"], [class*="pill"], svg';
-            var rawElements = root.querySelectorAll(interactiveSelectors);
+            var rawElements = Array.prototype.slice.call(root.querySelectorAll(interactiveSelectors));
+            if (root !== document && root.matches && root.matches(interactiveSelectors)) {
+                rawElements.unshift(root);
+            }
             var seen = new Set();
             var visibleCandidates = [];
 
@@ -105,6 +115,9 @@ public final class VisualBadgeInjector
 
             var container = document.createElement('div');
             container.id = '__neo_som_badges__';
+            if (scopeSelector && typeof scopeSelector === 'string' && scopeSelector.trim()) {
+                container.setAttribute('data-scope', scopeSelector.trim());
+            }
             container.style.position = 'fixed';
             container.style.top = '0';
             container.style.left = '0';
@@ -186,9 +199,21 @@ public final class VisualBadgeInjector
         }
         """;
 
+    private static volatile String activeScope = null;
+
     private VisualBadgeInjector()
     {
         // Static utility
+    }
+
+    /**
+     * Returns the active CSS scope selector used during the most recent marker injection, or {@code null}.
+     *
+     * @return active scope selector, or {@code null}
+     */
+    public static String getActiveScope()
+    {
+        return activeScope;
     }
 
     /**
@@ -215,6 +240,7 @@ public final class VisualBadgeInjector
     @SuppressWarnings("unchecked")
     public static List<Map<String, Object>> injectMarkers(final WebDriver driver, final String scope, final int maxCount)
     {
+        activeScope = (scope != null && !scope.isBlank()) ? scope.trim() : null;
         if (driver instanceof final JavascriptExecutor js)
         {
             try
@@ -240,6 +266,7 @@ public final class VisualBadgeInjector
      */
     public static void removeMarkers(final WebDriver driver)
     {
+        activeScope = null;
         if (driver instanceof final JavascriptExecutor js)
         {
             try

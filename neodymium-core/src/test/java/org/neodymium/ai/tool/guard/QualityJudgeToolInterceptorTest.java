@@ -18,9 +18,12 @@
  */
 package org.neodymium.ai.tool.guard;
 
+import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.HashMap;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
@@ -43,6 +46,8 @@ import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.tool.ToolRegistry;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 
 /**
  * Unit tests verifying {@link QualityJudgeToolInterceptor} candidate locator
@@ -634,4 +639,273 @@ public class QualityJudgeToolInterceptorTest
             System.clearProperty("neodymium.ai.locatorImprover.enabled");
         }
     }
+
+    @Test
+    public void testFragileSelectorWithAllLowCandidatesReturnsRetryWithFeedbackRecommendingMarker()
+    {
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("selector", "div:nth-child(3) > span:nth-of-type(2)");
+        final ArrayNode candidates = args.putArray("candidates");
+
+        final ObjectNode c1 = candidates.addObject();
+        c1.put("locator", "div:nth-child(3) > span:nth-of-type(2)");
+        c1.put("strategy", "SYNTHETIC");
+        c1.put("score", 0.20);
+
+        final ToolCall call = new ToolCall("call-fragile", "click", args);
+        final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+        Assertions.assertFalse(verdict.isAllowed());
+        Assertions.assertEquals(InterceptionVerdict.Decision.RETRY_WITH_FEEDBACK, verdict.decision());
+        Assertions.assertNotNull(verdict.rejectionResult());
+        Assertions.assertTrue(verdict.rejectionResult().content().contains("mark_elements"));
+        Assertions.assertTrue(verdict.rejectionResult().content().contains("marker:N"));
+        Assertions.assertTrue(verdict.reason().contains("fragile"));
+    }
+
+    @Test
+    public void testFragileSelectorWithMultipleCandidatesAllLowScoresReturnsRetryWithFeedback()
+    {
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("selector", ".css-soup-1");
+        final ArrayNode candidates = args.putArray("candidates");
+
+        final ObjectNode c1 = candidates.addObject();
+        c1.put("locator", ".css-soup-1");
+        c1.put("strategy", "CLASS");
+        c1.put("score", 0.25);
+
+        final ObjectNode c2 = candidates.addObject();
+        c2.put("locator", "div > .css-soup-1");
+        c2.put("strategy", "COMBINED");
+        c2.put("score", 0.30);
+
+        final ToolCall call = new ToolCall("call-soup", "click", args);
+        final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+        Assertions.assertFalse(verdict.isAllowed());
+        Assertions.assertEquals(InterceptionVerdict.Decision.RETRY_WITH_FEEDBACK, verdict.decision());
+        Assertions.assertNotNull(verdict.rejectionResult());
+        Assertions.assertTrue(verdict.rejectionResult().content().contains("mark_elements"));
+    }
+
+    @Test
+    public void testFragileSelectorWithGoodAlternativeDeliberatesToBetterCandidate()
+    {
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("selector", "div:nth-child(3) > span");
+        final ArrayNode candidates = args.putArray("candidates");
+
+        final ObjectNode c1 = candidates.addObject();
+        c1.put("locator", "div:nth-child(3) > span");
+        c1.put("strategy", "SYNTHETIC");
+        c1.put("score", 0.20);
+
+        final ObjectNode c2 = candidates.addObject();
+        c2.put("locator", "#good-id");
+        c2.put("strategy", "ID");
+        c2.put("score", 0.90);
+
+        final ToolCall call = new ToolCall("call-mixed", "click", args);
+        final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+        Assertions.assertTrue(verdict.isAllowed());
+        Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
+        Assertions.assertNotNull(verdict.adjustedCall());
+        Assertions.assertEquals("#good-id", verdict.adjustedCall().arguments().path("selector").asText());
+    }
+
+    @Test
+    public void testRecommendMarkerDisabledBypassesFeedback()
+    {
+        try
+        {
+            System.setProperty("neodymium.ai.judge.recommendMarker", "false");
+            final QualityJudgeToolInterceptor customInterceptor = new QualityJudgeToolInterceptor();
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "div:nth-child(3) > span");
+            final ArrayNode candidates = args.putArray("candidates");
+
+            final ObjectNode c1 = candidates.addObject();
+            c1.put("locator", "div:nth-child(3) > span");
+            c1.put("strategy", "SYNTHETIC");
+            c1.put("score", 0.20);
+
+            final ToolCall call = new ToolCall("call-no-rec", "click", args);
+            final InterceptionVerdict verdict = customInterceptor.intercept(call, this.context);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.judge.recommendMarker");
+        }
+    }
+
+    @Test
+    public void testVisualMarkerAndCoordinateLocatorsExemptFromJudging()
+    {
+        final ObjectNode markerArgs = MAPPER.createObjectNode();
+        markerArgs.put("target", "marker:3");
+        final ToolCall markerCall = new ToolCall("call-marker", "click", markerArgs);
+        final InterceptionVerdict markerVerdict = this.interceptor.intercept(markerCall, this.context);
+
+        Assertions.assertTrue(markerVerdict.isAllowed());
+        Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, markerVerdict.decision());
+        Assertions.assertTrue(markerVerdict.reason().contains("exempt"));
+
+        final ObjectNode coordArgs = MAPPER.createObjectNode();
+        coordArgs.put("target", "coord:100,200");
+        final ToolCall coordCall = new ToolCall("call-coord", "click", coordArgs);
+        final InterceptionVerdict coordVerdict = this.interceptor.intercept(coordCall, this.context);
+
+        Assertions.assertTrue(coordVerdict.isAllowed());
+        Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, coordVerdict.decision());
+        Assertions.assertTrue(coordVerdict.reason().contains("exempt"));
+    }
+
+    @Test
+    public void testMarkElementsToolExemptFromJudging()
+    {
+        final ObjectNode args = MAPPER.createObjectNode();
+        final ToolCall markCall = new ToolCall("call-mark", "mark_elements", args);
+        final InterceptionVerdict markVerdict = this.interceptor.intercept(markCall, this.context);
+
+        Assertions.assertTrue(markVerdict.isAllowed());
+        Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, markVerdict.decision());
+        Assertions.assertTrue(markVerdict.reason().contains("exempt"));
+
+        final ToolCall unmarkCall = new ToolCall("call-unmark", "unmark_elements", args);
+        final InterceptionVerdict unmarkVerdict = this.interceptor.intercept(unmarkCall, this.context);
+
+        Assertions.assertTrue(unmarkVerdict.isAllowed());
+        Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, unmarkVerdict.decision());
+        Assertions.assertTrue(unmarkVerdict.reason().contains("exempt"));
+    }
+
+    @Test
+    public void testFragileSelectorWithoutCandidatesWhenLocatorImproverDisabledRecommendsMarker()
+    {
+        final WebElement mockElement = (WebElement) Proxy.newProxyInstance(
+                WebElement.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (final Object proxy, final Method method, final Object[] args) ->
+                {
+                    if ("getTagName".equals(method.getName()))
+                    {
+                        return "button";
+                    }
+                    if ("getAttribute".equals(method.getName()) && args != null && args.length > 0)
+                    {
+                        if ("data-ai".equals(args[0]))
+                        {
+                            return "xc_anon_btn";
+                        }
+                        return null;
+                    }
+                    return null;
+                }
+        );
+
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+                WebDriver.class.getClassLoader(),
+                new Class<?>[]{WebDriver.class},
+                (final Object proxy, final Method method, final Object[] args) ->
+                {
+                    if ("findElements".equals(method.getName()))
+                    {
+                        return List.of(mockElement);
+                    }
+                    return List.of();
+                }
+        );
+
+        WebDriverRunner.setWebDriver(mockDriver);
+        try
+        {
+            System.setProperty("neodymium.ai.locatorImprover.enabled", "false");
+            System.setProperty("neodymium.ai.judge.enabled", "true");
+            System.setProperty("neodymium.ai.judge.recommendMarker", "true");
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "div._wrap_anon_2 button:nth-child(2)");
+
+            final ToolCall call = new ToolCall("call-deck-anon", "click", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+            Assertions.assertFalse(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.RETRY_WITH_FEEDBACK, verdict.decision());
+            Assertions.assertNotNull(verdict.rejectionResult());
+            Assertions.assertTrue(verdict.rejectionResult().content().contains("mark_elements"));
+            Assertions.assertTrue(verdict.rejectionResult().content().contains("marker:N"));
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.locatorImprover.enabled");
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.recommendMarker");
+            WebDriverRunner.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testTextPseudoSelector_allowedWhenUniqueWithJudgeEnabled()
+    {
+        final WebElement mockElement = (WebElement) Proxy.newProxyInstance(
+                WebElement.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (final Object proxy, final Method method, final Object[] args) ->
+                {
+                    if ("getTagName".equals(method.getName()))
+                    {
+                        return "a";
+                    }
+                    if ("getText".equals(method.getName()))
+                    {
+                        return "Tops";
+                    }
+                    return null;
+                }
+        );
+
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+                WebDriver.class.getClassLoader(),
+                new Class<?>[]{WebDriver.class},
+                (final Object proxy, final Method method, final Object[] args) ->
+                {
+                    if ("findElements".equals(method.getName()))
+                    {
+                        return List.of(mockElement);
+                    }
+                    return List.of();
+                }
+        );
+
+        WebDriverRunner.setWebDriver(mockDriver);
+        try
+        {
+            System.setProperty("neodymium.ai.locatorImprover.enabled", "false");
+            System.setProperty("neodymium.ai.judge.enabled", "true");
+            System.setProperty("neodymium.ai.judge.recommendMarker", "true");
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", ".plp-sidebar a:text-is(\"Tops\")");
+
+            final ToolCall call = new ToolCall("call-text-exact", "click", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+            Assertions.assertTrue(verdict.isAllowed(), "Exact text pseudo-selector with unique match must be allowed without marker recommendation");
+            Assertions.assertEquals(InterceptionVerdict.Decision.ALLOW, verdict.decision());
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.locatorImprover.enabled");
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.recommendMarker");
+            WebDriverRunner.closeWebDriver();
+        }
+    }
 }
+

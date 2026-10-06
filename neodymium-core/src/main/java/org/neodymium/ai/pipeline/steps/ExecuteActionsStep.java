@@ -33,6 +33,7 @@ import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
+import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
@@ -467,8 +468,9 @@ public final class ExecuteActionsStep
                     {
                         try
                         {
-                            final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                                    || (step != null && step.isFullPageVisualStep());
+                            final boolean isFullPageReq = !hasCoordinateAction(step)
+                                    && (Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                            || (step != null && step.isFullPageVisualStep()));
                             final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
 
                             final Object prevPostState = c.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);
@@ -653,8 +655,9 @@ public final class ExecuteActionsStep
 
                         if (isVisualRequired)
                         {
-                            final boolean isFullPageReq = Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
-                                    || (step != null && step.isFullPageVisualStep());
+                            final boolean isFullPageReq = !hasCoordinateAction(step)
+                                    && (Boolean.TRUE.equals(c.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                            || (step != null && step.isFullPageVisualStep()));
                             final ContextLevel cl = isFullPageReq ? ContextLevel.VISUAL_LEAN : ContextLevel.VISUAL;
                             final SutState postStepState = executor.captureState(cl, isFullPageReq);
                             if (postStepState != null)
@@ -983,5 +986,11 @@ public final class ExecuteActionsStep
             }
         }
         return result;
+    }
+
+    private static boolean hasCoordinateAction(final PlaybookStep step)
+    {
+        return step != null && step.getActions() != null && step.getActions().stream()
+            .anyMatch(a -> a != null && ClickAction.parseCoordinateTarget(a.getTarget()) != null);
     }
 }

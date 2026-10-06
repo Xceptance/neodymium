@@ -40,11 +40,11 @@
   "semanticContext" : null,
   "domFeatureVector" : null,
   "schemaVersion" : "4.0",
-  "contextLevel" : "LEAN",
+  "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 2736,
-  "startTimeMs" : 1791052600664,
+  "durationMs" : 3477,
+  "startTimeMs" : 1791242218778,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -57,7 +57,7 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_1105103",
+    "callId" : "call_252174",
     "toolName" : "navigate",
     "arguments" : {
       "url" : "${verla.url}/verla-perfect/index.html"
@@ -155,11 +155,11 @@
     "tileSsim" : ""
   },
   "schemaVersion" : "4.0",
-  "contextLevel" : "LEAN",
+  "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 2930,
-  "startTimeMs" : 1791052603472,
+  "durationMs" : 3424,
+  "startTimeMs" : 1791242222361,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -172,11 +172,12 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_1122248",
+    "callId" : "call_213802",
     "toolName" : "fill",
     "arguments" : {
-      "selector" : "#search-input",
       "text" : "${searchTerm}",
+      "pressEnter" : false,
+      "selector" : "#search-input",
       "domFeatureVector" : {
         "tag" : "input",
         "text" : "Search products...",
@@ -247,11 +248,11 @@
   "semanticContext" : null,
   "domFeatureVector" : null,
   "schemaVersion" : "4.0",
-  "contextLevel" : "LEAN",
+  "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 3192,
-  "startTimeMs" : 1791052606567,
+  "durationMs" : 3745,
+  "startTimeMs" : 1791242226023,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -264,7 +265,7 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_1550373",
+    "callId" : "call_255129",
     "toolName" : "press_key",
     "arguments" : {
       "selector" : "#search-input",

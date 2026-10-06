@@ -171,4 +171,37 @@ public class MarkdownReportGeneratorTest
         Assertions.assertTrue(md.contains("- **Step Mode:** `REPLAY`"),
             "Step 1 must display REPLAY step mode");
     }
+
+    @Test
+    public void testActivePropertiesRenderedInMarkdown()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestName("Markdown Properties Test");
+        report.setStatus("PASSED");
+        report.setSuccess(true);
+        report.addActiveProperty("neodymium.browser", "Chrome_1500x1000");
+        report.addActiveProperty("neodymium.url", "https://example.com");
+
+        final MarkdownReportGenerator generator = new MarkdownReportGenerator();
+        final String md = generator.generate(report);
+
+        Assertions.assertTrue(md.contains("## ⚙️ Active Properties"), "Markdown must have Active Properties section");
+        Assertions.assertTrue(md.contains("| `neodymium.browser` | `Chrome_1500x1000` |"), "Markdown must contain browser property row");
+        Assertions.assertTrue(md.contains("| `neodymium.url` | `https://example.com` |"), "Markdown must contain url property row");
+    }
+
+    @Test
+    public void testActivePropertiesEmptyStateInMarkdown()
+    {
+        final TestExecutionReport report = new TestExecutionReport();
+        report.setTestName("Empty Markdown Test");
+        report.setStatus("PASSED");
+        report.setSuccess(true);
+
+        final MarkdownReportGenerator generator = new MarkdownReportGenerator();
+        final String md = generator.generate(report);
+
+        Assertions.assertTrue(md.contains("## ⚙️ Active Properties"), "Markdown must have Active Properties section");
+        Assertions.assertTrue(md.contains("_No active properties recorded._"), "Markdown must display empty message");
+    }
 }

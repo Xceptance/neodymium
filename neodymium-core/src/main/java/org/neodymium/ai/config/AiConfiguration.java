@@ -23,6 +23,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -94,6 +95,28 @@ public final class AiConfiguration
     public AiConfiguration()
     {
         loadHierarchicalProperties();
+    }
+
+    /**
+     * Returns an unmodifiable snapshot of all loaded configuration property names and their resolved values.
+     *
+     * @return map of all loaded configuration property names and their resolved values
+     */
+    public Map<String, String> getAllProperties()
+    {
+        final Map<String, String> all = new HashMap<>();
+        for (final String name : this.properties.stringPropertyNames())
+        {
+            all.put(name, getProperty(name, ""));
+        }
+        for (final String sysName : System.getProperties().stringPropertyNames())
+        {
+            if (sysName.startsWith("neodymium.ai"))
+            {
+                all.put(sysName, getProperty(sysName, ""));
+            }
+        }
+        return Collections.unmodifiableMap(all);
     }
 
     /**
@@ -539,6 +562,28 @@ public final class AiConfiguration
     public boolean isJudgeEnabled()
     {
         return getBoolean("neodymium.ai.judge.enabled", false);
+    }
+
+    /**
+     * Checks if the Quality Judge or selector evaluation recommends visual markers
+     * when encountering fragile or volatile locators.
+     *
+     * @return true if visual marker recommendation on bad selectors is enabled (default: true), false otherwise
+     */
+    public boolean isJudgeRecommendMarkerEnabled()
+    {
+        return getBoolean("neodymium.ai.judge.recommendMarker", true);
+    }
+
+    /**
+     * Checks if synthetic automation ID attributes (data-ai) should be stamped into the DOM
+     * and included in structural DOM tree captures.
+     *
+     * @return true if data-ai stamping is enabled, false otherwise (default: false)
+     */
+    public boolean isDataAiEnabled()
+    {
+        return getBoolean("neodymium.ai.dataAi.enabled", false);
     }
 
 
