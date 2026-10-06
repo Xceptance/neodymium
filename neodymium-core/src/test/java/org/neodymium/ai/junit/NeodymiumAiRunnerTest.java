@@ -33,6 +33,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.resources.InMemoryResourceManager;
+import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.util.Neodymium;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -523,6 +525,34 @@ public class NeodymiumAiRunnerTest
     }
 
     /**
+     * Sample test class decorated with AUTO mode where companion recording has a mismatched source YAML hash.
+     */
+    public static class AutoModeWithMismatchedHashTestClass
+    {
+        @Test
+        @AiMode(ExecutionMode.AUTO)
+        @AiInlinePlaybook("name: auto_mode_sample\nsteps:\n  - step: Click search button\n")
+        @AiPlaybook(recordingFileName = "stale_hash_recording")
+        public void testAutoWithMismatchedHash()
+        {
+        }
+    }
+
+    /**
+     * Sample test class decorated with REPLAY_STRICT where companion recording has a mismatched source YAML hash.
+     */
+    public static class ReplayStrictWithMismatchedHashTestClass
+    {
+        @Test
+        @AiMode(ExecutionMode.REPLAY_STRICT)
+        @AiInlinePlaybook("name: strict_mode_sample\nsteps:\n  - step: Click search button\n")
+        @AiPlaybook(recordingFileName = "strict_stale_hash_recording")
+        public void testStrictWithMismatchedHash()
+        {
+        }
+    }
+
+    /**
      * Goal: Verifies that AUTO mode dynamically resolves to LLM_RECORDING when no companion
      * JSON recording exists on disk, without throwing FileNotFoundException.
      */
@@ -605,6 +635,117 @@ public class NeodymiumAiRunnerTest
             final AiSession session = (AiSession) extensionContext.getStore(null).get(AiSession.class);
             Assertions.assertNotNull(session);
             Assertions.assertEquals(ExecutionMode.REPLAY_WITH_HEALING, session.getExecutionMode());
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.playbook.recordingDirectory");
+            AiConfiguration.resetInstance();
+        }
+    }
+
+    /**
+     * Goal: Verifies that computeResourceSha256 produces identical hashes for CRLF and LF content.
+     */
+    @Test
+    public void testComputeResourceSha256LineEndingInvariance() throws Exception
+    {
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("lf.yaml", "name: test\r\nsteps:\r\n  - step: hello\r\n");
+        manager.write("crlf.yaml", "name: test\nsteps:\n  - step: hello\n");
+
+        final String hashLf = NeodymiumAiRunner.computeResourceSha256(manager, "lf.yaml");
+        final String hashCrlf = NeodymiumAiRunner.computeResourceSha256(manager, "crlf.yaml");
+
+        Assertions.assertNotNull(hashLf);
+        Assertions.assertNotNull(hashCrlf);
+        Assertions.assertEquals(hashLf, hashCrlf, "SHA-256 computation must normalize line endings and produce identical hashes");
+    }
+
+    /**
+     * Goal: Verifies that AUTO mode discards a stale companion recording when source YAML hash differs,
+     * surfaces an execution warning, and falls back to live LLM_RECORDING mode.
+     */
+    @Test
+    public void testAutoModeDiscardsStaleRecordingWhenSourceYamlHashDiffers(@TempDir final Path tempDir) throws Exception
+    {
+        final Path recordingFile = tempDir.resolve("stale_hash_recording.json");
+        Files.writeString(recordingFile, "[{\"step\":\"Click search button\",\"sourceYamlHash\":\"stale_deadbeef1234\",\"actions\":[]}]");
+
+        System.setProperty("neodymium.ai.playbook.recordingDirectory", tempDir.toString());
+        AiConfiguration.resetInstance();
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = AutoModeWithMismatchedHashTestClass.class.getMethod("testAutoWithMismatchedHash");
+            final ExtensionContext extensionContext = createMockExtensionContext(AutoModeWithMismatchedHashTestClass.class, method);
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final BeforeEachCallback beforeEach = (BeforeEachCallback) invocations.get(0).getAdditionalExtensions().stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            beforeEach.beforeEach(extensionContext);
+
+            final ExecutionContext execCtx = (ExecutionContext) extensionContext.getStore(null).get(ExecutionContext.class);
+            Assertions.assertNotNull(execCtx);
+            Assertions.assertEquals(ExecutionMode.LLM_RECORDING, execCtx.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE));
+            Assertions.assertEquals(ExecutionMode.AUTO, execCtx.getTransientData().get(ExecutionContext.KEY_CONFIGURED_EXECUTION_MODE));
+            Assertions.assertNull(execCtx.getTransientData().get("playbookRecordingFile"), "Stale recording path must not be bound");
+
+            final AiSession session = (AiSession) extensionContext.getStore(null).get(AiSession.class);
+            Assertions.assertNotNull(session);
+            Assertions.assertEquals(ExecutionMode.LLM_RECORDING, session.getExecutionMode());
+
+            @SuppressWarnings("unchecked")
+            final List<String> warnings = (List<String>) execCtx.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+            Assertions.assertNotNull(warnings);
+            Assertions.assertTrue(warnings.stream().anyMatch(w -> w.contains("discarded") && w.contains("stale_hash_recording.json")));
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.playbook.recordingDirectory");
+            AiConfiguration.resetInstance();
+        }
+    }
+
+    /**
+     * Goal: Verifies that REPLAY_STRICT fails immediately with IllegalStateException when source YAML hash differs.
+     */
+    @Test
+    public void testReplayStrictThrowsWhenSourceYamlHashDiffers(@TempDir final Path tempDir) throws Exception
+    {
+        final Path recordingFile = tempDir.resolve("strict_stale_hash_recording.json");
+        Files.writeString(recordingFile, "[{\"step\":\"Click search button\",\"sourceYamlHash\":\"stale_deadbeef1234\",\"actions\":[]}]");
+
+        System.setProperty("neodymium.ai.playbook.recordingDirectory", tempDir.toString());
+        AiConfiguration.resetInstance();
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = ReplayStrictWithMismatchedHashTestClass.class.getMethod("testStrictWithMismatchedHash");
+            final ExtensionContext extensionContext = createMockExtensionContext(ReplayStrictWithMismatchedHashTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final BeforeEachCallback beforeEach = (BeforeEachCallback) invocations.get(0).getAdditionalExtensions().stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            final IllegalStateException ex = Assertions.assertThrows(IllegalStateException.class, () ->
+            {
+                beforeEach.beforeEach(extensionContext);
+            });
+
+            Assertions.assertTrue(ex.getMessage().contains("has been modified since recording"),
+                "Exception message must specify source YAML modification");
         }
         finally
         {

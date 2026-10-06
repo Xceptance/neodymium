@@ -587,10 +587,13 @@ Neodymium AI provides two complementary visual snapshot testing modes: **pixel-e
 * **`(layout)`**: Injects a client-side color wireframe transformation (`neodymium-color-wireframe.js`), turning text into solid skeleton bars and images into geometric placeholders while preserving computed brand styling, typography colors, margins, and alignments. Records a $128 \times 128 \times 3$ (49,152-byte) RGB color SSIM matrix.
 * **`(layout: full)` / `(layout-full)` / `(layout_full)`**: Applies the color wireframe transformation across the full scrollable page height and records a full-page color SSIM matrix baseline.
 * **Custom Tolerance Thresholds**: Authors can override default thresholds directly in the directive or via standalone threshold tags:
-  - `Verify homepage header (layout: threshold: 0.90)`
+  - `Verify homepage header (layout: threshold=0.90)`
   - `Verify hero layout (layout: 95%)`
-  - `Verify product catalog layout (layout: full, minScore: 0.88)`
-  - `Verify status badge (visual: min-score: 0.98)`
+  - `Verify product catalog layout (layout: full, minScore=0.88)`
+  - `Verify status badge (visual: min-score=0.98)`
+> [!TIP]
+> **YAML Syntax Rule for Key-Value Directive Parameters:**
+> When writing steps as unquoted YAML list items (`- Verify ...`), always use `=` instead of `: ` for parameter values (e.g. `min-score=0.98` or `threshold=0.90`). In YAML plain scalars, a colon followed by space (`: `) is treated as a YAML mapping indicator, which causes SnakeYAML to abort parsing with `mapping values are not allowed here`. Alternatively, enclose the full instruction in double quotes (e.g. `"- Verify status badge (visual: min-score: 0.98)"`).
 * **Persistent Full-Page Flag During Escalation**: Stored in step transient data as `KEY_IS_FULL_PAGE_SCREENSHOT = true`. Escalation (`VISUAL` $\rightarrow$ `VISUAL_LEAN` $\rightarrow$ `VISUAL_RICH`) **continuously preserves full-page screenshot capture**.
 * **Author Tag Protection**: Explicit `(visual)`, `(visual: full)`, and `(layout)` tags set by the test author are strictly protected from being overwritten or downgraded.
 
@@ -1366,8 +1369,8 @@ Authors can override the threshold per step:
 ```yaml
 steps: |
   Open ${app.url}/catalog
-  Verify product grid layout (layout: threshold: 0.90)
-  Verify checkout summary styling (layout: full, min-score: 0.95)
+  Verify product grid layout (layout: threshold=0.90)
+  Verify checkout summary styling (layout: full, min-score=0.95)
 ```
 
 #### D. Deterministic Zero-Token Replay ($< 15\text{ms}$)

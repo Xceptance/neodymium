@@ -1759,6 +1759,71 @@ public final class ExecuteActionsStepTest
         assertNull(mockProvider.getLastRequest(), "LLM must NOT be invoked when natural language verification step fails");
         assertFalse(context.getTransientData().containsKey(ExecutionContext.KEY_IS_HEALED_STEP));
     }
+
+    /**
+     * Goal: Verifies that when a visual baseline check fails against SUT during REPLAY_WITH_HEALING,
+     * ExecuteActionsStep catches HealingRequiredException from VisualBaselineGateStep and pushes
+     * AgentToolLoopStep for online visual healing instead of escaping uncaught.
+     */
+    @Test
+    public void testReplayWithHealingTriggersAgentToolLoopStepOnVisualBaselineMismatch() throws Exception
+    {
+        final BufferedImage img1 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = img1.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 200, 200);
+        g1.dispose();
+
+        final BufferedImage img2 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = img2.createGraphics();
+        g2.setColor(Color.BLACK);
+        g2.fillRect(0, 0, 200, 200);
+        g2.dispose();
+
+        final String base64Png1 = encodeToBase64(img1);
+        final String base64Png2 = encodeToBase64(img2);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state2 = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png2)),
+            "content_hash");
+        for (int i = 0; i < 6; i++)
+        {
+            executor.enqueueState(state2);
+        }
+
+        final SessionData sessionData = new SessionData(Collections.emptyMap());
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry llmRegistry = new LlmRegistry();
+        llmRegistry.setDefaultProvider(mockProvider);
+
+        final AiSession session = AiSession.mock(
+            ExecutionMode.REPLAY_WITH_HEALING,
+            sessionData,
+            llmRegistry,
+            new ExecutionEventBus(),
+            executor);
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String baselineHash = ScreenshotHasher.computeSsimMatrix(base64Png1);
+        final PlaybookStep visualStep = new PlaybookStep("Verify logo (visual: min-score=0.99)");
+        visualStep.setScreenshotHash(baselineHash);
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(visualStep, session, context);
+
+        // Executing the pipeline step must catch HealingRequiredException internally and route to AgentToolLoopStep
+        pipelineStep.execute(context);
+
+        assertTrue(Boolean.TRUE.equals(context.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP)),
+            "Visual baseline gate failure must flag the step as requiring healing");
+        assertTrue(context.hasSteps(), "Context must have healing steps queued");
+        final PipelineStep nextStep = context.popStep();
+        assertTrue(nextStep instanceof AgentToolLoopStep, "Context top step must be AgentToolLoopStep for online visual healing");
+    }
 }
 
 

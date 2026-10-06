@@ -19,11 +19,15 @@
 package org.neodymium.ai.junit;
 
 import com.codeborne.selenide.WebDriverRunner;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.ByteArrayInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -73,6 +77,8 @@ import org.neodymium.util.Neodymium;
 
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleServer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * JUnit 5 {@link TestTemplateInvocationContextProvider} implementation for Neodymium AI tests.
@@ -83,6 +89,8 @@ import com.xceptance.neodymium.ai.console.InteractiveConsoleServer;
  */
 public final class NeodymiumAiRunner implements TestTemplateInvocationContextProvider
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(NeodymiumAiRunner.class);
+
     /**
      * In-memory storage for inline playbooks registered at test runtime.
      */
@@ -1174,6 +1182,61 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     }
                 }
 
+                if (companionJsonPath != null)
+                {
+                    String companionYamlPath = (playbookPath != null && !playbookPath.isEmpty()) ? playbookPath : resolvedPlaybookPath;
+                    if (companionYamlPath != null && companionYamlPath.endsWith(".json"))
+                    {
+                        final String fallbackYamlPath = companionYamlPath.substring(0, companionYamlPath.length() - 5) + ".yaml";
+                        try (final InputStream in = manager.read(fallbackYamlPath))
+                        {
+                            if (in != null)
+                            {
+                                companionYamlPath = fallbackYamlPath;
+                            }
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
+
+                    final String freshYamlHash = computeResourceSha256(manager, companionYamlPath);
+                    final String recordedHash = readRecordingSourceYamlHash(manager, companionJsonPath);
+
+                    if (freshYamlHash != null && recordedHash != null && !freshYamlHash.equalsIgnoreCase(recordedHash))
+                    {
+                        if (this.mode == ExecutionMode.REPLAY_STRICT)
+                        {
+                            final String msg = String.format(
+                                "Replay mode '%s' failed for test '%s.%s': Source YAML '%s' (SHA-256: %s...) has been modified since recording '%s' (SHA-256: %s...) was generated.",
+                                this.mode,
+                                testClass != null ? testClass.getSimpleName() : "UnknownClass",
+                                method != null ? method.getName() : "unknownMethod",
+                                companionYamlPath,
+                                freshYamlHash.substring(0, Math.min(8, freshYamlHash.length())),
+                                companionJsonPath,
+                                recordedHash.substring(0, Math.min(8, recordedHash.length()))
+                            );
+                            LOGGER.error("❌ {}", msg);
+                            throw new IllegalStateException(msg);
+                        }
+                        else
+                        {
+                            final String warning = String.format(
+                                "⚠️ Stale companion recording '%s' (SHA-256: %s...) discarded: source YAML '%s' was modified (SHA-256: %s...). Executing in live LLM_RECORDING mode to regenerate recording.",
+                                companionJsonPath,
+                                recordedHash.substring(0, Math.min(8, recordedHash.length())),
+                                companionYamlPath,
+                                freshYamlHash.substring(0, Math.min(8, freshYamlHash.length()))
+                            );
+                            LOGGER.warn(warning);
+                            addExecutionWarning(executionContext, warning);
+                            executionContext.getTransientData().put(ExecutionContext.KEY_YAML_MISMATCH_WARNING, warning);
+                            companionJsonPath = null;
+                        }
+                    }
+                }
+
                 if (this.mode == ExecutionMode.AUTO)
                 {
                     if (companionJsonPath != null)
@@ -1181,14 +1244,14 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                         this.effectiveMode = ExecutionMode.REPLAY_WITH_HEALING;
                         resolvedPlaybookPath = companionJsonPath;
                         executionContext.getTransientData().put("playbookRecordingFile", companionJsonPath);
-                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).info(
+                        LOGGER.info(
                             "AUTO mode: Found recorded companion JSON at '{}'. Executing in REPLAY_WITH_HEALING mode.", companionJsonPath);
                     }
                     else
                     {
                         this.effectiveMode = ExecutionMode.LLM_RECORDING;
-                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).info(
-                            "AUTO mode: No recorded companion JSON found for '{}.{}'. Falling back to live LLM_RECORDING mode.",
+                        LOGGER.info(
+                            "AUTO mode: No valid recorded companion JSON found for '{}.{}'. Falling back to live LLM_RECORDING mode.",
                             testClass != null ? testClass.getSimpleName() : "UnknownClass",
                             method != null ? method.getName() : "unknownMethod"
                         );
@@ -1202,6 +1265,16 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                         executionContext.getTransientData().put("playbookRecordingFile", companionJsonPath);
                         resolvedPlaybookPath = companionJsonPath;
                     }
+                    else if (this.mode == ExecutionMode.REPLAY_WITH_HEALING)
+                    {
+                        this.effectiveMode = ExecutionMode.LLM_RECORDING;
+                        this.session.setExecutionMode(this.effectiveMode);
+                        LOGGER.info(
+                            "REPLAY_WITH_HEALING mode: Discarded stale recording for '{}.{}'. Falling back to live LLM_RECORDING mode to record fresh execution.",
+                            testClass != null ? testClass.getSimpleName() : "UnknownClass",
+                            method != null ? method.getName() : "unknownMethod"
+                        );
+                    }
                     else
                     {
                         final String msg = String.format(
@@ -1212,8 +1285,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                             method != null ? method.getName() : "unknownMethod",
                             String.join("\n  - ", candidatePaths.stream().filter(p -> p != null && !p.isEmpty()).distinct().toList())
                         );
-                        org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).error("❌ {}", msg);
-                        throw new java.io.FileNotFoundException(msg);
+                        LOGGER.error("❌ {}", msg);
+                        throw new FileNotFoundException(msg);
                     }
                 }
             }
@@ -1324,17 +1397,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                         resolvedPlaybookPath,
                         recordedHash.substring(0, Math.min(8, recordedHash.length()))
                     );
-                    org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).warn("⚠️ [YAML Coherence Mismatch] {}", warning);
+                    LOGGER.warn("⚠️ [YAML Coherence Mismatch] {}", warning);
                     executionContext.getTransientData().put(ExecutionContext.KEY_YAML_MISMATCH_WARNING, warning);
-
-                    @SuppressWarnings("unchecked")
-                    List<String> warningsList = (List<String>) executionContext.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
-                    if (warningsList == null)
-                    {
-                        warningsList = new ArrayList<>();
-                        executionContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_WARNINGS, warningsList);
-                    }
-                    warningsList.add(warning);
+                    addExecutionWarning(executionContext, warning);
                 }
             }
 
@@ -1776,20 +1841,22 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         }
     }
 
-    private static String computeResourceSha256(final PlaybookResourceManager manager, final String path)
+    static String computeResourceSha256(final PlaybookResourceManager manager, final String path)
     {
         if (manager == null || path == null || path.isEmpty())
         {
             return null;
         }
-        try (final java.io.InputStream in = manager.read(path))
+        try (final InputStream in = manager.read(path))
         {
             if (in == null)
             {
                 return null;
             }
-            final byte[] bytes = in.readAllBytes();
-            final java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            final byte[] rawBytes = in.readAllBytes();
+            final String normalized = new String(rawBytes, StandardCharsets.UTF_8).replace("\r\n", "\n").replace("\r", "\n");
+            final byte[] bytes = normalized.getBytes(StandardCharsets.UTF_8);
+            final MessageDigest digest = MessageDigest.getInstance("SHA-256");
             final byte[] hash = digest.digest(bytes);
             final StringBuilder hex = new StringBuilder();
             for (final byte b : hash)
@@ -1802,6 +1869,82 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         {
             return null;
         }
+    }
+
+    static String readRecordingSourceYamlHash(final PlaybookResourceManager manager, final String jsonPath)
+    {
+        if (manager == null || jsonPath == null || jsonPath.isEmpty())
+        {
+            return null;
+        }
+        try (final InputStream in = manager.read(jsonPath))
+        {
+            if (in == null)
+            {
+                return null;
+            }
+            final JsonNode root = new ObjectMapper().readTree(in);
+            if (root.isArray())
+            {
+                for (final JsonNode stepNode : root)
+                {
+                    if (stepNode.hasNonNull("sourceYamlHash"))
+                    {
+                        final String hash = stepNode.get("sourceYamlHash").asText();
+                        if (!hash.isBlank())
+                        {
+                            return hash;
+                        }
+                    }
+                }
+            }
+            else if (root.isObject())
+            {
+                if (root.hasNonNull("sourceYamlHash"))
+                {
+                    final String hash = root.get("sourceYamlHash").asText();
+                    if (!hash.isBlank())
+                    {
+                        return hash;
+                    }
+                }
+                if (root.has("steps") && root.get("steps").isArray())
+                {
+                    for (final JsonNode stepNode : root.get("steps"))
+                    {
+                        if (stepNode.hasNonNull("sourceYamlHash"))
+                        {
+                            final String hash = stepNode.get("sourceYamlHash").asText();
+                            if (!hash.isBlank())
+                            {
+                                return hash;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            LOGGER.debug("Could not read sourceYamlHash from recording JSON {}: {}", jsonPath, e.getMessage());
+        }
+        return null;
+    }
+
+    private static void addExecutionWarning(final ExecutionContext context, final String warning)
+    {
+        if (context == null || warning == null || warning.isBlank())
+        {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        List<String> warningsList = (List<String>) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+        if (warningsList == null)
+        {
+            warningsList = new ArrayList<>();
+            context.getTransientData().put(ExecutionContext.KEY_EXECUTION_WARNINGS, warningsList);
+        }
+        warningsList.add(warning);
     }
 
     private static void flattenSteps(final List<PlaybookStep> source, final List<PlaybookStep> target)
