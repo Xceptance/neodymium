@@ -43,6 +43,7 @@ import dev.langchain4j.model.chat.response.ChatResponse;
 import dev.langchain4j.model.googleai.GeminiThinkingConfig;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import dev.langchain4j.model.googleai.GoogleAiGeminiTokenUsage;
+import dev.langchain4j.model.output.FinishReason;
 import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
@@ -502,6 +503,12 @@ public final class GeminiLlmProvider implements LlmProvider
                     request.reasoningEffort()
                 );
                 final ChatResponse response = activeModel.chat(chatRequest);
+                if (response.finishReason() == FinishReason.LENGTH)
+                {
+                    final int maxTokens = ResponseSchema.resolveMaxOutputTokens(request.responseSchema());
+                    LOGGER.warn("⚠️ Gemini response truncated because maxOutputTokens ({}) was reached (finishReason: LENGTH). Model: {}, Usage: {}",
+                        maxTokens, this.modelName, response.tokenUsage());
+                }
 
                 final var usage = response.tokenUsage();
 

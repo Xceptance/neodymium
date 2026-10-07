@@ -951,13 +951,20 @@ public final class PreliminaryReportListener implements ExecutionListener
         }
         else if (event instanceof SessionFinishedEvent sessionFinished)
         {
-            this.report.setEndTimeMs(System.currentTimeMillis());
-            this.report.setDurationMs(sessionFinished.getDurationMs());
-            this.report.setSuccess(sessionFinished.isSuccess());
-            this.report.setStatus(sessionFinished.isSuccess() ? "PASSED" : "FAILED");
+            final long now = System.currentTimeMillis();
+            this.report.setEndTimeMs(now);
+            final long totalDuration = (this.report.getStartTimeMs() > 0)
+                ? Math.max(sessionFinished.getDurationMs(), now - this.report.getStartTimeMs())
+                : sessionFinished.getDurationMs();
+            this.report.setDurationMs(totalDuration);
+
+            final boolean wasAlreadyFailed = "FAILED".equalsIgnoreCase(this.report.getStatus());
+            final boolean cumulativeSuccess = !wasAlreadyFailed && sessionFinished.isSuccess();
+            this.report.setSuccess(cumulativeSuccess);
+            this.report.setStatus(cumulativeSuccess ? "PASSED" : "FAILED");
             this.report.addWarnings(sessionFinished.getWarnings());
 
-            if (sessionFinished.isSuccess())
+            if (cumulativeSuccess)
             {
                 this.report.setFailureReason(null);
                 this.report.setFailureStackTrace(null);
@@ -1899,10 +1906,7 @@ public final class PreliminaryReportListener implements ExecutionListener
      */
     public synchronized void flushReport()
     {
-        if (!this.reportFlushed.compareAndSet(false, true))
-        {
-            return;
-        }
+        this.reportFlushed.set(true);
 
         try
         {
@@ -1919,7 +1923,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                 Files.createDirectories(this.outputDirectory);
             }
 
-            final String baseFileName = computeBaseFileName();
+            final String baseFileName = (this.lastBaseFileName != null) ? this.lastBaseFileName : computeBaseFileName();
             this.lastBaseFileName = baseFileName;
 
             for (final DiskReportFormat format : this.formats)
