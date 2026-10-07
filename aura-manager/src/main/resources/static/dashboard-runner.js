@@ -1063,8 +1063,49 @@ function closePlaybookInspector() {
     }
 }
 
+function acceptPlaybookHealing(btnOrFile, datasetId, stepIndex, actionIndex) {
+    let file = btnOrFile;
+    let dsId = datasetId;
+    let sIdx = stepIndex;
+    let aIdx = actionIndex;
+    if (typeof btnOrFile === 'object' && btnOrFile !== null) {
+        file = btnOrFile.getAttribute('data-file');
+        dsId = btnOrFile.getAttribute('data-id') || '';
+        sIdx = btnOrFile.getAttribute('data-step-index');
+        aIdx = btnOrFile.getAttribute('data-action-index');
+    }
+    let url = `/api/playbook/accept-healing?file=${encodeURIComponent(file || '')}&id=${encodeURIComponent(dsId || '')}`;
+    if (sIdx !== null && sIdx !== undefined && sIdx !== '') {
+        url += `&stepIndex=${encodeURIComponent(sIdx)}`;
+    }
+    if (aIdx !== null && aIdx !== undefined && aIdx !== '') {
+        url += `&actionIndex=${encodeURIComponent(aIdx)}`;
+    }
+    fetch(url, { method: 'POST', headers: { 'HX-Request': 'true' } })
+        .then(res => {
+            if (!res.ok) throw new Error('Failed to accept playbook healing');
+            return res.text();
+        })
+        .then(html => {
+            const currentPanel = document.getElementById('playbookSidePagePanel');
+            if (currentPanel) {
+                const temp = document.createElement('div');
+                temp.innerHTML = html;
+                const newPanel = temp.querySelector('#playbookSidePagePanel') || temp.firstElementChild;
+                if (newPanel) {
+                    currentPanel.replaceWith(newPanel);
+                    if (window.htmx) htmx.process(newPanel);
+                }
+            }
+        })
+        .catch(err => {
+            console.error('Error accepting playbook healing:', err);
+        });
+}
+
 window.openPlaybookInspector = openPlaybookInspector;
 window.closePlaybookInspector = closePlaybookInspector;
+window.acceptPlaybookHealing = acceptPlaybookHealing;
 
 
 

@@ -147,4 +147,22 @@ public final class AreaSummaryDto
     {
         return testClasses;
     }
+
+    public int getPassedHealedCount()
+    {
+        if (testClasses != null)
+        {
+            return testClasses.stream().mapToInt(TestClassSummaryDto::getPassedHealedCount).sum();
+        }
+        return 0;
+    }
+
+    public int getFailedHealedCount()
+    {
+        if (testClasses != null)
+        {
+            return testClasses.stream().mapToInt(TestClassSummaryDto::getFailedHealedCount).sum();
+        }
+        return 0;
+    }
 }

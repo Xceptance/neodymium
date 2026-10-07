@@ -32,6 +32,7 @@ import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
 import java.io.File;
 import java.io.IOException;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -193,6 +194,9 @@ public class RunStorageSyncService
                                             {
                                                 final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
                                                 final String rawStatus = exec.path("status").asText("failed-unknown");
+                                                final boolean isHealed = (exec.has("healed") && exec.path("healed").asBoolean(false))
+                                                                      || (exec.has("healedStepsCount") && exec.path("healedStepsCount").asInt(0) > 0)
+                                                                      || "healed".equalsIgnoreCase(rawStatus);
                                                 final List<String> bugList = new ArrayList<>();
                                                 if (exec.has("bugs") && exec.path("bugs").isArray())
                                                 {
@@ -206,13 +210,14 @@ public class RunStorageSyncService
                                                 }
                                                 final String bugsStr = !bugList.isEmpty() ? String.join(";", bugList) : "";
 
-                                                final String enrichedUrl = "/run-report?runId=" + java.net.URLEncoder.encode(rId, java.nio.charset.StandardCharsets.UTF_8)
-                                                    + (curExecId != null && !curExecId.trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(curExecId.trim(), java.nio.charset.StandardCharsets.UTF_8) : "")
-                                                    + "&batch=" + java.net.URLEncoder.encode(bName, java.nio.charset.StandardCharsets.UTF_8)
-                                                    + "&engine=" + java.net.URLEncoder.encode(engine, java.nio.charset.StandardCharsets.UTF_8)
-                                                    + "&ts=" + java.net.URLEncoder.encode(ts, java.nio.charset.StandardCharsets.UTF_8)
-                                                    + "&status=" + java.net.URLEncoder.encode(rawStatus, java.nio.charset.StandardCharsets.UTF_8)
-                                                    + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, java.nio.charset.StandardCharsets.UTF_8) : "");
+                                                final String enrichedUrl = "/run-report?runId=" + URLEncoder.encode(rId, StandardCharsets.UTF_8)
+                                                    + (curExecId != null && !curExecId.trim().isEmpty() ? "&executionId=" + URLEncoder.encode(curExecId.trim(), StandardCharsets.UTF_8) : "")
+                                                    + "&batch=" + URLEncoder.encode(bName, StandardCharsets.UTF_8)
+                                                    + "&engine=" + URLEncoder.encode(engine, StandardCharsets.UTF_8)
+                                                    + "&ts=" + URLEncoder.encode(ts, StandardCharsets.UTF_8)
+                                                    + "&status=" + URLEncoder.encode(rawStatus, StandardCharsets.UTF_8)
+                                                    + (isHealed ? "&healed=true" : "")
+                                                    + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
 
                                                 upgradedLinks.add(enrichedUrl);
                                                 modified = true;
@@ -531,7 +536,7 @@ public class RunStorageSyncService
                             calcUnknown++;
                         }
                     }
-                    else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus))
+                    else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus) || "healed".equalsIgnoreCase(rawStatus))
                     {
                         if (hasBugs)
                         {
@@ -584,18 +589,24 @@ public class RunStorageSyncService
                             varEntity = new TestBaseVariationEntity(varId, testClass, testMethod, dataSet, "@General", location, browser);
                         }
 
+                        final boolean isHealed = (exec.has("healed") && exec.path("healed").asBoolean(false))
+                                              || (exec.has("healedStepsCount") && exec.path("healedStepsCount").asInt(0) > 0)
+                                              || "healed".equalsIgnoreCase(rawStatus);
+
                         varEntity.setLastStatus(effectiveStatus);
                         varEntity.setLastExecutedAt(System.currentTimeMillis());
+                        varEntity.setHealed(isHealed);
 
                         final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
 
-                        final String relUrl = "/run-report?runId=" + java.net.URLEncoder.encode(runId, java.nio.charset.StandardCharsets.UTF_8)
-                            + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(execId.trim(), java.nio.charset.StandardCharsets.UTF_8) : "")
-                            + "&batch=" + java.net.URLEncoder.encode(batchName, java.nio.charset.StandardCharsets.UTF_8)
-                            + "&engine=" + java.net.URLEncoder.encode(engine, java.nio.charset.StandardCharsets.UTF_8)
-                            + "&ts=" + java.net.URLEncoder.encode(timestamp, java.nio.charset.StandardCharsets.UTF_8)
-                            + "&status=" + java.net.URLEncoder.encode(effectiveStatus, java.nio.charset.StandardCharsets.UTF_8)
-                            + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, java.nio.charset.StandardCharsets.UTF_8) : "");
+                        final String relUrl = "/run-report?runId=" + URLEncoder.encode(runId, StandardCharsets.UTF_8)
+                            + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + URLEncoder.encode(execId.trim(), StandardCharsets.UTF_8) : "")
+                            + "&batch=" + URLEncoder.encode(batchName, StandardCharsets.UTF_8)
+                            + "&engine=" + URLEncoder.encode(engine, StandardCharsets.UTF_8)
+                            + "&ts=" + URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
+                            + "&status=" + URLEncoder.encode(effectiveStatus, StandardCharsets.UTF_8)
+                            + (isHealed ? "&healed=true" : "")
+                            + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
 
                         final String currentHistory = varEntity.getHistoryLinks();
                         if (currentHistory == null || currentHistory.trim().isEmpty())

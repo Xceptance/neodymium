@@ -18,6 +18,10 @@
  */
 package com.xceptance.aura.report.dto;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -39,6 +43,39 @@ public final class TestBaseVariationHistoryDto
     private final String statusClass;
     private final String statusLabel;
     private final List<String> bugs;
+    private final boolean healed;
+    private final boolean passedHealed;
+    private final boolean failedHealed;
+
+    public TestBaseVariationHistoryDto(
+        final String runId,
+        final String executionId,
+        final String batchName,
+        final String mode,
+        final String engine,
+        final String timestamp,
+        final String status,
+        final String statusClass,
+        final String statusLabel,
+        final List<String> bugs,
+        final boolean healed,
+        final boolean passedHealed,
+        final boolean failedHealed)
+    {
+        this.runId = runId != null ? runId : "";
+        this.executionId = executionId != null ? executionId : "";
+        this.batchName = batchName != null ? batchName : "Unknown";
+        this.mode = mode != null && !mode.isBlank() ? mode : "FORCE_RECORDING";
+        this.engine = engine != null ? engine : "Java";
+        this.timestamp = formatTimestamp(timestamp);
+        this.status = status != null ? status : "passed-clean";
+        this.statusClass = statusClass != null ? statusClass : "badge-pass";
+        this.statusLabel = statusLabel != null ? statusLabel : "PASSED";
+        this.bugs = bugs != null ? new ArrayList<>(bugs) : new ArrayList<>();
+        this.healed = healed;
+        this.passedHealed = passedHealed;
+        this.failedHealed = failedHealed;
+    }
 
     public TestBaseVariationHistoryDto(
         final String runId,
@@ -52,16 +89,7 @@ public final class TestBaseVariationHistoryDto
         final String statusLabel,
         final List<String> bugs)
     {
-        this.runId = runId != null ? runId : "";
-        this.executionId = executionId != null ? executionId : "";
-        this.batchName = batchName != null ? batchName : "Unknown";
-        this.mode = mode != null && !mode.isBlank() ? mode : "FORCE_RECORDING";
-        this.engine = engine != null ? engine : "Java";
-        this.timestamp = formatTimestamp(timestamp);
-        this.status = status != null ? status : "passed-clean";
-        this.statusClass = statusClass != null ? statusClass : "badge-pass";
-        this.statusLabel = statusLabel != null ? statusLabel : "PASSED";
-        this.bugs = bugs != null ? new ArrayList<>(bugs) : new ArrayList<>();
+        this(runId, executionId, batchName, mode, engine, timestamp, status, statusClass, statusLabel, bugs, false, false, false);
     }
 
     private static String formatTimestamp(final String raw)
@@ -73,16 +101,16 @@ public final class TestBaseVariationHistoryDto
         final String trimmed = raw.trim();
         try
         {
-            final java.time.Instant instant = java.time.Instant.parse(trimmed);
-            final java.time.LocalDateTime ldt = java.time.LocalDateTime.ofInstant(instant, java.time.ZoneId.systemDefault());
-            return ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            final Instant instant = Instant.parse(trimmed);
+            final LocalDateTime ldt = LocalDateTime.ofInstant(instant, ZoneId.systemDefault());
+            return ldt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
         }
         catch (final Exception e1)
         {
             try
             {
-                final java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(trimmed.replace(" ", "T"));
-                return ldt.format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+                final LocalDateTime ldt = LocalDateTime.parse(trimmed.replace(" ", "T"));
+                return ldt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
             }
             catch (final Exception e2)
             {
@@ -102,7 +130,7 @@ public final class TestBaseVariationHistoryDto
         final String statusLabel,
         final List<String> bugs)
     {
-        this(runId, "", batchName, mode, engine, timestamp, status, statusClass, statusLabel, bugs);
+        this(runId, "", batchName, mode, engine, timestamp, status, statusClass, statusLabel, bugs, false, false, false);
     }
 
     public String getRunId()
@@ -153,5 +181,20 @@ public final class TestBaseVariationHistoryDto
     public List<String> getBugs()
     {
         return bugs;
+    }
+
+    public boolean isHealed()
+    {
+        return healed;
+    }
+
+    public boolean isPassedHealed()
+    {
+        return passedHealed;
+    }
+
+    public boolean isFailedHealed()
+    {
+        return failedHealed;
     }
 }

@@ -229,7 +229,11 @@ public final class InteractiveConsoleListener implements ExecutionListener
         }
         else if (event instanceof SessionFinishedEvent sessionFinished)
         {
-            final String overallStatus = sessionFinished.isSuccess() ? "passed" : "failed";
+            final TestExecutionReport rep = getReport();
+            final boolean hasHealed = (rep != null && rep.getMetrics() != null && rep.getMetrics().getHealedSteps() > 0)
+                || (this.session != null && this.session.getExecutionContext() != null
+                    && Boolean.TRUE.equals(this.session.getExecutionContext().getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP)));
+            final String overallStatus = !sessionFinished.isSuccess() ? "failed" : (hasHealed ? "healed" : "passed");
 
             if (this.interactive)
             {

@@ -128,6 +128,7 @@
                                     th:data-test-method="${var.testMethodName ?: ''}"
                                     th:data-dataset="${var.dataSetLabel}" 
                                     th:data-status="${var.lastStatus}" 
+                                    th:data-healed="${var.healed or var.lastStatus == 'healed'}"
                                     th:data-location="${var.location}" 
                                     th:data-browser="${var.browser}">
                                     <td>
@@ -143,8 +144,8 @@
                                             <span class="badge-status badge-pass" th:if="${var.lastStatus == 'passed-clean' or var.lastStatus == 'passed' or var.lastStatus == 'succeeded' or var.lastStatus == null}">
                                                 <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED
                                             </span>
-                                            <span class="badge-status badge-healed" th:if="${var.lastStatus == 'succeeded-fixed' or var.lastStatus == 'fixed' or var.lastStatus == 'healed'}">
-                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> SUCCEEDED-FIXED
+                                            <span class="badge-status badge-fixed" th:if="${var.lastStatus == 'succeeded-fixed' or var.lastStatus == 'fixed'}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> SUCCEEDED-FIXED
                                             </span>
                                             <span class="badge-status badge-known-fail" th:if="${var.lastStatus == 'failed-known' or var.lastStatus == 'known'}">
                                                 <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL
@@ -154,6 +155,9 @@
                                             </span>
                                             <span class="badge-status badge-ignored" th:if="${var.lastStatus == 'ignored' or var.lastStatus == 'skipped'}">
                                                 <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED
+                                            </span>
+                                            <span class="badge-status badge-healed" th:if="${var.healed or var.lastStatus == 'healed'}" style="font-size: 0.72rem; padding: 0.15rem 0.45rem;" title="Test had dynamic self-healing">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> HEALED
                                             </span>
                                             <span class="font-mono" style="font-size: 0.78rem; color: var(--text-main);" th:text="${'(' + var.totalExecutionsCount + ' runs)'}">(1 runs)</span>
                                         </div>

@@ -472,9 +472,9 @@ public class LocalRunJsonStorageService
                                 unknown++;
                             }
                         }
-                        else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus))
+                        else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus) || "healed".equalsIgnoreCase(rawStatus))
                         {
-                            if (hasBugs)
+                            if (hasBugs || "succeeded-fixed".equalsIgnoreCase(rawStatus))
                             {
                                 fixed++;
                             }
@@ -611,8 +611,18 @@ public class LocalRunJsonStorageService
                     metricObj.put("testMethod", tMethod);
                     metricObj.put("title", tTitle);
                     metricObj.put("location", loc);
-                    metricObj.put("browser", tBrowser);
-                    metricObj.put("status", objNode.path("status").asText("failed-unknown"));
+                    final String baseStatus = objNode.path("status").asText("failed-unknown");
+                    final boolean hasBugsNode = objNode.has("bugs") && objNode.get("bugs").isArray() && objNode.get("bugs").size() > 0;
+                    final String effStatus;
+                    if ("healed".equalsIgnoreCase(baseStatus))
+                    {
+                        effStatus = hasBugsNode ? "succeeded-fixed" : "passed-clean";
+                    }
+                    else
+                    {
+                        effStatus = baseStatus;
+                    }
+                    metricObj.put("status", effStatus);
                     metricObj.put("areaName", objNode.path("areaName").asText("Browsing (default)"));
                     if (objNode.has("startTime"))
                     {
@@ -628,9 +638,15 @@ public class LocalRunJsonStorageService
                     metricObj.put("durationMs", durMs);
                     metricObj.put("durationFormatted", objNode.hasNonNull("durationFormatted") ? objNode.path("durationFormatted").asText() : RunStorageSyncService.formatDurationMs(durMs));
 
+                    final int healedSteps = extractStepsHealed(objNode);
+                    final boolean isHealed = (objNode.has("healed") && objNode.path("healed").asBoolean(false))
+                        || healedSteps > 0
+                        || "healed".equalsIgnoreCase(baseStatus);
+
                     metricObj.put("totalStepsCount", extractStepsTotal(objNode));
                     metricObj.put("failedStepsCount", extractStepsFailed(objNode));
-                    metricObj.put("healedStepsCount", extractStepsHealed(objNode));
+                    metricObj.put("healedStepsCount", healedSteps);
+                    metricObj.put("healed", isHealed);
                     metricObj.put("llmCallsCount", extractLlmCalls(objNode));
                     metricObj.put("llmTotalTokens", extractLlmTokens(objNode));
                     metricObj.put("llmCost", extractLlmCost(objNode));
@@ -854,8 +870,32 @@ public class LocalRunJsonStorageService
         {
             return node.path("healedStepsCount").asInt();
         }
+        int count = 0;
+        final JsonNode blocks = node.path("blocks");
+        if (blocks.isObject())
+        {
+            for (final String key : List.of("before", "steps", "after"))
+            {
+                final JsonNode arr = blocks.path(key);
+                if (arr.isArray())
+                {
+                    for (final JsonNode step : arr)
+                    {
+                        final String st = step.path("status").asText("");
+                        if ("healed".equalsIgnoreCase(st) || step.path("healed").asBoolean(false))
+                        {
+                            count++;
+                        }
+                    }
+                }
+            }
+        }
+        if (count > 0)
+        {
+            return count;
+        }
         final String status = node.path("status").asText("");
-        return "succeeded-fixed".equalsIgnoreCase(status) || "fixed".equalsIgnoreCase(status) || "healed".equalsIgnoreCase(status) ? 1 : 0;
+        return (node.path("healed").asBoolean(false) || "healed".equalsIgnoreCase(status)) ? 1 : 0;
     }
 
     private int extractLlmCalls(final JsonNode node)
@@ -927,13 +967,31 @@ public class LocalRunJsonStorageService
                 stepObj.put("file", file + ".java");
                 stepObj.put("source", stepNode.path("engine").asText(stepNode.path("source").asText(defaultEngine)));
 
+                final JsonNode sourceActions = stepNode.path("actions");
+                final String stepStatusRaw = stepNode.path("status").asText("");
+                boolean isHealed = "healed".equalsIgnoreCase(stepStatusRaw) || stepNode.path("healed").asBoolean(false);
+                if (!isHealed && sourceActions.isArray())
+                {
+                    for (final JsonNode a : sourceActions)
+                    {
+                        if (a.has("healed") && a.get("healed").asBoolean(false))
+                        {
+                            isHealed = true;
+                            break;
+                        }
+                    }
+                }
                 final boolean isPassed = stepNode.path("passed").asBoolean(true);
-                stepObj.put("status", isPassed ? "passed" : "failed");
+                final String stepStatus = isHealed ? "healed" : (isPassed ? "passed" : "failed");
+                stepObj.put("status", stepStatus);
+                if (isHealed)
+                {
+                    stepObj.put("healed", true);
+                }
                 stepObj.put("screenshot", stepNode.path("screenshot").asText(""));
                 stepObj.put("error", stepNode.path("error").asText(""));
 
                 final ArrayNode actionsArr = mapper.createArrayNode();
-                final JsonNode sourceActions = stepNode.path("actions");
                 if (sourceActions.isArray())
                 {
                     for (final JsonNode actNode : sourceActions)
@@ -943,7 +1001,15 @@ public class LocalRunJsonStorageService
                         actObj.put("type", actName);
                         actObj.put("name", actName);
                         actObj.put("target", actNode.path("target").asText(""));
+                        if (actNode.has("resolvedTarget") && !actNode.path("resolvedTarget").asText().isBlank())
+                        {
+                            actObj.put("resolvedTarget", actNode.path("resolvedTarget").asText());
+                        }
                         actObj.put("value", actNode.path("value").asText(""));
+                        if (actNode.has("resolvedValue") && !actNode.path("resolvedValue").asText().isBlank())
+                        {
+                            actObj.put("resolvedValue", actNode.path("resolvedValue").asText());
+                        }
                         actObj.put("description", actNode.path("description").asText("Executed " + actName + " action"));
                         final String reasoning = actNode.path("reasoning").asText("");
                         if (!reasoning.isEmpty())
@@ -953,6 +1019,22 @@ public class LocalRunJsonStorageService
                         if (actNode.has("success") && actNode.get("success").isBoolean())
                         {
                             actObj.put("success", actNode.get("success").asBoolean());
+                        }
+                        if (actNode.has("healed") && actNode.get("healed").isBoolean())
+                        {
+                            actObj.put("healed", actNode.get("healed").asBoolean());
+                        }
+                        if (actNode.has("expectedTarget") && !actNode.path("expectedTarget").asText().isBlank())
+                        {
+                            actObj.put("expectedTarget", actNode.path("expectedTarget").asText());
+                        }
+                        if (actNode.has("originalTarget") && !actNode.path("originalTarget").asText().isBlank())
+                        {
+                            actObj.put("originalTarget", actNode.path("originalTarget").asText());
+                        }
+                        if (actNode.has("healedFrom") && !actNode.path("healedFrom").asText().isBlank())
+                        {
+                            actObj.put("healedFrom", actNode.path("healedFrom").asText());
                         }
                         actionsArr.add(actObj);
                     }

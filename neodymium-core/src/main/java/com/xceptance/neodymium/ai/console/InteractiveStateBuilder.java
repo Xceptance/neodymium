@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.ai.console;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -43,6 +44,7 @@ import org.neodymium.ai.session.AiSession;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
 /**
@@ -436,6 +438,38 @@ public final class InteractiveStateBuilder
         blocks.add("after", afterArray);
         state.add("blocks", blocks);
 
+        final boolean hasHealedReport = (execReport != null && execReport.getMetrics() != null && execReport.getMetrics().getHealedSteps() > 0)
+            || (context != null && Boolean.TRUE.equals(context.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP)));
+        boolean anyStepHealed = hasHealedReport;
+        if (!anyStepHealed)
+        {
+            for (final JsonArray arr : List.of(beforeArray, stepsArray, afterArray))
+            {
+                for (final JsonElement elem : arr)
+                {
+                    if (elem.isJsonObject())
+                    {
+                        final JsonObject stepObj = elem.getAsJsonObject();
+                        final String st = stepObj.has("status") && !stepObj.get("status").isJsonNull() ? stepObj.get("status").getAsString() : "";
+                        final boolean isHealed = (stepObj.has("healed") && !stepObj.get("healed").isJsonNull() && stepObj.get("healed").getAsBoolean()) || "healed".equalsIgnoreCase(st);
+                        if (isHealed)
+                        {
+                            anyStepHealed = true;
+                            break;
+                        }
+                    }
+                }
+                if (anyStepHealed)
+                {
+                    break;
+                }
+            }
+        }
+        if (anyStepHealed && state.has("status") && ("passed".equalsIgnoreCase(state.get("status").getAsString()) || "succeeded".equalsIgnoreCase(state.get("status").getAsString())))
+        {
+            state.addProperty("status", "healed");
+        }
+
         // Enrich with TestExecutionReport data if available
         if (execReport != null)
         {
@@ -620,13 +654,18 @@ public final class InteractiveStateBuilder
 
         final String statusStr = switch (status)
         {
-            case SUCCESS, HEALED -> "passed";
+            case SUCCESS -> "passed";
+            case HEALED -> "healed";
             case RUNNING -> "running";
             case FAILED -> "failed";
             case SKIPPED -> "skipped";
             case PENDING, SPLITTED -> "pending";
         };
         obj.addProperty("status", statusStr);
+        if (status == PlaybookStepStatus.HEALED)
+        {
+            obj.addProperty("healed", true);
+        }
 
         Long stepStart = step.getStartTimeMs();
         if (stepStart == null && isCurrentSection && stepIndex == activeStepIndex && context != null)
@@ -635,7 +674,7 @@ public final class InteractiveStateBuilder
         }
         if (stepStart != null && stepStart > 0)
         {
-            obj.addProperty("startTimestamp", java.time.Instant.ofEpochMilli(stepStart).toString());
+            obj.addProperty("startTimestamp", Instant.ofEpochMilli(stepStart).toString());
         }
 
         Long stepDuration = step.getDurationMs();
@@ -697,6 +736,17 @@ public final class InteractiveStateBuilder
                     actObj.addProperty("value", action.getValue() != null ? action.getValue() : "");
                     actObj.addProperty("description", action.getDescription() != null ? action.getDescription() : "");
                     actObj.addProperty("reasoning", action.getReasoning() != null ? action.getReasoning() : "");
+                    final String expectedTarget = action.getExpectedTarget();
+                    if (expectedTarget != null && !expectedTarget.isBlank() && !expectedTarget.equals(action.getTarget()))
+                    {
+                        actObj.addProperty("expectedTarget", expectedTarget);
+                        actObj.addProperty("originalTarget", expectedTarget);
+                        actObj.addProperty("healedFrom", expectedTarget);
+                    }
+                    if (action.isHealed())
+                    {
+                        actObj.addProperty("healed", true);
+                    }
                     actionsArray.add(actObj);
                 }
             }
@@ -731,10 +781,25 @@ public final class InteractiveStateBuilder
             obj.addProperty("continueOnError", reportStep.isContinueOnError());
             obj.addProperty("noHealing", reportStep.isNoHealing());
             obj.addProperty("visual", reportStep.isVisual());
+            if (reportStep.isHealed() || "HEALED".equalsIgnoreCase(reportStep.getStatus()))
+            {
+                obj.addProperty("status", "healed");
+                obj.addProperty("healed", true);
+            }
 
             if (!reportStep.getActions().isEmpty())
             {
-                obj.add("actions", serializeReportActions(reportStep.getActions()));
+                final JsonArray reportActions = serializeReportActions(reportStep.getActions());
+                obj.add("actions", reportActions);
+                for (final JsonElement actElem : reportActions)
+                {
+                    if (actElem.isJsonObject() && actElem.getAsJsonObject().has("healed") && actElem.getAsJsonObject().get("healed").getAsBoolean())
+                    {
+                        obj.addProperty("status", "healed");
+                        obj.addProperty("healed", true);
+                        break;
+                    }
+                }
             }
             else
             {
@@ -1005,11 +1070,48 @@ public final class InteractiveStateBuilder
                 {
                     final JsonObject actObj = new JsonObject();
                     actObj.addProperty("type", action.getType() != null ? action.getType() : "");
-                    actObj.addProperty("target", action.getTarget() != null ? action.getTarget() : "");
-                    actObj.addProperty("value", action.getValue() != null ? action.getValue() : "");
-                    actObj.addProperty("description", action.getDescription() != null ? action.getDescription() : "");
+
+                    final String resolvedTarget = action.getResolvedTarget();
+                    final String originalTarget = action.getTarget() != null ? action.getTarget() : "";
+                    final String effectiveTarget = (resolvedTarget != null && !resolvedTarget.isBlank()) ? resolvedTarget : originalTarget;
+                    actObj.addProperty("target", effectiveTarget);
+                    if (resolvedTarget != null && !resolvedTarget.isBlank())
+                    {
+                        actObj.addProperty("resolvedTarget", resolvedTarget);
+                    }
+
+                    final String resolvedValue = action.getResolvedValue();
+                    final String originalValue = action.getValue() != null ? action.getValue() : "";
+                    final String effectiveValue = (resolvedValue != null && !resolvedValue.isBlank()) ? resolvedValue : originalValue;
+                    actObj.addProperty("value", effectiveValue);
+                    if (resolvedValue != null && !resolvedValue.isBlank())
+                    {
+                        actObj.addProperty("resolvedValue", resolvedValue);
+                    }
+
+                    String description = action.getDescription() != null ? action.getDescription() : "";
+                    if (resolvedTarget != null && !resolvedTarget.isBlank() && !originalTarget.isBlank() && description.contains(originalTarget))
+                    {
+                        description = description.replace(originalTarget, resolvedTarget);
+                    }
+                    actObj.addProperty("description", description);
                     actObj.addProperty("reasoning", action.getReasoning() != null ? action.getReasoning() : "");
                     actObj.addProperty("success", action.isSuccess());
+                    if (action.isHealed())
+                    {
+                        actObj.addProperty("healed", true);
+                    }
+                    String expectedTarget = action.getExpectedTarget();
+                    if ((expectedTarget == null || expectedTarget.isBlank()) && (action.isHealed() || (resolvedTarget != null && !resolvedTarget.isBlank() && !resolvedTarget.equals(originalTarget))))
+                    {
+                        expectedTarget = originalTarget;
+                    }
+                    if (expectedTarget != null && !expectedTarget.isBlank() && !expectedTarget.equals(effectiveTarget))
+                    {
+                        actObj.addProperty("expectedTarget", expectedTarget);
+                        actObj.addProperty("originalTarget", expectedTarget);
+                        actObj.addProperty("healedFrom", expectedTarget);
+                    }
                     arr.add(actObj);
                 }
             }

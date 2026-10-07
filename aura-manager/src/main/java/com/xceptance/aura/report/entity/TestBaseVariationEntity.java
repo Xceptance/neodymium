@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.report.entity;
 
+import com.xceptance.aura.report.service.AuraReportDataService;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -70,6 +71,9 @@ public class TestBaseVariationEntity
     @Column(name = "last_executed_at")
     private Long lastExecutedAt;
 
+    @Column(name = "healed")
+    private Boolean healed = false;
+
     @Lob
     @Column(name = "history_links", columnDefinition = "CLOB")
     private String historyLinks;
@@ -90,8 +94,8 @@ public class TestBaseVariationEntity
         this.testMethodName = (testMethodName != null && !testMethodName.isBlank()) ? testMethodName.trim() : null;
         this.dataSetLabel = (dataSetLabel != null && !dataSetLabel.isBlank()) ? dataSetLabel.trim() : "Default";
         this.areaTag = areaTag;
-        this.location = com.xceptance.aura.report.service.AuraReportDataService.normalizeLocation(location);
-        this.browser = com.xceptance.aura.report.service.AuraReportDataService.normalizeBrowser(browser);
+        this.location = AuraReportDataService.normalizeLocation(location);
+        this.browser = AuraReportDataService.normalizeBrowser(browser);
     }
 
     public String getId()
@@ -202,5 +206,20 @@ public class TestBaseVariationEntity
     public void setHistoryLinks(final String historyLinks)
     {
         this.historyLinks = historyLinks;
+    }
+
+    public Boolean isHealed()
+    {
+        return healed != null && healed;
+    }
+
+    public Boolean getHealed()
+    {
+        return healed;
+    }
+
+    public void setHealed(final Boolean healed)
+    {
+        this.healed = healed != null ? healed : false;
     }
 }

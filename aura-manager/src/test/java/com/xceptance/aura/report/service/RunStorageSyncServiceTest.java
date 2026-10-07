@@ -35,9 +35,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.aura.report.dto.AreaSummaryDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestClassSummaryDto;
+import com.xceptance.aura.report.dto.TestExecutionDto;
 import com.xceptance.aura.report.entity.TestBaseBugEntity;
+import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 import com.xceptance.aura.report.entity.TestRunEntity;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
+import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
 
 /**
@@ -65,6 +68,9 @@ public class RunStorageSyncServiceTest
 
     @Autowired
     private AuraReportDataService dataService;
+
+    @Autowired
+    private TestBaseVariationRepository variationRepository;
 
     @AfterEach
     public void cleanup() throws IOException
@@ -770,5 +776,257 @@ public class RunStorageSyncServiceTest
             }
         }
     }
+
+    @Test
+    public void testHealedActionTargetPreservedInStorageService() throws Exception
+    {
+        final String runId = "run_test_healed_action_" + System.currentTimeMillis();
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Aura_my_test_yaml_Test");
+        Files.createDirectories(execDir);
+
+        final String healedJson = """
+            {
+              "runId": "%s",
+              "status": "passed",
+              "testName": "Aura_my_test_yaml_Test",
+              "blocks": {
+                "steps": [
+                  {
+                    "instruction": "Select language",
+                    "status": "passed",
+                    "actions": [
+                      {
+                        "type": "SELECT",
+                        "target": "#searchLanguage",
+                        "resolvedTarget": "#searchLanguage",
+                        "expectedTarget": "#selectLanguage",
+                        "originalTarget": "#selectLanguage",
+                        "healedFrom": "#selectLanguage",
+                        "value": "en",
+                        "resolvedValue": "en",
+                        "healed": true
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+            """.formatted(runId);
+
+        final Path execFile = execDir.resolve("console-execution-1.json");
+        Files.writeString(execFile, healedJson);
+
+        try
+        {
+            final ObjectMapper mapper = new ObjectMapper();
+            final JsonNode rootNode = mapper.readTree(execFile.toFile());
+            final TestExecutionDto dto = mapper.treeToValue(rootNode, TestExecutionDto.class);
+            Assertions.assertNotNull(dto.getBlocks(), "Blocks should be populated");
+
+            final JsonNode actionNode = dto.getBlocks().path("steps").get(0).path("actions").get(0);
+            Assertions.assertEquals("#searchLanguage", actionNode.path("target").asText());
+            Assertions.assertEquals("#searchLanguage", actionNode.path("resolvedTarget").asText());
+            Assertions.assertEquals("#selectLanguage", actionNode.path("expectedTarget").asText());
+            Assertions.assertEquals("#selectLanguage", actionNode.path("originalTarget").asText());
+            Assertions.assertEquals("#selectLanguage", actionNode.path("healedFrom").asText());
+            Assertions.assertTrue(actionNode.path("healed").asBoolean(), "healed flag should be true");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testHealedStepAndExecutionStatusInStorageAndDto() throws IOException
+    {
+        final String runId = "run-healed-status-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Yaml").resolve("YamlTest");
+        Files.createDirectories(execDir);
+
+        final String healedJson = """
+            {
+              "id": "yaml-exec-1",
+              "runId": "%s",
+              "testClass": "YamlTest",
+              "status": "passed",
+              "blocks": {
+                "steps": [
+                  {
+                    "instruction": "Select language",
+                    "status": "healed",
+                    "healed": true,
+                    "actions": [
+                      {
+                        "type": "SELECT",
+                        "target": "#searchLanguage",
+                        "expectedTarget": "#selectLanguage",
+                        "healed": true
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+            """.formatted(runId);
+
+        final Path execFile = execDir.resolve("console-execution-1.json");
+        Files.writeString(execFile, healedJson);
+
+        try
+        {
+            final ObjectMapper mapper = new ObjectMapper();
+            final JsonNode rootNode = mapper.readTree(execFile.toFile());
+            final TestExecutionDto dto = mapper.treeToValue(rootNode, TestExecutionDto.class);
+            Assertions.assertEquals("PASSED", dto.getDisplayStatusKey());
+            Assertions.assertTrue(dto.isHealed(), "Execution should be marked as healed");
+            Assertions.assertTrue(dto.isPassedHealed(), "Execution should be passed healed");
+            Assertions.assertFalse(dto.isFailedHealed(), "Execution should not be failed healed");
+
+            final Optional<String> runJsonOpt = storageService.buildRunJsonContent(runDir.toFile(), runId, true);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "run.json content should be generated");
+            final JsonNode runNode = mapper.readTree(runJsonOpt.get());
+            Assertions.assertEquals(0, runNode.path("summary").path("fixed").asInt(), "Fixed count should be 0 because no bugs are linked");
+            Assertions.assertEquals(1, runNode.path("summary").path("pass").asInt(), "Passed count should be 1");
+            final RunReportDto report = dataService.getRunReport(runId);
+            Assertions.assertNotNull(report, "RunReportDto should not be null");
+            Assertions.assertEquals(0, report.getFixedCount(), "RunReport should reflect 0 fixed tests (no bugs)");
+            Assertions.assertEquals(1, report.getPassCount(), "RunReport should reflect 1 passed test");
+            Assertions.assertEquals(1, report.getPassedHealedCount(), "RunReport should reflect 1 passed healed test");
+            Assertions.assertEquals(0, report.getFailedHealedCount(), "RunReport should reflect 0 failed healed tests");
+            Assertions.assertEquals(1, report.getHealedCount(), "RunReport should reflect 1 healed step");
+            Assertions.assertEquals("PASSED", report.getExecutions().get(0).getDisplayStatusKey());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testFailedHealedStepAndExecutionStatusInStorageAndDto() throws Exception
+    {
+        final String runId = "run-failed-healed-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Yaml").resolve("YamlFailTest");
+        Files.createDirectories(execDir);
+
+        final String failedHealedJson = """
+            {
+              "id": "yaml-exec-fail-1",
+              "runId": "%s",
+              "testClass": "YamlFailTest",
+              "status": "failed-unknown",
+              "failure": "Element not clickable",
+              "blocks": {
+                "steps": [
+                  {
+                    "instruction": "Select language",
+                    "status": "healed",
+                    "healed": true,
+                    "actions": [
+                      {
+                        "type": "SELECT",
+                        "target": "#searchLanguage",
+                        "expectedTarget": "#selectLanguage",
+                        "healed": true
+                      }
+                    ]
+                  },
+                  {
+                    "instruction": "Click checkout",
+                    "status": "failed",
+                    "error": "Element not clickable"
+                  }
+                ]
+              }
+            }
+            """.formatted(runId);
+
+        final Path execFile = execDir.resolve("console-execution-fail-1.json");
+        Files.writeString(execFile, failedHealedJson);
+
+        try
+        {
+            final ObjectMapper mapper = new ObjectMapper();
+            final JsonNode rootNode = mapper.readTree(execFile.toFile());
+            final TestExecutionDto dto = mapper.treeToValue(rootNode, TestExecutionDto.class);
+            Assertions.assertEquals("FAILED_UNKNOWN", dto.getDisplayStatusKey());
+            Assertions.assertTrue(dto.isHealed(), "Execution should be marked as healed");
+            Assertions.assertFalse(dto.isPassedHealed(), "Execution should not be passed healed");
+            Assertions.assertTrue(dto.isFailedHealed(), "Execution should be failed healed");
+
+            final Optional<String> runJsonOpt = storageService.buildRunJsonContent(runDir.toFile(), runId, true);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "run.json content should be generated");
+            final JsonNode runNode = mapper.readTree(runJsonOpt.get());
+            Assertions.assertEquals(0, runNode.path("summary").path("fixed").asInt(), "Fixed count should be 0");
+            Assertions.assertEquals(0, runNode.path("summary").path("pass").asInt(), "Passed count should be 0");
+            Assertions.assertEquals(1, runNode.path("summary").path("unknown").asInt(), "Unknown fail count should be 1");
+            final RunReportDto report = dataService.getRunReport(runId);
+            Assertions.assertNotNull(report, "RunReportDto should not be null");
+            Assertions.assertEquals(0, report.getFixedCount(), "RunReport should reflect 0 fixed tests");
+            Assertions.assertEquals(0, report.getPassCount(), "RunReport should reflect 0 passed tests");
+            Assertions.assertEquals(0, report.getPassedHealedCount(), "RunReport should reflect 0 passed healed tests");
+            Assertions.assertEquals(1, report.getFailedHealedCount(), "RunReport should reflect 1 failed healed test");
+            Assertions.assertEquals(1, report.getHealedCount(), "RunReport should reflect 1 healed step");
+            Assertions.assertEquals("FAILED_UNKNOWN", report.getExecutions().get(0).getDisplayStatusKey());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testSyncExecutionWithHealedSetsVariationEntityHealedAndHistoryLink() throws IOException
+    {
+        final String runId = "run-healed-sync-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path execDir = runDir.resolve("Checkout").resolve("HealedSyncTest");
+
+        final String testClass = "HealedSyncTest";
+        final String testMethod = "testAutoHeal";
+        final String dataSet = "Default";
+        final String location = "US";
+        final String browser = "Chrome";
+        final String varId = AuraReportDataService.generateVariationId(testClass, testMethod, dataSet, location, browser);
+
+        try
+        {
+            Files.createDirectories(execDir);
+
+            final String execJson = """
+                {
+                    "id": "exec-healed-1",
+                    "title": "Default",
+                    "testClass": "HealedSyncTest",
+                    "testMethod": "testAutoHeal",
+                    "status": "passed-clean",
+                    "healed": true,
+                    "location": "US",
+                    "browser": "Chrome"
+                }
+                """;
+            Files.writeString(execDir.resolve("exec-1.json"), execJson);
+
+            Assertions.assertTrue(syncService.importOrUpdateRunReport(runId), "Import should succeed");
+
+            final Optional<TestBaseVariationEntity> varOpt = variationRepository.findById(varId);
+            Assertions.assertTrue(varOpt.isPresent(), "Variation entity should be created/updated in database");
+            final TestBaseVariationEntity varEntity = varOpt.get();
+            Assertions.assertTrue(varEntity.isHealed(), "Variation entity should be marked as healed");
+            Assertions.assertNotNull(varEntity.getHistoryLinks(), "History links should not be null");
+            Assertions.assertTrue(varEntity.getHistoryLinks().contains("&healed=true"), "History link should contain &healed=true");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+            variationRepository.findById(varId).ifPresent(variationRepository::delete);
+        }
+    }
 }
+
 

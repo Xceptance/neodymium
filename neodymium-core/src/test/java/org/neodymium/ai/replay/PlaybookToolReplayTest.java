@@ -250,6 +250,7 @@ public class PlaybookToolReplayTest
         Assertions.assertTrue(aee.isHealed(), "ActionExecutedEvent must be marked as healed");
         Assertions.assertEquals("button.old-class", aee.getAction().getTarget(), "Canonical target must be recorded selector");
         Assertions.assertEquals("#submit-order", aee.getResolvedAction().getTarget(), "Resolved target must be healed selector");
+        Assertions.assertEquals("button.old-class", aee.getResolvedAction().getExpectedTarget(), "Expected target must be recorded selector");
     }
 
     @Test

@@ -745,10 +745,16 @@ function buildStepDetailsHtml(step, isActiveStep) {
         : actionsList.length > 0
             ? actionsList.map((a) => {
                 const parts = [];
-                if (a.target) parts.push(`<span style="color:var(--text-main);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;">${escHtml(a.target)}</span>`);
-                if (a.value) parts.push(`<span style="color:var(--text-secondary);font-size:11px;">= <code style="background:rgba(255,255,255,0.06);padding:0 4px;border-radius:3px;">${escHtml(a.value)}</code></span>`);
+                const actTarget = a.resolvedTarget || a.target || '';
+                const actVal = a.resolvedValue || a.value || '';
+                if (actTarget) parts.push(`<span style="color:var(--text-main);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:260px;">${escHtml(actTarget)}</span>`);
+                if (actVal) parts.push(`<span style="color:var(--text-secondary);font-size:11px;">= <code style="background:rgba(255,255,255,0.06);padding:0 4px;border-radius:3px;">${escHtml(actVal)}</code></span>`);
+                const origTarget = a.expectedTarget || a.originalTarget || a.healedFrom || (a.healed && a.target && a.target !== actTarget ? a.target : null);
+                if (origTarget && origTarget !== actTarget) {
+                    parts.push(`<span class="action-healed-from" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#c084fc;"><span>🧬 Healed from:</span><span style="padding:1px 5px;background:rgba(192,132,252,0.15);border:1px solid rgba(192,132,252,0.4);border-radius:3px;text-decoration:line-through;font-family:monospace;">${escHtml(origTarget)}</span></span>`);
+                }
                 if (a.durationMs) parts.push(`<span style="color:var(--text-muted);font-size:10px;margin-left:auto;white-space:nowrap;"><span class="material-symbols-outlined" style="color:var(--accent-warning);">bolt</span> ${(a.durationMs / 1000).toFixed(2)}s</span>`);
-                return `<div class="acc-action-row">
+                return `<div class="acc-action-row" style="flex-wrap:wrap;gap:6px;">
                             <span class="acc-action-type-badge" data-type="${escAttr(a.type || 'unknown')}">${escHtml(a.type || 'unknown')}</span>
                             ${parts.join('')}
                         </div>`;

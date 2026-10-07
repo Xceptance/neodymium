@@ -746,9 +746,31 @@ function resetGlobalTestFilters() {
     document.querySelectorAll('#runReportSubTabAllTests .js-chk-all, #runReportSubTabAllTests .js-chk-option').forEach(c => c.checked = true);
     document.querySelectorAll('#runReportSubTabAllTests .js-selected-text').forEach(s => s.innerText = 'All Selected');
     activeWholeExecutionFilter = null;
+    currentGlobalStatusBadgeFilter = 'ALL';
+    currentExecutionStatusFilter = 'ALL';
+    currentExecutionModeFilter = 'ALL';
+    currentHealedFilter = 'ALL';
     document.querySelectorAll('#runReportSubTabOverview .metric-card').forEach(card => card.classList.remove('active-filter'));
-    document.querySelectorAll('.js-filter-badge').forEach(b => b.classList.remove('active-filter'));
-    applyRunReportFilters();
+    document.querySelectorAll('.js-filter-badge').forEach(b => b.classList.remove('active-filter', 'active-filter-badge'));
+    document.querySelectorAll('#healedFilterToggle .segment-btn').forEach(btn => {
+        if (btn.getAttribute('data-val') === 'ALL') {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    const modeSelect = document.getElementById('modeFilter');
+    if (modeSelect) modeSelect.value = 'ALL';
+    const browserSelect = document.getElementById('browserFilter');
+    if (browserSelect) browserSelect.value = 'ALL';
+    const localeSelect = document.getElementById('localeFilter');
+    if (localeSelect) localeSelect.value = 'ALL';
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) searchInput.value = '';
+    applyFilter();
+    if (typeof applyRunReportFilters === 'function') {
+        applyRunReportFilters();
+    }
 }
 
 function openAllTestsAndExpandArea(targetAreaGroupId) {
@@ -935,7 +957,7 @@ function updateRowStatusAndMetrics(rowId) {
         if (newStatus === 'PASSED' || newStatus === 'passed-clean') {
             statusTd.innerHTML = `<span class="badge-status badge-pass"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED</span>`;
         } else if (newStatus === 'SUCCEEDED_FIXED' || newStatus === 'succeeded-fixed') {
-            statusTd.innerHTML = `<span class="badge-status badge-healed"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> SUCCEEDED-FIXED</span>`;
+            statusTd.innerHTML = `<span class="badge-status badge-fixed"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> SUCCEEDED-FIXED</span>`;
         } else if (newStatus === 'FAILED_KNOWN' || newStatus === 'failed-known') {
             statusTd.innerHTML = `<span class="badge-status badge-known-fail"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL</span>`;
         } else if (newStatus === 'FAILED_UNKNOWN' || newStatus === 'failed-unknown') {
@@ -995,10 +1017,10 @@ function getRowStatusCategory(r) {
     if (st === 'RUNNING' || stRaw === 'running' || stRaw === 'in_progress' || stRaw === 'executing' || stRaw === 'pending') {
         return 'RUNNING';
     }
-    if (st === 'SUCCEEDED_FIXED' || st === 'HEALED' || stRaw === 'succeeded-fixed' || stRaw === 'fixed' || stRaw === 'healed') {
+    if (st === 'SUCCEEDED_FIXED' || stRaw === 'succeeded-fixed' || stRaw === 'fixed') {
         return hasBugs ? 'SUCCEEDED_FIXED' : 'PASSED';
     }
-    if (st === 'PASSED' || stRaw === 'passed-clean' || stRaw === 'passed' || stRaw === 'succeeded') {
+    if (st === 'PASSED' || st === 'HEALED' || stRaw === 'passed-clean' || stRaw === 'passed' || stRaw === 'succeeded' || stRaw === 'healed') {
         return hasBugs ? 'SUCCEEDED_FIXED' : 'PASSED';
     }
     if (st === 'FAILED_KNOWN' || stRaw === 'failed-known' || stRaw === 'known') {
@@ -1018,6 +1040,7 @@ function recalculateRunReportMetrics() {
     if (rows.length === 0) return;
 
     let pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0, running = 0;
+    let passedHealed = 0, failedHealed = 0;
     let totalLlmCalls = 0;
     let totalLlmTokens = 0;
     let totalLlmCost = 0.0;
@@ -1030,6 +1053,15 @@ function recalculateRunReportMetrics() {
         else if (cat === 'FAILED_UNKNOWN') unknown++;
         else if (cat === 'SKIPPED') ignored++;
         else if (cat === 'RUNNING') running++;
+
+        const isHealed = r.getAttribute('data-healed') === 'true' || Number(r.getAttribute('data-healed-count') || 0) > 0 || (r.getAttribute('data-status-raw') || '').toLowerCase() === 'healed';
+        if (isHealed) {
+            if (cat === 'PASSED' || cat === 'SUCCEEDED_FIXED') {
+                passedHealed++;
+            } else if (cat.includes('FAIL')) {
+                failedHealed++;
+            }
+        }
 
         const ai = syncRowAiUsage(r);
         if (ai) {
@@ -1065,6 +1097,8 @@ function recalculateRunReportMetrics() {
     const elOvTotal = document.getElementById('overviewKpiTotal');
     const elOvPass = document.getElementById('overviewKpiPassed');
     const elOvFixed = document.getElementById('overviewKpiFixed');
+    const elOvPassedHealed = document.getElementById('overviewKpiPassedHealed');
+    const elOvFailedHealed = document.getElementById('overviewKpiFailedHealed');
     const elOvKnown = document.getElementById('overviewKpiKnown');
     const elOvUnknown = document.getElementById('overviewKpiUnknown');
     const elOvIgnored = document.getElementById('overviewKpiIgnored');
@@ -1075,6 +1109,8 @@ function recalculateRunReportMetrics() {
     if (elOvTotal) elOvTotal.innerText = totalExecutions;
     if (elOvPass) elOvPass.innerText = pass;
     if (elOvFixed) elOvFixed.innerText = fixed;
+    if (elOvPassedHealed) elOvPassedHealed.innerText = passedHealed;
+    if (elOvFailedHealed) elOvFailedHealed.innerText = failedHealed;
     if (elOvKnown) elOvKnown.innerText = known;
     if (elOvUnknown) elOvUnknown.innerText = unknown;
     if (elOvIgnored) elOvIgnored.innerText = ignored;
@@ -1100,7 +1136,7 @@ function recalculateRunReportMetrics() {
 
         wholeBadges.innerHTML = `
             <span class="badge-status badge-pass clickable-badge js-filter-badge${isPassActive}" onclick="filterByGlobalStatusBadge('PASSED', this)" data-status-key="PASSED" title="Filter Passed">Passed: ${pass}</span>
-            <span class="badge-status badge-healed clickable-badge js-filter-badge${isFixedActive}" onclick="filterByGlobalStatusBadge('SUCCEEDED_FIXED', this)" data-status-key="SUCCEEDED_FIXED" title="Filter Succeeded-Fixed">Succeeded-Fixed: ${fixed}</span>
+            <span class="badge-status badge-fixed clickable-badge js-filter-badge${isFixedActive}" onclick="filterByGlobalStatusBadge('SUCCEEDED_FIXED', this)" data-status-key="SUCCEEDED_FIXED" title="Filter Succeeded-Fixed">Succeeded-Fixed: ${fixed}</span>
             <span class="badge-status badge-known-fail clickable-badge js-filter-badge${isKnownActive}" onclick="filterByGlobalStatusBadge('FAILED_KNOWN', this)" data-status-key="FAILED_KNOWN" title="Filter Known Fail">Known Fail: ${known}</span>
             <span class="badge-status badge-unknown-fail clickable-badge js-filter-badge${isUnknownActive}" onclick="filterByGlobalStatusBadge('FAILED_UNKNOWN', this)" data-status-key="FAILED_UNKNOWN" title="Filter Unknown Fail">Unknown Fail: ${unknown}</span>
             <span class="badge-status badge-ignored clickable-badge js-filter-badge${isSkippedActive}" onclick="filterByGlobalStatusBadge('SKIPPED', this)" data-status-key="SKIPPED" title="Filter Ignored/Skipped">Ignored: ${ignored}</span>
@@ -1114,6 +1150,7 @@ function recalculateRunReportMetrics() {
         const areaRows = areaGroup.querySelectorAll('.test-row, tr.execution-row');
 
         let aPass = 0, aFixed = 0, aKnown = 0, aUnknown = 0, aIgnored = 0, aRunning = 0;
+        let aPassedHealed = 0, aFailedHealed = 0;
         areaRows.forEach(r => {
             const cat = getRowStatusCategory(r);
             if (cat === 'PASSED') aPass++;
@@ -1122,6 +1159,15 @@ function recalculateRunReportMetrics() {
             else if (cat === 'FAILED_UNKNOWN') aUnknown++;
             else if (cat === 'SKIPPED') aIgnored++;
             else if (cat === 'RUNNING') aRunning++;
+
+            const isHealed = r.getAttribute('data-healed') === 'true' || Number(r.getAttribute('data-healed-count') || 0) > 0 || (r.getAttribute('data-status-raw') || '').toLowerCase() === 'healed';
+            if (isHealed) {
+                if (cat === 'PASSED' || cat === 'SUCCEEDED_FIXED') {
+                    aPassedHealed++;
+                } else if (cat.includes('FAIL')) {
+                    aFailedHealed++;
+                }
+            }
         });
 
         const totalArea = aPass + aFixed + aKnown + aUnknown + aIgnored + aRunning;
@@ -1136,7 +1182,7 @@ function recalculateRunReportMetrics() {
             const activeFilter = areaGroup.getAttribute('data-active-status-filter') || 'ALL';
             let badgesHtml = '';
             if (aPass > 0) badgesHtml += `<span class="badge-status badge-pass clickable-badge${activeFilter === 'PASSED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'PASSED');" title="Filter Passed in Area">Passed: ${aPass}</span>`;
-            if (aFixed > 0) badgesHtml += `<span class="badge-status badge-healed clickable-badge${activeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'SUCCEEDED_FIXED');" title="Filter Succeeded-Fixed in Area">Succeeded-Fixed: ${aFixed}</span>`;
+            if (aFixed > 0) badgesHtml += `<span class="badge-status badge-fixed clickable-badge${activeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'SUCCEEDED_FIXED');" title="Filter Succeeded-Fixed in Area">Succeeded-Fixed: ${aFixed}</span>`;
             if (aKnown > 0) badgesHtml += `<span class="badge-status badge-known-fail clickable-badge${activeFilter === 'FAILED_KNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'FAILED_KNOWN');" title="Filter Known Fail in Area">Known: ${aKnown}</span>`;
             if (aUnknown > 0) badgesHtml += `<span class="badge-status badge-unknown-fail clickable-badge${activeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'FAILED_UNKNOWN');" title="Filter Unknown Fail in Area">Unknown: ${aUnknown}</span>`;
             if (aIgnored > 0) badgesHtml += `<span class="badge-status badge-ignored clickable-badge${activeFilter === 'SKIPPED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterAreaByStatusBadge(this, 'SKIPPED');" title="Filter Ignored in Area">Ignored: ${aIgnored}</span>`;
@@ -1148,6 +1194,8 @@ function recalculateRunReportMetrics() {
         if (pieCard) {
             const valPass = pieCard.querySelector('.val-pass');
             const valFixed = pieCard.querySelector('.val-fixed');
+            const valHealedPass = pieCard.querySelector('.val-healed-pass');
+            const valHealedFail = pieCard.querySelector('.val-healed-fail');
             const valKnown = pieCard.querySelector('.val-known');
             const valUnknown = pieCard.querySelector('.val-unknown');
             const valIgnored = pieCard.querySelector('.val-ignored');
@@ -1155,6 +1203,8 @@ function recalculateRunReportMetrics() {
 
             if (valPass) valPass.innerText = aPass;
             if (valFixed) valFixed.innerText = aFixed;
+            if (valHealedPass) valHealedPass.innerText = aPassedHealed;
+            if (valHealedFail) valHealedFail.innerText = aFailedHealed;
             if (valKnown) valKnown.innerText = aKnown;
             if (valUnknown) valUnknown.innerText = aUnknown;
             if (valIgnored) valIgnored.innerText = aIgnored;
@@ -1865,7 +1915,10 @@ function renderStepsForExecution(activeRow) {
     const outputTokens = aiMetrics ? aiMetrics.outputTokens : (activeRow.getAttribute('data-output-tokens') || '0');
     const cachedTokens = aiMetrics ? aiMetrics.cachedTokens : (activeRow.getAttribute('data-cached-tokens') || '0');
     const estCost = aiMetrics ? aiMetrics.costFormatted : (activeRow.getAttribute('data-est-cost') || '$0.0000');
-    const statusVal = activeRow.getAttribute('data-status') || 'PASSED';
+    let statusVal = activeRow.getAttribute('data-status') || 'PASSED';
+    if (statusVal === 'SUCCEEDED_FIXED' || statusVal === 'succeeded-fixed' || statusVal === 'healed' || ((statusVal === 'PASSED' || statusVal === 'passed') && Number(healedCount) > 0)) {
+        statusVal = 'HEALED';
+    }
 
     const sideDurEl = document.getElementById('sideMetricDuration');
     const sideStatusEl = document.getElementById('sideMetricStatus');
@@ -1889,7 +1942,7 @@ function renderStepsForExecution(activeRow) {
         }
         sideDurEl.innerHTML = `${durFormatted}`;
     }
-    if (sideStatusEl) sideStatusEl.innerHTML = `Status: <strong class="${statusVal === 'PASSED' ? 'status-pass' : (statusVal === 'HEALED' ? 'status-fixed' : (statusVal === 'RUNNING' ? 'status-running' : 'status-fail'))}">${statusVal}</strong>`;
+    if (sideStatusEl) sideStatusEl.innerHTML = `Status: <strong class="${statusVal === 'PASSED' ? 'status-pass' : (statusVal === 'HEALED' || statusVal === 'SUCCEEDED_FIXED' ? 'status-fixed' : (statusVal === 'RUNNING' ? 'status-running' : 'status-fail'))}">${statusVal === 'SUCCEEDED_FIXED' ? 'HEALED' : statusVal}</strong>`;
     if (sideStepsEl) sideStepsEl.innerText = stepsTotal;
     if (sideStepHealthEl) sideStepHealthEl.innerText = `✨ Healed: ${healedCount} | ❌ Failed: ${failedCount}`;
     if (sideLlmCallsEl) sideLlmCallsEl.innerText = llmCalls;
@@ -2070,10 +2123,11 @@ function renderStepsForExecution(activeRow) {
                 }
             }
             const status = rawStatus;
-            const isPassed = status === 'passed' || status === 'passed-clean' || status === 'success' || s.passed === true;
+            const isHealed = status === 'healed' || status === 'succeeded-fixed' || status === 'fixed' || s.healed === true || (Array.isArray(s.actions) && s.actions.some(a => a.healed));
+            const isPassed = !isHealed && (status === 'passed' || status === 'passed-clean' || status === 'success' || s.passed === true);
             const isFailed = status === 'failed' || status === 'failed-unknown' || status === 'failed-known' || s.passed === false;
             
-            const stepClass = isPassed ? 'step-passed' : (isFailed ? 'step-failed' : 'step-ignored');
+            const stepClass = isHealed ? 'step-healed' : (isPassed ? 'step-passed' : (isFailed ? 'step-failed' : 'step-ignored'));
             const stepId = `stepCard_${sectionClass}_${idx}`;
             const rawContextLevel = s.contextLevels || s.stats?.contextLevels || 'PENDING';
             const isUnexecutedOrSkipped = !isPassed && !isFailed && status !== 'running';
@@ -2219,8 +2273,8 @@ function renderStepsForExecution(activeRow) {
                 `;
                 actions.forEach(act => {
                     const actName = act.type || act.name || 'ACTION';
-                    const actTarget = act.target || '';
-                    const actVal = act.value ? ` ➔ ${act.value}` : '';
+                    const actTarget = act.resolvedTarget || act.target || '';
+                    const actVal = (act.resolvedValue || act.value) ? ` ➔ ${act.resolvedValue || act.value}` : '';
                     const actDesc = act.description ? ` (${act.description})` : '';
                     const hasSuccess = typeof act.success === 'boolean';
                     const successModifier = hasSuccess ? (act.success ? ' action-success' : ' action-failed') : '';
@@ -2230,12 +2284,18 @@ function renderStepsForExecution(activeRow) {
                     const actReasoning = act.reasoning
                         ? `<div class="action-reasoning"><span class="material-symbols-outlined">psychology</span><span class="action-reasoning-text">${act.reasoning}</span></div>`
                         : '';
+                    const origTarget = act.expectedTarget || act.originalTarget || act.healedFrom || (act.healed && act.target && act.target !== actTarget ? act.target : null);
+                    let healedBadge = '';
+                    if (origTarget && origTarget !== actTarget) {
+                        healedBadge = `<div class="action-healed-from" style="width: 100%; display: flex; align-items: center; gap: 0.35rem; margin-top: 0.25rem; font-size: 0.78rem; color: #7e22ce;"><span>🧬 Healed from:</span> <span style="display: inline-block; padding: 0.1rem 0.4rem; background: #f3e8ff; border: 1px solid #d8b4fe; border-radius: 4px; text-decoration: line-through; color: #7e22ce; font-family: monospace;">${escapeHtml(origTarget)}</span></div>`;
+                    }
 
                     actionsHtml += `
                         <div class="action-item-pill-row${successModifier}">
                             ${successBadge}
                             <span class="action-type-pill">${actName}</span>
-                            <span class="action-code-text">${actTarget}${actVal}${actDesc}</span>
+                            <span class="action-code-text">${escapeHtml(actTarget)}${escapeHtml(actVal)}${escapeHtml(actDesc)}</span>
+                            ${healedBadge}
                             ${actReasoning}
                         </div>
                     `;
@@ -2352,11 +2412,17 @@ function renderStepsForExecution(activeRow) {
                             const successBadge = hasSuccess
                                 ? `<span class="action-status-badge ${act.success ? 'action-status-ok' : 'action-status-fail'}" title="${act.success ? 'Action succeeded' : 'Action failed'}"><span class="material-symbols-outlined">${act.success ? 'check_circle' : 'cancel'}</span></span>`
                                 : '';
+                            const origTarget = act.expectedTarget || act.originalTarget || act.healedFrom || (act.healed && act.target && act.target !== actTarget ? act.target : null);
+                            let healedBadge = '';
+                            if (origTarget && origTarget !== actTarget) {
+                                healedBadge = `<div class="action-healed-from" style="width: 100%; display: flex; align-items: center; gap: 0.35rem; margin-top: 0.25rem; font-size: 0.78rem; color: #7e22ce;"><span>🧬 Healed from:</span> <span style="display: inline-block; padding: 0.1rem 0.4rem; background: #f3e8ff; border: 1px solid #d8b4fe; border-radius: 4px; text-decoration: line-through; color: #7e22ce; font-family: monospace;">${escapeHtml(origTarget)}</span></div>`;
+                            }
                             subActionsHtml += `
                                 <div class="action-item-pill-row${successModifier}">
                                     ${successBadge}
                                     <span class="action-type-pill">${actName}</span>
                                     <span class="action-code-text">${escapeHtml(actTarget)}${escapeHtml(actVal)}</span>
+                                    ${healedBadge}
                                 </div>
                             `;
                         });
@@ -2666,9 +2732,10 @@ function renderStepsForExecution(activeRow) {
                     <div class="step-header">
                         <div class="step-title-line" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
                             <span class="step-num-box">#${stepNum}</span>
-                            ${isPassed ? '<span class="badge-status badge-pass" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SUCCESS</span>' :
+                            ${isHealed ? '<span class="badge-status badge-healed" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> HEALED</span>' :
+                              (isPassed ? '<span class="badge-status badge-pass" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SUCCESS</span>' :
                               (isFailed ? '<span class="badge-status badge-unknown-fail" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">FAILED</span>' :
-                              '<span class="badge-status badge-ignored" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SKIPPED</span>')}
+                              '<span class="badge-status badge-ignored" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SKIPPED</span>'))}
                             <span class="context-badge level-${contextLevel.toLowerCase()}">${contextLevel}</span>
                             <span style="color: var(--text-main); font-weight: 600; margin-left: 0.2rem;">${title}</span>
                         </div>
@@ -2688,7 +2755,7 @@ function renderStepsForExecution(activeRow) {
                             <div class="inspector-header">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-family: var(--font-mono); font-weight: 800; color: var(--status-fixed); font-size: 0.9rem;">#${stepNum}</span>
-                                    <span class="badge-status ${isPassed ? 'badge-pass' : 'badge-unknown-fail'}" style="font-size: 0.7rem;">${isPassed ? 'PASSED' : 'FAILED'}</span>
+                                    <span class="badge-status ${isHealed ? 'badge-healed' : (isPassed ? 'badge-pass' : 'badge-unknown-fail')}" style="font-size: 0.7rem;">${isHealed ? 'HEALED' : (isPassed ? 'PASSED' : 'FAILED')}</span>
                                 </div>
                                 <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-top: 0.2rem;">${title}</div>
                             </div>
@@ -3644,6 +3711,32 @@ function filterByMode(mode) {
     applyFilter();
 }
 
+let currentHealedFilter = 'ALL';
+
+function setHealedFilter(mode) {
+    currentHealedFilter = mode || 'ALL';
+    document.querySelectorAll('#healedFilterToggle .segment-btn').forEach(btn => {
+        if (btn.getAttribute('data-val') === currentHealedFilter) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    applyFilter();
+}
+
+function filterAllTestsByHealedStatus(status, healedFilter) {
+    switchRunReportSubTab('runReportSubTabAllTests', document.getElementById('runReportTabBtnAllTests'));
+    if (healedFilter) {
+        setHealedFilter(healedFilter);
+    }
+    if (status) {
+        filterByGlobalStatusBadge(status);
+    } else {
+        applyFilter();
+    }
+}
+
 function populateBrowserAndLocaleFilters() {
     const browserSelect = document.getElementById('browserFilter');
     const localeSelect = document.getElementById('localeFilter');
@@ -3713,7 +3806,7 @@ function applyFilter() {
             if (!filterKey || filterKey === 'ALL') return true;
             const key = filterKey.toUpperCase();
             if (key === 'PASSED') return rowStatus === 'PASSED' || rowStatusRaw === 'passed-clean' || rowStatusRaw === 'passed' || rowStatusRaw === 'succeeded';
-            if (key === 'HEALED' || key === 'SUCCEEDED_FIXED') return rowStatus === 'HEALED' || rowStatus === 'SUCCEEDED_FIXED' || rowStatusRaw === 'succeeded-fixed' || rowStatusRaw === 'fixed' || rowStatusRaw === 'healed';
+            if (key === 'SUCCEEDED_FIXED' || key === 'FIXED') return rowStatus === 'SUCCEEDED_FIXED' || rowStatusRaw === 'succeeded-fixed' || rowStatusRaw === 'fixed';
             if (key === 'FAILED_KNOWN' || key === 'KNOWN') return rowStatus === 'FAILED_KNOWN' || rowStatusRaw === 'failed-known' || rowStatusRaw === 'known';
             if (key === 'FAILED_UNKNOWN' || key === 'UNKNOWN') return rowStatus === 'FAILED_UNKNOWN' || rowStatusRaw === 'failed-unknown' || rowStatusRaw === 'failed' || rowStatusRaw === 'error';
             if (key === 'SKIPPED' || key === 'IGNORED') return rowStatus === 'SKIPPED' || rowStatusRaw === 'ignored' || rowStatusRaw === 'skipped';
@@ -3726,12 +3819,17 @@ function applyFilter() {
         const matchesClassBadge = matchesStatusKey(classStatusFilter);
         const matchesLegacyStatus = matchesStatusKey(currentExecutionStatusFilter);
 
+        const isHealed = row.getAttribute('data-healed') === 'true' || Number(row.getAttribute('data-healed-count') || 0) > 0 || rowStatusRaw === 'healed';
+        const matchesHealed = (currentHealedFilter === 'ALL') ||
+                              (currentHealedFilter === 'HEALED' && isHealed) ||
+                              (currentHealedFilter === 'NOT_HEALED' && !isHealed);
+
         const matchesMode = (currentExecutionModeFilter === 'ALL' || rowMode === currentExecutionModeFilter.toUpperCase() || rowMode.includes(currentExecutionModeFilter.toUpperCase()));
         const matchesBrowser = (selBrowser === 'ALL' || rowBrowser.toLowerCase() === selBrowser.toLowerCase());
         const matchesLocale = (selLocale === 'ALL' || rowLocale.toLowerCase() === selLocale.toLowerCase());
         const matchesSearch = (!search || rowSearch.indexOf(search) !== -1);
 
-        if (matchesGlobalBadge && matchesAreaBadge && matchesClassBadge && matchesLegacyStatus && matchesMode && matchesBrowser && matchesLocale && matchesSearch) {
+        if (matchesGlobalBadge && matchesAreaBadge && matchesClassBadge && matchesLegacyStatus && matchesMode && matchesHealed && matchesBrowser && matchesLocale && matchesSearch) {
             row.style.display = '';
         } else {
             row.style.display = 'none';

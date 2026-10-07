@@ -163,4 +163,22 @@ public final class TestClassSummaryDto
     {
         return executions;
     }
+
+    public int getPassedHealedCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isPassedHealed).count();
+        }
+        return 0;
+    }
+
+    public int getFailedHealedCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFailedHealed).count();
+        }
+        return 0;
+    }
 }

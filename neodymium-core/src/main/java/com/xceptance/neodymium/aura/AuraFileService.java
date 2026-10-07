@@ -29,6 +29,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -39,6 +42,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.neodymium.ai.util.AtomicFileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
@@ -278,6 +282,47 @@ public final class AuraFileService
         return null;
     }
 
+    public File findSourceTestFile(final String file)
+    {
+        if (file == null || file.isBlank())
+        {
+            return null;
+        }
+        try
+        {
+            final File canonical = resolveCanonicalFile(file);
+            if (canonical != null && canonical.exists())
+            {
+                return canonical;
+            }
+        }
+        catch (final Exception ignored)
+        {
+        }
+
+        final List<File> resourceRoots = getAllResourceDirectories();
+        for (final File root : resourceRoots)
+        {
+            try
+            {
+                final File candidate = new File(root, file).getCanonicalFile();
+                if (candidate.exists() && candidate.isFile())
+                {
+                    return candidate;
+                }
+                final File found = findFileRecursively(root, file);
+                if (found != null && found.exists())
+                {
+                    return found;
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        return null;
+    }
+
     public boolean hasPlaybook(final String file, final String datasetId)
     {
         return findPlaybookFile(file, datasetId) != null;
@@ -324,6 +369,30 @@ public final class AuraFileService
         result.put("playbookPath", pbFile.getPath());
         result.put("playbookFileName", pbFile.getName());
 
+        final long lastModified = pbFile.lastModified();
+        result.put("lastModifiedEpoch", lastModified);
+        if (lastModified > 0)
+        {
+            final String formattedDate = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                    .withZone(ZoneId.systemDefault())
+                    .format(Instant.ofEpochMilli(lastModified));
+            result.put("generatedAt", formattedDate);
+        }
+
+        final File sourceTestFile = findSourceTestFile(file);
+        if (sourceTestFile != null && sourceTestFile.exists())
+        {
+            final long sourceLastModified = sourceTestFile.lastModified();
+            result.put("testFileLastModifiedEpoch", sourceLastModified);
+            if (sourceLastModified > 0)
+            {
+                final String formattedSourceDate = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                        .withZone(ZoneId.systemDefault())
+                        .format(Instant.ofEpochMilli(sourceLastModified));
+                result.put("testFileLastEdited", formattedSourceDate);
+            }
+        }
+
         try
         {
             final String rawContent = Files.readString(pbFile.toPath(), StandardCharsets.UTF_8);
@@ -343,10 +412,12 @@ public final class AuraFileService
             {
                 if (stepObj instanceof Map)
                 {
-                    final Map<?, ?> stepMap = (Map<?, ?>) stepObj;
+                    @SuppressWarnings("unchecked")
+                    final Map<String, Object> stepMap = (Map<String, Object>) stepObj;
                     final Object statusObj = stepMap.get("status");
                     final String status = statusObj != null ? String.valueOf(statusObj) : "SUCCESS";
-                    if ("HEALED".equalsIgnoreCase(status))
+                    final boolean isStepHealed = "HEALED".equalsIgnoreCase(status);
+                    if (isStepHealed)
                     {
                         healedCount++;
                     }
@@ -364,6 +435,97 @@ public final class AuraFileService
                     {
                         totalDur += ((Number) durObj).longValue();
                     }
+
+                    // Reconcile and surface healed targets for actions
+                    final Object actionsObj = stepMap.get("actions");
+                    final Object toolCallsObj = stepMap.get("toolCalls");
+                    if (actionsObj instanceof List)
+                    {
+                        final List<?> actions = (List<?>) actionsObj;
+                        final List<?> toolCalls = toolCallsObj instanceof List ? (List<?>) toolCallsObj : null;
+
+                        for (int actIdx = 0; actIdx < actions.size(); actIdx++)
+                        {
+                            final Object actObj = actions.get(actIdx);
+                            if (actObj instanceof Map)
+                            {
+                                @SuppressWarnings("unchecked")
+                                final Map<String, Object> actMap = (Map<String, Object>) actObj;
+                                Object expectedTargetObj = actMap.get("expectedTarget");
+                                if (expectedTargetObj == null || expectedTargetObj.toString().isBlank())
+                                {
+                                    expectedTargetObj = actMap.get("originalTarget");
+                                }
+                                if (expectedTargetObj == null || expectedTargetObj.toString().isBlank())
+                                {
+                                    expectedTargetObj = actMap.get("healedFrom");
+                                }
+
+                                final Object currentTargetObj = actMap.get("target");
+                                final String currentTarget = currentTargetObj != null ? currentTargetObj.toString().trim() : "";
+
+                                if ((expectedTargetObj == null || expectedTargetObj.toString().isBlank()) && toolCalls != null && actIdx < toolCalls.size())
+                                {
+                                    final Object toolCallObj = toolCalls.get(actIdx);
+                                    if (toolCallObj instanceof Map)
+                                    {
+                                        final Map<?, ?> toolCallMap = (Map<?, ?>) toolCallObj;
+                                        final Object argsObj = toolCallMap.get("arguments");
+                                        if (argsObj instanceof Map)
+                                        {
+                                            final Map<?, ?> argsMap = (Map<?, ?>) argsObj;
+                                            final Object selObj = argsMap.get("selector") != null ? argsMap.get("selector") : argsMap.get("target");
+                                            if (selObj != null && !selObj.toString().isBlank())
+                                            {
+                                                final String originalSelector = selObj.toString().trim();
+                                                if (isStepHealed || (!currentTarget.isEmpty() && !currentTarget.equals(originalSelector)))
+                                                {
+                                                    expectedTargetObj = originalSelector;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (expectedTargetObj != null && !expectedTargetObj.toString().isBlank())
+                                {
+                                    final String expectedTargetStr = expectedTargetObj.toString().trim();
+                                    actMap.put("expectedTarget", expectedTargetStr);
+                                    actMap.put("originalTarget", expectedTargetStr);
+                                    if (!currentTarget.isEmpty() && !currentTarget.equals(expectedTargetStr))
+                                    {
+                                        actMap.put("healed", true);
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    boolean hasHealedAction = false;
+                    if (actionsObj instanceof List)
+                    {
+                        for (final Object actObj : (List<?>) actionsObj)
+                        {
+                            if (actObj instanceof Map && Boolean.TRUE.equals(((Map<?, ?>) actObj).get("healed")))
+                            {
+                                hasHealedAction = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    final boolean isStepActuallyHealed = isStepHealed || hasHealedAction;
+                    stepMap.put("healed", isStepActuallyHealed);
+                    final boolean isFailed = "FAILED".equalsIgnoreCase(status) || Boolean.TRUE.equals(stepMap.get("failed"));
+                    stepMap.put("failed", isFailed);
+                    if (isStepActuallyHealed && !isStepHealed)
+                    {
+                        healedCount++;
+                        if (passedCount > 0)
+                        {
+                            passedCount--;
+                        }
+                    }
                 }
             }
 
@@ -379,6 +541,168 @@ public final class AuraFileService
         }
 
         return result;
+    }
+
+    /**
+     * Accepts a self-healed locator change in a recorded playbook, updating the playbook JSON on disk
+     * so that the healed action becomes the canonical recorded action.
+     *
+     * @param file relative test file path
+     * @param datasetId optional dataset ID
+     * @param stepIndex 0-based index of the step to accept, or null to accept all healed steps
+     * @return true if playbook was found and updated successfully, false otherwise
+     */
+    public boolean acceptPlaybookHealing(final String file, final String datasetId, final Integer stepIndex)
+    {
+        return acceptPlaybookHealing(file, datasetId, stepIndex, null);
+    }
+
+    /**
+     * Accepts a self-healed locator change in a recorded playbook, updating the playbook JSON on disk
+     * so that the healed action becomes the canonical recorded action.
+     *
+     * @param file relative test file path
+     * @param datasetId optional dataset ID
+     * @param stepIndex 0-based index of the step to accept, or null to accept all healed steps
+     * @param actionIndex 0-based index of the action within the step to accept, or null for all actions in step
+     * @return true if playbook was found and updated successfully, false otherwise
+     */
+    public boolean acceptPlaybookHealing(final String file, final String datasetId, final Integer stepIndex, final Integer actionIndex)
+    {
+        final File pbFile = findPlaybookFile(file, datasetId);
+        if (pbFile == null || !pbFile.exists() || !pbFile.isFile())
+        {
+            LOGGER.warn("Cannot accept playbook healing: Playbook file not found for file='{}', datasetId='{}'", file, datasetId);
+            return false;
+        }
+
+        try
+        {
+            final String rawContent = Files.readString(pbFile.toPath(), StandardCharsets.UTF_8);
+            final ObjectMapper mapper = new ObjectMapper();
+            final List<?> rawStepsList = mapper.readValue(rawContent, List.class);
+            if (rawStepsList == null || rawStepsList.isEmpty())
+            {
+                return false;
+            }
+
+            @SuppressWarnings("unchecked")
+            final List<Map<String, Object>> stepsList = (List<Map<String, Object>>) rawStepsList;
+            boolean modified = false;
+
+            for (int sIdx = 0; sIdx < stepsList.size(); sIdx++)
+            {
+                if (stepIndex != null && stepIndex.intValue() != sIdx)
+                {
+                    continue;
+                }
+
+                final Map<String, Object> stepMap = stepsList.get(sIdx);
+                final Object actionsObj = stepMap.get("actions");
+                final Object toolCallsObj = stepMap.get("toolCalls");
+                final List<?> actions = actionsObj instanceof List ? (List<?>) actionsObj : null;
+                final List<?> toolCalls = toolCallsObj instanceof List ? (List<?>) toolCallsObj : null;
+
+                boolean stepModified = false;
+
+                if (actions != null)
+                {
+                    for (int actIdx = 0; actIdx < actions.size(); actIdx++)
+                    {
+                        if (actionIndex != null && actionIndex.intValue() != actIdx)
+                        {
+                            continue;
+                        }
+
+                        final Object actObj = actions.get(actIdx);
+                        if (actObj instanceof Map)
+                        {
+                            @SuppressWarnings("unchecked")
+                            final Map<String, Object> actMap = (Map<String, Object>) actObj;
+
+                            final Object currentTargetObj = actMap.get("target");
+                            final String currentTarget = currentTargetObj != null ? currentTargetObj.toString().trim() : "";
+
+                            // Clear healing flags
+                            actMap.remove("expectedTarget");
+                            actMap.remove("originalTarget");
+                            actMap.remove("healedFrom");
+                            actMap.remove("healed");
+
+                            if (!currentTarget.isEmpty())
+                            {
+                                actMap.put("bestCandidateLocator", currentTarget);
+                            }
+
+                            // Synchronize corresponding tool call
+                            if (toolCalls != null && actIdx < toolCalls.size())
+                            {
+                                final Object tcObj = toolCalls.get(actIdx);
+                                if (tcObj instanceof Map)
+                                {
+                                    @SuppressWarnings("unchecked")
+                                    final Map<String, Object> tcMap = (Map<String, Object>) tcObj;
+                                    final Object argsObj = tcMap.get("arguments");
+                                    if (argsObj instanceof Map)
+                                    {
+                                        @SuppressWarnings("unchecked")
+                                        final Map<String, Object> argsMap = (Map<String, Object>) argsObj;
+                                        if (argsMap.containsKey("selector") || argsMap.containsKey("target") || argsMap.containsKey("locator"))
+                                        {
+                                            if (argsMap.containsKey("selector"))
+                                            {
+                                                argsMap.put("selector", currentTarget);
+                                            }
+                                            if (argsMap.containsKey("target"))
+                                            {
+                                                argsMap.put("target", currentTarget);
+                                            }
+                                            if (argsMap.containsKey("locator"))
+                                            {
+                                                argsMap.put("locator", currentTarget);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            stepModified = true;
+                        }
+                    }
+                }
+
+                // If step actions were modified or step was HEALED, transition status to SUCCESS
+                final Object statusObj = stepMap.get("status");
+                final String status = statusObj != null ? String.valueOf(statusObj) : "";
+                if (stepModified || "HEALED".equalsIgnoreCase(status))
+                {
+                    stepMap.put("status", "SUCCESS");
+                    stepMap.put("failed", false);
+                    stepMap.remove("failureReason");
+                    stepModified = true;
+                }
+
+                if (stepModified)
+                {
+                    modified = true;
+                }
+            }
+
+            if (modified)
+            {
+                final String updatedJson = mapper.writerWithDefaultPrettyPrinter().writeValueAsString(stepsList);
+                AtomicFileUtils.writeStringAtomic(pbFile.toPath(), updatedJson);
+                LOGGER.info("Successfully accepted healing and updated playbook JSON at {}", pbFile.getAbsolutePath());
+                return true;
+            }
+
+            return false;
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to accept playbook healing for file='{}', datasetId='{}': {}", file, datasetId, e.getMessage(), e);
+            return false;
+        }
     }
 
     public List<YamlFileDto> getFilteredYamlFilesList(final String query)

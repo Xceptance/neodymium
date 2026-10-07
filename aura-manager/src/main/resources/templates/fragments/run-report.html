@@ -44,10 +44,20 @@
                         <div class="kpi-value text-success" id="overviewKpiPassed" th:text="${report?.passCount ?: 0}">0</div>
                         <div class="kpi-sub">Clean Executions</div>
                     </div>
-                    <div class="kpi-card card-healed" onclick="filterAllTestsByStatus('SUCCEEDED_FIXED')">
+                    <div class="kpi-card card-fixed" onclick="filterAllTestsByStatus('SUCCEEDED_FIXED')">
                         <div class="kpi-label">Succeeded-Fixed</div>
-                        <div class="kpi-value text-healed" id="overviewKpiFixed" th:text="${report?.fixedCount ?: (report?.healedCount ?: 0)}">0</div>
+                        <div class="kpi-value text-fixed" id="overviewKpiFixed" th:text="${report?.fixedCount ?: 0}">0</div>
                         <div class="kpi-sub">Tests with Linked Bugs</div>
+                    </div>
+                    <div class="kpi-card card-healed-passed" onclick="filterAllTestsByHealedStatus('PASSED', 'HEALED')" title="Filter Passed Healed Tests">
+                        <div class="kpi-label">Passed Healed</div>
+                        <div class="kpi-value text-healed-pass" id="overviewKpiPassedHealed" th:text="${report?.passedHealedCount ?: 0}">0</div>
+                        <div class="kpi-sub">Passed with Self-Healing</div>
+                    </div>
+                    <div class="kpi-card card-healed-failed" onclick="filterAllTestsByHealedStatus('FAILED', 'HEALED')" title="Filter Failed Healed Tests">
+                        <div class="kpi-label">Failed Healed</div>
+                        <div class="kpi-value text-healed-fail" id="overviewKpiFailedHealed" th:text="${report?.failedHealedCount ?: 0}">0</div>
+                        <div class="kpi-sub">Failed with Healing</div>
                     </div>
                     <div class="kpi-card card-known" onclick="filterAllTestsByStatus('FAILED_KNOWN')">
                         <div class="kpi-label">Known Fail</div>
@@ -112,6 +122,8 @@
                                 <div class="pie-breakdown-list">
                                     <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-pass);"></div> Successful</div><div class="val val-pass" style="color: var(--status-pass);" th:text="${area.passCount}">0</div></div>
                                     <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Succeeded-Fixed</div><div class="val val-fixed" style="color: var(--status-fixed);" th:text="${area.fixedCount}">0</div></div>
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot dot-healed-pass"></div> Passed Healed</div><div class="val val-healed-pass text-healed-pass" th:text="${area.passedHealedCount}">0</div></div>
+                                    <div class="pie-breakdown-item"><div class="label"><div class="dot dot-healed-fail"></div> Failed Healed</div><div class="val val-healed-fail text-healed-fail" th:text="${area.failedHealedCount}">0</div></div>
                                     <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Failed</div><div class="val val-known" style="color: var(--status-known-fail);" th:text="${area.knownCount}">0</div></div>
                                     <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Failed</div><div class="val val-unknown" style="color: var(--status-unknown-fail);" th:text="${area.unknownCount}">0</div></div>
                                     <div class="pie-breakdown-item"><div class="label"><div class="dot" style="background: var(--status-ignored);"></div> Ignored / Skipped</div><div class="val val-ignored" style="color: var(--status-ignored);" th:text="${area.ignoredCount}">0</div></div>
@@ -138,6 +150,15 @@
                             <option value="ALL">All Modes</option>
                             <option th:each="m : ${report?.filterModes}" th:value="${m}" th:text="${m}">FORCE_RECORDING</option>
                         </select>
+                    </div>
+
+                    <div class="filter-mode-group">
+                        <label class="filter-label" style="display: inline-flex; align-items: center; gap: 0.2rem;"><span class="material-symbols-outlined" style="font-size: 1rem; color: var(--status-healed-pass);">healing</span> Healed:</label>
+                        <div class="segmented-control" id="healedFilterToggle">
+                            <button type="button" class="segment-btn active" data-val="ALL" onclick="setHealedFilter('ALL')">All</button>
+                            <button type="button" class="segment-btn" data-val="HEALED" onclick="setHealedFilter('HEALED')" title="Show only healed tests">Healed</button>
+                            <button type="button" class="segment-btn" data-val="NOT_HEALED" onclick="setHealedFilter('NOT_HEALED')" title="Show only non-healed tests">Not Healed</button>
+                        </div>
                     </div>
 
                     <div class="filter-mode-group">
@@ -257,6 +278,9 @@
                                                     th:data-location="${exec.location}" 
                                                     th:data-browser="${exec.browser}" 
                                                     th:data-bugs="${exec.bugs != null and not #lists.isEmpty(exec.bugs) ? #strings.arrayJoin(exec.bugs, ',') : 'NONE'}" 
+                                                    th:data-healed="${exec.healed}"
+                                                    th:data-healed-passed="${exec.passedHealed}"
+                                                    th:data-healed-failed="${exec.failedHealed}"
                                                     th:data-failure="${exec.failure}"
                                                     th:data-steps-total="${exec.totalStepsCount}"
                                                     th:data-healed-count="${exec.healedStepsCount}"
@@ -281,7 +305,7 @@
                                                     <td class="col-status-badge">
                                                         <span class="badge-status badge-running" th:if="${exec.displayStatusKey == 'RUNNING'}"><span class="material-symbols-outlined spin" style="font-size: 0.85rem; vertical-align: middle;">sync</span> RUNNING</span>
                                                         <span class="badge-status badge-pass" th:if="${exec.displayStatusKey == 'PASSED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check_circle</span> PASSED</span>
-                                                        <span class="badge-status badge-healed" th:if="${exec.displayStatusKey == 'SUCCEEDED_FIXED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> SUCCEEDED-FIXED</span>
+                                                        <span class="badge-status badge-fixed" th:if="${exec.displayStatusKey == 'SUCCEEDED_FIXED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> SUCCEEDED-FIXED</span>
                                                         <span class="badge-status badge-known-fail" th:if="${exec.displayStatusKey == 'FAILED_KNOWN'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">bug_report</span> KNOWN FAIL</span>
                                                         <span class="badge-status badge-unknown-fail" th:if="${exec.displayStatusKey == 'FAILED_UNKNOWN'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">cancel</span> UNKNOWN FAIL</span>
                                                         <span class="badge-status badge-ignored" th:if="${exec.displayStatusKey == 'SKIPPED'}"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED</span>
@@ -298,7 +322,15 @@
                                                     </td>
 
                                                     <td>
-                                                        <span class="mode-badge" onclick="event.stopPropagation(); filterByMode(this.innerText)" th:text="${exec.executionMode ?: 'FORCE_RECORDING'}">FORCE_RECORDING</span>
+                                                        <div style="display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                                                            <span class="mode-badge" onclick="event.stopPropagation(); filterByMode(this.innerText)" th:text="${exec.executionMode ?: 'FORCE_RECORDING'}">FORCE_RECORDING</span>
+                                                            <span th:if="${exec.healed}" 
+                                                                  th:class="'badge-status ' + (${exec.failedHealed} ? 'badge-healed-failed' : 'badge-healed-passed')"
+                                                                  style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"
+                                                                  title="Test had dynamic self-healing">
+                                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> HEALED
+                                                            </span>
+                                                        </div>
                                                     </td>
 
                                                     <td th:attr="data-sort=${exec.totalStepsCount}">

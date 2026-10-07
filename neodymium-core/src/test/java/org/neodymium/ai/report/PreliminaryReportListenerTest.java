@@ -2271,6 +2271,7 @@ public class PreliminaryReportListenerTest
         assertTrue(actionEntry.isHealed(), "Action entry must be flagged as healed");
         assertEquals("#coupon-input", actionEntry.getTarget(), "Target must be canonical recorded selector");
         assertEquals("#input_dyn_84920", actionEntry.getResolvedTarget(), "Resolved target must be runtime healed selector");
+        assertEquals("#coupon-input", actionEntry.getExpectedTarget(), "Expected target must be recorded canonical selector");
 
         // Verify HTML report rendering contains the healed intel marker and status-heal class
         final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");

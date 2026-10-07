@@ -416,4 +416,44 @@ public class InteractiveConsoleEngineTest
         assertTrue(updatedJsonContent.contains("\"videoUrl\":\"video-1.mp4\""), "Custom execution JSON should contain videoUrl attribute");
         assertTrue(updatedJsonContent.contains("\"videoPath\":\"video-1.mp4\""), "Custom execution JSON should contain videoPath attribute");
     }
+
+    @Test
+    public void testStateJsonSerializesHealedActionTargetAndFlag() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new org.neodymium.ai.model.SessionData());
+        final org.neodymium.ai.model.PlaybookStep pbStep = new org.neodymium.ai.model.PlaybookStep("Select language");
+        pbStep.setLineNumber(1);
+        context.getTransientData().put("playbook.flatSteps", java.util.List.of(pbStep));
+
+        final TestExecutionReport report = new TestExecutionReport();
+        final TestExecutionReport.ReportStepEntry step = new TestExecutionReport.ReportStepEntry();
+        step.setStepIndex(0);
+        step.setRawInstruction("Select language");
+
+        final TestExecutionReport.ReportActionEntry action = new TestExecutionReport.ReportActionEntry(
+            "SELECT",
+            "#selectLanguage",
+            "en",
+            "Select 'en' on #selectLanguage",
+            "",
+            true,
+            null,
+            true
+        );
+        action.setResolvedTarget("#searchLanguage");
+        action.setResolvedValue("en");
+        step.addAction(action);
+        report.addStep(step);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run_test_healed", 0, "passed", null, report);
+        final com.fasterxml.jackson.databind.JsonNode rootNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(stateJson);
+        final com.fasterxml.jackson.databind.JsonNode actionNode = rootNode.path("blocks").path("steps").get(0).path("actions").get(0);
+
+        assertEquals("#searchLanguage", actionNode.path("target").asText());
+        assertEquals("#searchLanguage", actionNode.path("resolvedTarget").asText());
+        assertEquals(true, actionNode.path("healed").asBoolean());
+        assertEquals("#selectLanguage", actionNode.path("expectedTarget").asText());
+        assertEquals("#selectLanguage", actionNode.path("originalTarget").asText());
+        assertEquals("#selectLanguage", actionNode.path("healedFrom").asText());
+    }
 }

@@ -23,6 +23,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.xceptance.aura.report.service.AuraReportDataService;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -65,6 +66,8 @@ public final class TestExecutionDto
     private final long timestampMs;
     private final int totalStepsCount;
     private final int failedStepsCount;
+    private int healedStepsCount;
+    private Boolean healed;
     private final long durationMs;
     private final String durationFormatted;
     private final int llmCallsCount;
@@ -80,7 +83,7 @@ public final class TestExecutionDto
 
     public TestExecutionDto()
     {
-        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "");
+        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false);
     }
 
     @JsonCreator
@@ -128,7 +131,8 @@ public final class TestExecutionDto
         @JsonProperty("visualRcaExplanation") final String visualRcaExplanation,
         @JsonProperty("llmResponsibility") final JsonNode llmResponsibility,
         @JsonProperty("metrics") final JsonNode metrics,
-        @JsonProperty("videoUrl") @JsonAlias({"videoPath", "video"}) final String videoUrl)
+        @JsonProperty("videoUrl") @JsonAlias({"videoPath", "video"}) final String videoUrl,
+        @JsonProperty("healed") final Boolean healed)
     {
         final String effectiveTestClass;
         if (testClass != null && !testClass.trim().isEmpty())
@@ -252,7 +256,7 @@ public final class TestExecutionDto
         }
         this.location = effectiveLocation;
 
-        this.browser = com.xceptance.aura.report.service.AuraReportDataService.normalizeBrowser(browser);
+        this.browser = AuraReportDataService.normalizeBrowser(browser);
         this.failure = failure != null ? failure : "NONE";
         this.bugs = bugs != null ? new ArrayList<>(bugs) : new ArrayList<>();
         this.comment = comment;
@@ -260,6 +264,10 @@ public final class TestExecutionDto
         this.dataBindings = dataBindings != null ? new HashMap<>(dataBindings) : new HashMap<>();
         this.localDataBindings = localDataBindings != null ? new HashMap<>(localDataBindings) : new HashMap<>();
         this.blocks = blocks;
+        if (this.blocks != null)
+        {
+            getHealedStepsCount();
+        }
         this.steps = steps;
         this.executionMode = (executionMode != null && !executionMode.isBlank()) ? executionMode : ((mode != null && !mode.isBlank()) ? mode : "FORCE_RECORDING");
         this.startTime = startTime != null ? startTime : "";
@@ -280,6 +288,7 @@ public final class TestExecutionDto
         this.llmResponsibility = llmResponsibility;
         this.metrics = metrics;
         this.videoUrl = videoUrl != null ? videoUrl : "";
+        this.healed = Boolean.TRUE.equals(healed);
     }
 
     public TestExecutionDto(
@@ -321,7 +330,7 @@ public final class TestExecutionDto
         final Double llmCost,
         final String failureSnippet)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, "", "", "", null, null, "");
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, "", "", "", null, null, "", false);
     }
 
     public TestExecutionDto(
@@ -366,7 +375,7 @@ public final class TestExecutionDto
         final String failureStackTrace,
         final String visualRcaExplanation)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, null, null, "");
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, null, null, "", false);
     }
 
     public TestExecutionDto(
@@ -392,7 +401,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "");
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false);
     }
 
     public TestExecutionDto(
@@ -417,7 +426,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "");
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false);
     }
 
     public TestExecutionDto(
@@ -431,7 +440,7 @@ public final class TestExecutionDto
         final String failure,
         final List<String> bugs)
     {
-        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "");
+        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false);
     }
 
     public String getId()
@@ -501,15 +510,16 @@ public final class TestExecutionDto
         {
             return "RUNNING";
         }
-        if ("succeeded-fixed".equals(st) || "fixed".equals(st) || "healed".equals(st) || (("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st)) && bugs != null && !bugs.isEmpty()))
+        final boolean hasBugs = bugs != null && !bugs.isEmpty();
+        if ("succeeded-fixed".equals(st) || "fixed".equals(st) || (("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st)) && hasBugs))
         {
             return "SUCCEEDED_FIXED";
         }
-        if ("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st))
+        if ("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st) || "healed".equals(st))
         {
             return "PASSED";
         }
-        if ("failed-known".equals(st) || "known".equals(st) || (("failed".equals(st) || "error".equals(st)) && bugs != null && !bugs.isEmpty()))
+        if ("failed-known".equals(st) || "known".equals(st) || (("failed".equals(st) || "error".equals(st) || "failure".equals(st)) && hasBugs))
         {
             return "FAILED_KNOWN";
         }
@@ -517,7 +527,7 @@ public final class TestExecutionDto
         {
             return "SKIPPED";
         }
-        return "FAILED_UNKNOWN";
+        return hasBugs ? "FAILED_KNOWN" : "FAILED_UNKNOWN";
     }
 
     public String getEngine()
@@ -631,6 +641,10 @@ public final class TestExecutionDto
 
     public void setBlocks(final JsonNode blocks)
     {
+        if (blocks != null)
+        {
+            getHealedStepsCount();
+        }
         this.blocks = blocks;
     }
 
@@ -751,9 +765,74 @@ public final class TestExecutionDto
         return failureSnippet;
     }
 
+    @JsonProperty("healedStepsCount")
+    public void setHealedStepsCount(final int healedStepsCount)
+    {
+        this.healedStepsCount = healedStepsCount;
+    }
+
     public int getHealedStepsCount()
     {
-        return "succeeded-fixed".equalsIgnoreCase(status) ? 1 : 0;
+        if (healedStepsCount > 0)
+        {
+            return healedStepsCount;
+        }
+        if (blocks != null)
+        {
+            int count = 0;
+            for (final String key : List.of("before", "steps", "after"))
+            {
+                final JsonNode arr = blocks.path(key);
+                if (arr.isArray())
+                {
+                    for (final JsonNode stepNode : arr)
+                    {
+                        if ("healed".equalsIgnoreCase(stepNode.path("status").asText("")) || stepNode.path("healed").asBoolean(false))
+                        {
+                            count++;
+                        }
+                    }
+                }
+            }
+            if (count > 0)
+            {
+                this.healedStepsCount = count;
+                return count;
+            }
+        }
+        return "healed".equalsIgnoreCase(status) ? 1 : 0;
+    }
+
+    @JsonProperty("healed")
+    public void setHealed(final Boolean healed)
+    {
+        this.healed = healed;
+    }
+
+    @JsonProperty("healed")
+    public boolean isHealed()
+    {
+        return Boolean.TRUE.equals(healed) || getHealedStepsCount() > 0 || "healed".equalsIgnoreCase(status);
+    }
+
+    public boolean isPassedHealed()
+    {
+        if (!isHealed())
+        {
+            return false;
+        }
+        final String st = getDisplayStatusKey();
+        return "PASSED".equals(st) || "SUCCEEDED_FIXED".equals(st);
+    }
+
+    public boolean isFailedHealed()
+    {
+        if (!isHealed())
+        {
+            return false;
+        }
+        final String st = getDisplayStatusKey();
+        return "FAILED_KNOWN".equals(st) || "FAILED_UNKNOWN".equals(st);
     }
 
     public long getTotalTokensCount()

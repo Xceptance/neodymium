@@ -286,5 +286,86 @@ public class TestBaseVariationHistoryTest
         Assertions.assertEquals("Batch A", historyTest7.get(0).getBatchName());
         Assertions.assertEquals("Java", historyTest7.get(0).getEngine());
     }
+
+    @Test
+    public void testGetVariationHistoryWithHealedExecutionFromJson()
+    {
+        final TestRunEntity run1 = new TestRunEntity("RUN_HEALED", "Batch Healed", "COMPLETED", "Main", "Manual", "Java", "Chrome", "12:00", 3000L);
+
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(run1));
+
+        final String jsonHealed = """
+            {
+              "executions": [
+                {
+                  "id": "e_healed_1",
+                  "testClass": "HealedTest",
+                  "title": "canyon_healed_US",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "healed": true,
+                  "engine": "Java"
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("RUN_HEALED")).thenReturn(Optional.of(jsonHealed));
+
+        final List<TestBaseVariationHistoryDto> history = dataService.getVariationHistory(
+            "HealedTest",
+            "canyon_healed_US",
+            "US",
+            "Chrome"
+        );
+
+        Assertions.assertNotNull(history);
+        Assertions.assertEquals(1, history.size());
+        final TestBaseVariationHistoryDto dto = history.get(0);
+        Assertions.assertEquals("RUN_HEALED", dto.getRunId());
+        Assertions.assertEquals("e_healed_1", dto.getExecutionId());
+        Assertions.assertTrue(dto.isHealed(), "DTO should be marked as healed");
+        Assertions.assertTrue(dto.isPassedHealed(), "DTO should be passed healed");
+        Assertions.assertFalse(dto.isFailedHealed(), "DTO should not be failed healed");
+    }
+
+    @Test
+    public void testGetVariationHistoryWithHealedFromHistoryLinks()
+    {
+        final String testClass = "HealedLinkTest";
+        final String dataSet = "Payment_VISA";
+        final String location = "US";
+        final String browser = "Chrome";
+        final String varId = AuraReportDataService.generateVariationId(testClass, dataSet, location, browser);
+
+        final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, dataSet, "@General", location, browser);
+        varEntity.setHistoryLinks("/run-report?runId=RUN_HEALED_LINK&executionId=exec-hl-1&batch=Nightly&engine=Java&ts=Today&status=passed-clean&healed=true");
+
+        final TestRunEntity runEntity = new TestRunEntity("RUN_HEALED_LINK", "Nightly", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "Today", 7000L);
+
+        Mockito.when(variationRepository.findById(varId)).thenReturn(Optional.of(varEntity));
+        Mockito.when(runRepository.findAllById(List.of("RUN_HEALED_LINK"))).thenReturn(List.of(runEntity));
+
+        final List<TestBaseVariationHistoryDto> history = dataService.getVariationHistory(testClass, dataSet, location, browser);
+
+        Assertions.assertNotNull(history);
+        Assertions.assertEquals(1, history.size());
+        final TestBaseVariationHistoryDto dto = history.get(0);
+        Assertions.assertEquals("RUN_HEALED_LINK", dto.getRunId());
+        Assertions.assertTrue(dto.isHealed(), "DTO should be marked as healed");
+        Assertions.assertTrue(dto.isPassedHealed(), "DTO should be passed healed");
+        Assertions.assertFalse(dto.isFailedHealed(), "DTO should not be failed healed");
+    }
+
+    @Test
+    public void testVariationEntityHealedField()
+    {
+        final TestBaseVariationEntity entity = new TestBaseVariationEntity();
+        Assertions.assertFalse(entity.isHealed(), "Default healed should be false");
+        entity.setHealed(true);
+        Assertions.assertTrue(entity.isHealed(), "Healed should be true after setter");
+    }
 }
+
 

@@ -734,6 +734,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                     actionEntry.setResolvedValue(resolvedAction.getValue());
                 }
                 actionEntry.setHealed(actionExecuted.isHealed());
+                final String origTarget = (resolvedAction != null && resolvedAction.getExpectedTarget() != null && !resolvedAction.getExpectedTarget().isBlank())
+                    ? resolvedAction.getExpectedTarget()
+                    : ((action.getExpectedTarget() != null && !action.getExpectedTarget().isBlank()) ? action.getExpectedTarget() : action.getTarget());
+                actionEntry.setExpectedTarget(origTarget);
                 if (actionExecuted.getPhase() != null)
                 {
                     this.currentStep.setMultiStage(true);

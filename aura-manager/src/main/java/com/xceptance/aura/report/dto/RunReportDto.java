@@ -265,7 +265,38 @@ public final class RunReportDto
 
     public int getHealedCount()
     {
-        return fixedCount;
+        if (executions != null && !executions.isEmpty())
+        {
+            final int stepsHealed = executions.stream().mapToInt(TestExecutionDto::getHealedStepsCount).sum();
+            if (stepsHealed > 0)
+            {
+                return stepsHealed;
+            }
+        }
+        return 0;
+    }
+
+    public int getPassedHealedCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isPassedHealed).count();
+        }
+        return 0;
+    }
+
+    public int getFailedHealedCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFailedHealed).count();
+        }
+        return 0;
+    }
+
+    public int getTotalHealedCount()
+    {
+        return getPassedHealedCount() + getFailedHealedCount();
     }
 
     public int getFailCount()

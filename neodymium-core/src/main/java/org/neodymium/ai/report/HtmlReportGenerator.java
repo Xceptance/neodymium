@@ -1623,14 +1623,15 @@ public final class HtmlReportGenerator
                         var resText = a.success ? (a.healed ? 'HEALED' : 'SUCCESS') : 'FAILED';
 
                         var displayTarget = a.resolvedTarget || a.target || '-';
+                        var origTarget = a.expectedTarget || a.originalTarget || a.healedFrom || (a.healed ? a.target : null);
                         var hasTargetTpl = !a.healed && a.target && a.resolvedTarget && a.target !== a.resolvedTarget;
                         var targetHtml;
                         if (displayTarget === '-') {
                             targetHtml = '<span class="text-muted">-</span>';
                         } else {
                             targetHtml = '<code class="code-selector" onclick="copyActionTarget(' + ai + ', this)" title="Click to copy">' + escapeHtml(displayTarget) + '</code>';
-                            if (a.healed && a.target && a.target !== displayTarget) {
-                                targetHtml += '<div class="action-healed-note" title="Original Recorded Selector">🧬 Healed from: <code>' + escapeHtml(a.target) + '</code></div>';
+                            if (origTarget && origTarget !== displayTarget) {
+                                targetHtml += '<div class="action-healed-note" title="Original Recorded Selector">🧬 Healed from: <code>' + escapeHtml(origTarget) + '</code></div>';
                             } else if (hasTargetTpl) {
                                 targetHtml += '<div class="action-tpl-note" title="Original Parameterized Template">Template: <code>' + escapeHtml(a.target) + '</code></div>';
                             }

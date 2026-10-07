@@ -229,6 +229,7 @@ public final class PlaybookToolReplayer
                 {
                     result = toolOpt.get().execute(finalCall, effectiveContext);
                     dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, true);
+                    syncStepActionOnSuccess(step, i, variableResolvedCall, finalCall, isToolHealed);
                 }
                 catch (final AssertionError e)
                 {
@@ -263,6 +264,7 @@ public final class PlaybookToolReplayer
                     effectiveExecutor.execute(mapped);
                     result = ToolResult.success(finalCall.callId(), "Action executed via TargetExecutor");
                     dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, true);
+                    syncStepActionOnSuccess(step, i, variableResolvedCall, finalCall, isToolHealed);
                 }
                 catch (final AssertionError e)
                 {
@@ -346,11 +348,43 @@ public final class PlaybookToolReplayer
             if (isHealed && canonicalCall != null)
             {
                 final Action canonicalAction = AgentToolLoopStep.mapToolCallToAction(canonicalCall);
+                final String origTarget = canonicalAction.getExpectedTarget() != null && !canonicalAction.getExpectedTarget().isBlank()
+                    ? canonicalAction.getExpectedTarget()
+                    : canonicalAction.getTarget();
+                resolvedAction.setExpectedTarget(origTarget);
+                resolvedAction.setHealed(true);
                 session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, resolvedAction, success, null, true));
             }
             else
             {
                 session.getEventBus().dispatch(new ActionExecutedEvent(resolvedAction, success));
+            }
+        }
+    }
+
+    private static void syncStepActionOnSuccess(
+        final PlaybookStep step,
+        final int callIndex,
+        final ToolCall canonicalCall,
+        final ToolCall finalCall,
+        final boolean isHealed
+    )
+    {
+        if (step != null && step.getActions() != null && callIndex >= 0 && callIndex < step.getActions().size())
+        {
+            final Action act = step.getActions().get(callIndex);
+            if (act != null && isHealed && canonicalCall != null)
+            {
+                final Action canonicalAction = AgentToolLoopStep.mapToolCallToAction(canonicalCall);
+                final Action resolvedAction = AgentToolLoopStep.mapToolCallToAction(finalCall);
+                final String origTarget = canonicalAction.getExpectedTarget() != null && !canonicalAction.getExpectedTarget().isBlank()
+                    ? canonicalAction.getExpectedTarget()
+                    : canonicalAction.getTarget();
+                final Action updated = act.withTarget(resolvedAction.getTarget());
+                updated.setExpectedTarget(origTarget);
+                updated.setOriginalTarget(origTarget);
+                updated.setHealed(true);
+                step.getActions().set(callIndex, updated);
             }
         }
     }

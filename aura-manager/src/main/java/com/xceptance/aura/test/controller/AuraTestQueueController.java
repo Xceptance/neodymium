@@ -1240,4 +1240,18 @@ public class AuraTestQueueController
         model.addAttribute("datasetId", datasetId != null ? datasetId : "");
         return "fragments/side-panel-playbook :: playbookSidePanel";
     }
+
+    @PostMapping("/api/playbook/accept-healing")
+    public String acceptHealing(@RequestParam("file") final String file,
+                                @RequestParam(value = "id", required = false) final String datasetId,
+                                @RequestParam(value = "stepIndex", required = false) final Integer stepIndex,
+                                @RequestParam(value = "actionIndex", required = false) final Integer actionIndex,
+                                final Model model)
+    {
+        if (fileService != null)
+        {
+            fileService.acceptPlaybookHealing(file, datasetId, stepIndex, actionIndex);
+        }
+        return renderPlaybookSidePanel(file, datasetId, model);
+    }
 }

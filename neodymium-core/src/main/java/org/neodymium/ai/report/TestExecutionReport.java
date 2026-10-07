@@ -1030,6 +1030,7 @@ public final class TestExecutionReport
         private boolean success;
         private String phase;
         private boolean healed;
+        private String expectedTarget;
 
         public ReportActionEntry()
         {
@@ -1179,6 +1180,26 @@ public final class TestExecutionReport
         public void setHealed(final boolean healed)
         {
             this.healed = healed;
+        }
+
+        public String getExpectedTarget()
+        {
+            return this.expectedTarget;
+        }
+
+        public String getOriginalTarget()
+        {
+            return this.expectedTarget;
+        }
+
+        public String getHealedFrom()
+        {
+            return this.expectedTarget;
+        }
+
+        public void setExpectedTarget(final String expectedTarget)
+        {
+            this.expectedTarget = expectedTarget;
         }
     }
 

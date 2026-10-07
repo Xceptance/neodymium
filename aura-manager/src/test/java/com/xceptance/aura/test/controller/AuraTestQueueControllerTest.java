@@ -23,7 +23,10 @@ import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
@@ -32,6 +35,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
+import org.thymeleaf.context.Context;
+import org.thymeleaf.spring6.SpringTemplateEngine;
+import org.thymeleaf.templatemode.TemplateMode;
+import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 /**
  * Unit tests for AuraTestQueueController default browser and execution mode behavior.
@@ -186,24 +193,87 @@ public final class AuraTestQueueControllerTest
     @Test
     public final void testRenderPlaybookSidePanelPopulatesModel()
     {
-        final java.util.Map<String, Object> details = new java.util.HashMap<>();
+        final Map<String, Object> details = new HashMap<>();
         details.put("file", "verla/SearchTest.yaml");
         details.put("datasetId", "normal");
         details.put("totalSteps", 3);
-        details.put("steps", java.util.List.of());
+        details.put("steps", List.of());
 
-        Mockito.when(fileService.loadPlaybookDetails("verla/SearchTest.yaml", "normal")).thenReturn(details);
-        Mockito.when(fileService.hasPlaybook("verla/SearchTest.yaml", "normal")).thenReturn(true);
+        Mockito.when(this.fileService.loadPlaybookDetails("verla/SearchTest.yaml", "normal")).thenReturn(details);
+        Mockito.when(this.fileService.hasPlaybook("verla/SearchTest.yaml", "normal")).thenReturn(true);
 
-        Assertions.assertTrue(controller.hasPlaybook("verla/SearchTest.yaml", "normal"));
+        Assertions.assertTrue(this.controller.hasPlaybook("verla/SearchTest.yaml", "normal"));
 
         final Model model = new ConcurrentModel();
-        final String viewName = controller.renderPlaybookSidePanel("verla/SearchTest.yaml", "normal", model);
+        final String viewName = this.controller.renderPlaybookSidePanel("verla/SearchTest.yaml", "normal", model);
 
         Assertions.assertEquals("fragments/side-panel-playbook :: playbookSidePanel", viewName);
         Assertions.assertTrue(model.containsAttribute("playbook"));
         Assertions.assertEquals(details, model.getAttribute("playbook"));
         Assertions.assertEquals("verla/SearchTest.yaml", model.getAttribute("file"));
         Assertions.assertEquals("normal", model.getAttribute("datasetId"));
+    }
+
+    @Test
+    public final void testAcceptHealingInPlaybook()
+    {
+        final Map<String, Object> details = new HashMap<>();
+        details.put("file", "verla/SearchTest.yaml");
+        details.put("datasetId", "normal");
+        details.put("totalSteps", 1);
+        details.put("healedSteps", 0);
+
+        Mockito.when(this.fileService.acceptPlaybookHealing("verla/SearchTest.yaml", "normal", 0, null)).thenReturn(true);
+        Mockito.when(this.fileService.loadPlaybookDetails("verla/SearchTest.yaml", "normal")).thenReturn(details);
+
+        final Model model = new ConcurrentModel();
+        final String viewName = this.controller.acceptHealing("verla/SearchTest.yaml", "normal", 0, null, model);
+
+        Mockito.verify(this.fileService).acceptPlaybookHealing("verla/SearchTest.yaml", "normal", 0, null);
+        Mockito.verify(this.fileService).loadPlaybookDetails("verla/SearchTest.yaml", "normal");
+
+        Assertions.assertEquals("fragments/side-panel-playbook :: playbookSidePanel", viewName);
+        Assertions.assertTrue(model.containsAttribute("playbook"));
+        Assertions.assertEquals(details, model.getAttribute("playbook"));
+    }
+
+    @Test
+    public final void testSidePanelPlaybookTemplateRendersWithoutHealedOrFailedProperties()
+    {
+        final SpringTemplateEngine engine = new SpringTemplateEngine();
+        final ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding("UTF-8");
+        engine.setTemplateResolver(resolver);
+
+        final Map<String, Object> step = new LinkedHashMap<>();
+        step.put("instruction", "Click button");
+        step.put("status", "SUCCESS");
+        // deliberately omit "healed" and "failed" to simulate raw unhealed JSON map deserialization
+
+        final Map<String, Object> action = new LinkedHashMap<>();
+        action.put("type", "CLICK");
+        action.put("target", "#myBtn");
+        step.put("actions", List.of(action));
+
+        final Map<String, Object> playbook = new HashMap<>();
+        playbook.put("playbookPath", "path/to/pb.json");
+        playbook.put("totalSteps", 1);
+        playbook.put("passedSteps", 1);
+        playbook.put("healedSteps", 0);
+        playbook.put("failedSteps", 0);
+        playbook.put("steps", List.of(step));
+
+        final Context context = new Context();
+        context.setVariable("playbook", playbook);
+        context.setVariable("file", "test.yaml");
+        context.setVariable("datasetId", "default");
+
+        final String html = engine.process("fragments/side-panel-playbook", Collections.singleton("playbookSidePanel"), context);
+        Assertions.assertNotNull(html);
+        Assertions.assertTrue(html.contains("Click button"));
+        Assertions.assertTrue(html.contains("#myBtn"));
     }
 }

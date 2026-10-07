@@ -18,7 +18,10 @@
  */
 package com.xceptance.neodymium.aura;
 
+import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Assertions;
@@ -383,5 +386,233 @@ public class AuraFileServiceTest
         Assertions.assertEquals("normal", details.get("datasetId"));
         Assertions.assertNotNull(details.get("steps"));
         Assertions.assertTrue(((Integer) details.get("totalSteps")) > 0);
+        Assertions.assertNotNull(details.get("generatedAt"));
+        Assertions.assertNotNull(details.get("lastModifiedEpoch"));
+        Assertions.assertNotNull(details.get("testFileLastEdited"));
+        Assertions.assertNotNull(details.get("testFileLastModifiedEpoch"));
+    }
+
+    @Test
+    public void testLoadPlaybookDetailsWithHealedStepReconcilesOriginalTarget() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final File resourcesDir = fileService.getResourcesDirectory();
+        final String testFileName = "test_healed_reconcile.yaml";
+        final File testFile = new File(resourcesDir, testFileName);
+        final File jsonFile = new File(resourcesDir, "test_healed_reconcile.json");
+
+        try
+        {
+            Files.writeString(testFile.toPath(), "test:\n  - step: Click button\n", StandardCharsets.UTF_8);
+            final String samplePlaybook = """
+                [
+                  {
+                    "instruction": "Click button",
+                    "status": "HEALED",
+                    "actions": [
+                      {
+                        "type": "CLICK",
+                        "target": "#healedButton",
+                        "originalTarget": null,
+                        "expectedTarget": null,
+                        "healed": false
+                      }
+                    ],
+                    "toolCalls": [
+                      {
+                        "callId": "c1",
+                        "toolName": "click",
+                        "arguments": {
+                          "selector": "#brokenButton"
+                        }
+                      }
+                    ]
+                  }
+                ]
+                """;
+            Files.writeString(jsonFile.toPath(), samplePlaybook, StandardCharsets.UTF_8);
+
+            final Map<String, Object> details = fileService.loadPlaybookDetails(testFileName, null);
+            Assertions.assertNotNull(details);
+            Assertions.assertEquals(1, details.get("healedSteps"));
+            Assertions.assertEquals(1, details.get("totalSteps"));
+
+            final List<?> steps = (List<?>) details.get("steps");
+            Assertions.assertEquals(1, steps.size());
+            final Map<?, ?> step = (Map<?, ?>) steps.get(0);
+            final List<?> actions = (List<?>) step.get("actions");
+            Assertions.assertEquals(1, actions.size());
+
+            final Map<?, ?> action = (Map<?, ?>) actions.get(0);
+            Assertions.assertEquals("#healedButton", action.get("target"));
+            Assertions.assertEquals("#brokenButton", action.get("expectedTarget"));
+            Assertions.assertEquals("#brokenButton", action.get("originalTarget"));
+            Assertions.assertEquals(true, action.get("healed"));
+        }
+        finally
+        {
+            if (testFile.exists())
+            {
+                testFile.delete();
+            }
+            if (jsonFile.exists())
+            {
+                jsonFile.delete();
+            }
+        }
+    }
+
+    @Test
+    public final void testAcceptPlaybookHealingSingleStep() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final File resourcesDir = fileService.getResourcesDirectory();
+        final String testFileName = "test_accept_healing.yaml";
+        final File testFile = new File(resourcesDir, testFileName);
+        final File jsonFile = new File(resourcesDir, "test_accept_healing.json");
+
+        try
+        {
+            Files.writeString(testFile.toPath(), "test:\n  - step: Click button\n", StandardCharsets.UTF_8);
+            final String samplePlaybook = """
+                [
+                  {
+                    "instruction": "Click button",
+                    "status": "HEALED",
+                    "actions": [
+                      {
+                        "type": "CLICK",
+                        "target": "#newButton",
+                        "originalTarget": "#oldButton",
+                        "expectedTarget": "#oldButton",
+                        "healed": true
+                      }
+                    ],
+                    "toolCalls": [
+                      {
+                        "callId": "c1",
+                        "toolName": "click",
+                        "arguments": {
+                          "selector": "#oldButton"
+                        }
+                      }
+                    ]
+                  }
+                ]
+                """;
+            Files.writeString(jsonFile.toPath(), samplePlaybook, StandardCharsets.UTF_8);
+
+            final boolean accepted = fileService.acceptPlaybookHealing(testFileName, null, 0);
+            Assertions.assertTrue(accepted);
+
+            final Map<String, Object> details = fileService.loadPlaybookDetails(testFileName, null);
+            Assertions.assertNotNull(details);
+            Assertions.assertEquals(0, details.get("healedSteps"));
+            Assertions.assertEquals(1, details.get("passedSteps"));
+
+            final List<?> steps = (List<?>) details.get("steps");
+            Assertions.assertEquals(1, steps.size());
+            final Map<?, ?> step = (Map<?, ?>) steps.get(0);
+            Assertions.assertEquals("SUCCESS", step.get("status"));
+
+            final List<?> actions = (List<?>) step.get("actions");
+            final Map<?, ?> action = (Map<?, ?>) actions.get(0);
+            Assertions.assertEquals("#newButton", action.get("target"));
+            Assertions.assertNull(action.get("expectedTarget"));
+            Assertions.assertNull(action.get("healed"));
+
+            // Check JSON content directly on disk
+            final String updatedDiskContent = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
+            Assertions.assertTrue(updatedDiskContent.contains("\"selector\" : \"#newButton\"") || updatedDiskContent.contains("\"selector\": \"#newButton\""));
+            Assertions.assertFalse(updatedDiskContent.contains("#oldButton"));
+        }
+        finally
+        {
+            if (testFile.exists())
+            {
+                testFile.delete();
+            }
+            if (jsonFile.exists())
+            {
+                jsonFile.delete();
+            }
+        }
+    }
+
+    @Test
+    public final void testAcceptPlaybookHealingAllSteps() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final File resourcesDir = fileService.getResourcesDirectory();
+        final String testFileName = "test_accept_healing_all.yaml";
+        final File testFile = new File(resourcesDir, testFileName);
+        final File jsonFile = new File(resourcesDir, "test_accept_healing_all.json");
+
+        try
+        {
+            Files.writeString(testFile.toPath(), "test:\n  - step: Click\n  - step: Type\n", StandardCharsets.UTF_8);
+            final String samplePlaybook = """
+                [
+                  {
+                    "instruction": "Click",
+                    "status": "HEALED",
+                    "actions": [
+                      {
+                        "type": "CLICK",
+                        "target": "#newBtn",
+                        "originalTarget": "#oldBtn",
+                        "expectedTarget": "#oldBtn",
+                        "healed": true
+                      }
+                    ],
+                    "toolCalls": [
+                      {
+                        "callId": "c1",
+                        "toolName": "click",
+                        "arguments": {
+                          "selector": "#oldBtn"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "instruction": "Type",
+                    "status": "SUCCESS",
+                    "actions": [
+                      {
+                        "type": "TYPE",
+                        "target": "#inputField",
+                        "value": "hello"
+                      }
+                    ]
+                  }
+                ]
+                """;
+            Files.writeString(jsonFile.toPath(), samplePlaybook, StandardCharsets.UTF_8);
+
+            final boolean accepted = fileService.acceptPlaybookHealing(testFileName, null, null);
+            Assertions.assertTrue(accepted);
+
+            final Map<String, Object> details = fileService.loadPlaybookDetails(testFileName, null);
+            Assertions.assertNotNull(details);
+            Assertions.assertEquals(0, details.get("healedSteps"));
+            Assertions.assertEquals(2, details.get("passedSteps"));
+
+            final List<?> steps = (List<?>) details.get("steps");
+            Assertions.assertEquals(2, steps.size());
+            Assertions.assertEquals("SUCCESS", ((Map<?, ?>) steps.get(0)).get("status"));
+            Assertions.assertEquals("SUCCESS", ((Map<?, ?>) steps.get(1)).get("status"));
+        }
+        finally
+        {
+            if (testFile.exists())
+            {
+                testFile.delete();
+            }
+            if (jsonFile.exists())
+            {
+                jsonFile.delete();
+            }
+        }
     }
 }

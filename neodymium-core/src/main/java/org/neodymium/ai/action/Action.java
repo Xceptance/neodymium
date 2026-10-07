@@ -122,6 +122,14 @@ public class Action
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private ToolCall toolCall;
 
+    @JsonProperty("expectedTarget")
+    @JsonAlias({"expectedTarget", "originalTarget", "healedFrom"})
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String expectedTarget;
+
+    @JsonProperty("healed")
+    private boolean healed = false;
+
     /**
      * Dynamic parameter binding bindings for extensible runtime properties.
      */
@@ -309,8 +317,50 @@ public class Action
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
+        copy.expectedTarget = this.expectedTarget;
+        copy.healed = this.healed;
         copy.parameters.putAll(this.parameters);
         return copy;
+    }
+
+    public String getExpectedTarget()
+    {
+        return this.expectedTarget;
+    }
+
+    public String getOriginalTarget()
+    {
+        return this.expectedTarget;
+    }
+
+    public String getHealedFrom()
+    {
+        return this.expectedTarget;
+    }
+
+    public void setExpectedTarget(final String expectedTarget)
+    {
+        this.expectedTarget = expectedTarget;
+    }
+
+    public void setOriginalTarget(final String originalTarget)
+    {
+        this.expectedTarget = originalTarget;
+    }
+
+    public void setHealedFrom(final String healedFrom)
+    {
+        this.expectedTarget = healedFrom;
+    }
+
+    public boolean isHealed()
+    {
+        return this.healed;
+    }
+
+    public void setHealed(final boolean healed)
+    {
+        this.healed = healed;
     }
 
     @JsonProperty("isRegex")
