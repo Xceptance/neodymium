@@ -1223,4 +1223,21 @@ public class AuraTestQueueController
     {
         return "chrome";
     }
+
+    public boolean hasPlaybook(final String file, final String datasetId)
+    {
+        return fileService != null && fileService.hasPlaybook(file, datasetId);
+    }
+
+    @GetMapping({"/api/playbook/view", "/fragments/playbook-side-panel"})
+    public String renderPlaybookSidePanel(@RequestParam("file") final String file,
+                                           @RequestParam(value = "id", required = false) final String datasetId,
+                                           final Model model)
+    {
+        final Map<String, Object> playbookDetails = fileService != null ? fileService.loadPlaybookDetails(file, datasetId) : null;
+        model.addAttribute("playbook", playbookDetails);
+        model.addAttribute("file", file);
+        model.addAttribute("datasetId", datasetId != null ? datasetId : "");
+        return "fragments/side-panel-playbook :: playbookSidePanel";
+    }
 }

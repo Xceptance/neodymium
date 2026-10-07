@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head></head>
+<body>
+
+<!-- Side Panel Playbook Inspector Drawer Fragment -->
+<!-- Displays recorded JSON playbook steps matching report drawer theme colors -->
+<div th:fragment="playbookSidePanel" class="allure-side-page-panel active" id="playbookSidePagePanel"
+     style="position: fixed; top: 0; right: 0; bottom: 0; width: 680px; max-width: 90vw; background: var(--bg-panel, #ffffff); border-left: 1px solid var(--border, #e2e8f0); z-index: 9999; display: flex; flex-direction: column; box-shadow: var(--shadow-panel, -4px 0 20px rgba(0,0,0,0.15)); animation: slideInRight 0.25s ease-out;">
+    
+    <!-- Drawer Header -->
+    <div class="side-page-header" style="padding: 1.1rem 1.25rem; border-bottom: 1px solid var(--border, #e2e8f0); background: var(--bg-card, #f8fafc); display: flex; align-items: flex-start; justify-content: space-between;">
+        <div>
+            <div class="side-page-title" style="font-size: 1.1rem; font-weight: 700; color: var(--text-main, #0f172a); display: flex; align-items: center; gap: 0.5rem;">
+                <span class="material-symbols-outlined text-accent" style="color: var(--accent, #2563eb); font-size: 1.3rem;">menu_book</span>
+                <span>Recorded Playbook JSON</span>
+            </div>
+            <div class="text-mono" style="font-size: 0.85rem; color: var(--text-muted, #475569); margin-top: 0.25rem; font-weight: 600;"
+                 th:text="${file} + (${datasetId != null and !datasetId.isEmpty() ? ' :: Dataset [' + datasetId + ']' : ''})">TestFile.yaml</div>
+            <div class="text-mono" style="font-size: 0.75rem; color: var(--text-dim, #94a3b8); margin-top: 0.35rem; display: flex; align-items: center; gap: 0.35rem; word-break: break-all;"
+                 th:if="${playbook != null and playbook.playbookPath != null}">
+                <span class="material-symbols-outlined" style="font-size: 0.85rem; color: var(--accent-purple, #a855f7);">folder_open</span>
+                <span th:text="${playbook.playbookPath}">src/test/resources/...json</span>
+            </div>
+        </div>
+        <button class="side-page-close js-close-side-panel" onclick="closePlaybookInspector()" style="background: none; border: none; color: var(--text-muted, #64748b); cursor: pointer; padding: 4px; border-radius: 4px;" title="Close Inspector">
+            <span class="material-symbols-outlined" style="font-size: 1.4rem;">close</span>
+        </button>
+    </div>
+
+    <!-- Drawer Body -->
+    <div class="side-page-body" style="flex: 1; overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; background: var(--bg-base, #f8fafc);">
+        
+        <!-- Empty / Error State -->
+        <div th:if="${playbook == null or playbook.steps == null or playbook.steps.isEmpty()}" class="empty-state-card" style="padding: 2rem; text-align: center; background: var(--bg-card, #ffffff); border: 1px dashed var(--border, #cbd5e1); border-radius: 8px;">
+            <span class="material-symbols-outlined" style="font-size: 2.5rem; color: var(--text-muted, #64748b); margin-bottom: 0.5rem;">find_in_page</span>
+            <div style="font-size: 0.95rem; font-weight: 600; color: var(--text-main, #0f172a); margin-bottom: 0.25rem;">No Recorded Playbook JSON Found</div>
+            <div style="font-size: 0.82rem; color: var(--text-muted, #64748b);" th:text="${playbook != null and playbook.error != null ? playbook.error : 'No recorded companion JSON playbook file exists for this test dataset.'}"></div>
+        </div>
+
+        <th:block th:if="${playbook != null and playbook.steps != null and !playbook.steps.isEmpty()}">
+            
+            <!-- Playbook Metrics Grid -->
+            <div class="metrics-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 0.6rem;">
+                <div class="metric-card" style="padding: 0.65rem 0.85rem; background: var(--bg-panel, #ffffff); border: 1px solid var(--border, #e2e8f0); border-radius: 8px;">
+                    <div class="metric-label" style="font-size: 0.72rem; color: var(--text-muted, #475569); font-weight: 700; text-transform: uppercase;">Total Steps</div>
+                    <div class="metric-value" style="font-size: 1.15rem; font-weight: 800; color: var(--text-main, #0f172a); font-family: var(--font-mono);" th:text="${playbook.totalSteps}">0</div>
+                </div>
+                <div class="metric-card" style="padding: 0.65rem 0.85rem; background: var(--bg-panel, #ffffff); border: 1px solid var(--border, #e2e8f0); border-radius: 8px;">
+                    <div class="metric-label" style="font-size: 0.72rem; color: var(--text-muted, #475569); font-weight: 700; text-transform: uppercase;">Step Health</div>
+                    <div class="metric-value" style="font-size: 0.9rem; font-weight: 700; color: var(--text-main, #0f172a); margin-top: 2px;">
+                        <span style="color: var(--status-pass, #059669);">✔ <span th:text="${playbook.passedSteps}">0</span></span>
+                        <span style="color: var(--status-known-fail, #d97706); margin-left: 6px;">✨ <span th:text="${playbook.healedSteps}">0</span></span>
+                        <span style="color: var(--status-unknown-fail, #dc2626); margin-left: 6px;">❌ <span th:text="${playbook.failedSteps}">0</span></span>
+                    </div>
+                </div>
+                <div class="metric-card" style="padding: 0.65rem 0.85rem; background: var(--bg-panel, #ffffff); border: 1px solid var(--border, #e2e8f0); border-radius: 8px;">
+                    <div class="metric-label" style="font-size: 0.72rem; color: var(--text-muted, #475569); font-weight: 700; text-transform: uppercase;">Est. Total Duration</div>
+                    <div class="metric-value" style="font-size: 1.15rem; font-weight: 800; color: var(--accent, #2563eb); font-family: var(--font-mono);"
+                         th:text="${playbook.totalDurationMs != null ? (playbook.totalDurationMs / 1000.0) + ' s' : '0 s'}">0 s</div>
+                </div>
+            </div>
+
+            <!-- Section Title -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; margin-bottom: 0.2rem;">
+                <span style="font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted, #475569); display: flex; align-items: center; gap: 0.4rem;">
+                    <span class="material-symbols-outlined text-accent" style="font-size: 1rem; color: var(--accent, #2563eb);">list_alt</span>
+                    <span>Playbook Steps &amp; Action Details</span>
+                </span>
+                <span class="tag-chip" style="font-size: 0.7rem; background: var(--mode-playbook-bg, #e0f2fe); color: var(--mode-playbook-color, #0369a1); border: 1px solid var(--mode-playbook-border, #bae6fd); padding: 2px 8px; border-radius: 4px; font-weight: 600;">Deterministic Replay</span>
+            </div>
+
+            <!-- Step List Container -->
+            <div class="step-execution-list" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                <div th:each="step, iter : ${playbook.steps}" class="step-section" style="background: var(--bg-panel, #ffffff); border: 1px solid var(--border, #e2e8f0); border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                    
+                    <!-- Step Header Bar -->
+                    <div style="padding: 0.75rem 1rem; background: var(--bg-hover, #f1f5f9); display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; border-bottom: 1px solid var(--border, #e2e8f0);">
+                        <div style="display: flex; align-items: center; gap: 0.6rem; min-width: 0; flex: 1;">
+                            <span style="font-weight: 700; font-size: 0.82rem; color: var(--text-muted, #475569); font-family: var(--font-mono);" th:text="${'Step ' + iter.count + '.'}">Step 1.</span>
+                            <span style="font-size: 0.9rem; font-weight: 700; color: var(--text-main, #0f172a); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"
+                                  th:text="${step.instruction != null ? step.instruction : 'Step ' + iter.count}">Instruction text</span>
+                            <span th:if="${step.lineNumber != null}" style="font-size: 0.72rem; color: var(--text-muted, #64748b); background: var(--bg-panel, #ffffff); border: 1px solid var(--border, #e2e8f0); padding: 1px 6px; border-radius: 4px;"
+                                  th:text="'Line ' + ${step.lineNumber}">Line 1</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0;">
+                            <span th:if="${step.durationMs != null}" style="font-size: 0.75rem; font-family: var(--font-mono); color: var(--text-muted, #64748b);"
+                                  th:text="${step.durationMs + ' ms'}">1200 ms</span>
+                            <span class="badge-status"
+                                  th:classappend="${step.status == 'HEALED' ? 'badge-healed' : (step.status == 'FAILED' or step.failed == true ? 'badge-fail' : 'badge-pass')}"
+                                  style="font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; font-weight: 700;"
+                                  th:text="${step.status != null ? step.status : 'SUCCESS'}">SUCCESS</span>
+                        </div>
+                    </div>
+
+                    <!-- Step Body: Reasoning & Actions -->
+                    <div style="padding: 0.85rem 1rem; display: flex; flex-direction: column; gap: 0.65rem;">
+                        
+                        <!-- Step Reasoning -->
+                        <div th:if="${step.reasoning != null and !step.reasoning.isEmpty()}" style="font-size: 0.8rem; color: var(--text-muted, #475569); font-style: italic; background: var(--bg-card, #f8fafc); padding: 6px 10px; border-radius: 6px; border-left: 3px solid var(--accent, #2563eb);">
+                            <span style="font-weight: 700; font-style: normal; color: var(--accent, #2563eb);">💡 Reasoning:</span> <span th:text="${step.reasoning}">Step reasoning</span>
+                        </div>
+
+                        <!-- Actions List -->
+                        <div th:if="${step.actions != null and !step.actions.isEmpty()}" style="display: flex; flex-direction: column; gap: 0.6rem; margin-top: 0.2rem;">
+                            <div th:each="act : ${step.actions}" style="background: var(--bg-card, #f8fafc); border: 1px solid var(--border, #e2e8f0); border-radius: 8px; padding: 0.7rem 0.85rem; font-size: 0.825rem;">
+                                
+                                <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.4rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                        <span class="tag-chip" style="font-weight: 700; font-size: 0.72rem; padding: 2px 7px; border-radius: 4px; background: var(--mode-playbook-bg, #e0f2fe); color: var(--mode-playbook-color, #0369a1); border: 1px solid var(--mode-playbook-border, #bae6fd);"
+                                              th:text="${act.type != null ? act.type : 'ACTION'}">CLICK</span>
+                                        <span style="font-weight: 700; color: var(--text-main, #0f172a);" th:text="${act.description != null ? act.description : act.target}">Action description</span>
+                                    </div>
+                                    <span th:if="${act.durationMs != null}" style="font-size: 0.72rem; font-family: var(--font-mono); color: var(--text-muted, #64748b);" th:text="${act.durationMs + ' ms'}">250 ms</span>
+                                </div>
+
+                                <!-- Target & Value details -->
+                                <div style="display: flex; flex-direction: column; gap: 0.3rem; font-family: var(--font-mono, monospace); font-size: 0.78rem;">
+                                    <div th:if="${act.target != null and !act.target.isEmpty()}" style="color: var(--text-main, #0f172a); word-break: break-all;">
+                                        <span style="color: var(--text-muted, #475569); font-weight: 600;">Target:</span>
+                                        <code style="color: var(--text-main, #0f172a); background: var(--bg-hover, #f1f5f9); border: 1px solid var(--border, #cbd5e1); padding: 2px 6px; border-radius: 4px;" th:text="${act.target}">#target</code>
+                                    </div>
+                                    <div th:if="${act.value != null and !act.value.isEmpty()}" style="color: var(--text-main, #0f172a); word-break: break-all;">
+                                        <span style="color: var(--text-muted, #475569); font-weight: 600;">Value:</span>
+                                        <code style="color: var(--mode-ai-color, #7e22ce); background: var(--bg-hover, #f1f5f9); border: 1px solid var(--border, #cbd5e1); padding: 2px 6px; border-radius: 4px;" th:text="${act.value}">value</code>
+                                    </div>
+                                    <div th:if="${act.bestCandidateLocator != null and !act.bestCandidateLocator.isEmpty() and act.bestCandidateLocator != act.target}" style="color: var(--text-muted, #475569); font-size: 0.75rem;">
+                                        Best Candidate: <code style="color: var(--status-pass, #059669); background: var(--bg-hover, #f1f5f9); border: 1px solid var(--border, #cbd5e1); padding: 2px 6px; border-radius: 4px;" th:text="${act.bestCandidateLocator}">#candidate</code>
+                                    </div>
+                                </div>
+
+                                <!-- Action reasoning -->
+                                <div th:if="${act.reasoning != null and !act.reasoning.isEmpty()}" style="margin-top: 0.4rem; font-size: 0.75rem; color: var(--text-muted, #475569);">
+                                    <span style="color: var(--text-muted, #64748b); font-weight: 600;">Action Reasoning:</span> <span th:text="${act.reasoning}">reasoning</span>
+                                </div>
+
+                                <!-- Candidate Locators List -->
+                                <div th:if="${act.candidateLocators != null and !act.candidateLocators.isEmpty()}" style="margin-top: 0.45rem; padding-top: 0.4rem; border-top: 1px dashed var(--border, #e2e8f0);">
+                                    <div style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted, #475569); text-transform: uppercase; margin-bottom: 0.25rem;">Candidate Locators</div>
+                                    <div style="display: flex; flex-direction: column; gap: 3px;">
+                                        <div th:each="cand : ${act.candidateLocators}" style="font-size: 0.75rem; font-family: var(--font-mono); display: flex; justify-content: space-between; color: var(--text-main, #0f172a); background: var(--bg-hover, #f1f5f9); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border, #e2e8f0);">
+                                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 80%; font-weight: 500;" th:text="${cand.locator != null ? cand.locator : cand}">#loc</span>
+                                            <span style="color: var(--accent, #2563eb); font-size: 0.7rem; font-weight: 700;" th:if="${cand.score != null}" th:text="${'Score: ' + cand.score}">Score: 1.0</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+        </th:block>
+    </div>
+</div>
+
+</body>
+</html>

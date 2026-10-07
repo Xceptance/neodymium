@@ -368,4 +368,20 @@ public class AuraFileServiceTest
         Assertions.assertEquals(0, result.updatedFileCount());
         Assertions.assertTrue(result.updatedFiles().isEmpty());
     }
+
+    @Test
+    public void testFindAndLoadPlaybookDetails()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final java.io.File pbFile = fileService.findPlaybookFile("verla/SearchTest.yaml", "normal");
+        Assertions.assertNotNull(pbFile, "Playbook JSON file for verla/SearchTest.yaml [normal] should be found");
+        Assertions.assertTrue(fileService.hasPlaybook("verla/SearchTest.yaml", "normal"));
+
+        final Map<String, Object> details = fileService.loadPlaybookDetails("verla/SearchTest.yaml", "normal");
+        Assertions.assertNotNull(details);
+        Assertions.assertEquals("verla/SearchTest.yaml", details.get("file"));
+        Assertions.assertEquals("normal", details.get("datasetId"));
+        Assertions.assertNotNull(details.get("steps"));
+        Assertions.assertTrue(((Integer) details.get("totalSteps")) > 0);
+    }
 }

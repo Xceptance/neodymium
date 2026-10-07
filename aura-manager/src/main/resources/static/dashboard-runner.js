@@ -1029,5 +1029,43 @@ function showRunFinishedPrompt(reportUrl, reportId) {
 }
 window.showRunFinishedPrompt = showRunFinishedPrompt;
 
+// Playbook Inspector Side Drawer Engine
+function openPlaybookInspector(file, datasetId) {
+    if (!file) return;
+    const url = `/api/playbook/view?file=${encodeURIComponent(file)}&id=${encodeURIComponent(datasetId || '')}`;
+    
+    const existing = document.getElementById('playbookInspectorContainer') || document.getElementById('playbookSidePagePanel');
+    if (existing) {
+        existing.remove();
+    }
+    
+    fetch(url, { headers: { 'HX-Request': 'true' } })
+        .then(res => {
+            if (!res.ok) throw new Error('Failed to load playbook inspector');
+            return res.text();
+        })
+        .then(html => {
+            const container = document.createElement('div');
+            container.id = 'playbookInspectorContainer';
+            container.innerHTML = html;
+            document.body.appendChild(container);
+            if (window.htmx) htmx.process(container);
+        })
+        .catch(err => {
+            console.error('Error loading playbook inspector:', err);
+        });
+}
+
+function closePlaybookInspector() {
+    const el = document.getElementById('playbookInspectorContainer') || document.getElementById('playbookSidePagePanel');
+    if (el) {
+        el.remove();
+    }
+}
+
+window.openPlaybookInspector = openPlaybookInspector;
+window.closePlaybookInspector = closePlaybookInspector;
+
+
 
 

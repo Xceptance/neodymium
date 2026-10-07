@@ -182,4 +182,28 @@ public final class AuraTestQueueControllerTest
         Assertions.assertTrue(moveModel.containsAttribute("queue"));
         Assertions.assertEquals(controller.getSelectedQueue(), moveModel.getAttribute("queue"));
     }
+
+    @Test
+    public final void testRenderPlaybookSidePanelPopulatesModel()
+    {
+        final java.util.Map<String, Object> details = new java.util.HashMap<>();
+        details.put("file", "verla/SearchTest.yaml");
+        details.put("datasetId", "normal");
+        details.put("totalSteps", 3);
+        details.put("steps", java.util.List.of());
+
+        Mockito.when(fileService.loadPlaybookDetails("verla/SearchTest.yaml", "normal")).thenReturn(details);
+        Mockito.when(fileService.hasPlaybook("verla/SearchTest.yaml", "normal")).thenReturn(true);
+
+        Assertions.assertTrue(controller.hasPlaybook("verla/SearchTest.yaml", "normal"));
+
+        final Model model = new ConcurrentModel();
+        final String viewName = controller.renderPlaybookSidePanel("verla/SearchTest.yaml", "normal", model);
+
+        Assertions.assertEquals("fragments/side-panel-playbook :: playbookSidePanel", viewName);
+        Assertions.assertTrue(model.containsAttribute("playbook"));
+        Assertions.assertEquals(details, model.getAttribute("playbook"));
+        Assertions.assertEquals("verla/SearchTest.yaml", model.getAttribute("file"));
+        Assertions.assertEquals("normal", model.getAttribute("datasetId"));
+    }
 }

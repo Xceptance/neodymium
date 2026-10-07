@@ -4335,6 +4335,23 @@ body[data-bs-theme="dark"] .validation-issue-context {
     word-break: break-word;
 }
 
+.playbook-marker-btn {
+    transition: all 0.15s ease-in-out;
+}
+.playbook-marker-btn:hover {
+    background: rgba(59, 130, 246, 0.3) !important;
+    border-color: #3b82f6 !important;
+    transform: scale(1.05);
+}
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+    }
+    to {
+        transform: translateX(0);
+    }
+}
+
 
 
 

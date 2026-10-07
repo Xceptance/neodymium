@@ -18,6 +18,7 @@
  */
 package com.xceptance.neodymium.aura;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.neodymium.aura.dto.DatasetDto;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import java.io.File;
@@ -151,9 +152,233 @@ public final class AuraFileService
             final List<DatasetDto> datasets = (List<DatasetDto>) details.get("datasets");
             final String error = (String) details.get("error");
             final boolean hasError = Boolean.TRUE.equals(details.get("hasError")) || (error != null && !error.isBlank());
-            responseList.add(new YamlFileDto(file, datasets != null ? datasets : new ArrayList<>(), hasError, error));
+
+            final List<DatasetDto> enrichedDatasets = new ArrayList<>();
+            boolean fileHasPlaybook = false;
+            if (datasets != null)
+            {
+                for (final DatasetDto ds : datasets)
+                {
+                    final File pbFile = findPlaybookFile(file, ds.id);
+                    final boolean dsHasPb = pbFile != null;
+                    if (dsHasPb)
+                    {
+                        fileHasPlaybook = true;
+                    }
+                    enrichedDatasets.add(new DatasetDto(ds.id, ds.label, ds.hasTestId, dsHasPb, pbFile != null ? pbFile.getPath() : null));
+                }
+            }
+            if (!fileHasPlaybook)
+            {
+                fileHasPlaybook = hasPlaybook(file, null);
+            }
+            responseList.add(new YamlFileDto(file, enrichedDatasets, hasError, error, fileHasPlaybook));
         }
         return responseList;
+    }
+
+    /**
+     * Resolves all test resources directories across all project modules.
+     *
+     * @return list of resource directories
+     */
+    public List<File> getAllResourceDirectories()
+    {
+        final List<File> dirs = new ArrayList<>();
+        final File primary = getResourcesDirectory();
+        if (primary != null && primary.exists() && primary.isDirectory())
+        {
+            dirs.add(primary);
+        }
+        for (final String moduleName : List.of("neodymium-core", "aura-manager", "neodymium-e2e-tests"))
+        {
+            final File modDir = new File(moduleName, "src/test/resources").getAbsoluteFile();
+            if (modDir.exists() && modDir.isDirectory() && !dirs.contains(modDir))
+            {
+                dirs.add(modDir);
+            }
+        }
+        return dirs;
+    }
+
+    /**
+     * Resolves a recorded companion JSON playbook file matching the specified test file and dataset ID.
+     *
+     * @param file test file relative path (e.g. "verla/SearchTest.yaml")
+     * @param datasetId dataset ID (e.g. "normal")
+     * @return resolved File or null if not found
+     */
+    public File findPlaybookFile(final String file, final String datasetId)
+    {
+        if (file == null || file.isBlank())
+        {
+            return null;
+        }
+
+        final String cleanFileName;
+        final int lastSlash = file.lastIndexOf('/');
+        cleanFileName = lastSlash >= 0 ? file.substring(lastSlash + 1) : file;
+        final int lastDot = cleanFileName.lastIndexOf('.');
+        final String baseName = lastDot > 0 ? cleanFileName.substring(0, lastDot) : cleanFileName;
+
+        final List<File> resourceRoots = getAllResourceDirectories();
+        for (final File root : resourceRoots)
+        {
+            final List<File> jsonFiles = new ArrayList<>();
+            scanJsonFiles(root, jsonFiles);
+
+            // 1. Precise name match
+            for (final File jsonFile : jsonFiles)
+            {
+                final String nameLower = jsonFile.getName().toLowerCase();
+                final String baseLower = baseName.toLowerCase();
+
+                if (nameLower.contains(baseLower))
+                {
+                    if (datasetId != null && !datasetId.isBlank())
+                    {
+                        if (nameLower.contains(datasetId.toLowerCase()))
+                        {
+                            return jsonFile;
+                        }
+                    }
+                    else
+                    {
+                        return jsonFile;
+                    }
+                }
+            }
+
+            // 2. Content fallback match
+            for (final File jsonFile : jsonFiles)
+            {
+                try
+                {
+                    final String content = Files.readString(jsonFile.toPath(), StandardCharsets.UTF_8);
+                    if (content.contains(cleanFileName))
+                    {
+                        if (datasetId != null && !datasetId.isBlank())
+                        {
+                            if (jsonFile.getName().toLowerCase().contains(datasetId.toLowerCase()) || content.contains(datasetId))
+                            {
+                                return jsonFile;
+                            }
+                        }
+                        else
+                        {
+                            return jsonFile;
+                        }
+                    }
+                }
+                catch (final IOException ignored)
+                {
+                }
+            }
+        }
+        return null;
+    }
+
+    public boolean hasPlaybook(final String file, final String datasetId)
+    {
+        return findPlaybookFile(file, datasetId) != null;
+    }
+
+    private void scanJsonFiles(final File dir, final List<File> results)
+    {
+        final File[] files = dir.listFiles();
+        if (files == null)
+        {
+            return;
+        }
+        for (final File f : files)
+        {
+            if (f.isDirectory())
+            {
+                scanJsonFiles(f, results);
+            }
+            else if (f.getName().endsWith(".json") && !f.getName().startsWith("package") && !f.getName().startsWith("pom"))
+            {
+                results.add(f);
+            }
+        }
+    }
+
+    /**
+     * Loads and parses recorded playbook details for a given test file and dataset ID.
+     *
+     * @param file test file relative path
+     * @param datasetId optional dataset ID
+     * @return map of playbook details for UI view, or null if no playbook found
+     */
+    public Map<String, Object> loadPlaybookDetails(final String file, final String datasetId)
+    {
+        final File pbFile = findPlaybookFile(file, datasetId);
+        if (pbFile == null || !pbFile.exists() || !pbFile.isFile())
+        {
+            return null;
+        }
+
+        final Map<String, Object> result = new HashMap<>();
+        result.put("file", file);
+        result.put("datasetId", datasetId != null ? datasetId : "");
+        result.put("playbookPath", pbFile.getPath());
+        result.put("playbookFileName", pbFile.getName());
+
+        try
+        {
+            final String rawContent = Files.readString(pbFile.toPath(), StandardCharsets.UTF_8);
+            result.put("rawJson", rawContent);
+
+            final ObjectMapper mapper = new ObjectMapper();
+            final List<?> stepsList = mapper.readValue(rawContent, List.class);
+            result.put("steps", stepsList);
+            result.put("totalSteps", stepsList.size());
+
+            int passedCount = 0;
+            int healedCount = 0;
+            int failedCount = 0;
+            long totalDur = 0;
+
+            for (final Object stepObj : stepsList)
+            {
+                if (stepObj instanceof Map)
+                {
+                    final Map<?, ?> stepMap = (Map<?, ?>) stepObj;
+                    final Object statusObj = stepMap.get("status");
+                    final String status = statusObj != null ? String.valueOf(statusObj) : "SUCCESS";
+                    if ("HEALED".equalsIgnoreCase(status))
+                    {
+                        healedCount++;
+                    }
+                    else if ("FAILED".equalsIgnoreCase(status) || Boolean.TRUE.equals(stepMap.get("failed")))
+                    {
+                        failedCount++;
+                    }
+                    else
+                    {
+                        passedCount++;
+                    }
+
+                    final Object durObj = stepMap.get("durationMs");
+                    if (durObj instanceof Number)
+                    {
+                        totalDur += ((Number) durObj).longValue();
+                    }
+                }
+            }
+
+            result.put("passedSteps", passedCount);
+            result.put("healedSteps", healedCount);
+            result.put("failedSteps", failedCount);
+            result.put("totalDurationMs", totalDur);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to parse playbook JSON {}: {}", pbFile.getAbsolutePath(), e.getMessage());
+            result.put("error", "Failed to parse playbook JSON: " + e.getMessage());
+        }
+
+        return result;
     }
 
     public List<YamlFileDto> getFilteredYamlFilesList(final String query)

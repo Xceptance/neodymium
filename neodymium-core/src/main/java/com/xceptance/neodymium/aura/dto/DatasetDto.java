@@ -29,11 +29,30 @@ public final class DatasetDto
     public final String id;
     public final String label;
     public final boolean hasTestId;
+    public final boolean hasPlaybook;
+    public final String playbookPath;
 
     public DatasetDto(final String id, final String label, final boolean hasTestId)
+    {
+        this(id, label, hasTestId, false, null);
+    }
+
+    public DatasetDto(final String id, final String label, final boolean hasTestId, final boolean hasPlaybook, final String playbookPath)
     {
         this.id = id;
         this.label = label;
         this.hasTestId = hasTestId;
+        this.hasPlaybook = hasPlaybook;
+        this.playbookPath = playbookPath;
+    }
+
+    public boolean isHasPlaybook()
+    {
+        return hasPlaybook;
+    }
+
+    public String getPlaybookPath()
+    {
+        return playbookPath;
     }
 }

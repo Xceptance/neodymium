@@ -33,6 +33,16 @@
             <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 500;" th:text="${ds.file}">file.yaml</span>
             <span class="badge-dataset"><span class="material-symbols-outlined" style="font-size: 12px;">database</span> <span th:text="${ds.id}">id</span></span>
             
+            <!-- Playbook Marker Button -->
+            <button type="button" class="playbook-marker-btn"
+                    th:if="${queueController != null and queueController.hasPlaybook(ds.file, ds.id)}"
+                    th:data-file="${ds.file}" th:data-id="${ds.id}"
+                    onclick="event.stopPropagation(); if(typeof openPlaybookInspector==='function') openPlaybookInspector(this.getAttribute('data-file'), this.getAttribute('data-id'));"
+                    style="padding: 2px 5px; font-size: 11px; border-radius: 4px; background: rgba(59, 130, 246, 0.15); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.4); cursor: pointer; display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;"
+                    title="View Recorded Companion JSON Playbook">
+                <span class="material-symbols-outlined" style="font-size: 14px;">menu_book</span>
+            </button>
+
             <!-- Multi-Browser Badge Pill -->
             <button type="button" class="queue-browser-pill" 
                     th:classappend="${ds.browserProfiles != null and !ds.browserProfiles.isEmpty() ? 'customized' : ''}"
