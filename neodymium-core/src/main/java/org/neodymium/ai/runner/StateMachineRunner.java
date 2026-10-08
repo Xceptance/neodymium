@@ -602,6 +602,7 @@ public final class StateMachineRunner
                         this.session.getEventBus().dispatch(new StepFinishedEvent(currentStep, PlaybookStepStatus.FAILED));
                     }
                 }
+                markRemainingStepsAsSkipped(context, currentStepObj);
             }
 
             // Empirical Post-Flight Playbook Linting
@@ -1120,5 +1121,94 @@ public final class StateMachineRunner
         }
         final int prefixLen = Math.min(2, trimmed.length() - 4);
         return trimmed.substring(0, prefixLen) + "...." + trimmed.substring(trimmed.length() - 4);
+    }
+
+    /**
+     * Marks all unexecuted subsequent playbook steps as {@link PlaybookStepStatus#SKIPPED}
+     * when a test failure halts execution.
+     *
+     * @param context active execution context
+     * @param failedStepObj the step that failed
+     */
+    private void markRemainingStepsAsSkipped(final ExecutionContext context, final Object failedStepObj)
+    {
+        if (context == null)
+        {
+            return;
+        }
+
+        final List<PlaybookStep> targetSteps = new ArrayList<>();
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+        if (flatSteps != null && !flatSteps.isEmpty())
+        {
+            targetSteps.addAll(flatSteps);
+        }
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        if (sessionSteps != null && !sessionSteps.isEmpty())
+        {
+            for (final PlaybookStep s : sessionSteps)
+            {
+                if (!targetSteps.contains(s))
+                {
+                    targetSteps.add(s);
+                }
+            }
+        }
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+        if (afterSteps != null && !afterSteps.isEmpty())
+        {
+            for (final PlaybookStep s : afterSteps)
+            {
+                if (!targetSteps.contains(s))
+                {
+                    targetSteps.add(s);
+                }
+            }
+        }
+
+        boolean foundFailed = (failedStepObj == null);
+        for (final PlaybookStep step : targetSteps)
+        {
+            if (!foundFailed)
+            {
+                if (step == failedStepObj || (failedStepObj instanceof PlaybookStep fs && (step.equals(fs) || (step.hasSubSteps() && step.getSubSteps().contains(fs)))))
+                {
+                    foundFailed = true;
+                }
+                continue;
+            }
+
+            final PlaybookStepStatus st = step.getStatus();
+            if (st == null || st == PlaybookStepStatus.PENDING || st == PlaybookStepStatus.RUNNING || st == PlaybookStepStatus.SUCCESS)
+            {
+                step.setStatus(PlaybookStepStatus.SKIPPED);
+                step.setFailed(false);
+                step.setStartTimeMs(null);
+                step.setDurationMs(null);
+
+                if (step.hasSubSteps())
+                {
+                    for (final PlaybookStep sub : step.getSubSteps())
+                    {
+                        final PlaybookStepStatus subSt = sub.getStatus();
+                        if (subSt == null || subSt == PlaybookStepStatus.PENDING || subSt == PlaybookStepStatus.RUNNING || subSt == PlaybookStepStatus.SUCCESS)
+                        {
+                            sub.setStatus(PlaybookStepStatus.SKIPPED);
+                            sub.setFailed(false);
+                            sub.setStartTimeMs(null);
+                            sub.setDurationMs(null);
+                        }
+                    }
+                }
+
+                if (this.session != null && this.session.getEventBus() != null)
+                {
+                    this.session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SKIPPED));
+                }
+            }
+        }
     }
 }

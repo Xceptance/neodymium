@@ -402,12 +402,17 @@ public final class InteractiveStateBuilder
             final boolean beforePassed = !beforeActive && (stepsActive || afterActive);
             final boolean stepsPassed = !beforeActive && !stepsActive && afterActive;
 
+            boolean sectionFailed = false;
             if (beforeSteps != null)
             {
                 for (int i = 0; i < beforeSteps.size(); i++)
                 {
                     final PlaybookStep step = beforeSteps.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "before", beforeActive, beforePassed, execReport);
+                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "before", beforeActive, beforePassed, execReport, runnerStatus, sectionFailed);
+                    if (stepObj.has("status") && "failed".equalsIgnoreCase(stepObj.get("status").getAsString()))
+                    {
+                        sectionFailed = true;
+                    }
                     beforeArray.add(stepObj);
                 }
             }
@@ -417,7 +422,11 @@ public final class InteractiveStateBuilder
                 for (int i = 0; i < flatSteps.size(); i++)
                 {
                     final PlaybookStep step = flatSteps.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "playbook", stepsActive, stepsPassed, execReport);
+                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "playbook", stepsActive, stepsPassed, execReport, runnerStatus, sectionFailed);
+                    if (stepObj.has("status") && "failed".equalsIgnoreCase(stepObj.get("status").getAsString()))
+                    {
+                        sectionFailed = true;
+                    }
                     stepsArray.add(stepObj);
                 }
             }
@@ -427,7 +436,7 @@ public final class InteractiveStateBuilder
                 for (int i = 0; i < afterSteps.size(); i++)
                 {
                     final PlaybookStep step = afterSteps.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "after", afterActive, false, execReport);
+                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "after", afterActive, false, execReport, runnerStatus, sectionFailed);
                     afterArray.add(stepObj);
                 }
             }
@@ -570,7 +579,9 @@ public final class InteractiveStateBuilder
         final String source,
         final boolean isCurrentSection,
         final boolean isPastSection,
-        final TestExecutionReport report
+        final TestExecutionReport report,
+        final String runnerStatus,
+        final boolean precedingStepFailed
     )
     {
         final JsonObject obj = new JsonObject();
@@ -624,10 +635,20 @@ public final class InteractiveStateBuilder
         obj.addProperty("source", stepEngine);
         obj.addProperty("origin", origin);
 
+        final boolean isRunFailed = runnerStatus != null && ("failed".equalsIgnoreCase(runnerStatus) || "aborted".equalsIgnoreCase(runnerStatus));
+
         PlaybookStepStatus status = step.getStatus();
-        if (status == null || status == PlaybookStepStatus.PENDING)
+        if (precedingStepFailed && isRunFailed)
         {
-            if (isCurrentSection)
+            status = PlaybookStepStatus.SKIPPED;
+        }
+        else if (status == null || status == PlaybookStepStatus.PENDING)
+        {
+            if (isRunFailed)
+            {
+                status = PlaybookStepStatus.SKIPPED;
+            }
+            else if (isCurrentSection)
             {
                 if (stepIndex < activeStepIndex)
                 {
@@ -672,7 +693,7 @@ public final class InteractiveStateBuilder
         {
             stepStart = (Long) context.getTransientData().get("KEY_STEP_START_TIME");
         }
-        if (stepStart != null && stepStart > 0)
+        if (stepStart != null && stepStart > 0 && status != PlaybookStepStatus.SKIPPED)
         {
             obj.addProperty("startTimestamp", Instant.ofEpochMilli(stepStart).toString());
         }
@@ -682,7 +703,7 @@ public final class InteractiveStateBuilder
         {
             stepDuration = Math.max(0L, System.currentTimeMillis() - stepStart);
         }
-        if (stepDuration != null)
+        if (stepDuration != null && status != PlaybookStepStatus.SKIPPED)
         {
             obj.addProperty("duration", stepDuration);
         }

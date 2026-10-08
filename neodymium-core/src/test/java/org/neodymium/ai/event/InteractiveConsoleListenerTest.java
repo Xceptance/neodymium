@@ -46,7 +46,9 @@ import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.session.AiSession;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 
 /**
@@ -379,5 +381,36 @@ public class InteractiveConsoleListenerTest
         });
         t.setDaemon(true);
         t.start();
+    }
+
+    @Test
+    public void testUnexecutedStepsSerializedAsSkippedOnRunFailure()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, false);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step1 = new PlaybookStep("Step 1");
+        step1.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep step2 = new PlaybookStep("Step 2");
+        step2.setStatus(PlaybookStepStatus.FAILED);
+
+        final PlaybookStep step3 = new PlaybookStep("Step 3");
+        step3.setStatus(PlaybookStepStatus.PENDING);
+
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step1, step2, step3));
+
+        eventBus.dispatch(new SessionFinishedEvent(100, false, Collections.emptyList()));
+
+        final String stateJson = consoleEngine.getCurrentStateJson();
+        assertNotNull(stateJson);
+        final JsonObject stateObj = JsonParser.parseString(stateJson).getAsJsonObject();
+        assertEquals("failed", stateObj.get("status").getAsString());
+
+        final JsonArray steps = stateObj.getAsJsonObject("blocks").getAsJsonArray("steps");
+        assertEquals("passed", steps.get(0).getAsJsonObject().get("status").getAsString());
+        assertEquals("failed", steps.get(1).getAsJsonObject().get("status").getAsString());
+        assertEquals("skipped", steps.get(2).getAsJsonObject().get("status").getAsString());
+        assertFalse(steps.get(2).getAsJsonObject().has("duration"), "Skipped step should not have duration");
     }
 }

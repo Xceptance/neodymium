@@ -33,6 +33,7 @@ import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.resources.ClasspathResourceManager;
 import org.neodymium.ai.resources.InMemoryResourceManager;
@@ -175,6 +176,25 @@ public final class YamlPlaybookParser implements PlaybookParser
                 {
                     normalizeCompositeModifiers(step);
                     setParentReferences(step.getSubSteps(), step);
+                }
+            }
+        }
+    }
+
+    private void resetExecutionState(final List<PlaybookStep> steps)
+    {
+        if (steps != null)
+        {
+            for (final PlaybookStep step : steps)
+            {
+                step.setStatus(PlaybookStepStatus.PENDING);
+                step.setFailed(false);
+                step.setFailureReason(null);
+                step.setStartTimeMs(null);
+                step.setDurationMs(null);
+                if (step.hasSubSteps())
+                {
+                    resetExecutionState(step.getSubSteps());
                 }
             }
         }
@@ -330,6 +350,8 @@ public final class YamlPlaybookParser implements PlaybookParser
                         {
                             throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
                         }
+                        setParentReferences(parsedSteps, null);
+                        resetExecutionState(parsedSteps);
                         return new Playbook(parsedSteps, dataSets, promptAddons, description);
                     }
                 }
@@ -893,6 +915,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                 {
                     final List<PlaybookStep> jsonSteps = mapper.readValue(content, new TypeReference<List<PlaybookStep>>(){});
                     setParentReferences(jsonSteps, null);
+                    resetExecutionState(jsonSteps);
                     return new Playbook(jsonSteps, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons());
                 }
                 catch (final Exception e)

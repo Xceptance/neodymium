@@ -2402,6 +2402,7 @@ function renderStepsForExecution(activeRow) {
                 <div class="step-section-body">
         `;
 
+        let hasEncounteredFailure = false;
         stepsArray.forEach((s, idx) => {
             const stepNum = s.index || s.stepNum || (idx + 1);
             const title = s.instruction || s.name || s.title || `Step ${stepNum}`;
@@ -2424,6 +2425,14 @@ function renderStepsForExecution(activeRow) {
                     }
                 }
             }
+            if (hasEncounteredFailure && !isRunningState) {
+                rawStatus = 'skipped';
+            }
+            if (rawStatus === 'failed' || s.passed === false || s.error || s.failure) {
+                if (!s.optional && !s.continueOnError) {
+                    hasEncounteredFailure = true;
+                }
+            }
             const status = rawStatus;
             const isHealed = status === 'healed' || status === 'succeeded-fixed' || status === 'fixed' || s.healed === true || (Array.isArray(s.actions) && s.actions.some(a => a.healed));
             const isPassed = !isHealed && (status === 'passed' || status === 'passed-clean' || status === 'success' || s.passed === true);
@@ -2438,7 +2447,7 @@ function renderStepsForExecution(activeRow) {
             // Format Timing
             const rawStart = s.startTimestamp || s.startTime || s.startTimeMs;
             let formattedStart = '';
-            if (rawStart) {
+            if (rawStart && !isUnexecutedOrSkipped) {
                 if (typeof rawStart === 'number') {
                     formattedStart = new Date(rawStart).toLocaleTimeString();
                 } else if (typeof rawStart === 'string') {
@@ -2448,7 +2457,9 @@ function renderStepsForExecution(activeRow) {
 
             let rawDuration = s.duration !== undefined && s.duration !== null ? s.duration : (s.durationMs !== undefined ? s.durationMs : null);
             let formattedDuration = '0 min 0 s';
-            if (rawDuration !== null && rawDuration !== undefined) {
+            if (isUnexecutedOrSkipped) {
+                formattedDuration = '-';
+            } else if (rawDuration !== null && rawDuration !== undefined) {
                 formattedDuration = formatDurationInMinutes(rawDuration);
             }
 
@@ -3001,9 +3012,9 @@ function renderStepsForExecution(activeRow) {
             }
 
             // Per-step totals (number of actions, screenshots and LLM calls) from console-log.json step data.
-            const stepActionsCount = Array.isArray(s.actions) ? s.actions.length : 0;
-            const stepScreenshotsCount = screenshotSources.length;
-            const stepLlmCallsCount = Array.isArray(calls) ? calls.length : 0;
+            const stepActionsCount = isUnexecutedOrSkipped ? 0 : (Array.isArray(s.actions) ? s.actions.length : 0);
+            const stepScreenshotsCount = isUnexecutedOrSkipped ? 0 : screenshotSources.length;
+            const stepLlmCallsCount = isUnexecutedOrSkipped ? 0 : (Array.isArray(calls) ? calls.length : 0);
             let stepInTokens = 0;
             let stepOutTokens = 0;
             if (Array.isArray(calls)) {

@@ -157,4 +157,46 @@ public class StateMachineRunnerTest
         assertTrue(capturedLevels.contains(ContextLevel.VISUAL_RICH),
                 "StateMachineRunner must capture state with ContextLevel.VISUAL_RICH during failure Visual RCA analysis");
     }
+
+    @Test
+    public void testUnexecutedStepsMarkedSkippedOnStepFailure()
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final MockTargetExecutor mockExecutor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(new SessionData(), registry, new ExecutionEventBus(), mockExecutor);
+        final StateMachineRunner runner = new StateMachineRunner(session);
+
+        final PlaybookStep step1 = new PlaybookStep("Step 1: Open website");
+        step1.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep step2 = new PlaybookStep("Step 2: Click button");
+        step2.setStatus(PlaybookStepStatus.RUNNING);
+
+        final PlaybookStep step3 = new PlaybookStep("Step 3: Verify text");
+        step3.setStatus(PlaybookStepStatus.PENDING);
+
+        final PlaybookStep step4 = new PlaybookStep("Step 4: Submit form");
+        step4.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final List<PlaybookStep> playbookSteps = List.of(step1, step2, step3, step4);
+
+        final ExecutionContext innerContext = session.getExecutionContext();
+        innerContext.getTransientData().put("playbook.steps", new ArrayList<>(playbookSteps));
+        innerContext.getTransientData().put("playbook.flatSteps", new ArrayList<>(playbookSteps));
+        innerContext.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step2);
+
+        innerContext.pushStep(ctx -> {
+            throw new ConclusiveFailureException("Failed to click button");
+        });
+
+        assertThrows(ConclusiveFailureException.class, () -> runner.run());
+
+        assertEquals(PlaybookStepStatus.SUCCESS, step1.getStatus(), "Step 1 before failure should remain SUCCESS");
+        assertEquals(PlaybookStepStatus.FAILED, step2.getStatus(), "Step 2 that failed should be FAILED");
+        assertEquals(PlaybookStepStatus.SKIPPED, step3.getStatus(), "Step 3 after failure should be SKIPPED");
+        assertEquals(PlaybookStepStatus.SKIPPED, step4.getStatus(), "Step 4 after failure should be SKIPPED even if stale status was present");
+    }
 }

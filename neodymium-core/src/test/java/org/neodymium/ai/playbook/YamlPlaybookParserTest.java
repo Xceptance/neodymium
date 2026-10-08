@@ -31,6 +31,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.resources.InMemoryResourceManager;
 
@@ -988,5 +989,45 @@ public class YamlPlaybookParserTest
         });
 
         assertNotNull(ex.getMessage());
+    }
+
+    @Test
+    public void testJsonRecordedStepsStatusResetToPendingOnParse() throws IOException
+    {
+        final String jsonContent = """
+            [
+              {
+                "instruction": "Step 1: Open page",
+                "status": "SUCCESS",
+                "durationMs": 5432,
+                "startTimeMs": 1700000000000
+              },
+              {
+                "instruction": "Step 2: Click button",
+                "status": "HEALED",
+                "durationMs": 1234,
+                "startTimeMs": 1700000005432
+              }
+            ]
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("recorded.json", jsonContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("recorded.json", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getSteps().size());
+
+        final PlaybookStep s1 = playbook.getSteps().get(0);
+        assertEquals(PlaybookStepStatus.PENDING, s1.getStatus(), "Step 1 status must be reset to PENDING");
+        assertNull(s1.getDurationMs(), "Step 1 duration must be reset to null");
+        assertNull(s1.getStartTimeMs(), "Step 1 startTimeMs must be reset to null");
+
+        final PlaybookStep s2 = playbook.getSteps().get(1);
+        assertEquals(PlaybookStepStatus.PENDING, s2.getStatus(), "Step 2 status must be reset to PENDING");
+        assertNull(s2.getDurationMs(), "Step 2 duration must be reset to null");
+        assertNull(s2.getStartTimeMs(), "Step 2 startTimeMs must be reset to null");
     }
 }
