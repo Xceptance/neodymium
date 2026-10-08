@@ -647,6 +647,32 @@ public final class ExecuteActionsStepTest
     }
 
     @Test
+    public void testFoldedBlockScalarStepMapsToSingleInstructionWithoutMilestones() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
+
+        final String foldedInstruction =
+            "Verify the cart header is displayed. Verify the cart items section is displayed. Verify the product is displayed in the cart.";
+        final PlaybookStep foldedStep = new PlaybookStep(foldedInstruction);
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(foldedStep, session, context);
+        pipelineStep.execute(context);
+
+        assertNull(
+            context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES),
+            "Folded scalar step must not set internal milestones");
+
+        final String activeInstruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        assertNotNull(activeInstruction);
+        assertEquals(foldedInstruction, activeInstruction);
+    }
+
+    @Test
     public void testIncludeStepUnrollsSubSteps() throws Exception
     {
         final MockTargetExecutor executor = new MockTargetExecutor();

@@ -1030,4 +1030,75 @@ public class YamlPlaybookParserTest
         assertNull(s2.getDurationMs(), "Step 2 duration must be reset to null");
         assertNull(s2.getStartTimeMs(), "Step 2 startTimeMs must be reset to null");
     }
+
+    @Test
+    public void testParseYamlListStepWithFoldedBlockScalar() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - "Open homepage"
+              - >-
+                Verify the cart header is displayed.
+                Verify the cart items section is displayed.
+                Verify the product is displayed in the cart.
+              - "Click checkout"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("folded-scalar.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("folded-scalar.yaml", manager);
+
+        assertNotNull(playbook);
+        final List<PlaybookStep> steps = playbook.getSteps();
+        assertEquals(3, steps.size(), "Folded scalar block must collapse into exactly one step in the sequence");
+        assertEquals("Open homepage", steps.get(0).getInstruction());
+        assertFalse(steps.get(0).hasSubSteps());
+
+        final PlaybookStep foldedStep = steps.get(1);
+        assertEquals(
+            "Verify the cart header is displayed. Verify the cart items section is displayed. Verify the product is displayed in the cart.",
+            foldedStep.getInstruction(),
+            "YAML folded scalar (>-) must fold newlines into single spaces and strip trailing newlines");
+        assertFalse(foldedStep.hasSubSteps(), "Folded scalar step must not be converted into compound parent sub-steps");
+
+        assertEquals("Click checkout", steps.get(2).getInstruction());
+        assertFalse(steps.get(2).hasSubSteps());
+    }
+
+    @Test
+    public void testParseYamlListStepWithLiteralBlockScalarAndIndentedSubSteps() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - "Open checkout page"
+              - |-
+                Fill shipping address form:
+                  Enter first name 'John'
+                  Enter last name 'Doe'
+              - "Submit order"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("literal-scalar-substeps.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("literal-scalar-substeps.yaml", manager);
+
+        assertNotNull(playbook);
+        final List<PlaybookStep> steps = playbook.getSteps();
+        assertEquals(3, steps.size(), "Should parse 3 top-level steps");
+        assertEquals("Open checkout page", steps.get(0).getInstruction());
+
+        final PlaybookStep parentStep = steps.get(1);
+        assertEquals("Fill shipping address form", parentStep.getInstruction(), "Trailing colon should be stripped from goal header");
+        assertTrue(parentStep.hasSubSteps(), "Multiline string with indented lines inside a list item must parse into child sub-steps");
+        assertEquals(2, parentStep.getSubSteps().size());
+        assertEquals("Enter first name 'John'", parentStep.getSubSteps().get(0).getInstruction());
+        assertEquals("Enter last name 'Doe'", parentStep.getSubSteps().get(1).getInstruction());
+        assertEquals(parentStep, parentStep.getSubSteps().get(0).getParent());
+
+        assertEquals("Submit order", steps.get(2).getInstruction());
+    }
 }
