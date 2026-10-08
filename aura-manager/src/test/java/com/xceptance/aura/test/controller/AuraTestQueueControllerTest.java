@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Assertions;
+import org.neodymium.ai.config.ExecutionMode;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -69,10 +70,86 @@ public final class AuraTestQueueControllerTest
     }
 
     @Test
-    public final void testDefaultExecutionModeIsLlmRecording()
+    public final void testDefaultExecutionModeIsAuto()
     {
-        Assertions.assertEquals("LLM_RECORDING", controller.getExecutionMode(),
-                "AuraTestQueueController execution mode must default to LLM_RECORDING");
+        Assertions.assertEquals("AUTO", controller.getExecutionMode(),
+                "AuraTestQueueController execution mode must default to AUTO");
+    }
+
+    @Test
+    public final void testSetExecutionModeViaApiConfigMode()
+    {
+        for (final ExecutionMode mode : ExecutionMode.values())
+        {
+            final HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
+            Mockito.when(req.getParameter("mode")).thenReturn(mode.name());
+            Mockito.when(req.getParameterNames()).thenReturn(Collections.enumeration(List.of("mode")));
+
+            final Model model = new ConcurrentModel();
+            final String view = controller.setConfigMode(req, model);
+
+            Assertions.assertEquals("fragments/queue :: configPanel", view);
+            Assertions.assertEquals(mode.name(), controller.getExecutionMode());
+            Assertions.assertEquals(mode.name(), model.getAttribute("executionMode"));
+        }
+    }
+
+    @Test
+    public final void testSetInvalidExecutionModeIsRejected()
+    {
+        final HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(req.getParameter("mode")).thenReturn("INVALID_UNKNOWN_MODE");
+        Mockito.when(req.getParameterNames()).thenReturn(Collections.enumeration(List.of("mode")));
+
+        final Model model = new ConcurrentModel();
+        controller.setConfigMode(req, model);
+
+        Assertions.assertEquals("AUTO", controller.getExecutionMode(),
+                "Invalid execution mode should be rejected, preserving existing mode");
+    }
+
+    @Test
+    public final void testToggleConfigExecutionMode()
+    {
+        final HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(req.getParameter("key")).thenReturn("mode");
+        Mockito.when(req.getParameter("mode")).thenReturn("REPLAY_WITH_HEALING");
+        Mockito.when(req.getParameterNames()).thenReturn(Collections.enumeration(List.of("key", "mode")));
+
+        final Model model = new ConcurrentModel();
+        controller.toggleConfig(req, model);
+
+        Assertions.assertEquals("REPLAY_WITH_HEALING", controller.getExecutionMode());
+    }
+
+    @Test
+    public final void testQueueTemplateContainsAllSevenExecutionModes()
+    {
+        final SpringTemplateEngine engine = new SpringTemplateEngine();
+        final ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding("UTF-8");
+        engine.setTemplateResolver(resolver);
+
+        final Context context = new Context();
+        context.setVariable("executionMode", "AUTO");
+        context.setVariable("headless", true);
+        context.setVariable("video", false);
+        context.setVariable("interactive", false);
+        context.setVariable("queue", List.of());
+        context.setVariable("totalRuns", 0);
+        context.setVariable("running", false);
+        context.setVariable("activeEditingFile", null);
+
+        final String html = engine.process("fragments/queue", Collections.singleton("configPanel"), context);
+        Assertions.assertNotNull(html);
+        for (final ExecutionMode mode : ExecutionMode.values())
+        {
+            Assertions.assertTrue(html.contains("value=\"" + mode.name() + "\""),
+                    "queue.html must contain option value for " + mode.name());
+        }
     }
 
     @Test

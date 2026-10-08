@@ -195,11 +195,13 @@
                         hx-target="#configPanel" 
                         hx-swap="outerHTML" 
                         onclick="event.stopPropagation()">
-                    <option value="LLM_RECORDING" th:selected="${executionMode == null or executionMode == 'LLM_RECORDING'}">LLM Recording</option>
+                    <option value="AUTO" th:selected="${executionMode == null or executionMode == 'AUTO'}">Auto</option>
                     <option value="REPLAY_WITH_HEALING" th:selected="${executionMode == 'REPLAY_WITH_HEALING'}">Replay with Healing</option>
                     <option value="REPLAY_STRICT" th:selected="${executionMode == 'REPLAY_STRICT'}">Replay Strict</option>
                     <option value="FORCE_RECORDING" th:selected="${executionMode == 'FORCE_RECORDING'}">Force Recording</option>
+                    <option value="LLM_RECORDING" th:selected="${executionMode == 'LLM_RECORDING'}">LLM Recording</option>
                     <option value="LLM_ONLY" th:selected="${executionMode == 'LLM_ONLY'}">LLM Only</option>
+                    <option value="LINTER_ONLY" th:selected="${executionMode == 'LINTER_ONLY'}">Linter Only</option>
                 </select>
             </div>
             <span class="neo-u-32">Governs LLM action generation, recording, and replay healing.</span>

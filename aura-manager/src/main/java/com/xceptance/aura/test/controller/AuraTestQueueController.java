@@ -45,6 +45,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.common.browser.configuration.BrowserConfiguration;
 import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import org.slf4j.Logger;
@@ -87,7 +88,7 @@ public class AuraTestQueueController
 
     private boolean video = false;
 
-    private String executionMode = "LLM_RECORDING";
+    private String executionMode = ExecutionMode.AUTO.name();
 
     private boolean interactive = false;
 
@@ -794,17 +795,12 @@ public class AuraTestQueueController
                 case "headless" -> headless = !headless;
                 case "video" -> video = !video;
                 case "interactive" -> interactive = !interactive;
-                case "executionMode", "mode" -> {
-                    if (modeParam != null && !modeParam.isBlank())
-                    {
-                        executionMode = modeParam.trim();
-                    }
-                }
+                case "executionMode", "mode" -> setValidatedExecutionMode(modeParam);
             }
         }
         else if (modeParam != null && !modeParam.isBlank())
         {
-            executionMode = modeParam.trim();
+            setValidatedExecutionMode(modeParam);
         }
 
         populateQueueModel(model);
@@ -821,12 +817,29 @@ public class AuraTestQueueController
             mode = params.get("value");
         }
 
-        if (mode != null && !mode.isBlank())
-        {
-            executionMode = mode.trim();
-        }
+        setValidatedExecutionMode(mode);
         populateQueueModel(model);
         return "fragments/queue :: configPanel";
+    }
+
+    /**
+     * Validates and updates the active execution mode against {@link ExecutionMode}.
+     *
+     * @param rawMode the unvalidated execution mode name
+     */
+    private void setValidatedExecutionMode(final String rawMode)
+    {
+        if (rawMode != null && !rawMode.isBlank())
+        {
+            try
+            {
+                this.executionMode = ExecutionMode.valueOf(rawMode.trim().toUpperCase()).name();
+            }
+            catch (final IllegalArgumentException e)
+            {
+                LOGGER.warn("Unknown execution mode '{}' rejected, keeping current mode '{}'", rawMode, this.executionMode);
+            }
+        }
     }
 
     @PostMapping({"/api/config/browser", "/api/config/browser/toggle"})
