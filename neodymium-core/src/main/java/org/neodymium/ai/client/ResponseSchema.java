@@ -59,10 +59,10 @@ public enum ResponseSchema
 
         return switch (schema)
         {
-            case STEP_SPLITS -> 256;
-            case JUDGE -> 1024;
-            case TEXT -> 2048;
-            case ACTIONS, ASSERTION, LINTER -> 4096;
+            case STEP_SPLITS -> 512;
+            case JUDGE -> 2048;
+            case TEXT -> 4096;
+            case ACTIONS, ASSERTION, LINTER -> 8192;
         };
     }
 

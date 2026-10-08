@@ -2362,4 +2362,55 @@ public class PreliminaryReportListenerTest
             System.clearProperty("neodymium.ai.apiKey.mockTest");
         }
     }
+
+    @Test
+    @DisplayName("Verify that multi-session executions accumulate steps and re-flush final failure status to disk")
+    public void testMultiSessionExecuteAccumulatesStepsAndFlushesFinalFailure() throws IOException
+    {
+        final Path reportDir = this.tempFolder.resolve("multi-session-reports");
+        Files.createDirectories(reportDir);
+
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.HTML, DiskReportFormat.MARKDOWN));
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        // Phase 1: Step 1 executes and finishes successfully
+        final PlaybookStep step1 = new PlaybookStep("Step 1 - Login");
+        bus.dispatch(new StepStartedEvent(step1, 0));
+        bus.dispatch(new StepFinishedEvent(step1, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(100, true));
+
+        final String initialBaseFileName = listener.getLastBaseFileName();
+        assertNotNull(initialBaseFileName);
+        final Path jsonPath = reportDir.resolve(initialBaseFileName + ".json");
+        assertTrue(Files.exists(jsonPath), "JSON report must exist after phase 1");
+
+        final ObjectMapper mapper = new ObjectMapper();
+        final JsonNode initialJson = mapper.readTree(Files.readString(jsonPath, StandardCharsets.UTF_8));
+        assertEquals("PASSED", initialJson.path("status").asText());
+        assertEquals(1, initialJson.path("steps").size());
+
+        // Phase 2: Step 2 executes in a second session block and fails
+        final PlaybookStep step2 = new PlaybookStep("Step 2 - Unlock case");
+        bus.dispatch(new StepStartedEvent(step2, 1));
+        bus.dispatch(new DiagnosticErrorEvent("Failed to find unlock button", new RuntimeException("Element not found")));
+        bus.dispatch(new StepFinishedEvent(step2, PlaybookStepStatus.FAILED));
+        bus.dispatch(new SessionFinishedEvent(150, false));
+
+        assertEquals(initialBaseFileName, listener.getLastBaseFileName(), "Base file name should be reused across flushes");
+
+        final JsonNode updatedJson = mapper.readTree(Files.readString(jsonPath, StandardCharsets.UTF_8));
+        assertEquals("FAILED", updatedJson.path("status").asText(), "Report status must update to FAILED after phase 2 failure");
+        assertFalse(updatedJson.path("success").asBoolean(), "Report success flag must be false");
+        assertEquals(2, updatedJson.path("steps").size(), "Report must contain cumulative steps from both phases");
+        assertNotNull(updatedJson.path("failureReason").asText(), "Failure reason must be recorded");
+
+        final Path htmlPath = reportDir.resolve(initialBaseFileName + ".html");
+        final String htmlContent = Files.readString(htmlPath, StandardCharsets.UTF_8);
+        assertTrue(htmlContent.contains("FAILED"), "HTML report must reflect FAILED status");
+
+        final Path mdPath = reportDir.resolve(initialBaseFileName + ".md");
+        final String mdContent = Files.readString(mdPath, StandardCharsets.UTF_8);
+        assertTrue(mdContent.contains("FAILED"), "Markdown report must reflect FAILED status");
+    }
 }

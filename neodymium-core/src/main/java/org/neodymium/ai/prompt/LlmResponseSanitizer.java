@@ -70,6 +70,13 @@ public final class LlmResponseSanitizer
             return extracted;
         }
 
+        // If the trimmed text contains no JSON structure delimiters ('{' or '['),
+        // it is non-JSON plain text (such as conversational thinking monologue). Return empty.
+        if (!trimmed.contains("{") && !trimmed.contains("["))
+        {
+            return "";
+        }
+
         return trimmed;
     }
 
