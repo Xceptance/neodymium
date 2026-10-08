@@ -3,6 +3,7 @@
 
 steps: |
   Open ${verla.url}/verla-apocalypse/index.html
+  Close the VIP Privilige Wheel dialog when open (optional).
   Validate that United States as country is selected.
 
   Locate the first product card and click its 'Quick Curation' or 'Add to Bag' button.
