@@ -125,10 +125,16 @@ public class RunStorageSyncService
                 if (Files.isDirectory(entry))
                 {
                     final String runId = entry.getFileName().toString();
-                    if (localRunJsonStorageService.hasRunJsonFile(runId) && runRepository.existsById(runId))
+                    final Optional<TestRunEntity> existingRunOpt = runRepository.findById(runId);
+                    if (localRunJsonStorageService.hasRunJsonFile(runId) && existingRunOpt.isPresent())
                     {
-                        LOG.debug("Skipping already initialized run report: runId={}", runId);
-                        continue;
+                        final TestRunEntity existingRun = existingRunOpt.get();
+                        if (existingRun.getPassedHealedCount() != null && existingRun.getSucceededFixedHealedCount() != null
+                            && existingRun.getFailedKnownHealedCount() != null && existingRun.getFailedUnknownHealedCount() != null)
+                        {
+                            LOG.debug("Skipping already initialized run report: runId={}", runId);
+                            continue;
+                        }
                     }
                     final boolean success = importOrUpdateRunReport(runId);
                     if (success)
@@ -305,6 +311,10 @@ public class RunStorageSyncService
             final int known = summaryNode.path("known").asInt(0);
             final int unknown = summaryNode.path("unknown").asInt(0);
             final int ignored = summaryNode.path("ignored").asInt(0);
+            final int passHealed = summaryNode.path("passHealed").asInt(summaryNode.path("passedHealed").asInt(0));
+            final int fixedHealed = summaryNode.path("fixedHealed").asInt(summaryNode.path("succeededFixedHealed").asInt(0));
+            final int knownHealed = summaryNode.path("knownHealed").asInt(summaryNode.path("failedKnownHealed").asInt(0));
+            final int unknownHealed = summaryNode.path("unknownHealed").asInt(summaryNode.path("failedUnknownHealed").asInt(0));
             final double passRate = summaryNode.path("passRate").asDouble(totalTests > 0 ? (double) (pass + fixed) / totalTests * 100.0 : 0.0);
 
             int sumLlmCalls = summaryNode.path("totalLlmCalls").asInt(0);
@@ -493,6 +503,10 @@ public class RunStorageSyncService
             int calcKnown = 0;
             int calcUnknown = 0;
             int calcIgnored = 0;
+            int calcPassHealed = 0;
+            int calcFixedHealed = 0;
+            int calcKnownHealed = 0;
+            int calcUnknownHealed = 0;
 
             long sumDurationMs = 0L;
 
@@ -529,6 +543,10 @@ public class RunStorageSyncService
                     final String browser = AuraReportDataService.normalizeBrowser(!rawBrowser.isEmpty() ? rawBrowser : "Chrome");
                     final String rawStatus = exec.path("status").asText("failed-unknown");
 
+                    final boolean isHealed = (exec.has("healed") && exec.path("healed").asBoolean(false))
+                                          || (exec.has("healedStepsCount") && exec.path("healedStepsCount").asInt(0) > 0)
+                                          || "healed".equalsIgnoreCase(rawStatus);
+
                     final String varId = generateVariationId(testClass, testMethod, dataSet, location, browser);
                     final List<String> dbBugTickets = dbBugsByVarId.getOrDefault(varId, List.of()).stream()
                         .distinct()
@@ -560,11 +578,19 @@ public class RunStorageSyncService
                         {
                             effectiveStatus = "failed-known";
                             calcKnown++;
+                            if (isHealed)
+                            {
+                                calcKnownHealed++;
+                            }
                         }
                         else
                         {
                             effectiveStatus = "failed-unknown";
                             calcUnknown++;
+                            if (isHealed)
+                            {
+                                calcUnknownHealed++;
+                            }
                         }
                     }
                     else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus) || "healed".equalsIgnoreCase(rawStatus))
@@ -573,11 +599,19 @@ public class RunStorageSyncService
                         {
                             effectiveStatus = "succeeded-fixed";
                             calcFixed++;
+                            if (isHealed)
+                            {
+                                calcFixedHealed++;
+                            }
                         }
                         else
                         {
                             effectiveStatus = "passed-clean";
                             calcPass++;
+                            if (isHealed)
+                            {
+                                calcPassHealed++;
+                            }
                         }
                     }
                     else if ("ignored".equalsIgnoreCase(rawStatus) || "skipped".equalsIgnoreCase(rawStatus))
@@ -591,11 +625,19 @@ public class RunStorageSyncService
                         {
                             effectiveStatus = "failed-known";
                             calcKnown++;
+                            if (isHealed)
+                            {
+                                calcKnownHealed++;
+                            }
                         }
                         else
                         {
                             effectiveStatus = "failed-unknown";
                             calcUnknown++;
+                            if (isHealed)
+                            {
+                                calcUnknownHealed++;
+                            }
                         }
                     }
 
@@ -619,10 +661,6 @@ public class RunStorageSyncService
                         {
                             varEntity = new TestBaseVariationEntity(varId, testClass, testMethod, dataSet, "@General", location, browser);
                         }
-
-                        final boolean isHealed = (exec.has("healed") && exec.path("healed").asBoolean(false))
-                                              || (exec.has("healedStepsCount") && exec.path("healedStepsCount").asInt(0) > 0)
-                                              || "healed".equalsIgnoreCase(rawStatus);
 
                         varEntity.setLastStatus(effectiveStatus);
                         varEntity.setLastExecutedAt(System.currentTimeMillis());
@@ -734,6 +772,10 @@ public class RunStorageSyncService
             final int finalKnown = hasExecCounts ? calcKnown : known;
             final int finalUnknown = hasExecCounts ? calcUnknown : unknown;
             final int finalIgnored = hasExecCounts ? calcIgnored : ignored;
+            final int finalPassHealed = hasExecCounts ? calcPassHealed : passHealed;
+            final int finalFixedHealed = hasExecCounts ? calcFixedHealed : fixedHealed;
+            final int finalKnownHealed = hasExecCounts ? calcKnownHealed : knownHealed;
+            final int finalUnknownHealed = hasExecCounts ? calcUnknownHealed : unknownHealed;
             final double finalPassRate = finalTotal > 0 ? (double)(finalPass + finalFixed) / finalTotal * 100.0 : passRate;
 
             final long calculatedRunDurationMs;
@@ -762,6 +804,10 @@ public class RunStorageSyncService
             runEntity.setFailedKnownCount(finalKnown);
             runEntity.setFailedUnknownCount(finalUnknown);
             runEntity.setIgnoredCount(finalIgnored);
+            runEntity.setPassedHealedCount(finalPassHealed);
+            runEntity.setSucceededFixedHealedCount(finalFixedHealed);
+            runEntity.setFailedKnownHealedCount(finalKnownHealed);
+            runEntity.setFailedUnknownHealedCount(finalUnknownHealed);
             runEntity.setPassRate(finalPassRate);
             runEntity.setTotalLlmCalls(sumLlmCalls);
             runEntity.setTotalLlmTokens(sumLlmTokens);

@@ -180,6 +180,21 @@ function renderBatchSpecificRunsTable(batchName) {
     htmx.process(tbody);
 }
 
+function applyCustomBatchLimit() {
+    const input = document.getElementById('customBatchLimitInput');
+    if (!input) return;
+    const batchName = input.getAttribute('data-batch-name') || activeBatchName || 'Unknown';
+    const val = parseInt(input.value.trim(), 10);
+    const targetUrl = (!isNaN(val) && val > 0)
+        ? `/batch-history?batchName=${encodeURIComponent(batchName)}&limit=${val}`
+        : `/batch-history?batchName=${encodeURIComponent(batchName)}`;
+    if (window.htmx) {
+        htmx.ajax('GET', targetUrl, { target: '#mainViewContainer', pushUrl: true });
+    } else {
+        window.location.href = targetUrl;
+    }
+}
+
 function handleTrendChartHover(event) {
     const svg = document.getElementById('mainTrendSvg');
     const guide = document.getElementById('trendHoverGuide');
@@ -226,26 +241,84 @@ function handleTrendChartHover(event) {
         activeCircle.style.filter = 'url(#glow)';
     }
 
-    const runTitle = document.getElementById('ttRunTitle') || document.getElementById('trendTooltipTitle');
-    if (runTitle) runTitle.innerText = stat.title;
-    const passRate = document.getElementById('ttPassRate');
-    if (passRate) passRate.innerText = `${stat.rate} Pass`;
-    const totalVal = document.getElementById('ttTotalVal');
-    if (totalVal) totalVal.innerText = stat.total;
-    const passVal = document.getElementById('ttPassVal') || document.getElementById('trendTooltipPass');
-    if (passVal) passVal.innerText = stat.pass;
-    const fixedVal = document.getElementById('ttFixedVal') || document.getElementById('trendTooltipFixed');
-    if (fixedVal) fixedVal.innerText = stat.fixed;
-    const knownVal = document.getElementById('ttKnownVal') || document.getElementById('trendTooltipKnown');
-    if (knownVal) knownVal.innerText = stat.known;
-    const unknownVal = document.getElementById('ttUnknownVal') || document.getElementById('trendTooltipUnknown');
-    if (unknownVal) unknownVal.innerText = stat.unknown;
-    const ignoredVal = document.getElementById('ttIgnoredVal') || document.getElementById('trendTooltipIgnored');
-    if (ignoredVal) ignoredVal.innerText = stat.ignored;
+    const runIdEl = document.getElementById('ttRunId');
+    if (runIdEl) runIdEl.innerText = `#${stat.runId || closestRun}`;
 
+    const headerHealed = document.getElementById('ttHeaderHealed');
+    if (headerHealed) {
+        if (stat.totalHealed > 0) {
+            headerHealed.innerText = `✨ ${stat.totalHealed} healed`;
+            headerHealed.style.display = 'inline-flex';
+        } else {
+            headerHealed.style.display = 'none';
+        }
+    }
+
+    const timestampEl = document.getElementById('ttTimestamp');
+    if (timestampEl) timestampEl.innerText = stat.time || 'Recently';
+
+    const runTitle = document.getElementById('ttRunTitle') || document.getElementById('trendTooltipTitle');
+    if (runTitle) {
+        if (stat.totalHealed > 0) {
+            runTitle.innerHTML = `${stat.title} <span class="badge-healed-inline badge-pass-healed" style="font-size: 0.68rem; padding: 0.05rem 0.35rem; margin-left: 0.35rem;">✨ ${stat.totalHealed} healed</span>`;
+        } else {
+            runTitle.innerText = stat.title;
+        }
+    }
+
+    const passRate = document.getElementById('ttPassRate') || document.getElementById('trendTooltipRate');
+    if (passRate) {
+        let rateText = (stat.rate || '0%').trim();
+        if (!rateText.toLowerCase().includes('pass')) {
+            rateText += ' PASS';
+        }
+        passRate.innerText = rateText.toUpperCase();
+    }
+
+    const totalVal = document.getElementById('ttTotalVal');
+    if (totalVal) {
+        totalVal.innerText = (stat.total && stat.total.includes('Tests')) ? stat.total : `${stat.total || 0} Tests`;
+    }
+
+    function updateTooltipRow(rowId, valId, healedId, count, healedCount) {
+        const row = document.getElementById(rowId);
+        const val = document.getElementById(valId);
+        const healed = healedId ? document.getElementById(healedId) : null;
+        if (val) val.innerText = count;
+        if (healed) {
+            if (healedCount > 0) {
+                healed.innerText = `✨ ${healedCount} healed`;
+                healed.style.display = 'inline-flex';
+            } else {
+                healed.style.display = 'none';
+            }
+        }
+        if (row) {
+            row.style.display = count > 0 ? 'flex' : 'none';
+        }
+    }
+
+    updateTooltipRow('ttRowPass', 'ttPassVal', 'ttHealedPass', stat.pass, stat.passHealed);
+    updateTooltipRow('ttRowFixed', 'ttFixedVal', 'ttHealedFixed', stat.fixed, stat.fixedHealed);
+    updateTooltipRow('ttRowKnown', 'ttKnownVal', 'ttHealedKnown', stat.known, stat.knownHealed);
+    updateTooltipRow('ttRowUnknown', 'ttUnknownVal', 'ttHealedUnknown', stat.unknown, stat.unknownHealed);
+    updateTooltipRow('ttRowIgnored', 'ttIgnoredVal', null, stat.ignored, 0);
+
+    const legacyPass = document.getElementById('trendTooltipPass');
+    if (legacyPass) legacyPass.innerText = stat.pass;
+    const legacyFixed = document.getElementById('trendTooltipFixed');
+    if (legacyFixed) legacyFixed.innerText = stat.fixed;
+    const legacyKnown = document.getElementById('trendTooltipKnown');
+    if (legacyKnown) legacyKnown.innerText = stat.known;
+    const legacyUnknown = document.getElementById('trendTooltipUnknown');
+    if (legacyUnknown) legacyUnknown.innerText = stat.unknown;
+    const legacyIgnored = document.getElementById('trendTooltipIgnored');
+    if (legacyIgnored) legacyIgnored.innerText = stat.ignored;
+
+    const tooltipWidth = 265;
     let ttLeft = (stat.x / 800) * svgWidth + 15;
-    if (ttLeft + 220 > svgWidth) {
-        ttLeft = (stat.x / 800) * svgWidth - 225;
+    if (ttLeft + tooltipWidth + 10 > svgWidth) {
+        ttLeft = Math.max(10, (stat.x / 800) * svgWidth - tooltipWidth - 15);
     }
 
     tooltip.style.left = ttLeft + 'px';
@@ -299,16 +372,28 @@ function renderDynamicTrendChart(targetBatchName) {
         const known = parseInt(row.getAttribute('data-known') || row.querySelector('.seg-known')?.innerText.trim() || '0', 10) || 0;
         const unknown = parseInt(row.getAttribute('data-unknown') || row.querySelector('.seg-unknown')?.innerText.trim() || '0', 10) || 0;
         const ignored = parseInt(row.getAttribute('data-ignored') || row.querySelector('.seg-ignored')?.innerText.trim() || '0', 10) || 0;
+        const passHealed = parseInt(row.getAttribute('data-pass-healed') || '0', 10) || 0;
+        const fixedHealed = parseInt(row.getAttribute('data-fixed-healed') || '0', 10) || 0;
+        const knownHealed = parseInt(row.getAttribute('data-known-healed') || '0', 10) || 0;
+        const unknownHealed = parseInt(row.getAttribute('data-unknown-healed') || '0', 10) || 0;
+        const totalHealed = passHealed + fixedHealed + knownHealed + unknownHealed;
         const total = parseInt(row.getAttribute('data-total') || row.querySelector('td.text-mono:nth-of-type(4)')?.innerText.trim() || '0', 10) || (pass + fixed + known + unknown + ignored) || 1;
         const rate = row.getAttribute('data-rate') || (row.querySelector('.badge-status')?.innerText.trim() || '0%');
         const time = row.getAttribute('data-time') || row.querySelector('td.text-muted')?.innerText.trim() || 'Recently';
 
-        runsData.push({ runId, pass, fixed, known, unknown, ignored, total, rate, time });
+        runsData.push({ runId, pass, fixed, known, unknown, ignored, passHealed, fixedHealed, knownHealed, unknownHealed, totalHealed, total, rate, time });
     });
 
     if (runsData.length === 0) {
         batchRunStatsRegistry[batchName] = { runIds: [], maxTests: 0, stats: {} };
-        ['trendLayerIgnored', 'trendLayerUnknown', 'trendLayerKnown', 'trendLayerFixed', 'trendLayerPass', 'trendTopStroke'].forEach(id => {
+        [
+            'trendLayerIgnored',
+            'trendLayerUnknown', 'trendLayerUnknownHealed', 'trendLayerUnknownHealedPattern',
+            'trendLayerKnown', 'trendLayerKnownHealed', 'trendLayerKnownHealedPattern',
+            'trendLayerFixed', 'trendLayerFixedHealed', 'trendLayerFixedHealedPattern',
+            'trendLayerPass', 'trendLayerPassHealed', 'trendLayerPassHealedPattern',
+            'trendTopStroke'
+        ].forEach(id => {
             document.getElementById(id)?.setAttribute('d', '');
         });
         const dotsGroup = document.getElementById('trendSvgDots');
@@ -327,23 +412,58 @@ function renderDynamicTrendChart(targetBatchName) {
         const x = count === 1 ? 400 : 50 + (idx / (count - 1)) * 750;
         stats[r.runId] = {
             x,
+            runId: r.runId,
+            time: r.time,
             title: `Run #${r.runId} (${r.time})`,
             pass: r.pass,
             fixed: r.fixed,
             known: r.known,
             unknown: r.unknown,
             ignored: r.ignored,
+            passHealed: r.passHealed,
+            fixedHealed: r.fixedHealed,
+            knownHealed: r.knownHealed,
+            unknownHealed: r.unknownHealed,
+            totalHealed: r.totalHealed,
             total: `${r.total} Tests`,
             rate: r.rate
         };
 
+        const cleanUnknown = Math.max(0, r.unknown - r.unknownHealed);
+        const cleanKnown = Math.max(0, r.known - r.knownHealed);
+        const cleanFixed = Math.max(0, r.fixed - r.fixedHealed);
+        const cleanPass = Math.max(0, r.pass - r.passHealed);
+
         const y0 = 190;
         const y1 = y0 - (r.ignored * baseScale);
-        const y2 = y1 - (r.unknown * baseScale);
-        const y3 = y2 - (r.known * baseScale);
-        const y4 = y3 - (r.fixed * baseScale);
-        const y5 = y4 - (r.pass * baseScale);
-        return { x, y0, y1, y2, y3, y4, y5, id: r.runId };
+        const y2_clean = y1 - (cleanUnknown * baseScale);
+        const y2 = y2_clean - (r.unknownHealed * baseScale);
+        const y3_clean = y2 - (cleanKnown * baseScale);
+        const y3 = y3_clean - (r.knownHealed * baseScale);
+        const y4_clean = y3 - (cleanFixed * baseScale);
+        const y4 = y4_clean - (r.fixedHealed * baseScale);
+        const y5_clean = y4 - (cleanPass * baseScale);
+        const y5 = y5_clean - (r.passHealed * baseScale);
+
+        return {
+            x,
+            y0,
+            y1,
+            y2_clean,
+            y2,
+            y3_clean,
+            y3,
+            y4_clean,
+            y4,
+            y5_clean,
+            y5,
+            id: r.runId,
+            passHealed: r.passHealed,
+            fixedHealed: r.fixedHealed,
+            knownHealed: r.knownHealed,
+            unknownHealed: r.unknownHealed,
+            totalHealed: r.totalHealed
+        };
     });
 
     batchRunStatsRegistry[batchName] = { runIds, maxTests, stats };
@@ -355,16 +475,28 @@ function renderDynamicTrendChart(targetBatchName) {
         const rightX = Math.min(800, c.x + halfWidth);
 
         const pathL1 = `M ${leftX} ${c.y1} L ${rightX} ${c.y1} L ${rightX} 190 L ${leftX} 190 Z`;
-        const pathL2 = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y1} L ${leftX} ${c.y1} Z`;
-        const pathL3 = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y2} L ${leftX} ${c.y2} Z`;
-        const pathL4 = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y3} L ${leftX} ${c.y3} Z`;
-        const pathL5 = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y4} L ${leftX} ${c.y4} Z`;
+        const pathL2 = `M ${leftX} ${c.y2_clean} L ${rightX} ${c.y2_clean} L ${rightX} ${c.y1} L ${leftX} ${c.y1} Z`;
+        const pathL2H = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y2_clean} L ${leftX} ${c.y2_clean} Z`;
+        const pathL3 = `M ${leftX} ${c.y3_clean} L ${rightX} ${c.y3_clean} L ${rightX} ${c.y2} L ${leftX} ${c.y2} Z`;
+        const pathL3H = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y3_clean} L ${leftX} ${c.y3_clean} Z`;
+        const pathL4 = `M ${leftX} ${c.y4_clean} L ${rightX} ${c.y4_clean} L ${rightX} ${c.y3} L ${leftX} ${c.y3} Z`;
+        const pathL4H = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y4_clean} L ${leftX} ${c.y4_clean} Z`;
+        const pathL5 = `M ${leftX} ${c.y5_clean} L ${rightX} ${c.y5_clean} L ${rightX} ${c.y4} L ${leftX} ${c.y4} Z`;
+        const pathL5H = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y5_clean} L ${leftX} ${c.y5_clean} Z`;
 
         document.getElementById('trendLayerIgnored')?.setAttribute('d', pathL1);
         document.getElementById('trendLayerUnknown')?.setAttribute('d', pathL2);
+        document.getElementById('trendLayerUnknownHealed')?.setAttribute('d', c.unknownHealed > 0 ? pathL2H : '');
+        document.getElementById('trendLayerUnknownHealedPattern')?.setAttribute('d', c.unknownHealed > 0 ? pathL2H : '');
         document.getElementById('trendLayerKnown')?.setAttribute('d', pathL3);
+        document.getElementById('trendLayerKnownHealed')?.setAttribute('d', c.knownHealed > 0 ? pathL3H : '');
+        document.getElementById('trendLayerKnownHealedPattern')?.setAttribute('d', c.knownHealed > 0 ? pathL3H : '');
         document.getElementById('trendLayerFixed')?.setAttribute('d', pathL4);
+        document.getElementById('trendLayerFixedHealed')?.setAttribute('d', c.fixedHealed > 0 ? pathL4H : '');
+        document.getElementById('trendLayerFixedHealedPattern')?.setAttribute('d', c.fixedHealed > 0 ? pathL4H : '');
         document.getElementById('trendLayerPass')?.setAttribute('d', pathL5);
+        document.getElementById('trendLayerPassHealed')?.setAttribute('d', c.passHealed > 0 ? pathL5H : '');
+        document.getElementById('trendLayerPassHealedPattern')?.setAttribute('d', c.passHealed > 0 ? pathL5H : '');
         document.getElementById('trendTopStroke')?.setAttribute('d', `M ${leftX} ${c.y5} L ${rightX} ${c.y5}`);
 
         const dotsGroup = document.getElementById('trendSvgDots');
@@ -372,7 +504,7 @@ function renderDynamicTrendChart(targetBatchName) {
             dotsGroup.innerHTML = `
                 <g class="trend-click-col" id="trendPoint-${c.id}" 
                    hx-get="/run-report?runId=${encodeURIComponent(c.id)}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
-                    <circle cx="${c.x}" cy="${c.y5}" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                    <circle cx="${c.x}" cy="${c.y5}" r="6" fill="${c.totalHealed > 0 ? '#34d399' : '#2563eb'}" stroke="${c.totalHealed > 0 ? '#fef08a' : '#ffffff'}" stroke-width="2" class="trend-node-circle"/>
                 </g>
             `;
             if (window.htmx) htmx.process(dotsGroup);
@@ -410,16 +542,33 @@ function renderDynamicTrendChart(targetBatchName) {
     const firstX = coords[0].x;
 
     const pathL1 = `${buildBezierTopPath('y1')} L ${lastX} 190 L ${firstX} 190 Z`;
-    const pathL2 = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y1')} Z`;
-    const pathL3 = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y2')} Z`;
-    const pathL4 = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y3')} Z`;
-    const pathL5 = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y4')} Z`;
+    const pathL2 = `${buildBezierTopPath('y2_clean')} ${buildBezierReversePath('y1')} Z`;
+    const pathL2H = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y2_clean')} Z`;
+    const pathL3 = `${buildBezierTopPath('y3_clean')} ${buildBezierReversePath('y2')} Z`;
+    const pathL3H = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y3_clean')} Z`;
+    const pathL4 = `${buildBezierTopPath('y4_clean')} ${buildBezierReversePath('y3')} Z`;
+    const pathL4H = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y4_clean')} Z`;
+    const pathL5 = `${buildBezierTopPath('y5_clean')} ${buildBezierReversePath('y4')} Z`;
+    const pathL5H = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y5_clean')} Z`;
+
+    const hasUnknownHealed = coords.some(c => c.unknownHealed > 0);
+    const hasKnownHealed = coords.some(c => c.knownHealed > 0);
+    const hasFixedHealed = coords.some(c => c.fixedHealed > 0);
+    const hasPassHealed = coords.some(c => c.passHealed > 0);
 
     document.getElementById('trendLayerIgnored')?.setAttribute('d', pathL1);
     document.getElementById('trendLayerUnknown')?.setAttribute('d', pathL2);
+    document.getElementById('trendLayerUnknownHealed')?.setAttribute('d', hasUnknownHealed ? pathL2H : '');
+    document.getElementById('trendLayerUnknownHealedPattern')?.setAttribute('d', hasUnknownHealed ? pathL2H : '');
     document.getElementById('trendLayerKnown')?.setAttribute('d', pathL3);
+    document.getElementById('trendLayerKnownHealed')?.setAttribute('d', hasKnownHealed ? pathL3H : '');
+    document.getElementById('trendLayerKnownHealedPattern')?.setAttribute('d', hasKnownHealed ? pathL3H : '');
     document.getElementById('trendLayerFixed')?.setAttribute('d', pathL4);
+    document.getElementById('trendLayerFixedHealed')?.setAttribute('d', hasFixedHealed ? pathL4H : '');
+    document.getElementById('trendLayerFixedHealedPattern')?.setAttribute('d', hasFixedHealed ? pathL4H : '');
     document.getElementById('trendLayerPass')?.setAttribute('d', pathL5);
+    document.getElementById('trendLayerPassHealed')?.setAttribute('d', hasPassHealed ? pathL5H : '');
+    document.getElementById('trendLayerPassHealedPattern')?.setAttribute('d', hasPassHealed ? pathL5H : '');
     document.getElementById('trendTopStroke')?.setAttribute('d', buildBezierTopPath('y5'));
 
     const dotsGroup = document.getElementById('trendSvgDots');
@@ -427,7 +576,7 @@ function renderDynamicTrendChart(targetBatchName) {
         dotsGroup.innerHTML = coords.map(c => `
             <g class="trend-click-col" id="trendPoint-${c.id}" 
                hx-get="/run-report?runId=${encodeURIComponent(c.id)}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
-                <circle cx="${c.x}" cy="${c.y5}" r="6" fill="#2563eb" stroke="#ffffff" stroke-width="2" class="trend-node-circle"/>
+                <circle cx="${c.x}" cy="${c.y5}" r="6" fill="${c.totalHealed > 0 ? '#34d399' : '#2563eb'}" stroke="${c.totalHealed > 0 ? '#fef08a' : '#ffffff'}" stroke-width="2" class="trend-node-circle"/>
             </g>
         `).join('');
         if (window.htmx) htmx.process(dotsGroup);
@@ -458,13 +607,50 @@ function renderDynamicAreaTrendCharts() {
 
         const coords = points.map((p, idx) => {
             const x = count === 1 ? 150 : 20 + (idx / (count - 1)) * 260;
+            const unknownCount = p.unknownCount || 0;
+            const unknownHealed = p.unknownHealedCount || 0;
+            const cleanUnknown = Math.max(0, unknownCount - unknownHealed);
+
+            const knownCount = p.knownCount || 0;
+            const knownHealed = p.knownHealedCount || 0;
+            const cleanKnown = Math.max(0, knownCount - knownHealed);
+
+            const fixedCount = p.fixedCount || 0;
+            const fixedHealed = p.fixedHealedCount || 0;
+            const cleanFixed = Math.max(0, fixedCount - fixedHealed);
+
+            const passCount = p.passCount || 0;
+            const passHealed = p.passHealedCount || 0;
+            const cleanPass = Math.max(0, passCount - passHealed);
+
             const y0 = 80;
             const y1 = y0 - ((p.ignoredCount || 0) * scale);
-            const y2 = y1 - ((p.unknownCount || 0) * scale);
-            const y3 = y2 - ((p.knownCount || 0) * scale);
-            const y4 = y3 - ((p.fixedCount || 0) * scale);
-            const y5 = y4 - ((p.passCount || 0) * scale);
-            return { x, y0, y1, y2, y3, y4, y5 };
+            const y2_clean = y1 - (cleanUnknown * scale);
+            const y2 = y2_clean - (unknownHealed * scale);
+            const y3_clean = y2 - (cleanKnown * scale);
+            const y3 = y3_clean - (knownHealed * scale);
+            const y4_clean = y3 - (cleanFixed * scale);
+            const y4 = y4_clean - (fixedHealed * scale);
+            const y5_clean = y4 - (cleanPass * scale);
+            const y5 = y5_clean - (passHealed * scale);
+
+            return {
+                x,
+                y0,
+                y1,
+                y2_clean,
+                y2,
+                y3_clean,
+                y3,
+                y4_clean,
+                y4,
+                y5_clean,
+                y5,
+                unknownHealed,
+                knownHealed,
+                fixedHealed,
+                passHealed
+            };
         });
 
         function buildBezierTopPath(yProp) {
@@ -493,7 +679,7 @@ function renderDynamicAreaTrendCharts() {
             return d;
         }
 
-        let pathL1, pathL2, pathL3, pathL4, pathL5, topStroke;
+        let pathL1, pathL2, pathL2H, pathL3, pathL3H, pathL4, pathL4H, pathL5, pathL5H, topStroke;
 
         if (coords.length === 1) {
             const c = coords[0];
@@ -502,28 +688,49 @@ function renderDynamicAreaTrendCharts() {
             const rightX = Math.min(280, c.x + halfW);
 
             pathL1 = `M ${leftX} ${c.y1} L ${rightX} ${c.y1} L ${rightX} 80 L ${leftX} 80 Z`;
-            pathL2 = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y1} L ${leftX} ${c.y1} Z`;
-            pathL3 = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y2} L ${leftX} ${c.y2} Z`;
-            pathL4 = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y3} L ${leftX} ${c.y3} Z`;
-            pathL5 = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y4} L ${leftX} ${c.y4} Z`;
+            pathL2 = `M ${leftX} ${c.y2_clean} L ${rightX} ${c.y2_clean} L ${rightX} ${c.y1} L ${leftX} ${c.y1} Z`;
+            pathL2H = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y2_clean} L ${leftX} ${c.y2_clean} Z`;
+            pathL3 = `M ${leftX} ${c.y3_clean} L ${rightX} ${c.y3_clean} L ${rightX} ${c.y2} L ${leftX} ${c.y2} Z`;
+            pathL3H = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y3_clean} L ${leftX} ${c.y3_clean} Z`;
+            pathL4 = `M ${leftX} ${c.y4_clean} L ${rightX} ${c.y4_clean} L ${rightX} ${c.y3} L ${leftX} ${c.y3} Z`;
+            pathL4H = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y4_clean} L ${leftX} ${c.y4_clean} Z`;
+            pathL5 = `M ${leftX} ${c.y5_clean} L ${rightX} ${c.y5_clean} L ${rightX} ${c.y4} L ${leftX} ${c.y4} Z`;
+            pathL5H = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y5_clean} L ${leftX} ${c.y5_clean} Z`;
             topStroke = `M ${leftX} ${c.y5} L ${rightX} ${c.y5}`;
         } else {
             const lastX = coords[coords.length - 1].x;
             const firstX = coords[0].x;
 
             pathL1 = `${buildBezierTopPath('y1')} L ${lastX} 80 L ${firstX} 80 Z`;
-            pathL2 = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y1')} Z`;
-            pathL3 = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y2')} Z`;
-            pathL4 = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y3')} Z`;
-            pathL5 = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y4')} Z`;
+            pathL2 = `${buildBezierTopPath('y2_clean')} ${buildBezierReversePath('y1')} Z`;
+            pathL2H = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y2_clean')} Z`;
+            pathL3 = `${buildBezierTopPath('y3_clean')} ${buildBezierReversePath('y2')} Z`;
+            pathL3H = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y3_clean')} Z`;
+            pathL4 = `${buildBezierTopPath('y4_clean')} ${buildBezierReversePath('y3')} Z`;
+            pathL4H = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y4_clean')} Z`;
+            pathL5 = `${buildBezierTopPath('y5_clean')} ${buildBezierReversePath('y4')} Z`;
+            pathL5H = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y5_clean')} Z`;
             topStroke = buildBezierTopPath('y5');
         }
 
+        const hasUnknownHealed = coords.some(c => c.unknownHealed > 0);
+        const hasKnownHealed = coords.some(c => c.knownHealed > 0);
+        const hasFixedHealed = coords.some(c => c.fixedHealed > 0);
+        const hasPassHealed = coords.some(c => c.passHealed > 0);
+
         svg.querySelector('.area-layer-ignored')?.setAttribute('d', pathL1);
         svg.querySelector('.area-layer-unknown')?.setAttribute('d', pathL2);
+        svg.querySelector('.area-layer-unknown-healed')?.setAttribute('d', hasUnknownHealed ? pathL2H : '');
+        svg.querySelector('.area-layer-unknown-healed-pat')?.setAttribute('d', hasUnknownHealed ? pathL2H : '');
         svg.querySelector('.area-layer-known')?.setAttribute('d', pathL3);
+        svg.querySelector('.area-layer-known-healed')?.setAttribute('d', hasKnownHealed ? pathL3H : '');
+        svg.querySelector('.area-layer-known-healed-pat')?.setAttribute('d', hasKnownHealed ? pathL3H : '');
         svg.querySelector('.area-layer-fixed')?.setAttribute('d', pathL4);
+        svg.querySelector('.area-layer-fixed-healed')?.setAttribute('d', hasFixedHealed ? pathL4H : '');
+        svg.querySelector('.area-layer-fixed-healed-pat')?.setAttribute('d', hasFixedHealed ? pathL4H : '');
         svg.querySelector('.area-layer-pass')?.setAttribute('d', pathL5);
+        svg.querySelector('.area-layer-pass-healed')?.setAttribute('d', hasPassHealed ? pathL5H : '');
+        svg.querySelector('.area-layer-pass-healed-pat')?.setAttribute('d', hasPassHealed ? pathL5H : '');
         svg.querySelector('.area-layer-top-stroke')?.setAttribute('d', topStroke);
     });
 }
@@ -627,15 +834,27 @@ function closeSidePanelInspector() {
 function filterAllTestsByStatus(statusKey) {
     switchRunReportSubTab('runReportSubTabAllTests', document.getElementById('runReportTabBtnAllTests'));
 
+    // Clicking general status number or card resets healed filter to ALL
+    currentHealedFilter = 'ALL';
+    document.querySelectorAll('#healedFilterToggle .segment-btn').forEach(btn => {
+        if (btn.getAttribute('data-val') === 'ALL') {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+
     if (activeWholeExecutionFilter === statusKey) {
         activeWholeExecutionFilter = null;
+        currentGlobalStatusBadgeFilter = 'ALL';
         statusKey = null;
     } else {
         activeWholeExecutionFilter = statusKey;
+        currentGlobalStatusBadgeFilter = statusKey || 'ALL';
     }
 
     document.querySelectorAll('#runReportSubTabOverview .metric-card, #runReportSubTabOverview .kpi-card').forEach(card => card.classList.remove('active-filter'));
-    document.querySelectorAll('.js-filter-badge').forEach(badge => badge.classList.remove('active-filter'));
+    document.querySelectorAll('.js-filter-badge').forEach(badge => badge.classList.remove('active-filter', 'active-filter-badge'));
 
     if (statusKey) {
         const cardMap = {
@@ -655,9 +874,10 @@ function filterAllTestsByStatus(statusKey) {
         if (cardValId) {
             document.getElementById(cardValId)?.closest('.metric-card, .kpi-card')?.classList.add('active-filter');
         }
-        document.querySelectorAll(`.js-filter-badge[data-status-key="${statusKey}"]`).forEach(b => b.classList.add('active-filter'));
+        document.querySelectorAll(`.js-filter-badge[data-status-key="${statusKey}"]`).forEach(b => b.classList.add('active-filter', 'active-filter-badge'));
     }
 
+    applyFilter();
     applyRunReportFilters();
 }
 
@@ -714,7 +934,12 @@ function applyRunReportFilters() {
             }
         }
 
-        row.style.display = (matchLoc && matchBrowser && matchBug && matchFailure && matchStatus) ? '' : 'none';
+        const isHealed = row.getAttribute('data-healed') === 'true' || Number(row.getAttribute('data-healed-count') || 0) > 0 || (row.getAttribute('data-status-raw') || '').toLowerCase() === 'healed';
+        const matchHealed = (currentHealedFilter === 'ALL') ||
+                            (currentHealedFilter === 'HEALED' && isHealed) ||
+                            (currentHealedFilter === 'NOT_HEALED' && !isHealed);
+
+        row.style.display = (matchLoc && matchBrowser && matchBug && matchFailure && matchStatus && matchHealed) ? '' : 'none';
     });
 
     document.querySelectorAll('#runReportSubTabAllTests .test-class-container').forEach(classBox => {
@@ -1040,7 +1265,7 @@ function recalculateRunReportMetrics() {
     if (rows.length === 0) return;
 
     let pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0, running = 0;
-    let passedHealed = 0, failedHealed = 0;
+    let passHealed = 0, fixedHealed = 0, knownHealed = 0, unknownHealed = 0;
     let totalLlmCalls = 0;
     let totalLlmTokens = 0;
     let totalLlmCost = 0.0;
@@ -1056,11 +1281,10 @@ function recalculateRunReportMetrics() {
 
         const isHealed = r.getAttribute('data-healed') === 'true' || Number(r.getAttribute('data-healed-count') || 0) > 0 || (r.getAttribute('data-status-raw') || '').toLowerCase() === 'healed';
         if (isHealed) {
-            if (cat === 'PASSED' || cat === 'SUCCEEDED_FIXED') {
-                passedHealed++;
-            } else if (cat.includes('FAIL')) {
-                failedHealed++;
-            }
+            if (cat === 'PASSED') passHealed++;
+            else if (cat === 'SUCCEEDED_FIXED') fixedHealed++;
+            else if (cat === 'FAILED_KNOWN') knownHealed++;
+            else if (cat === 'FAILED_UNKNOWN') unknownHealed++;
         }
 
         const ai = syncRowAiUsage(r);
@@ -1097,8 +1321,6 @@ function recalculateRunReportMetrics() {
     const elOvTotal = document.getElementById('overviewKpiTotal');
     const elOvPass = document.getElementById('overviewKpiPassed');
     const elOvFixed = document.getElementById('overviewKpiFixed');
-    const elOvPassedHealed = document.getElementById('overviewKpiPassedHealed');
-    const elOvFailedHealed = document.getElementById('overviewKpiFailedHealed');
     const elOvKnown = document.getElementById('overviewKpiKnown');
     const elOvUnknown = document.getElementById('overviewKpiUnknown');
     const elOvIgnored = document.getElementById('overviewKpiIgnored');
@@ -1107,12 +1329,47 @@ function recalculateRunReportMetrics() {
     const elOvLlmSub = document.getElementById('overviewKpiTotalLlmSub');
 
     if (elOvTotal) elOvTotal.innerText = totalExecutions;
-    if (elOvPass) elOvPass.innerText = pass;
-    if (elOvFixed) elOvFixed.innerText = fixed;
-    if (elOvPassedHealed) elOvPassedHealed.innerText = passedHealed;
-    if (elOvFailedHealed) elOvFailedHealed.innerText = failedHealed;
-    if (elOvKnown) elOvKnown.innerText = known;
-    if (elOvUnknown) elOvUnknown.innerText = unknown;
+
+    if (elOvPass) {
+        if (passHealed > 0) {
+            elOvPass.className = 'kpi-value-dual';
+            elOvPass.innerHTML = `<span class="kpi-healed-part text-pass-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('PASSED', 'HEALED')" title="Filter Passed Healed Tests"><span class="material-symbols-outlined kpi-sparkle-icon">auto_fix_high</span> ${passHealed} healed</span><span class="kpi-slash">/</span><span class="kpi-total-part text-pass" onclick="event.stopPropagation(); filterAllTestsByStatus('PASSED')" title="Filter All Passed Tests">${pass} passed</span>`;
+        } else {
+            elOvPass.className = 'kpi-value text-pass';
+            elOvPass.innerText = pass;
+        }
+    }
+
+    if (elOvFixed) {
+        if (fixedHealed > 0) {
+            elOvFixed.className = 'kpi-value-dual';
+            elOvFixed.innerHTML = `<span class="kpi-healed-part text-fixed-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('SUCCEEDED_FIXED', 'HEALED')" title="Filter Succeeded-Fixed Healed Tests"><span class="material-symbols-outlined kpi-sparkle-icon">auto_fix_high</span> ${fixedHealed} healed</span><span class="kpi-slash">/</span><span class="kpi-total-part text-fixed" onclick="event.stopPropagation(); filterAllTestsByStatus('SUCCEEDED_FIXED')" title="Filter All Succeeded-Fixed Tests">${fixed} fixed</span>`;
+        } else {
+            elOvFixed.className = 'kpi-value text-fixed';
+            elOvFixed.innerText = fixed;
+        }
+    }
+
+    if (elOvKnown) {
+        if (knownHealed > 0) {
+            elOvKnown.className = 'kpi-value-dual';
+            elOvKnown.innerHTML = `<span class="kpi-healed-part text-known-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('FAILED_KNOWN', 'HEALED')" title="Filter Known Fail Healed Tests"><span class="material-symbols-outlined kpi-sparkle-icon">auto_fix_high</span> ${knownHealed} healed</span><span class="kpi-slash">/</span><span class="kpi-total-part text-known" onclick="event.stopPropagation(); filterAllTestsByStatus('FAILED_KNOWN')" title="Filter All Known Fail Tests">${known} known fail</span>`;
+        } else {
+            elOvKnown.className = 'kpi-value text-known';
+            elOvKnown.innerText = known;
+        }
+    }
+
+    if (elOvUnknown) {
+        if (unknownHealed > 0) {
+            elOvUnknown.className = 'kpi-value-dual';
+            elOvUnknown.innerHTML = `<span class="kpi-healed-part text-unknown-healed" onclick="event.stopPropagation(); filterAllTestsByHealedStatus('FAILED_UNKNOWN', 'HEALED')" title="Filter Unknown Fail Healed Tests"><span class="material-symbols-outlined kpi-sparkle-icon">auto_fix_high</span> ${unknownHealed} healed</span><span class="kpi-slash">/</span><span class="kpi-total-part text-fail" onclick="event.stopPropagation(); filterAllTestsByStatus('FAILED_UNKNOWN')" title="Filter All Unknown Fail Tests">${unknown} unknown fail</span>`;
+        } else {
+            elOvUnknown.className = 'kpi-value text-fail';
+            elOvUnknown.innerText = unknown;
+        }
+    }
+
     if (elOvIgnored) elOvIgnored.innerText = ignored;
     if (elOvRunning) elOvRunning.innerText = running;
 
@@ -1150,7 +1407,7 @@ function recalculateRunReportMetrics() {
         const areaRows = areaGroup.querySelectorAll('.test-row, tr.execution-row');
 
         let aPass = 0, aFixed = 0, aKnown = 0, aUnknown = 0, aIgnored = 0, aRunning = 0;
-        let aPassedHealed = 0, aFailedHealed = 0;
+        let aPassHealed = 0, aFixedHealed = 0, aKnownHealed = 0, aUnknownHealed = 0;
         areaRows.forEach(r => {
             const cat = getRowStatusCategory(r);
             if (cat === 'PASSED') aPass++;
@@ -1162,11 +1419,10 @@ function recalculateRunReportMetrics() {
 
             const isHealed = r.getAttribute('data-healed') === 'true' || Number(r.getAttribute('data-healed-count') || 0) > 0 || (r.getAttribute('data-status-raw') || '').toLowerCase() === 'healed';
             if (isHealed) {
-                if (cat === 'PASSED' || cat === 'SUCCEEDED_FIXED') {
-                    aPassedHealed++;
-                } else if (cat.includes('FAIL')) {
-                    aFailedHealed++;
-                }
+                if (cat === 'PASSED') aPassHealed++;
+                else if (cat === 'SUCCEEDED_FIXED') aFixedHealed++;
+                else if (cat === 'FAILED_KNOWN') aKnownHealed++;
+                else if (cat === 'FAILED_UNKNOWN') aUnknownHealed++;
             }
         });
 
@@ -1194,8 +1450,6 @@ function recalculateRunReportMetrics() {
         if (pieCard) {
             const valPass = pieCard.querySelector('.val-pass');
             const valFixed = pieCard.querySelector('.val-fixed');
-            const valHealedPass = pieCard.querySelector('.val-healed-pass');
-            const valHealedFail = pieCard.querySelector('.val-healed-fail');
             const valKnown = pieCard.querySelector('.val-known');
             const valUnknown = pieCard.querySelector('.val-unknown');
             const valIgnored = pieCard.querySelector('.val-ignored');
@@ -1203,40 +1457,88 @@ function recalculateRunReportMetrics() {
 
             if (valPass) valPass.innerText = aPass;
             if (valFixed) valFixed.innerText = aFixed;
-            if (valHealedPass) valHealedPass.innerText = aPassedHealed;
-            if (valHealedFail) valHealedFail.innerText = aFailedHealed;
             if (valKnown) valKnown.innerText = aKnown;
             if (valUnknown) valUnknown.innerText = aUnknown;
             if (valIgnored) valIgnored.innerText = aIgnored;
             if (valRunning) valRunning.innerText = aRunning;
 
+            const syncInlineHealedBadge = (valElement, badgeClass, count) => {
+                if (!valElement) return;
+                const parentGroup = valElement.closest('.val-group') || valElement.parentElement;
+                if (!parentGroup) return;
+                let badge = parentGroup.querySelector(`.${badgeClass}`);
+                if (count > 0) {
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = `badge-healed-inline ${badgeClass}`;
+                        parentGroup.appendChild(badge);
+                    }
+                    badge.innerText = `✨ ${count} healed`;
+                    badge.style.display = 'inline-flex';
+                } else if (badge) {
+                    badge.style.display = 'none';
+                }
+            };
+
+            syncInlineHealedBadge(valPass, 'badge-pass-healed', aPassHealed);
+            syncInlineHealedBadge(valFixed, 'badge-fixed-healed', aFixedHealed);
+            syncInlineHealedBadge(valKnown, 'badge-known-healed', aKnownHealed);
+            syncInlineHealedBadge(valUnknown, 'badge-unknown-healed', aUnknownHealed);
+
             const svgWrapper = pieCard.querySelector('.pie-chart-wrapper');
             if (svgWrapper && totalArea > 0) {
-                const pPass = (aPass / totalArea) * 100;
-                const pFixed = (aFixed / totalArea) * 100;
-                const pKnown = (aKnown / totalArea) * 100;
-                const pUnknown = (aUnknown / totalArea) * 100;
-                const pIgnored = (aIgnored / totalArea) * 100;
-                const pRunning = (aRunning / totalArea) * 100;
-
-                const cPass = `${pPass} ${100 - pPass}`;
-                const cFixed = `${pFixed} ${100 - pFixed}`;
-                const cKnown = `${pKnown} ${100 - pKnown}`;
-                const cUnknown = `${pUnknown} ${100 - pUnknown}`;
-                const cIgnored = `${pIgnored} ${100 - pIgnored}`;
-                const cRunning = `${pRunning} ${100 - pRunning}`;
-
-                svgWrapper.innerHTML = `
+                const patId = 'sparkle-pat-' + encodeURIComponent(areaName).replace(/[^a-zA-Z0-9_-]/g, '_');
+                let currentOffset = 25;
+                let circlesHtml = `
                     <svg width="100%" height="100%" viewBox="0 0 36 36">
+                        <defs>
+                            <pattern id="${patId}" width="4.5" height="4.5" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">
+                                <path d="M 2.25, 0.7 Q 2.25, 2.25 3.8, 2.25 Q 2.25, 2.25 2.25, 3.8 Q 2.25, 2.25 0.7, 2.25 Q 2.25, 2.25 2.25, 0.7 Z" fill="#ffffff" opacity="0.9"/>
+                                <circle cx="3.8" cy="0.9" r="0.4" fill="#fef08a" opacity="0.95"/>
+                            </pattern>
+                        </defs>
                         <circle cx="18" cy="18" r="15.915" fill="none" stroke="#e2e8f0" stroke-width="4"/>
-                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#059669" stroke-width="5" stroke-dasharray="${cPass}" stroke-dashoffset="25"/>
-                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#2563eb" stroke-width="5" stroke-dasharray="${cFixed}" stroke-dashoffset="${25 - pPass}"/>
-                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#ea580c" stroke-width="5" stroke-dasharray="${cKnown}" stroke-dashoffset="${25 - pPass - pFixed}"/>
-                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#dc2626" stroke-width="5" stroke-dasharray="${cUnknown}" stroke-dashoffset="${25 - pPass - pFixed - pKnown}"/>
-                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#64748b" stroke-width="5" stroke-dasharray="${cIgnored}" stroke-dashoffset="${25 - pPass - pFixed - pKnown - pUnknown}"/>
-                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="#94a3b8" stroke-width="5" stroke-dasharray="${cRunning}" stroke-dashoffset="${25 - pPass - pFixed - pKnown - pUnknown - pIgnored}"/>
-                    </svg>
                 `;
+
+                const addSubSlice = (count, color, title, isHealed = false) => {
+                    if (count <= 0) return;
+                    const pct = (count / totalArea) * 100;
+                    const dashArray = `${pct} ${100 - pct}`;
+                    circlesHtml += `<circle cx="18" cy="18" r="15.915" fill="none" stroke="${color}" stroke-width="5" stroke-dasharray="${dashArray}" stroke-dashoffset="${currentOffset}"><title>${title}: ${count}</title></circle>`;
+                    if (isHealed) {
+                        circlesHtml += `<circle cx="18" cy="18" r="15.915" fill="none" stroke="url(#${patId})" stroke-width="5" stroke-dasharray="${dashArray}" stroke-dashoffset="${currentOffset}" pointer-events="none"></circle>`;
+                    }
+                    currentOffset -= pct;
+                };
+
+                // 1. Successful: Clean (#059669) + Healed (#34d399 + sparkle print)
+                const cleanPass = Math.max(0, aPass - aPassHealed);
+                addSubSlice(cleanPass, '#059669', 'Clean Successful', false);
+                addSubSlice(aPassHealed, '#34d399', 'Healed Successful', true);
+
+                // 2. Succeeded-Fixed: Clean (#2563eb) + Healed (#60a5fa + sparkle print)
+                const cleanFixed = Math.max(0, aFixed - aFixedHealed);
+                addSubSlice(cleanFixed, '#2563eb', 'Clean Succeeded-Fixed', false);
+                addSubSlice(aFixedHealed, '#60a5fa', 'Healed Succeeded-Fixed', true);
+
+                // 3. Known Failed: Clean (#ea580c) + Healed (#fb923c + sparkle print)
+                const cleanKnown = Math.max(0, aKnown - aKnownHealed);
+                addSubSlice(cleanKnown, '#ea580c', 'Clean Known Fail', false);
+                addSubSlice(aKnownHealed, '#fb923c', 'Healed Known Fail', true);
+
+                // 4. Unknown Failed: Clean (#dc2626) + Healed (#f87171 + sparkle print)
+                const cleanUnknown = Math.max(0, aUnknown - aUnknownHealed);
+                addSubSlice(cleanUnknown, '#dc2626', 'Clean Unknown Fail', false);
+                addSubSlice(aUnknownHealed, '#f87171', 'Healed Unknown Fail', true);
+
+                // 5. Ignored: (#64748b)
+                addSubSlice(aIgnored, '#64748b', 'Ignored / Skipped', false);
+
+                // 6. Running: (#94a3b8)
+                addSubSlice(aRunning, '#94a3b8', 'Running', false);
+
+                circlesHtml += '</svg>';
+                svgWrapper.innerHTML = circlesHtml;
             }
         }
     });
@@ -1260,7 +1562,7 @@ function recalculateRunReportMetrics() {
             const activeFilter = classBox.getAttribute('data-active-status-filter') || 'ALL';
             let html = '';
             if (cPass > 0) html += `<span class="badge-status badge-pass clickable-badge${activeFilter === 'PASSED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'PASSED');" title="Filter Passed in Class">Passed: ${cPass}</span>`;
-            if (cFixed > 0) html += `<span class="badge-status badge-healed clickable-badge${activeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'SUCCEEDED_FIXED');" title="Filter Succeeded-Fixed in Class">Succeeded-Fixed: ${cFixed}</span>`;
+            if (cFixed > 0) html += `<span class="badge-status badge-fixed clickable-badge${activeFilter === 'SUCCEEDED_FIXED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'SUCCEEDED_FIXED');" title="Filter Succeeded-Fixed in Class">Succeeded-Fixed: ${cFixed}</span>`;
             if (cKnown > 0) html += `<span class="badge-status badge-known-fail clickable-badge${activeFilter === 'FAILED_KNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'FAILED_KNOWN');" title="Filter Known Fail in Class">Known: ${cKnown}</span>`;
             if (cUnknown > 0) html += `<span class="badge-status badge-unknown-fail clickable-badge${activeFilter === 'FAILED_UNKNOWN' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'FAILED_UNKNOWN');" title="Filter Unknown Fail in Class">Unknown: ${cUnknown}</span>`;
             if (cIgnored > 0) html += `<span class="badge-status badge-ignored clickable-badge${activeFilter === 'SKIPPED' ? ' active-filter-badge' : ''}" onclick="event.stopPropagation(); filterClassByStatusBadge(this, 'SKIPPED');" title="Filter Ignored in Class">Ignored: ${cIgnored}</span>`;
@@ -3731,7 +4033,29 @@ function filterAllTestsByHealedStatus(status, healedFilter) {
         setHealedFilter(healedFilter);
     }
     if (status) {
-        filterByGlobalStatusBadge(status);
+        currentGlobalStatusBadgeFilter = status;
+        activeWholeExecutionFilter = status;
+        document.querySelectorAll('#wholeExecutionSummaryBadges .badge-status').forEach(b => b.classList.remove('active-filter-badge'));
+        document.querySelectorAll(`#wholeExecutionSummaryBadges .badge-status[data-status-key="${status}"]`).forEach(b => b.classList.add('active-filter-badge'));
+
+        document.querySelectorAll('#runReportSubTabOverview .metric-card, #runReportSubTabOverview .kpi-card').forEach(card => card.classList.remove('active-filter'));
+        const cardMap = {
+            'PASSED': 'overviewKpiPassed',
+            'SUCCEEDED_FIXED': 'overviewKpiFixed',
+            'FAILED_KNOWN': 'overviewKpiKnown',
+            'FAILED_UNKNOWN': 'overviewKpiUnknown',
+            'SKIPPED': 'overviewKpiIgnored',
+            'IGNORED': 'overviewKpiIgnored'
+        };
+        const cardValId = cardMap[status];
+        if (cardValId) {
+            document.getElementById(cardValId)?.closest('.metric-card, .kpi-card')?.classList.add('active-filter');
+        }
+
+        applyFilter();
+        if (typeof applyRunReportFilters === 'function') {
+            applyRunReportFilters();
+        }
     } else {
         applyFilter();
     }

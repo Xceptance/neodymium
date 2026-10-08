@@ -6,6 +6,76 @@
 <!-- Batch History Fragment -->
 <div th:fragment="batchHistory" class="d-flex flex-column gap-4" id="pageBatchHistoryOverview">
 
+    <!-- BATCH HISTORY LIMIT TOOLBAR -->
+    <div class="batch-history-toolbar">
+        <div class="d-flex align-items-center gap-3 flex-wrap justify-content-between w-100">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="toolbar-label">
+                    <span class="material-symbols-outlined text-accent" style="font-size: 1.15rem; vertical-align: middle;">tune</span>
+                    <strong>History Records Limit:</strong>
+                </span>
+                <div class="btn-group-pills" role="group" aria-label="History Limit Presets">
+                    <button type="button"
+                            class="pill-btn"
+                            th:classappend="${currentLimit == 5 ? 'active' : ''}"
+                            th:attr="hx-get=@{/batch-history(batchName=${batchName}, limit=5)}"
+                            hx-target="#mainViewContainer"
+                            hx-push-url="true">Last 5</button>
+                    <button type="button"
+                            class="pill-btn"
+                            th:classappend="${currentLimit == 10 ? 'active' : ''}"
+                            th:attr="hx-get=@{/batch-history(batchName=${batchName}, limit=10)}"
+                            hx-target="#mainViewContainer"
+                            hx-push-url="true">Last 10</button>
+                    <button type="button"
+                            class="pill-btn"
+                            th:classappend="${currentLimit == 25 ? 'active' : ''}"
+                            th:attr="hx-get=@{/batch-history(batchName=${batchName}, limit=25)}"
+                            hx-target="#mainViewContainer"
+                            hx-push-url="true">Last 25</button>
+                    <button type="button"
+                            class="pill-btn"
+                            th:classappend="${currentLimit == 50 ? 'active' : ''}"
+                            th:attr="hx-get=@{/batch-history(batchName=${batchName}, limit=50)}"
+                            hx-target="#mainViewContainer"
+                            hx-push-url="true">Last 50</button>
+                    <button type="button"
+                            class="pill-btn"
+                            th:classappend="${currentLimit == null ? 'active' : ''}"
+                            th:attr="hx-get=@{/batch-history(batchName=${batchName})}"
+                            hx-target="#mainViewContainer"
+                            hx-push-url="true">All</button>
+                </div>
+
+                <!-- Custom Limit Input -->
+                <div class="d-flex align-items-center gap-1 ms-1">
+                    <div class="custom-limit-box">
+                        <span class="custom-limit-prefix">Custom:</span>
+                        <input type="number"
+                               id="customBatchLimitInput"
+                               class="custom-limit-input"
+                               min="1"
+                               th:max="${totalRunsCount > 0 ? totalRunsCount : 9999}"
+                               th:value="${currentLimit != null && currentLimit != 5 && currentLimit != 10 && currentLimit != 25 && currentLimit != 50 ? currentLimit : ''}"
+                               placeholder="e.g. 15"
+                               th:data-batch-name="${batchName}"
+                               onkeydown="if(event.key==='Enter'){ applyCustomBatchLimit(); }">
+                    </div>
+                    <button type="button" class="btn-apply-limit" onclick="applyCustomBatchLimit()">Apply</button>
+                </div>
+            </div>
+
+            <!-- Summary counter badge -->
+            <div class="history-count-badge">
+                <span class="material-symbols-outlined text-accent" style="font-size: 1rem; vertical-align: middle;">info</span>
+                <span th:if="${currentLimit != null && currentLimit < totalRunsCount}"
+                      th:text="'Showing last ' + ${showingRunsCount} + ' of ' + ${totalRunsCount} + ' total runs'">Showing last 10 of 48 total runs</span>
+                <span th:unless="${currentLimit != null && currentLimit < totalRunsCount}"
+                      th:text="'Showing all ' + ${totalRunsCount} + ' runs'">Showing all 48 runs</span>
+            </div>
+        </div>
+    </div>
+
     <!-- BATCH ENVIRONMENT & CONTAINED METADATA BANNER -->
     <div class="batch-env-card">
         <div class="env-meta-item">
@@ -42,6 +112,7 @@
         <div class="trend-chart-header">
             <div>
                 <span class="material-symbols-outlined text-accent">trending_up</span> HISTORY TREND FOR WHOLE BATCH: <span id="batchOverviewTitle" th:text="${batchName ?: 'Unknown'}">Unknown</span>
+                <span th:if="${currentLimit != null && currentLimit < totalRunsCount}" class="tag-chip ms-2" style="font-size: 0.75rem; vertical-align: middle;">LAST <span th:text="${showingRunsCount}">10</span> RUNS</span>
                 <div style="font-size: 0.825rem; color: var(--text-muted); font-weight: 400; margin-top: 0.25rem;">
                     Stacked area trend for the whole batch. <strong style="color: var(--status-fixed);"><span class="material-symbols-outlined">touch_app</span> On click on any history trend point below, the corresponding report for the batch will open.</strong>
                 </div>
@@ -49,11 +120,13 @@
         </div>
 
         <div class="allure-legend">
-            <div class="legend-item"><div class="legend-box" style="background: #6ee7b7; border: 1px solid #34d399;"></div> Passed Clean</div>
-            <div class="legend-item"><div class="legend-box" style="background: #93c5fd; border: 1px solid #60a5fa;"></div> Succeeded with Known Bug</div>
-            <div class="legend-item"><div class="legend-box" style="background: #fdba74; border: 1px solid #fb923c;"></div> Failed due to Known Bug</div>
-            <div class="legend-item"><div class="legend-box" style="background: #fca5a5; border: 1px solid #f87171;"></div> Failed without Issue Info</div>
-            <div class="legend-item"><div class="legend-box" style="background: #475569; border: 1px solid #64748b;"></div> Ignored / Skipped</div>
+            <div class="legend-item"><div class="legend-box" style="background: var(--status-pass); border: 1px solid var(--status-pass);"></div> Passed Clean</div>
+            <div class="legend-item"><div class="legend-box seg-healed-print" style="background: var(--status-pass-healed, #34d399); border: 1px solid var(--status-pass-healed);"></div> Passed Healed</div>
+            <div class="legend-item"><div class="legend-box" style="background: var(--status-fixed); border: 1px solid var(--status-fixed);"></div> Succeeded with Known Bug</div>
+            <div class="legend-item"><div class="legend-box seg-healed-print" style="background: var(--status-fixed-healed, #60a5fa); border: 1px solid var(--status-fixed-healed);"></div> Succeeded Fixed Healed</div>
+            <div class="legend-item"><div class="legend-box" style="background: var(--status-known-fail); border: 1px solid var(--status-known-fail);"></div> Failed due to Known Bug</div>
+            <div class="legend-item"><div class="legend-box" style="background: var(--status-unknown-fail); border: 1px solid var(--status-unknown-fail);"></div> Failed without Issue Info</div>
+            <div class="legend-item"><div class="legend-box" style="background: var(--status-ignored); border: 1px solid var(--status-ignored);"></div> Ignored / Skipped</div>
         </div>
 
         <div class="allure-stacked-svg-container" style="position: relative;">
@@ -62,6 +135,10 @@
                     <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
                         <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#2563eb" flood-opacity="0.4"/>
                     </filter>
+                    <pattern id="trendSparklePattern" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">
+                        <path d="M 3, 0.9 Q 3, 3 5.1, 3 Q 3, 3 3, 5.1 Q 3, 3 0.9, 3 Q 3, 3 3, 0.9 Z" fill="#ffffff" opacity="0.95"/>
+                        <circle cx="5.1" cy="1.2" r="0.45" fill="#fef08a" opacity="0.95"/>
+                    </pattern>
                 </defs>
 
                 <!-- Y-AXIS GRID LINES & TICKS -->
@@ -82,12 +159,20 @@
                 <text x="42" y="194" fill="var(--text-main)" font-size="10" font-family="JetBrains Mono" text-anchor="end">0 Tests</text>
 
                 <!-- STACKED LAYERS -->
-                <path id="trendLayerIgnored" d="" fill="#334155" />
-                <path id="trendLayerUnknown" d="" fill="#fca5a5" />
-                <path id="trendLayerKnown" d="" fill="#fdba74" />
-                <path id="trendLayerFixed" d="" fill="#93c5fd" />
-                <path id="trendLayerPass" d="" fill="#6ee7b7" />
-                <path id="trendTopStroke" d="" fill="none" stroke="#34d399" stroke-width="3" />
+                <path id="trendLayerIgnored" d="" fill="var(--status-ignored)" />
+                <path id="trendLayerUnknown" d="" fill="var(--status-unknown-fail)" />
+                <path id="trendLayerUnknownHealed" d="" fill="var(--status-unknown-healed, #f87171)" />
+                <path id="trendLayerUnknownHealedPattern" d="" fill="url(#trendSparklePattern)" pointer-events="none" />
+                <path id="trendLayerKnown" d="" fill="var(--status-known-fail)" />
+                <path id="trendLayerKnownHealed" d="" fill="var(--status-known-healed, #fb923c)" />
+                <path id="trendLayerKnownHealedPattern" d="" fill="url(#trendSparklePattern)" pointer-events="none" />
+                <path id="trendLayerFixed" d="" fill="var(--status-fixed)" />
+                <path id="trendLayerFixedHealed" d="" fill="var(--status-fixed-healed, #60a5fa)" />
+                <path id="trendLayerFixedHealedPattern" d="" fill="url(#trendSparklePattern)" pointer-events="none" />
+                <path id="trendLayerPass" d="" fill="var(--status-pass)" />
+                <path id="trendLayerPassHealed" d="" fill="var(--status-pass-healed, #34d399)" />
+                <path id="trendLayerPassHealedPattern" d="" fill="url(#trendSparklePattern)" pointer-events="none" />
+                <path id="trendTopStroke" d="" fill="none" stroke="var(--status-pass-healed, #34d399)" stroke-width="3" />
 
                 <line id="trendHoverGuide" x1="-100" y1="10" x2="-100" y2="190" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="3 3" style="display: none;" />
 
@@ -100,17 +185,85 @@
                 </g>
             </svg>
 
-            <div id="trendHoverTooltip" style="display: none; position: absolute; top: 10px; left: 10px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.75rem 0.9rem; box-shadow: 0 10px 25px rgba(0,0,0,0.15); pointer-events: none; z-index: 40; font-size: 0.78rem; width: 210px; flex-direction: column; gap: 0.35rem;">
-                <div class="flex-between" style="border-bottom: 1px solid var(--border); padding-bottom: 0.35rem; margin-bottom: 0.25rem;">
-                    <strong style="color: var(--text-main); font-size: 0.85rem;" id="ttRunTitle" th:text="${runs != null and !runs.empty ? 'Run #' + runs[0].id : 'Run #RUN_ID'}">Run #RUN_ID</strong>
-                    <span class="tag-chip" id="ttPassRate" style="background: var(--status-pass-bg); color: var(--status-pass); border: 1px solid var(--status-pass-border); font-weight: 700;" th:text="${runs != null and !runs.empty ? runs[0].passRate + '% Pass' : '0% Pass'}">0% Pass</span>
+            <div id="trendHoverTooltip" class="trend-tooltip" style="display: none;">
+                <div class="trend-tooltip-header">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;">
+                        <div style="display: flex; align-items: center; gap: 0.35rem;">
+                            <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">insights</span>
+                            <strong style="color: var(--text-main); font-size: 0.84rem;">Run Details</strong>
+                        </div>
+                        <span class="badge-status badge-pass" id="ttPassRate" style="font-size: 0.7rem; padding: 0.1rem 0.45rem; white-space: nowrap; flex-shrink: 0;" th:text="${runs != null and !runs.empty ? runs[0].passRate + '% PASS' : '0% PASS'}">0% PASS</span>
+                    </div>
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">
+                        <span class="text-truncate" id="ttRunId" style="max-width: 175px;" th:text="${runs != null and !runs.empty ? '#' + runs[0].id : '#RUN_ID'}">#RUN_ID</span>
+                        <span class="badge-healed-inline badge-pass-healed" id="ttHeaderHealed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem; display: none;">✨ 0 healed</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">
+                        <span class="material-symbols-outlined" style="font-size: 0.8rem;">schedule</span>
+                        <span id="ttTimestamp" th:text="${runs != null and !runs.empty ? runs[0].timestampLabel : 'Recently'}">Recently</span>
+                    </div>
                 </div>
-                <div class="flex-between"><span><span class="material-symbols-outlined text-accent">fact_check</span> Total Executed:</span><strong class="text-mono" id="ttTotalVal" th:text="${runs != null and !runs.empty ? runs[0].totalTests + ' Tests' : '0 Tests'}">0 Tests</strong></div>
-                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#6ee7b7;"></div> Passed Clean:</span><strong class="text-mono" style="color:var(--status-pass)" id="ttPassVal" th:text="${runs != null and !runs.empty ? runs[0].passedCount : 0}">0</strong></div>
-                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#93c5fd;"></div> Succeeded (Bug):</span><strong class="text-mono" style="color:var(--status-fixed)" id="ttFixedVal" th:text="${runs != null and !runs.empty ? runs[0].succeededFixedCount : 0}">0</strong></div>
-                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#fdba74;"></div> Failed (Bug):</span><strong class="text-mono" style="color:var(--status-known-fail)" id="ttKnownVal" th:text="${runs != null and !runs.empty ? runs[0].failedKnownCount : 0}">0</strong></div>
-                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#fca5a5;"></div> Failed (Unknown):</span><strong class="text-mono" style="color:var(--status-unknown-fail)" id="ttUnknownVal" th:text="${runs != null and !runs.empty ? runs[0].failedUnknownCount : 0}">0</strong></div>
-                <div class="flex-between"><span><div class="legend-box" style="display:inline-block; width:8px; height:8px; background:#475569;"></div> Ignored / Skipped:</span><strong class="text-mono" style="color:var(--status-ignored)" id="ttIgnoredVal" th:text="${runs != null and !runs.empty ? runs[0].ignoredCount : 0}">0</strong></div>
+
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);">
+                    <span style="display: flex; align-items: center; gap: 0.3rem;"><span class="material-symbols-outlined text-accent" style="font-size: 0.9rem;">fact_check</span> Total Executed:</span>
+                    <strong class="text-mono" id="ttTotalVal" style="color: var(--text-main);" th:text="${runs != null and !runs.empty ? runs[0].totalTests + ' Tests' : '0 Tests'}">0 Tests</strong>
+                </div>
+
+                <div id="ttBreakdownList" style="display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.75rem;">
+                    <div class="trend-tooltip-row" id="ttRowPass" style="display: none;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-weight: 500; white-space: nowrap;">
+                            <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--status-pass); flex-shrink: 0;"></div>
+                            <span>Passed</span>
+                        </div>
+                        <div class="val-group" id="ttGroupPass">
+                            <span class="badge-healed-inline badge-pass-healed" id="ttHealedPass" style="font-size: 0.65rem; padding: 0.05rem 0.3rem; display: none;">✨ 1 healed</span>
+                            <span class="val" id="ttPassVal" style="color: var(--status-pass);">0</span>
+                        </div>
+                    </div>
+
+                    <div class="trend-tooltip-row" id="ttRowFixed" style="display: none;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-weight: 500; white-space: nowrap;">
+                            <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--status-fixed); flex-shrink: 0;"></div>
+                            <span>Succeeded (Bug)</span>
+                        </div>
+                        <div class="val-group" id="ttGroupFixed">
+                            <span class="badge-healed-inline badge-fixed-healed" id="ttHealedFixed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem; display: none;">✨ 1 healed</span>
+                            <span class="val" id="ttFixedVal" style="color: var(--status-fixed);">0</span>
+                        </div>
+                    </div>
+
+                    <div class="trend-tooltip-row" id="ttRowKnown" style="display: none;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-weight: 500; white-space: nowrap;">
+                            <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--status-known-fail); flex-shrink: 0;"></div>
+                            <span>Failed (Bug)</span>
+                        </div>
+                        <div class="val-group" id="ttGroupKnown">
+                            <span class="badge-healed-inline badge-known-healed" id="ttHealedKnown" style="font-size: 0.65rem; padding: 0.05rem 0.3rem; display: none;">✨ 1 healed</span>
+                            <span class="val" id="ttKnownVal" style="color: var(--status-known-fail);">0</span>
+                        </div>
+                    </div>
+
+                    <div class="trend-tooltip-row" id="ttRowUnknown" style="display: none;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-weight: 500; white-space: nowrap;">
+                            <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--status-unknown-fail); flex-shrink: 0;"></div>
+                            <span>Failed (Unknown)</span>
+                        </div>
+                        <div class="val-group" id="ttGroupUnknown">
+                            <span class="badge-healed-inline badge-unknown-healed" id="ttHealedUnknown" style="font-size: 0.65rem; padding: 0.05rem 0.3rem; display: none;">✨ 1 healed</span>
+                            <span class="val" id="ttUnknownVal" style="color: var(--status-unknown-fail);">0</span>
+                        </div>
+                    </div>
+
+                    <div class="trend-tooltip-row" id="ttRowIgnored" style="display: none;">
+                        <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-weight: 500; white-space: nowrap;">
+                            <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--status-ignored); flex-shrink: 0;"></div>
+                            <span>Ignored / Skipped</span>
+                        </div>
+                        <div class="val-group" id="ttGroupIgnored">
+                            <span class="val" id="ttIgnoredVal" style="color: var(--status-ignored);">0</span>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -132,13 +285,27 @@
                 </div>
                 <div class="area-stacked-svg-container">
                     <svg class="area-trend-svg" width="100%" height="100%" viewBox="0 0 300 90" preserveAspectRatio="none" th:data-run-points="${area.runPointsJson}">
+                        <defs>
+                            <pattern th:id="'areaSparklePat-' + ${area.areaGroup}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">
+                                <path d="M 2.5, 0.7 Q 2.5, 2.5 4.2, 2.5 Q 2.5, 2.5 2.5, 4.2 Q 2.5, 2.5 0.7, 2.5 Q 2.5, 2.5 2.5, 0.7 Z" fill="#ffffff" opacity="0.95"/>
+                                <circle cx="4.2" cy="0.9" r="0.4" fill="#fef08a" opacity="0.95"/>
+                            </pattern>
+                        </defs>
                         <line x1="20" y1="80" x2="280" y2="80" stroke="var(--border)" stroke-width="1"/>
-                        <path class="area-layer-ignored" d="" fill="#334155" />
-                        <path class="area-layer-unknown" d="" fill="#fca5a5" />
-                        <path class="area-layer-known" d="" fill="#fdba74" />
-                        <path class="area-layer-fixed" d="" fill="#93c5fd" />
-                        <path class="area-layer-pass" d="" fill="#6ee7b7" />
-                        <path class="area-layer-top-stroke" d="" fill="none" stroke="#34d399" stroke-width="2" />
+                        <path class="area-layer-ignored" d="" fill="var(--status-ignored)" />
+                        <path class="area-layer-unknown" d="" fill="var(--status-unknown-fail)" />
+                        <path class="area-layer-unknown-healed" d="" fill="var(--status-unknown-healed, #f87171)" />
+                        <path class="area-layer-unknown-healed-pat" d="" th:attr="fill='url(#areaSparklePat-' + ${area.areaGroup} + ')'" pointer-events="none" />
+                        <path class="area-layer-known" d="" fill="var(--status-known-fail)" />
+                        <path class="area-layer-known-healed" d="" fill="var(--status-known-healed, #fb923c)" />
+                        <path class="area-layer-known-healed-pat" d="" th:attr="fill='url(#areaSparklePat-' + ${area.areaGroup} + ')'" pointer-events="none" />
+                        <path class="area-layer-fixed" d="" fill="var(--status-fixed)" />
+                        <path class="area-layer-fixed-healed" d="" fill="var(--status-fixed-healed, #60a5fa)" />
+                        <path class="area-layer-fixed-healed-pat" d="" th:attr="fill='url(#areaSparklePat-' + ${area.areaGroup} + ')'" pointer-events="none" />
+                        <path class="area-layer-pass" d="" fill="var(--status-pass)" />
+                        <path class="area-layer-pass-healed" d="" fill="var(--status-pass-healed, #34d399)" />
+                        <path class="area-layer-pass-healed-pat" d="" th:attr="fill='url(#areaSparklePat-' + ${area.areaGroup} + ')'" pointer-events="none" />
+                        <path class="area-layer-top-stroke" d="" fill="none" stroke="var(--status-pass-healed, #34d399)" stroke-width="2" />
                     </svg>
                 </div>
             </div>
@@ -152,7 +319,7 @@
     <div class="panel">
         <div class="panel-header">
             <div>
-                <div class="panel-title"><span class="material-symbols-outlined text-accent">history</span> List of All Runs for this Batch</div>
+                <div class="panel-title"><span class="material-symbols-outlined text-accent">history</span> <span th:text="${currentLimit != null && currentLimit < totalRunsCount ? 'List of Runs for this Batch (Showing Last ' + showingRunsCount + ' of ' + totalRunsCount + ')' : 'List of All Runs for this Batch (' + (totalRunsCount ?: 0) + ' Runs)'}">List of All Runs for this Batch</span></div>
             </div>
         </div>
 
@@ -178,6 +345,10 @@
                         th:data-known="${run.failedKnownCount}"
                         th:data-unknown="${run.failedUnknownCount}"
                         th:data-ignored="${run.ignoredCount}"
+                        th:data-pass-healed="${run.passedHealedCountSafe}"
+                        th:data-fixed-healed="${run.fixedHealedCountSafe}"
+                        th:data-known-healed="${run.knownHealedCountSafe}"
+                        th:data-unknown-healed="${run.unknownHealedCountSafe}"
                         th:data-rate="${run.passRate + '% Pass'}"
                         th:data-total="${run.totalTests != null ? run.totalTests : 0}"
                         th:data-time="${run.timestampLabel}">
@@ -191,10 +362,14 @@
                         <td><strong class="text-mono" th:text="${run.totalTests != null ? run.totalTests + ' Tests' : '0 Tests'}">8 Tests</strong></td>
                         <td style="min-width: 220px; vertical-align: middle;">
                             <div class="status-stacked-bar">
-                                <div th:if="${run.passedCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedTooltip}" th:text="${run.passedLabel}">3</div>
-                                <div th:if="${run.succeededFixedCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(run.fixedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedTooltip}" th:text="${run.fixedLabel}">2</div>
-                                <div th:if="${run.failedKnownCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(run.knownPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownTooltip}" th:text="${run.knownLabel}">1</div>
-                                <div th:if="${run.failedUnknownCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownTooltip}" th:text="${run.unknownLabel}">1</div>
+                                <div th:if="${run.passedCleanCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedCleanTooltip}" th:text="${run.passedCleanLabel}">3</div>
+                                <div th:if="${run.passedHealedCountSafe > 0}" class="status-bar-seg seg-pass-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.passedHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedHealedTooltip}" th:text="${run.passedHealedLabel}">0</div>
+                                <div th:if="${run.fixedCleanCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(run.fixedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedCleanTooltip}" th:text="${run.fixedCleanLabel}">2</div>
+                                <div th:if="${run.fixedHealedCountSafe > 0}" class="status-bar-seg seg-fixed-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.fixedHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedHealedTooltip}" th:text="${run.fixedHealedLabel}">0</div>
+                                <div th:if="${run.knownCleanCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(run.knownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownCleanTooltip}" th:text="${run.knownCleanLabel}">1</div>
+                                <div th:if="${run.knownHealedCountSafe > 0}" class="status-bar-seg seg-known-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.knownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownHealedTooltip}" th:text="${run.knownHealedLabel}">0</div>
+                                <div th:if="${run.unknownCleanCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownCleanTooltip}" th:text="${run.unknownCleanLabel}">1</div>
+                                <div th:if="${run.unknownHealedCountSafe > 0}" class="status-bar-seg seg-unknown-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.unknownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownHealedTooltip}" th:text="${run.unknownHealedLabel}">0</div>
                                 <div th:if="${run.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(run.ignoredPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.ignoredTooltip}" th:text="${run.ignoredLabel}">1</div>
                             </div>
                         </td>

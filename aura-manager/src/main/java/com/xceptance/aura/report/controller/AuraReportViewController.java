@@ -147,7 +147,20 @@ public class AuraReportViewController
             else if (targetUrl.contains("/batch-history"))
             {
                 final String batchName = extractQueryParam(targetUrl, "batchName");
-                return batchHistory(batchName != null && !batchName.isBlank() ? batchName : "Unknown", hxRequest, model);
+                final String limitParam = extractQueryParam(targetUrl, "limit");
+                Integer limit = null;
+                if (limitParam != null && !limitParam.isBlank())
+                {
+                    try
+                    {
+                        limit = Integer.parseInt(limitParam.trim());
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                        // Fall back to no limit
+                    }
+                }
+                return batchHistory(batchName != null && !batchName.isBlank() ? batchName : "Unknown", limit, hxRequest, model);
             }
             else if (targetUrl.contains("/test-base"))
             {
@@ -190,10 +203,23 @@ public class AuraReportViewController
     @GetMapping({"/batch-history", "/fragments/batch-history"})
     public String batchHistory(
         @RequestParam(name = "batchName", defaultValue = "Unknown") final String batchName,
+        @RequestParam(name = "limit", required = false) final Integer limit,
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         final Model model)
     {
-        final List<TestRunEntity> runs = runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(batchName);
+        final List<TestRunEntity> allRuns = runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(batchName);
+        final int totalRunsCount = allRuns.size();
+
+        final Integer effectiveLimit = (limit != null && limit > 0) ? limit : null;
+        final List<TestRunEntity> runs;
+        if (effectiveLimit != null && effectiveLimit < totalRunsCount)
+        {
+            runs = new ArrayList<>(allRuns.subList(0, effectiveLimit));
+        }
+        else
+        {
+            runs = new ArrayList<>(allRuns);
+        }
         final Optional<TestBatchEntity> batchOpt = batchRepository.findById(batchName);
 
         final List<String> batchLocales = runs.stream()
@@ -226,22 +252,38 @@ public class AuraReportViewController
         for (final TestRunEntity r : chronoRuns)
         {
             final RunReportDto rReport = dataService.getRunReport(r.getId());
-            if (rReport != null && rReport.getAreaSummaries() != null)
+            if (rReport != null)
             {
-                for (final AreaSummaryDto area : rReport.getAreaSummaries())
+                if (r.getPassedHealedCount() == null || r.getSucceededFixedHealedCount() == null
+                    || r.getFailedKnownHealedCount() == null || r.getFailedUnknownHealedCount() == null)
                 {
-                    final String areaName = area.getAreaName() != null ? area.getAreaName() : "Browsing (default)";
-                    areaPointsMap.computeIfAbsent(areaName, k -> new ArrayList<>())
-                        .add(new AreaRunPointDto(
-                            r.getId(),
-                            r.getTimestampLabel(),
-                            area.getPassCount(),
-                            area.getFixedCount(),
-                            area.getKnownCount(),
-                            area.getUnknownCount(),
-                            area.getIgnoredCount(),
-                            area.getTotalCount()
-                        ));
+                    r.setPassedHealedCount(rReport.getPassHealedCount());
+                    r.setSucceededFixedHealedCount(rReport.getFixedHealedCount());
+                    r.setFailedKnownHealedCount(rReport.getKnownHealedCount());
+                    r.setFailedUnknownHealedCount(rReport.getUnknownHealedCount());
+                    runRepository.save(r);
+                }
+                if (rReport.getAreaSummaries() != null)
+                {
+                    for (final AreaSummaryDto area : rReport.getAreaSummaries())
+                    {
+                        final String areaName = area.getAreaName() != null ? area.getAreaName() : "Browsing (default)";
+                        areaPointsMap.computeIfAbsent(areaName, k -> new ArrayList<>())
+                            .add(new AreaRunPointDto(
+                                r.getId(),
+                                r.getTimestampLabel(),
+                                area.getPassCount(),
+                                area.getFixedCount(),
+                                area.getKnownCount(),
+                                area.getUnknownCount(),
+                                area.getIgnoredCount(),
+                                area.getTotalCount(),
+                                area.getPassHealedCount(),
+                                area.getFixedHealedCount(),
+                                area.getKnownHealedCount(),
+                                area.getUnknownHealedCount()
+                            ));
+                    }
                 }
             }
         }
@@ -291,6 +333,9 @@ public class AuraReportViewController
         model.addAttribute("batch", batchOpt.orElse(null));
         model.addAttribute("batchEnvironment", batchEnvironment);
         model.addAttribute("runs", runs);
+        model.addAttribute("totalRunsCount", totalRunsCount);
+        model.addAttribute("currentLimit", effectiveLimit);
+        model.addAttribute("showingRunsCount", runs.size());
         model.addAttribute("batchLocales", batchLocales);
         model.addAttribute("batchBrowsers", batchBrowsers);
         model.addAttribute("areaTrends", areaTrends);

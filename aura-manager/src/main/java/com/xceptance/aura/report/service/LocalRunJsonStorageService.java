@@ -173,6 +173,7 @@ public class LocalRunJsonStorageService
             final List<String> existingBrowsers = new ArrayList<>();
             int totalExecsCount = 0;
             int pass = 0, fixed = 0, known = 0, unknown = 0, ignoredCount = 0;
+            int passHealed = 0, fixedHealed = 0, knownHealed = 0, unknownHealed = 0;
             long earliestMs = Long.MAX_VALUE;
             String earliestTimeStr = null;
 
@@ -466,16 +467,27 @@ public class LocalRunJsonStorageService
                         final String rawStatus = node.path("status").asText("failed-unknown");
                         final JsonNode bugsNode = node.path("bugs");
                         final boolean hasBugs = bugsNode.isArray() && bugsNode.size() > 0;
+                        final boolean isHealed = (node.has("healed") && node.path("healed").asBoolean(false))
+                                              || (node.has("healedStepsCount") && node.path("healedStepsCount").asInt(0) > 0)
+                                              || "healed".equalsIgnoreCase(rawStatus);
 
                         if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus))
                         {
                             if (hasBugs)
                             {
                                 known++;
+                                if (isHealed)
+                                {
+                                    knownHealed++;
+                                }
                             }
                             else
                             {
                                 unknown++;
+                                if (isHealed)
+                                {
+                                    unknownHealed++;
+                                }
                             }
                         }
                         else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus) || "healed".equalsIgnoreCase(rawStatus))
@@ -483,10 +495,18 @@ public class LocalRunJsonStorageService
                             if (hasBugs || "succeeded-fixed".equalsIgnoreCase(rawStatus))
                             {
                                 fixed++;
+                                if (isHealed)
+                                {
+                                    fixedHealed++;
+                                }
                             }
                             else
                             {
                                 pass++;
+                                if (isHealed)
+                                {
+                                    passHealed++;
+                                }
                             }
                         }
                         else if ("ignored".equalsIgnoreCase(rawStatus) || "skipped".equalsIgnoreCase(rawStatus) || "cancelled".equalsIgnoreCase(rawStatus))
@@ -498,10 +518,18 @@ public class LocalRunJsonStorageService
                             if (hasBugs)
                             {
                                 known++;
+                                if (isHealed)
+                                {
+                                    knownHealed++;
+                                }
                             }
                             else
                             {
                                 unknown++;
+                                if (isHealed)
+                                {
+                                    unknownHealed++;
+                                }
                             }
                         }
                     }
@@ -569,6 +597,10 @@ public class LocalRunJsonStorageService
             summaryNode.put("known", known);
             summaryNode.put("unknown", unknown);
             summaryNode.put("ignored", ignoredCount);
+            summaryNode.put("passHealed", passHealed);
+            summaryNode.put("fixedHealed", fixedHealed);
+            summaryNode.put("knownHealed", knownHealed);
+            summaryNode.put("unknownHealed", unknownHealed);
             summaryNode.put("passRate", Math.round(passRate * 10.0) / 10.0);
 
             final ArrayNode areasArray = objectMapper.createArrayNode();

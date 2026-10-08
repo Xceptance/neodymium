@@ -101,40 +101,83 @@
                     <!-- LAST EXECUTION PIE CHART SECTION -->
                     <div class="batch-last-run-section" th:if="${b.hasLatestRun()}">
                         <div class="last-run-header">
-                            <span class="d-flex align-items-center gap-1"><span class="material-symbols-outlined text-accent" style="font-size: 0.9rem;">pie_chart</span> <strong>Last Execution</strong> (<span th:text="${b.lastExecuted}">Today 14:22</span>)</span>
-                            <span class="badge-status badge-pass" style="font-size: 0.7rem; padding: 0.1rem 0.4rem;" th:text="${b.latestRunPassRateText}">83% Pass</span>
+                            <div class="last-run-header-top">
+                                <span class="last-run-header-title">
+                                    <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">pie_chart</span>
+                                    <span>Last Execution</span>
+                                </span>
+                                <span class="badge-status badge-pass" style="font-size: 0.7rem; padding: 0.1rem 0.45rem;" th:text="${b.latestRunPassRateText}">83% Pass</span>
+                            </div>
+                            <div class="last-run-header-time" th:if="${b.lastExecuted != null and b.lastExecuted != ''}">
+                                <span class="material-symbols-outlined" style="font-size: 0.85rem;">schedule</span>
+                                <span th:text="${b.lastExecuted}">Today 14:22</span>
+                            </div>
                         </div>
                         <div class="last-run-body">
                             <div class="pie-chart-wrapper-sm">
                                 <svg width="100%" height="100%" viewBox="0 0 36 36">
+                                    <defs>
+                                        <pattern th:id="'sparkle-pat-batch-' + ${b.id}" width="4" height="4" patternUnits="userSpaceOnUse">
+                                            <path d="M2,0.5 L2.3,1.7 L3.5,2 L2.3,2.3 L2,3.5 L1.7,2.3 L0.5,2 L1.7,1.7 Z" fill="#ffffff" opacity="0.95"/>
+                                            <circle cx="0.8" cy="0.8" r="0.25" fill="#fef08a" opacity="0.85"/>
+                                        </pattern>
+                                    </defs>
                                     <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--border)" stroke-width="4"/>
-                                    <circle th:if="${b.latestPassedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass)" stroke-width="5" th:attr="stroke-dasharray=${b.passDashArray},stroke-dashoffset=${b.passDashOffset}"/>
-                                    <circle th:if="${b.latestFixedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed)" stroke-width="5" th:attr="stroke-dasharray=${b.fixedDashArray},stroke-dashoffset=${b.fixedDashOffset}"/>
-                                    <circle th:if="${b.latestKnownCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-fail)" stroke-width="5" th:attr="stroke-dasharray=${b.knownDashArray},stroke-dashoffset=${b.knownDashOffset}"/>
-                                    <circle th:if="${b.latestUnknownCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-fail)" stroke-width="5" th:attr="stroke-dasharray=${b.unknownDashArray},stroke-dashoffset=${b.unknownDashOffset}"/>
+                                    <!-- Clean sub-arcs (deep solid) -->
+                                    <circle th:if="${b.latestPassCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass)" stroke-width="5" th:attr="stroke-dasharray=${b.passCleanDashArray},stroke-dashoffset=${b.passCleanDashOffset}"/>
+                                    <circle th:if="${b.latestFixedCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed)" stroke-width="5" th:attr="stroke-dasharray=${b.fixedCleanDashArray},stroke-dashoffset=${b.fixedCleanDashOffset}"/>
+                                    <circle th:if="${b.latestKnownCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-fail)" stroke-width="5" th:attr="stroke-dasharray=${b.knownCleanDashArray},stroke-dashoffset=${b.knownCleanDashOffset}"/>
+                                    <circle th:if="${b.latestUnknownCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-fail)" stroke-width="5" th:attr="stroke-dasharray=${b.unknownCleanDashArray},stroke-dashoffset=${b.unknownCleanDashOffset}"/>
                                     <circle th:if="${b.latestIgnoredCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-ignored)" stroke-width="5" th:attr="stroke-dasharray=${b.ignoredDashArray},stroke-dashoffset=${b.ignoredDashOffset}"/>
+
+                                    <!-- Healed sub-arcs: Luminous base tint + sparkle pattern overlay -->
+                                    <circle th:if="${b.latestPassHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass-healed, #34d399)" stroke-width="5" th:attr="stroke-dasharray=${b.passHealedDashArray},stroke-dashoffset=${b.passHealedDashOffset}"/>
+                                    <circle th:if="${b.latestPassHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-batch-' + ${b.id} + ')',stroke-dasharray=${b.passHealedDashArray},stroke-dashoffset=${b.passHealedDashOffset}" stroke-width="5"/>
+
+                                    <circle th:if="${b.latestFixedHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed-healed, #60a5fa)" stroke-width="5" th:attr="stroke-dasharray=${b.fixedHealedDashArray},stroke-dashoffset=${b.fixedHealedDashOffset}"/>
+                                    <circle th:if="${b.latestFixedHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-batch-' + ${b.id} + ')',stroke-dasharray=${b.fixedHealedDashArray},stroke-dashoffset=${b.fixedHealedDashOffset}" stroke-width="5"/>
+
+                                    <circle th:if="${b.latestKnownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-healed, #fb923c)" stroke-width="5" th:attr="stroke-dasharray=${b.knownHealedDashArray},stroke-dashoffset=${b.knownHealedDashOffset}"/>
+                                    <circle th:if="${b.latestKnownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-batch-' + ${b.id} + ')',stroke-dasharray=${b.knownHealedDashArray},stroke-dashoffset=${b.knownHealedDashOffset}" stroke-width="5"/>
+
+                                    <circle th:if="${b.latestUnknownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-healed, #f87171)" stroke-width="5" th:attr="stroke-dasharray=${b.unknownHealedDashArray},stroke-dashoffset=${b.unknownHealedDashOffset}"/>
+                                    <circle th:if="${b.latestUnknownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-batch-' + ${b.id} + ')',stroke-dasharray=${b.unknownHealedDashArray},stroke-dashoffset=${b.unknownHealedDashOffset}" stroke-width="5"/>
                                 </svg>
                             </div>
                             <div class="pie-breakdown-list-sm">
                                 <div class="pie-breakdown-item" th:if="${b.latestPassedCount > 0}">
                                     <div class="label"><div class="dot" style="background: var(--status-pass);"></div> Passed</div>
-                                    <div class="val" style="color: var(--status-pass);" th:text="${b.latestPassedCount}">0</div>
+                                    <div class="val-group">
+                                        <span th:if="${b.latestPassHealedCount > 0}" class="badge-healed-inline badge-pass-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${b.latestPassHealedCount} + ' healed'">✨ 1 healed</span>
+                                        <span class="val" style="color: var(--status-pass);" th:text="${b.latestPassedCount}">0</span>
+                                    </div>
                                 </div>
                                 <div class="pie-breakdown-item" th:if="${b.latestFixedCount > 0}">
                                     <div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Fixed</div>
-                                    <div class="val" style="color: var(--status-fixed);" th:text="${b.latestFixedCount}">0</div>
+                                    <div class="val-group">
+                                        <span th:if="${b.latestFixedHealedCount > 0}" class="badge-healed-inline badge-fixed-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${b.latestFixedHealedCount} + ' healed'">✨ 1 healed</span>
+                                        <span class="val" style="color: var(--status-fixed);" th:text="${b.latestFixedCount}">0</span>
+                                    </div>
                                 </div>
                                 <div class="pie-breakdown-item" th:if="${b.latestKnownCount > 0}">
                                     <div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Fail</div>
-                                    <div class="val" style="color: var(--status-known-fail);" th:text="${b.latestKnownCount}">0</div>
+                                    <div class="val-group">
+                                        <span th:if="${b.latestKnownHealedCount > 0}" class="badge-healed-inline badge-known-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${b.latestKnownHealedCount} + ' healed'">✨ 1 healed</span>
+                                        <span class="val" style="color: var(--status-known-fail);" th:text="${b.latestKnownCount}">0</span>
+                                    </div>
                                 </div>
                                 <div class="pie-breakdown-item" th:if="${b.latestUnknownCount > 0}">
                                     <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Fail</div>
-                                    <div class="val" style="color: var(--status-unknown-fail);" th:text="${b.latestUnknownCount}">0</div>
+                                    <div class="val-group">
+                                        <span th:if="${b.latestUnknownHealedCount > 0}" class="badge-healed-inline badge-unknown-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${b.latestUnknownHealedCount} + ' healed'">✨ 1 healed</span>
+                                        <span class="val" style="color: var(--status-unknown-fail);" th:text="${b.latestUnknownCount}">0</span>
+                                    </div>
                                 </div>
                                 <div class="pie-breakdown-item" th:if="${b.latestIgnoredCount > 0}">
                                     <div class="label"><div class="dot" style="background: var(--status-ignored);"></div> Ignored</div>
-                                    <div class="val" style="color: var(--status-ignored);" th:text="${b.latestIgnoredCount}">0</div>
+                                    <div class="val-group">
+                                        <span class="val" style="color: var(--status-ignored);" th:text="${b.latestIgnoredCount}">0</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -203,9 +246,22 @@
                     </thead>
                     <tbody id="overviewRunsTableBody">
                         <tr th:each="r : ${runs}" class="run-directory-row clickable-row" 
+                            th:data-run-id="${r.id}"
                             th:data-env="${r.environment}" 
                             th:data-locales="${r.localesCsv}" 
                             th:data-browsers="${r.browsersCsv}"
+                            th:data-pass="${r.passedCount}"
+                            th:data-fixed="${r.succeededFixedCount}"
+                            th:data-known="${r.failedKnownCount}"
+                            th:data-unknown="${r.failedUnknownCount}"
+                            th:data-ignored="${r.ignoredCount}"
+                            th:data-pass-healed="${r.passedHealedCountSafe}"
+                            th:data-fixed-healed="${r.fixedHealedCountSafe}"
+                            th:data-known-healed="${r.knownHealedCountSafe}"
+                            th:data-unknown-healed="${r.unknownHealedCountSafe}"
+                            th:data-rate="${r.passRate + '% Pass'}"
+                            th:data-total="${r.totalTests != null ? r.totalTests : 0}"
+                            th:data-time="${r.timestampLabel}"
                             th:attr="hx-get='/run-report?runId=' + ${r.id}" 
                             hx-target="#mainViewContainer" 
                             hx-swap="innerHTML" 
@@ -228,10 +284,14 @@
                             <td class="text-mono" th:text="${r.totalTests}">0</td>
                             <td style="min-width: 220px; vertical-align: middle;">
                                 <div class="status-stacked-bar">
-                                    <div th:if="${r.passedCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(r.passedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.passedTooltip}" th:text="${r.passedLabel}">0</div>
-                                    <div th:if="${r.succeededFixedCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(r.fixedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.fixedTooltip}" th:text="${r.fixedLabel}">0</div>
-                                    <div th:if="${r.failedKnownCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(r.knownPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.knownTooltip}" th:text="${r.knownLabel}">0</div>
-                                    <div th:if="${r.failedUnknownCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(r.unknownPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.unknownTooltip}" th:text="${r.unknownLabel}">0</div>
+                                    <div th:if="${r.passedCleanCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(r.passedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.passedCleanTooltip}" th:text="${r.passedCleanLabel}">0</div>
+                                    <div th:if="${r.passedHealedCountSafe > 0}" class="status-bar-seg seg-pass-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(r.passedHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.passedHealedTooltip}" th:text="${r.passedHealedLabel}">0</div>
+                                    <div th:if="${r.fixedCleanCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(r.fixedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.fixedCleanTooltip}" th:text="${r.fixedCleanLabel}">0</div>
+                                    <div th:if="${r.fixedHealedCountSafe > 0}" class="status-bar-seg seg-fixed-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(r.fixedHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.fixedHealedTooltip}" th:text="${r.fixedHealedLabel}">0</div>
+                                    <div th:if="${r.knownCleanCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(r.knownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.knownCleanTooltip}" th:text="${r.knownCleanLabel}">0</div>
+                                    <div th:if="${r.knownHealedCountSafe > 0}" class="status-bar-seg seg-known-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(r.knownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.knownHealedTooltip}" th:text="${r.knownHealedLabel}">0</div>
+                                    <div th:if="${r.unknownCleanCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(r.unknownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.unknownCleanTooltip}" th:text="${r.unknownCleanLabel}">0</div>
+                                    <div th:if="${r.unknownHealedCountSafe > 0}" class="status-bar-seg seg-unknown-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(r.unknownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.unknownHealedTooltip}" th:text="${r.unknownHealedLabel}">0</div>
                                     <div th:if="${r.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(r.ignoredPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.ignoredTooltip}" th:text="${r.ignoredLabel}">0</div>
                                 </div>
                             </td>
@@ -299,14 +359,83 @@
 
                     <!-- HOVER TOOLTIP FLOATING CONTAINER -->
                     <div id="trendHoverTooltip" class="trend-tooltip" style="display: none;">
-                        <div id="trendTooltipTitle" style="font-weight: 700; font-size: 0.825rem; color: var(--text-main); margin-bottom: 0.4rem;">Run #RUN_ID</div>
-                        <div style="display: flex; flex-direction: column; gap: 0.2rem; font-size: 0.78rem;">
-                            <div class="flex-between"><span class="text-pass"><span class="material-symbols-outlined" style="font-size: 0.8rem;">check_circle</span> Passed Clean:</span> <strong id="trendTooltipPass">3</strong></div>
-                            <div class="flex-between"><span class="text-fixed"><span class="material-symbols-outlined" style="font-size: 0.8rem;">build</span> Succeeded Fixed:</span> <strong id="trendTooltipFixed">2</strong></div>
-                            <div class="flex-between"><span class="text-known"><span class="material-symbols-outlined" style="font-size: 0.8rem;">bug_report</span> Failed Known:</span> <strong id="trendTooltipKnown">1</strong></div>
-                            <div class="flex-between"><span class="text-unknown"><span class="material-symbols-outlined" style="font-size: 0.8rem;">error</span> Failed Unknown:</span> <strong id="trendTooltipUnknown">1</strong></div>
-                            <div class="flex-between"><span class="text-muted"><span class="material-symbols-outlined" style="font-size: 0.8rem;">block</span> Ignored:</span> <strong id="trendTooltipIgnored">1</strong></div>
-                            <div class="flex-between" style="border-top: 1px stroke var(--border-color); padding-top: 0.2rem; margin-top: 0.2rem;"><span style="color: var(--text-muted);">Pass Rate:</span> <strong id="trendTooltipRate" class="text-accent">37.5%</strong></div>
+                        <div class="trend-tooltip-header">
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.4rem;">
+                                <div style="display: flex; align-items: center; gap: 0.35rem;">
+                                    <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">insights</span>
+                                    <strong style="color: var(--text-main); font-size: 0.84rem;">Run Details</strong>
+                                </div>
+                                <span class="badge-status badge-pass" id="ttPassRate" style="font-size: 0.7rem; padding: 0.1rem 0.45rem; white-space: nowrap; flex-shrink: 0;">0% PASS</span>
+                            </div>
+                            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">
+                                <span class="text-truncate" id="ttRunId" style="max-width: 175px;">#RUN_ID</span>
+                                <span class="badge-healed-inline badge-pass-healed" id="ttHeaderHealed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem; display: none;">✨ 0 healed</span>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.25rem; font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono);">
+                                <span class="material-symbols-outlined" style="font-size: 0.8rem;">schedule</span>
+                                <span id="ttTimestamp">Recently</span>
+                            </div>
+                        </div>
+
+                        <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted);">
+                            <span style="display: flex; align-items: center; gap: 0.3rem;"><span class="material-symbols-outlined text-accent" style="font-size: 0.9rem;">fact_check</span> Total Executed:</span>
+                            <strong class="text-mono" id="ttTotalVal" style="color: var(--text-main);">0 Tests</strong>
+                        </div>
+
+                        <div id="ttBreakdownList" style="display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.75rem;">
+                            <div class="trend-tooltip-row" id="ttRowPass" style="display: none;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-weight: 500; white-space: nowrap;">
+                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--status-pass); flex-shrink: 0;"></div>
+                                    <span>Passed</span>
+                                </div>
+                                <div class="val-group" id="ttGroupPass">
+                                    <span class="badge-healed-inline badge-pass-healed" id="ttHealedPass" style="font-size: 0.65rem; padding: 0.05rem 0.3rem; display: none;">✨ 1 healed</span>
+                                    <span class="val" id="ttPassVal" style="color: var(--status-pass);">0</span>
+                                </div>
+                            </div>
+
+                            <div class="trend-tooltip-row" id="ttRowFixed" style="display: none;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-weight: 500; white-space: nowrap;">
+                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--status-fixed); flex-shrink: 0;"></div>
+                                    <span>Succeeded (Bug)</span>
+                                </div>
+                                <div class="val-group" id="ttGroupFixed">
+                                    <span class="badge-healed-inline badge-fixed-healed" id="ttHealedFixed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem; display: none;">✨ 1 healed</span>
+                                    <span class="val" id="ttFixedVal" style="color: var(--status-fixed);">0</span>
+                                </div>
+                            </div>
+
+                            <div class="trend-tooltip-row" id="ttRowKnown" style="display: none;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-weight: 500; white-space: nowrap;">
+                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--status-known-fail); flex-shrink: 0;"></div>
+                                    <span>Failed (Bug)</span>
+                                </div>
+                                <div class="val-group" id="ttGroupKnown">
+                                    <span class="badge-healed-inline badge-known-healed" id="ttHealedKnown" style="font-size: 0.65rem; padding: 0.05rem 0.3rem; display: none;">✨ 1 healed</span>
+                                    <span class="val" id="ttKnownVal" style="color: var(--status-known-fail);">0</span>
+                                </div>
+                            </div>
+
+                            <div class="trend-tooltip-row" id="ttRowUnknown" style="display: none;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-weight: 500; white-space: nowrap;">
+                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--status-unknown-fail); flex-shrink: 0;"></div>
+                                    <span>Failed (Unknown)</span>
+                                </div>
+                                <div class="val-group" id="ttGroupUnknown">
+                                    <span class="badge-healed-inline badge-unknown-healed" id="ttHealedUnknown" style="font-size: 0.65rem; padding: 0.05rem 0.3rem; display: none;">✨ 1 healed</span>
+                                    <span class="val" id="ttUnknownVal" style="color: var(--status-unknown-fail);">0</span>
+                                </div>
+                            </div>
+
+                            <div class="trend-tooltip-row" id="ttRowIgnored" style="display: none;">
+                                <div style="display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-weight: 500; white-space: nowrap;">
+                                    <div style="width: 8px; height: 8px; border-radius: 50%; background: var(--status-ignored); flex-shrink: 0;"></div>
+                                    <span>Ignored / Skipped</span>
+                                </div>
+                                <div class="val-group" id="ttGroupIgnored">
+                                    <span class="val" id="ttIgnoredVal" style="color: var(--status-ignored);">0</span>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

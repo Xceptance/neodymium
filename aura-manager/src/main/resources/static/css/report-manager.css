@@ -49,6 +49,11 @@
     --status-healed-fail-bg: #fae8ff;
     --status-healed-fail-border: #a855f7;
 
+    --status-pass-healed: #34d399;       /* Luminous Mint */
+    --status-fixed-healed: #60a5fa;      /* Luminous Sky Blue */
+    --status-known-healed: #fb923c;      /* Luminous Orange */
+    --status-unknown-healed: #f87171;    /* Luminous Rose */
+
     /* Execution Mode Badges */
     --mode-ai-bg: #f3e8ff;
     --mode-ai-color: #7e22ce;
@@ -92,19 +97,23 @@ body[data-bs-theme="dark"] {
     --text-muted: #cbd5e1;
     --text-dim: #94a3b8;
 
-    --status-pass: #34d399;
+    --status-pass: #10b981;
+    --status-pass-healed: #34d399;
     --status-pass-bg: rgba(16, 185, 129, 0.15);
     --status-pass-border: rgba(16, 185, 129, 0.35);
 
-    --status-fixed: #60a5fa;
+    --status-fixed: #3b82f6;
+    --status-fixed-healed: #60a5fa;
     --status-fixed-bg: rgba(59, 130, 246, 0.15);
     --status-fixed-border: rgba(59, 130, 246, 0.35);
 
-    --status-known-fail: #fbbf24;
-    --status-known-fail-bg: rgba(245, 158, 11, 0.15);
-    --status-known-fail-border: rgba(245, 158, 11, 0.35);
+    --status-known-fail: #f97316;
+    --status-known-healed: #fb923c;
+    --status-known-fail-bg: rgba(249, 115, 22, 0.15);
+    --status-known-fail-border: rgba(249, 115, 22, 0.35);
 
-    --status-unknown-fail: #fca5a5;
+    --status-unknown-fail: #ef4444;
+    --status-unknown-healed: #f87171;
     --status-unknown-fail-bg: rgba(239, 68, 68, 0.15);
     --status-unknown-fail-border: rgba(239, 68, 68, 0.35);
 
@@ -151,19 +160,23 @@ body[data-bs-theme="dark"] {
         --text-muted: #cbd5e1;
         --text-dim: #94a3b8;
 
-        --status-pass: #34d399;
+        --status-pass: #10b981;
+        --status-pass-healed: #34d399;
         --status-pass-bg: rgba(16, 185, 129, 0.15);
         --status-pass-border: rgba(16, 185, 129, 0.35);
 
-        --status-fixed: #60a5fa;
+        --status-fixed: #3b82f6;
+        --status-fixed-healed: #60a5fa;
         --status-fixed-bg: rgba(59, 130, 246, 0.15);
         --status-fixed-border: rgba(59, 130, 246, 0.35);
 
-        --status-known-fail: #fbbf24;
-        --status-known-fail-bg: rgba(245, 158, 11, 0.15);
-        --status-known-fail-border: rgba(245, 158, 11, 0.35);
+        --status-known-fail: #f97316;
+        --status-known-healed: #fb923c;
+        --status-known-fail-bg: rgba(249, 115, 22, 0.15);
+        --status-known-fail-border: rgba(249, 115, 22, 0.35);
 
-        --status-unknown-fail: #fca5a5;
+        --status-unknown-fail: #ef4444;
+        --status-unknown-healed: #f87171;
         --status-unknown-fail-bg: rgba(239, 68, 68, 0.15);
         --status-unknown-fail-border: rgba(239, 68, 68, 0.35);
 
@@ -312,15 +325,6 @@ body[data-bs-theme="dark"] .status-stacked-bar {
     border-color: var(--border) !important;
 }
 
-:root.force-dark .status-bar-seg.seg-unknown,
-:root[data-bs-theme="dark"] .status-bar-seg.seg-unknown,
-body.force-dark .status-bar-seg.seg-unknown,
-body[data-bs-theme="dark"] .status-bar-seg.seg-unknown {
-    background-color: rgba(239, 68, 68, 0.35) !important;
-    color: #fca5a5 !important;
-    border-right-color: rgba(239, 68, 68, 0.45) !important;
-}
-
 * { box-sizing: border-box; margin: 0; padding: 0; user-select: text; }
 body { font-family: var(--font-family); background-color: var(--bg-base); color: var(--text-main); display: flex; height: 100vh; overflow: hidden; user-select: text; }
 
@@ -452,6 +456,23 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 #pageBatchHistoryOverview.view-state { flex-grow: 0; }
 #pageBatchHistoryOverview .panel { height: auto; flex: 0 0 auto; overflow: visible; }
 
+/* BATCH HISTORY LIMIT TOOLBAR */
+.batch-history-toolbar { display: flex; align-items: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.65rem 1rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
+.toolbar-label { font-size: 0.85rem; color: var(--text-main); display: inline-flex; align-items: center; gap: 0.4rem; }
+.btn-group-pills { display: inline-flex; align-items: center; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 2px; gap: 2px; }
+.pill-btn { background: transparent; border: none; border-radius: 4px; color: var(--text-muted); font-family: var(--font-family); font-size: 0.8rem; font-weight: 500; padding: 0.35rem 0.75rem; cursor: pointer; transition: all 0.15s ease-in-out; }
+.pill-btn:hover { color: var(--text-main); background: var(--bg-hover); }
+.pill-btn.active { background: var(--status-fixed); color: #ffffff; font-weight: 600; box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3); }
+.custom-limit-box { display: inline-flex; align-items: center; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 0.5rem; height: 32px; transition: border-color 0.2s; }
+.custom-limit-box:focus-within { border-color: var(--status-fixed); }
+.custom-limit-prefix { font-size: 0.78rem; color: var(--text-muted); font-weight: 500; margin-right: 0.35rem; }
+.custom-limit-input { width: 65px; background: transparent; border: none; color: var(--text-main); font-family: var(--font-mono); font-size: 0.825rem; padding: 0; outline: none; }
+.custom-limit-input::-webkit-outer-spin-button, .custom-limit-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.custom-limit-input { -moz-appearance: textfield; }
+.btn-apply-limit { background: var(--bg-panel); border: 1px solid var(--border); color: var(--text-main); border-radius: var(--radius-sm); padding: 0.35rem 0.75rem; font-family: var(--font-family); font-size: 0.8rem; font-weight: 600; cursor: pointer; height: 32px; display: inline-flex; align-items: center; transition: all 0.15s ease-in-out; }
+.btn-apply-limit:hover { border-color: var(--status-fixed); color: var(--status-fixed); background: var(--status-fixed-bg); }
+.history-count-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: var(--status-fixed-bg); color: var(--status-fixed); border: 1px solid var(--status-fixed-border); border-radius: 9999px; padding: 0.35rem 0.85rem; font-size: 0.78rem; font-weight: 600; }
+
 /* BATCH METADATA ENVIRONMENT BANNER CARD */
 .batch-env-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.85rem 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; font-size: 0.85rem; }
 .env-meta-item { display: flex; align-items: center; gap: 0.5rem; font-weight: 600; color: var(--text-main); }
@@ -506,10 +527,29 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 .badge-running { background: var(--status-running-bg); color: var(--status-running); border: 1px solid var(--status-running-border); }
 .status-running { background: var(--status-running-bg); color: var(--status-running); border-color: var(--status-running-border); }
 
-.text-healed-pass { color: var(--status-healed-pass); }
-.text-healed-fail { color: var(--status-healed-fail); }
-.dot-healed-pass { background: var(--status-healed-pass); }
-.dot-healed-fail { background: var(--status-healed-fail); }
+.text-pass { color: var(--status-pass); }
+.text-fixed { color: var(--status-fixed); }
+.text-known-fail, .text-known { color: var(--status-known-fail); }
+.text-unknown-fail, .text-fail { color: var(--status-unknown-fail); }
+.text-ignored { color: var(--status-ignored); }
+.text-running { color: var(--status-running); }
+
+.text-pass-healed { color: var(--status-pass-healed, #34d399); }
+.text-fixed-healed { color: var(--status-fixed-healed, #60a5fa); }
+.text-known-healed { color: var(--status-known-healed, #fb923c); }
+.text-unknown-healed { color: var(--status-unknown-healed, #f87171); }
+
+.dot-pass { background: var(--status-pass); }
+.dot-fixed { background: var(--status-fixed); }
+.dot-known { background: var(--status-known-fail); }
+.dot-unknown { background: var(--status-unknown-fail); }
+.dot-ignored { background: var(--status-ignored); }
+.dot-running { background: var(--status-running); }
+
+.text-healed-pass { color: var(--status-pass-healed, #34d399); }
+.text-healed-fail { color: var(--status-unknown-healed, #f87171); }
+.dot-healed-pass { background: var(--status-pass-healed, #34d399); }
+.dot-healed-fail { background: var(--status-unknown-healed, #f87171); }
 
 .material-symbols-outlined.spin, .spin { animation: aura-spin 1.5s linear infinite; display: inline-block; }
 @keyframes aura-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -557,7 +597,78 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 .pie-breakdown-item { display: flex; align-items: center; justify-content: space-between; }
 .pie-breakdown-item .label { display: flex; align-items: center; gap: 0.4rem; color: var(--text-muted); font-weight: 500; }
 .pie-breakdown-item .dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-.pie-breakdown-item .val { font-weight: 700; font-family: var(--font-mono); color: var(--text-main); }
+.pie-breakdown-item .val { font-weight: 700; font-family: var(--font-mono); color: var(--text-main); min-width: 14px; text-align: right; }
+.pie-breakdown-item .val-group { display: flex; align-items: center; gap: 0.4rem; white-space: nowrap; }
+.badge-healed-inline {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    padding: 0.1rem 0.4rem;
+    border-radius: 9999px;
+    background: rgba(52, 211, 153, 0.15);
+    color: var(--status-pass, #059669);
+    border: 1px solid rgba(52, 211, 153, 0.35);
+    line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    white-space: nowrap;
+}
+.badge-healed-inline.badge-pass-healed {
+    background: rgba(52, 211, 153, 0.15);
+    color: var(--status-pass, #059669);
+    border-color: rgba(52, 211, 153, 0.35);
+}
+.badge-healed-inline.badge-fixed-healed {
+    background: rgba(96, 165, 250, 0.15);
+    color: var(--status-fixed, #2563eb);
+    border-color: rgba(96, 165, 250, 0.35);
+}
+.badge-healed-inline.badge-known-healed {
+    background: rgba(251, 146, 60, 0.15);
+    color: var(--status-known-fail, #ea580c);
+    border-color: rgba(251, 146, 60, 0.35);
+}
+.badge-healed-inline.badge-unknown-healed {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--status-unknown-fail, #dc2626);
+    border-color: rgba(248, 113, 113, 0.35);
+}
+
+[data-theme="dark"] .badge-healed-inline,
+:root.force-dark .badge-healed-inline,
+:root[data-bs-theme="dark"] .badge-healed-inline {
+    background: rgba(52, 211, 153, 0.2);
+    color: #34d399;
+    border-color: rgba(52, 211, 153, 0.4);
+}
+[data-theme="dark"] .badge-healed-inline.badge-pass-healed,
+:root.force-dark .badge-healed-inline.badge-pass-healed,
+:root[data-bs-theme="dark"] .badge-healed-inline.badge-pass-healed {
+    background: rgba(52, 211, 153, 0.2);
+    color: #34d399;
+    border-color: rgba(52, 211, 153, 0.4);
+}
+[data-theme="dark"] .badge-healed-inline.badge-fixed-healed,
+:root.force-dark .badge-healed-inline.badge-fixed-healed,
+:root[data-bs-theme="dark"] .badge-healed-inline.badge-fixed-healed {
+    background: rgba(96, 165, 250, 0.2);
+    color: #60a5fa;
+    border-color: rgba(96, 165, 250, 0.4);
+}
+[data-theme="dark"] .badge-healed-inline.badge-known-healed,
+:root.force-dark .badge-healed-inline.badge-known-healed,
+:root[data-bs-theme="dark"] .badge-healed-inline.badge-known-healed {
+    background: rgba(251, 146, 60, 0.2);
+    color: #fb923c;
+    border-color: rgba(251, 146, 60, 0.4);
+}
+[data-theme="dark"] .badge-healed-inline.badge-unknown-healed,
+:root.force-dark .badge-healed-inline.badge-unknown-healed,
+:root[data-bs-theme="dark"] .badge-healed-inline.badge-unknown-healed {
+    background: rgba(248, 113, 113, 0.2);
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.4);
+}
 
 /* BATCH CARD LAST EXECUTION PIE CHART SECTION */
 .batch-last-run-section {
@@ -571,29 +682,118 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 }
 .last-run-header {
     display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.4rem;
+}
+.last-run-header-top {
+    display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 0.78rem;
+    width: 100%;
+}
+.last-run-header-title {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-weight: 700;
+    font-size: 0.8rem;
     color: var(--text-main);
-    border-bottom: 1px solid var(--border);
-    padding-bottom: 0.35rem;
+}
+.last-run-header-time {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
 }
 .last-run-body {
     display: flex;
     align-items: center;
-    gap: 0.85rem;
+    gap: 0.75rem;
 }
 .pie-chart-wrapper-sm {
-    width: 68px;
-    height: 68px;
+    width: 60px;
+    height: 60px;
     flex-shrink: 0;
 }
 .pie-breakdown-list-sm {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.2rem;
+    gap: 0.35rem;
     font-size: 0.75rem;
+}
+.pie-breakdown-list-sm .pie-breakdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+}
+.pie-breakdown-list-sm .val-group {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+.pie-breakdown-list-sm .val {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    min-width: 14px;
+    text-align: right;
+}
+
+/* HISTORY TREND HOVER TOOLTIP */
+.trend-tooltip {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    background: var(--bg-card);
+    color: var(--text-main);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 8px);
+    padding: 0.85rem 1rem;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    z-index: 40;
+    font-size: 0.78rem;
+    width: 265px;
+    display: none;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+:root.force-dark .trend-tooltip,
+:root[data-bs-theme="dark"] .trend-tooltip,
+body.force-dark .trend-tooltip,
+body[data-bs-theme="dark"] .trend-tooltip {
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+}
+.trend-tooltip-header {
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0.45rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+.trend-tooltip-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.35rem;
+}
+.trend-tooltip-row .val-group {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    white-space: nowrap;
+}
+.trend-tooltip-row .val {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    min-width: 14px;
+    text-align: right;
 }
 
 /* Tables */
@@ -928,33 +1128,67 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 }
 
 .status-bar-seg.seg-pass {
-    background-color: var(--status-pass-bg);
-    color: var(--status-pass);
-    border-right: 1px solid var(--status-pass-border);
+    background-color: var(--status-pass);
+    color: #ffffff;
+    border-right: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .status-bar-seg.seg-fixed {
-    background-color: var(--status-fixed-bg);
-    color: var(--status-fixed);
-    border-right: 1px solid var(--status-fixed-border);
+    background-color: var(--status-fixed);
+    color: #ffffff;
+    border-right: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .status-bar-seg.seg-known {
-    background-color: var(--status-known-fail-bg);
-    color: var(--status-known-fail);
-    border-right: 1px solid var(--status-known-fail-border);
+    background-color: var(--status-known-fail);
+    color: #ffffff;
+    border-right: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .status-bar-seg.seg-unknown {
-    background-color: var(--status-unknown-fail-bg);
-    color: var(--status-unknown-fail);
-    border-right: 1px solid var(--status-unknown-fail-border);
+    background-color: var(--status-unknown-fail);
+    color: #ffffff;
+    border-right: 1px solid rgba(255, 255, 255, 0.25);
 }
 
 .status-bar-seg.seg-ignored {
-    background-color: var(--status-ignored-bg);
-    color: var(--status-ignored);
-    border-right: 1px solid var(--status-ignored-border);
+    background-color: var(--status-ignored);
+    color: #ffffff;
+    border-right: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.status-bar-seg.seg-pass-healed {
+    background-color: var(--status-pass-healed, #34d399);
+    color: #ffffff;
+    border-right: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.status-bar-seg.seg-fixed-healed {
+    background-color: var(--status-fixed-healed, #60a5fa);
+    color: #ffffff;
+    border-right: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.status-bar-seg.seg-known-healed {
+    background-color: var(--status-known-healed, #fb923c);
+    color: #ffffff;
+    border-right: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.status-bar-seg.seg-unknown-healed {
+    background-color: var(--status-unknown-healed, #f87171);
+    color: #ffffff;
+    border-right: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.status-bar-seg.seg-healed-print,
+.legend-box.seg-healed-print {
+    background-image:
+        radial-gradient(circle at 4px 4px, rgba(255, 255, 255, 0.95) 1.2px, transparent 1.2px),
+        radial-gradient(circle at 12px 12px, rgba(254, 240, 138, 0.9) 1px, transparent 1px);
+    background-size: 16px 16px;
+    background-repeat: repeat;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
 .status-bar-seg:last-child {
@@ -1003,6 +1237,154 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
     margin-bottom: 0.3rem;
 }
 
+.kpi-value-dual {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    font-size: 1.45rem;
+    font-weight: 800;
+    line-height: 1.1;
+    margin-bottom: 0.3rem;
+    flex-wrap: wrap;
+}
+
+.kpi-healed-part {
+    cursor: pointer;
+    border-radius: var(--radius-sm, 6px);
+    padding: 0.15rem 0.45rem;
+    font-size: 1.15rem;
+    font-weight: 800;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    transition: all 0.15s ease;
+    user-select: none;
+    line-height: 1.2;
+}
+
+.kpi-sparkle-icon {
+    font-size: 0.95rem;
+    vertical-align: middle;
+}
+
+.kpi-slash {
+    color: var(--text-dim, #cbd5e1);
+    font-weight: 400;
+    font-size: 1.3rem;
+    user-select: none;
+    padding: 0 0.1rem;
+}
+
+.kpi-total-part {
+    cursor: pointer;
+    border-radius: var(--radius-sm, 6px);
+    padding: 0.15rem 0.4rem;
+    font-size: 1.3rem;
+    font-weight: 800;
+    transition: all 0.15s ease;
+    user-select: none;
+    line-height: 1.2;
+}
+
+/* Luminous Healed Pills per Status */
+.kpi-healed-part.text-pass-healed {
+    color: var(--status-pass, #059669);
+    background: rgba(52, 211, 153, 0.22);
+    border: 1px solid rgba(52, 211, 153, 0.65);
+    box-shadow: 0 0 10px -2px rgba(52, 211, 153, 0.45);
+}
+.kpi-healed-part.text-pass-healed:hover {
+    background: rgba(52, 211, 153, 0.4);
+    border-color: #34d399;
+    transform: scale(1.04);
+    box-shadow: 0 0 15px rgba(52, 211, 153, 0.65);
+}
+.kpi-total-part.text-pass:hover {
+    background: rgba(5, 150, 105, 0.12);
+    transform: scale(1.04);
+}
+
+.kpi-healed-part.text-fixed-healed {
+    color: var(--status-fixed, #2563eb);
+    background: rgba(96, 165, 250, 0.22);
+    border: 1px solid rgba(96, 165, 250, 0.6);
+    box-shadow: 0 0 10px -2px rgba(96, 165, 250, 0.4);
+}
+.kpi-healed-part.text-fixed-healed:hover {
+    background: rgba(96, 165, 250, 0.38);
+    border-color: #60a5fa;
+    transform: scale(1.04);
+    box-shadow: 0 0 15px rgba(96, 165, 250, 0.65);
+}
+.kpi-total-part.text-fixed:hover {
+    background: rgba(37, 99, 235, 0.12);
+    transform: scale(1.04);
+}
+
+.kpi-healed-part.text-known-healed {
+    color: var(--status-known-fail, #ea580c);
+    background: rgba(251, 146, 60, 0.22);
+    border: 1px solid rgba(251, 146, 60, 0.6);
+    box-shadow: 0 0 10px -2px rgba(251, 146, 60, 0.4);
+}
+.kpi-healed-part.text-known-healed:hover {
+    background: rgba(251, 146, 60, 0.38);
+    border-color: #fb923c;
+    transform: scale(1.04);
+    box-shadow: 0 0 15px rgba(251, 146, 60, 0.65);
+}
+.kpi-total-part.text-known:hover {
+    background: rgba(234, 88, 12, 0.12);
+    transform: scale(1.04);
+}
+
+.kpi-healed-part.text-unknown-healed {
+    color: var(--status-unknown-fail, #dc2626);
+    background: rgba(248, 113, 113, 0.22);
+    border: 1px solid rgba(248, 113, 113, 0.6);
+    box-shadow: 0 0 10px -2px rgba(248, 113, 113, 0.4);
+}
+.kpi-healed-part.text-unknown-healed:hover {
+    background: rgba(248, 113, 113, 0.38);
+    border-color: #f87171;
+    transform: scale(1.04);
+    box-shadow: 0 0 15px rgba(248, 113, 113, 0.65);
+}
+.kpi-total-part.text-fail:hover {
+    background: rgba(220, 38, 38, 0.12);
+    transform: scale(1.04);
+}
+
+/* Dark mode overrides for luminous healed pills */
+[data-theme="dark"] .kpi-healed-part.text-pass-healed,
+:root.force-dark .kpi-healed-part.text-pass-healed,
+:root[data-bs-theme="dark"] .kpi-healed-part.text-pass-healed {
+    color: #34d399;
+    background: rgba(52, 211, 153, 0.2);
+    border-color: rgba(52, 211, 153, 0.5);
+}
+[data-theme="dark"] .kpi-healed-part.text-fixed-healed,
+:root.force-dark .kpi-healed-part.text-fixed-healed,
+:root[data-bs-theme="dark"] .kpi-healed-part.text-fixed-healed {
+    color: #60a5fa;
+    background: rgba(96, 165, 250, 0.2);
+    border-color: rgba(96, 165, 250, 0.5);
+}
+[data-theme="dark"] .kpi-healed-part.text-known-healed,
+:root.force-dark .kpi-healed-part.text-known-healed,
+:root[data-bs-theme="dark"] .kpi-healed-part.text-known-healed {
+    color: #fb923c;
+    background: rgba(251, 146, 60, 0.2);
+    border-color: rgba(251, 146, 60, 0.5);
+}
+[data-theme="dark"] .kpi-healed-part.text-unknown-healed,
+:root.force-dark .kpi-healed-part.text-unknown-healed,
+:root[data-bs-theme="dark"] .kpi-healed-part.text-unknown-healed {
+    color: #f87171;
+    background: rgba(248, 113, 113, 0.2);
+    border-color: rgba(248, 113, 113, 0.5);
+}
+
 .kpi-sub {
     font-size: 0.75rem;
     color: var(--text-muted);
@@ -1010,9 +1392,9 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 
 .card-passed { border-top: 3px solid var(--status-pass); }
 .card-fixed { border-top: 3px solid var(--status-fixed); }
-.card-healed { border-top: 3px solid var(--status-healed-pass); }
-.card-healed-passed { border-top: 3px solid var(--status-healed-pass); }
-.card-healed-failed { border-top: 3px solid var(--status-healed-fail); }
+.card-healed { border-top: 3px solid var(--status-pass-healed, #34d399); }
+.card-healed-passed { border-top: 3px solid var(--status-pass-healed, #34d399); }
+.card-healed-failed { border-top: 3px solid var(--status-unknown-healed, #f87171); }
 .card-known { border-top: 3px solid var(--status-known-fail); }
 .card-failed { border-top: 3px solid var(--status-unknown-fail); }
 .card-ignored { border-top: 3px solid var(--status-ignored); }

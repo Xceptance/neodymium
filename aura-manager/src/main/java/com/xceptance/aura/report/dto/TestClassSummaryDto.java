@@ -173,11 +173,47 @@ public final class TestClassSummaryDto
         return 0;
     }
 
+    public int getPassHealedCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isPassHealed).count();
+        }
+        return 0;
+    }
+
+    public int getFixedHealedCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFixedHealed).count();
+        }
+        return 0;
+    }
+
     public int getFailedHealedCount()
     {
         if (executions != null)
         {
             return (int) executions.stream().filter(TestExecutionDto::isFailedHealed).count();
+        }
+        return 0;
+    }
+
+    public int getKnownHealedCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isKnownHealed).count();
+        }
+        return 0;
+    }
+
+    public int getUnknownHealedCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isUnknownHealed).count();
         }
         return 0;
     }

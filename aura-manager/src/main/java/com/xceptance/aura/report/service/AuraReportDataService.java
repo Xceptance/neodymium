@@ -176,6 +176,10 @@ public class AuraReportDataService
             int latestUnknown = 0;
             int latestIgnored = 0;
             int latestTotal = 0;
+            int latestPassHealed = 0;
+            int latestFixedHealed = 0;
+            int latestKnownHealed = 0;
+            int latestUnknownHealed = 0;
 
             if (!batchRuns.isEmpty())
             {
@@ -187,6 +191,10 @@ public class AuraReportDataService
                 latestUnknown = latestRun.getFailedUnknownCount() != null ? latestRun.getFailedUnknownCount() : 0;
                 latestIgnored = latestRun.getIgnoredCount() != null ? latestRun.getIgnoredCount() : 0;
                 latestTotal = latestRun.getTotalTests() != null ? latestRun.getTotalTests() : 0;
+                latestPassHealed = latestRun.getPassedHealedCountSafe();
+                latestFixedHealed = latestRun.getFixedHealedCountSafe();
+                latestKnownHealed = latestRun.getKnownHealedCountSafe();
+                latestUnknownHealed = latestRun.getUnknownHealedCountSafe();
 
                 lastExecutedText = latestRun.getTimestampLabel() != null ? latestRun.getTimestampLabel() : "Recently";
 
@@ -202,17 +210,33 @@ public class AuraReportDataService
                 try
                 {
                     final RunReportDto latestReport = getRunReport(latestRunId);
-                    if (latestReport != null && latestReport.getExecutions() != null)
+                    if (latestReport != null)
                     {
-                        for (final TestExecutionDto exec : latestReport.getExecutions())
+                        if (latestReport.getTotalHealedCount() > 0 && (latestPassHealed == 0 && latestFixedHealed == 0 && latestKnownHealed == 0 && latestUnknownHealed == 0))
                         {
-                            if (exec.getBugs() != null)
+                            latestPassHealed = latestReport.getPassHealedCount();
+                            latestFixedHealed = latestReport.getFixedHealedCount();
+                            latestKnownHealed = latestReport.getKnownHealedCount();
+                            latestUnknownHealed = latestReport.getUnknownHealedCount();
+                            latestRun.setPassedHealedCount(latestPassHealed);
+                            latestRun.setSucceededFixedHealedCount(latestFixedHealed);
+                            latestRun.setFailedKnownHealedCount(latestKnownHealed);
+                            latestRun.setFailedUnknownHealedCount(latestUnknownHealed);
+                            runRepository.save(latestRun);
+                        }
+
+                        if (latestReport.getExecutions() != null)
+                        {
+                            for (final TestExecutionDto exec : latestReport.getExecutions())
                             {
-                                for (final String bug : exec.getBugs())
+                                if (exec.getBugs() != null)
                                 {
-                                    if (bug != null && !bug.trim().isEmpty())
+                                    for (final String bug : exec.getBugs())
                                     {
-                                        activeBatchBugs.add(bug.trim());
+                                        if (bug != null && !bug.trim().isEmpty())
+                                        {
+                                            activeBatchBugs.add(bug.trim());
+                                        }
                                     }
                                 }
                             }
@@ -244,7 +268,11 @@ public class AuraReportDataService
                 latestKnown,
                 latestUnknown,
                 latestIgnored,
-                latestTotal
+                latestTotal,
+                latestPassHealed,
+                latestFixedHealed,
+                latestKnownHealed,
+                latestUnknownHealed
             ));
         }
         return batches;
@@ -254,6 +282,29 @@ public class AuraReportDataService
     {
         final List<TestBatchEntity> allBatchEntities = batchRepository.findAll();
         final List<TestRunEntity> allRunEntities = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc();
+
+        for (final TestRunEntity r : allRunEntities)
+        {
+            if (r.getPassedHealedCount() == null || r.getSucceededFixedHealedCount() == null
+                || r.getFailedKnownHealedCount() == null || r.getFailedUnknownHealedCount() == null)
+            {
+                try
+                {
+                    final RunReportDto report = getRunReport(r.getId());
+                    if (report != null)
+                    {
+                        r.setPassedHealedCount(report.getPassHealedCount());
+                        r.setSucceededFixedHealedCount(report.getFixedHealedCount());
+                        r.setFailedKnownHealedCount(report.getKnownHealedCount());
+                        r.setFailedUnknownHealedCount(report.getUnknownHealedCount());
+                        runRepository.save(r);
+                    }
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
 
         final List<BatchSummaryDto> batches = getAllBatches(allBatchEntities, allRunEntities);
 
@@ -880,6 +931,10 @@ public class AuraReportDataService
                 liveRun.setFailedKnownCount(report.getKnownCount());
                 liveRun.setFailedUnknownCount(report.getUnknownCount());
                 liveRun.setIgnoredCount(report.getIgnoredCount());
+                liveRun.setPassedHealedCount(report.getPassHealedCount());
+                liveRun.setSucceededFixedHealedCount(report.getFixedHealedCount());
+                liveRun.setFailedKnownHealedCount(report.getKnownHealedCount());
+                liveRun.setFailedUnknownHealedCount(report.getUnknownHealedCount());
                 if (report.getExecutions() != null && !report.getExecutions().isEmpty())
                 {
                     final String bCsv = report.getExecutions().stream()
@@ -1224,6 +1279,7 @@ public class AuraReportDataService
             ));
 
         int pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0, running = 0;
+        int passHealed = 0, fixedHealed = 0, knownHealed = 0, unknownHealed = 0;
         final List<TestExecutionDto> updatedExecutions = new ArrayList<>();
 
         for (final TestExecutionDto exec : cachedReport.getExecutions())
@@ -1271,10 +1327,38 @@ public class AuraReportDataService
             }
 
             final String st = exec.getStatus();
-            if ("passed-clean".equalsIgnoreCase(st) || "passed".equalsIgnoreCase(st)) pass++;
-            else if ("succeeded-fixed".equalsIgnoreCase(st)) fixed++;
-            else if ("failed-known".equalsIgnoreCase(st)) known++;
-            else if ("failed-unknown".equalsIgnoreCase(st) || "failed".equalsIgnoreCase(st)) unknown++;
+            if ("passed-clean".equalsIgnoreCase(st) || "passed".equalsIgnoreCase(st))
+            {
+                pass++;
+                if (exec.isPassHealed())
+                {
+                    passHealed++;
+                }
+            }
+            else if ("succeeded-fixed".equalsIgnoreCase(st))
+            {
+                fixed++;
+                if (exec.isFixedHealed())
+                {
+                    fixedHealed++;
+                }
+            }
+            else if ("failed-known".equalsIgnoreCase(st))
+            {
+                known++;
+                if (exec.isKnownHealed())
+                {
+                    knownHealed++;
+                }
+            }
+            else if ("failed-unknown".equalsIgnoreCase(st) || "failed".equalsIgnoreCase(st))
+            {
+                unknown++;
+                if (exec.isUnknownHealed())
+                {
+                    unknownHealed++;
+                }
+            }
             else if ("running".equalsIgnoreCase(st)) running++;
             else ignored++;
 
@@ -1307,6 +1391,10 @@ public class AuraReportDataService
         runEntity.setFailedKnownCount(known);
         runEntity.setFailedUnknownCount(unknown);
         runEntity.setIgnoredCount(ignored);
+        runEntity.setPassedHealedCount(passHealed);
+        runEntity.setSucceededFixedHealedCount(fixedHealed);
+        runEntity.setFailedKnownHealedCount(knownHealed);
+        runEntity.setFailedUnknownHealedCount(unknownHealed);
         runEntity.recalculatePassRate();
         runRepository.save(runEntity);
     }
@@ -1523,6 +1611,10 @@ public class AuraReportDataService
                 int knownCount = 0;
                 int unknownCount = 0;
                 int ignoredCount = 0;
+                int passHealedCount = 0;
+                int fixedHealedCount = 0;
+                int knownHealedCount = 0;
+                int unknownHealedCount = 0;
                 final Set<String> browsersSet = new LinkedHashSet<>();
                 final Set<String> localesSet = new LinkedHashSet<>();
 
@@ -1534,12 +1626,42 @@ public class AuraReportDataService
                     final String st = item.getStatus() != null ? item.getStatus() : "passed-clean";
                     switch (st)
                     {
-                        case "passed-clean", "passed" -> passCount++;
-                        case "succeeded-fixed", "fixed", "healed" -> fixedCount++;
-                        case "failed-known" -> knownCount++;
-                        case "failed-unknown", "failed", "error" -> unknownCount++;
+                        case "passed-clean", "passed" -> {
+                            passCount++;
+                            if (item.isPassHealed())
+                            {
+                                passHealedCount++;
+                            }
+                        }
+                        case "succeeded-fixed", "fixed", "healed" -> {
+                            fixedCount++;
+                            if (item.isFixedHealed())
+                            {
+                                fixedHealedCount++;
+                            }
+                        }
+                        case "failed-known" -> {
+                            knownCount++;
+                            if (item.isKnownHealed())
+                            {
+                                knownHealedCount++;
+                            }
+                        }
+                        case "failed-unknown", "failed", "error" -> {
+                            unknownCount++;
+                            if (item.isUnknownHealed())
+                            {
+                                unknownHealedCount++;
+                            }
+                        }
                         case "ignored", "skipped" -> ignoredCount++;
-                        default -> passCount++;
+                        default -> {
+                            passCount++;
+                            if (item.isPassHealed())
+                            {
+                                passHealedCount++;
+                            }
+                        }
                     }
                     if (item.getBrowser() != null && !item.getBrowser().isBlank() && !"Unknown".equalsIgnoreCase(item.getBrowser()))
                     {
@@ -1579,6 +1701,10 @@ public class AuraReportDataService
                 run.setFailedKnownCount(knownCount);
                 run.setFailedUnknownCount(unknownCount);
                 run.setIgnoredCount(ignoredCount);
+                run.setPassedHealedCount(passHealedCount);
+                run.setSucceededFixedHealedCount(fixedHealedCount);
+                run.setFailedKnownHealedCount(knownHealedCount);
+                run.setFailedUnknownHealedCount(unknownHealedCount);
 
                 if (minStartTimeMs != null && minStartTimeMs > 0L)
                 {
@@ -2184,6 +2310,10 @@ public class AuraReportDataService
             run.setFailedKnownCount(report.getKnownCount());
             run.setFailedUnknownCount(report.getUnknownCount());
             run.setIgnoredCount(report.getIgnoredCount());
+            run.setPassedHealedCount(report.getPassHealedCount());
+            run.setSucceededFixedHealedCount(report.getFixedHealedCount());
+            run.setFailedKnownHealedCount(report.getKnownHealedCount());
+            run.setFailedUnknownHealedCount(report.getUnknownHealedCount());
             run.recalculatePassRate();
             runRepository.save(run);
             final long durationMs = System.currentTimeMillis() - startMs;

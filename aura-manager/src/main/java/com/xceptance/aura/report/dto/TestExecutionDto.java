@@ -825,6 +825,16 @@ public final class TestExecutionDto
         return "PASSED".equals(st) || "SUCCEEDED_FIXED".equals(st);
     }
 
+    public boolean isPassHealed()
+    {
+        return isHealed() && "PASSED".equals(getDisplayStatusKey());
+    }
+
+    public boolean isFixedHealed()
+    {
+        return isHealed() && "SUCCEEDED_FIXED".equals(getDisplayStatusKey());
+    }
+
     public boolean isFailedHealed()
     {
         if (!isHealed())
@@ -833,6 +843,16 @@ public final class TestExecutionDto
         }
         final String st = getDisplayStatusKey();
         return "FAILED_KNOWN".equals(st) || "FAILED_UNKNOWN".equals(st);
+    }
+
+    public boolean isKnownHealed()
+    {
+        return isHealed() && "FAILED_KNOWN".equals(getDisplayStatusKey());
+    }
+
+    public boolean isUnknownHealed()
+    {
+        return isHealed() && "FAILED_UNKNOWN".equals(getDisplayStatusKey());
     }
 
     public long getTotalTokensCount()

@@ -34,6 +34,10 @@ public final class AreaRunPointDto
     private final int unknownCount;
     private final int ignoredCount;
     private final int totalCount;
+    private final int passHealedCount;
+    private final int fixedHealedCount;
+    private final int knownHealedCount;
+    private final int unknownHealedCount;
 
     public AreaRunPointDto(
         final String runId,
@@ -45,6 +49,23 @@ public final class AreaRunPointDto
         final int ignoredCount,
         final int totalCount)
     {
+        this(runId, timestampLabel, passCount, fixedCount, knownCount, unknownCount, ignoredCount, totalCount, 0, 0, 0, 0);
+    }
+
+    public AreaRunPointDto(
+        final String runId,
+        final String timestampLabel,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final int totalCount,
+        final int passHealedCount,
+        final int fixedHealedCount,
+        final int knownHealedCount,
+        final int unknownHealedCount)
+    {
         this.runId = runId;
         this.timestampLabel = timestampLabel;
         this.passCount = passCount;
@@ -53,6 +74,10 @@ public final class AreaRunPointDto
         this.unknownCount = unknownCount;
         this.ignoredCount = ignoredCount;
         this.totalCount = totalCount;
+        this.passHealedCount = passHealedCount;
+        this.fixedHealedCount = fixedHealedCount;
+        this.knownHealedCount = knownHealedCount;
+        this.unknownHealedCount = unknownHealedCount;
     }
 
     public String getRunId()
@@ -93,5 +118,45 @@ public final class AreaRunPointDto
     public int getTotalCount()
     {
         return totalCount;
+    }
+
+    public int getPassHealedCount()
+    {
+        return passHealedCount;
+    }
+
+    public int getFixedHealedCount()
+    {
+        return fixedHealedCount;
+    }
+
+    public int getKnownHealedCount()
+    {
+        return knownHealedCount;
+    }
+
+    public int getUnknownHealedCount()
+    {
+        return unknownHealedCount;
+    }
+
+    public int getPassCleanCount()
+    {
+        return Math.max(0, passCount - passHealedCount);
+    }
+
+    public int getFixedCleanCount()
+    {
+        return Math.max(0, fixedCount - fixedHealedCount);
+    }
+
+    public int getKnownCleanCount()
+    {
+        return Math.max(0, knownCount - knownHealedCount);
+    }
+
+    public int getUnknownCleanCount()
+    {
+        return Math.max(0, unknownCount - unknownHealedCount);
     }
 }

@@ -294,9 +294,45 @@ public final class RunReportDto
         return 0;
     }
 
+    public int getPassHealedCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isPassHealed).count();
+        }
+        return 0;
+    }
+
+    public int getFixedHealedCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFixedHealed).count();
+        }
+        return 0;
+    }
+
+    public int getKnownHealedCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isKnownHealed).count();
+        }
+        return 0;
+    }
+
+    public int getUnknownHealedCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isUnknownHealed).count();
+        }
+        return 0;
+    }
+
     public int getTotalHealedCount()
     {
-        return getPassedHealedCount() + getFailedHealedCount();
+        return getPassHealedCount() + getFixedHealedCount() + getKnownHealedCount() + getUnknownHealedCount();
     }
 
     public int getFailCount()
