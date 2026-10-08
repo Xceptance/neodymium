@@ -23,6 +23,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
@@ -465,7 +467,7 @@ public class RunStorageSyncServiceTest
             final boolean synced = syncService.importOrUpdateRunReport(runId);
             Assertions.assertTrue(synced, "syncService should import report into DB");
 
-            final Optional<com.xceptance.aura.report.entity.TestRunEntity> entityOpt = runRepository.findById(runId);
+            final Optional<TestRunEntity> entityOpt = runRepository.findById(runId);
             Assertions.assertTrue(entityOpt.isPresent(), "TestRunEntity should be in database");
             final String label = entityOpt.get().getTimestampLabel();
             Assertions.assertTrue(label != null && (label.contains("06:15:00") || label.contains("08:15:00")),
@@ -520,7 +522,7 @@ public class RunStorageSyncServiceTest
             final boolean synced = syncService.importOrUpdateRunReport(runId);
             Assertions.assertTrue(synced, "syncService should import report into DB");
 
-            final Optional<com.xceptance.aura.report.entity.TestRunEntity> entityOpt = runRepository.findById(runId);
+            final Optional<TestRunEntity> entityOpt = runRepository.findById(runId);
             Assertions.assertTrue(entityOpt.isPresent(), "TestRunEntity should be in database");
             final String locales = entityOpt.get().getLocalesCsv();
             Assertions.assertTrue(locales != null && locales.contains("DE") && locales.contains("FR"),
@@ -1025,6 +1027,140 @@ public class RunStorageSyncServiceTest
             deleteRecursively(runDir);
             runRepository.findById(runId).ifPresent(runRepository::delete);
             variationRepository.findById(varId).ifPresent(variationRepository::delete);
+        }
+    }
+
+    @Test
+    public void testEarliestTestStartTimeOverridesContainerTimestamp() throws IOException
+    {
+        final String runId = "run-earliest-override-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        if (Files.exists(runDir))
+        {
+            deleteRecursively(runDir);
+        }
+        final Path execDir = runDir.resolve("Browsing (default)").resolve("CartTest");
+        Files.createDirectories(execDir);
+
+        // Pre-create a run.json with a top-level container timestamp of 05:00:00
+        final String initialRunJson = """
+            {
+                "runId": "run-earliest-override-test",
+                "timestamp": "2026-08-20 05:00:00",
+                "startTimeMs": 1787202000000
+            }
+            """;
+        Files.writeString(runDir.resolve("run.json"), initialRunJson);
+
+        final String exec1Json = """
+            {
+                "id": "exec-later",
+                "testClass": "CartTest",
+                "status": "passed-clean",
+                "startTime": "2026-08-20 10:00:00"
+            }
+            """;
+        final String exec2Json = """
+            {
+                "id": "exec-earliest",
+                "testClass": "CartTest",
+                "status": "passed-clean",
+                "startTime": "2026-08-20 07:15:00"
+            }
+            """;
+
+        Files.writeString(execDir.resolve("exec-1.json"), exec1Json);
+        Files.writeString(execDir.resolve("exec-2.json"), exec2Json);
+
+        try
+        {
+            final boolean synced = syncService.importOrUpdateRunReport(runId);
+            Assertions.assertTrue(synced, "syncService should import report into DB");
+
+            final Optional<TestRunEntity> entityOpt = runRepository.findById(runId);
+            Assertions.assertTrue(entityOpt.isPresent(), "TestRunEntity should be in database");
+
+            final TestRunEntity entity = entityOpt.get();
+            final String label = entity.getTimestampLabel();
+            // Earliest test starts at 07:15:00, not the container's 05:00:00
+            Assertions.assertFalse(label != null && label.contains("05:00:00"),
+                "Run timestamp must NOT be the container timestamp (05:00:00) when tests have start times");
+            Assertions.assertTrue(label != null && (label.contains("07:15:00") || label.contains("09:15:00")),
+                "Expected run timestamp to be defined by earliest test '07:15:00' (or local tz '09:15:00'), but was: " + label);
+
+            // Also verify that the generated run.json has the updated earliest startTimeMs
+            final Optional<String> runJsonOpt = storageService.readRunJson(runId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "run.json should exist");
+            final JsonNode runJsonRoot = new ObjectMapper().readTree(runJsonOpt.get());
+            Assertions.assertEquals(entity.getStartTimeMs(), runJsonRoot.path("startTimeMs").asLong(),
+                "run.json startTimeMs should match DB entity startTimeMs");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testLiveIngestionAndFinishRunUpdatesRunTimestampToEarliestTest() throws IOException
+    {
+        final String runId = "run-live-earliest-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        if (Files.exists(runDir))
+        {
+            deleteRecursively(runDir);
+        }
+
+        try
+        {
+            dataService.startRun(runId, "EarliestTestBatch", "PROD", "TEST");
+
+            final Map<String, Object> exec1 = new HashMap<>();
+            exec1.put("id", "exec-live-1");
+            exec1.put("testClass", "LiveTest");
+            exec1.put("title", "LiveTest1");
+            exec1.put("status", "passed");
+            exec1.put("startTime", "2026-08-20 11:30:00");
+
+            dataService.ingestExecution(runId, exec1);
+
+            Optional<TestRunEntity> entityOpt = runRepository.findById(runId);
+            Assertions.assertTrue(entityOpt.isPresent());
+            String label = entityOpt.get().getTimestampLabel();
+            Assertions.assertTrue(label != null && (label.contains("11:30:00") || label.contains("13:30:00")),
+                "Expected timestamp from exec1, but was: " + label);
+
+            // Ingest an execution that started earlier
+            final Map<String, Object> exec2 = new HashMap<>();
+            exec2.put("id", "exec-live-2");
+            exec2.put("testClass", "LiveTest");
+            exec2.put("title", "LiveTest2");
+            exec2.put("status", "passed");
+            exec2.put("startTime", "2026-08-20 08:15:00");
+
+            dataService.ingestExecution(runId, exec2);
+
+            entityOpt = runRepository.findById(runId);
+            Assertions.assertTrue(entityOpt.isPresent());
+            label = entityOpt.get().getTimestampLabel();
+            Assertions.assertTrue(label != null && (label.contains("08:15:00") || label.contains("10:15:00")),
+                "Expected run timestamp updated to earlier exec2 '08:15:00', but was: " + label);
+
+            // Finish run
+            dataService.finishRun(runId);
+
+            entityOpt = runRepository.findById(runId);
+            Assertions.assertTrue(entityOpt.isPresent());
+            final TestRunEntity finishedRun = entityOpt.get();
+            final String finishLabel = finishedRun.getTimestampLabel();
+            Assertions.assertTrue(finishLabel != null && (finishLabel.contains("08:15:00") || finishLabel.contains("10:15:00")),
+                "Expected finished run timestamp to remain earliest test '08:15:00', but was: " + finishLabel);
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
         }
     }
 }

@@ -1456,6 +1456,9 @@ public class AuraReportDataService
                 final Set<String> browsersSet = new LinkedHashSet<>();
                 final Set<String> localesSet = new LinkedHashSet<>();
 
+                Long minStartTimeMs = null;
+                String earliestFormattedTime = null;
+
                 for (final TestExecutionDto item : list)
                 {
                     final String st = item.getStatus() != null ? item.getStatus() : "passed-clean";
@@ -1476,6 +1479,28 @@ public class AuraReportDataService
                     {
                         localesSet.add(item.getLocation().trim());
                     }
+
+                    long itemStartMs = item.getTimestampMs();
+                    if (itemStartMs <= 0L && item.getStartTime() != null && !item.getStartTime().isBlank())
+                    {
+                        final Long parsed = RunStorageSyncService.parseTimestampToMs(item.getStartTime());
+                        if (parsed != null && parsed > 0L)
+                        {
+                            itemStartMs = parsed;
+                        }
+                    }
+                    if (itemStartMs > 0L)
+                    {
+                        if (minStartTimeMs == null || itemStartMs < minStartTimeMs)
+                        {
+                            minStartTimeMs = itemStartMs;
+                            earliestFormattedTime = item.getFormattedTime();
+                            if (earliestFormattedTime == null || earliestFormattedTime.isBlank())
+                            {
+                                earliestFormattedTime = item.getStartTime();
+                            }
+                        }
+                    }
                 }
 
                 run.setTotalTests(totalCount);
@@ -1484,6 +1509,15 @@ public class AuraReportDataService
                 run.setFailedKnownCount(knownCount);
                 run.setFailedUnknownCount(unknownCount);
                 run.setIgnoredCount(ignoredCount);
+
+                if (minStartTimeMs != null && minStartTimeMs > 0L)
+                {
+                    run.setStartTimeMs(minStartTimeMs);
+                    if (earliestFormattedTime != null && !earliestFormattedTime.isBlank())
+                    {
+                        run.setTimestampLabel(earliestFormattedTime);
+                    }
+                }
 
                 if (!browsersSet.isEmpty())
                 {
@@ -1520,12 +1554,45 @@ public class AuraReportDataService
             }
 
             final List<TestExecutionDto> executions = liveRunBuffer.getOrDefault(runId, List.of());
+            Long minStartTimeMs = null;
+            String earliestFormattedTime = null;
+
             for (final TestExecutionDto exec : executions)
             {
                 final String st = exec.getStatus();
                 if (st == null || "running".equalsIgnoreCase(st) || "in_progress".equalsIgnoreCase(st) || "executing".equalsIgnoreCase(st) || "pending".equalsIgnoreCase(st))
                 {
                     exec.setStatus("skipped");
+                }
+                long execStartMs = exec.getTimestampMs();
+                if (execStartMs <= 0L && exec.getStartTime() != null && !exec.getStartTime().isBlank())
+                {
+                    final Long parsed = RunStorageSyncService.parseTimestampToMs(exec.getStartTime());
+                    if (parsed != null && parsed > 0L)
+                    {
+                        execStartMs = parsed;
+                    }
+                }
+                if (execStartMs > 0L)
+                {
+                    if (minStartTimeMs == null || execStartMs < minStartTimeMs)
+                    {
+                        minStartTimeMs = execStartMs;
+                        earliestFormattedTime = exec.getFormattedTime();
+                        if (earliestFormattedTime == null || earliestFormattedTime.isBlank())
+                        {
+                            earliestFormattedTime = exec.getStartTime();
+                        }
+                    }
+                }
+            }
+
+            if (minStartTimeMs != null && minStartTimeMs > 0L)
+            {
+                run.setStartTimeMs(minStartTimeMs);
+                if (earliestFormattedTime != null && !earliestFormattedTime.isBlank())
+                {
+                    run.setTimestampLabel(earliestFormattedTime);
                 }
             }
 

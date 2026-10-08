@@ -22,12 +22,18 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.xceptance.aura.report.dto.RunReportDto;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import org.neodymium.ai.util.AtomicFileUtils;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -521,6 +527,10 @@ public class LocalRunJsonStorageService
             rootNode.put("trigger", trigger);
             rootNode.put("timestamp", timestamp);
             rootNode.put("startTime", timestamp);
+            if (earliestMs != Long.MAX_VALUE && earliestMs > 0L)
+            {
+                rootNode.put("startTimeMs", earliestMs);
+            }
 
             final ArrayNode localesArray = objectMapper.createArrayNode();
             if (!localesSet.isEmpty())
@@ -685,6 +695,11 @@ public class LocalRunJsonStorageService
             if (earliestTimeStr != null && !earliestTimeStr.isBlank())
             {
                 compactRootNode.put("timestamp", earliestTimeStr);
+                compactRootNode.put("startTime", earliestTimeStr);
+            }
+            if (earliestMs != Long.MAX_VALUE && earliestMs > 0L)
+            {
+                compactRootNode.put("startTimeMs", earliestMs);
             }
             compactRootNode.set("summary", summaryNode);
             compactRootNode.set("executionMetrics", executionMetricsNode);
@@ -712,7 +727,7 @@ public class LocalRunJsonStorageService
         return Optional.empty();
     }
 
-    public boolean updateRunJsonSummaryStats(final File runDir, final com.xceptance.aura.report.dto.RunReportDto report)
+    public boolean updateRunJsonSummaryStats(final File runDir, final RunReportDto report)
     {
         if (runDir == null || !runDir.exists() || report == null)
         {
@@ -1584,7 +1599,12 @@ public class LocalRunJsonStorageService
                 num *= 1000.0;
             }
             final long ms = (long) num;
-            return new ExecutionTime(ms, rawVal);
+            final LocalDateTime ldt = LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(ms),
+                ZoneId.systemDefault()
+            );
+            final String formatted = ldt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            return new ExecutionTime(ms, formatted);
         }
         catch (final NumberFormatException ignored)
         {
@@ -1592,7 +1612,7 @@ public class LocalRunJsonStorageService
 
         try
         {
-            final java.time.Instant instant = java.time.Instant.parse(rawVal);
+            final Instant instant = Instant.parse(rawVal);
             return new ExecutionTime(instant.toEpochMilli(), rawVal);
         }
         catch (final Exception ignored)
@@ -1603,8 +1623,8 @@ public class LocalRunJsonStorageService
         {
             try
             {
-                final java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(rawVal, java.time.format.DateTimeFormatter.ofPattern(pattern));
-                final long ms = ldt.toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+                final LocalDateTime ldt = LocalDateTime.parse(rawVal, DateTimeFormatter.ofPattern(pattern));
+                final long ms = ldt.toInstant(ZoneOffset.UTC).toEpochMilli();
                 return new ExecutionTime(ms, rawVal);
             }
             catch (final Exception ignored)

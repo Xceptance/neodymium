@@ -39,6 +39,11 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -367,51 +372,6 @@ public class RunStorageSyncService
             }
             final String browsersCsv = !browsersList.isEmpty() ? String.join(",", browsersList) : "Chrome";
 
-            String timestampVal = root.path("timestamp").asText(root.path("startTime").asText("")).trim();
-            if (execMetricsNode.isObject() && !execMetricsNode.isEmpty())
-            {
-                String earliestTime = null;
-                Long minMs = null;
-                if (!timestampVal.isEmpty() && !"Recently".equalsIgnoreCase(timestampVal))
-                {
-                    earliestTime = timestampVal;
-                    minMs = parseTimestampToMs(timestampVal);
-                }
-                for (final JsonNode mNode : execMetricsNode)
-                {
-                    final Long ms = parseStartTimeMs(mNode);
-                    String st = mNode.path("startTime").asText("").trim();
-                    if (st.isEmpty() && mNode.has("timestamp"))
-                    {
-                        st = mNode.path("timestamp").asText("").trim();
-                    }
-                    if (ms != null && ms > 0L)
-                    {
-                        if (minMs == null || ms < minMs)
-                        {
-                            minMs = ms;
-                            if (!st.isEmpty())
-                            {
-                                earliestTime = st;
-                            }
-                        }
-                    }
-                    else if (!st.isEmpty() && (earliestTime == null || st.compareTo(earliestTime) < 0))
-                    {
-                        earliestTime = st;
-                    }
-                }
-                if (earliestTime != null)
-                {
-                    timestampVal = earliestTime;
-                }
-            }
-            if (timestampVal.isEmpty())
-            {
-                timestampVal = "Recently";
-            }
-            final String timestamp = timestampVal;
-
             final List<JsonNode> execList = new ArrayList<>();
             if (execMetricsNode.isObject() && !execMetricsNode.isEmpty())
             {
@@ -421,6 +381,67 @@ public class RunStorageSyncService
             {
                 root.path("executions").elements().forEachRemaining(execList::add);
             }
+
+            Long minStartTimeMs = null;
+            Long maxStartTimeMs = null;
+            String earliestStartTimeStr = null;
+            long durationOfLatestExecMs = 0L;
+
+            for (final JsonNode exec : execList)
+            {
+                final Long execStartMs = parseStartTimeMs(exec);
+                final long execDurationMs = exec.hasNonNull("duration") ? exec.path("duration").asLong(0L) : exec.path("durationMs").asLong(0L);
+
+                String st = exec.path("startTime").asText("").trim();
+                if (st.isEmpty() && exec.has("timestamp"))
+                {
+                    st = exec.path("timestamp").asText("").trim();
+                }
+
+                if (execStartMs != null && execStartMs > 0L)
+                {
+                    if (minStartTimeMs == null || execStartMs < minStartTimeMs)
+                    {
+                        minStartTimeMs = execStartMs;
+                        earliestStartTimeStr = !st.isEmpty() ? st : null;
+                    }
+                    if (maxStartTimeMs == null || execStartMs >= maxStartTimeMs)
+                    {
+                        maxStartTimeMs = execStartMs;
+                        durationOfLatestExecMs = execDurationMs;
+                    }
+                }
+                else if (!st.isEmpty())
+                {
+                    if (earliestStartTimeStr == null || st.compareTo(earliestStartTimeStr) < 0)
+                    {
+                        earliestStartTimeStr = st;
+                    }
+                }
+            }
+
+            String timestampVal = null;
+            if (earliestStartTimeStr != null && !earliestStartTimeStr.isBlank())
+            {
+                timestampVal = earliestStartTimeStr;
+            }
+            else if (minStartTimeMs != null && minStartTimeMs > 0L)
+            {
+                final LocalDateTime ldt = LocalDateTime.ofInstant(
+                    Instant.ofEpochMilli(minStartTimeMs),
+                    ZoneId.systemDefault()
+                );
+                timestampVal = ldt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+            }
+            else
+            {
+                timestampVal = root.path("timestamp").asText(root.path("startTime").asText("")).trim();
+            }
+            if (timestampVal == null || timestampVal.isBlank())
+            {
+                timestampVal = "Recently";
+            }
+            final String timestamp = timestampVal;
 
             final String runEnv = env != null ? env : "ALL";
             final String runBatch = batchName != null ? batchName : "ALL";
@@ -455,9 +476,6 @@ public class RunStorageSyncService
             int calcUnknown = 0;
             int calcIgnored = 0;
 
-            Long minStartTimeMs = null;
-            Long maxStartTimeMs = null;
-            long durationOfLatestExecMs = 0L;
             long sumDurationMs = 0L;
 
             if (!execList.isEmpty())
@@ -466,20 +484,6 @@ public class RunStorageSyncService
                 {
                     final long execDurationMs = exec.hasNonNull("duration") ? exec.path("duration").asLong(0L) : exec.path("durationMs").asLong(0L);
                     sumDurationMs += execDurationMs;
-
-                    final Long execStartMs = parseStartTimeMs(exec);
-                    if (execStartMs != null && execStartMs > 0L)
-                    {
-                        if (minStartTimeMs == null || execStartMs < minStartTimeMs)
-                        {
-                            minStartTimeMs = execStartMs;
-                        }
-                        if (maxStartTimeMs == null || execStartMs >= maxStartTimeMs)
-                        {
-                            maxStartTimeMs = execStartMs;
-                            durationOfLatestExecMs = execDurationMs;
-                        }
-                    }
                     final String execId = exec.path("id").asText("");
                     final String testClass = exec.path("testClass").asText("UnknownClass");
                     final String testMethod = LocalRunJsonStorageService.extractTestMethod(exec);
@@ -646,6 +650,7 @@ public class RunStorageSyncService
 
             final Optional<TestRunEntity> existingRunOpt = runRepository.findById(runId);
             final TestRunEntity runEntity;
+            final Long initialStartMs = minStartTimeMs != null ? minStartTimeMs : parseTimestampToMs(timestamp);
             if (existingRunOpt.isPresent())
             {
                 runEntity = existingRunOpt.get();
@@ -653,6 +658,10 @@ public class RunStorageSyncService
                 runEntity.setEnvironment(env);
                 runEntity.setTriggerSource(trigger);
                 runEntity.setTimestampLabel(timestamp);
+                if (minStartTimeMs != null)
+                {
+                    runEntity.setStartTimeMs(minStartTimeMs);
+                }
             }
             else
             {
@@ -665,7 +674,7 @@ public class RunStorageSyncService
                     localesCsv,
                     browsersCsv,
                     timestamp,
-                    System.currentTimeMillis()
+                    initialStartMs != null && initialStartMs > 0L ? initialStartMs : System.currentTimeMillis()
                 );
             }
 
@@ -822,7 +831,7 @@ public class RunStorageSyncService
 
         try
         {
-            return java.time.Instant.parse(trimmed).toEpochMilli();
+            return Instant.parse(trimmed).toEpochMilli();
         }
         catch (final Exception ignored)
         {
@@ -832,8 +841,8 @@ public class RunStorageSyncService
         {
             try
             {
-                final java.time.LocalDateTime ldt = java.time.LocalDateTime.parse(trimmed, java.time.format.DateTimeFormatter.ofPattern(pattern));
-                return ldt.toInstant(java.time.ZoneOffset.UTC).toEpochMilli();
+                final LocalDateTime ldt = LocalDateTime.parse(trimmed, DateTimeFormatter.ofPattern(pattern));
+                return ldt.toInstant(ZoneOffset.UTC).toEpochMilli();
             }
             catch (final Exception ignored)
             {
