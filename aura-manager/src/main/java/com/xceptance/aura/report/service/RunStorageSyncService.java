@@ -20,8 +20,6 @@ package com.xceptance.aura.report.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.xceptance.aura.report.entity.TestBaseBugEntity;
 import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 import com.xceptance.aura.report.entity.TestBatchEntity;
@@ -37,8 +35,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -48,6 +44,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -258,6 +255,18 @@ public class RunStorageSyncService
                     variationRepository.save(varEntity);
                 }
             }
+            if ("Chrome".equalsIgnoreCase(varEntity.getBrowser()) && varEntity.getHistoryLinks() != null && !varEntity.getHistoryLinks().isBlank())
+            {
+                final String firstLink = varEntity.getHistoryLinks().split(",")[0].trim();
+                final Map<String, String> params = AuraReportDataService.parseQueryParams(firstLink);
+                final String linkExecId = params.get("executionId");
+                final String extracted = AuraReportDataService.extractBrowserFromIdOrKey(linkExecId);
+                if (extracted != null && !extracted.isBlank() && !"Chrome".equalsIgnoreCase(extracted))
+                {
+                    varEntity.setBrowser(AuraReportDataService.normalizeBrowser(extracted));
+                    variationRepository.save(varEntity);
+                }
+            }
         }
     }
 
@@ -362,10 +371,19 @@ public class RunStorageSyncService
                 final Set<String> bSet = new LinkedHashSet<>();
                 for (final JsonNode mNode : execMetricsNode)
                 {
-                    final String br = mNode.path("browser").asText("").trim();
+                    String br = mNode.path("browser").asText("").trim();
+                    if (br.isEmpty() || "Chrome".equalsIgnoreCase(br) || "Unknown".equalsIgnoreCase(br))
+                    {
+                        final String mId = mNode.path("id").asText("");
+                        final String extracted = AuraReportDataService.extractBrowserFromIdOrKey(mId);
+                        if (extracted != null && !extracted.isBlank())
+                        {
+                            br = extracted;
+                        }
+                    }
                     if (!br.isEmpty() && !"Unknown".equalsIgnoreCase(br))
                     {
-                        bSet.add(br);
+                        bSet.add(AuraReportDataService.normalizeBrowser(br));
                     }
                 }
                 browsersList.addAll(bSet);
@@ -499,7 +517,16 @@ public class RunStorageSyncService
                     final String dataSet = !rawTitle.isEmpty() ? rawTitle : "Default";
                     final String rawLoc = exec.has("locale") && !exec.path("locale").asText().trim().isEmpty() ? exec.path("locale").asText().trim() : exec.path("location").asText("Unknown");
                     final String location = AuraReportDataService.normalizeLocation(rawLoc);
-                    final String browser = AuraReportDataService.normalizeBrowser(exec.path("browser").asText("Chrome"));
+                    String rawBrowser = exec.path("browser").asText("").trim();
+                    if (rawBrowser.isEmpty() || "Chrome".equalsIgnoreCase(rawBrowser) || "Unknown".equalsIgnoreCase(rawBrowser))
+                    {
+                        final String extracted = AuraReportDataService.extractBrowserFromIdOrKey(execId);
+                        if (extracted != null && !extracted.isBlank())
+                        {
+                            rawBrowser = extracted;
+                        }
+                    }
+                    final String browser = AuraReportDataService.normalizeBrowser(!rawBrowser.isEmpty() ? rawBrowser : "Chrome");
                     final String rawStatus = exec.path("status").asText("failed-unknown");
 
                     final String varId = generateVariationId(testClass, testMethod, dataSet, location, browser);
@@ -613,13 +640,15 @@ public class RunStorageSyncService
                             + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
 
                         final String currentHistory = varEntity.getHistoryLinks();
+                        final List<String> linksList;
                         if (currentHistory == null || currentHistory.trim().isEmpty())
                         {
-                            varEntity.setHistoryLinks(relUrl);
+                            linksList = new ArrayList<>();
+                            linksList.add(relUrl);
                         }
                         else
                         {
-                            final List<String> linksList = new ArrayList<>(List.of(currentHistory.split(",")));
+                            linksList = new ArrayList<>(List.of(currentHistory.split(",")));
                             boolean replaced = false;
                             for (int i = 0; i < linksList.size(); i++)
                             {
@@ -628,7 +657,7 @@ public class RunStorageSyncService
                                 final String existingRunId = existingParams.get("runId");
                                 final String existingExecId = existingParams.get("executionId");
 
-                                if (runId.equals(existingRunId) && java.util.Objects.equals(execId, existingExecId))
+                                if (runId.equals(existingRunId) && Objects.equals(execId, existingExecId))
                                 {
                                     linksList.set(i, relUrl);
                                     replaced = true;
@@ -639,10 +668,30 @@ public class RunStorageSyncService
                             {
                                 linksList.add(relUrl);
                             }
-                            varEntity.setHistoryLinks(String.join(",", linksList));
                         }
 
-                        varEntity.setTotalExecutionsCount(AuraReportDataService.countHistoryLinks(varEntity.getHistoryLinks()));
+                        final List<String> sortedLinks = AuraReportDataService.sortHistoryLinksDescending(String.join(",", linksList));
+                        varEntity.setHistoryLinks(String.join(",", sortedLinks));
+                        varEntity.setTotalExecutionsCount(sortedLinks.size());
+
+                        if (!sortedLinks.isEmpty())
+                        {
+                            final Map<String, String> latestParams = AuraReportDataService.parseQueryParams(sortedLinks.get(0));
+                            final String latestStatus = latestParams.get("status");
+                            final String latestHealed = latestParams.get("healed");
+                            final boolean latestIsHealed = "true".equalsIgnoreCase(latestHealed) || "healed".equalsIgnoreCase(latestStatus);
+                            varEntity.setHealed(latestIsHealed);
+                            if (latestStatus != null && !latestStatus.isBlank())
+                            {
+                                varEntity.setLastStatus(latestStatus);
+                            }
+                        }
+                        else
+                        {
+                            varEntity.setLastStatus(effectiveStatus);
+                            varEntity.setHealed(isHealed);
+                        }
+
                         variationRepository.save(varEntity);
                     }
                 }

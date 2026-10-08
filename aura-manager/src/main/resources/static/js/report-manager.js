@@ -4086,10 +4086,70 @@ function initPanelResizer() {
     });
 }
 
+let variationHistorySortDirections = {};
+function sortVariationHistoryTable(colIndex) {
+    const tbody = document.getElementById('tbVariationHistoryTableBody');
+    if (!tbody) return;
+    const rows = Array.from(tbody.querySelectorAll('tr.history-var-row'));
+    if (rows.length <= 1) return;
+
+    const isAsc = variationHistorySortDirections[colIndex] = !variationHistorySortDirections[colIndex];
+
+    const table = tbody.closest('table');
+    if (table) {
+        const ths = table.querySelectorAll('thead th');
+        ths.forEach((th, idx) => {
+            const icon = th.querySelector('.sort-icon');
+            if (icon) {
+                if (idx === colIndex) {
+                    icon.textContent = isAsc ? 'arrow_upward' : 'arrow_downward';
+                } else {
+                    icon.textContent = 'unfold_more';
+                }
+            }
+        });
+    }
+
+    rows.sort(function(a, b) {
+        const aCell = a.children[colIndex];
+        const bCell = b.children[colIndex];
+        if (!aCell || !bCell) return 0;
+
+        const aVal = (aCell.getAttribute('data-sort') || aCell.textContent || '').trim();
+        const bVal = (bCell.getAttribute('data-sort') || bCell.textContent || '').trim();
+
+        if (colIndex === 3) {
+            const aEpoch = parseDateToEpochHelper(aVal);
+            const bEpoch = parseDateToEpochHelper(bVal);
+            return isAsc ? (aEpoch - bEpoch) : (bEpoch - aEpoch);
+        }
+
+        const aNum = parseFloat(aVal);
+        const bNum = parseFloat(bVal);
+        if (!isNaN(aNum) && !isNaN(bNum)) {
+            return isAsc ? (aNum - bNum) : (bNum - aNum);
+        }
+        return isAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+    });
+
+    rows.forEach(function(row) {
+        tbody.appendChild(row);
+    });
+}
+
+function parseDateToEpochHelper(val) {
+    if (!val || val === 'Recently') return Number.MAX_SAFE_INTEGER;
+    const clean = val.trim();
+    const d = new Date(clean.replace(' ', 'T'));
+    if (!isNaN(d.getTime())) return d.getTime();
+    return 0;
+}
+
 window.loadTestBaseVariationHistory = loadTestBaseVariationHistory;
 window.populateTbSideBatchMultiselect = populateTbSideBatchMultiselect;
 window.filterTbVariationHistoryTable = filterTbVariationHistoryTable;
 window.initPanelResizer = initPanelResizer;
+window.sortVariationHistoryTable = sortVariationHistoryTable;
 
 
 

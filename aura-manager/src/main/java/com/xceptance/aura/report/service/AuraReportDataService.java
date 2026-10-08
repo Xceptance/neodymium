@@ -18,7 +18,6 @@
  */
 package com.xceptance.aura.report.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -43,19 +42,21 @@ import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -351,7 +352,18 @@ public class AuraReportDataService
         for (final TestBaseVariationEntity var : rawVariations)
         {
             final String normLoc = normalizeLocation(var.getLocation());
-            final String normBr = normalizeBrowser(var.getBrowser());
+            String normBr = normalizeBrowser(var.getBrowser());
+            if ("Chrome".equalsIgnoreCase(normBr) && var.getHistoryLinks() != null && !var.getHistoryLinks().isBlank())
+            {
+                final String firstLink = var.getHistoryLinks().split(",")[0].trim();
+                final Map<String, String> params = parseQueryParams(firstLink);
+                final String linkExecId = params.get("executionId");
+                final String extracted = extractBrowserFromIdOrKey(linkExecId);
+                if (extracted != null && !extracted.isBlank() && !"Chrome".equalsIgnoreCase(extracted))
+                {
+                    normBr = normalizeBrowser(extracted);
+                }
+            }
             var.setLocation(normLoc);
             var.setBrowser(normBr);
 
@@ -360,19 +372,35 @@ public class AuraReportDataService
                                        (var.getDataSetLabel() != null ? var.getDataSetLabel().trim() : "") + "|" +
                                        normLoc + "|" + normBr;
 
+            final String canonicalId = generateVariationId(
+                var.getTestClassName(),
+                var.getTestMethodName(),
+                var.getDataSetLabel(),
+                normLoc,
+                normBr
+            );
+
             if (!mergedMap.containsKey(logicalKey))
             {
                 mergedMap.put(logicalKey, var);
             }
             else
             {
-                final TestBaseVariationEntity existing = mergedMap.get(logicalKey);
-                final int totalExecs = (existing.getTotalExecutionsCount() != null ? existing.getTotalExecutionsCount() : 0)
-                                     + (var.getTotalExecutionsCount() != null ? var.getTotalExecutionsCount() : 0);
-                existing.setTotalExecutionsCount(totalExecs);
+                TestBaseVariationEntity primary = mergedMap.get(logicalKey);
+                TestBaseVariationEntity secondary = var;
+                if (!primary.getId().equals(canonicalId) && secondary.getId().equals(canonicalId))
+                {
+                    primary = var;
+                    secondary = mergedMap.get(logicalKey);
+                    mergedMap.put(logicalKey, primary);
+                }
 
-                final String h1 = existing.getHistoryLinks();
-                final String h2 = var.getHistoryLinks();
+                final int totalExecs = (primary.getTotalExecutionsCount() != null ? primary.getTotalExecutionsCount() : 0)
+                                     + (secondary.getTotalExecutionsCount() != null ? secondary.getTotalExecutionsCount() : 0);
+                primary.setTotalExecutionsCount(totalExecs);
+
+                final String h1 = primary.getHistoryLinks();
+                final String h2 = secondary.getHistoryLinks();
                 final List<String> linksList = new ArrayList<>();
                 if (h1 != null && !h1.isBlank())
                 {
@@ -395,25 +423,29 @@ public class AuraReportDataService
                     }
                 }
                 final String mergedHistory = String.join(",", linksList);
-                existing.setHistoryLinks(mergedHistory);
-                existing.setTotalExecutionsCount(countHistoryLinks(mergedHistory));
+                primary.setHistoryLinks(mergedHistory);
+                final int countedLinks = countHistoryLinks(mergedHistory);
+                if (countedLinks > 0)
+                {
+                    primary.setTotalExecutionsCount(countedLinks);
+                }
 
-                final long t1 = existing.getLastExecutedAt() != null ? existing.getLastExecutedAt() : 0L;
-                final long t2 = var.getLastExecutedAt() != null ? var.getLastExecutedAt() : 0L;
+                final long t1 = primary.getLastExecutedAt() != null ? primary.getLastExecutedAt() : 0L;
+                final long t2 = secondary.getLastExecutedAt() != null ? secondary.getLastExecutedAt() : 0L;
                 if (t2 > t1)
                 {
-                    existing.setLastExecutedAt(t2);
-                    if (var.getLastStatus() != null)
+                    primary.setLastExecutedAt(t2);
+                    if (secondary.getLastStatus() != null)
                     {
-                        existing.setLastStatus(var.getLastStatus());
+                        primary.setLastStatus(secondary.getLastStatus());
                     }
-                    if (var.getHealed() != null)
+                    if (secondary.getHealed() != null)
                     {
-                        existing.setHealed(var.getHealed());
+                        primary.setHealed(secondary.getHealed());
                     }
                 }
 
-                duplicatesToDelete.add(var);
+                duplicatesToDelete.add(secondary);
             }
         }
 
@@ -441,18 +473,41 @@ public class AuraReportDataService
 
         for (final TestBaseVariationEntity var : variations)
         {
-            final int actualHistoryCount = countHistoryLinks(var.getHistoryLinks());
+            final List<String> sortedLinks = sortHistoryLinksDescending(var.getHistoryLinks());
+            final int actualHistoryCount = sortedLinks.size();
             if (actualHistoryCount > 0)
             {
                 var.setTotalExecutionsCount(actualHistoryCount);
+                final String sortedLinksStr = String.join(",", sortedLinks);
+                if (!sortedLinksStr.equals(var.getHistoryLinks()))
+                {
+                    var.setHistoryLinks(sortedLinksStr);
+                }
             }
 
+            final String historyStr = var.getHistoryLinks();
             final boolean hasBugs = (bugsMap.containsKey(var.getId()) && !bugsMap.get(var.getId()).isEmpty())
-                                 || hasBugsInLatestHistoryLink(var.getHistoryLinks());
-            final boolean isHealed = (var.getHealed() != null && var.getHealed()) || isLatestHistoryLinkHealed(var.getHistoryLinks());
+                                 || hasBugsInLatestHistoryLink(historyStr);
+
+            final String curStatus;
+            final boolean isHealed;
+            if (!sortedLinks.isEmpty())
+            {
+                final Map<String, String> latestParams = parseQueryParams(sortedLinks.get(0));
+                final String linkStatus = latestParams.get("status");
+                final String linkHealed = latestParams.get("healed");
+                isHealed = "true".equalsIgnoreCase(linkHealed) || "healed".equalsIgnoreCase(linkStatus);
+                curStatus = (linkStatus != null && !linkStatus.isBlank())
+                    ? linkStatus
+                    : (var.getLastStatus() != null ? var.getLastStatus() : "passed-clean");
+            }
+            else
+            {
+                isHealed = (var.getHealed() != null && var.getHealed()) || isLatestHistoryLinkHealed(historyStr);
+                curStatus = var.getLastStatus() != null ? var.getLastStatus() : "passed-clean";
+            }
             var.setHealed(isHealed);
 
-            final String curStatus = var.getLastStatus() != null ? var.getLastStatus() : "passed-clean";
             String effectiveLastStatus = curStatus;
 
             if ("failed".equalsIgnoreCase(curStatus) || "failed-unknown".equalsIgnoreCase(curStatus) || "failed-known".equalsIgnoreCase(curStatus) || "error".equalsIgnoreCase(curStatus))
@@ -672,7 +727,22 @@ public class AuraReportDataService
                         execMetrics.fields().forEachRemaining(entry -> {
                             try
                             {
-                                final TestExecutionDto exec = objectMapper.treeToValue(entry.getValue(), TestExecutionDto.class);
+                                final JsonNode valueNode = entry.getValue();
+                                if (valueNode instanceof ObjectNode obj)
+                                {
+                                    final JsonNode bNode = obj.path("browser");
+                                    if (bNode.isMissingNode() || bNode.asText("").trim().isEmpty()
+                                            || "Chrome".equalsIgnoreCase(bNode.asText().trim())
+                                            || "Unknown".equalsIgnoreCase(bNode.asText().trim()))
+                                    {
+                                        final String fallbackBrowser = extractBrowserFromIdOrKey(entry.getKey());
+                                        if (fallbackBrowser != null && !fallbackBrowser.isBlank() && !"Chrome".equalsIgnoreCase(fallbackBrowser))
+                                        {
+                                            obj.put("browser", fallbackBrowser);
+                                        }
+                                    }
+                                }
+                                final TestExecutionDto exec = objectMapper.treeToValue(valueNode, TestExecutionDto.class);
                                 if (exec.getId() == null || exec.getId().isBlank() || seenIds.contains(exec.getId())
                                         || "bad".equalsIgnoreCase(exec.getId()) || "perfect".equalsIgnoreCase(exec.getId()) || "default".equalsIgnoreCase(exec.getId()))
                                 {
@@ -1836,16 +1906,40 @@ public class AuraReportDataService
             batchName, affectedRuns.size(), totalReevalMs);
     }
 
+    public static List<String> sortHistoryLinksDescending(final String historyLinks)
+    {
+        if (historyLinks == null || historyLinks.trim().isEmpty())
+        {
+            return Collections.emptyList();
+        }
+        final List<String> linksList = new ArrayList<>(List.of(historyLinks.split(",")));
+        linksList.sort((final String u1, final String u2) -> {
+            final Map<String, String> p1 = parseQueryParams(u1);
+            final Map<String, String> p2 = parseQueryParams(u2);
+            final long t1 = TestBaseVariationHistoryDto.parseTimestampToEpoch(p1.get("ts"), p1.get("runId"));
+            final long t2 = TestBaseVariationHistoryDto.parseTimestampToEpoch(p2.get("ts"), p2.get("runId"));
+            final int cmp = Long.compare(t2, t1);
+            if (cmp != 0)
+            {
+                return cmp;
+            }
+            final String r1 = p1.getOrDefault("runId", "");
+            final String r2 = p2.getOrDefault("runId", "");
+            return r2.compareToIgnoreCase(r1);
+        });
+        return linksList;
+    }
+
     static boolean hasBugsInLatestHistoryLink(final String historyLinks)
     {
         if (historyLinks == null || historyLinks.trim().isEmpty())
         {
             return false;
         }
-        final String[] links = historyLinks.split(",");
-        if (links.length > 0)
+        final List<String> sorted = sortHistoryLinksDescending(historyLinks);
+        if (!sorted.isEmpty())
         {
-            final String first = links[0].trim();
+            final String first = sorted.get(0).trim();
             final Map<String, String> params = parseQueryParams(first);
             final String status = params.get("status");
             final String bugs = params.get("bugs");
@@ -1863,10 +1957,10 @@ public class AuraReportDataService
         {
             return false;
         }
-        final String[] links = historyLinks.split(",");
-        if (links.length > 0)
+        final List<String> sorted = sortHistoryLinksDescending(historyLinks);
+        if (!sorted.isEmpty())
         {
-            final String first = links[0].trim();
+            final String first = sorted.get(0).trim();
             final Map<String, String> params = parseQueryParams(first);
             final String status = params.get("status");
             final String healed = params.get("healed");
@@ -1891,11 +1985,38 @@ public class AuraReportDataService
             final List<TestBaseBugEntity> activeBugs = bugRepository.findByVariationId(varId).stream()
                 .filter(b -> b.getRemovedRunId() == null)
                 .collect(Collectors.toList());
-            final boolean hasBugs = !activeBugs.isEmpty() || hasBugsInLatestHistoryLink(var.getHistoryLinks());
-            final boolean isHealed = (var.getHealed() != null && var.getHealed()) || isLatestHistoryLinkHealed(var.getHistoryLinks());
+            final List<String> sortedLinks = sortHistoryLinksDescending(var.getHistoryLinks());
+            if (!sortedLinks.isEmpty())
+            {
+                final String sortedLinksStr = String.join(",", sortedLinks);
+                if (!sortedLinksStr.equals(var.getHistoryLinks()))
+                {
+                    var.setHistoryLinks(sortedLinksStr);
+                }
+            }
+
+            final String historyStr = var.getHistoryLinks();
+            final boolean hasBugs = !activeBugs.isEmpty() || hasBugsInLatestHistoryLink(historyStr);
+
+            final String cur;
+            final boolean isHealed;
+            if (!sortedLinks.isEmpty())
+            {
+                final Map<String, String> latestParams = parseQueryParams(sortedLinks.get(0));
+                final String linkStatus = latestParams.get("status");
+                final String linkHealed = latestParams.get("healed");
+                isHealed = "true".equalsIgnoreCase(linkHealed) || "healed".equalsIgnoreCase(linkStatus);
+                cur = (linkStatus != null && !linkStatus.isBlank())
+                    ? linkStatus
+                    : (var.getLastStatus() != null ? var.getLastStatus() : "passed-clean");
+            }
+            else
+            {
+                isHealed = (var.getHealed() != null && var.getHealed()) || isLatestHistoryLinkHealed(historyStr);
+                cur = var.getLastStatus() != null ? var.getLastStatus() : "passed-clean";
+            }
             var.setHealed(isHealed);
 
-            final String cur = var.getLastStatus() != null ? var.getLastStatus() : "passed-clean";
             String effective = cur;
             if ("failed".equalsIgnoreCase(cur) || "failed-unknown".equalsIgnoreCase(cur) || "failed-known".equalsIgnoreCase(cur) || "error".equalsIgnoreCase(cur))
             {
@@ -1905,7 +2026,7 @@ public class AuraReportDataService
             {
                 effective = hasBugs ? "succeeded-fixed" : (isHealed ? "healed" : "passed-clean");
             }
-            if (!effective.equalsIgnoreCase(cur))
+            if (!effective.equalsIgnoreCase(var.getLastStatus()) || !Objects.equals(isHealed, var.getHealed()))
             {
                 var.setLastStatus(effective);
                 variationRepository.save(var);
@@ -2379,6 +2500,7 @@ public class AuraReportDataService
 
                     final List<TestBaseVariationHistoryDto> historyList = new ArrayList<>();
                     final List<String> upgradedLinks = new ArrayList<>();
+                    final Map<String, String> linkByKey = new HashMap<>();
                     boolean modifiedAny = false;
 
                     for (final Map<String, String> params : parsedLinks)
@@ -2489,16 +2611,17 @@ public class AuraReportDataService
                                 isFailedHealed
                             ));
 
-                            final String relUrl = "/run-report?runId=" + java.net.URLEncoder.encode(runId, StandardCharsets.UTF_8)
-                                + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(execId.trim(), StandardCharsets.UTF_8) : "")
-                                + "&batch=" + java.net.URLEncoder.encode(batchName, StandardCharsets.UTF_8)
-                                + "&engine=" + java.net.URLEncoder.encode(engine, StandardCharsets.UTF_8)
-                                + (legacyMode != null && !legacyMode.isBlank() ? "&mode=" + java.net.URLEncoder.encode(legacyMode, StandardCharsets.UTF_8) : "")
-                                + "&ts=" + java.net.URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
-                                + "&status=" + java.net.URLEncoder.encode(effectiveStatus, StandardCharsets.UTF_8)
+                            final String relUrl = "/run-report?runId=" + URLEncoder.encode(runId, StandardCharsets.UTF_8)
+                                + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + URLEncoder.encode(execId.trim(), StandardCharsets.UTF_8) : "")
+                                + "&batch=" + URLEncoder.encode(batchName, StandardCharsets.UTF_8)
+                                + "&engine=" + URLEncoder.encode(engine, StandardCharsets.UTF_8)
+                                + (legacyMode != null && !legacyMode.isBlank() ? "&mode=" + URLEncoder.encode(legacyMode, StandardCharsets.UTF_8) : "")
+                                + "&ts=" + URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
+                                + "&status=" + URLEncoder.encode(effectiveStatus, StandardCharsets.UTF_8)
                                 + (isHealed ? "&healed=true" : "")
-                                + (!joinedBugs.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(joinedBugs, StandardCharsets.UTF_8) : "");
+                                + (!joinedBugs.isEmpty() ? "&bugs=" + URLEncoder.encode(joinedBugs, StandardCharsets.UTF_8) : "");
                             upgradedLinks.add(relUrl);
+                            linkByKey.put(runId + "::" + (execId != null ? execId : ""), relUrl);
                             modifiedAny = true;
                         }
                         else
@@ -2583,17 +2706,18 @@ public class AuraReportDataService
                                         isFailedHealed
                                     ));
 
-                                    final String enrichedUrl = "/run-report?runId=" + java.net.URLEncoder.encode(runId, StandardCharsets.UTF_8)
-                                        + (matchedExec.getId() != null && !matchedExec.getId().trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(matchedExec.getId().trim(), StandardCharsets.UTF_8) : "")
-                                        + "&batch=" + java.net.URLEncoder.encode(run.getBatchName(), StandardCharsets.UTF_8)
-                                        + "&engine=" + java.net.URLEncoder.encode(curEngine, StandardCharsets.UTF_8)
-                                        + (curMode != null && !curMode.isBlank() ? "&mode=" + java.net.URLEncoder.encode(curMode, StandardCharsets.UTF_8) : "")
-                                        + "&ts=" + java.net.URLEncoder.encode(curTs, StandardCharsets.UTF_8)
-                                        + "&status=" + java.net.URLEncoder.encode(execRawStatus, StandardCharsets.UTF_8)
+                                    final String enrichedUrl = "/run-report?runId=" + URLEncoder.encode(runId, StandardCharsets.UTF_8)
+                                        + (matchedExec.getId() != null && !matchedExec.getId().trim().isEmpty() ? "&executionId=" + URLEncoder.encode(matchedExec.getId().trim(), StandardCharsets.UTF_8) : "")
+                                        + "&batch=" + URLEncoder.encode(run.getBatchName(), StandardCharsets.UTF_8)
+                                        + "&engine=" + URLEncoder.encode(curEngine, StandardCharsets.UTF_8)
+                                        + (curMode != null && !curMode.isBlank() ? "&mode=" + URLEncoder.encode(curMode, StandardCharsets.UTF_8) : "")
+                                        + "&ts=" + URLEncoder.encode(curTs, StandardCharsets.UTF_8)
+                                        + "&status=" + URLEncoder.encode(execRawStatus, StandardCharsets.UTF_8)
                                         + (isHealed ? "&healed=true" : "")
-                                        + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
+                                        + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
 
                                     upgradedLinks.add(enrichedUrl);
+                                    linkByKey.put(runId + "::" + (matchedExec.getId() != null ? matchedExec.getId() : ""), enrichedUrl);
                                     modifiedAny = true;
                                 }
                             }
@@ -2602,19 +2726,50 @@ public class AuraReportDataService
 
                     if (!historyList.isEmpty())
                     {
-                        final String latestStatus = historyList.get(0).getStatus();
-                        if (latestStatus != null && !latestStatus.equalsIgnoreCase(varEntity.getLastStatus()))
+                        historyList.sort(TestBaseVariationHistoryDto.BY_TIMESTAMP_DESC);
+
+                        final List<String> sortedUpgradedLinks = new ArrayList<>();
+                        for (final TestBaseVariationHistoryDto dto : historyList)
+                        {
+                            final String key = dto.getRunId() + "::" + dto.getExecutionId();
+                            final String link = linkByKey.get(key);
+                            if (link != null && !sortedUpgradedLinks.contains(link))
+                            {
+                                sortedUpgradedLinks.add(link);
+                            }
+                        }
+
+                        final boolean needSaveLinks = !sortedUpgradedLinks.isEmpty() && (!sortedUpgradedLinks.equals(upgradedLinks) || modifiedAny);
+                        final String rawLatest = historyList.get(0).getStatus();
+                        final boolean isHealed = historyList.get(0).isHealed();
+                        final boolean hasBugs = historyList.get(0).getBugs() != null && !historyList.get(0).getBugs().isEmpty();
+                        final String latestStatus;
+                        if ("failed".equalsIgnoreCase(rawLatest) || "error".equalsIgnoreCase(rawLatest) || "failed-unknown".equalsIgnoreCase(rawLatest) || "failed-known".equalsIgnoreCase(rawLatest))
+                        {
+                            latestStatus = hasBugs ? "failed-known" : "failed-unknown";
+                        }
+                        else if ("passed".equalsIgnoreCase(rawLatest) || "succeeded".equalsIgnoreCase(rawLatest) || "passed-clean".equalsIgnoreCase(rawLatest) || "succeeded-fixed".equalsIgnoreCase(rawLatest) || "healed".equalsIgnoreCase(rawLatest))
+                        {
+                            latestStatus = hasBugs ? "succeeded-fixed" : (isHealed ? "healed" : "passed-clean");
+                        }
+                        else
+                        {
+                            latestStatus = rawLatest != null ? rawLatest : "passed-clean";
+                        }
+
+                        if (!latestStatus.equalsIgnoreCase(varEntity.getLastStatus()) || !Objects.equals(isHealed, varEntity.getHealed()))
                         {
                             varEntity.setLastStatus(latestStatus);
-                            if (modifiedAny && !upgradedLinks.isEmpty())
+                            varEntity.setHealed(isHealed);
+                            if (needSaveLinks)
                             {
-                                varEntity.setHistoryLinks(String.join(",", upgradedLinks));
+                                varEntity.setHistoryLinks(String.join(",", sortedUpgradedLinks));
                             }
                             variationRepository.save(varEntity);
                         }
-                        else if (modifiedAny && !upgradedLinks.isEmpty())
+                        else if (needSaveLinks)
                         {
-                            varEntity.setHistoryLinks(String.join(",", upgradedLinks));
+                            varEntity.setHistoryLinks(String.join(",", sortedUpgradedLinks));
                             variationRepository.save(varEntity);
                         }
                         return historyList;
@@ -2626,6 +2781,7 @@ public class AuraReportDataService
         final List<TestRunEntity> runs = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc();
         final List<TestBaseVariationHistoryDto> historyList = new ArrayList<>();
         final List<String> newLinksList = new ArrayList<>();
+        final Map<String, String> fallbackLinkByKey = new HashMap<>();
 
         for (final TestRunEntity run : runs)
         {
@@ -2683,20 +2839,21 @@ public class AuraReportDataService
                 final boolean isPassedHealed = exec.isPassedHealed();
                 final boolean isFailedHealed = exec.isFailedHealed();
 
-                final String relUrl = "/run-report?runId=" + java.net.URLEncoder.encode(run.getId(), StandardCharsets.UTF_8)
-                    + (exec.getId() != null && !exec.getId().trim().isEmpty() ? "&executionId=" + java.net.URLEncoder.encode(exec.getId().trim(), StandardCharsets.UTF_8) : "")
-                    + "&batch=" + java.net.URLEncoder.encode(run.getBatchName(), StandardCharsets.UTF_8)
-                    + "&engine=" + java.net.URLEncoder.encode(engine, StandardCharsets.UTF_8)
-                    + (mode != null && !mode.isBlank() ? "&mode=" + java.net.URLEncoder.encode(mode, StandardCharsets.UTF_8) : "")
-                    + "&ts=" + java.net.URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
-                    + "&status=" + java.net.URLEncoder.encode(rawStatus, StandardCharsets.UTF_8)
+                final String relUrl = "/run-report?runId=" + URLEncoder.encode(run.getId(), StandardCharsets.UTF_8)
+                    + (exec.getId() != null && !exec.getId().trim().isEmpty() ? "&executionId=" + URLEncoder.encode(exec.getId().trim(), StandardCharsets.UTF_8) : "")
+                    + "&batch=" + URLEncoder.encode(run.getBatchName(), StandardCharsets.UTF_8)
+                    + "&engine=" + URLEncoder.encode(engine, StandardCharsets.UTF_8)
+                    + (mode != null && !mode.isBlank() ? "&mode=" + URLEncoder.encode(mode, StandardCharsets.UTF_8) : "")
+                    + "&ts=" + URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
+                    + "&status=" + URLEncoder.encode(rawStatus, StandardCharsets.UTF_8)
                     + (isHealed ? "&healed=true" : "")
-                    + (!bugsStr.isEmpty() ? "&bugs=" + java.net.URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
+                    + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
 
                 if (!newLinksList.contains(relUrl))
                 {
                     newLinksList.add(relUrl);
                 }
+                fallbackLinkByKey.put(run.getId() + "::" + (exec.getId() != null ? exec.getId() : ""), relUrl);
 
                 historyList.add(new TestBaseVariationHistoryDto(
                     run.getId(),
@@ -2716,7 +2873,47 @@ public class AuraReportDataService
             }
         }
 
-        if (!newLinksList.isEmpty() && varOpt.isPresent())
+        if (!historyList.isEmpty())
+        {
+            historyList.sort(TestBaseVariationHistoryDto.BY_TIMESTAMP_DESC);
+
+            final List<String> sortedFallbackLinks = new ArrayList<>();
+            for (final TestBaseVariationHistoryDto dto : historyList)
+            {
+                final String key = dto.getRunId() + "::" + dto.getExecutionId();
+                final String link = fallbackLinkByKey.get(key);
+                if (link != null && !sortedFallbackLinks.contains(link))
+                {
+                    sortedFallbackLinks.add(link);
+                }
+            }
+
+            if (!sortedFallbackLinks.isEmpty() && varOpt.isPresent())
+            {
+                final TestBaseVariationEntity varEntity = varOpt.get();
+                varEntity.setHistoryLinks(String.join(",", sortedFallbackLinks));
+                final String rawLatest = historyList.get(0).getStatus();
+                final boolean isHealed = historyList.get(0).isHealed();
+                final boolean hasBugs = historyList.get(0).getBugs() != null && !historyList.get(0).getBugs().isEmpty();
+                final String latestStatus;
+                if ("failed".equalsIgnoreCase(rawLatest) || "error".equalsIgnoreCase(rawLatest) || "failed-unknown".equalsIgnoreCase(rawLatest) || "failed-known".equalsIgnoreCase(rawLatest))
+                {
+                    latestStatus = hasBugs ? "failed-known" : "failed-unknown";
+                }
+                else if ("passed".equalsIgnoreCase(rawLatest) || "succeeded".equalsIgnoreCase(rawLatest) || "passed-clean".equalsIgnoreCase(rawLatest) || "succeeded-fixed".equalsIgnoreCase(rawLatest) || "healed".equalsIgnoreCase(rawLatest))
+                {
+                    latestStatus = hasBugs ? "succeeded-fixed" : (isHealed ? "healed" : "passed-clean");
+                }
+                else
+                {
+                    latestStatus = rawLatest != null ? rawLatest : "passed-clean";
+                }
+                varEntity.setLastStatus(latestStatus);
+                varEntity.setHealed(isHealed);
+                variationRepository.save(varEntity);
+            }
+        }
+        else if (!newLinksList.isEmpty() && varOpt.isPresent())
         {
             final TestBaseVariationEntity varEntity = varOpt.get();
             varEntity.setHistoryLinks(String.join(",", newLinksList));
@@ -2855,6 +3052,24 @@ public class AuraReportDataService
     public static String generateVariationId(final String testClass, final String dataSet, final String location, final String browser)
     {
         return generateVariationId(testClass, null, dataSet, location, browser);
+    }
+
+    public static String extractBrowserFromIdOrKey(final String idOrKey)
+    {
+        if (idOrKey == null || idOrKey.isBlank() || !idOrKey.contains("#"))
+        {
+            return null;
+        }
+        final String[] parts = idOrKey.split("#");
+        if (parts.length >= 4 && !parts[3].isBlank())
+        {
+            return parts[3].trim();
+        }
+        if (parts.length == 3 && !parts[2].isBlank())
+        {
+            return parts[2].trim();
+        }
+        return null;
     }
 }
 

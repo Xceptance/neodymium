@@ -621,6 +621,7 @@ public class LocalRunJsonStorageService
                     metricObj.put("testMethod", tMethod);
                     metricObj.put("title", tTitle);
                     metricObj.put("location", loc);
+                    metricObj.put("browser", tBrowser);
                     final String baseStatus = objNode.path("status").asText("failed-unknown");
                     final boolean hasBugsNode = objNode.has("bugs") && objNode.get("bugs").isArray() && objNode.get("bugs").size() > 0;
                     final String effStatus;

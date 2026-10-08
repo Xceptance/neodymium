@@ -1456,30 +1456,47 @@
         }
 
         .history-table th {
-            padding: 3px 6px !important;
-            font-weight: 600;
+            padding: 8px 10px !important;
+            font-weight: 700;
             border-bottom: 2px solid var(--border);
             color: var(--text-secondary);
             font-size: 11px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             text-align: left;
+            white-space: nowrap;
         }
 
         .history-table td {
-            padding: 3px 6px !important;
+            padding: 8px 10px !important;
             border-bottom: 1px solid var(--border);
             color: var(--text-primary);
             vertical-align: middle;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .history-table .btn-fake-link {
-            padding: 0.15rem 0.3rem !important;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            padding: 0.15rem 0.35rem !important;
             background: transparent !important;
             border: none !important;
             box-shadow: none !important;
+            font-family: var(--font-mono) !important;
             font-size: 0.8rem !important;
+            font-weight: 600;
+            color: #1d4ed8 !important;
             max-width: 100%;
+            white-space: nowrap;
+        }
+
+        .history-table .run-id-text {
+            font-family: var(--font-mono, monospace);
+            font-size: 0.8rem;
+            letter-spacing: -0.01em;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
@@ -1489,6 +1506,32 @@
             background: #eff6ff !important;
             color: #1d4ed8 !important;
             text-decoration: underline !important;
+            border-radius: 4px;
+        }
+
+        .history-table .tag-chip-mode {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 7px;
+            letter-spacing: 0.2px;
+            white-space: nowrap;
+            display: inline-block;
+            max-width: 100%;
+        }
+
+        .history-table th:hover {
+            color: var(--text-primary);
+        }
+
+        .history-table th .sort-icon {
+            font-size: 13px;
+            vertical-align: middle;
+            color: var(--text-secondary);
+            transition: color 0.15s ease;
+        }
+
+        .history-table th:hover .sort-icon {
+            color: #1d4ed8;
         }
 
         .history-row {

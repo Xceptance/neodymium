@@ -599,15 +599,42 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 /* Tables */
 .table-responsive { overflow-x: auto; }
 table.aura-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.875rem; }
-table.history-table { table-layout: fixed; width: 100%; }
-table.history-table th, table.history-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0.25rem 0.4rem !important; }
+table.history-table { width: 100%; border-collapse: collapse; }
+table.history-table th { 
+    padding: 0.5rem 0.65rem !important; 
+    font-size: 0.75rem; 
+    font-weight: 700; 
+    letter-spacing: 0.04em; 
+    color: var(--text-muted); 
+    background-color: var(--bg-card); 
+    border-bottom: 1px solid var(--border); 
+    white-space: nowrap; 
+}
+table.history-table td { 
+    padding: 0.5rem 0.65rem !important; 
+    border-bottom: 1px solid var(--border); 
+    white-space: nowrap; 
+    vertical-align: middle; 
+}
 table.history-table .btn-fake-link {
-    padding: 0.15rem 0.3rem !important;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.35rem !important;
     background: transparent !important;
     border: none !important;
     box-shadow: none !important;
+    font-family: var(--font-mono) !important;
     font-size: 0.8rem !important;
+    font-weight: 600;
+    color: var(--status-fixed) !important;
     max-width: 100%;
+    white-space: nowrap;
+}
+table.history-table .run-id-text {
+    font-family: var(--font-mono, monospace);
+    font-size: 0.8rem;
+    letter-spacing: -0.01em;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -616,6 +643,34 @@ table.history-table .btn-fake-link:hover {
     background: var(--status-fixed-bg) !important;
     color: var(--status-fixed) !important;
     text-decoration: underline !important;
+    border-radius: var(--radius-sm);
+}
+table.history-table th,
+table.history-table td {
+    padding: 0.65rem 0.65rem !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+table.history-table .tag-chip-mode {
+    font-size: 0.72rem;
+    font-weight: 600;
+    padding: 0.15rem 0.5rem;
+    letter-spacing: 0.01em;
+    white-space: nowrap;
+    display: inline-block;
+    max-width: 100%;
+}
+table.history-table th:hover {
+    color: var(--text-main);
+}
+table.history-table th .sort-icon {
+    font-size: 0.85rem;
+    vertical-align: middle;
+    color: var(--text-muted);
+    transition: color 0.15s ease;
+}
+table.history-table th:hover .sort-icon {
+    color: var(--status-fixed);
 }
 table.aura-table th { background-color: var(--bg-card); color: var(--text-muted); font-weight: 600; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; }
 table.aura-table td { padding: 0.85rem 1rem; border-bottom: 1px solid var(--border); color: var(--text-main); vertical-align: middle; }
