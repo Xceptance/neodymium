@@ -151,13 +151,38 @@ public final class MarkdownReportGenerator
         if (!report.isSuccess() && (report.getFailureReason() != null || report.getVisualRcaResult() != null || report.getVisualRcaExplanation() != null || (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())))
         {
             sb.append("## 🚨 Failure Diagnostics\n\n");
-            if (report.getFailureReason() != null)
+            String failureReason = report.getFailureReason();
+            String embeddedRca = null;
+            if (failureReason != null)
             {
-                sb.append("> **Error**: ").append(report.getFailureReason()).append("\n\n");
+                final int rcaMarkerIdx = Math.max(
+                    failureReason.indexOf("Visual Root Cause Analysis (RCA):"),
+                    failureReason.indexOf("**Root Cause Analysis:**")
+                );
+                if (rcaMarkerIdx >= 0)
+                {
+                    embeddedRca = failureReason.substring(rcaMarkerIdx).trim();
+                    failureReason = failureReason.substring(0, rcaMarkerIdx).trim();
+                }
             }
-            if (report.getVisualRcaResult() != null)
+
+            if (failureReason != null && !failureReason.isBlank())
             {
-                final VisualRcaResult vr = report.getVisualRcaResult();
+                sb.append("> **Error**: ").append(failureReason).append("\n\n");
+            }
+
+            VisualRcaResult vr = report.getVisualRcaResult();
+            if (vr == null)
+            {
+                final String rawRca = report.getVisualRcaExplanation() != null ? report.getVisualRcaExplanation() : embeddedRca;
+                if (rawRca != null && !rawRca.isBlank())
+                {
+                    vr = VisualRcaResult.fromFormattedDiagnosis(rawRca);
+                }
+            }
+
+            if (vr != null)
+            {
                 sb.append("### 🔍 Visual Root Cause Analysis (RCA)\n\n");
                 if (vr.getRootCause() != null && !vr.getRootCause().isBlank())
                 {
@@ -190,10 +215,11 @@ public final class MarkdownReportGenerator
                     sb.append("\n");
                 }
             }
-            else if (report.getVisualRcaExplanation() != null)
+            else if (report.getVisualRcaExplanation() != null || embeddedRca != null)
             {
+                final String explanation = report.getVisualRcaExplanation() != null ? report.getVisualRcaExplanation() : embeddedRca;
                 sb.append("### 🔍 Visual Root Cause Analysis (RCA)\n\n");
-                sb.append("```\n").append(report.getVisualRcaExplanation()).append("\n```\n\n");
+                sb.append("```\n").append(explanation).append("\n```\n\n");
             }
             if (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())
             {

@@ -207,13 +207,38 @@ public final class HtmlReportGenerator
         {
             sb.append("  <section class=\"diagnostic-box failure-box\">\n");
             sb.append("    <div class=\"box-header\">🚨 Execution Failure Details</div>\n");
-            if (report.getFailureReason() != null)
+            String failureReason = report.getFailureReason();
+            String embeddedRca = null;
+            if (failureReason != null)
             {
-                sb.append("    <div class=\"failure-reason\"><strong>Error:</strong> ").append(escapeHtml(report.getFailureReason())).append("</div>\n");
+                final int rcaMarkerIdx = Math.max(
+                    failureReason.indexOf("Visual Root Cause Analysis (RCA):"),
+                    failureReason.indexOf("**Root Cause Analysis:**")
+                );
+                if (rcaMarkerIdx >= 0)
+                {
+                    embeddedRca = failureReason.substring(rcaMarkerIdx).trim();
+                    failureReason = failureReason.substring(0, rcaMarkerIdx).trim();
+                }
             }
-            if (report.getVisualRcaResult() != null)
+
+            if (failureReason != null && !failureReason.isBlank())
             {
-                final VisualRcaResult rcaResult = report.getVisualRcaResult();
+                sb.append("    <div class=\"failure-reason\"><strong>Error:</strong> ").append(escapeHtml(failureReason)).append("</div>\n");
+            }
+
+            VisualRcaResult rcaResult = report.getVisualRcaResult();
+            if (rcaResult == null)
+            {
+                final String rawRca = report.getVisualRcaExplanation() != null ? report.getVisualRcaExplanation() : embeddedRca;
+                if (rawRca != null && !rawRca.isBlank())
+                {
+                    rcaResult = VisualRcaResult.fromFormattedDiagnosis(rawRca);
+                }
+            }
+
+            if (rcaResult != null)
+            {
                 sb.append("    <div class=\"visual-rca-box\">\n");
                 sb.append("      <div class=\"rca-title\">🔍 Visual Root Cause Analysis (RCA)</div>\n");
                 if (rcaResult.getRootCause() != null && !rcaResult.getRootCause().isBlank())
@@ -234,11 +259,12 @@ public final class HtmlReportGenerator
                 }
                 sb.append("    </div>\n");
             }
-            else if (report.getVisualRcaExplanation() != null)
+            else if (report.getVisualRcaExplanation() != null || embeddedRca != null)
             {
+                final String explanation = report.getVisualRcaExplanation() != null ? report.getVisualRcaExplanation() : embeddedRca;
                 sb.append("    <div class=\"visual-rca-box\">\n");
                 sb.append("      <div class=\"rca-title\">🔍 Visual Root Cause Analysis (RCA)</div>\n");
-                sb.append("      <div class=\"rca-content\">").append(escapeHtml(report.getVisualRcaExplanation())).append("</div>\n");
+                sb.append("      <div class=\"rca-content\">").append(escapeHtml(explanation)).append("</div>\n");
                 sb.append("    </div>\n");
             }
             if (report.getFailureStackTrace() != null && !report.getFailureStackTrace().isBlank())

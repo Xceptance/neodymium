@@ -2076,6 +2076,207 @@ function startLiveStepRefreshTimer(activeRow) {
     }, 1000);
 }
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function formatInlineMarkdown(text) {
+    if (!text) return '';
+    return text
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code class="text-mono" style="font-size: 0.85em; background: rgba(0,0,0,0.05); padding: 1px 4px; border-radius: 3px;">$1</code>');
+}
+
+function getScoreBadgeClass(score) {
+    const s = String(score || '').trim().toUpperCase();
+    switch (s) {
+        case 'ERROR_PRESENT':
+        case 'MISSING':
+        case 'STUCK':
+        case 'OBSTRUCTED':
+        case 'FAIL':
+        case 'FAILED':
+            return 'pill-fail';
+        case 'CLEAN':
+        case 'FOUND':
+        case 'PROGRESSING':
+        case 'CLEAR':
+        case 'PASS':
+        case 'PASSED':
+            return 'pill-pass';
+        default:
+            return 'pill-pending';
+    }
+}
+
+function extractRcaFromText(rawText) {
+    if (!rawText) return { cleanError: '', rcaText: null };
+    const str = String(rawText);
+
+    const marker1 = 'Visual Root Cause Analysis (RCA):';
+    const marker2 = '**Root Cause Analysis:**';
+    const marker3 = '### Diagnostic Rubrics';
+
+    const idx1 = str.indexOf(marker1);
+    const idx2 = str.indexOf(marker2);
+    const idx3 = str.indexOf(marker3);
+
+    const validIndices = [idx1, idx2, idx3].filter(idx => idx >= 0);
+    if (validIndices.length > 0) {
+        const markerIdx = Math.min(...validIndices);
+        return {
+            cleanError: str.substring(0, markerIdx).trim(),
+            rcaText: str.substring(markerIdx).trim()
+        };
+    }
+
+    return { cleanError: str.trim(), rcaText: null };
+}
+
+function parseVisualRca(rcaText) {
+    if (!rcaText) return null;
+    let text = String(rcaText).trim();
+
+    text = text.replace(/^Visual Root Cause Analysis \(RCA\):\s*/i, '').trim();
+
+    let rootCause = '';
+    const rcMatch = text.match(/(?:\*\*Root Cause (?:Analysis|Diagnosis):\*\*|Root Cause Diagnosis:)\s*\n*([\s\S]*?)(?=(?:###\s*Diagnostic Rubrics|-\s*\*\*)|$)/i);
+    if (rcMatch) {
+        rootCause = rcMatch[1].trim();
+    }
+
+    const rubrics = [];
+    const rubricDefs = [
+        { key: 'targetPresence', name: '🎯 Target Presence Check', pattern: /-\s*\*\*(?:🎯\s*)?Target Presence Check:\*\*\s*`?\[([^\]]+)\]`?\s*([\s\S]*?)(?=(?:-\s*\*\*)|$)/i },
+        { key: 'formValidation', name: '📝 Form & Validation Check', pattern: /-\s*\*\*(?:📝\s*)?Form & Validation Check:\*\*\s*`?\[([^\]]+)\]`?\s*([\s\S]*?)(?=(?:-\s*\*\*)|$)/i },
+        { key: 'flowState', name: '🧭 Navigation & Flow State', pattern: /-\s*\*\*(?:🧭\s*)?Navigation & Flow State:\*\*\s*`?\[([^\]]+)\]`?\s*([\s\S]*?)(?=(?:-\s*\*\*)|$)/i },
+        { key: 'obstruction', name: '🚫 Action Obstruction Check', pattern: /-\s*\*\*(?:🚫\s*)?Action Obstruction Check:\*\*\s*`?\[([^\]]+)\]`?\s*([\s\S]*?)(?=(?:-\s*\*\*)|$)/i }
+    ];
+
+    for (const def of rubricDefs) {
+        const m = text.match(def.pattern);
+        if (m) {
+            rubrics.push({
+                name: def.name,
+                score: m[1].trim(),
+                analysis: m[2].trim()
+            });
+        }
+    }
+
+    if (rubrics.length === 0) {
+        const genericRegex = /-\s*\*\*([^*]+):\*\*\s*`?\[([^\]]+)\]`?\s*([^\n]+)/g;
+        let gm;
+        while ((gm = genericRegex.exec(text)) !== null) {
+            rubrics.push({
+                name: gm[1].trim(),
+                score: gm[2].trim(),
+                analysis: gm[3].trim()
+            });
+        }
+    }
+
+    if (!rootCause) {
+        if (rubrics.length > 0) {
+            const rubricHeaderIdx = text.indexOf('### Diagnostic Rubrics');
+            if (rubricHeaderIdx > 0) {
+                rootCause = text.substring(0, rubricHeaderIdx).replace(/\*\*Root Cause Analysis:\*\*/i, '').trim();
+            } else {
+                const bulletIdx = text.indexOf('- **');
+                if (bulletIdx > 0) {
+                    rootCause = text.substring(0, bulletIdx).replace(/\*\*Root Cause Analysis:\*\*/i, '').trim();
+                }
+            }
+        } else {
+            rootCause = text;
+        }
+    }
+
+    return { rootCause, rubrics };
+}
+
+function renderVisualRcaHtml(rcaText) {
+    const parsed = parseVisualRca(rcaText);
+    if (!parsed) return '';
+
+    let html = '<div class="visual-rca-box">';
+    html += '<div class="rca-title"><span class="material-symbols-outlined" style="font-size: 1.05rem; vertical-align: middle;">search</span> Visual Root Cause Analysis (RCA)</div>';
+
+    if (parsed.rootCause) {
+        html += `<div class="rca-root-cause"><strong>Root Cause Diagnosis:</strong> ${formatInlineMarkdown(escapeHtml(parsed.rootCause))}</div>`;
+    }
+
+    if (parsed.rubrics && parsed.rubrics.length > 0) {
+        html += '<div class="rubrics-grid">';
+        for (const item of parsed.rubrics) {
+            const scoreClass = getScoreBadgeClass(item.score);
+            html += `
+                <div class="rubric-item-card">
+                    <div class="rubric-item-header">
+                        <span class="rubric-name">${escapeHtml(item.name)}</span>
+                        <span class="rubric-score ${scoreClass}">${escapeHtml(item.score)}</span>
+                    </div>
+                    <div class="rubric-analysis">${formatInlineMarkdown(escapeHtml(item.analysis))}</div>
+                </div>
+            `;
+        }
+        html += '</div>';
+    } else if (!parsed.rootCause) {
+        html += `<div class="rca-root-cause" style="white-space: pre-wrap;">${formatInlineMarkdown(escapeHtml(rcaText))}</div>`;
+    }
+
+    html += '</div>';
+    return html;
+}
+
+function renderErrorBoxContent(failureText, failureReason, visualRcaExplanation, allStackTraces) {
+    const rawFailure = (failureReason && failureReason.trim().length > 0) 
+        ? failureReason.trim() 
+        : (failureText && failureText !== 'NONE' && failureText.trim().length > 0 ? failureText.trim() : '');
+
+    let cleanFailure = rawFailure;
+    let effectiveRca = visualRcaExplanation && visualRcaExplanation.trim().length > 0 ? visualRcaExplanation.trim() : '';
+
+    if (rawFailure) {
+        const extracted = extractRcaFromText(rawFailure);
+        cleanFailure = extracted.cleanError;
+        if (!effectiveRca && extracted.rcaText) {
+            effectiveRca = extracted.rcaText;
+        }
+    }
+
+    if (!cleanFailure && !effectiveRca && (!allStackTraces || allStackTraces.length === 0)) {
+        return '';
+    }
+
+    let html = '';
+    if (cleanFailure) {
+        const displayFailure = cleanFailure.replace(/^(?:Failure Reason|Error):\s*/i, '');
+        html += `<div style="white-space: pre-wrap; word-break: break-word; color: #991b1b; font-family: var(--font-mono); font-size: 0.8rem; margin-bottom: 0.35rem;"><strong>Error:</strong> ${escapeHtml(displayFailure)}</div>`;
+    }
+
+    if (effectiveRca) {
+        html += renderVisualRcaHtml(effectiveRca);
+    }
+
+    if (allStackTraces && allStackTraces.length > 0) {
+        const combinedTrace = allStackTraces.join('\n\n');
+        html += `
+            <details class="error-stacktrace-collapsible">
+                <summary class="error-stacktrace-summary">
+                    <span class="material-symbols-outlined" style="font-size: 0.95rem;">terminal</span>
+                    Failure Stack Trace
+                </summary>
+                <pre class="error-stacktrace-pre">${escapeHtml(combinedTrace)}</pre>
+            </details>
+        `;
+    }
+
+    return html;
+}
+
 function renderStepsForExecution(activeRow) {
     const stepListEl = document.getElementById('sidePageStepList');
     if (!stepListEl) return;
@@ -2158,8 +2359,9 @@ function renderStepsForExecution(activeRow) {
     const errorCard = document.getElementById('sidePageErrorDisplayCard');
     const errorTextEl = document.getElementById('sidePageErrorText');
     if (errorCard && errorTextEl) {
-        if (failureText && failureText !== 'NONE' && failureText.trim().length > 0) {
-            errorTextEl.innerText = failureText.trim();
+        const initialHtml = renderErrorBoxContent(failureText, activeRow.getAttribute('data-failure-reason') || '', activeRow.getAttribute('data-visual-rca-explanation') || '', []);
+        if (initialHtml) {
+            errorTextEl.innerHTML = initialHtml;
             errorCard.style.display = 'flex';
         } else {
             errorCard.style.display = 'none';
@@ -2315,50 +2517,19 @@ function renderStepsForExecution(activeRow) {
     const stRawVal = (activeRow.getAttribute('data-status-raw') || '').toLowerCase();
     const isRunningState = stVal === 'RUNNING' || stRawVal === 'running' || stRawVal === 'in_progress' || stRawVal === 'executing' || stRawVal === 'pending';
 
-    function escapeHtml(str) {
-        if (!str) return '';
-        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    }
-
     const failureReason = activeRow.getAttribute('data-failure-reason') || blocksObj?.failureReason || '';
     const failureStackTrace = activeRow.getAttribute('data-failure-stack-trace') || blocksObj?.failureStackTrace || '';
     const visualRcaExplanation = activeRow.getAttribute('data-visual-rca-explanation') || blocksObj?.visualRcaExplanation || '';
 
     if (errorCard && errorTextEl) {
-        const errorParts = [];
-        if (failureText && failureText !== 'NONE' && failureText.trim().length > 0) {
-            errorParts.push(failureText.trim());
-        }
-        if (failureReason && failureReason.trim().length > 0) {
-            errorParts.push(`Failure Reason:\n${failureReason.trim()}`);
-        }
-        if (visualRcaExplanation && visualRcaExplanation.trim().length > 0) {
-            errorParts.push(`Visual Root Cause Analysis (RCA):\n${visualRcaExplanation.trim()}`);
-        }
-
         const allStackTraces = [];
         if (failureStackTrace && failureStackTrace.trim().length > 0) {
             allStackTraces.push(failureStackTrace.trim());
         }
 
-        if (errorParts.length > 0 || allStackTraces.length > 0) {
-            let htmlContent = '';
-            if (errorParts.length > 0) {
-                htmlContent += `<div style="white-space: pre-wrap; word-break: break-word;">${escapeHtml(errorParts.join('\n\n'))}</div>`;
-            }
-            if (allStackTraces.length > 0) {
-                const combinedTrace = allStackTraces.join('\n\n');
-                htmlContent += `
-                    <details class="error-stacktrace-collapsible">
-                        <summary class="error-stacktrace-summary">
-                            <span class="material-symbols-outlined" style="font-size: 0.95rem;">terminal</span>
-                            Failure Stack Trace
-                        </summary>
-                        <pre class="error-stacktrace-pre">${escapeHtml(combinedTrace)}</pre>
-                    </details>
-                `;
-            }
-            errorTextEl.innerHTML = htmlContent;
+        const renderedHtml = renderErrorBoxContent(failureText, failureReason, visualRcaExplanation, allStackTraces);
+        if (renderedHtml) {
+            errorTextEl.innerHTML = renderedHtml;
             errorCard.style.display = 'flex';
         } else {
             errorCard.style.display = 'none';

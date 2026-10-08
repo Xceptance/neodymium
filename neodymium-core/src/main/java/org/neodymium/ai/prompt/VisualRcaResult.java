@@ -18,6 +18,8 @@
  */
 package org.neodymium.ai.prompt;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.gson.annotations.SerializedName;
@@ -148,6 +150,99 @@ public final class VisualRcaResult
             }
         }
         return sb.length() > 0 ? sb.toString().trim() : (this.rootCause != null ? this.rootCause : "");
+    }
+
+    private static final Pattern ROOT_CAUSE_PATTERN = Pattern.compile(
+        "(?:\\*\\*Root Cause (?:Analysis|Diagnosis):\\*\\*|Root Cause Diagnosis:)\\s*\\n*([\\s\\S]*?)(?=(?:###\\s*Diagnostic Rubrics|-\\s*\\*\\*)|$)",
+        Pattern.CASE_INSENSITIVE
+    );
+
+    private static final Pattern TARGET_PRESENCE_PATTERN = Pattern.compile(
+        "-\\s*\\*\\*(?:🎯\\s*)?Target Presence Check:\\*\\*\\s*`?\\[([^\\]]+)\\]`?\\s*([\\s\\S]*?)(?=(?:-\\s*\\*\\*)|$)",
+        Pattern.CASE_INSENSITIVE
+    );
+
+    private static final Pattern FORM_VALIDATION_PATTERN = Pattern.compile(
+        "-\\s*\\*\\*(?:📝\\s*)?Form & Validation Check:\\*\\*\\s*`?\\[([^\\]]+)\\]`?\\s*([\\s\\S]*?)(?=(?:-\\s*\\*\\*)|$)",
+        Pattern.CASE_INSENSITIVE
+    );
+
+    private static final Pattern FLOW_STATE_PATTERN = Pattern.compile(
+        "-\\s*\\*\\*(?:🧭\\s*)?Navigation & Flow State:\\*\\*\\s*`?\\[([^\\]]+)\\]`?\\s*([\\s\\S]*?)(?=(?:-\\s*\\*\\*)|$)",
+        Pattern.CASE_INSENSITIVE
+    );
+
+    private static final Pattern OBSTRUCTION_PATTERN = Pattern.compile(
+        "-\\s*\\*\\*(?:🚫\\s*)?Action Obstruction Check:\\*\\*\\s*`?\\[([^\\]]+)\\]`?\\s*([\\s\\S]*?)(?=(?:-\\s*\\*\\*)|$)",
+        Pattern.CASE_INSENSITIVE
+    );
+
+    /**
+     * Parses a Markdown formatted diagnosis string back into a structured {@link VisualRcaResult}.
+     *
+     * @param markdown the Markdown text containing the diagnosis and optional rubrics
+     * @return the parsed VisualRcaResult or null if markdown is null or blank
+     */
+    public static VisualRcaResult fromFormattedDiagnosis(final String markdown)
+    {
+        if (markdown == null || markdown.isBlank())
+        {
+            return null;
+        }
+
+        String rootCause = null;
+        final Matcher rcMatcher = ROOT_CAUSE_PATTERN.matcher(markdown);
+        if (rcMatcher.find())
+        {
+            rootCause = rcMatcher.group(1).trim();
+        }
+
+        final RubricItem targetPresence = extractRubricItem(TARGET_PRESENCE_PATTERN, markdown);
+        final RubricItem formValidation = extractRubricItem(FORM_VALIDATION_PATTERN, markdown);
+        final RubricItem flowState = extractRubricItem(FLOW_STATE_PATTERN, markdown);
+        final RubricItem obstruction = extractRubricItem(OBSTRUCTION_PATTERN, markdown);
+
+        final Rubrics rubrics = (targetPresence != null || formValidation != null || flowState != null || obstruction != null)
+            ? new Rubrics(targetPresence, formValidation, flowState, obstruction)
+            : null;
+
+        if (rootCause == null || rootCause.isBlank())
+        {
+            if (rubrics != null)
+            {
+                final int rubricIdx = markdown.indexOf("### Diagnostic Rubrics");
+                if (rubricIdx > 0)
+                {
+                    rootCause = markdown.substring(0, rubricIdx).trim();
+                }
+                else
+                {
+                    final int bulletIdx = markdown.indexOf("- **");
+                    if (bulletIdx > 0)
+                    {
+                        rootCause = markdown.substring(0, bulletIdx).trim();
+                    }
+                }
+            }
+            else
+            {
+                rootCause = markdown.trim();
+            }
+        }
+
+        return new VisualRcaResult(rubrics, rootCause);
+    }
+
+    private static RubricItem extractRubricItem(final Pattern pattern, final String text)
+    {
+        final Matcher matcher = pattern.matcher(text);
+        if (matcher.find())
+        {
+            final String score = matcher.group(1).trim();
+            final String analysis = matcher.group(2).trim();
+            return new RubricItem(analysis, score);
+        }
+        return null;
     }
 
     /**

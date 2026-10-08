@@ -1985,6 +1985,58 @@ public class PreliminaryReportListenerTest
     }
 
     @Test
+    public void testFailureReasonWithEmbeddedRcaRendersRubricCard(@TempDir final Path reportDir) throws Exception
+    {
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        final PreliminaryReportListener listener = new PreliminaryReportListener(
+            reportDir,
+            EnumSet.of(DiskReportFormat.HTML, DiskReportFormat.MARKDOWN),
+            true
+        );
+        bus.registerListener(listener);
+
+        final PlaybookStep step1 = new PlaybookStep("Navigate to Wikipedia");
+        bus.dispatch(new StepStartedEvent(step1, 0));
+
+        final String rawFailureWithRca = """
+            no such element: Unable to locate element: {"method":"css selector","selector":"#selectLanguage"}
+
+            Visual Root Cause Analysis (RCA):
+            **Root Cause Analysis:**
+
+            The test failed due to an incorrect locator selector ({#selectLanguage}). English language options are visibly present and accessible.
+
+            ### Diagnostic Rubrics
+            - **Target Presence Check:** `[FOUND]` The target language option is visibly rendered on the page in multiple locations.
+            - **Form & Validation Check:** `[CLEAN]` No validation bubbles or errors are present.
+            - **Navigation & Flow State:** `[STUCK]` The test execution halted on landing page.
+            - **Action Obstruction Check:** `[CLEAR]` The user interface is completely visible and unobstructed.
+            """;
+
+        bus.dispatch(new DiagnosticErrorEvent(rawFailureWithRca));
+        bus.dispatch(new SessionFinishedEvent(1500, false, List.of()));
+
+        final Path htmlPath = reportDir.resolve(listener.getLastBaseFileName() + ".html");
+        assertTrue(Files.exists(htmlPath));
+        final String html = Files.readString(htmlPath);
+
+        assertTrue(html.contains("Visual Root Cause Analysis (RCA)"), "HTML report must contain Visual RCA section");
+        assertTrue(html.contains("visual-rca-box"), "HTML report must contain visual-rca-box");
+        assertTrue(html.contains("Target Presence Check"), "HTML report must contain Target Presence Check rubric card");
+        assertTrue(html.contains("FOUND"), "HTML report must render rubric score badge FOUND");
+        assertTrue(html.contains("STUCK"), "HTML report must render rubric score badge STUCK");
+        assertTrue(html.contains("pill-pass"), "HTML report must contain pill-pass badge class");
+        assertTrue(html.contains("pill-fail"), "HTML report must contain pill-fail badge class");
+        assertTrue(html.contains("no such element: Unable to locate element"), "HTML must contain clean error message");
+
+        final Path mdPath = reportDir.resolve(listener.getLastBaseFileName() + ".md");
+        assertTrue(Files.exists(mdPath));
+        final String md = Files.readString(mdPath);
+        assertTrue(md.contains("Visual Root Cause Analysis (RCA)"), "Markdown report must contain Visual RCA section");
+        assertTrue(md.contains("Diagnostic Rubrics"), "Markdown report must contain Diagnostic Rubrics");
+    }
+
+    @Test
     public void testVisualRcaTokensAreNotDoubleCountedAsStandardActionTokens(@TempDir final Path reportDir) throws Exception
     {
         final ExecutionEventBus bus = new ExecutionEventBus();

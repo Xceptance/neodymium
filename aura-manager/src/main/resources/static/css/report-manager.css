@@ -1004,6 +1004,21 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 .error-stacktrace-summary:hover { background: var(--bg-hover); }
 .error-stacktrace-pre { margin: 0; padding: 0.65rem 0.75rem; border-top: 1px solid var(--status-unknown-fail-border); background: var(--bg-card); color: var(--text-main); font-family: var(--font-mono); font-size: 0.75rem; white-space: pre-wrap; word-break: break-word; max-height: 250px; overflow-y: auto; }
 
+/* VISUAL ROOT CAUSE ANALYSIS (RCA) IN ERROR BOX */
+.visual-rca-box { background: #ffffff; border: 1px solid rgba(220, 38, 38, 0.3); border-radius: var(--radius-md, 8px); padding: 0.85rem 1rem; margin-top: 0.6rem; display: flex; flex-direction: column; gap: 0.6rem; font-family: var(--font-family, system-ui, -apple-system, sans-serif); }
+.rca-title { font-weight: 700; color: var(--accent, #2563eb); font-size: 0.875rem; display: flex; align-items: center; gap: 0.35rem; }
+.rca-root-cause { font-size: 0.825rem; line-height: 1.5; color: var(--text-main); word-break: break-word; }
+.rca-root-cause strong { font-weight: 700; }
+.rubrics-grid { display: grid; grid-template-columns: 1fr; gap: 0.5rem; }
+.rubric-item-card { background: var(--bg-panel, #f8fafc); border: 1px solid var(--border, #e2e8f0); border-radius: var(--radius-sm, 6px); padding: 0.5rem 0.75rem; display: flex; flex-direction: column; gap: 0.25rem; }
+.rubric-item-header { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem; }
+.rubric-name { font-weight: 600; font-size: 0.8rem; color: var(--text-main); }
+.rubric-score { font-size: 0.7rem; font-weight: 700; padding: 0.15rem 0.45rem; border-radius: 4px; text-transform: uppercase; font-family: var(--font-mono, monospace); }
+.rubric-analysis { font-size: 0.78rem; color: var(--text-muted); line-height: 1.4; word-break: break-word; }
+.pill-pass { background: #f0fdf4 !important; color: #166534 !important; border: 1px solid #bbf7d0 !important; }
+.pill-fail { background: #fef2f2 !important; color: #991b1b !important; border: 1px solid #fecaca !important; }
+.pill-pending { background: #fffbeb !important; color: #92400e !important; border: 1px solid #fde68a !important; }
+
 /* IGNORED REASON BOX STYLING */
 .step-ignored-box-top { background: var(--status-ignored-bg); border: 1px solid var(--status-ignored-border); border-radius: var(--radius-md); padding: 0.85rem 1rem; display: flex; flex-direction: column; gap: 0.45rem; font-size: 0.825rem; animation: fadeIn 0.2s ease; margin-top: 0.2rem; }
 .ignored-box-top-header { font-weight: 800; font-size: 0.8rem; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between; text-transform: uppercase; letter-spacing: 0.04em; }

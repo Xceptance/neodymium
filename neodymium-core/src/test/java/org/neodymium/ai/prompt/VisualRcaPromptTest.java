@@ -169,4 +169,47 @@ public final class VisualRcaPromptTest
         Assertions.assertTrue(userMessage.contains("## Recent Tool Interactions in this Step:"));
         Assertions.assertTrue(userMessage.contains("1. click(selector=\"button.submit\")"));
     }
+
+    @Test
+    public void testFromFormattedDiagnosis()
+    {
+        Assertions.assertNull(VisualRcaResult.fromFormattedDiagnosis(null));
+        Assertions.assertNull(VisualRcaResult.fromFormattedDiagnosis("   "));
+
+        final String simple = "Element was not visible within 5 seconds";
+        final VisualRcaResult simpleResult = VisualRcaResult.fromFormattedDiagnosis(simple);
+        Assertions.assertNotNull(simpleResult);
+        Assertions.assertEquals(simple, simpleResult.getRootCause());
+        Assertions.assertNull(simpleResult.getRubrics());
+
+        final String markdown = """
+            **Root Cause Analysis:**
+
+            The test failed due to an incorrect locator selector ({#selectLanguage}). English language options are visibly present and accessible.
+
+            ### Diagnostic Rubrics
+            - **Target Presence Check:** `[FOUND]` The target language option is visibly rendered on the page in multiple locations.
+            - **Form & Validation Check:** `[CLEAN]` No validation bubbles or errors are present.
+            - **Navigation & Flow State:** `[STUCK]` The test execution halted on landing page.
+            - **Action Obstruction Check:** `[CLEAR]` The user interface is completely visible and unobstructed.
+            """;
+
+        final VisualRcaResult parsed = VisualRcaResult.fromFormattedDiagnosis(markdown);
+        Assertions.assertNotNull(parsed);
+        Assertions.assertEquals("The test failed due to an incorrect locator selector ({#selectLanguage}). English language options are visibly present and accessible.", parsed.getRootCause());
+        Assertions.assertNotNull(parsed.getRubrics());
+        Assertions.assertEquals("FOUND", parsed.getRubrics().targetPresence().score());
+        Assertions.assertTrue(parsed.getRubrics().targetPresence().analysis().contains("visibly rendered"));
+        Assertions.assertEquals("CLEAN", parsed.getRubrics().formValidation().score());
+        Assertions.assertEquals("STUCK", parsed.getRubrics().flowState().score());
+        Assertions.assertEquals("CLEAR", parsed.getRubrics().obstruction().score());
+
+        // Round-trip check
+        final String reformatted = parsed.toFormattedDiagnosis();
+        final VisualRcaResult roundTrip = VisualRcaResult.fromFormattedDiagnosis(reformatted);
+        Assertions.assertNotNull(roundTrip);
+        Assertions.assertEquals(parsed.getRootCause(), roundTrip.getRootCause());
+        Assertions.assertEquals(parsed.getRubrics().targetPresence().score(), roundTrip.getRubrics().targetPresence().score());
+        Assertions.assertEquals(parsed.getRubrics().flowState().score(), roundTrip.getRubrics().flowState().score());
+    }
 }
