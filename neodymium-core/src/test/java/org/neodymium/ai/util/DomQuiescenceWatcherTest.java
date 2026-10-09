@@ -19,11 +19,17 @@
 package org.neodymium.ai.util;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
 import java.time.Duration;
+
+import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.WebDriverRunner;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -35,6 +41,21 @@ import org.junit.jupiter.api.Test;
  */
 final class DomQuiescenceWatcherTest
 {
+    private String previousBrowser;
+
+    @AfterEach
+    void tearDown()
+    {
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            Selenide.closeWebDriver();
+        }
+        if (previousBrowser != null)
+        {
+            Configuration.browser = previousBrowser;
+        }
+    }
+
     @Test
     void testUtilityClassProperties() throws Exception
     {
@@ -58,5 +79,57 @@ final class DomQuiescenceWatcherTest
         assertDoesNotThrow(() -> DomQuiescenceWatcher.waitForDomQuiet());
         assertDoesNotThrow(() -> DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(200), Duration.ofMillis(50)));
         assertDoesNotThrow(() -> DomQuiescenceWatcher.waitForDomQuiet(null, null));
+    }
+
+    @Test
+    void testBareFetchCallAfterInstallingTracker()
+    {
+        previousBrowser = Configuration.browser;
+        Configuration.browser = "firefox";
+        Configuration.headless = true;
+        Selenide.open("data:text/html;charset=utf-8,<html><head><title>Test</title></head><body></body></html>");
+
+        DomQuiescenceWatcher.installTracker();
+
+        final String result = Selenide.executeAsyncJavaScript("""
+            var done = arguments[arguments.length - 1];
+            (async function() {
+                try {
+                    await fetch('data:text/plain,ok');
+                    done('SUCCESS');
+                } catch (err) {
+                    done('ERROR [' + navigator.userAgent + ']: ' + err.name + ' - ' + err.message);
+                }
+            })();
+            """);
+
+        assertEquals("SUCCESS", result,
+                     "Bare fetch() call must succeed after tracker installation");
+    }
+
+    @Test
+    void testBareFetchCallAfterWaitForDomQuiet()
+    {
+        previousBrowser = Configuration.browser;
+        Configuration.browser = "firefox";
+        Configuration.headless = true;
+        Selenide.open("data:text/html;charset=utf-8,<html><head><title>Test</title></head><body></body></html>");
+
+        DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(50), Duration.ofMillis(10));
+
+        final String result = Selenide.executeAsyncJavaScript("""
+            var done = arguments[arguments.length - 1];
+            (async function() {
+                try {
+                    await fetch('data:text/plain,ok');
+                    done('SUCCESS');
+                } catch (err) {
+                    done('ERROR [' + navigator.userAgent + ']: ' + err.name + ' - ' + err.message);
+                }
+            })();
+            """);
+
+        assertEquals("SUCCESS", result,
+                     "Bare fetch() call must succeed after waitForDomQuiet");
     }
 }
