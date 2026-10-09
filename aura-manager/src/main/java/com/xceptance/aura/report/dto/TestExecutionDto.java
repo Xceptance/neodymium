@@ -20,8 +20,10 @@ package com.xceptance.aura.report.dto;
 
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonRawValue;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import java.util.ArrayList;
@@ -80,10 +82,12 @@ public final class TestExecutionDto
     private final JsonNode llmResponsibility;
     private final JsonNode metrics;
     private final String videoUrl;
+    private final JsonNode linterFindings;
+    private final JsonNode postFlightFindings;
 
     public TestExecutionDto()
     {
-        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false);
+        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
     }
 
     @JsonCreator
@@ -132,7 +136,9 @@ public final class TestExecutionDto
         @JsonProperty("llmResponsibility") final JsonNode llmResponsibility,
         @JsonProperty("metrics") final JsonNode metrics,
         @JsonProperty("videoUrl") @JsonAlias({"videoPath", "video"}) final String videoUrl,
-        @JsonProperty("healed") final Boolean healed)
+        @JsonProperty("healed") final Boolean healed,
+        @JsonProperty("linterFindings") final JsonNode linterFindings,
+        @JsonProperty("postFlightFindings") final JsonNode postFlightFindings)
     {
         final String effectiveTestClass;
         if (testClass != null && !testClass.trim().isEmpty())
@@ -289,6 +295,8 @@ public final class TestExecutionDto
         this.metrics = metrics;
         this.videoUrl = videoUrl != null ? videoUrl : "";
         this.healed = Boolean.TRUE.equals(healed);
+        this.linterFindings = linterFindings;
+        this.postFlightFindings = postFlightFindings;
     }
 
     public TestExecutionDto(
@@ -330,7 +338,7 @@ public final class TestExecutionDto
         final Double llmCost,
         final String failureSnippet)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, "", "", "", null, null, "", false);
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, "", "", "", null, null, "", false, null, null);
     }
 
     public TestExecutionDto(
@@ -375,7 +383,7 @@ public final class TestExecutionDto
         final String failureStackTrace,
         final String visualRcaExplanation)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, null, null, "", false);
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, null, null, "", false, null, null);
     }
 
     public TestExecutionDto(
@@ -401,7 +409,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false);
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
     }
 
     public TestExecutionDto(
@@ -426,7 +434,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false);
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
     }
 
     public TestExecutionDto(
@@ -440,7 +448,7 @@ public final class TestExecutionDto
         final String failure,
         final List<String> bugs)
     {
-        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false);
+        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
     }
 
     public String getId()
@@ -973,5 +981,41 @@ public final class TestExecutionDto
     public String getVisualRcaExplanation()
     {
         return visualRcaExplanation != null ? visualRcaExplanation : "";
+    }
+
+    @JsonIgnore
+    public JsonNode getLinterFindings()
+    {
+        return linterFindings;
+    }
+
+    @JsonIgnore
+    public JsonNode getPostFlightFindings()
+    {
+        return postFlightFindings;
+    }
+
+    @JsonProperty("linterFindings")
+    @JsonRawValue
+    public String getLinterFindingsRaw()
+    {
+        return (linterFindings != null && !linterFindings.isNull()) ? linterFindings.toString() : null;
+    }
+
+    @JsonProperty("postFlightFindings")
+    @JsonRawValue
+    public String getPostFlightFindingsRaw()
+    {
+        return (postFlightFindings != null && !postFlightFindings.isNull()) ? postFlightFindings.toString() : null;
+    }
+
+    public String getLinterFindingsJson()
+    {
+        return (linterFindings != null && !linterFindings.isNull()) ? linterFindings.toString() : "";
+    }
+
+    public String getPostFlightFindingsJson()
+    {
+        return (postFlightFindings != null && !postFlightFindings.isNull()) ? postFlightFindings.toString() : "";
     }
 }

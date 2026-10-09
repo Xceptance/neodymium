@@ -27,16 +27,27 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.playbook.linter.LinterCategory;
+import org.neodymium.ai.playbook.linter.LinterSeverity;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.report.TestExecutionReport.CategoryTokenUsage;
+import org.neodymium.ai.report.TestExecutionReport.ReportActionEntry;
 import org.neodymium.ai.report.TestExecutionReport.ReportMetrics;
+import org.neodymium.ai.report.TestExecutionReport.ReportStepEntry;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Unit test suite validating {@link InteractiveConsoleEngine} console execution logging.
@@ -420,17 +431,17 @@ public class InteractiveConsoleEngineTest
     @Test
     public void testStateJsonSerializesHealedActionTargetAndFlag() throws Exception
     {
-        final ExecutionContext context = new ExecutionContext(new org.neodymium.ai.model.SessionData());
-        final org.neodymium.ai.model.PlaybookStep pbStep = new org.neodymium.ai.model.PlaybookStep("Select language");
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final PlaybookStep pbStep = new PlaybookStep("Select language");
         pbStep.setLineNumber(1);
-        context.getTransientData().put("playbook.flatSteps", java.util.List.of(pbStep));
+        context.getTransientData().put("playbook.flatSteps", List.of(pbStep));
 
         final TestExecutionReport report = new TestExecutionReport();
-        final TestExecutionReport.ReportStepEntry step = new TestExecutionReport.ReportStepEntry();
+        final ReportStepEntry step = new ReportStepEntry();
         step.setStepIndex(0);
         step.setRawInstruction("Select language");
 
-        final TestExecutionReport.ReportActionEntry action = new TestExecutionReport.ReportActionEntry(
+        final ReportActionEntry action = new ReportActionEntry(
             "SELECT",
             "#selectLanguage",
             "en",
@@ -446,8 +457,8 @@ public class InteractiveConsoleEngineTest
         report.addStep(step);
 
         final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run_test_healed", 0, "passed", null, report);
-        final com.fasterxml.jackson.databind.JsonNode rootNode = new com.fasterxml.jackson.databind.ObjectMapper().readTree(stateJson);
-        final com.fasterxml.jackson.databind.JsonNode actionNode = rootNode.path("blocks").path("steps").get(0).path("actions").get(0);
+        final JsonNode rootNode = new ObjectMapper().readTree(stateJson);
+        final JsonNode actionNode = rootNode.path("blocks").path("steps").get(0).path("actions").get(0);
 
         assertEquals("#searchLanguage", actionNode.path("target").asText());
         assertEquals("#searchLanguage", actionNode.path("resolvedTarget").asText());
@@ -455,5 +466,224 @@ public class InteractiveConsoleEngineTest
         assertEquals("#selectLanguage", actionNode.path("expectedTarget").asText());
         assertEquals("#selectLanguage", actionNode.path("originalTarget").asText());
         assertEquals("#selectLanguage", actionNode.path("healedFrom").asText());
+    }
+
+    @Test
+    public void testStateJsonIncludesLinterFindingsWhenEnabled() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final PlaybookLinterFinding finding = new PlaybookLinterFinding(
+            1,
+            14,
+            "checkout.yaml",
+            "Open dropdown and click \"${country}\"",
+            "Open dropdown and click \"Germany\"",
+            LinterCategory.STEP_SPLITTING_CANDIDATE,
+            LinterSeverity.WARNING,
+            "Instruction combines two interactive actions.",
+            "1. Open dropdown\n2. Click \"${country}\"",
+            null
+        );
+        context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS, List.of(finding));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run_test_linter", 0, "passed");
+        final JsonNode rootNode = new ObjectMapper().readTree(stateJson);
+
+        assertTrue(rootNode.has("linterFindings"), "State JSON should contain linterFindings when linter is enabled");
+        final JsonNode findingsArr = rootNode.get("linterFindings");
+        assertEquals(1, findingsArr.size());
+        final JsonNode f = findingsArr.get(0);
+        assertEquals(1, f.path("stepIndex").asInt());
+        assertEquals(14, f.path("lineNumber").asInt());
+        assertEquals("checkout.yaml", f.path("sourceFile").asText());
+        assertEquals("Open dropdown and click \"${country}\"", f.path("rawInstruction").asText());
+        assertEquals("Open dropdown and click \"Germany\"", f.path("resolvedInstruction").asText());
+        assertEquals("STEP_SPLITTING_CANDIDATE", f.path("category").asText());
+        assertEquals("WARNING", f.path("severity").asText());
+        assertEquals("Instruction combines two interactive actions.", f.path("message").asText());
+        assertEquals("1. Open dropdown\n2. Click \"${country}\"", f.path("suggestedRewrite").asText());
+    }
+
+    @Test
+    public void testStateJsonOmitsLinterFindingsWhenDisabled() throws Exception
+    {
+        final String orig = System.getProperty("neodymium.ai.linter.enabled");
+        try
+        {
+            System.setProperty("neodymium.ai.linter.enabled", "false");
+            AiConfiguration.resetInstance();
+
+            final ExecutionContext context = new ExecutionContext(new SessionData());
+            final PlaybookLinterFinding finding = new PlaybookLinterFinding(
+                1,
+                "click button",
+                "click button",
+                LinterCategory.VAGUE_TARGET,
+                LinterSeverity.WARNING,
+                "Ambiguous target",
+                "click #submit",
+                null
+            );
+            context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS, List.of(finding));
+
+            final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run_test_linter_off", 0, "passed");
+            final JsonNode rootNode = new ObjectMapper().readTree(stateJson);
+
+            assertFalse(rootNode.has("linterFindings"), "State JSON should omit linterFindings when pre-flight linter is disabled");
+        }
+        finally
+        {
+            if (orig != null)
+            {
+                System.setProperty("neodymium.ai.linter.enabled", orig);
+            }
+            else
+            {
+                System.clearProperty("neodymium.ai.linter.enabled");
+            }
+            AiConfiguration.resetInstance();
+        }
+    }
+
+    @Test
+    public void testStateJsonIncludesPostFlightFindingsWhenEnabled() throws Exception
+    {
+        final String orig = System.getProperty("neodymium.ai.linter.postFlight.enabled");
+        try
+        {
+            System.setProperty("neodymium.ai.linter.postFlight.enabled", "true");
+            AiConfiguration.resetInstance();
+
+            final ExecutionContext context = new ExecutionContext(new SessionData());
+            final PlaybookLinterFinding finding = new PlaybookLinterFinding(
+                2,
+                25,
+                "cart.yaml",
+                "Hover and click",
+                "Hover and click",
+                LinterCategory.EMPIRICAL_MULTI_ACTION,
+                LinterSeverity.INFO,
+                "Multiple actions in step",
+                "Split actions",
+                "ACTION"
+            );
+            context.getTransientData().put(ExecutionContext.KEY_POST_FLIGHT_LINTER_FINDINGS, List.of(finding));
+
+            final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run_test_postflight", 0, "passed");
+            final JsonNode rootNode = new ObjectMapper().readTree(stateJson);
+
+            assertTrue(rootNode.has("postFlightFindings"), "State JSON should contain postFlightFindings when post-flight linter is enabled");
+            final JsonNode findingsArr = rootNode.get("postFlightFindings");
+            assertEquals(1, findingsArr.size());
+            final JsonNode f = findingsArr.get(0);
+            assertEquals(2, f.path("stepIndex").asInt());
+            assertEquals(25, f.path("lineNumber").asInt());
+            assertEquals("cart.yaml", f.path("sourceFile").asText());
+            assertEquals("EMPIRICAL_MULTI_ACTION", f.path("category").asText());
+            assertEquals("INFO", f.path("severity").asText());
+            assertEquals("ACTION", f.path("scope").asText());
+        }
+        finally
+        {
+            if (orig != null)
+            {
+                System.setProperty("neodymium.ai.linter.postFlight.enabled", orig);
+            }
+            else
+            {
+                System.clearProperty("neodymium.ai.linter.postFlight.enabled");
+            }
+            AiConfiguration.resetInstance();
+        }
+    }
+
+    @Test
+    public void testStateJsonOmitsPostFlightFindingsWhenDisabled() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final PlaybookLinterFinding finding = new PlaybookLinterFinding(
+            1,
+            "click button",
+            "click button",
+            LinterCategory.REDUNDANT_VISUAL_TAG,
+            LinterSeverity.INFO,
+            "Redundant tag",
+            "click button",
+            null
+        );
+        context.getTransientData().put(ExecutionContext.KEY_POST_FLIGHT_LINTER_FINDINGS, List.of(finding));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run_test_postflight_off", 0, "passed");
+        final JsonNode rootNode = new ObjectMapper().readTree(stateJson);
+
+        assertFalse(rootNode.has("postFlightFindings"), "State JSON should omit postFlightFindings by default when post-flight linter is disabled");
+    }
+
+    @Test
+    public void testPushStatePersistsLinterAndPostFlightFindingsToDisk() throws Exception
+    {
+        final String origPost = System.getProperty("neodymium.ai.linter.postFlight.enabled");
+        try
+        {
+            System.setProperty("neodymium.ai.linter.postFlight.enabled", "true");
+            AiConfiguration.resetInstance();
+
+            final ExecutionContext context = new ExecutionContext(new SessionData());
+            context.getTransientData().put("testClass", "com.xceptance.FindingsTestClass");
+
+            final PlaybookLinterFinding preFlight = new PlaybookLinterFinding(
+                1,
+                "Enter username",
+                "Enter admin",
+                LinterCategory.STEP_SPLITTING_CANDIDATE,
+                LinterSeverity.WARNING,
+                "Pre-flight finding",
+                "Enter username",
+                null
+            );
+            context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS, List.of(preFlight));
+
+            final PlaybookLinterFinding postFlight = new PlaybookLinterFinding(
+                2,
+                "Submit form",
+                "Submit form",
+                LinterCategory.HIGH_AGENT_FRICTION,
+                LinterSeverity.WARNING,
+                "Post-flight finding",
+                "Submit form with wait",
+                null
+            );
+            context.getTransientData().put(ExecutionContext.KEY_POST_FLIGHT_LINTER_FINDINGS, List.of(postFlight));
+
+            final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run_test_disk", 0, "passed");
+            final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run_test_disk");
+            engine.pushState(stateJson);
+
+            final File logFile = new File(tempResultsDir, "console-execution-1.json");
+            assertTrue(logFile.exists(), "console-execution-1.json should exist on disk");
+
+            final String loggedJson = Files.readString(logFile.toPath());
+            final JsonNode loggedRoot = new ObjectMapper().readTree(loggedJson);
+
+            assertTrue(loggedRoot.has("linterFindings"), "Logged JSON file should have linterFindings");
+            assertEquals(1, loggedRoot.get("linterFindings").size());
+            assertEquals("Pre-flight finding", loggedRoot.get("linterFindings").get(0).path("message").asText());
+
+            assertTrue(loggedRoot.has("postFlightFindings"), "Logged JSON file should have postFlightFindings");
+            assertEquals(1, loggedRoot.get("postFlightFindings").size());
+            assertEquals("Post-flight finding", loggedRoot.get("postFlightFindings").get(0).path("message").asText());
+        }
+        finally
+        {
+            if (origPost != null)
+            {
+                System.setProperty("neodymium.ai.linter.postFlight.enabled", origPost);
+            }
+            else
+            {
+                System.clearProperty("neodymium.ai.linter.postFlight.enabled");
+            }
+            AiConfiguration.resetInstance();
+        }
     }
 }

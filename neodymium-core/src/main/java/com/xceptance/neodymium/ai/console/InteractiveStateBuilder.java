@@ -29,10 +29,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.report.TestExecutionReport.CategoryTokenUsage;
 import org.neodymium.ai.report.TestExecutionReport.ReportActionEntry;
@@ -333,7 +335,7 @@ public final class InteractiveStateBuilder
         {
             try
             {
-                modeObj = org.neodymium.ai.config.AiConfiguration.getInstance().getExecutionMode();
+                modeObj = AiConfiguration.getInstance().getExecutionMode();
             }
             catch (final Throwable ignored)
             {
@@ -506,8 +508,43 @@ public final class InteractiveStateBuilder
             }
             if (execReport.getEndTimeMs() > 0)
             {
-                state.addProperty("endTime", java.time.Instant.ofEpochMilli(execReport.getEndTimeMs()).toString());
+                state.addProperty("endTime", Instant.ofEpochMilli(execReport.getEndTimeMs()).toString());
             }
+        }
+
+        final AiConfiguration aiConfig = AiConfiguration.getInstance();
+        if (aiConfig.isLinterEnabled())
+        {
+            List<PlaybookLinterFinding> linterFindings = null;
+            if (execReport != null && !execReport.getLinterFindings().isEmpty())
+            {
+                linterFindings = execReport.getLinterFindings();
+            }
+            else if (context != null && context.getTransientData() != null)
+            {
+                @SuppressWarnings("unchecked")
+                final List<PlaybookLinterFinding> ctxFindings =
+                    (List<PlaybookLinterFinding>) context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK_LINTER_FINDINGS);
+                linterFindings = ctxFindings;
+            }
+            state.add("linterFindings", serializeLinterFindings(linterFindings));
+        }
+
+        if (aiConfig.isPostFlightLinterEnabled())
+        {
+            List<PlaybookLinterFinding> postFlightFindings = null;
+            if (execReport != null && !execReport.getPostFlightFindings().isEmpty())
+            {
+                postFlightFindings = execReport.getPostFlightFindings();
+            }
+            else if (context != null && context.getTransientData() != null)
+            {
+                @SuppressWarnings("unchecked")
+                final List<PlaybookLinterFinding> ctxFindings =
+                    (List<PlaybookLinterFinding>) context.getTransientData().get(ExecutionContext.KEY_POST_FLIGHT_LINTER_FINDINGS);
+                postFlightFindings = ctxFindings;
+            }
+            state.add("postFlightFindings", serializeLinterFindings(postFlightFindings));
         }
 
         // Top-level reasoning property for the active step
@@ -1074,6 +1111,48 @@ public final class InteractiveStateBuilder
                 if (warning != null)
                 {
                     arr.add(warning);
+                }
+            }
+        }
+        return arr;
+    }
+
+    private static JsonArray serializeLinterFindings(final List<PlaybookLinterFinding> findings)
+    {
+        final JsonArray arr = new JsonArray();
+        if (findings != null)
+        {
+            for (final PlaybookLinterFinding finding : findings)
+            {
+                if (finding != null)
+                {
+                    final JsonObject obj = new JsonObject();
+                    obj.addProperty("stepIndex", finding.stepIndex());
+                    obj.addProperty("lineNumber", finding.lineNumber());
+                    if (finding.sourceFile() != null)
+                    {
+                        obj.addProperty("sourceFile", finding.sourceFile());
+                    }
+                    obj.addProperty("rawInstruction", finding.rawInstruction());
+                    obj.addProperty("resolvedInstruction", finding.resolvedInstruction());
+                    if (finding.category() != null)
+                    {
+                        obj.addProperty("category", finding.category().name());
+                    }
+                    if (finding.severity() != null)
+                    {
+                        obj.addProperty("severity", finding.severity().name());
+                    }
+                    obj.addProperty("message", finding.message());
+                    if (finding.suggestedRewrite() != null)
+                    {
+                        obj.addProperty("suggestedRewrite", finding.suggestedRewrite());
+                    }
+                    if (finding.scope() != null)
+                    {
+                        obj.addProperty("scope", finding.scope());
+                    }
+                    arr.add(obj);
                 }
             }
         }

@@ -1,7 +1,7 @@
 /*
  * GNU Affero General Public License (AGPLv3)
  *
- * Copyright (c) 2026 Xceptance
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
@@ -18,106 +18,126 @@
  */
 package com.xceptance.aura.report.dto;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 /**
- * Unit tests for {@link TestExecutionDto}.
+ * Unit tests for {@link TestExecutionDto} deserialization and findings getters.
  *
- * @author AI-generated: Antigravity
+ * @author AI-generated: Gemini 3.6 Flash
  * @author Xceptance GmbH 2026
  */
-public class TestExecutionDtoTest
+public final class TestExecutionDtoTest
 {
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @Test
-    public void noArgConstructorDefaultsLlmResponsibilityJsonToEmptyString()
+    public void testDeserializationWithLinterAndPostFlightFindings() throws Exception
+    {
+        final String json = """
+            {
+                "id": "exec-1",
+                "testClass": "com.xceptance.test.DemoTest",
+                "testMethod": "testLogin",
+                "title": "US Login",
+                "status": "passed-clean",
+                "linterFindings": [
+                    {
+                        "stepIndex": 5,
+                        "lineNumber": 5,
+                        "category": "VAGUE_TARGET",
+                        "severity": "WARNING",
+                        "message": "Target description is overly ambiguous.",
+                        "rawInstruction": "click on \\"Log In\\"",
+                        "resolvedInstruction": "click on \\"Log In\\"",
+                        "suggestedRewrite": "click the \\"Log In\\" button in the top navigation bar",
+                        "scope": "PRE_FLIGHT"
+                    }
+                ],
+                "postFlightFindings": [
+                    {
+                        "stepIndex": 6,
+                        "lineNumber": 6,
+                        "category": "SLOW_STEP",
+                        "severity": "INFO",
+                        "message": "Step took 4,210 ms to stabilize and execute.",
+                        "rawInstruction": "wait for search input",
+                        "resolvedInstruction": "wait for search input",
+                        "suggestedRewrite": "assert search input is visible",
+                        "scope": "POST_FLIGHT"
+                    }
+                ]
+            }
+            """;
+
+        final TestExecutionDto dto = objectMapper.readValue(json, TestExecutionDto.class);
+
+        Assertions.assertNotNull(dto);
+        Assertions.assertEquals("exec-1", dto.getId());
+        Assertions.assertEquals("com.xceptance.test.DemoTest", dto.getTestClass());
+
+        final JsonNode linterFindings = dto.getLinterFindings();
+        Assertions.assertNotNull(linterFindings);
+        Assertions.assertTrue(linterFindings.isArray());
+        Assertions.assertEquals(1, linterFindings.size());
+        Assertions.assertEquals("VAGUE_TARGET", linterFindings.get(0).path("category").asText());
+        Assertions.assertEquals("WARNING", linterFindings.get(0).path("severity").asText());
+        Assertions.assertEquals("click on \"Log In\"", linterFindings.get(0).path("rawInstruction").asText());
+        Assertions.assertEquals("click the \"Log In\" button in the top navigation bar", linterFindings.get(0).path("suggestedRewrite").asText());
+
+        final JsonNode postFlightFindings = dto.getPostFlightFindings();
+        Assertions.assertNotNull(postFlightFindings);
+        Assertions.assertTrue(postFlightFindings.isArray());
+        Assertions.assertEquals(1, postFlightFindings.size());
+        Assertions.assertEquals("SLOW_STEP", postFlightFindings.get(0).path("category").asText());
+        Assertions.assertEquals("INFO", postFlightFindings.get(0).path("severity").asText());
+        Assertions.assertEquals("assert search input is visible", postFlightFindings.get(0).path("suggestedRewrite").asText());
+
+        // Verify JSON serialization ensures true JSON array output (not POJO metadata)
+        final String serializedJson = objectMapper.writeValueAsString(dto);
+        final JsonNode serializedTree = objectMapper.readTree(serializedJson);
+
+        final JsonNode serializedLinter = serializedTree.path("linterFindings");
+        Assertions.assertTrue(serializedLinter.isArray(), "linterFindings must serialize as a JSON array, got: " + serializedLinter);
+        Assertions.assertEquals(1, serializedLinter.size());
+        Assertions.assertEquals("VAGUE_TARGET", serializedLinter.get(0).path("category").asText());
+
+        final JsonNode serializedPostFlight = serializedTree.path("postFlightFindings");
+        Assertions.assertTrue(serializedPostFlight.isArray(), "postFlightFindings must serialize as a JSON array, got: " + serializedPostFlight);
+        Assertions.assertEquals(1, serializedPostFlight.size());
+        Assertions.assertEquals("SLOW_STEP", serializedPostFlight.get(0).path("category").asText());
+
+        Assertions.assertTrue(dto.getLinterFindingsJson().contains("\"VAGUE_TARGET\""));
+        Assertions.assertTrue(dto.getPostFlightFindingsJson().contains("\"SLOW_STEP\""));
+    }
+
+    @Test
+    public void testDeserializationWithoutFindings() throws Exception
+    {
+        final String json = """
+            {
+                "id": "exec-clean",
+                "testClass": "com.xceptance.test.DemoTest",
+                "status": "passed-clean"
+            }
+            """;
+
+        final TestExecutionDto dto = objectMapper.readValue(json, TestExecutionDto.class);
+
+        Assertions.assertNotNull(dto);
+        Assertions.assertEquals("exec-clean", dto.getId());
+        Assertions.assertNull(dto.getLinterFindings());
+        Assertions.assertNull(dto.getPostFlightFindings());
+    }
+
+    @Test
+    public void testDefaultConstructorFindingsAreNull()
     {
         final TestExecutionDto dto = new TestExecutionDto();
-        assertNotNull(dto.getLlmResponsibilityJson());
-        assertEquals("", dto.getLlmResponsibilityJson());
-    }
 
-    @Test
-    public void deserializesLlmResponsibilityJsonFromJson() throws Exception
-    {
-        final String json = "{"
-            + "\"id\":\"exec-1\","
-            + "\"runId\":\"run-1\","
-            + "\"testClass\":\"WikiTest\","
-            + "\"title\":\"search\","
-            + "\"llmResponsibility\":{"
-            + "  \"action\":{\"calls\":3,\"inputTokens\":800,\"outputTokens\":80,\"cachedTokens\":0,\"totalTokens\":880,\"estimatedCostUsd\":0.0012},"
-            + "  \"pesap\":{\"calls\":1,\"inputTokens\":200,\"outputTokens\":20,\"cachedTokens\":0,\"totalTokens\":220,\"estimatedCostUsd\":0.0001},"
-            + "  \"judge\":{\"calls\":0,\"inputTokens\":0,\"outputTokens\":0,\"cachedTokens\":0,\"totalTokens\":0,\"estimatedCostUsd\":0.0},"
-            + "  \"verification\":{\"calls\":0,\"inputTokens\":0,\"outputTokens\":0,\"cachedTokens\":0,\"totalTokens\":0,\"estimatedCostUsd\":0.0},"
-            + "  \"visualRca\":{\"calls\":1,\"inputTokens\":100,\"outputTokens\":10,\"cachedTokens\":0,\"totalTokens\":110,\"estimatedCostUsd\":0.0},"
-            + "  \"total\":{\"calls\":5,\"inputTokens\":1100,\"outputTokens\":110,\"cachedTokens\":0,\"totalTokens\":1210,\"estimatedCostUsd\":0.0013}"
-            + "}"
-            + "}";
-
-        final TestExecutionDto dto = new ObjectMapper().readValue(json, TestExecutionDto.class);
-        final String responsibility = dto.getLlmResponsibilityJson();
-        assertNotNull(responsibility);
-        assertTrue(responsibility.contains("\"action\""), "responsibility must contain 'action' bucket");
-        assertTrue(responsibility.contains("\"pesap\""), "responsibility must contain 'pesap' bucket");
-        assertTrue(responsibility.contains("\"judge\""), "responsibility must contain 'judge' bucket");
-        assertTrue(responsibility.contains("\"verification\""), "responsibility must contain 'verification' bucket");
-        assertTrue(responsibility.contains("\"visualRca\""), "responsibility must contain 'visualRca' bucket");
-        assertTrue(responsibility.contains("\"total\""), "responsibility must contain 'total' bucket");
-        assertTrue(responsibility.contains("\"inputTokens\":800"), "responsibility must preserve per-bucket inputTokens");
-    }
-
-    @Test
-    public void missingLlmResponsibilityJsonStaysEmptyAfterDeserialization() throws Exception
-    {
-        final String json = "{\"id\":\"exec-2\",\"runId\":\"run-2\",\"testClass\":\"WikiTest\",\"title\":\"search\"}";
-        final TestExecutionDto dto = new ObjectMapper().readValue(json, TestExecutionDto.class);
-        assertEquals("", dto.getLlmResponsibilityJson());
-    }
-
-    @Test
-    public void deserializesContextLevelCountsFromMetricsBlock() throws Exception
-    {
-        final String json = "{"
-            + "\"id\":\"exec-3\","
-            + "\"runId\":\"run-3\","
-            + "\"testClass\":\"WikiTest\","
-            + "\"title\":\"search\","
-            + "\"metrics\":{"
-            + "  \"totalSteps\":6,"
-            + "  \"contextLevelCounts\":{\"MINIMAL\":2,\"LEAN\":2,\"STANDARD\":1,\"VISUAL\":1,\"VISUAL_LEAN\":1,\"VISUAL_RICH\":1}"
-            + "}"
-            + "}";
-
-        final TestExecutionDto dto = new ObjectMapper().readValue(json, TestExecutionDto.class);
-        final String counts = dto.getContextLevelCountsJson();
-        assertNotNull(counts);
-        assertTrue(counts.contains("\"MINIMAL\":2"), "counts must contain MINIMAL");
-        assertTrue(counts.contains("\"LEAN\":2"), "counts must contain LEAN");
-        assertTrue(counts.contains("\"STANDARD\":1"), "counts must contain STANDARD");
-        assertTrue(counts.contains("\"VISUAL\":1"), "counts must contain VISUAL");
-        assertTrue(counts.contains("\"VISUAL_LEAN\":1"), "counts must contain VISUAL_LEAN");
-        assertTrue(counts.contains("\"VISUAL_RICH\":1"), "counts must contain VISUAL_RICH");
-    }
-
-    @Test
-    public void missingMetricsBlockYieldsEmptyContextLevelCounts() throws Exception
-    {
-        final String json = "{\"id\":\"exec-4\",\"runId\":\"run-4\",\"testClass\":\"WikiTest\",\"title\":\"search\"}";
-        final TestExecutionDto dto = new ObjectMapper().readValue(json, TestExecutionDto.class);
-        assertEquals("", dto.getContextLevelCountsJson());
-    }
-
-    @Test
-    public void metricsBlockWithoutContextLevelCountsYieldsEmpty() throws Exception
-    {
-        final String json = "{\"id\":\"exec-5\",\"runId\":\"run-5\",\"testClass\":\"WikiTest\",\"title\":\"search\",\"metrics\":{\"totalSteps\":3}}";
-        final TestExecutionDto dto = new ObjectMapper().readValue(json, TestExecutionDto.class);
-        assertEquals("", dto.getContextLevelCountsJson());
+        Assertions.assertNull(dto.getLinterFindings());
+        Assertions.assertNull(dto.getPostFlightFindings());
     }
 }

@@ -824,6 +824,17 @@ function closeSidePanelInspector() {
     if (panel) panel.classList.remove('active');
     if (resizer) resizer.classList.remove('active');
 
+    const linterContainer = document.getElementById('sidePageLinterFindingsContainer');
+    if (linterContainer) {
+        linterContainer.innerHTML = '';
+        linterContainer.style.display = 'none';
+    }
+    const postFlightContainer = document.getElementById('sidePagePostFlightFindingsContainer');
+    if (postFlightContainer) {
+        postFlightContainer.innerHTML = '';
+        postFlightContainer.style.display = 'none';
+    }
+
     document.querySelectorAll('tr.clickable-row').forEach(r => {
         r.classList.remove('selected', 'active-selected-row');
         const marker = r.querySelector('.active-row-marker');
@@ -1983,6 +1994,18 @@ function extractStepsJson(execDto) {
     return null;
 }
 
+function extractFindingsArray(raw) {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw;
+    if (typeof raw === 'string' && raw.trim().length > 0) {
+        try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) return parsed;
+        } catch (e) {}
+    }
+    return [];
+}
+
 function startLiveStepRefreshTimer(activeRow) {
     stopLiveStepRefreshTimer();
     if (!activeRow) return;
@@ -2054,6 +2077,26 @@ function startLiveStepRefreshTimer(activeRow) {
                     else if (execDto.videoPath) currentActiveEl.setAttribute('data-video-url', execDto.videoPath);
                     if (execDto.llmResponsibilityJson) currentActiveEl.setAttribute('data-llm-responsibility', execDto.llmResponsibilityJson);
                     if (execDto.contextLevelCountsJson) currentActiveEl.setAttribute('data-context-level-counts', execDto.contextLevelCountsJson);
+
+                    const liveLinter = extractFindingsArray(execDto.linterFindings).length > 0
+                        ? extractFindingsArray(execDto.linterFindings)
+                        : extractFindingsArray(execDto.linterFindingsJson);
+                    const liveLinterJson = liveLinter.length > 0 ? JSON.stringify(liveLinter) : '';
+                    if ((currentActiveEl.getAttribute('data-linter-findings') || '') !== liveLinterJson) {
+                        if (liveLinterJson) currentActiveEl.setAttribute('data-linter-findings', liveLinterJson);
+                        else currentActiveEl.removeAttribute('data-linter-findings');
+                        changed = true;
+                    }
+
+                    const livePostFlight = extractFindingsArray(execDto.postFlightFindings).length > 0
+                        ? extractFindingsArray(execDto.postFlightFindings)
+                        : extractFindingsArray(execDto.postFlightFindingsJson);
+                    const livePostFlightJson = livePostFlight.length > 0 ? JSON.stringify(livePostFlight) : '';
+                    if ((currentActiveEl.getAttribute('data-post-flight-findings') || '') !== livePostFlightJson) {
+                        if (livePostFlightJson) currentActiveEl.setAttribute('data-post-flight-findings', livePostFlightJson);
+                        else currentActiveEl.removeAttribute('data-post-flight-findings');
+                        changed = true;
+                    }
 
                     if (changed) {
                         const savedScrollTop = stepListEl ? stepListEl.scrollTop : 0;
@@ -2277,12 +2320,119 @@ function renderErrorBoxContent(failureText, failureReason, visualRcaExplanation,
     return html;
 }
 
+function renderLinterFindingsCard(findings, isPostFlight) {
+    if (!findings || !Array.isArray(findings) || findings.length === 0) {
+        return '';
+    }
+    const count = findings.length;
+    const borderLeftColor = isPostFlight ? '#8b5cf6' : '#6366f1';
+    const title = isPostFlight
+        ? `🔍 Empirical Playbook Findings (Post-Flight Telemetry) (${count})`
+        : `📋 Playbook Quality & Pre-Flight Findings (${count})`;
+    const col4Title = isPostFlight ? 'Telemetry & Suggested Rewrite' : 'Message & Suggested Rewrite';
+    const rewriteBg = isPostFlight ? 'rgba(139,92,246,0.06)' : 'rgba(99,102,241,0.06)';
+    const rewriteBorder = isPostFlight ? '#8b5cf6' : '#6366f1';
+    const rewriteLabelColor = isPostFlight ? '#6d28d9' : '#4338ca';
+    const rewriteCodeColor = isPostFlight ? '#4c1d95' : '#312e81';
+
+    let rowsHtml = '';
+    for (const f of findings) {
+        const lineLabel = (f.lineNumber && f.lineNumber > 0) ? `L${f.lineNumber}` : `Step ${f.stepIndex || 0}`;
+        const sev = (f.severity || 'INFO').toUpperCase();
+        let sevBadge = '';
+        if (sev === 'ERROR') {
+            sevBadge = '<span class="badge badge-error" style="background:#ef4444;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">ERROR</span>';
+        } else if (sev === 'WARNING') {
+            sevBadge = '<span class="badge badge-warning" style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">WARNING</span>';
+        } else {
+            sevBadge = '<span class="badge badge-info" style="background:#3b82f6;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.75rem;font-weight:600;">INFO</span>';
+        }
+        const cat = f.category || 'GENERAL';
+
+        let stepTextHtml = '';
+        if (f.rawInstruction && f.resolvedInstruction && f.rawInstruction !== f.resolvedInstruction) {
+            stepTextHtml = `
+                <div style="margin:6px 0;font-size:0.85rem;background:var(--bg-muted,#f1f5f9);padding:6px 10px;border-radius:4px;border-left:3px solid #94a3b8;">
+                    <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted,#475569);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Template Step:</div>
+                    <code style="white-space:pre-wrap;font-weight:500;color:var(--text-main,#1e293b);">${escapeHtml(f.rawInstruction)}</code>
+                    <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted,#475569);text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;margin-bottom:2px;">Resolved Step:</div>
+                    <code style="white-space:pre-wrap;font-weight:500;color:var(--text-main,#1e293b);">${escapeHtml(f.resolvedInstruction)}</code>
+                </div>
+            `;
+        } else if (f.rawInstruction && f.rawInstruction.trim()) {
+            stepTextHtml = `
+                <div style="margin:6px 0;font-size:0.85rem;background:var(--bg-muted,#f1f5f9);padding:6px 10px;border-radius:4px;border-left:3px solid #94a3b8;">
+                    <div style="font-size:0.72rem;font-weight:700;color:var(--text-muted,#475569);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">Original Step:</div>
+                    <code style="white-space:pre-wrap;font-weight:500;color:var(--text-main,#1e293b);">${escapeHtml(f.rawInstruction)}</code>
+                </div>
+            `;
+        }
+
+        let rewriteHtml = '';
+        if (f.suggestedRewrite && f.suggestedRewrite.trim()) {
+            rewriteHtml = `
+                <div style="margin-top:6px;font-size:0.85rem;background:${rewriteBg};padding:6px 10px;border-radius:4px;border-left:3px solid ${rewriteBorder};">
+                    <div style="font-size:0.72rem;font-weight:700;color:${rewriteLabelColor};text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px;">💡 Suggested Rewrite:</div>
+                    <code style="white-space:pre-wrap;font-weight:500;color:${rewriteCodeColor};">${escapeHtml(f.suggestedRewrite)}</code>
+                </div>
+            `;
+        }
+
+        rowsHtml += `
+            <tr style="border-bottom: 1px solid var(--border, #e2e8f0);">
+                <td style="vertical-align:top; padding: 8px 10px;"><code>${escapeHtml(lineLabel)}</code></td>
+                <td style="vertical-align:top; padding: 8px 10px;"><span style="font-weight:600;font-size:0.85rem;">${escapeHtml(cat)}</span></td>
+                <td style="vertical-align:top; padding: 8px 10px;">${sevBadge}</td>
+                <td style="padding: 8px 10px;">
+                    <div style="font-weight:600;margin-bottom:6px;color:var(--text-main,#1e293b);">${escapeHtml(f.message || '')}</div>
+                    ${stepTextHtml}
+                    ${rewriteHtml}
+                </td>
+            </tr>
+        `;
+    }
+
+    return `
+        <details open class="diagnostic-box ${isPostFlight ? 'postflight-linter-box' : 'linter-box'}" style="border-left: 4px solid ${borderLeftColor}; background: var(--bg-card, #ffffff); margin-bottom: 16px; padding: 14px 18px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid var(--border, #e2e8f0); border-left-width: 4px;">
+            <summary class="box-header" style="font-size: 0.95rem; font-weight: 700; color: var(--text-main, #1e293b); cursor: pointer; user-select: none; list-style: none; display: flex; align-items: center; justify-content: space-between;">
+                <div style="display: flex; align-items: center; gap: 8px;"><span>${title}</span></div>
+                <span class="linter-toggle-icon" style="font-size: 0.85rem; color: var(--text-muted); transition: transform 0.2s ease;">▼</span>
+            </summary>
+            <div class="linter-content" style="margin-top: 12px; overflow-x: auto;">
+                <table class="data-table" style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">
+                    <thead>
+                        <tr style="border-bottom: 2px solid var(--border, #cbd5e1); text-align: left; background: var(--bg-hover, #f8fafc);">
+                            <th style="padding: 8px 10px; font-weight: 700;">Line / Step</th>
+                            <th style="padding: 8px 10px; font-weight: 700;">Category</th>
+                            <th style="padding: 8px 10px; font-weight: 700;">Severity</th>
+                            <th style="padding: 8px 10px; font-weight: 700;">${col4Title}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rowsHtml}
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    `;
+}
+
 function renderStepsForExecution(activeRow) {
     const stepListEl = document.getElementById('sidePageStepList');
     if (!stepListEl) return;
 
     if (!activeRow) {
         stepListEl.innerHTML = '<div style="color: var(--text-muted); font-size: 0.85rem; padding: 0.5rem;">Select a test execution row to view steps.</div>';
+        const linterContainer = document.getElementById('sidePageLinterFindingsContainer');
+        if (linterContainer) {
+            linterContainer.innerHTML = '';
+            linterContainer.style.display = 'none';
+        }
+        const postFlightContainer = document.getElementById('sidePagePostFlightFindingsContainer');
+        if (postFlightContainer) {
+            postFlightContainer.innerHTML = '';
+            postFlightContainer.style.display = 'none';
+        }
         return;
     }
 
@@ -2327,6 +2477,24 @@ function renderStepsForExecution(activeRow) {
                         else if (execDto.videoPath) activeRow.setAttribute('data-video-url', execDto.videoPath);
                         if (execDto.llmResponsibilityJson) activeRow.setAttribute('data-llm-responsibility', execDto.llmResponsibilityJson);
                         if (execDto.contextLevelCountsJson) activeRow.setAttribute('data-context-level-counts', execDto.contextLevelCountsJson);
+
+                        const linterArray = extractFindingsArray(execDto.linterFindings).length > 0
+                            ? extractFindingsArray(execDto.linterFindings)
+                            : extractFindingsArray(execDto.linterFindingsJson);
+                        if (linterArray.length > 0) {
+                            activeRow.setAttribute('data-linter-findings', JSON.stringify(linterArray));
+                        } else {
+                            activeRow.removeAttribute('data-linter-findings');
+                        }
+
+                        const postFlightArray = extractFindingsArray(execDto.postFlightFindings).length > 0
+                            ? extractFindingsArray(execDto.postFlightFindings)
+                            : extractFindingsArray(execDto.postFlightFindingsJson);
+                        if (postFlightArray.length > 0) {
+                            activeRow.setAttribute('data-post-flight-findings', JSON.stringify(postFlightArray));
+                        } else {
+                            activeRow.removeAttribute('data-post-flight-findings');
+                        }
 
                         const startTimeEl = document.getElementById('sidePageTestStartTimeVal');
                         if (startTimeEl) {
@@ -2533,6 +2701,32 @@ function renderStepsForExecution(activeRow) {
             errorCard.style.display = 'flex';
         } else {
             errorCard.style.display = 'none';
+        }
+    }
+
+    // Render Pre-Flight Findings Box
+    const linterContainer = document.getElementById('sidePageLinterFindingsContainer');
+    if (linterContainer) {
+        const linterFindings = extractFindingsArray(activeRow.getAttribute('data-linter-findings'));
+        if (linterFindings.length > 0) {
+            linterContainer.innerHTML = renderLinterFindingsCard(linterFindings, false);
+            linterContainer.style.display = 'block';
+        } else {
+            linterContainer.innerHTML = '';
+            linterContainer.style.display = 'none';
+        }
+    }
+
+    // Render Empirical Post-Flight Findings Box
+    const postFlightContainer = document.getElementById('sidePagePostFlightFindingsContainer');
+    if (postFlightContainer) {
+        const postFlightFindings = extractFindingsArray(activeRow.getAttribute('data-post-flight-findings'));
+        if (postFlightFindings.length > 0) {
+            postFlightContainer.innerHTML = renderLinterFindingsCard(postFlightFindings, true);
+            postFlightContainer.style.display = 'block';
+        } else {
+            postFlightContainer.innerHTML = '';
+            postFlightContainer.style.display = 'none';
         }
     }
 
