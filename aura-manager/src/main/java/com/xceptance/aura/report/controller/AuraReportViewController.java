@@ -44,6 +44,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -254,13 +255,80 @@ public class AuraReportViewController
             final RunReportDto rReport = dataService.getRunReport(r.getId());
             if (rReport != null)
             {
-                if (r.getPassedHealedCount() == null || r.getSucceededFixedHealedCount() == null
-                    || r.getFailedKnownHealedCount() == null || r.getFailedUnknownHealedCount() == null)
+                boolean changed = false;
+                if (!Objects.equals(r.getPassedHealedCount(), rReport.getPassHealedCount()))
                 {
                     r.setPassedHealedCount(rReport.getPassHealedCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getSucceededFixedHealedCount(), rReport.getFixedHealedCount()))
+                {
                     r.setSucceededFixedHealedCount(rReport.getFixedHealedCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getFailedKnownHealedCount(), rReport.getKnownHealedCount()))
+                {
                     r.setFailedKnownHealedCount(rReport.getKnownHealedCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getFailedUnknownHealedCount(), rReport.getUnknownHealedCount()))
+                {
                     r.setFailedUnknownHealedCount(rReport.getUnknownHealedCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getPassedAiCount(), rReport.getPassAiCount()))
+                {
+                    r.setPassedAiCount(rReport.getPassAiCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getSucceededFixedAiCount(), rReport.getFixedAiCount()))
+                {
+                    r.setSucceededFixedAiCount(rReport.getFixedAiCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getFailedKnownAiCount(), rReport.getKnownAiCount()))
+                {
+                    r.setFailedKnownAiCount(rReport.getKnownAiCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getFailedUnknownAiCount(), rReport.getUnknownAiCount()))
+                {
+                    r.setFailedUnknownAiCount(rReport.getUnknownAiCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getPassedCount(), rReport.getPassCount()))
+                {
+                    r.setPassedCount(rReport.getPassCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getSucceededFixedCount(), rReport.getFixedCount()))
+                {
+                    r.setSucceededFixedCount(rReport.getFixedCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getFailedKnownCount(), rReport.getKnownCount()))
+                {
+                    r.setFailedKnownCount(rReport.getKnownCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getFailedUnknownCount(), rReport.getUnknownCount()))
+                {
+                    r.setFailedUnknownCount(rReport.getUnknownCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getIgnoredCount(), rReport.getIgnoredCount()))
+                {
+                    r.setIgnoredCount(rReport.getIgnoredCount());
+                    changed = true;
+                }
+                if (!Objects.equals(r.getTotalTests(), rReport.getTotalCount()))
+                {
+                    r.setTotalTests(rReport.getTotalCount());
+                    changed = true;
+                }
+                if (changed)
+                {
+                    r.recalculatePassRate();
                     runRepository.save(r);
                 }
                 if (rReport.getAreaSummaries() != null)
@@ -281,7 +349,11 @@ public class AuraReportViewController
                                 area.getPassHealedCount(),
                                 area.getFixedHealedCount(),
                                 area.getKnownHealedCount(),
-                                area.getUnknownHealedCount()
+                                area.getUnknownHealedCount(),
+                                area.getPassAiCount(),
+                                area.getFixedAiCount(),
+                                area.getKnownAiCount(),
+                                area.getUnknownAiCount()
                             ));
                     }
                 }
@@ -448,9 +520,12 @@ public class AuraReportViewController
         @RequestParam(name = "rowId", defaultValue = "") final String rowId,
         @RequestParam(name = "testName", defaultValue = "") final String testName,
         @RequestParam(name = "dataSet", defaultValue = "") final String dataSet,
+        @RequestHeader(value = "HX-Current-URL", required = false) final String currentUrl,
+        @RequestHeader(value = "Referer", required = false) final String referer,
         final Model model)
     {
-        final RunReportDto report = dataService.getRunReport(runId);
+        final String effectiveRunId = resolveEffectiveRunId(runId, currentUrl, referer);
+        final RunReportDto report = dataService.getRunReport(effectiveRunId);
         TestExecutionDto currentExec = null;
         if (report != null && report.getExecutions() != null)
         {
@@ -465,10 +540,10 @@ public class AuraReportViewController
         }
         if (currentExec == null)
         {
-            currentExec = dataService.getExecutionDetails(runId, rowId);
+            currentExec = dataService.getExecutionDetails(effectiveRunId, rowId);
         }
 
-        model.addAttribute("runId", runId);
+        model.addAttribute("runId", effectiveRunId);
         model.addAttribute("rowId", rowId);
         model.addAttribute("testName", testName);
         model.addAttribute("dataSet", dataSet);
@@ -551,9 +626,12 @@ public class AuraReportViewController
     public String getBugSection(
         @RequestParam(name = "runId", defaultValue = "#RUN_ID") final String runId,
         @RequestParam(name = "rowId", defaultValue = "") final String rowId,
+        @RequestHeader(value = "HX-Current-URL", required = false) final String currentUrl,
+        @RequestHeader(value = "Referer", required = false) final String referer,
         final Model model)
     {
-        final RunReportDto report = dataService.getRunReport(runId);
+        final String effectiveRunId = resolveEffectiveRunId(runId, currentUrl, referer);
+        final RunReportDto report = dataService.getRunReport(effectiveRunId);
         TestExecutionDto currentExec = null;
         if (report != null && report.getExecutions() != null)
         {
@@ -568,9 +646,9 @@ public class AuraReportViewController
         }
         if (currentExec == null)
         {
-            currentExec = dataService.getExecutionDetails(runId, rowId);
+            currentExec = dataService.getExecutionDetails(effectiveRunId, rowId);
         }
-        model.addAttribute("runId", runId);
+        model.addAttribute("runId", effectiveRunId);
         model.addAttribute("rowId", rowId);
         model.addAttribute("exec", currentExec);
         return "fragments/side-panel-step-list :: sidePanelBugSection";
@@ -581,24 +659,27 @@ public class AuraReportViewController
         @RequestParam("runId") final String runId,
         @RequestParam("rowId") final String rowId,
         @RequestParam("bugTicket") final String bugTicket,
+        @RequestHeader(value = "HX-Current-URL", required = false) final String currentUrl,
+        @RequestHeader(value = "Referer", required = false) final String referer,
         final Model model,
         final HttpServletResponse response)
     {
+        final String effectiveRunId = resolveEffectiveRunId(runId, currentUrl, referer);
         final long totalStart = System.currentTimeMillis();
 
         final long addStart = System.currentTimeMillis();
-        final TestExecutionDto updatedExec = dataService.addBugToExecution(runId, rowId, bugTicket);
+        final TestExecutionDto updatedExec = dataService.addBugToExecution(effectiveRunId, rowId, bugTicket);
         final long addDuration = System.currentTimeMillis() - addStart;
 
         final long reportStart = System.currentTimeMillis();
-        final RunReportDto report = dataService.getRunReport(runId);
+        final RunReportDto report = dataService.getRunReport(effectiveRunId);
         final long reportDuration = System.currentTimeMillis() - reportStart;
 
         try
         {
             final Map<String, Object> triggerMap = Map.of(
                 "bugUpdated", Map.of(
-                    "runId", runId,
+                    "runId", effectiveRunId,
                     "rowId", rowId,
                     "status", updatedExec.getStatus() != null ? updatedExec.getStatus() : "",
                     "bugs", updatedExec.getBugs() != null ? updatedExec.getBugs() : List.of(),
@@ -616,13 +697,13 @@ public class AuraReportViewController
             LOG.error("Failed to serialize HX-Trigger header: {}", e.getMessage());
         }
 
-        model.addAttribute("runId", runId);
+        model.addAttribute("runId", effectiveRunId);
         model.addAttribute("rowId", rowId);
         model.addAttribute("exec", updatedExec);
 
         final long totalDuration = System.currentTimeMillis() - totalStart;
         LOG.info("[PERF] Controller addBugToExecution total={} ms (addBug={} ms, getRunReport={} ms) runId={}, rowId={}, ticket={}",
-            totalDuration, addDuration, reportDuration, runId, rowId, bugTicket);
+            totalDuration, addDuration, reportDuration, effectiveRunId, rowId, bugTicket);
 
         return "fragments/side-panel-step-list :: sidePanelBugSection";
     }
@@ -634,29 +715,35 @@ public class AuraReportViewController
         @RequestParam(name = "amp;rowId", required = false) final String ampRowId,
         @RequestParam(name = "bugTicket", required = false) final String bugTicketParam,
         @RequestParam(name = "amp;bugTicket", required = false) final String ampBugTicket,
+        @RequestHeader(value = "HX-Current-URL", required = false) final String currentUrl,
+        @RequestHeader(value = "Referer", required = false) final String referer,
         final Model model,
         final HttpServletResponse response)
     {
+        final String effectiveRunId = resolveEffectiveRunId(runId, currentUrl, referer);
         final long totalStart = System.currentTimeMillis();
         final String effectiveRowId = rowIdParam != null ? rowIdParam : ampRowId;
         final String effectiveBugTicket = bugTicketParam != null ? bugTicketParam : ampBugTicket;
 
         final long removeStart = System.currentTimeMillis();
-        final TestExecutionDto updatedExec = dataService.removeBugFromExecution(runId, effectiveRowId, effectiveBugTicket);
+        final TestExecutionDto updatedExec = dataService.removeBugFromExecution(effectiveRunId, effectiveRowId, effectiveBugTicket);
+        final TestExecutionDto effectiveExec = (updatedExec != null && updatedExec.getId() != null && !updatedExec.getId().isBlank())
+            ? updatedExec
+            : Optional.ofNullable(dataService.getExecutionDetails(effectiveRunId, effectiveRowId)).orElse(updatedExec);
         final long removeDuration = System.currentTimeMillis() - removeStart;
 
         final long reportStart = System.currentTimeMillis();
-        final RunReportDto report = dataService.getRunReport(runId);
+        final RunReportDto report = dataService.getRunReport(effectiveRunId);
         final long reportDuration = System.currentTimeMillis() - reportStart;
 
         try
         {
             final Map<String, Object> triggerMap = Map.of(
                 "bugUpdated", Map.of(
-                    "runId", runId,
+                    "runId", effectiveRunId,
                     "rowId", effectiveRowId,
-                    "status", updatedExec.getStatus() != null ? updatedExec.getStatus() : "",
-                    "bugs", updatedExec.getBugs() != null ? updatedExec.getBugs() : List.of(),
+                    "status", effectiveExec.getStatus() != null ? effectiveExec.getStatus() : "",
+                    "bugs", effectiveExec.getBugs() != null ? effectiveExec.getBugs() : List.of(),
                     "pass", report.getPassCount(),
                     "fixed", report.getFixedCount(),
                     "known", report.getKnownCount(),
@@ -671,14 +758,40 @@ public class AuraReportViewController
             LOG.error("Failed to serialize HX-Trigger header: {}", e.getMessage());
         }
 
-        model.addAttribute("runId", runId);
+        model.addAttribute("runId", effectiveRunId);
         model.addAttribute("rowId", effectiveRowId);
-        model.addAttribute("exec", updatedExec);
+        model.addAttribute("exec", effectiveExec);
 
         final long totalDuration = System.currentTimeMillis() - totalStart;
         LOG.info("[PERF] Controller removeBugFromExecution total={} ms (removeBug={} ms, getRunReport={} ms) runId={}, rowId={}, ticket={}",
-            totalDuration, removeDuration, reportDuration, runId, effectiveRowId, effectiveBugTicket);
+            totalDuration, removeDuration, reportDuration, effectiveRunId, effectiveRowId, effectiveBugTicket);
 
         return "fragments/side-panel-step-list :: sidePanelBugSection";
+    }
+
+    private String resolveEffectiveRunId(final String runId, final String currentUrl, final String referer)
+    {
+        if (runId != null)
+        {
+            final String clean = runId.trim().replaceAll("^#+", "");
+            if (!clean.isEmpty() && !"RUN_ID".equalsIgnoreCase(clean))
+            {
+                return clean;
+            }
+        }
+        final String targetUrl = (currentUrl != null && !currentUrl.isBlank()) ? currentUrl : referer;
+        if (targetUrl != null)
+        {
+            final String extracted = extractQueryParam(targetUrl, "runId");
+            if (extracted != null)
+            {
+                final String clean = extracted.trim().replaceAll("^#+", "");
+                if (!clean.isEmpty() && !"RUN_ID".equalsIgnoreCase(clean))
+                {
+                    return clean;
+                }
+            }
+        }
+        return (runId != null && !runId.isBlank()) ? runId.trim().replaceAll("^#+", "") : "#RUN_ID";
     }
 }

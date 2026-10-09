@@ -36,12 +36,14 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import org.neodymium.ai.util.AtomicFileUtils;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -676,7 +678,10 @@ public class LocalRunJsonStorageService
                             metricObj.put("timestampMs", parsedStartMs);
                         }
                     }
-                    metricObj.put("executionMode", objNode.path("executionMode").asText("FORCE_RECORDING"));
+                    final String execMode = objNode.hasNonNull("executionMode")
+                        ? objNode.path("executionMode").asText("")
+                        : objNode.path("mode").asText("");
+                    metricObj.put("executionMode", execMode);
                     final long durMs = objNode.hasNonNull("duration") ? objNode.path("duration").asLong(0L) : objNode.path("durationMs").asLong(0L);
                     metricObj.put("durationMs", durMs);
                     metricObj.put("durationFormatted", objNode.hasNonNull("durationFormatted") ? objNode.path("durationFormatted").asText() : RunStorageSyncService.formatDurationMs(durMs));
@@ -1407,14 +1412,15 @@ public class LocalRunJsonStorageService
         }
     }
 
-    public boolean updateExecutionInRun(final String runId, final String rowId, final java.util.function.Consumer<ObjectNode> updater)
+    public boolean updateExecutionInRun(final String runId, final String rowId, final Consumer<ObjectNode> updater)
     {
+        boolean updatedOnDisk = false;
         final Path runDir = getRunDir(runId);
         if (Files.exists(runDir))
         {
             try (final var stream = Files.walk(runDir))
             {
-                final java.util.List<Path> jsonFiles = stream.filter(p -> p.toString().endsWith(".json") && !p.getFileName().toString().equals("run.json") && !p.getFileName().toString().equals("batch.json"))
+                final List<Path> jsonFiles = stream.filter(p -> p.toString().endsWith(".json") && !p.getFileName().toString().equals("run.json") && !p.getFileName().toString().equals("batch.json"))
                     .toList();
                 for (final Path jsonPath : jsonFiles)
                 {
@@ -1426,11 +1432,36 @@ public class LocalRunJsonStorageService
                         final String nodeDatasetId = objNode.has("datasetId") ? objNode.path("datasetId").asText() : "";
                         final String fileNameNoExt = jsonPath.getFileName().toString().replaceAll("\\.json$", "");
 
+                        final String tClass = objNode.has("testClass") && !objNode.path("testClass").asText("").isBlank()
+                            ? objNode.path("testClass").asText("").trim()
+                            : (jsonPath.getParent() != null ? jsonPath.getParent().getFileName().toString() : "");
+                        final String tMethod = extractTestMethod(objNode);
+                        final String tTitle = objNode.has("title") && !objNode.path("title").asText("").isBlank()
+                            ? objNode.path("title").asText("").trim()
+                            : (!nodeDatasetId.isBlank() ? nodeDatasetId : (!nodeTestId.isBlank() ? nodeTestId : "Default"));
+                        final String tBrowser = objNode.has("browser") && !objNode.path("browser").asText("").isBlank()
+                            ? objNode.path("browser").asText("").trim()
+                            : "Chrome";
+
+                        final String execKey = buildExecutionKey(tClass, tMethod, tTitle, tBrowser);
+                        final String execKeyNoMethod = buildExecutionKey(tClass, null, tTitle, tBrowser);
+                        final String fullKey = tClass + "#" + nodeId + "#" + tBrowser;
+                        final String fullKeyTestId = tClass + "#" + nodeTestId + "#" + tBrowser;
+                        final String fullKeyDatasetId = tClass + "#" + nodeDatasetId + "#" + tBrowser;
+                        final String classMethodBrowser = tClass + "#" + tMethod + "#" + tBrowser;
+
                         final boolean matches = (rowId != null && !rowId.isEmpty() && (
                             rowId.equalsIgnoreCase(nodeId)
                             || rowId.equalsIgnoreCase(nodeTestId)
                             || rowId.equalsIgnoreCase(nodeDatasetId)
                             || rowId.equalsIgnoreCase(fileNameNoExt)
+                            || rowId.equalsIgnoreCase(execKey)
+                            || rowId.equalsIgnoreCase(execKeyNoMethod)
+                            || rowId.equalsIgnoreCase(fullKey)
+                            || rowId.equalsIgnoreCase(fullKeyTestId)
+                            || rowId.equalsIgnoreCase(fullKeyDatasetId)
+                            || rowId.equalsIgnoreCase(classMethodBrowser)
+                            || (rowId.contains("#") && rowId.contains(tClass) && (!tTitle.isEmpty() && rowId.contains(tTitle)) && rowId.contains(tBrowser))
                         )) || (jsonFiles.size() == 1);
 
                         if (matches)
@@ -1450,7 +1481,8 @@ public class LocalRunJsonStorageService
                                 objectMapper.writerWithDefaultPrettyPrinter().writeValue(jsonPath.toFile(), objNode);
                                 LOG.info("Updated execution JSON on disk: {}", jsonPath.toAbsolutePath());
                             }
-                            return true;
+                            updatedOnDisk = true;
+                            break;
                         }
                     }
                 }
@@ -1459,35 +1491,210 @@ public class LocalRunJsonStorageService
             {
                 LOG.error("Failed updating execution {} in run dir {}: {}", rowId, runId, e.getMessage());
             }
+
+            final Path nestedRunJson = runDir.resolve("run.json");
+            final boolean runJsonUpdated = updateRunJsonFile(nestedRunJson, rowId, updater);
+            if (runJsonUpdated)
+            {
+                updatedOnDisk = true;
+            }
         }
 
         final Path flatRunJson = Paths.get(baseDir, "run-" + runId + ".json");
-        if (Files.exists(flatRunJson))
+        final boolean flatUpdated = updateRunJsonFile(flatRunJson, rowId, updater);
+        if (flatUpdated)
         {
-            try
+            updatedOnDisk = true;
+        }
+
+        return updatedOnDisk;
+    }
+
+    private boolean updateRunJsonFile(final Path runJsonPath, final String rowId, final Consumer<ObjectNode> updater)
+    {
+        if (!Files.exists(runJsonPath) || Files.isDirectory(runJsonPath))
+        {
+            return false;
+        }
+        try
+        {
+            final JsonNode root = objectMapper.readTree(runJsonPath.toFile());
+            if (root instanceof ObjectNode runObj)
             {
-                final ObjectNode root = (ObjectNode) objectMapper.readTree(flatRunJson.toFile());
-                final JsonNode execArray = root.path("executions");
-                if (execArray.isArray())
+                boolean updated = false;
+                final JsonNode execMetrics = runObj.path("executionMetrics");
+                if (execMetrics instanceof ObjectNode metricsObj)
                 {
-                    for (final JsonNode execNode : execArray)
+                    final Iterator<Map.Entry<String, JsonNode>> fields = metricsObj.fields();
+                    while (fields.hasNext())
                     {
-                        if (execNode instanceof ObjectNode execObj && rowId.equalsIgnoreCase(execObj.path("id").asText()))
+                        final Map.Entry<String, JsonNode> entry = fields.next();
+                        if (entry.getValue() instanceof ObjectNode metricObj)
                         {
-                            updater.accept(execObj);
-                            objectMapper.writerWithDefaultPrettyPrinter().writeValue(flatRunJson.toFile(), root);
-                            LOG.info("Updated flat run JSON on disk: {}", flatRunJson.toAbsolutePath());
-                            return true;
+                            final String mId = metricObj.has("id") ? metricObj.path("id").asText() : "";
+                            final String tClass = metricObj.path("testClass").asText("");
+                            final String tMethod = metricObj.path("testMethod").asText(extractTestMethod(metricObj));
+                            final String tTitle = metricObj.path("title").asText("");
+                            final String tBrowser = metricObj.path("browser").asText("Chrome");
+                            final String execKey = buildExecutionKey(tClass, tMethod, tTitle, tBrowser);
+                            final String execKeyNoMethod = buildExecutionKey(tClass, "", tTitle, tBrowser);
+                            final String fullKey = tClass + "#" + mId + "#" + tBrowser;
+                            final String classMethodBrowser = tClass + "#" + tMethod + "#" + tBrowser;
+
+                            final boolean matches = (rowId != null && !rowId.isEmpty() && (
+                                rowId.equalsIgnoreCase(entry.getKey())
+                                || rowId.equalsIgnoreCase(mId)
+                                || rowId.equalsIgnoreCase(execKey)
+                                || rowId.equalsIgnoreCase(execKeyNoMethod)
+                                || rowId.equalsIgnoreCase(fullKey)
+                                || rowId.equalsIgnoreCase(classMethodBrowser)
+                                || (rowId.contains("#") && rowId.contains(tClass) && (!tTitle.isEmpty() && rowId.contains(tTitle)) && rowId.contains(tBrowser))
+                            ));
+
+                            if (matches)
+                            {
+                                updater.accept(metricObj);
+                                updated = true;
+                            }
                         }
                     }
                 }
-            }
-            catch (final IOException e)
-            {
-                LOG.error("Failed updating execution {} in flat run JSON {}: {}", rowId, runId, e.getMessage());
+                final JsonNode execArr = runObj.path("executions");
+                if (execArr instanceof ArrayNode arr)
+                {
+                    for (final JsonNode item : arr)
+                    {
+                        if (item instanceof ObjectNode itemObj)
+                        {
+                            final String itemNodeId = itemObj.has("id") ? itemObj.path("id").asText() : "";
+                            final String tClass = itemObj.path("testClass").asText("");
+                            final String tMethod = itemObj.path("testMethod").asText(extractTestMethod(itemObj));
+                            final String tTitle = itemObj.path("title").asText("");
+                            final String tBrowser = itemObj.path("browser").asText("Chrome");
+                            final String execKey = buildExecutionKey(tClass, tMethod, tTitle, tBrowser);
+                            final String execKeyNoMethod = buildExecutionKey(tClass, "", tTitle, tBrowser);
+                            final String fullKey = tClass + "#" + itemNodeId + "#" + tBrowser;
+                            final String classMethodBrowser = tClass + "#" + tMethod + "#" + tBrowser;
+
+                            final boolean matches = (rowId != null && !rowId.isEmpty() && (
+                                rowId.equalsIgnoreCase(itemNodeId)
+                                || rowId.equalsIgnoreCase(execKey)
+                                || rowId.equalsIgnoreCase(execKeyNoMethod)
+                                || rowId.equalsIgnoreCase(fullKey)
+                                || rowId.equalsIgnoreCase(classMethodBrowser)
+                                || (rowId.contains("#") && rowId.contains(tClass) && (!tTitle.isEmpty() && rowId.contains(tTitle)) && rowId.contains(tBrowser))
+                            ));
+
+                            if (matches)
+                            {
+                                updater.accept(itemObj);
+                                updated = true;
+                            }
+                        }
+                    }
+                }
+                if (updated)
+                {
+                    if (execMetrics instanceof ObjectNode metricsObj && !metricsObj.isEmpty())
+                    {
+                        int sPass = 0;
+                        int sFixed = 0;
+                        int sKnown = 0;
+                        int sUnknown = 0;
+                        int sIgnored = 0;
+                        int sPassHealed = 0;
+                        int sFixedHealed = 0;
+                        int sKnownHealed = 0;
+                        int sUnknownHealed = 0;
+                        for (final JsonNode mNode : metricsObj)
+                        {
+                            final String mStatus = mNode.path("status").asText("failed-unknown");
+                            final boolean mHasBugs = mNode.has("bugs") && mNode.path("bugs").isArray() && mNode.path("bugs").size() > 0;
+                            final boolean mHealed = mNode.path("healed").asBoolean(false) || mNode.path("healedStepsCount").asInt(0) > 0 || "healed".equalsIgnoreCase(mStatus);
+                            if ("failed-known".equalsIgnoreCase(mStatus) || (("failed".equalsIgnoreCase(mStatus) || "error".equalsIgnoreCase(mStatus)) && mHasBugs))
+                            {
+                                sKnown++;
+                                if (mHealed)
+                                {
+                                    sKnownHealed++;
+                                }
+                            }
+                            else if ("failed-unknown".equalsIgnoreCase(mStatus) || "failed".equalsIgnoreCase(mStatus) || "error".equalsIgnoreCase(mStatus))
+                            {
+                                sUnknown++;
+                                if (mHealed)
+                                {
+                                    sUnknownHealed++;
+                                }
+                            }
+                            else if ("succeeded-fixed".equalsIgnoreCase(mStatus) || ("passed".equalsIgnoreCase(mStatus) && mHasBugs))
+                            {
+                                sFixed++;
+                                if (mHealed)
+                                {
+                                    sFixedHealed++;
+                                }
+                            }
+                            else if ("passed".equalsIgnoreCase(mStatus) || "passed-clean".equalsIgnoreCase(mStatus))
+                            {
+                                sPass++;
+                                if (mHealed)
+                                {
+                                    sPassHealed++;
+                                }
+                            }
+                            else if ("ignored".equalsIgnoreCase(mStatus) || "skipped".equalsIgnoreCase(mStatus))
+                            {
+                                sIgnored++;
+                            }
+                            else
+                            {
+                                if (mHasBugs)
+                                {
+                                    sKnown++;
+                                    if (mHealed)
+                                    {
+                                        sKnownHealed++;
+                                    }
+                                }
+                                else
+                                {
+                                    sUnknown++;
+                                    if (mHealed)
+                                    {
+                                        sUnknownHealed++;
+                                    }
+                                }
+                            }
+                        }
+                        final int sTotal = sPass + sFixed + sKnown + sUnknown + sIgnored;
+                        final ObjectNode sObj = runObj.has("summary") && runObj.path("summary").isObject()
+                            ? (ObjectNode) runObj.path("summary")
+                            : objectMapper.createObjectNode();
+                        sObj.put("total", sTotal);
+                        sObj.put("pass", sPass);
+                        sObj.put("fixed", sFixed);
+                        sObj.put("known", sKnown);
+                        sObj.put("unknown", sUnknown);
+                        sObj.put("ignored", sIgnored);
+                        sObj.put("passHealed", sPassHealed);
+                        sObj.put("fixedHealed", sFixedHealed);
+                        sObj.put("knownHealed", sKnownHealed);
+                        sObj.put("unknownHealed", sUnknownHealed);
+                        sObj.put("passRate", sTotal > 0 ? Math.round((double) (sPass + sFixed) / sTotal * 1000.0) / 10.0 : 0.0);
+                        runObj.set("summary", sObj);
+                    }
+
+                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(runJsonPath.toFile(), runObj);
+                    LOG.info("Updated run JSON on disk: {}", runJsonPath.toAbsolutePath());
+                    return true;
+                }
             }
         }
-
+        catch (final IOException e)
+        {
+            LOG.error("Failed updating execution {} in run JSON {}: {}", rowId, runJsonPath, e.getMessage());
+        }
         return false;
     }
 

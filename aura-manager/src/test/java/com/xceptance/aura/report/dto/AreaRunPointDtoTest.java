@@ -101,4 +101,56 @@ public class AreaRunPointDtoTest
         assertEquals(2, point.getKnownCleanCount());
         assertEquals(1, point.getUnknownCleanCount());
     }
+
+    @Test
+    public void testSixteenParameterConstructorPreservesAiCountsAndCalculatesCleanMetrics()
+    {
+        final AreaRunPointDto point = new AreaRunPointDto(
+            "run_003",
+            "2026-10-09 10:00:00",
+            10,
+            5,
+            4,
+            3,
+            0,
+            22,
+            2,
+            1,
+            1,
+            1,
+            3,
+            2,
+            1,
+            1
+        );
+
+        assertEquals("run_003", point.getRunId());
+        assertEquals("2026-10-09 10:00:00", point.getTimestampLabel());
+        assertEquals(10, point.getPassCount());
+        assertEquals(5, point.getFixedCount());
+        assertEquals(4, point.getKnownCount());
+        assertEquals(3, point.getUnknownCount());
+        assertEquals(0, point.getIgnoredCount());
+        assertEquals(22, point.getTotalCount());
+
+        assertEquals(2, point.getPassHealedCount());
+        assertEquals(1, point.getFixedHealedCount());
+        assertEquals(1, point.getKnownHealedCount());
+        assertEquals(1, point.getUnknownHealedCount());
+
+        assertEquals(3, point.getPassAiCount());
+        assertEquals(2, point.getFixedAiCount());
+        assertEquals(1, point.getKnownAiCount());
+        assertEquals(1, point.getUnknownAiCount());
+
+        // clean = total - healed - ai
+        // passClean = 10 - 2 - 3 = 5
+        assertEquals(5, point.getPassCleanCount());
+        // fixedClean = 5 - 1 - 2 = 2
+        assertEquals(2, point.getFixedCleanCount());
+        // knownClean = 4 - 1 - 1 = 2
+        assertEquals(2, point.getKnownCleanCount());
+        // unknownClean = 3 - 1 - 1 = 1
+        assertEquals(1, point.getUnknownCleanCount());
+    }
 }

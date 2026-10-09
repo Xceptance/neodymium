@@ -4,7 +4,7 @@
 <body>
 
 <!-- Run Report Fragment -->
-<div th:fragment="runReport" class="d-flex flex-column gap-4" th:data-target-execution-id="${targetExecutionId}">
+<div th:fragment="runReport" class="d-flex flex-column gap-4" th:data-target-execution-id="${targetExecutionId}" th:data-run-id="${report?.runId ?: runId}">
 
     <!-- PAGE HEADER / SUB-TABS BAR -->
     <div class="sub-tab-bar">
@@ -144,23 +144,34 @@
                                             <pattern th:id="'sparkle-pat-area-' + ${area.areaGroup}" width="6" height="6" patternUnits="userSpaceOnUse">
                                                 <path d="M3 0.8 L3.5 2.5 L5.2 3 L3.5 3.5 L3 5.2 L2.5 3.5 L0.8 3 L2.5 2.5 Z" fill="#ffffff" opacity="0.85"/>
                                             </pattern>
+                                            <pattern th:id="'ai-pat-area-' + ${area.areaGroup}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                                                <line x1="0" y1="0" x2="0" y2="4" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+                                            </pattern>
                                         </defs>
                                         <circle cx="18" cy="18" r="15.915" fill="none" stroke="#e2e8f0" stroke-width="4"/>
                                         <circle th:if="${area.passCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass, #059669)" stroke-width="5" th:attr="stroke-dasharray=${area.passCleanDashArray},stroke-dashoffset=${area.passCleanDashOffset}"/>
                                         <circle th:if="${area.passHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass-healed, #34d399)" stroke-width="5" th:attr="stroke-dasharray=${area.passHealedDashArray},stroke-dashoffset=${area.passHealedDashOffset}"/>
                                         <circle th:if="${area.passHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-area-' + ${area.areaGroup} + ')',stroke-dasharray=${area.passHealedDashArray},stroke-dashoffset=${area.passHealedDashOffset}" stroke-width="5"/>
+                                        <circle th:if="${area.passAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass, #059669)" stroke-width="5" th:attr="stroke-dasharray=${area.passAiDashArray},stroke-dashoffset=${area.passAiDashOffset}"/>
+                                        <circle th:if="${area.passAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-area-' + ${area.areaGroup} + ')',stroke-dasharray=${area.passAiDashArray},stroke-dashoffset=${area.passAiDashOffset}" stroke-width="5"/>
 
                                         <circle th:if="${area.fixedCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed, #2563eb)" stroke-width="5" th:attr="stroke-dasharray=${area.fixedCleanDashArray},stroke-dashoffset=${area.fixedCleanDashOffset}"/>
                                         <circle th:if="${area.fixedHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed-healed, #60a5fa)" stroke-width="5" th:attr="stroke-dasharray=${area.fixedHealedDashArray},stroke-dashoffset=${area.fixedHealedDashOffset}"/>
                                         <circle th:if="${area.fixedHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-area-' + ${area.areaGroup} + ')',stroke-dasharray=${area.fixedHealedDashArray},stroke-dashoffset=${area.fixedHealedDashOffset}" stroke-width="5"/>
+                                        <circle th:if="${area.fixedAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed, #2563eb)" stroke-width="5" th:attr="stroke-dasharray=${area.fixedAiDashArray},stroke-dashoffset=${area.fixedAiDashOffset}"/>
+                                        <circle th:if="${area.fixedAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-area-' + ${area.areaGroup} + ')',stroke-dasharray=${area.fixedAiDashArray},stroke-dashoffset=${area.fixedAiDashOffset}" stroke-width="5"/>
 
                                         <circle th:if="${area.knownCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-fail, #ea580c)" stroke-width="5" th:attr="stroke-dasharray=${area.knownCleanDashArray},stroke-dashoffset=${area.knownCleanDashOffset}"/>
                                         <circle th:if="${area.knownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-healed, #fb923c)" stroke-width="5" th:attr="stroke-dasharray=${area.knownHealedDashArray},stroke-dashoffset=${area.knownHealedDashOffset}"/>
                                         <circle th:if="${area.knownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-area-' + ${area.areaGroup} + ')',stroke-dasharray=${area.knownHealedDashArray},stroke-dashoffset=${area.knownHealedDashOffset}" stroke-width="5"/>
+                                        <circle th:if="${area.knownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-fail, #ea580c)" stroke-width="5" th:attr="stroke-dasharray=${area.knownAiDashArray},stroke-dashoffset=${area.knownAiDashOffset}"/>
+                                        <circle th:if="${area.knownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-area-' + ${area.areaGroup} + ')',stroke-dasharray=${area.knownAiDashArray},stroke-dashoffset=${area.knownAiDashOffset}" stroke-width="5"/>
 
                                         <circle th:if="${area.unknownCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-fail, #dc2626)" stroke-width="5" th:attr="stroke-dasharray=${area.unknownCleanDashArray},stroke-dashoffset=${area.unknownCleanDashOffset}"/>
                                         <circle th:if="${area.unknownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-healed, #f87171)" stroke-width="5" th:attr="stroke-dasharray=${area.unknownHealedDashArray},stroke-dashoffset=${area.unknownHealedDashOffset}"/>
                                         <circle th:if="${area.unknownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-area-' + ${area.areaGroup} + ')',stroke-dasharray=${area.unknownHealedDashArray},stroke-dashoffset=${area.unknownHealedDashOffset}" stroke-width="5"/>
+                                        <circle th:if="${area.unknownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-fail, #dc2626)" stroke-width="5" th:attr="stroke-dasharray=${area.unknownAiDashArray},stroke-dashoffset=${area.unknownAiDashOffset}"/>
+                                        <circle th:if="${area.unknownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-area-' + ${area.areaGroup} + ')',stroke-dasharray=${area.unknownAiDashArray},stroke-dashoffset=${area.unknownAiDashOffset}" stroke-width="5"/>
 
                                         <circle th:if="${area.ignoredCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-ignored, #94a3b8)" stroke-width="5" th:attr="stroke-dasharray=${area.ignoredDashArray},stroke-dashoffset=${area.ignoredDashOffset}"/>
                                     </svg>
@@ -171,6 +182,7 @@
                                         <div class="label"><div class="dot" style="background: var(--status-pass);"></div> Successful</div>
                                         <div class="val-group">
                                             <span class="badge-healed-inline badge-pass-healed" th:if="${area.passHealedCount > 0}" th:text="${'✨ ' + area.passHealedCount + ' healed'}">1 healed</span>
+                                            <span class="badge-ai-inline badge-pass-ai" th:if="${area.passAiCount > 0}" th:text="${area.passAiCount + ' AI'}">1 AI</span>
                                             <span class="val val-pass" style="color: var(--status-pass);" th:text="${area.passCount}">0</span>
                                         </div>
                                     </div>
@@ -178,6 +190,7 @@
                                         <div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Succeeded-Fixed</div>
                                         <div class="val-group">
                                             <span class="badge-healed-inline badge-fixed-healed" th:if="${area.fixedHealedCount > 0}" th:text="${'✨ ' + area.fixedHealedCount + ' healed'}">1 healed</span>
+                                            <span class="badge-ai-inline badge-fixed-ai" th:if="${area.fixedAiCount > 0}" th:text="${area.fixedAiCount + ' AI'}">1 AI</span>
                                             <span class="val val-fixed" style="color: var(--status-fixed);" th:text="${area.fixedCount}">0</span>
                                         </div>
                                     </div>
@@ -185,6 +198,7 @@
                                         <div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Failed</div>
                                         <div class="val-group">
                                             <span class="badge-healed-inline badge-known-healed" th:if="${area.knownHealedCount > 0}" th:text="${'✨ ' + area.knownHealedCount + ' healed'}">1 healed</span>
+                                            <span class="badge-ai-inline badge-known-ai" th:if="${area.knownAiCount > 0}" th:text="${area.knownAiCount + ' AI'}">1 AI</span>
                                             <span class="val val-known" style="color: var(--status-known-fail);" th:text="${area.knownCount}">0</span>
                                         </div>
                                     </div>
@@ -192,6 +206,7 @@
                                         <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Failed</div>
                                         <div class="val-group">
                                             <span class="badge-healed-inline badge-unknown-healed" th:if="${area.unknownHealedCount > 0}" th:text="${'✨ ' + area.unknownHealedCount + ' healed'}">1 healed</span>
+                                            <span class="badge-ai-inline badge-unknown-ai" th:if="${area.unknownAiCount > 0}" th:text="${area.unknownAiCount + ' AI'}">1 AI</span>
                                             <span class="val val-unknown" style="color: var(--status-unknown-fail);" th:text="${area.unknownCount}">0</span>
                                         </div>
                                     </div>
@@ -348,13 +363,14 @@
                                                     th:data-dataset="${exec.title}" 
                                                     th:data-status="${exec.displayStatusKey}"
                                                     th:data-status-raw="${exec.status}" 
-                                                    th:data-mode="${exec.executionMode ?: 'FORCE_RECORDING'}"
+                                                    th:data-mode="${exec.displayMode}"
                                                     th:data-test-method="${exec.testMethod ?: ''}"
-                                                    th:data-search="${(exec.testClass ?: '') + ' ' + (exec.testMethod ?: '') + ' ' + (exec.title ?: '') + ' ' + (exec.location ?: '') + ' ' + (exec.browser ?: '') + ' ' + (exec.executionMode ?: '')}"
+                                                    th:data-search="${(exec.testClass ?: '') + ' ' + (exec.testMethod ?: '') + ' ' + (exec.title ?: '') + ' ' + (exec.location ?: '') + ' ' + (exec.browser ?: '') + ' ' + (exec.displayMode ?: '')}"
                                                     th:data-location="${exec.location}" 
                                                     th:data-browser="${exec.browser}" 
                                                     th:data-bugs="${exec.bugs != null and not #lists.isEmpty(exec.bugs) ? #strings.arrayJoin(exec.bugs, ',') : 'NONE'}" 
                                                     th:data-healed="${exec.healed}"
+                                                    th:data-ai="${exec.aiDriven}"
                                                     th:data-healed-passed="${exec.passedHealed}"
                                                     th:data-healed-failed="${exec.failedHealed}"
                                                     th:data-failure="${exec.failure}"
@@ -399,13 +415,12 @@
 
                                                     <td>
                                                         <div style="display: inline-flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
-                                                            <span class="mode-badge" onclick="event.stopPropagation(); filterByMode(this.innerText)" th:text="${exec.executionMode ?: 'FORCE_RECORDING'}">FORCE_RECORDING</span>
-                                                            <span th:if="${exec.healed}" 
-                                                                  th:class="'badge-status ' + (${exec.failedHealed} ? 'badge-healed-failed' : 'badge-healed-passed')"
-                                                                  style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"
-                                                                  title="Test had dynamic self-healing">
-                                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> HEALED
-                                                            </span>
+                                                            <span class="badge-status" 
+                                                                  th:classappend="${exec.displayMode == 'AI' ? 'badge-mode-ai' : (exec.displayMode == 'PLAYBOOK' ? 'badge-mode-playbook' : (exec.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
+                                                                  onclick="event.stopPropagation(); filterByMode(this.innerText)" 
+                                                                  style="cursor: pointer; font-size: 0.72rem; padding: 0.15rem 0.45rem;"
+                                                                  th:title="${'Execution Mode: ' + (exec.executionMode ?: 'JAVA')}"
+                                                                  th:text="${exec.displayMode}">PLAYBOOK</span>
                                                         </div>
                                                     </td>
 

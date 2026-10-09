@@ -23,7 +23,9 @@ import com.xceptance.aura.report.dto.AreaSummaryDto;
 import com.xceptance.aura.report.dto.BatchAreaTrendDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestBaseDataDto;
+import com.xceptance.aura.report.dto.TestExecutionDto;
 import com.xceptance.aura.report.entity.TestRunEntity;
+import jakarta.servlet.http.HttpServletResponse;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestBatchRepository;
@@ -378,5 +380,126 @@ public class AuraReportViewControllerTest
         Assertions.assertEquals(1, point.getUnknownCount());
         Assertions.assertEquals(0, point.getUnknownHealedCount());
         Assertions.assertEquals(1, point.getUnknownCleanCount());
+    }
+
+    @Test
+    public void testRemoveBugFromExecutionResolvesRunIdFromCurrentUrlWhenPlaceholderProvided()
+    {
+        final String runIdPlaceholder = "#RUN_ID";
+        final String currentUrl = "/run-report?runId=run-resolved-456";
+        final TestExecutionDto execDto = new TestExecutionDto();
+        execDto.setId("row-1");
+        execDto.setStatus("failed-unknown");
+
+        final RunReportDto reportDto = Mockito.mock(RunReportDto.class);
+        Mockito.when(reportDto.getRunId()).thenReturn("run-resolved-456");
+
+        Mockito.when(dataService.removeBugFromExecution("run-resolved-456", "row-1", "BUG-123"))
+            .thenReturn(execDto);
+        Mockito.when(dataService.getRunReport("run-resolved-456"))
+            .thenReturn(reportDto);
+
+        final Model model = new ConcurrentModel();
+        final HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+
+        final String view = controller.removeBugFromExecution(
+            runIdPlaceholder, "row-1", null, "BUG-123", null, currentUrl, null, model, response);
+
+        Assertions.assertEquals("fragments/side-panel-step-list :: sidePanelBugSection", view);
+        Assertions.assertEquals("run-resolved-456", model.getAttribute("runId"));
+        Mockito.verify(dataService).removeBugFromExecution("run-resolved-456", "row-1", "BUG-123");
+    }
+
+    @Test
+    public void testRemoveBugFromExecutionStripsHashPrefixFromRunId()
+    {
+        final String runIdWithHash = "#run-with-hash-789";
+        final TestExecutionDto execDto = new TestExecutionDto();
+        execDto.setId("row-2");
+        execDto.setStatus("failed-unknown");
+
+        final RunReportDto reportDto = Mockito.mock(RunReportDto.class);
+        Mockito.when(reportDto.getRunId()).thenReturn("run-with-hash-789");
+
+        Mockito.when(dataService.removeBugFromExecution("run-with-hash-789", "row-2", "BUG-456"))
+            .thenReturn(execDto);
+        Mockito.when(dataService.getRunReport("run-with-hash-789"))
+            .thenReturn(reportDto);
+
+        final Model model = new ConcurrentModel();
+        final HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+
+        final String view = controller.removeBugFromExecution(
+            runIdWithHash, "row-2", null, "BUG-456", null, null, null, model, response);
+
+        Assertions.assertEquals("fragments/side-panel-step-list :: sidePanelBugSection", view);
+        Assertions.assertEquals("run-with-hash-789", model.getAttribute("runId"));
+        Mockito.verify(dataService).removeBugFromExecution("run-with-hash-789", "row-2", "BUG-456");
+    }
+
+    @Test
+    public void testRemoveBugFromExecutionWithCompositeKeyContainingHashes()
+    {
+        final String runId = "run-comp-1";
+        final String compositeRowId = "Aura_google_test_yaml_Test#executeYamlTest#Default#Chrome_1920x1080";
+        final String ticket = "BUG-48868";
+
+        final TestExecutionDto execDto = new TestExecutionDto();
+        execDto.setId(compositeRowId);
+        execDto.setStatus("failed-unknown");
+        execDto.setBugs(List.of());
+
+        final RunReportDto reportDto = Mockito.mock(RunReportDto.class);
+        Mockito.when(reportDto.getRunId()).thenReturn(runId);
+
+        Mockito.when(dataService.removeBugFromExecution(runId, compositeRowId, ticket))
+            .thenReturn(execDto);
+        Mockito.when(dataService.getRunReport(runId))
+            .thenReturn(reportDto);
+
+        final Model model = new ConcurrentModel();
+        final HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+
+        final String view = controller.removeBugFromExecution(
+            runId, compositeRowId, null, ticket, null, null, null, model, response);
+
+        Assertions.assertEquals("fragments/side-panel-step-list :: sidePanelBugSection", view);
+        Assertions.assertEquals(runId, model.getAttribute("runId"));
+        Assertions.assertEquals(compositeRowId, model.getAttribute("rowId"));
+        Assertions.assertEquals(execDto, model.getAttribute("exec"));
+        Mockito.verify(dataService).removeBugFromExecution(runId, compositeRowId, ticket);
+    }
+
+    @Test
+    public void testRemoveBugFromExecutionFallsBackToExecutionDetailsWhenRemovalYieldsHollowDto()
+    {
+        final String runId = "run-comp-2";
+        final String compositeRowId = "Aura_test#method#title#Chrome";
+
+        final TestExecutionDto existingExec = new TestExecutionDto();
+        existingExec.setId(compositeRowId);
+        existingExec.setStatus("failed-known");
+        existingExec.setBugs(List.of("BUG-EXISTING-1"));
+
+        final RunReportDto reportDto = Mockito.mock(RunReportDto.class);
+        Mockito.when(reportDto.getRunId()).thenReturn(runId);
+
+        // When dataService returns a hollow DTO (e.g. bugTicket was null or not found)
+        Mockito.when(dataService.removeBugFromExecution(runId, compositeRowId, null))
+            .thenReturn(new TestExecutionDto());
+        Mockito.when(dataService.getExecutionDetails(runId, compositeRowId))
+            .thenReturn(existingExec);
+        Mockito.when(dataService.getRunReport(runId))
+            .thenReturn(reportDto);
+
+        final Model model = new ConcurrentModel();
+        final HttpServletResponse response = Mockito.mock(HttpServletResponse.class);
+
+        final String view = controller.removeBugFromExecution(
+            runId, compositeRowId, null, null, null, null, null, model, response);
+
+        Assertions.assertEquals("fragments/side-panel-step-list :: sidePanelBugSection", view);
+        Assertions.assertEquals(existingExec, model.getAttribute("exec"));
+        Assertions.assertEquals(List.of("BUG-EXISTING-1"), ((TestExecutionDto) model.getAttribute("exec")).getBugs());
     }
 }

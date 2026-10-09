@@ -181,7 +181,7 @@
                     <span th:each="bug : ${exec?.bugs}" class="badge-status badge-known-fail" style="font-family: var(--font-family);" th:data-bug-ticket="${bug}">
                         <span class="material-symbols-outlined">bug_report</span> <span th:text="${bug.startsWith('#') ? bug : '#' + bug}">#BUG-4821</span>
                         <button class="btn-danger-subtle" type="button" th:title="'Unlink #' + ${bug}"
-                                th:hx-delete="|/fragments/test-side-panel/bugs?runId=${runId ?: '#RUN_ID'}&rowId=${exec?.id ?: rowId ?: 'row-ds-1'}&bugTicket=${#uris.escapeQueryParam(bug)}|"
+                                th:hx-delete="|/fragments/test-side-panel/bugs?runId=${#uris.escapeQueryParam(#strings.replace(runId ?: '#RUN_ID', '#', ''))}&rowId=${#uris.escapeQueryParam(exec?.id ?: rowId ?: 'row-ds-1')}&bugTicket=${#uris.escapeQueryParam(bug)}|"
                                 hx-target="#sidePageStatusBadge" hx-swap="outerHTML">
                             <span class="material-symbols-outlined">delete</span>
                         </button>
@@ -234,7 +234,7 @@
                     <span class="scope-badge-batch"><span class="material-symbols-outlined">layers</span> PERSISTENT OVER BATCH</span>
                 </div>
                 <form hx-post="/fragments/test-side-panel/bugs" hx-target="#sidePageStatusBadge" hx-swap="outerHTML" class="flex-gap-2">
-                    <input type="hidden" name="runId" th:value="${runId ?: '#RUN_ID'}">
+                    <input type="hidden" name="runId" th:value="${#strings.replace(runId ?: '#RUN_ID', '#', '')}">
                     <input type="hidden" name="rowId" th:value="${exec?.id ?: rowId ?: 'row-ds-1'}">
                     <input type="text" class="action-input" name="bugTicket" id="bugTicketInput" value="" placeholder="e.g. #BUG-4821">
                     <button type="submit" class="btn-primary" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;"><span class="material-symbols-outlined">check</span> Save Bugs</button>

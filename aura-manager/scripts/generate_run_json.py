@@ -274,7 +274,7 @@ def extract_execution_metrics(exec_data, test_class_name):
         "browser": browser,
         "status": effective_status,
         "areaName": exec_data.get("areaName") or "Browsing (default)",
-        "executionMode": exec_data.get("executionMode") or exec_data.get("mode") or "FORCE_RECORDING",
+        "executionMode": exec_data.get("executionMode") or exec_data.get("mode") or "",
         "startTime": time_str or "",
         "dateFormatted": date_formatted,
         "timeFormatted": time_formatted,

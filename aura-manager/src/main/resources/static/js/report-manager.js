@@ -254,13 +254,30 @@ function handleTrendChartHover(event) {
         }
     }
 
+    const headerAi = document.getElementById('ttHeaderAi');
+    if (headerAi) {
+        if (stat.totalAi > 0) {
+            headerAi.innerText = `${stat.totalAi} AI`;
+            headerAi.style.display = 'inline-flex';
+        } else {
+            headerAi.style.display = 'none';
+        }
+    }
+
     const timestampEl = document.getElementById('ttTimestamp');
     if (timestampEl) timestampEl.innerText = stat.time || 'Recently';
 
     const runTitle = document.getElementById('ttRunTitle') || document.getElementById('trendTooltipTitle');
     if (runTitle) {
+        let badgesHtml = '';
         if (stat.totalHealed > 0) {
-            runTitle.innerHTML = `${stat.title} <span class="badge-healed-inline badge-pass-healed" style="font-size: 0.68rem; padding: 0.05rem 0.35rem; margin-left: 0.35rem;">✨ ${stat.totalHealed} healed</span>`;
+            badgesHtml += ` <span class="badge-healed-inline badge-pass-healed" style="font-size: 0.68rem; padding: 0.05rem 0.35rem; margin-left: 0.35rem;">✨ ${stat.totalHealed} healed</span>`;
+        }
+        if (stat.totalAi > 0) {
+            badgesHtml += ` <span class="badge-ai-inline badge-pass-ai" style="font-size: 0.68rem; padding: 0.05rem 0.35rem; margin-left: 0.35rem;">${stat.totalAi} AI</span>`;
+        }
+        if (badgesHtml) {
+            runTitle.innerHTML = `${stat.title}${badgesHtml}`;
         } else {
             runTitle.innerText = stat.title;
         }
@@ -280,10 +297,11 @@ function handleTrendChartHover(event) {
         totalVal.innerText = (stat.total && stat.total.includes('Tests')) ? stat.total : `${stat.total || 0} Tests`;
     }
 
-    function updateTooltipRow(rowId, valId, healedId, count, healedCount) {
+    function updateTooltipRow(rowId, valId, healedId, aiId, count, healedCount, aiCount) {
         const row = document.getElementById(rowId);
         const val = document.getElementById(valId);
         const healed = healedId ? document.getElementById(healedId) : null;
+        const ai = aiId ? document.getElementById(aiId) : null;
         if (val) val.innerText = count;
         if (healed) {
             if (healedCount > 0) {
@@ -293,16 +311,24 @@ function handleTrendChartHover(event) {
                 healed.style.display = 'none';
             }
         }
+        if (ai) {
+            if (aiCount > 0) {
+                ai.innerText = `${aiCount} AI`;
+                ai.style.display = 'inline-flex';
+            } else {
+                ai.style.display = 'none';
+            }
+        }
         if (row) {
             row.style.display = count > 0 ? 'flex' : 'none';
         }
     }
 
-    updateTooltipRow('ttRowPass', 'ttPassVal', 'ttHealedPass', stat.pass, stat.passHealed);
-    updateTooltipRow('ttRowFixed', 'ttFixedVal', 'ttHealedFixed', stat.fixed, stat.fixedHealed);
-    updateTooltipRow('ttRowKnown', 'ttKnownVal', 'ttHealedKnown', stat.known, stat.knownHealed);
-    updateTooltipRow('ttRowUnknown', 'ttUnknownVal', 'ttHealedUnknown', stat.unknown, stat.unknownHealed);
-    updateTooltipRow('ttRowIgnored', 'ttIgnoredVal', null, stat.ignored, 0);
+    updateTooltipRow('ttRowPass', 'ttPassVal', 'ttHealedPass', 'ttAiPass', stat.pass, stat.passHealed, stat.passAi);
+    updateTooltipRow('ttRowFixed', 'ttFixedVal', 'ttHealedFixed', 'ttAiFixed', stat.fixed, stat.fixedHealed, stat.fixedAi);
+    updateTooltipRow('ttRowKnown', 'ttKnownVal', 'ttHealedKnown', 'ttAiKnown', stat.known, stat.knownHealed, stat.knownAi);
+    updateTooltipRow('ttRowUnknown', 'ttUnknownVal', 'ttHealedUnknown', 'ttAiUnknown', stat.unknown, stat.unknownHealed, stat.unknownAi);
+    updateTooltipRow('ttRowIgnored', 'ttIgnoredVal', null, null, stat.ignored, 0, 0);
 
     const legacyPass = document.getElementById('trendTooltipPass');
     if (legacyPass) legacyPass.innerText = stat.pass;
@@ -377,21 +403,26 @@ function renderDynamicTrendChart(targetBatchName) {
         const knownHealed = parseInt(row.getAttribute('data-known-healed') || '0', 10) || 0;
         const unknownHealed = parseInt(row.getAttribute('data-unknown-healed') || '0', 10) || 0;
         const totalHealed = passHealed + fixedHealed + knownHealed + unknownHealed;
+        const passAi = parseInt(row.getAttribute('data-pass-ai') || '0', 10) || 0;
+        const fixedAi = parseInt(row.getAttribute('data-fixed-ai') || '0', 10) || 0;
+        const knownAi = parseInt(row.getAttribute('data-known-ai') || '0', 10) || 0;
+        const unknownAi = parseInt(row.getAttribute('data-unknown-ai') || '0', 10) || 0;
+        const totalAi = passAi + fixedAi + knownAi + unknownAi;
         const total = parseInt(row.getAttribute('data-total') || row.querySelector('td.text-mono:nth-of-type(4)')?.innerText.trim() || '0', 10) || (pass + fixed + known + unknown + ignored) || 1;
         const rate = row.getAttribute('data-rate') || (row.querySelector('.badge-status')?.innerText.trim() || '0%');
         const time = row.getAttribute('data-time') || row.querySelector('td.text-muted')?.innerText.trim() || 'Recently';
 
-        runsData.push({ runId, pass, fixed, known, unknown, ignored, passHealed, fixedHealed, knownHealed, unknownHealed, totalHealed, total, rate, time });
+        runsData.push({ runId, pass, fixed, known, unknown, ignored, passHealed, fixedHealed, knownHealed, unknownHealed, totalHealed, passAi, fixedAi, knownAi, unknownAi, totalAi, total, rate, time });
     });
 
     if (runsData.length === 0) {
         batchRunStatsRegistry[batchName] = { runIds: [], maxTests: 0, stats: {} };
         [
             'trendLayerIgnored',
-            'trendLayerUnknown', 'trendLayerUnknownHealed', 'trendLayerUnknownHealedPattern',
-            'trendLayerKnown', 'trendLayerKnownHealed', 'trendLayerKnownHealedPattern',
-            'trendLayerFixed', 'trendLayerFixedHealed', 'trendLayerFixedHealedPattern',
-            'trendLayerPass', 'trendLayerPassHealed', 'trendLayerPassHealedPattern',
+            'trendLayerUnknown', 'trendLayerUnknownHealed', 'trendLayerUnknownHealedPattern', 'trendLayerUnknownAi', 'trendLayerUnknownAiPattern',
+            'trendLayerKnown', 'trendLayerKnownHealed', 'trendLayerKnownHealedPattern', 'trendLayerKnownAi', 'trendLayerKnownAiPattern',
+            'trendLayerFixed', 'trendLayerFixedHealed', 'trendLayerFixedHealedPattern', 'trendLayerFixedAi', 'trendLayerFixedAiPattern',
+            'trendLayerPass', 'trendLayerPassHealed', 'trendLayerPassHealedPattern', 'trendLayerPassAi', 'trendLayerPassAiPattern',
             'trendTopStroke'
         ].forEach(id => {
             document.getElementById(id)?.setAttribute('d', '');
@@ -425,44 +456,62 @@ function renderDynamicTrendChart(targetBatchName) {
             knownHealed: r.knownHealed,
             unknownHealed: r.unknownHealed,
             totalHealed: r.totalHealed,
+            passAi: r.passAi,
+            fixedAi: r.fixedAi,
+            knownAi: r.knownAi,
+            unknownAi: r.unknownAi,
+            totalAi: r.totalAi,
             total: `${r.total} Tests`,
             rate: r.rate
         };
 
-        const cleanUnknown = Math.max(0, r.unknown - r.unknownHealed);
-        const cleanKnown = Math.max(0, r.known - r.knownHealed);
-        const cleanFixed = Math.max(0, r.fixed - r.fixedHealed);
-        const cleanPass = Math.max(0, r.pass - r.passHealed);
+        const cleanUnknown = Math.max(0, r.unknown - r.unknownHealed - r.unknownAi);
+        const cleanKnown = Math.max(0, r.known - r.knownHealed - r.knownAi);
+        const cleanFixed = Math.max(0, r.fixed - r.fixedHealed - r.fixedAi);
+        const cleanPass = Math.max(0, r.pass - r.passHealed - r.passAi);
 
         const y0 = 190;
         const y1 = y0 - (r.ignored * baseScale);
         const y2_clean = y1 - (cleanUnknown * baseScale);
-        const y2 = y2_clean - (r.unknownHealed * baseScale);
+        const y2_healed = y2_clean - (r.unknownHealed * baseScale);
+        const y2 = y2_healed - (r.unknownAi * baseScale);
         const y3_clean = y2 - (cleanKnown * baseScale);
-        const y3 = y3_clean - (r.knownHealed * baseScale);
+        const y3_healed = y3_clean - (r.knownHealed * baseScale);
+        const y3 = y3_healed - (r.knownAi * baseScale);
         const y4_clean = y3 - (cleanFixed * baseScale);
-        const y4 = y4_clean - (r.fixedHealed * baseScale);
+        const y4_healed = y4_clean - (r.fixedHealed * baseScale);
+        const y4 = y4_healed - (r.fixedAi * baseScale);
         const y5_clean = y4 - (cleanPass * baseScale);
-        const y5 = y5_clean - (r.passHealed * baseScale);
+        const y5_healed = y5_clean - (r.passHealed * baseScale);
+        const y5 = y5_healed - (r.passAi * baseScale);
 
         return {
             x,
             y0,
             y1,
             y2_clean,
+            y2_healed,
             y2,
             y3_clean,
+            y3_healed,
             y3,
             y4_clean,
+            y4_healed,
             y4,
             y5_clean,
+            y5_healed,
             y5,
             id: r.runId,
             passHealed: r.passHealed,
             fixedHealed: r.fixedHealed,
             knownHealed: r.knownHealed,
             unknownHealed: r.unknownHealed,
-            totalHealed: r.totalHealed
+            totalHealed: r.totalHealed,
+            passAi: r.passAi,
+            fixedAi: r.fixedAi,
+            knownAi: r.knownAi,
+            unknownAi: r.unknownAi,
+            totalAi: r.totalAi
         };
     });
 
@@ -476,27 +525,39 @@ function renderDynamicTrendChart(targetBatchName) {
 
         const pathL1 = `M ${leftX} ${c.y1} L ${rightX} ${c.y1} L ${rightX} 190 L ${leftX} 190 Z`;
         const pathL2 = `M ${leftX} ${c.y2_clean} L ${rightX} ${c.y2_clean} L ${rightX} ${c.y1} L ${leftX} ${c.y1} Z`;
-        const pathL2H = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y2_clean} L ${leftX} ${c.y2_clean} Z`;
+        const pathL2H = `M ${leftX} ${c.y2_healed} L ${rightX} ${c.y2_healed} L ${rightX} ${c.y2_clean} L ${leftX} ${c.y2_clean} Z`;
+        const pathL2Ai = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y2_healed} L ${leftX} ${c.y2_healed} Z`;
         const pathL3 = `M ${leftX} ${c.y3_clean} L ${rightX} ${c.y3_clean} L ${rightX} ${c.y2} L ${leftX} ${c.y2} Z`;
-        const pathL3H = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y3_clean} L ${leftX} ${c.y3_clean} Z`;
+        const pathL3H = `M ${leftX} ${c.y3_healed} L ${rightX} ${c.y3_healed} L ${rightX} ${c.y3_clean} L ${leftX} ${c.y3_clean} Z`;
+        const pathL3Ai = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y3_healed} L ${leftX} ${c.y3_healed} Z`;
         const pathL4 = `M ${leftX} ${c.y4_clean} L ${rightX} ${c.y4_clean} L ${rightX} ${c.y3} L ${leftX} ${c.y3} Z`;
-        const pathL4H = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y4_clean} L ${leftX} ${c.y4_clean} Z`;
+        const pathL4H = `M ${leftX} ${c.y4_healed} L ${rightX} ${c.y4_healed} L ${rightX} ${c.y4_clean} L ${leftX} ${c.y4_clean} Z`;
+        const pathL4Ai = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y4_healed} L ${leftX} ${c.y4_healed} Z`;
         const pathL5 = `M ${leftX} ${c.y5_clean} L ${rightX} ${c.y5_clean} L ${rightX} ${c.y4} L ${leftX} ${c.y4} Z`;
-        const pathL5H = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y5_clean} L ${leftX} ${c.y5_clean} Z`;
+        const pathL5H = `M ${leftX} ${c.y5_healed} L ${rightX} ${c.y5_healed} L ${rightX} ${c.y5_clean} L ${leftX} ${c.y5_clean} Z`;
+        const pathL5Ai = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y5_healed} L ${leftX} ${c.y5_healed} Z`;
 
         document.getElementById('trendLayerIgnored')?.setAttribute('d', pathL1);
         document.getElementById('trendLayerUnknown')?.setAttribute('d', pathL2);
         document.getElementById('trendLayerUnknownHealed')?.setAttribute('d', c.unknownHealed > 0 ? pathL2H : '');
         document.getElementById('trendLayerUnknownHealedPattern')?.setAttribute('d', c.unknownHealed > 0 ? pathL2H : '');
+        document.getElementById('trendLayerUnknownAi')?.setAttribute('d', c.unknownAi > 0 ? pathL2Ai : '');
+        document.getElementById('trendLayerUnknownAiPattern')?.setAttribute('d', c.unknownAi > 0 ? pathL2Ai : '');
         document.getElementById('trendLayerKnown')?.setAttribute('d', pathL3);
         document.getElementById('trendLayerKnownHealed')?.setAttribute('d', c.knownHealed > 0 ? pathL3H : '');
         document.getElementById('trendLayerKnownHealedPattern')?.setAttribute('d', c.knownHealed > 0 ? pathL3H : '');
+        document.getElementById('trendLayerKnownAi')?.setAttribute('d', c.knownAi > 0 ? pathL3Ai : '');
+        document.getElementById('trendLayerKnownAiPattern')?.setAttribute('d', c.knownAi > 0 ? pathL3Ai : '');
         document.getElementById('trendLayerFixed')?.setAttribute('d', pathL4);
         document.getElementById('trendLayerFixedHealed')?.setAttribute('d', c.fixedHealed > 0 ? pathL4H : '');
         document.getElementById('trendLayerFixedHealedPattern')?.setAttribute('d', c.fixedHealed > 0 ? pathL4H : '');
+        document.getElementById('trendLayerFixedAi')?.setAttribute('d', c.fixedAi > 0 ? pathL4Ai : '');
+        document.getElementById('trendLayerFixedAiPattern')?.setAttribute('d', c.fixedAi > 0 ? pathL4Ai : '');
         document.getElementById('trendLayerPass')?.setAttribute('d', pathL5);
         document.getElementById('trendLayerPassHealed')?.setAttribute('d', c.passHealed > 0 ? pathL5H : '');
         document.getElementById('trendLayerPassHealedPattern')?.setAttribute('d', c.passHealed > 0 ? pathL5H : '');
+        document.getElementById('trendLayerPassAi')?.setAttribute('d', c.passAi > 0 ? pathL5Ai : '');
+        document.getElementById('trendLayerPassAiPattern')?.setAttribute('d', c.passAi > 0 ? pathL5Ai : '');
         document.getElementById('trendTopStroke')?.setAttribute('d', `M ${leftX} ${c.y5} L ${rightX} ${c.y5}`);
 
         const dotsGroup = document.getElementById('trendSvgDots');
@@ -504,7 +565,7 @@ function renderDynamicTrendChart(targetBatchName) {
             dotsGroup.innerHTML = `
                 <g class="trend-click-col" id="trendPoint-${c.id}" 
                    hx-get="/run-report?runId=${encodeURIComponent(c.id)}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
-                    <circle cx="${c.x}" cy="${c.y5}" r="6" fill="${c.totalHealed > 0 ? '#34d399' : '#2563eb'}" stroke="${c.totalHealed > 0 ? '#fef08a' : '#ffffff'}" stroke-width="2" class="trend-node-circle"/>
+                    <circle cx="${c.x}" cy="${c.y5}" r="6" fill="${c.totalHealed > 0 ? '#34d399' : (c.totalAi > 0 ? '#10b981' : '#2563eb')}" stroke="${c.totalHealed > 0 ? '#fef08a' : (c.totalAi > 0 ? '#6ee7b7' : '#ffffff')}" stroke-width="2" class="trend-node-circle"/>
                 </g>
             `;
             if (window.htmx) htmx.process(dotsGroup);
@@ -543,32 +604,48 @@ function renderDynamicTrendChart(targetBatchName) {
 
     const pathL1 = `${buildBezierTopPath('y1')} L ${lastX} 190 L ${firstX} 190 Z`;
     const pathL2 = `${buildBezierTopPath('y2_clean')} ${buildBezierReversePath('y1')} Z`;
-    const pathL2H = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y2_clean')} Z`;
+    const pathL2H = `${buildBezierTopPath('y2_healed')} ${buildBezierReversePath('y2_clean')} Z`;
+    const pathL2Ai = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y2_healed')} Z`;
     const pathL3 = `${buildBezierTopPath('y3_clean')} ${buildBezierReversePath('y2')} Z`;
-    const pathL3H = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y3_clean')} Z`;
+    const pathL3H = `${buildBezierTopPath('y3_healed')} ${buildBezierReversePath('y3_clean')} Z`;
+    const pathL3Ai = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y3_healed')} Z`;
     const pathL4 = `${buildBezierTopPath('y4_clean')} ${buildBezierReversePath('y3')} Z`;
-    const pathL4H = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y4_clean')} Z`;
+    const pathL4H = `${buildBezierTopPath('y4_healed')} ${buildBezierReversePath('y4_clean')} Z`;
+    const pathL4Ai = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y4_healed')} Z`;
     const pathL5 = `${buildBezierTopPath('y5_clean')} ${buildBezierReversePath('y4')} Z`;
-    const pathL5H = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y5_clean')} Z`;
+    const pathL5H = `${buildBezierTopPath('y5_healed')} ${buildBezierReversePath('y5_clean')} Z`;
+    const pathL5Ai = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y5_healed')} Z`;
 
     const hasUnknownHealed = coords.some(c => c.unknownHealed > 0);
+    const hasUnknownAi = coords.some(c => c.unknownAi > 0);
     const hasKnownHealed = coords.some(c => c.knownHealed > 0);
+    const hasKnownAi = coords.some(c => c.knownAi > 0);
     const hasFixedHealed = coords.some(c => c.fixedHealed > 0);
+    const hasFixedAi = coords.some(c => c.fixedAi > 0);
     const hasPassHealed = coords.some(c => c.passHealed > 0);
+    const hasPassAi = coords.some(c => c.passAi > 0);
 
     document.getElementById('trendLayerIgnored')?.setAttribute('d', pathL1);
     document.getElementById('trendLayerUnknown')?.setAttribute('d', pathL2);
     document.getElementById('trendLayerUnknownHealed')?.setAttribute('d', hasUnknownHealed ? pathL2H : '');
     document.getElementById('trendLayerUnknownHealedPattern')?.setAttribute('d', hasUnknownHealed ? pathL2H : '');
+    document.getElementById('trendLayerUnknownAi')?.setAttribute('d', hasUnknownAi ? pathL2Ai : '');
+    document.getElementById('trendLayerUnknownAiPattern')?.setAttribute('d', hasUnknownAi ? pathL2Ai : '');
     document.getElementById('trendLayerKnown')?.setAttribute('d', pathL3);
     document.getElementById('trendLayerKnownHealed')?.setAttribute('d', hasKnownHealed ? pathL3H : '');
     document.getElementById('trendLayerKnownHealedPattern')?.setAttribute('d', hasKnownHealed ? pathL3H : '');
+    document.getElementById('trendLayerKnownAi')?.setAttribute('d', hasKnownAi ? pathL3Ai : '');
+    document.getElementById('trendLayerKnownAiPattern')?.setAttribute('d', hasKnownAi ? pathL3Ai : '');
     document.getElementById('trendLayerFixed')?.setAttribute('d', pathL4);
     document.getElementById('trendLayerFixedHealed')?.setAttribute('d', hasFixedHealed ? pathL4H : '');
     document.getElementById('trendLayerFixedHealedPattern')?.setAttribute('d', hasFixedHealed ? pathL4H : '');
+    document.getElementById('trendLayerFixedAi')?.setAttribute('d', hasFixedAi ? pathL4Ai : '');
+    document.getElementById('trendLayerFixedAiPattern')?.setAttribute('d', hasFixedAi ? pathL4Ai : '');
     document.getElementById('trendLayerPass')?.setAttribute('d', pathL5);
     document.getElementById('trendLayerPassHealed')?.setAttribute('d', hasPassHealed ? pathL5H : '');
     document.getElementById('trendLayerPassHealedPattern')?.setAttribute('d', hasPassHealed ? pathL5H : '');
+    document.getElementById('trendLayerPassAi')?.setAttribute('d', hasPassAi ? pathL5Ai : '');
+    document.getElementById('trendLayerPassAiPattern')?.setAttribute('d', hasPassAi ? pathL5Ai : '');
     document.getElementById('trendTopStroke')?.setAttribute('d', buildBezierTopPath('y5'));
 
     const dotsGroup = document.getElementById('trendSvgDots');
@@ -576,7 +653,7 @@ function renderDynamicTrendChart(targetBatchName) {
         dotsGroup.innerHTML = coords.map(c => `
             <g class="trend-click-col" id="trendPoint-${c.id}" 
                hx-get="/run-report?runId=${encodeURIComponent(c.id)}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" style="cursor: pointer;">
-                <circle cx="${c.x}" cy="${c.y5}" r="6" fill="${c.totalHealed > 0 ? '#34d399' : '#2563eb'}" stroke="${c.totalHealed > 0 ? '#fef08a' : '#ffffff'}" stroke-width="2" class="trend-node-circle"/>
+                <circle cx="${c.x}" cy="${c.y5}" r="6" fill="${c.totalHealed > 0 ? '#34d399' : (c.totalAi > 0 ? '#10b981' : '#2563eb')}" stroke="${c.totalHealed > 0 ? '#fef08a' : (c.totalAi > 0 ? '#6ee7b7' : '#ffffff')}" stroke-width="2" class="trend-node-circle"/>
             </g>
         `).join('');
         if (window.htmx) htmx.process(dotsGroup);
@@ -609,47 +686,63 @@ function renderDynamicAreaTrendCharts() {
             const x = count === 1 ? 150 : 20 + (idx / (count - 1)) * 260;
             const unknownCount = p.unknownCount || 0;
             const unknownHealed = p.unknownHealedCount || 0;
-            const cleanUnknown = Math.max(0, unknownCount - unknownHealed);
+            const unknownAi = p.unknownAiCount || 0;
+            const cleanUnknown = Math.max(0, unknownCount - unknownHealed - unknownAi);
 
             const knownCount = p.knownCount || 0;
             const knownHealed = p.knownHealedCount || 0;
-            const cleanKnown = Math.max(0, knownCount - knownHealed);
+            const knownAi = p.knownAiCount || 0;
+            const cleanKnown = Math.max(0, knownCount - knownHealed - knownAi);
 
             const fixedCount = p.fixedCount || 0;
             const fixedHealed = p.fixedHealedCount || 0;
-            const cleanFixed = Math.max(0, fixedCount - fixedHealed);
+            const fixedAi = p.fixedAiCount || 0;
+            const cleanFixed = Math.max(0, fixedCount - fixedHealed - fixedAi);
 
             const passCount = p.passCount || 0;
             const passHealed = p.passHealedCount || 0;
-            const cleanPass = Math.max(0, passCount - passHealed);
+            const passAi = p.passAiCount || 0;
+            const cleanPass = Math.max(0, passCount - passHealed - passAi);
 
             const y0 = 80;
             const y1 = y0 - ((p.ignoredCount || 0) * scale);
             const y2_clean = y1 - (cleanUnknown * scale);
-            const y2 = y2_clean - (unknownHealed * scale);
+            const y2_healed = y2_clean - (unknownHealed * scale);
+            const y2 = y2_healed - (unknownAi * scale);
             const y3_clean = y2 - (cleanKnown * scale);
-            const y3 = y3_clean - (knownHealed * scale);
+            const y3_healed = y3_clean - (knownHealed * scale);
+            const y3 = y3_healed - (knownAi * scale);
             const y4_clean = y3 - (cleanFixed * scale);
-            const y4 = y4_clean - (fixedHealed * scale);
+            const y4_healed = y4_clean - (fixedHealed * scale);
+            const y4 = y4_healed - (fixedAi * scale);
             const y5_clean = y4 - (cleanPass * scale);
-            const y5 = y5_clean - (passHealed * scale);
+            const y5_healed = y5_clean - (passHealed * scale);
+            const y5 = y5_healed - (passAi * scale);
 
             return {
                 x,
                 y0,
                 y1,
                 y2_clean,
+                y2_healed,
                 y2,
                 y3_clean,
+                y3_healed,
                 y3,
                 y4_clean,
+                y4_healed,
                 y4,
                 y5_clean,
+                y5_healed,
                 y5,
                 unknownHealed,
+                unknownAi,
                 knownHealed,
+                knownAi,
                 fixedHealed,
-                passHealed
+                fixedAi,
+                passHealed,
+                passAi
             };
         });
 
@@ -679,7 +772,7 @@ function renderDynamicAreaTrendCharts() {
             return d;
         }
 
-        let pathL1, pathL2, pathL2H, pathL3, pathL3H, pathL4, pathL4H, pathL5, pathL5H, topStroke;
+        let pathL1, pathL2, pathL2H, pathL2Ai, pathL3, pathL3H, pathL3Ai, pathL4, pathL4H, pathL4Ai, pathL5, pathL5H, pathL5Ai, topStroke;
 
         if (coords.length === 1) {
             const c = coords[0];
@@ -689,13 +782,17 @@ function renderDynamicAreaTrendCharts() {
 
             pathL1 = `M ${leftX} ${c.y1} L ${rightX} ${c.y1} L ${rightX} 80 L ${leftX} 80 Z`;
             pathL2 = `M ${leftX} ${c.y2_clean} L ${rightX} ${c.y2_clean} L ${rightX} ${c.y1} L ${leftX} ${c.y1} Z`;
-            pathL2H = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y2_clean} L ${leftX} ${c.y2_clean} Z`;
+            pathL2H = `M ${leftX} ${c.y2_healed} L ${rightX} ${c.y2_healed} L ${rightX} ${c.y2_clean} L ${leftX} ${c.y2_clean} Z`;
+            pathL2Ai = `M ${leftX} ${c.y2} L ${rightX} ${c.y2} L ${rightX} ${c.y2_healed} L ${leftX} ${c.y2_healed} Z`;
             pathL3 = `M ${leftX} ${c.y3_clean} L ${rightX} ${c.y3_clean} L ${rightX} ${c.y2} L ${leftX} ${c.y2} Z`;
-            pathL3H = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y3_clean} L ${leftX} ${c.y3_clean} Z`;
+            pathL3H = `M ${leftX} ${c.y3_healed} L ${rightX} ${c.y3_healed} L ${rightX} ${c.y3_clean} L ${leftX} ${c.y3_clean} Z`;
+            pathL3Ai = `M ${leftX} ${c.y3} L ${rightX} ${c.y3} L ${rightX} ${c.y3_healed} L ${leftX} ${c.y3_healed} Z`;
             pathL4 = `M ${leftX} ${c.y4_clean} L ${rightX} ${c.y4_clean} L ${rightX} ${c.y3} L ${leftX} ${c.y3} Z`;
-            pathL4H = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y4_clean} L ${leftX} ${c.y4_clean} Z`;
+            pathL4H = `M ${leftX} ${c.y4_healed} L ${rightX} ${c.y4_healed} L ${rightX} ${c.y4_clean} L ${leftX} ${c.y4_clean} Z`;
+            pathL4Ai = `M ${leftX} ${c.y4} L ${rightX} ${c.y4} L ${rightX} ${c.y4_healed} L ${leftX} ${c.y4_healed} Z`;
             pathL5 = `M ${leftX} ${c.y5_clean} L ${rightX} ${c.y5_clean} L ${rightX} ${c.y4} L ${leftX} ${c.y4} Z`;
-            pathL5H = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y5_clean} L ${leftX} ${c.y5_clean} Z`;
+            pathL5H = `M ${leftX} ${c.y5_healed} L ${rightX} ${c.y5_healed} L ${rightX} ${c.y5_clean} L ${leftX} ${c.y5_clean} Z`;
+            pathL5Ai = `M ${leftX} ${c.y5} L ${rightX} ${c.y5} L ${rightX} ${c.y5_healed} L ${leftX} ${c.y5_healed} Z`;
             topStroke = `M ${leftX} ${c.y5} L ${rightX} ${c.y5}`;
         } else {
             const lastX = coords[coords.length - 1].x;
@@ -703,34 +800,50 @@ function renderDynamicAreaTrendCharts() {
 
             pathL1 = `${buildBezierTopPath('y1')} L ${lastX} 80 L ${firstX} 80 Z`;
             pathL2 = `${buildBezierTopPath('y2_clean')} ${buildBezierReversePath('y1')} Z`;
-            pathL2H = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y2_clean')} Z`;
+            pathL2H = `${buildBezierTopPath('y2_healed')} ${buildBezierReversePath('y2_clean')} Z`;
+            pathL2Ai = `${buildBezierTopPath('y2')} ${buildBezierReversePath('y2_healed')} Z`;
             pathL3 = `${buildBezierTopPath('y3_clean')} ${buildBezierReversePath('y2')} Z`;
-            pathL3H = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y3_clean')} Z`;
+            pathL3H = `${buildBezierTopPath('y3_healed')} ${buildBezierReversePath('y3_clean')} Z`;
+            pathL3Ai = `${buildBezierTopPath('y3')} ${buildBezierReversePath('y3_healed')} Z`;
             pathL4 = `${buildBezierTopPath('y4_clean')} ${buildBezierReversePath('y3')} Z`;
-            pathL4H = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y4_clean')} Z`;
+            pathL4H = `${buildBezierTopPath('y4_healed')} ${buildBezierReversePath('y4_clean')} Z`;
+            pathL4Ai = `${buildBezierTopPath('y4')} ${buildBezierReversePath('y4_healed')} Z`;
             pathL5 = `${buildBezierTopPath('y5_clean')} ${buildBezierReversePath('y4')} Z`;
-            pathL5H = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y5_clean')} Z`;
+            pathL5H = `${buildBezierTopPath('y5_healed')} ${buildBezierReversePath('y5_clean')} Z`;
+            pathL5Ai = `${buildBezierTopPath('y5')} ${buildBezierReversePath('y5_healed')} Z`;
             topStroke = buildBezierTopPath('y5');
         }
 
         const hasUnknownHealed = coords.some(c => c.unknownHealed > 0);
+        const hasUnknownAi = coords.some(c => c.unknownAi > 0);
         const hasKnownHealed = coords.some(c => c.knownHealed > 0);
+        const hasKnownAi = coords.some(c => c.knownAi > 0);
         const hasFixedHealed = coords.some(c => c.fixedHealed > 0);
+        const hasFixedAi = coords.some(c => c.fixedAi > 0);
         const hasPassHealed = coords.some(c => c.passHealed > 0);
+        const hasPassAi = coords.some(c => c.passAi > 0);
 
         svg.querySelector('.area-layer-ignored')?.setAttribute('d', pathL1);
         svg.querySelector('.area-layer-unknown')?.setAttribute('d', pathL2);
         svg.querySelector('.area-layer-unknown-healed')?.setAttribute('d', hasUnknownHealed ? pathL2H : '');
         svg.querySelector('.area-layer-unknown-healed-pat')?.setAttribute('d', hasUnknownHealed ? pathL2H : '');
+        svg.querySelector('.area-layer-unknown-ai')?.setAttribute('d', hasUnknownAi ? pathL2Ai : '');
+        svg.querySelector('.area-layer-unknown-ai-pat')?.setAttribute('d', hasUnknownAi ? pathL2Ai : '');
         svg.querySelector('.area-layer-known')?.setAttribute('d', pathL3);
         svg.querySelector('.area-layer-known-healed')?.setAttribute('d', hasKnownHealed ? pathL3H : '');
         svg.querySelector('.area-layer-known-healed-pat')?.setAttribute('d', hasKnownHealed ? pathL3H : '');
+        svg.querySelector('.area-layer-known-ai')?.setAttribute('d', hasKnownAi ? pathL3Ai : '');
+        svg.querySelector('.area-layer-known-ai-pat')?.setAttribute('d', hasKnownAi ? pathL3Ai : '');
         svg.querySelector('.area-layer-fixed')?.setAttribute('d', pathL4);
         svg.querySelector('.area-layer-fixed-healed')?.setAttribute('d', hasFixedHealed ? pathL4H : '');
         svg.querySelector('.area-layer-fixed-healed-pat')?.setAttribute('d', hasFixedHealed ? pathL4H : '');
+        svg.querySelector('.area-layer-fixed-ai')?.setAttribute('d', hasFixedAi ? pathL4Ai : '');
+        svg.querySelector('.area-layer-fixed-ai-pat')?.setAttribute('d', hasFixedAi ? pathL4Ai : '');
         svg.querySelector('.area-layer-pass')?.setAttribute('d', pathL5);
         svg.querySelector('.area-layer-pass-healed')?.setAttribute('d', hasPassHealed ? pathL5H : '');
         svg.querySelector('.area-layer-pass-healed-pat')?.setAttribute('d', hasPassHealed ? pathL5H : '');
+        svg.querySelector('.area-layer-pass-ai')?.setAttribute('d', hasPassAi ? pathL5Ai : '');
+        svg.querySelector('.area-layer-pass-ai-pat')?.setAttribute('d', hasPassAi ? pathL5Ai : '');
         svg.querySelector('.area-layer-top-stroke')?.setAttribute('d', topStroke);
     });
 }
@@ -1040,10 +1153,38 @@ function toggleRunCommentFormBox() {
     if (box) box.classList.toggle('active');
 }
 
+function resolveActiveRunId(preferredRunId, rowElement) {
+    let rid = preferredRunId;
+    if (!rid || rid === '#RUN_ID' || rid === 'RUN_ID') {
+        rid = rowElement?.getAttribute('data-run-id');
+    }
+    if (!rid || rid === '#RUN_ID' || rid === 'RUN_ID') {
+        const rootContainer = document.querySelector('[data-run-id]');
+        rid = rootContainer?.getAttribute('data-run-id');
+    }
+    if (!rid || rid === '#RUN_ID' || rid === 'RUN_ID') {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            rid = urlParams.get('runId');
+        } catch (ignored) {}
+    }
+    if (!rid || rid === '#RUN_ID' || rid === 'RUN_ID') {
+        const labelText = document.querySelector('.run-id-label')?.innerText?.trim();
+        if (labelText && labelText !== '#RUN_ID' && labelText !== 'RUN_ID') {
+            rid = labelText;
+        }
+    }
+    if (rid && typeof rid === 'string') {
+        rid = rid.trim().replace(/^#+/, '');
+    }
+    return (rid && rid !== 'RUN_ID' && rid !== '#RUN_ID') ? rid : '#RUN_ID';
+}
+
 function saveBugTicketLink() {
     const inputVal = document.getElementById('bugTicketInput')?.value || '';
     const parsedBugs = inputVal.split(/[, ]+/).map(s => s.trim()).filter(s => s.length > 0);
-    const activeRunId = document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+    const activeRow = currentActiveRowId ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`)) : null;
+    const activeRunId = resolveActiveRunId(null, activeRow);
 
     if (currentActiveRowId) {
         if (parsedBugs.length > 0) {
@@ -1112,7 +1253,8 @@ function removeSpecificBugTicketLink(bugToRemove) {
         delete executionBugMap[currentActiveRowId];
     }
 
-    const activeRunId = document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+    const activeRow = currentActiveRowId ? (document.getElementById(currentActiveRowId) || document.querySelector(`[data-row-id="${currentActiveRowId}"]`)) : null;
+    const activeRunId = resolveActiveRunId(null, activeRow);
     fetch(`/fragments/test-side-panel/bugs?runId=${encodeURIComponent(activeRunId)}&rowId=${encodeURIComponent(currentActiveRowId)}&bugTicket=${encodeURIComponent(bugToRemove)}`, {
         method: 'DELETE',
         headers: { 'HX-Request': 'true' }
@@ -1419,6 +1561,7 @@ function recalculateRunReportMetrics() {
 
         let aPass = 0, aFixed = 0, aKnown = 0, aUnknown = 0, aIgnored = 0, aRunning = 0;
         let aPassHealed = 0, aFixedHealed = 0, aKnownHealed = 0, aUnknownHealed = 0;
+        let aPassAi = 0, aFixedAi = 0, aKnownAi = 0, aUnknownAi = 0;
         areaRows.forEach(r => {
             const cat = getRowStatusCategory(r);
             if (cat === 'PASSED') aPass++;
@@ -1434,6 +1577,14 @@ function recalculateRunReportMetrics() {
                 else if (cat === 'SUCCEEDED_FIXED') aFixedHealed++;
                 else if (cat === 'FAILED_KNOWN') aKnownHealed++;
                 else if (cat === 'FAILED_UNKNOWN') aUnknownHealed++;
+            }
+
+            const isAi = r.getAttribute('data-ai') === 'true' || (r.getAttribute('data-mode') || '').toUpperCase() === 'AI' || Number(r.getAttribute('data-llm-calls') || 0) > 0;
+            if (isAi) {
+                if (cat === 'PASSED') aPassAi++;
+                else if (cat === 'SUCCEEDED_FIXED') aFixedAi++;
+                else if (cat === 'FAILED_KNOWN') aKnownAi++;
+                else if (cat === 'FAILED_UNKNOWN') aUnknownAi++;
             }
         });
 
@@ -1491,14 +1642,37 @@ function recalculateRunReportMetrics() {
                 }
             };
 
+            const syncInlineAiBadge = (valElement, badgeClass, count) => {
+                if (!valElement) return;
+                const parentGroup = valElement.closest('.val-group') || valElement.parentElement;
+                if (!parentGroup) return;
+                let badge = parentGroup.querySelector(`.${badgeClass}`);
+                if (count > 0) {
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = `badge-ai-inline ${badgeClass}`;
+                        parentGroup.appendChild(badge);
+                    }
+                    badge.innerText = `${count} AI`;
+                    badge.style.display = 'inline-flex';
+                } else if (badge) {
+                    badge.style.display = 'none';
+                }
+            };
+
             syncInlineHealedBadge(valPass, 'badge-pass-healed', aPassHealed);
+            syncInlineAiBadge(valPass, 'badge-pass-ai', aPassAi);
             syncInlineHealedBadge(valFixed, 'badge-fixed-healed', aFixedHealed);
+            syncInlineAiBadge(valFixed, 'badge-fixed-ai', aFixedAi);
             syncInlineHealedBadge(valKnown, 'badge-known-healed', aKnownHealed);
+            syncInlineAiBadge(valKnown, 'badge-known-ai', aKnownAi);
             syncInlineHealedBadge(valUnknown, 'badge-unknown-healed', aUnknownHealed);
+            syncInlineAiBadge(valUnknown, 'badge-unknown-ai', aUnknownAi);
 
             const svgWrapper = pieCard.querySelector('.pie-chart-wrapper');
             if (svgWrapper && totalArea > 0) {
                 const patId = 'sparkle-pat-' + encodeURIComponent(areaName).replace(/[^a-zA-Z0-9_-]/g, '_');
+                const aiPatId = 'ai-pat-' + encodeURIComponent(areaName).replace(/[^a-zA-Z0-9_-]/g, '_');
                 let currentOffset = 25;
                 let circlesHtml = `
                     <svg width="100%" height="100%" viewBox="0 0 36 36">
@@ -1507,11 +1681,14 @@ function recalculateRunReportMetrics() {
                                 <path d="M 2.25, 0.7 Q 2.25, 2.25 3.8, 2.25 Q 2.25, 2.25 2.25, 3.8 Q 2.25, 2.25 0.7, 2.25 Q 2.25, 2.25 2.25, 0.7 Z" fill="#ffffff" opacity="0.9"/>
                                 <circle cx="3.8" cy="0.9" r="0.4" fill="#fef08a" opacity="0.95"/>
                             </pattern>
+                            <pattern id="${aiPatId}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                                <line x1="0" y1="0" x2="0" y2="4" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+                            </pattern>
                         </defs>
                         <circle cx="18" cy="18" r="15.915" fill="none" stroke="#e2e8f0" stroke-width="4"/>
                 `;
 
-                const addSubSlice = (count, color, title, isHealed = false) => {
+                const addSubSlice = (count, color, title, isHealed = false, isAi = false) => {
                     if (count <= 0) return;
                     const pct = (count / totalArea) * 100;
                     const dashArray = `${pct} ${100 - pct}`;
@@ -1519,34 +1696,41 @@ function recalculateRunReportMetrics() {
                     if (isHealed) {
                         circlesHtml += `<circle cx="18" cy="18" r="15.915" fill="none" stroke="url(#${patId})" stroke-width="5" stroke-dasharray="${dashArray}" stroke-dashoffset="${currentOffset}" pointer-events="none"></circle>`;
                     }
+                    if (isAi) {
+                        circlesHtml += `<circle cx="18" cy="18" r="15.915" fill="none" stroke="url(#${aiPatId})" stroke-width="5" stroke-dasharray="${dashArray}" stroke-dashoffset="${currentOffset}" pointer-events="none"></circle>`;
+                    }
                     currentOffset -= pct;
                 };
 
-                // 1. Successful: Clean (#059669) + Healed (#34d399 + sparkle print)
-                const cleanPass = Math.max(0, aPass - aPassHealed);
-                addSubSlice(cleanPass, '#059669', 'Clean Successful', false);
-                addSubSlice(aPassHealed, '#34d399', 'Healed Successful', true);
+                // 1. Successful: Clean (#059669) + Healed (#34d399 + sparkle) + AI (#059669 + pinstripe)
+                const cleanPass = Math.max(0, aPass - aPassHealed - aPassAi);
+                addSubSlice(cleanPass, '#059669', 'Clean Successful', false, false);
+                addSubSlice(aPassHealed, '#34d399', 'Healed Successful', true, false);
+                addSubSlice(aPassAi, '#059669', 'AI-Driven Successful', false, true);
 
-                // 2. Succeeded-Fixed: Clean (#2563eb) + Healed (#60a5fa + sparkle print)
-                const cleanFixed = Math.max(0, aFixed - aFixedHealed);
-                addSubSlice(cleanFixed, '#2563eb', 'Clean Succeeded-Fixed', false);
-                addSubSlice(aFixedHealed, '#60a5fa', 'Healed Succeeded-Fixed', true);
+                // 2. Succeeded-Fixed: Clean (#2563eb) + Healed (#60a5fa + sparkle) + AI (#2563eb + pinstripe)
+                const cleanFixed = Math.max(0, aFixed - aFixedHealed - aFixedAi);
+                addSubSlice(cleanFixed, '#2563eb', 'Clean Succeeded-Fixed', false, false);
+                addSubSlice(aFixedHealed, '#60a5fa', 'Healed Succeeded-Fixed', true, false);
+                addSubSlice(aFixedAi, '#2563eb', 'AI-Driven Succeeded-Fixed', false, true);
 
-                // 3. Known Failed: Clean (#ea580c) + Healed (#fb923c + sparkle print)
-                const cleanKnown = Math.max(0, aKnown - aKnownHealed);
-                addSubSlice(cleanKnown, '#ea580c', 'Clean Known Fail', false);
-                addSubSlice(aKnownHealed, '#fb923c', 'Healed Known Fail', true);
+                // 3. Known Failed: Clean (#ea580c) + Healed (#fb923c + sparkle) + AI (#ea580c + pinstripe)
+                const cleanKnown = Math.max(0, aKnown - aKnownHealed - aKnownAi);
+                addSubSlice(cleanKnown, '#ea580c', 'Clean Known Fail', false, false);
+                addSubSlice(aKnownHealed, '#fb923c', 'Healed Known Fail', true, false);
+                addSubSlice(aKnownAi, '#ea580c', 'AI-Driven Known Fail', false, true);
 
-                // 4. Unknown Failed: Clean (#dc2626) + Healed (#f87171 + sparkle print)
-                const cleanUnknown = Math.max(0, aUnknown - aUnknownHealed);
-                addSubSlice(cleanUnknown, '#dc2626', 'Clean Unknown Fail', false);
-                addSubSlice(aUnknownHealed, '#f87171', 'Healed Unknown Fail', true);
+                // 4. Unknown Failed: Clean (#dc2626) + Healed (#f87171 + sparkle) + AI (#dc2626 + pinstripe)
+                const cleanUnknown = Math.max(0, aUnknown - aUnknownHealed - aUnknownAi);
+                addSubSlice(cleanUnknown, '#dc2626', 'Clean Unknown Fail', false, false);
+                addSubSlice(aUnknownHealed, '#f87171', 'Healed Unknown Fail', true, false);
+                addSubSlice(aUnknownAi, '#dc2626', 'AI-Driven Unknown Fail', false, true);
 
                 // 5. Ignored: (#64748b)
-                addSubSlice(aIgnored, '#64748b', 'Ignored / Skipped', false);
+                addSubSlice(aIgnored, '#64748b', 'Ignored / Skipped', false, false);
 
                 // 6. Running: (#94a3b8)
-                addSubSlice(aRunning, '#94a3b8', 'Running', false);
+                addSubSlice(aRunning, '#94a3b8', 'Running', false, false);
 
                 circlesHtml += '</svg>';
                 svgWrapper.innerHTML = circlesHtml;
@@ -1733,7 +1917,7 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
         }
     }
 
-    const activeRunId = runId || activeRow?.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+    const activeRunId = resolveActiveRunId(runId, activeRow);
     const activeRowId = rowId || activeRow?.getAttribute('data-row-id') || activeRow?.id || '';
     const isTestBaseRow = activeRow ? (activeRow.closest('#pageTestBase') !== null) : (document.getElementById('pageTestBase') !== null);
 
@@ -4245,7 +4429,7 @@ function focusAndInspectExecution(targetExecId) {
         const statusKey = rowEl.getAttribute('data-status') || 'passed-clean';
         const issueTag = rowEl.getAttribute('data-bugs') || '';
         const rowId = rowEl.getAttribute('data-row-id') || rowEl.id;
-        const runId = rowEl.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+        const runId = resolveActiveRunId(rowEl.getAttribute('data-run-id'), rowEl);
 
         openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, runId);
     }, 120);
@@ -4258,7 +4442,7 @@ function handleRowClick(e) {
     const statusKey = row.getAttribute('data-status') || 'passed-clean';
     const issueTag = row.getAttribute('data-bugs') || '';
     const rowId = row.getAttribute('data-row-id') || row.id;
-    const runId = row.getAttribute('data-run-id') || document.querySelector('.run-id-label')?.innerText.trim() || '#RUN_ID';
+    const runId = resolveActiveRunId(row.getAttribute('data-run-id'), row);
 
     const isTestBasePage = document.getElementById('pageTestBase') !== null || row.closest('#pageTestBase') !== null;
 

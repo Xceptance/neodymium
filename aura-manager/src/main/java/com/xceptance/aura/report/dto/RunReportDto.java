@@ -335,6 +335,47 @@ public final class RunReportDto
         return getPassHealedCount() + getFixedHealedCount() + getKnownHealedCount() + getUnknownHealedCount();
     }
 
+    public int getPassAiCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isPassAi).count();
+        }
+        return 0;
+    }
+
+    public int getFixedAiCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFixedAi).count();
+        }
+        return 0;
+    }
+
+    public int getKnownAiCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isKnownAi).count();
+        }
+        return 0;
+    }
+
+    public int getUnknownAiCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isUnknownAi).count();
+        }
+        return 0;
+    }
+
+    public int getTotalAiCount()
+    {
+        return getPassAiCount() + getFixedAiCount() + getKnownAiCount() + getUnknownAiCount();
+    }
+
     public int getFailCount()
     {
         return knownCount + unknownCount;
@@ -460,7 +501,7 @@ public final class RunReportDto
             return List.of();
         }
         return executions.stream()
-            .map(TestExecutionDto::getExecutionMode)
+            .map(TestExecutionDto::getDisplayMode)
             .filter(m -> m != null && !m.isBlank())
             .distinct()
             .sorted()

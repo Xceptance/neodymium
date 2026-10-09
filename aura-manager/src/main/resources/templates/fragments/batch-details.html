@@ -55,18 +55,27 @@
                         <td class="font-mono fw-bold" th:text="${run.totalTests}">7</td>
                         <td style="min-width: 220px; vertical-align: middle;">
                             <div class="status-stacked-bar">
-                                <div th:if="${run.passedCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedTooltip}" th:text="${run.passedLabel}">3</div>
-                                <div th:if="${run.succeededFixedCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(run.fixedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedTooltip}" th:text="${run.fixedLabel}">2</div>
-                                <div th:if="${run.failedKnownCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(run.knownPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownTooltip}" th:text="${run.knownLabel}">1</div>
-                                <div th:if="${run.failedUnknownCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownTooltip}" th:text="${run.unknownLabel}">1</div>
+                                <div th:if="${run.passedCleanCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedCleanTooltip}" th:text="${run.passedCleanLabel}">3</div>
+                                <div th:if="${run.passedHealedCountSafe > 0}" class="status-bar-seg seg-pass-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.passedHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedHealedTooltip}" th:text="${run.passedHealedLabel}">0</div>
+                                <div th:if="${run.passedAiCountSafe > 0}" class="status-bar-seg seg-pass seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.passedAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedAiTooltip}" th:text="${run.passedAiLabel}">0</div>
+                                <div th:if="${run.fixedCleanCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(run.fixedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedCleanTooltip}" th:text="${run.fixedCleanLabel}">2</div>
+                                <div th:if="${run.fixedHealedCountSafe > 0}" class="status-bar-seg seg-fixed-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.fixedHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedHealedTooltip}" th:text="${run.fixedHealedLabel}">0</div>
+                                <div th:if="${run.fixedAiCountSafe > 0}" class="status-bar-seg seg-fixed seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.fixedAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.fixedAiTooltip}" th:text="${run.fixedAiLabel}">0</div>
+                                <div th:if="${run.knownCleanCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(run.knownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownCleanTooltip}" th:text="${run.knownCleanLabel}">1</div>
+                                <div th:if="${run.knownHealedCountSafe > 0}" class="status-bar-seg seg-known-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.knownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownHealedTooltip}" th:text="${run.knownHealedLabel}">0</div>
+                                <div th:if="${run.knownAiCountSafe > 0}" class="status-bar-seg seg-known seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.knownAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.knownAiTooltip}" th:text="${run.knownAiLabel}">0</div>
+                                <div th:if="${run.unknownCleanCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(run.unknownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownCleanTooltip}" th:text="${run.unknownCleanLabel}">1</div>
+                                <div th:if="${run.unknownHealedCountSafe > 0}" class="status-bar-seg seg-unknown-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(run.unknownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownHealedTooltip}" th:text="${run.unknownHealedLabel}">0</div>
+                                <div th:if="${run.unknownAiCountSafe > 0}" class="status-bar-seg seg-unknown seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(run.unknownAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.unknownAiTooltip}" th:text="${run.unknownAiLabel}">0</div>
                                 <div th:if="${run.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(run.ignoredPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.ignoredTooltip}" th:text="${run.ignoredLabel}">1</div>
                             </div>
                         </td>
                         <td>
                             <button class="btn btn-primary btn-sm font-size-sm" 
-                                    th:attr="hx-get='/fragments/run-report?runId=' + ${run.id}" 
+                                    th:attr="hx-get='/run-report?runId=' + ${run.id}" 
                                     hx-target="#mainViewContainer" 
-                                    hx-swap="innerHTML">
+                                    hx-swap="innerHTML"
+                                    hx-push-url="true">
                                 <span class="material-symbols-outlined me-1">trending_up</span> Open Report
                             </button>
                         </td>

@@ -140,4 +140,129 @@ public final class TestExecutionDtoTest
         Assertions.assertNull(dto.getLinterFindings());
         Assertions.assertNull(dto.getPostFlightFindings());
     }
+
+    @Test
+    public void testDisplayModeMappings() throws Exception
+    {
+        // 1. REPLAY_WITH_HEALING with no healing -> PLAYBOOK
+        final String jsonPlaybook = """
+            {
+                "id": "exec-pb",
+                "testClass": "com.xceptance.test.DemoTest",
+                "executionMode": "REPLAY_WITH_HEALING",
+                "healed": false
+            }
+            """;
+        final TestExecutionDto dtoPlaybook = objectMapper.readValue(jsonPlaybook, TestExecutionDto.class);
+        Assertions.assertEquals("PLAYBOOK", dtoPlaybook.getDisplayMode());
+
+        // 2. REPLAY_WITH_HEALING with healing -> HEALED
+        final String jsonHealed = """
+            {
+                "id": "exec-healed",
+                "testClass": "com.xceptance.test.DemoTest",
+                "executionMode": "REPLAY_WITH_HEALING",
+                "healed": true
+            }
+            """;
+        final TestExecutionDto dtoHealed = objectMapper.readValue(jsonHealed, TestExecutionDto.class);
+        Assertions.assertEquals("HEALED", dtoHealed.getDisplayMode());
+
+        // 3. LLM_RECORDING -> AI
+        final String jsonAi = """
+            {
+                "id": "exec-ai",
+                "testClass": "com.xceptance.test.DemoTest",
+                "executionMode": "LLM_RECORDING"
+            }
+            """;
+        final TestExecutionDto dtoAi = objectMapper.readValue(jsonAi, TestExecutionDto.class);
+        Assertions.assertEquals("AI", dtoAi.getDisplayMode());
+
+        // 4. No mode specified -> JAVA
+        final String jsonJava = """
+            {
+                "id": "exec-java",
+                "testClass": "com.xceptance.test.DemoTest"
+            }
+            """;
+        final TestExecutionDto dtoJava = objectMapper.readValue(jsonJava, TestExecutionDto.class);
+        Assertions.assertEquals("JAVA", dtoJava.getDisplayMode());
+
+        // 5. REPLAY_STRICT -> PLAYBOOK
+        final String jsonStrict = """
+            {
+                "id": "exec-strict",
+                "testClass": "com.xceptance.test.DemoTest",
+                "executionMode": "REPLAY_STRICT"
+            }
+            """;
+        final TestExecutionDto dtoStrict = objectMapper.readValue(jsonStrict, TestExecutionDto.class);
+        Assertions.assertEquals("PLAYBOOK", dtoStrict.getDisplayMode());
+
+        // 6. FORCE_RECORDING / LLM_ONLY -> AI
+        final String jsonForce = """
+            {
+                "id": "exec-force",
+                "testClass": "com.xceptance.test.DemoTest",
+                "executionMode": "FORCE_RECORDING"
+            }
+            """;
+        final TestExecutionDto dtoForce = objectMapper.readValue(jsonForce, TestExecutionDto.class);
+        Assertions.assertEquals("AI", dtoForce.getDisplayMode());
+    }
+
+    @Test
+    public void testAiDrivenAndStatusPredicates()
+    {
+        final TestExecutionDto execPassAi = new TestExecutionDto();
+        execPassAi.setStatus("passed");
+        execPassAi.setExecutionMode("LLM_RECORDING");
+
+        Assertions.assertTrue(execPassAi.isAiDriven());
+        Assertions.assertTrue(execPassAi.isPassAi());
+        Assertions.assertFalse(execPassAi.isFixedAi());
+        Assertions.assertFalse(execPassAi.isKnownAi());
+        Assertions.assertFalse(execPassAi.isUnknownAi());
+
+        final TestExecutionDto execFixedAi = new TestExecutionDto();
+        execFixedAi.setStatus("succeeded-fixed");
+        execFixedAi.setExecutionMode("LLM_RECORDING");
+
+        Assertions.assertTrue(execFixedAi.isAiDriven());
+        Assertions.assertFalse(execFixedAi.isPassAi());
+        Assertions.assertTrue(execFixedAi.isFixedAi());
+        Assertions.assertFalse(execFixedAi.isKnownAi());
+        Assertions.assertFalse(execFixedAi.isUnknownAi());
+
+        final TestExecutionDto execKnownAi = new TestExecutionDto();
+        execKnownAi.setStatus("failed-known");
+        execKnownAi.setExecutionMode("FORCE_RECORDING");
+
+        Assertions.assertTrue(execKnownAi.isAiDriven());
+        Assertions.assertFalse(execKnownAi.isPassAi());
+        Assertions.assertFalse(execKnownAi.isFixedAi());
+        Assertions.assertTrue(execKnownAi.isKnownAi());
+        Assertions.assertFalse(execKnownAi.isUnknownAi());
+
+        final TestExecutionDto execUnknownAi = new TestExecutionDto();
+        execUnknownAi.setStatus("failed-unknown");
+        execUnknownAi.setExecutionMode("LLM_ONLY");
+
+        Assertions.assertTrue(execUnknownAi.isAiDriven());
+        Assertions.assertFalse(execUnknownAi.isPassAi());
+        Assertions.assertFalse(execUnknownAi.isFixedAi());
+        Assertions.assertFalse(execUnknownAi.isKnownAi());
+        Assertions.assertTrue(execUnknownAi.isUnknownAi());
+
+        final TestExecutionDto execPlaybook = new TestExecutionDto();
+        execPlaybook.setStatus("passed");
+        execPlaybook.setExecutionMode("REPLAY_STRICT");
+
+        Assertions.assertFalse(execPlaybook.isAiDriven());
+        Assertions.assertFalse(execPlaybook.isPassAi());
+        Assertions.assertFalse(execPlaybook.isFixedAi());
+        Assertions.assertFalse(execPlaybook.isKnownAi());
+        Assertions.assertFalse(execPlaybook.isUnknownAi());
+    }
 }

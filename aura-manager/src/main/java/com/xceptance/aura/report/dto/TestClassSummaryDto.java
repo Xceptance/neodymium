@@ -217,4 +217,40 @@ public final class TestClassSummaryDto
         }
         return 0;
     }
+
+    public int getPassAiCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isPassAi).count();
+        }
+        return 0;
+    }
+
+    public int getFixedAiCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isFixedAi).count();
+        }
+        return 0;
+    }
+
+    public int getKnownAiCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isKnownAi).count();
+        }
+        return 0;
+    }
+
+    public int getUnknownAiCount()
+    {
+        if (executions != null)
+        {
+            return (int) executions.stream().filter(TestExecutionDto::isUnknownAi).count();
+        }
+        return 0;
+    }
 }

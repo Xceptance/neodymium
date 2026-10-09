@@ -121,6 +121,9 @@
                                             <path d="M2,0.5 L2.3,1.7 L3.5,2 L2.3,2.3 L2,3.5 L1.7,2.3 L0.5,2 L1.7,1.7 Z" fill="#ffffff" opacity="0.95"/>
                                             <circle cx="0.8" cy="0.8" r="0.25" fill="#fef08a" opacity="0.85"/>
                                         </pattern>
+                                        <pattern th:id="'ai-pat-batch-' + ${b.id}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                                            <line x1="0" y1="0" x2="0" y2="4" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+                                        </pattern>
                                     </defs>
                                     <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--border)" stroke-width="4"/>
                                     <!-- Clean sub-arcs (deep solid) -->
@@ -142,6 +145,19 @@
 
                                     <circle th:if="${b.latestUnknownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-healed, #f87171)" stroke-width="5" th:attr="stroke-dasharray=${b.unknownHealedDashArray},stroke-dashoffset=${b.unknownHealedDashOffset}"/>
                                     <circle th:if="${b.latestUnknownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-batch-' + ${b.id} + ')',stroke-dasharray=${b.unknownHealedDashArray},stroke-dashoffset=${b.unknownHealedDashOffset}" stroke-width="5"/>
+
+                                    <!-- AI-Driven sub-arcs: Base status color + pinstripe pattern overlay -->
+                                    <circle th:if="${b.latestPassAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass)" stroke-width="5" th:attr="stroke-dasharray=${b.passAiDashArray},stroke-dashoffset=${b.passAiDashOffset}"/>
+                                    <circle th:if="${b.latestPassAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-batch-' + ${b.id} + ')',stroke-dasharray=${b.passAiDashArray},stroke-dashoffset=${b.passAiDashOffset}" stroke-width="5"/>
+
+                                    <circle th:if="${b.latestFixedAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed)" stroke-width="5" th:attr="stroke-dasharray=${b.fixedAiDashArray},stroke-dashoffset=${b.fixedAiDashOffset}"/>
+                                    <circle th:if="${b.latestFixedAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-batch-' + ${b.id} + ')',stroke-dasharray=${b.fixedAiDashArray},stroke-dashoffset=${b.fixedAiDashOffset}" stroke-width="5"/>
+
+                                    <circle th:if="${b.latestKnownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-fail)" stroke-width="5" th:attr="stroke-dasharray=${b.knownAiDashArray},stroke-dashoffset=${b.knownAiDashOffset}"/>
+                                    <circle th:if="${b.latestKnownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-batch-' + ${b.id} + ')',stroke-dasharray=${b.knownAiDashArray},stroke-dashoffset=${b.knownAiDashOffset}" stroke-width="5"/>
+
+                                    <circle th:if="${b.latestUnknownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-fail)" stroke-width="5" th:attr="stroke-dasharray=${b.unknownAiDashArray},stroke-dashoffset=${b.unknownAiDashOffset}"/>
+                                    <circle th:if="${b.latestUnknownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-batch-' + ${b.id} + ')',stroke-dasharray=${b.unknownAiDashArray},stroke-dashoffset=${b.unknownAiDashOffset}" stroke-width="5"/>
                                 </svg>
                             </div>
                             <div class="pie-breakdown-list-sm">
@@ -149,6 +165,7 @@
                                     <div class="label"><div class="dot" style="background: var(--status-pass);"></div> Passed</div>
                                     <div class="val-group">
                                         <span th:if="${b.latestPassHealedCount > 0}" class="badge-healed-inline badge-pass-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${b.latestPassHealedCount} + ' healed'">✨ 1 healed</span>
+                                        <span th:if="${b.latestPassAiCount > 0}" class="badge-ai-inline badge-pass-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${b.latestPassAiCount} + ' AI'">1 AI</span>
                                         <span class="val" style="color: var(--status-pass);" th:text="${b.latestPassedCount}">0</span>
                                     </div>
                                 </div>
@@ -156,6 +173,7 @@
                                     <div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Fixed</div>
                                     <div class="val-group">
                                         <span th:if="${b.latestFixedHealedCount > 0}" class="badge-healed-inline badge-fixed-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${b.latestFixedHealedCount} + ' healed'">✨ 1 healed</span>
+                                        <span th:if="${b.latestFixedAiCount > 0}" class="badge-ai-inline badge-fixed-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${b.latestFixedAiCount} + ' AI'">1 AI</span>
                                         <span class="val" style="color: var(--status-fixed);" th:text="${b.latestFixedCount}">0</span>
                                     </div>
                                 </div>
@@ -163,6 +181,7 @@
                                     <div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Fail</div>
                                     <div class="val-group">
                                         <span th:if="${b.latestKnownHealedCount > 0}" class="badge-healed-inline badge-known-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${b.latestKnownHealedCount} + ' healed'">✨ 1 healed</span>
+                                        <span th:if="${b.latestKnownAiCount > 0}" class="badge-ai-inline badge-known-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${b.latestKnownAiCount} + ' AI'">1 AI</span>
                                         <span class="val" style="color: var(--status-known-fail);" th:text="${b.latestKnownCount}">0</span>
                                     </div>
                                 </div>
@@ -170,6 +189,7 @@
                                     <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Fail</div>
                                     <div class="val-group">
                                         <span th:if="${b.latestUnknownHealedCount > 0}" class="badge-healed-inline badge-unknown-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${b.latestUnknownHealedCount} + ' healed'">✨ 1 healed</span>
+                                        <span th:if="${b.latestUnknownAiCount > 0}" class="badge-ai-inline badge-unknown-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${b.latestUnknownAiCount} + ' AI'">1 AI</span>
                                         <span class="val" style="color: var(--status-unknown-fail);" th:text="${b.latestUnknownCount}">0</span>
                                     </div>
                                 </div>
@@ -259,6 +279,10 @@
                             th:data-fixed-healed="${r.fixedHealedCountSafe}"
                             th:data-known-healed="${r.knownHealedCountSafe}"
                             th:data-unknown-healed="${r.unknownHealedCountSafe}"
+                            th:data-pass-ai="${r.passedAiCountSafe}"
+                            th:data-fixed-ai="${r.fixedAiCountSafe}"
+                            th:data-known-ai="${r.knownAiCountSafe}"
+                            th:data-unknown-ai="${r.unknownAiCountSafe}"
                             th:data-rate="${r.passRate + '% Pass'}"
                             th:data-total="${r.totalTests != null ? r.totalTests : 0}"
                             th:data-time="${r.timestampLabel}"
@@ -286,12 +310,16 @@
                                 <div class="status-stacked-bar">
                                     <div th:if="${r.passedCleanCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(r.passedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.passedCleanTooltip}" th:text="${r.passedCleanLabel}">0</div>
                                     <div th:if="${r.passedHealedCountSafe > 0}" class="status-bar-seg seg-pass-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(r.passedHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.passedHealedTooltip}" th:text="${r.passedHealedLabel}">0</div>
+                                    <div th:if="${r.passedAiCountSafe > 0}" class="status-bar-seg seg-pass seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(r.passedAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.passedAiTooltip}" th:text="${r.passedAiLabel}">0</div>
                                     <div th:if="${r.fixedCleanCount > 0}" class="status-bar-seg seg-fixed" th:style="'width:' + ${#numbers.formatDecimal(r.fixedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.fixedCleanTooltip}" th:text="${r.fixedCleanLabel}">0</div>
                                     <div th:if="${r.fixedHealedCountSafe > 0}" class="status-bar-seg seg-fixed-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(r.fixedHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.fixedHealedTooltip}" th:text="${r.fixedHealedLabel}">0</div>
+                                    <div th:if="${r.fixedAiCountSafe > 0}" class="status-bar-seg seg-fixed seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(r.fixedAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.fixedAiTooltip}" th:text="${r.fixedAiLabel}">0</div>
                                     <div th:if="${r.knownCleanCount > 0}" class="status-bar-seg seg-known" th:style="'width:' + ${#numbers.formatDecimal(r.knownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.knownCleanTooltip}" th:text="${r.knownCleanLabel}">0</div>
                                     <div th:if="${r.knownHealedCountSafe > 0}" class="status-bar-seg seg-known-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(r.knownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.knownHealedTooltip}" th:text="${r.knownHealedLabel}">0</div>
+                                    <div th:if="${r.knownAiCountSafe > 0}" class="status-bar-seg seg-known seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(r.knownAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.knownAiTooltip}" th:text="${r.knownAiLabel}">0</div>
                                     <div th:if="${r.unknownCleanCount > 0}" class="status-bar-seg seg-unknown" th:style="'width:' + ${#numbers.formatDecimal(r.unknownCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.unknownCleanTooltip}" th:text="${r.unknownCleanLabel}">0</div>
                                     <div th:if="${r.unknownHealedCountSafe > 0}" class="status-bar-seg seg-unknown-healed seg-healed-print" th:style="'width:' + ${#numbers.formatDecimal(r.unknownHealedPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.unknownHealedTooltip}" th:text="${r.unknownHealedLabel}">0</div>
+                                    <div th:if="${r.unknownAiCountSafe > 0}" class="status-bar-seg seg-unknown seg-ai-print" th:style="'width:' + ${#numbers.formatDecimal(r.unknownAiPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.unknownAiTooltip}" th:text="${r.unknownAiLabel}">0</div>
                                     <div th:if="${r.ignoredCount > 0}" class="status-bar-seg seg-ignored" th:style="'width:' + ${#numbers.formatDecimal(r.ignoredPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${r.ignoredTooltip}" th:text="${r.ignoredLabel}">0</div>
                                 </div>
                             </td>
@@ -301,7 +329,7 @@
                             </td>
                             <td class="text-muted js-format-timestamp" th:data-timestamp-ms="${r.startTimeMs}" th:text="${r.timestampLabel}">Recently</td>
                             <td>
-                                <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:attr="hx-get='/run-report?runId=' + ${r.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" onclick="event.stopPropagation();">
+                                <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:attr="hx-get='/run-report?runId=' + ${r.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" onclick="event.stopPropagation();">
                                     <span class="material-symbols-outlined" style="font-size: 0.875rem;">visibility</span> Inspect
                                 </button>
                             </td>

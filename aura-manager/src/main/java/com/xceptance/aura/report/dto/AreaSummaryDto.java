@@ -203,24 +203,60 @@ public final class AreaSummaryDto
         return 0;
     }
 
+    public int getPassAiCount()
+    {
+        if (testClasses != null)
+        {
+            return testClasses.stream().mapToInt(TestClassSummaryDto::getPassAiCount).sum();
+        }
+        return 0;
+    }
+
+    public int getFixedAiCount()
+    {
+        if (testClasses != null)
+        {
+            return testClasses.stream().mapToInt(TestClassSummaryDto::getFixedAiCount).sum();
+        }
+        return 0;
+    }
+
+    public int getKnownAiCount()
+    {
+        if (testClasses != null)
+        {
+            return testClasses.stream().mapToInt(TestClassSummaryDto::getKnownAiCount).sum();
+        }
+        return 0;
+    }
+
+    public int getUnknownAiCount()
+    {
+        if (testClasses != null)
+        {
+            return testClasses.stream().mapToInt(TestClassSummaryDto::getUnknownAiCount).sum();
+        }
+        return 0;
+    }
+
     public int getPassCleanCount()
     {
-        return Math.max(0, passCount - getPassHealedCount());
+        return Math.max(0, passCount - getPassHealedCount() - getPassAiCount());
     }
 
     public int getFixedCleanCount()
     {
-        return Math.max(0, fixedCount - getFixedHealedCount());
+        return Math.max(0, fixedCount - getFixedHealedCount() - getFixedAiCount());
     }
 
     public int getKnownCleanCount()
     {
-        return Math.max(0, knownCount - getKnownHealedCount());
+        return Math.max(0, knownCount - getKnownHealedCount() - getKnownAiCount());
     }
 
     public int getUnknownCleanCount()
     {
-        return Math.max(0, unknownCount - getUnknownHealedCount());
+        return Math.max(0, unknownCount - getUnknownHealedCount() - getUnknownAiCount());
     }
 
     public double getPassCleanPct()
@@ -233,6 +269,11 @@ public final class AreaSummaryDto
         return totalCount > 0 ? (getPassHealedCount() * 100.0 / totalCount) : 0.0;
     }
 
+    public double getPassAiPct()
+    {
+        return totalCount > 0 ? (getPassAiCount() * 100.0 / totalCount) : 0.0;
+    }
+
     public double getFixedCleanPct()
     {
         return totalCount > 0 ? (getFixedCleanCount() * 100.0 / totalCount) : 0.0;
@@ -241,6 +282,11 @@ public final class AreaSummaryDto
     public double getFixedHealedPct()
     {
         return totalCount > 0 ? (getFixedHealedCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getFixedAiPct()
+    {
+        return totalCount > 0 ? (getFixedAiCount() * 100.0 / totalCount) : 0.0;
     }
 
     public double getKnownCleanPct()
@@ -253,6 +299,11 @@ public final class AreaSummaryDto
         return totalCount > 0 ? (getKnownHealedCount() * 100.0 / totalCount) : 0.0;
     }
 
+    public double getKnownAiPct()
+    {
+        return totalCount > 0 ? (getKnownAiCount() * 100.0 / totalCount) : 0.0;
+    }
+
     public double getUnknownCleanPct()
     {
         return totalCount > 0 ? (getUnknownCleanCount() * 100.0 / totalCount) : 0.0;
@@ -261,6 +312,11 @@ public final class AreaSummaryDto
     public double getUnknownHealedPct()
     {
         return totalCount > 0 ? (getUnknownHealedCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getUnknownAiPct()
+    {
+        return totalCount > 0 ? (getUnknownAiCount() * 100.0 / totalCount) : 0.0;
     }
 
     public double getPassedPct()
@@ -310,6 +366,17 @@ public final class AreaSummaryDto
         return String.format(Locale.US, "%.2f", 25.0 - getPassCleanPct());
     }
 
+    public String getPassAiDashArray()
+    {
+        final double p = getPassAiPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getPassAiDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassCleanPct() - getPassHealedPct());
+    }
+
     public String getFixedCleanDashArray()
     {
         final double p = getFixedCleanPct();
@@ -330,6 +397,17 @@ public final class AreaSummaryDto
     public String getFixedHealedDashOffset()
     {
         return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedCleanPct());
+    }
+
+    public String getFixedAiDashArray()
+    {
+        final double p = getFixedAiPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getFixedAiDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedCleanPct() - getFixedHealedPct());
     }
 
     public String getKnownCleanDashArray()
@@ -354,6 +432,17 @@ public final class AreaSummaryDto
         return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedPct() - getKnownCleanPct());
     }
 
+    public String getKnownAiDashArray()
+    {
+        final double p = getKnownAiPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getKnownAiDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedPct() - getKnownCleanPct() - getKnownHealedPct());
+    }
+
     public String getUnknownCleanDashArray()
     {
         final double p = getUnknownCleanPct();
@@ -374,6 +463,17 @@ public final class AreaSummaryDto
     public String getUnknownHealedDashOffset()
     {
         return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedPct() - getKnownPct() - getUnknownCleanPct());
+    }
+
+    public String getUnknownAiDashArray()
+    {
+        final double p = getUnknownAiPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getUnknownAiDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedPct() - getKnownPct() - getUnknownCleanPct() - getUnknownHealedPct());
     }
 
     public String getPassDashArray()

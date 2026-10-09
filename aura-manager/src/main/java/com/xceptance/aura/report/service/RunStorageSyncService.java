@@ -41,6 +41,7 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -315,6 +316,10 @@ public class RunStorageSyncService
             final int fixedHealed = summaryNode.path("fixedHealed").asInt(summaryNode.path("succeededFixedHealed").asInt(0));
             final int knownHealed = summaryNode.path("knownHealed").asInt(summaryNode.path("failedKnownHealed").asInt(0));
             final int unknownHealed = summaryNode.path("unknownHealed").asInt(summaryNode.path("failedUnknownHealed").asInt(0));
+            final int passAi = summaryNode.path("passAi").asInt(summaryNode.path("passedAi").asInt(0));
+            final int fixedAi = summaryNode.path("fixedAi").asInt(summaryNode.path("succeededFixedAi").asInt(0));
+            final int knownAi = summaryNode.path("knownAi").asInt(summaryNode.path("failedKnownAi").asInt(0));
+            final int unknownAi = summaryNode.path("unknownAi").asInt(summaryNode.path("failedUnknownAi").asInt(0));
             final double passRate = summaryNode.path("passRate").asDouble(totalTests > 0 ? (double) (pass + fixed) / totalTests * 100.0 : 0.0);
 
             int sumLlmCalls = summaryNode.path("totalLlmCalls").asInt(0);
@@ -507,6 +512,10 @@ public class RunStorageSyncService
             int calcFixedHealed = 0;
             int calcKnownHealed = 0;
             int calcUnknownHealed = 0;
+            int calcPassAi = 0;
+            int calcFixedAi = 0;
+            int calcKnownAi = 0;
+            int calcUnknownAi = 0;
 
             long sumDurationMs = 0L;
 
@@ -547,13 +556,28 @@ public class RunStorageSyncService
                                           || (exec.has("healedStepsCount") && exec.path("healedStepsCount").asInt(0) > 0)
                                           || "healed".equalsIgnoreCase(rawStatus);
 
-                    final String varId = generateVariationId(testClass, testMethod, dataSet, location, browser);
-                    final List<String> dbBugTickets = dbBugsByVarId.getOrDefault(varId, List.of()).stream()
-                        .distinct()
-                        .collect(Collectors.toList());
+                    final String execMode = exec.path("executionMode").asText(exec.path("mode").asText("")).trim();
+                    final int llmCalls = exec.path("llmCallsCount").asInt(exec.path("llmCalls").asInt(0));
+                    final boolean isAi = "AI".equalsIgnoreCase(execMode)
+                                      || "LLM_RECORDING".equalsIgnoreCase(execMode)
+                                      || "LLM_ONLY".equalsIgnoreCase(execMode)
+                                      || "FORCE_RECORDING".equalsIgnoreCase(execMode)
+                                      || llmCalls > 0;
 
-                    final java.util.Set<String> removedTickets = removedBugsByVarId.getOrDefault(varId, java.util.Set.of());
-                    final java.util.Set<String> combinedBugs = new java.util.LinkedHashSet<>();
+                    final String varId = generateVariationId(testClass, testMethod, dataSet, location, browser);
+                    final String varIdNoMethod = generateVariationId(testClass, null, dataSet, location, browser);
+                    final List<String> dbBugTickets = new ArrayList<>(dbBugsByVarId.getOrDefault(varId, List.of()));
+                    for (final String t : dbBugsByVarId.getOrDefault(varIdNoMethod, List.of()))
+                    {
+                        if (!dbBugTickets.contains(t))
+                        {
+                            dbBugTickets.add(t);
+                        }
+                    }
+
+                    final Set<String> removedTickets = new HashSet<>(removedBugsByVarId.getOrDefault(varId, Set.of()));
+                    removedTickets.addAll(removedBugsByVarId.getOrDefault(varIdNoMethod, Set.of()));
+                    final Set<String> combinedBugs = new LinkedHashSet<>();
                     if (exec.has("bugs") && exec.path("bugs").isArray())
                     {
                         for (final JsonNode bugNode : exec.path("bugs"))
@@ -582,6 +606,10 @@ public class RunStorageSyncService
                             {
                                 calcKnownHealed++;
                             }
+                            if (isAi)
+                            {
+                                calcKnownAi++;
+                            }
                         }
                         else
                         {
@@ -590,6 +618,10 @@ public class RunStorageSyncService
                             if (isHealed)
                             {
                                 calcUnknownHealed++;
+                            }
+                            if (isAi)
+                            {
+                                calcUnknownAi++;
                             }
                         }
                     }
@@ -603,6 +635,10 @@ public class RunStorageSyncService
                             {
                                 calcFixedHealed++;
                             }
+                            if (isAi)
+                            {
+                                calcFixedAi++;
+                            }
                         }
                         else
                         {
@@ -611,6 +647,10 @@ public class RunStorageSyncService
                             if (isHealed)
                             {
                                 calcPassHealed++;
+                            }
+                            if (isAi)
+                            {
+                                calcPassAi++;
                             }
                         }
                     }
@@ -629,6 +669,10 @@ public class RunStorageSyncService
                             {
                                 calcKnownHealed++;
                             }
+                            if (isAi)
+                            {
+                                calcKnownAi++;
+                            }
                         }
                         else
                         {
@@ -637,6 +681,10 @@ public class RunStorageSyncService
                             if (isHealed)
                             {
                                 calcUnknownHealed++;
+                            }
+                            if (isAi)
+                            {
+                                calcUnknownAi++;
                             }
                         }
                     }
@@ -776,6 +824,10 @@ public class RunStorageSyncService
             final int finalFixedHealed = hasExecCounts ? calcFixedHealed : fixedHealed;
             final int finalKnownHealed = hasExecCounts ? calcKnownHealed : knownHealed;
             final int finalUnknownHealed = hasExecCounts ? calcUnknownHealed : unknownHealed;
+            final int finalPassAi = hasExecCounts ? calcPassAi : passAi;
+            final int finalFixedAi = hasExecCounts ? calcFixedAi : fixedAi;
+            final int finalKnownAi = hasExecCounts ? calcKnownAi : knownAi;
+            final int finalUnknownAi = hasExecCounts ? calcUnknownAi : unknownAi;
             final double finalPassRate = finalTotal > 0 ? (double)(finalPass + finalFixed) / finalTotal * 100.0 : passRate;
 
             final long calculatedRunDurationMs;
@@ -808,6 +860,10 @@ public class RunStorageSyncService
             runEntity.setSucceededFixedHealedCount(finalFixedHealed);
             runEntity.setFailedKnownHealedCount(finalKnownHealed);
             runEntity.setFailedUnknownHealedCount(finalUnknownHealed);
+            runEntity.setPassedAiCount(finalPassAi);
+            runEntity.setSucceededFixedAiCount(finalFixedAi);
+            runEntity.setFailedKnownAiCount(finalKnownAi);
+            runEntity.setFailedUnknownAiCount(finalUnknownAi);
             runEntity.setPassRate(finalPassRate);
             runEntity.setTotalLlmCalls(sumLlmCalls);
             runEntity.setTotalLlmTokens(sumLlmTokens);

@@ -198,4 +198,87 @@ public class AreaSummaryDtoTest
         assertEquals("25.00", areaSummary.getPassHealedDashOffset());
         assertEquals("50.00 50.00", areaSummary.getFixedCleanDashArray());
     }
+
+    @Test
+    public void testAiDrivenTestsAggregationAndDashCalculations()
+    {
+        // 1. Pass clean (not healed, not AI)
+        final TestExecutionDto exec1 = new TestExecutionDto();
+        exec1.setStatus("passed");
+        exec1.setExecutionMode("REPLAY_STRICT");
+
+        // 2. Pass AI
+        final TestExecutionDto exec2 = new TestExecutionDto();
+        exec2.setStatus("passed");
+        exec2.setExecutionMode("LLM_RECORDING");
+
+        // 3. Fixed AI
+        final TestExecutionDto exec3 = new TestExecutionDto();
+        exec3.setStatus("succeeded-fixed");
+        exec3.setExecutionMode("FORCE_RECORDING");
+
+        // 4. Unknown AI
+        final TestExecutionDto exec4 = new TestExecutionDto();
+        exec4.setStatus("failed-unknown");
+        exec4.setExecutionMode("LLM_ONLY");
+
+        final TestClassSummaryDto classSummary = new TestClassSummaryDto(
+            "AiDrivenTestClass",
+            "class-ai",
+            "Checkout",
+            4,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            List.of(exec1, exec2, exec3, exec4)
+        );
+
+        assertEquals(1, classSummary.getPassAiCount());
+        assertEquals(1, classSummary.getFixedAiCount());
+        assertEquals(0, classSummary.getKnownAiCount());
+        assertEquals(1, classSummary.getUnknownAiCount());
+
+        final AreaSummaryDto areaSummary = new AreaSummaryDto(
+            "Checkout",
+            "area-checkout",
+            "Checkout Area",
+            4,
+            2,
+            1,
+            0,
+            1,
+            0,
+            0,
+            List.of(classSummary)
+        );
+
+        assertEquals(4, areaSummary.getTotalCount());
+        assertEquals(2, areaSummary.getPassCount());
+        assertEquals(1, areaSummary.getPassCleanCount());
+        assertEquals(1, areaSummary.getPassAiCount());
+        assertEquals(0, areaSummary.getPassHealedCount());
+
+        assertEquals(1, areaSummary.getFixedCount());
+        assertEquals(0, areaSummary.getFixedCleanCount());
+        assertEquals(1, areaSummary.getFixedAiCount());
+
+        assertEquals(1, areaSummary.getUnknownCount());
+        assertEquals(0, areaSummary.getUnknownCleanCount());
+        assertEquals(1, areaSummary.getUnknownAiCount());
+
+        // Pass clean: 1/4 = 25%
+        assertEquals("25.00 75.00", areaSummary.getPassCleanDashArray());
+        assertEquals("25", areaSummary.getPassCleanDashOffset());
+
+        // Pass AI: 1/4 = 25%, offset = 25 - 25 = 0
+        assertEquals("25.00 75.00", areaSummary.getPassAiDashArray());
+        assertEquals("0.00", areaSummary.getPassAiDashOffset());
+
+        // Fixed AI: 1/4 = 25%, offset = 25 - 50 - 0 = -25
+        assertEquals("25.00 75.00", areaSummary.getFixedAiDashArray());
+        assertEquals("-25.00", areaSummary.getFixedAiDashOffset());
+    }
 }

@@ -202,4 +202,90 @@ public final class StaticResourceSyntaxTest
 
         Assertions.assertEquals(0, braceCount, "Brace mismatch detected in " + jsFile.getName());
     }
+
+    @Test
+    public void testLegendBoxPatternStylesNotOverriddenByBackgroundShorthand() throws Exception
+    {
+        final Path templatePath = Paths.get("src/main/resources/templates/fragments/batch-history.html");
+        Assertions.assertTrue(Files.exists(templatePath), "Template must exist: " + templatePath.toAbsolutePath());
+
+        final String templateContent = Files.readString(templatePath, StandardCharsets.UTF_8);
+        Assertions.assertFalse(
+            templateContent.contains("class=\"legend-box seg-ai-print\" style=\"background:")
+            || templateContent.contains("class=\"legend-box seg-healed-print\" style=\"background:"),
+            "Patterned legend boxes must not use shorthand 'background:' which overrides background-image. Use 'background-color:'."
+        );
+
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        Assertions.assertTrue(Files.exists(cssPath), "CSS file must exist: " + cssPath.toAbsolutePath());
+
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            cssContent.contains(".legend-box.seg-ai-print") && cssContent.contains("repeating-linear-gradient"),
+            "CSS must define .legend-box.seg-ai-print repeating linear gradient pattern."
+        );
+        Assertions.assertTrue(
+            cssContent.contains(".legend-box.seg-healed-print") && cssContent.contains("radial-gradient"),
+            "CSS must define .legend-box.seg-healed-print radial gradient sparkle pattern."
+        );
+    }
+
+    @Test
+    public void testSymmetricPatternLegendAndStatusBreakdownTemplates() throws Exception
+    {
+        final Path historyPath = Paths.get("src/main/resources/templates/fragments/batch-history.html");
+        Assertions.assertTrue(Files.exists(historyPath), "batch-history.html must exist: " + historyPath.toAbsolutePath());
+        final String historyContent = Files.readString(historyPath, StandardCharsets.UTF_8);
+
+        final String[] expectedLegendEntries = {
+            "Passed Clean", "Passed Healed", "Passed AI-Driven",
+            "Succeeded with Known Bug", "Succeeded Fixed Healed", "Succeeded Fixed AI-Driven",
+            "Failed due to Known Bug", "Failed Known Healed", "Failed Known AI-Driven",
+            "Failed without Issue Info", "Failed Unknown Healed", "Failed Unknown AI-Driven",
+            "Ignored / Skipped"
+        };
+        for (final String entry : expectedLegendEntries)
+        {
+            Assertions.assertTrue(
+                historyContent.contains(entry),
+                "batch-history.html legend must contain '" + entry + "'"
+            );
+        }
+
+        final Path detailsPath = Paths.get("src/main/resources/templates/fragments/batch-details.html");
+        Assertions.assertTrue(Files.exists(detailsPath), "batch-details.html must exist: " + detailsPath.toAbsolutePath());
+        final String detailsContent = Files.readString(detailsPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            detailsContent.contains("run.fixedCleanCount")
+            && detailsContent.contains("run.fixedHealedCountSafe")
+            && detailsContent.contains("run.fixedAiCountSafe")
+            && detailsContent.contains("run.knownCleanCount")
+            && detailsContent.contains("run.knownHealedCountSafe")
+            && detailsContent.contains("run.knownAiCountSafe"),
+            "batch-details.html must render granular clean, healed, and AI-driven segments for known tests."
+        );
+    }
+
+    @Test
+    public void testAreaTrendSvgLayersIncludeKnownAndFixedAiPaths() throws Exception
+    {
+        final Path historyPath = Paths.get("src/main/resources/templates/fragments/batch-history.html");
+        Assertions.assertTrue(Files.exists(historyPath), "batch-history.html must exist: " + historyPath.toAbsolutePath());
+        final String historyContent = Files.readString(historyPath, StandardCharsets.UTF_8);
+
+        final String[] expectedLayerClasses = {
+            "area-layer-known-ai",
+            "area-layer-known-ai-pat",
+            "area-layer-fixed-ai",
+            "area-layer-fixed-ai-pat"
+        };
+        for (final String layerClass : expectedLayerClasses)
+        {
+            Assertions.assertTrue(
+                historyContent.contains(layerClass),
+                "batch-history.html area-trend-svg must contain layer class '" + layerClass + "'"
+            );
+        }
+    }
 }

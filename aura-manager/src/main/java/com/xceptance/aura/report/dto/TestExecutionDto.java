@@ -61,7 +61,7 @@ public final class TestExecutionDto
     private final Map<String, String> localDataBindings;
     private JsonNode blocks;
     private JsonNode steps;
-    private final String executionMode;
+    private String executionMode;
     private final String startTime;
     private final String dateFormatted;
     private final String timeFormatted;
@@ -87,7 +87,7 @@ public final class TestExecutionDto
 
     public TestExecutionDto()
     {
-        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
+        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
     }
 
     @JsonCreator
@@ -208,18 +208,18 @@ public final class TestExecutionDto
         this.junitTags = junitTags != null ? new ArrayList<>(junitTags) : new ArrayList<>();
 
         final String effectiveTestMethod;
-        if (testMethod != null && !testMethod.trim().isEmpty())
+        if (testMethod != null && !testMethod.trim().isEmpty() && !"executeTest".equalsIgnoreCase(testMethod.trim()))
         {
             effectiveTestMethod = testMethod.trim();
         }
-        else if (this.junitTags.size() >= 2 && !this.junitTags.get(1).trim().isEmpty() && !this.junitTags.get(1).trim().startsWith("Dataset:"))
+        else if (this.junitTags.size() >= 2 && !this.junitTags.get(1).trim().isEmpty() && !this.junitTags.get(1).trim().startsWith("Dataset:") && !this.junitTags.get(1).trim().startsWith("Location:") && !this.junitTags.get(1).trim().startsWith("Browser:") && !this.junitTags.get(1).trim().equalsIgnoreCase(this.testClass) && !"executeTest".equalsIgnoreCase(this.junitTags.get(1).trim()))
         {
             effectiveTestMethod = this.junitTags.get(1).trim();
         }
         else if (this.testFile.contains("#"))
         {
             final String tm = this.testFile.substring(this.testFile.indexOf('#') + 1).trim();
-            effectiveTestMethod = !tm.isEmpty() ? tm : "";
+            effectiveTestMethod = (!tm.isEmpty() && !"executeTest".equalsIgnoreCase(tm)) ? tm : "";
         }
         else if (this.id != null && (this.id.contains("#") || this.id.contains("%23")))
         {
@@ -235,7 +235,8 @@ public final class TestExecutionDto
                 }
             }
             final String[] parts = decodedId.split("#");
-            effectiveTestMethod = (parts.length > 1 && !parts[1].trim().isEmpty()) ? parts[1].trim() : "";
+            final String tm = (parts.length > 1 && !parts[1].trim().isEmpty()) ? parts[1].trim() : "";
+            effectiveTestMethod = !"executeTest".equalsIgnoreCase(tm) ? tm : "";
         }
         else
         {
@@ -275,7 +276,7 @@ public final class TestExecutionDto
             getHealedStepsCount();
         }
         this.steps = steps;
-        this.executionMode = (executionMode != null && !executionMode.isBlank()) ? executionMode : ((mode != null && !mode.isBlank()) ? mode : "FORCE_RECORDING");
+        this.executionMode = (executionMode != null && !executionMode.isBlank()) ? executionMode : ((mode != null && !mode.isBlank()) ? mode : null);
         this.startTime = startTime != null ? startTime : "";
         this.dateFormatted = dateFormatted != null ? dateFormatted : "";
         this.timeFormatted = timeFormatted != null ? timeFormatted : "";
@@ -409,7 +410,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
     }
 
     public TestExecutionDto(
@@ -434,7 +435,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
     }
 
     public TestExecutionDto(
@@ -448,7 +449,7 @@ public final class TestExecutionDto
         final String failure,
         final List<String> bugs)
     {
-        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, "FORCE_RECORDING", null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
+        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
     }
 
     public String getId()
@@ -678,12 +679,55 @@ public final class TestExecutionDto
 
     public String getExecutionMode()
     {
-        return (executionMode != null && !executionMode.isBlank()) ? executionMode : "FORCE_RECORDING";
+        return executionMode;
+    }
+
+    public void setExecutionMode(final String executionMode)
+    {
+        this.executionMode = executionMode;
     }
 
     public String getMode()
     {
-        return getExecutionMode();
+        return getDisplayMode();
+    }
+
+    /**
+     * Resolves the user-facing display mode for the All Tests tab mode column.
+     * <p>
+     * - If REPLAY_WITH_HEALING (or AUTO) and healing was performed: HEALED
+     * - If REPLAY_WITH_HEALING (or AUTO or REPLAY_STRICT) and no healing was performed: PLAYBOOK
+     * - If LLM_RECORDING (or LLM_ONLY or FORCE_RECORDING): AI
+     * - If no mode was configured or test is standard non-AI: JAVA
+     *
+     * @return display mode string (PLAYBOOK, HEALED, AI, or JAVA)
+     */
+    @JsonProperty("displayMode")
+    public String getDisplayMode()
+    {
+        final String rawMode = this.executionMode != null ? this.executionMode.trim() : "";
+        if (rawMode.isEmpty() || "JAVA".equalsIgnoreCase(rawMode))
+        {
+            return "JAVA";
+        }
+        final String upper = rawMode.toUpperCase();
+        if ("REPLAY_WITH_HEALING".equals(upper) || "AUTO".equals(upper))
+        {
+            return isHealed() ? "HEALED" : "PLAYBOOK";
+        }
+        if ("REPLAY_STRICT".equals(upper) || "PLAYBOOK".equals(upper))
+        {
+            return "PLAYBOOK";
+        }
+        if ("LLM_RECORDING".equals(upper) || "LLM_ONLY".equals(upper) || "FORCE_RECORDING".equals(upper) || "AI".equals(upper))
+        {
+            return "AI";
+        }
+        if (isHealed())
+        {
+            return "HEALED";
+        }
+        return upper;
     }
 
     public String getStartTime()
@@ -861,6 +905,35 @@ public final class TestExecutionDto
     public boolean isUnknownHealed()
     {
         return isHealed() && "FAILED_UNKNOWN".equals(getDisplayStatusKey());
+    }
+
+    @JsonProperty("aiDriven")
+    public boolean isAiDriven()
+    {
+        return "AI".equalsIgnoreCase(getDisplayMode())
+            || (llmCallsCount > 0)
+            || "LLM_RECORDING".equalsIgnoreCase(this.executionMode)
+            || "LLM_ONLY".equalsIgnoreCase(this.executionMode);
+    }
+
+    public boolean isPassAi()
+    {
+        return isAiDriven() && "PASSED".equals(getDisplayStatusKey());
+    }
+
+    public boolean isFixedAi()
+    {
+        return isAiDriven() && "SUCCEEDED_FIXED".equals(getDisplayStatusKey());
+    }
+
+    public boolean isKnownAi()
+    {
+        return isAiDriven() && "FAILED_KNOWN".equals(getDisplayStatusKey());
+    }
+
+    public boolean isUnknownAi()
+    {
+        return isAiDriven() && "FAILED_UNKNOWN".equals(getDisplayStatusKey());
     }
 
     public long getTotalTokensCount()
