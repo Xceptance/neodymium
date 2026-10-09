@@ -29,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
@@ -98,5 +99,31 @@ public class AuraPlaybookServiceTest
         Mockito.when(fileService.deleteYamlFile("tests/Unknown.yaml")).thenReturn(false);
         final AuraOperationResult<Boolean> res = playbookService.deletePlaybook("tests/Unknown.yaml");
         Assertions.assertEquals(AuraOperationResult.Status.NOT_FOUND, res.getStatus());
+    }
+
+    @Test
+    public void testResolvePlaybookPath()
+    {
+        final YamlFileDto f1 = new YamlFileDto("tests/examples/use-google.yaml", List.of());
+        final YamlFileDto f2 = new YamlFileDto("tests/Cart.yaml", List.of());
+        Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of(f1, f2));
+
+        // Exact relative path (fast-path via direct disk check)
+        final File mockDir = new File("src/test/resources");
+        Mockito.when(fileService.getResourcesDirectory()).thenReturn(mockDir);
+
+        // Exact relative path
+        Assertions.assertEquals("tests/examples/use-google.yaml", playbookService.resolvePlaybookPath("tests/examples/use-google.yaml"));
+
+        // Simple filename exact
+        Assertions.assertEquals("tests/examples/use-google.yaml", playbookService.resolvePlaybookPath("use-google.yaml"));
+
+        // Simple filename case-insensitive
+        Assertions.assertEquals("tests/examples/use-google.yaml", playbookService.resolvePlaybookPath("USE-GOOGLE.YAML"));
+
+        // Unsafe path blocked
+        Assertions.assertNull(playbookService.resolvePlaybookPath("../../etc/passwd"));
+        Assertions.assertNull(playbookService.resolvePlaybookPath(null));
+        Assertions.assertNull(playbookService.resolvePlaybookPath("   "));
     }
 }

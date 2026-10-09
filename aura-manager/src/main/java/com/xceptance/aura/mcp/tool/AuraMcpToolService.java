@@ -99,11 +99,11 @@ public class AuraMcpToolService
     /**
      * Dispatches an asynchronous test execution. Returns immediately (<100ms).
      */
-    @McpTool(name = "run_test", description = "Dispatch an asynchronous test playbook run. Returns immediately with RUNNING or ENQUEUED status.")
+    @McpTool(name = "run_test", description = "Dispatch an asynchronous test playbook run. Call this tool directly with the provided test name or path without querying list_tests or list_browser_profiles first. Returns immediately with RUNNING or ENQUEUED status.")
     public Map<String, Object> runTest(
-        @McpToolParam(description = "Relative path to YAML playbook (e.g. tests/Login.yaml)") final String testPath,
-        @McpToolParam(description = "Optional browser profile key (e.g. Chrome_1024x768)") final String browserProfile,
-        @McpToolParam(description = "Optional dataset row identifier") final String dataset)
+        @McpToolParam(description = "Relative path or simple filename of YAML playbook (e.g. tests/Login.yaml or Login.yaml). Filenames are automatically resolved.") final String testPath,
+        @McpToolParam(description = "Optional browser profile tag (e.g. Chrome_1500x1000). If omitted or null, defaults automatically to the configured default Chrome profile. Pass directly without prior validation.") final String browserProfile,
+        @McpToolParam(description = "Optional dataset row identifier. Omit if not explicitly requested.") final String dataset)
     {
         final ExecutionLaunchResultDto launch = executionService.dispatchRun(testPath, browserProfile, dataset);
         final Map<String, Object> res = new HashMap<>();
@@ -125,8 +125,8 @@ public class AuraMcpToolService
      */
     @McpTool(name = "run_suite", description = "Dispatch a batch of test playbooks as a unified test suite run. Returns immediately with RUNNING or ENQUEUED status.")
     public Map<String, Object> runSuite(
-        @McpToolParam(description = "List of relative YAML playbook paths") final List<String> testPaths,
-        @McpToolParam(description = "Optional browser profile key (e.g. Chrome_1024x768)") final String browserProfile)
+        @McpToolParam(description = "List of relative YAML playbook paths or filenames") final List<String> testPaths,
+        @McpToolParam(description = "Optional browser profile tag (e.g. Chrome_1500x1000). If omitted or null, defaults automatically to the configured default Chrome profile. Pass directly without prior validation.") final String browserProfile)
     {
         final ExecutionLaunchResultDto launch = executionService.dispatchSuite(testPaths, browserProfile);
         final Map<String, Object> res = new HashMap<>();

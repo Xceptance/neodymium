@@ -40,6 +40,15 @@ public interface AuraPlaybookService
     List<PlaybookSummaryDto> listPlaybooks(String filter);
 
     /**
+     * Resolves an input test path or filename to an actual relative playbook path.
+     * Matches exact paths, simple filenames, or case-insensitive filename matches.
+     *
+     * @param testPath the input test path or simple filename
+     * @return the resolved safe relative path, or null if unresolvable
+     */
+    String resolvePlaybookPath(String testPath);
+
+    /**
      * Reads the raw YAML content of a playbook.
      *
      * @param testPath relative path to the playbook file

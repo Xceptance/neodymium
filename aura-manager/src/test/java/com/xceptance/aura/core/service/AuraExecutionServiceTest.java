@@ -41,6 +41,7 @@ public class AuraExecutionServiceTest
     private McpExecutionCoordinator coordinator;
     private AuraQueueService queueService;
     private HostAllowlistValidator allowlistValidator;
+    private AuraPlaybookService playbookService;
     private AuraExecutionService executionService;
 
     @BeforeEach
@@ -49,7 +50,8 @@ public class AuraExecutionServiceTest
         coordinator = Mockito.mock(McpExecutionCoordinator.class);
         queueService = Mockito.mock(AuraQueueService.class);
         allowlistValidator = new HostAllowlistValidator();
-        executionService = new AuraExecutionServiceImpl(coordinator, queueService, allowlistValidator);
+        playbookService = Mockito.mock(AuraPlaybookService.class);
+        executionService = new AuraExecutionServiceImpl(coordinator, queueService, allowlistValidator, playbookService);
     }
 
     @Test
@@ -63,6 +65,7 @@ public class AuraExecutionServiceTest
     @Test
     public void testDispatchRunSuccess()
     {
+        Mockito.when(playbookService.resolvePlaybookPath("tests/Login.yaml")).thenReturn("tests/Login.yaml");
         Mockito.when(coordinator.submitRun("tests/Login.yaml", "Chrome", "ds1"))
             .thenReturn(new McpExecutionCoordinator.DispatchResult("run_001", "RUNNING", 0, "Dispatched"));
 
@@ -70,6 +73,19 @@ public class AuraExecutionServiceTest
         Assertions.assertEquals("run_001", res.getRunId());
         Assertions.assertEquals("RUNNING", res.getStatus());
         Assertions.assertEquals(0, res.getQueuePosition());
+    }
+
+    @Test
+    public void testDispatchRunWithFilenameResolution()
+    {
+        Mockito.when(playbookService.resolvePlaybookPath("Login.yaml")).thenReturn("tests/auth/Login.yaml");
+        Mockito.when(coordinator.submitRun("tests/auth/Login.yaml", null, null))
+            .thenReturn(new McpExecutionCoordinator.DispatchResult("run_002", "RUNNING", 0, "Dispatched"));
+
+        final ExecutionLaunchResultDto res = executionService.dispatchRun("Login.yaml", null, null);
+        Assertions.assertEquals("run_002", res.getRunId());
+        Assertions.assertEquals("RUNNING", res.getStatus());
+        Mockito.verify(coordinator).submitRun("tests/auth/Login.yaml", null, null);
     }
 
     @Test

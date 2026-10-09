@@ -41,7 +41,7 @@ public class HostAllowlistValidator
             return false;
         }
 
-        final String pathStr = normalized.toString().replace('\\', '/');
+        final String pathStr = normalized.toString().replace('\\', '/').toLowerCase();
         return pathStr.endsWith(".yaml") || pathStr.endsWith(".yml");
     }
 

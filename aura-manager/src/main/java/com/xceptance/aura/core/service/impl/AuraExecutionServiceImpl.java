@@ -21,12 +21,16 @@ package com.xceptance.aura.core.service.impl;
 import com.xceptance.aura.core.dto.AuraOperationResult;
 import com.xceptance.aura.core.dto.ExecutionLaunchResultDto;
 import com.xceptance.aura.core.service.AuraExecutionService;
+import com.xceptance.aura.core.service.AuraPlaybookService;
 import com.xceptance.aura.mcp.security.HostAllowlistValidator;
 import com.xceptance.aura.mcp.service.McpExecutionCoordinator;
 import com.xceptance.neodymium.aura.AuraQueueService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Implementation of AuraExecutionService coordinating test runs and queue cancellations.
@@ -42,15 +46,18 @@ public class AuraExecutionServiceImpl implements AuraExecutionService
     private final McpExecutionCoordinator executionCoordinator;
     private final AuraQueueService queueService;
     private final HostAllowlistValidator allowlistValidator;
+    private final AuraPlaybookService playbookService;
 
     public AuraExecutionServiceImpl(
         final McpExecutionCoordinator executionCoordinator,
         final AuraQueueService queueService,
-        final HostAllowlistValidator allowlistValidator)
+        final HostAllowlistValidator allowlistValidator,
+        final AuraPlaybookService playbookService)
     {
         this.executionCoordinator = executionCoordinator;
         this.queueService = queueService;
         this.allowlistValidator = allowlistValidator;
+        this.playbookService = playbookService;
     }
 
     @Override
@@ -61,9 +68,12 @@ public class AuraExecutionServiceImpl implements AuraExecutionService
             return ExecutionLaunchResultDto.error("Invalid or unsafe test path: " + testPath);
         }
 
+        final String resolvedPath = (playbookService != null) ? playbookService.resolvePlaybookPath(testPath) : testPath;
+        final String effectivePath = (resolvedPath != null) ? resolvedPath : testPath;
+
         try
         {
-            final McpExecutionCoordinator.DispatchResult dispatch = executionCoordinator.submitRun(testPath, browserProfile, dataset);
+            final McpExecutionCoordinator.DispatchResult dispatch = executionCoordinator.submitRun(effectivePath, browserProfile, dataset);
             return new ExecutionLaunchResultDto(
                 dispatch.getRunId(),
                 dispatch.getStatus(),
@@ -79,24 +89,27 @@ public class AuraExecutionServiceImpl implements AuraExecutionService
     }
 
     @Override
-    public ExecutionLaunchResultDto dispatchSuite(final java.util.List<String> testPaths, final String browserProfile)
+    public ExecutionLaunchResultDto dispatchSuite(final List<String> testPaths, final String browserProfile)
     {
         if (testPaths == null || testPaths.isEmpty())
         {
             return ExecutionLaunchResultDto.error("Suite testPaths cannot be null or empty.");
         }
 
+        final List<String> resolvedPaths = new ArrayList<>();
         for (final String path : testPaths)
         {
             if (!allowlistValidator.isSafeTestPath(path))
             {
                 return ExecutionLaunchResultDto.error("Invalid or unsafe test path in suite: " + path);
             }
+            final String resolved = (playbookService != null) ? playbookService.resolvePlaybookPath(path) : path;
+            resolvedPaths.add((resolved != null) ? resolved : path);
         }
 
         try
         {
-            final McpExecutionCoordinator.DispatchResult dispatch = executionCoordinator.submitSuite(testPaths, browserProfile);
+            final McpExecutionCoordinator.DispatchResult dispatch = executionCoordinator.submitSuite(resolvedPaths, browserProfile);
             return new ExecutionLaunchResultDto(
                 dispatch.getRunId(),
                 dispatch.getStatus(),

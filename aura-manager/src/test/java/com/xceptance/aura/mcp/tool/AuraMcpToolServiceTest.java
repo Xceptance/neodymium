@@ -71,7 +71,7 @@ public class AuraMcpToolServiceTest
         confirmationManager = new TwoStepConfirmationManager();
 
         final AuraPlaybookService playbookService = new AuraPlaybookServiceImpl(fileService, allowlistValidator);
-        final AuraExecutionService executionService = new AuraExecutionServiceImpl(executionCoordinator, queueService, allowlistValidator);
+        final AuraExecutionService executionService = new AuraExecutionServiceImpl(executionCoordinator, queueService, allowlistValidator, playbookService);
         final AuraDiagnosticService diagnosticService = new AuraDiagnosticServiceImpl(
             reportDataService,
             queueService,

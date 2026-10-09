@@ -32,6 +32,7 @@ import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -101,6 +102,90 @@ public class AuraPlaybookServiceImpl implements AuraPlaybookService
         }
 
         return result;
+    }
+
+    @Override
+    public String resolvePlaybookPath(final String testPath)
+    {
+        if (testPath == null || testPath.isBlank())
+        {
+            return null;
+        }
+
+        final String cleanPath = testPath.trim().replace('\\', '/');
+        if (!allowlistValidator.isSafeTestPath(cleanPath))
+        {
+            return null;
+        }
+
+        // Fast path: if exact relative path exists directly on disk, return immediately without directory traversal
+        try
+        {
+            final File resourcesDir = fileService.getResourcesDirectory();
+            if (resourcesDir != null && resourcesDir.isDirectory())
+            {
+                final File direct = new File(resourcesDir, cleanPath);
+                if (direct.exists() && direct.isFile())
+                {
+                    return cleanPath;
+                }
+            }
+        }
+        catch (final Exception e)
+        {
+            LOGGER.debug("Direct file check failed for path '{}': {}", cleanPath, e.getMessage());
+        }
+
+        final List<YamlFileDto> files;
+        try
+        {
+            files = fileService.getYamlFilesList();
+        }
+        catch (final Exception e)
+        {
+            LOGGER.warn("Failed to retrieve YAML files for playbook resolution: {}", e.getMessage());
+            return cleanPath;
+        }
+
+        if (files == null || files.isEmpty())
+        {
+            return cleanPath;
+        }
+
+        // 1. Direct exact path match
+        for (final YamlFileDto f : files)
+        {
+            if (f.file != null && f.file.replace('\\', '/').equalsIgnoreCase(cleanPath))
+            {
+                return f.file.replace('\\', '/');
+            }
+        }
+
+        // Extract filename from input (e.g. "tests/examples/google.yaml" -> "google.yaml")
+        final String inputFileName = cleanPath.contains("/") ? cleanPath.substring(cleanPath.lastIndexOf('/') + 1) : cleanPath;
+
+        // 2. Exact filename match (case-sensitive)
+        for (final YamlFileDto f : files)
+        {
+            final String fileName = f.getFileName();
+            if (fileName != null && fileName.equals(inputFileName) && f.file != null)
+            {
+                return f.file.replace('\\', '/');
+            }
+        }
+
+        // 3. Exact filename match (case-insensitive)
+        for (final YamlFileDto f : files)
+        {
+            final String fileName = f.getFileName();
+            if (fileName != null && fileName.equalsIgnoreCase(inputFileName) && f.file != null)
+            {
+                return f.file.replace('\\', '/');
+            }
+        }
+
+        // Fall back to cleanPath if no better match found
+        return cleanPath;
     }
 
     @Override
