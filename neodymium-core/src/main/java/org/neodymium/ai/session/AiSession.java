@@ -571,11 +571,13 @@ public abstract class AiSession implements AutoCloseable
                         if (recorded.getStatus() != null)
                         {
                             parsed.setStatus(recorded.getStatus());
+                            parsed.setRecordedStatus(recorded.getStatus());
                         }
                         parsed.setFailed(recorded.isFailed());
                         if (recorded.getFailureReason() != null)
                         {
                             parsed.setFailureReason(recorded.getFailureReason());
+                            parsed.setRecordedFailureReason(recorded.getFailureReason());
                         }
                         if (recorded.getSubSteps() != null && !recorded.getSubSteps().isEmpty() && (parsed.getSubSteps() == null || parsed.getSubSteps().isEmpty()))
                         {

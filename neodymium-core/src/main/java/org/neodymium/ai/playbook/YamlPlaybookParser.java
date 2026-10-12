@@ -190,6 +190,14 @@ public final class YamlPlaybookParser implements PlaybookParser
         {
             for (final PlaybookStep step : steps)
             {
+                if (step.getRecordedStatus() == null && step.getStatus() != null && step.getStatus() != PlaybookStepStatus.PENDING)
+                {
+                    step.setRecordedStatus(step.getStatus());
+                }
+                if (step.getRecordedFailureReason() == null && step.getFailureReason() != null)
+                {
+                    step.setRecordedFailureReason(step.getFailureReason());
+                }
                 step.setStatus(PlaybookStepStatus.PENDING);
                 step.setFailed(false);
                 step.setFailureReason(null);

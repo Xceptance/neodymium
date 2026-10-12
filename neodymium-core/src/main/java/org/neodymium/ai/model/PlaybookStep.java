@@ -138,6 +138,20 @@ public final class PlaybookStep
     private String failureReason;
 
     /**
+     * The recorded execution status from the companion JSON recording, if any.
+     */
+    @JsonProperty("recordedStatus")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private PlaybookStepStatus recordedStatus;
+
+    /**
+     * The recorded failure reason from the companion JSON recording, if any.
+     */
+    @JsonProperty("recordedFailureReason")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String recordedFailureReason;
+
+    /**
      * The baseline state text content (e.g. HTML/DOM) recorded for this step.
      */
     private String baselineState;
@@ -1331,6 +1345,46 @@ public final class PlaybookStep
     public void setFailureReason(final String failureReason)
     {
         this.failureReason = failureReason;
+    }
+
+    /**
+     * Returns the recorded execution status from the companion JSON recording.
+     *
+     * @return the recorded status or null if not recorded
+     */
+    public PlaybookStepStatus getRecordedStatus()
+    {
+        return this.recordedStatus;
+    }
+
+    /**
+     * Sets the recorded execution status from the companion JSON recording.
+     *
+     * @param recordedStatus the recorded status to set
+     */
+    public void setRecordedStatus(final PlaybookStepStatus recordedStatus)
+    {
+        this.recordedStatus = recordedStatus;
+    }
+
+    /**
+     * Returns the recorded failure reason from the companion JSON recording.
+     *
+     * @return the recorded failure reason string or null
+     */
+    public String getRecordedFailureReason()
+    {
+        return this.recordedFailureReason;
+    }
+
+    /**
+     * Sets the recorded failure reason from the companion JSON recording.
+     *
+     * @param recordedFailureReason the recorded failure reason to set
+     */
+    public void setRecordedFailureReason(final String recordedFailureReason)
+    {
+        this.recordedFailureReason = recordedFailureReason;
     }
 
     /**

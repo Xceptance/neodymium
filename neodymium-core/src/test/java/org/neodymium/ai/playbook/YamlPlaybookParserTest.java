@@ -1022,13 +1022,48 @@ public class YamlPlaybookParserTest
 
         final PlaybookStep s1 = playbook.getSteps().get(0);
         assertEquals(PlaybookStepStatus.PENDING, s1.getStatus(), "Step 1 status must be reset to PENDING");
+        assertEquals(PlaybookStepStatus.SUCCESS, s1.getRecordedStatus(), "Step 1 recordedStatus must preserve SUCCESS");
         assertNull(s1.getDurationMs(), "Step 1 duration must be reset to null");
         assertNull(s1.getStartTimeMs(), "Step 1 startTimeMs must be reset to null");
 
         final PlaybookStep s2 = playbook.getSteps().get(1);
         assertEquals(PlaybookStepStatus.PENDING, s2.getStatus(), "Step 2 status must be reset to PENDING");
+        assertEquals(PlaybookStepStatus.HEALED, s2.getRecordedStatus(), "Step 2 recordedStatus must preserve HEALED");
         assertNull(s2.getDurationMs(), "Step 2 duration must be reset to null");
         assertNull(s2.getStartTimeMs(), "Step 2 startTimeMs must be reset to null");
+    }
+
+    @Test
+    public void testJsonRecordedStepsPreserveRecordedFailureReasonAcrossReset() throws IOException
+    {
+        final String jsonContent = """
+            [
+              {
+                "instruction": "Step 1: Failing step",
+                "status": "FAILED",
+                "failed": true,
+                "failureReason": "Target element not found",
+                "durationMs": 1000,
+                "startTimeMs": 1700000000000
+              }
+            ]
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("failed-recorded.json", jsonContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("failed-recorded.json", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getSteps().size());
+
+        final PlaybookStep s1 = playbook.getSteps().get(0);
+        assertEquals(PlaybookStepStatus.PENDING, s1.getStatus(), "Status must be reset to PENDING for new execution");
+        assertFalse(s1.isFailed(), "Failed flag must be reset to false for new execution");
+        assertNull(s1.getFailureReason(), "Failure reason must be reset to null for new execution");
+        assertEquals(PlaybookStepStatus.FAILED, s1.getRecordedStatus(), "Recorded status must be preserved");
+        assertEquals("Target element not found", s1.getRecordedFailureReason(), "Recorded failure reason must be preserved");
     }
 
     @Test
