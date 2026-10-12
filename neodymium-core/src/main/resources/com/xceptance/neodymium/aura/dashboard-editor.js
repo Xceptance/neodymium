@@ -1794,6 +1794,13 @@ document.addEventListener('keydown', function(evt) {
 document.addEventListener('paste', function(evt) {
     if (!window.activeEditingFile || !document.getElementById('visualEditorMain')) return;
 
+    // Do not intercept paste in the Raw YAML code editor panel (preserve original formatting and newlines)
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+    if (isRaw || (evt.target && (evt.target.id === 'rawYamlTextarea' || (evt.target.closest && evt.target.closest('#rawEditorPanel'))))) {
+        return;
+    }
+
     const stepContent = evt.target.closest ? evt.target.closest('.step-content') : null;
     if (stepContent) {
         evt.preventDefault();
@@ -1859,7 +1866,7 @@ document.addEventListener('paste', function(evt) {
         if (typeof debouncedPushSnapshot === 'function') {
             debouncedPushSnapshot();
         }
-    } else if (evt.target.getAttribute && (evt.target.getAttribute('contenteditable') === 'true' || evt.target.tagName === 'INPUT' || evt.target.tagName === 'TEXTAREA')) {
+    } else if (evt.target.getAttribute && (evt.target.getAttribute('contenteditable') === 'true' || evt.target.tagName === 'INPUT')) {
         evt.preventDefault();
         const plainText = (evt.clipboardData || window.clipboardData).getData('text/plain') || '';
         const singleLineText = plainText.replace(/[\r\n]+/g, ' ');

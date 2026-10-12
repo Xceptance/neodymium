@@ -66,6 +66,10 @@ public final class AuraManagerEditorUiTest
     {
         Configuration.browser = "chrome";
         Configuration.headless = true;
+        if (new File("/usr/local/bin/google-chrome").exists())
+        {
+            Configuration.browserBinary = "/usr/local/bin/google-chrome";
+        }
 
         cleanupTestFiles();
     }
@@ -86,7 +90,7 @@ public final class AuraManagerEditorUiTest
         }
 
         final String[] dirPaths = new String[] { "src/test/resources", "target/test-classes", "src/test/resources/fragments", "target/test-classes/fragments" };
-        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps", "New Step Fragment.steps", "child.steps", "Child.steps", "Hierarchical Test.yaml", "test.yaml", "MissingIncludeTest.yaml", "nonexistent.steps", "TestDataVarIncludeTest.yaml", "testdata_var.steps" };
+        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps", "New Step Fragment.steps", "child.steps", "Child.steps", "Hierarchical Test.yaml", "test.yaml", "MissingIncludeTest.yaml", "nonexistent.steps", "TestDataVarIncludeTest.yaml", "testdata_var.steps", "RawYamlPasteTest.yaml" };
 
         for (final String dirPath : dirPaths)
         {
@@ -1130,6 +1134,71 @@ public final class AuraManagerEditorUiTest
         // Click Save on include card
         includeCard.$("button[id^='btnSaveInclude_']").shouldBe(Condition.visible).click();
         $(".toast.success").shouldBe(Condition.visible);
+    }
+
+    @Test
+    public final void testPasteIntoRawYamlEditorPreservesFormatting() throws Exception
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+
+        // Create new test file
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("RawYamlPasteTest.yaml");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Switch to Raw YAML editor mode
+        $("#btnModeRaw").shouldBe(Condition.visible).click();
+        $("#rawEditorPanel").shouldBe(Condition.visible);
+        $("#visualEditorContainer").shouldNotBe(Condition.visible);
+
+        final SelenideElement rawYamlTextarea = $("#rawYamlTextarea");
+        rawYamlTextarea.shouldBe(Condition.visible);
+
+        final String testYaml = "# Neodymium YAML Test Data File\n"
+                                + "\n"
+                                + "steps: |\n"
+                                + "  Open https://www.wikipedia.org\n"
+                                + "  Select the \"English language\n"
+                                + "  _include: search-in-wiki.steps\n"
+                                + "  Verify the main page heading contains '${searchPhrase}'\n"
+                                + "\n"
+                                + "data:\n"
+                                + "  -\n"
+                                + "    testId: \"en\"\n"
+                                + "    searchPhrase: \"Neodymium\"";
+
+        // Dispatch a synthetic paste event on the Raw YAML textarea
+        final Boolean defaultPrevented = Selenide.executeJavaScript(
+            "const textarea = document.getElementById('rawYamlTextarea');"
+            + "const dt = new DataTransfer();"
+            + "dt.setData('text/plain', arguments[0]);"
+            + "const pasteEvt = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });"
+            + "textarea.dispatchEvent(pasteEvt);"
+            + "if (!pasteEvt.defaultPrevented) {"
+            + "    textarea.value = arguments[0];"
+            + "    textarea.dispatchEvent(new Event('input', { bubbles: true }));"
+            + "}"
+            + "return pasteEvt.defaultPrevented;",
+            testYaml
+        );
+
+        // Verify paste event was not cancelled by visual editor paste handler
+        Assertions.assertFalse(defaultPrevented, "Paste event on rawYamlTextarea must not be defaultPrevented");
+
+        // Verify raw textarea content preserves all newlines and indentation
+        Assertions.assertEquals(testYaml, rawYamlTextarea.getValue(), "Raw YAML textarea content must preserve all newlines and indentation");
+        Assertions.assertTrue(rawYamlTextarea.getValue().contains("\nsteps: |\n"), "YAML content must contain multiline block header");
+        Assertions.assertTrue(rawYamlTextarea.getValue().contains("\n    testId: \"en\"\n"), "YAML content must contain indented testId key");
+
+        // Save the file
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Verify saved file on disk persisted the exact multiline formatting
+        final String savedContent = fileService.readYamlFileContent("RawYamlPasteTest.yaml");
+        Assertions.assertEquals(testYaml, savedContent, "Saved YAML file content must persist original multiline formatting");
     }
 }
 
