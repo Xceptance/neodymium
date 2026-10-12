@@ -466,6 +466,8 @@ public final class AgentToolLoopStep implements PipelineStep
         boolean hasActionToolFailed = false;
         String lastFailedActionTarget = null;
         String lastActionFailureMessage = null;
+        boolean hasUnresolvedAssertion = false;
+        String lastAssertionFailureMessage = null;
         List<SutAttachment> pendingVisualAttachments = null;
         String pendingVisualNote = null;
         int visualScrollCount = 0;
@@ -613,6 +615,13 @@ public final class AgentToolLoopStep implements PipelineStep
             // If no tool call could be parsed
             if (proposedCalls == null || proposedCalls.isEmpty())
             {
+                if (hasUnresolvedAssertion)
+                {
+                    LOGGER.info("🛑 Assertion failed and agent concluded failure without tool calls: {}", lastAssertionFailureMessage);
+                    throw new ConclusiveFailureException("Cannot complete step: Pending assertion failed: "
+                            + lastAssertionFailureMessage);
+                }
+
                 if (hasActionToolFailed && !isVisual && isInteractiveActionInstruction(rawInstruction, instruction, step))
                 {
                     final String detail = (lastActionFailureMessage != null && !lastActionFailureMessage.isBlank())
@@ -1006,6 +1015,22 @@ public final class AgentToolLoopStep implements PipelineStep
                 // If complete_step called -> Stop Criterion 1: Goal Accomplished
                 if ("complete_step".equals(currentCall.toolName()))
                 {
+                    if (hasUnresolvedAssertion)
+                    {
+                        if (!lastProposedToolWasCompleteStep)
+                        {
+                            lastProposedToolWasCompleteStep = true;
+                            final String rejectMsg = "Cannot complete step yet: A pending assertion failed: "
+                                    + lastAssertionFailureMessage
+                                    + ". You must successfully verify the assertion or find the correct element before calling complete_step.";
+                            LOGGER.warn("Rejecting complete_step: pending assertion failed: {}", lastAssertionFailureMessage);
+                            conversation.add(ChatMessage.tool(currentCall.callId(), currentCall.toolName(), rejectMsg));
+                            continue turnLoop;
+                        }
+                        throw new ConclusiveFailureException("Cannot complete step: Pending assertion failed: "
+                                + lastAssertionFailureMessage);
+                    }
+
                     if (!isVisual && isInteractiveActionInstruction(rawInstruction, instruction, step)
                             && hasActionToolFailed)
                     {
@@ -1197,6 +1222,20 @@ public final class AgentToolLoopStep implements PipelineStep
                     }
                 }
 
+                if (isAssertionTool(effectiveCall.toolName()))
+                {
+                    if (result != null && result.status() == ToolResult.Status.SUCCESS)
+                    {
+                        hasUnresolvedAssertion = false;
+                        lastAssertionFailureMessage = null;
+                    }
+                    else
+                    {
+                        hasUnresolvedAssertion = true;
+                        lastAssertionFailureMessage = result != null ? result.content() : "Assertion failed";
+                    }
+                }
+
                 if (result != null && result.variables().containsKey("requestedContextLevel"))
                 {
                     final String reqLevel = (String) result.variables().get("requestedContextLevel");
@@ -1373,6 +1412,20 @@ public final class AgentToolLoopStep implements PipelineStep
                 if (result != null && result.status() == ToolResult.Status.ERROR && result.content().startsWith("AssertionError"))
                 {
                     throw new AssertionError(result.content());
+                }
+
+                if (isAssertionTool(effectiveCall.toolName()))
+                {
+                    if (result != null && result.status() == ToolResult.Status.SUCCESS)
+                    {
+                        hasUnresolvedAssertion = false;
+                        lastAssertionFailureMessage = null;
+                    }
+                    else
+                    {
+                        hasUnresolvedAssertion = true;
+                        lastAssertionFailureMessage = result != null ? result.content() : "Assertion failed";
+                    }
                 }
 
                 // Task 3.3: Append structured ToolResult JSON directly to role: "TOOL"

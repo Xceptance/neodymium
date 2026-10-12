@@ -1862,5 +1862,79 @@ public class BrowserToolProviderStabilityTest
             WebDriverRunner.closeWebDriver();
         }
     }
+
+    @Test
+    public void testAssertAttributeThrowsAssertionErrorWhenValueMismatchesOnExistingElement() throws Exception
+    {
+        final WebElement existingElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getAttribute".equals(name))
+                    {
+                        final String attr = (String) args[0];
+                        if ("disabled".equals(attr))
+                        {
+                            return "false";
+                        }
+                        return null;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "button";
+                    }
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("findElements".equals(name))
+                    {
+                        return List.of(existingElement);
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        return existingElement;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 50;
+        try
+        {
+            final AiTool tool = this.registry.getTool("assert_attribute").orElseThrow();
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "#existing-btn");
+            args.put("attribute", "disabled");
+            args.put("expectedValue", "true");
+
+            final AssertionError error = Assertions.assertThrows(
+                    AssertionError.class,
+                    () -> tool.execute(new ToolCall("call-assert-attr-mismatch", "assert_attribute", args), null)
+            );
+            Assertions.assertNotNull(error);
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+            WebDriverRunner.closeWebDriver();
+        }
+    }
 }
 

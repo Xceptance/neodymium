@@ -2385,10 +2385,33 @@ public final class BrowserToolProvider
                         else
                         {
                             final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
-                            final By by = safeResolveLocator(selector);
-                            final List<WebElement> elements = driver != null ? driver.findElements(by) : Collections.emptyList();
-                            final SelenideElement singleEl = resolveLazyElement(selector);
-                            final boolean elementFound = !elements.isEmpty() || (singleEl != null && singleEl.exists());
+                            if (driver == null)
+                            {
+                                throw new AssertionError("No active browser window found to assert text on selector \"" + selector + "\"");
+                            }
+
+                            List<WebElement> elements = Collections.emptyList();
+                            try
+                            {
+                                final By by = safeResolveLocator(selector);
+                                elements = driver.findElements(by);
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+
+                            boolean singleElExists = false;
+                            SelenideElement singleEl = null;
+                            try
+                            {
+                                singleEl = resolveLazyElement(selector);
+                                singleElExists = singleEl != null && singleEl.exists();
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+
+                            final boolean elementFound = !elements.isEmpty() || singleElExists;
 
                             if (!elementFound)
                             {

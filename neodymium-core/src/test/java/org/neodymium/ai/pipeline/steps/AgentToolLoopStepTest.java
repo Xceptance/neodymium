@@ -1498,9 +1498,10 @@ public class AgentToolLoopStepTest
         final StepStats stats = new StepStats("Assert shipping zip code is 12345", System.currentTimeMillis());
         this.context.getTransientData().put("KEY_CURRENT_STEP_STATS", stats);
 
+        final ContextLevel expectedDefault = AiConfiguration.getInstance().getContextLevel();
         final AgentLoopLlmCaller caller = (req, ctx) -> {
             final ContextLevel activeLevel = (ContextLevel) this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);
-            Assertions.assertEquals(ContextLevel.LEAN, activeLevel, "Default context level must be LEAN");
+            Assertions.assertEquals(expectedDefault, activeLevel, "Default context level must match configured default");
             return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
                     List.of(new ToolCall("c-1", "complete_step", MAPPER.createObjectNode().put("summary", "Zip verified"))));
         };
@@ -1509,7 +1510,7 @@ public class AgentToolLoopStepTest
         step.execute(this.context);
 
         Assertions.assertEquals("Zip verified", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
-        Assertions.assertTrue(stats.getContextLevels().contains("LEAN"));
+        Assertions.assertTrue(stats.getContextLevels().contains(expectedDefault.name()));
     }
 
     @Test
@@ -1853,7 +1854,7 @@ public class AgentToolLoopStepTest
 
         Assertions.assertEquals(2, turn.get());
         Assertions.assertEquals("Opened site", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
-        Assertions.assertEquals(ContextLevel.LEAN, this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
+        Assertions.assertEquals(AiConfiguration.getInstance().getContextLevel(), this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL));
     }
 
     @Test
@@ -3832,6 +3833,160 @@ public class AgentToolLoopStepTest
 
         Assertions.assertTrue(step.getActions() == null || step.getActions().isEmpty(),
                 "Step actions must not contain unexecuted proposals when execution fails");
+    }
+
+    @Test
+    public void testCompleteStepRejectedWhenUnresolvedAssertionExists() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final AtomicInteger assertCallCount = new AtomicInteger(0);
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                assertCallCount.incrementAndGet();
+                return ToolResult.error(call.callId(), "Target element not found in DOM for selector '#missing'");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify order badge");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Turn 1: Call failing assertion
+                return new LlmResponse("Try assert", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-1", "assert_text", MAPPER.createObjectNode().put("selector", "#missing"))));
+            }
+            if (t == 2)
+            {
+                // Turn 2: Try to call complete_step despite failed assertion -> rejected
+                return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-2", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+            }
+            if (t == 3)
+            {
+                // Turn 3: Try to call complete_step again without resolving assertion -> fatal failure
+                return new LlmResponse("Done again", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-3", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+        final ConclusiveFailureException ex = Assertions.assertThrows(ConclusiveFailureException.class, () -> step.execute(this.context));
+        Assertions.assertTrue(ex.getMessage().contains("Pending assertion failed"),
+                "Exception message must mention pending assertion failure, was: " + ex.getMessage());
+        Assertions.assertEquals(3, turn.get(), "Must execute 3 turns: assert error, rejected complete_step warning, repeated complete_step failure");
+    }
+
+    @Test
+    public void testCompleteStepAllowedAfterUnresolvedAssertionResolved() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final AtomicInteger assertCallCount = new AtomicInteger(0);
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                final int count = assertCallCount.incrementAndGet();
+                if (count == 1)
+                {
+                    return ToolResult.error(call.callId(), "Target element not found in DOM for selector '#missing'");
+                }
+                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\",\"matched\":true}");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify order badge");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Turn 1: Call failing assertion
+                return new LlmResponse("Try assert", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-1", "assert_text", MAPPER.createObjectNode().put("selector", "#missing"))));
+            }
+            if (t == 2)
+            {
+                // Turn 2: Call passing assertion on corrected selector
+                return new LlmResponse("Retry assert with corrected selector", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-2", "assert_text", MAPPER.createObjectNode().put("selector", "#correct"))));
+            }
+            if (t == 3)
+            {
+                // Turn 3: complete_step now succeeds
+                return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("c-3", "complete_step", MAPPER.createObjectNode().put("summary", "Badge verified"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+        step.execute(this.context);
+
+        Assertions.assertEquals(3, turn.get());
+        Assertions.assertEquals("Badge verified", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
     }
 }
 
