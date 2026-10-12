@@ -52,7 +52,7 @@ import org.neodymium.util.Neodymium;
 @NeodymiumAiTest
 @AiJudge(true)
 @AiOutcomeVerification(value = false, failOnError = false)
-@AiPlaybook(value = "/verla/AddToCartTest.yaml", recordingDirectory = "target/playbooks/integration/cart")
+@AiPlaybook(value = "/verla/AddToCartTest.yaml", recordingDirectory = "target/playbooks/integration/cart/judge")
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 public class CartTest extends BaseAiTest
 {
@@ -71,7 +71,7 @@ public class CartTest extends BaseAiTest
     {
         if (server != null)
         {
-            server.resetInventory();
+            server.resetAll();
         }
         Neodymium.getData().put("verla.url", String.format("https://localhost:%d", server.getHttpsPort()));
         Neodymium.getData().put("neodymium.ai.visualRca.enabled", "false");

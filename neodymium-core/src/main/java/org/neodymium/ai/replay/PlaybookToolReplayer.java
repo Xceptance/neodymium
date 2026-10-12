@@ -975,49 +975,12 @@ public final class PlaybookToolReplayer
             }
 
             boolean matched = false;
-            if (regex)
+            for (final String text : textCandidates)
             {
-                Pattern pattern;
-                try
+                if (BrowserToolProvider.matchesCandidate(text, rawExpectedText, regex, exact))
                 {
-                    pattern = Pattern.compile(rawExpectedText, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-                }
-                catch (final PatternSyntaxException e)
-                {
-                    pattern = Pattern.compile(Pattern.quote(rawExpectedText), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
-                }
-                for (final String text : textCandidates)
-                {
-                    if (pattern.matcher(text).find() || pattern.matcher(text.replaceAll("\\s+", " ")).find())
-                    {
-                        matched = true;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                final String normExpected = rawExpectedText.replaceAll("\\s+", " ").trim();
-                for (final String text : textCandidates)
-                {
-                    if (exact)
-                    {
-                        if (text.trim().equalsIgnoreCase(rawExpectedText.trim())
-                                || text.replaceAll("\\s+", " ").trim().equalsIgnoreCase(normExpected))
-                        {
-                            matched = true;
-                            break;
-                        }
-                    }
-                    else
-                    {
-                        if (text.toLowerCase(Locale.ROOT).contains(rawExpectedText.toLowerCase(Locale.ROOT))
-                                || text.replaceAll("\\s+", " ").toLowerCase(Locale.ROOT).contains(normExpected.toLowerCase(Locale.ROOT)))
-                        {
-                            matched = true;
-                            break;
-                        }
-                    }
+                    matched = true;
+                    break;
                 }
             }
 

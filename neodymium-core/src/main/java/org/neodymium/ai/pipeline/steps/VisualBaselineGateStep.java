@@ -190,7 +190,7 @@ public final class VisualBaselineGateStep implements PipelineStep
                     }
 
                     final boolean pureVerification = isPureVerification();
-                    if (!pureVerification && coordinateTarget == null)
+                    if (!pureVerification)
                     {
                         LOGGER.debug("   Visual step contains recorded mutating actions; deferring visual baseline check to post-action for: \"{}\"",
                             resolvedInstruction);
@@ -552,6 +552,46 @@ public final class VisualBaselineGateStep implements PipelineStep
             }
             currentSsimMatrix = extracted;
         }
+        else if (coordinateTarget != null)
+        {
+            String extracted = null;
+            if (postState.getAttachments() != null)
+            {
+                for (final SutAttachment attachment : postState.getAttachments())
+                {
+                    if (attachment.mediaType() != null && attachment.mediaType().startsWith("image/") && attachment.base64Data() != null)
+                    {
+                        int cropX = coordinateTarget.x();
+                        int cropY = coordinateTarget.y();
+                        if (coordinateTarget.anchorSelector() != null && !coordinateTarget.anchorSelector().isBlank())
+                        {
+                            try
+                            {
+                                final SelenideElement anchorEl = SelenideElementFinder.findElement(coordinateTarget.anchorSelector());
+                                if (anchorEl != null && anchorEl.exists())
+                                {
+                                    SelenideElementFinder.scrollIntoViewIfNeeded(anchorEl);
+                                    final Object rectObj = Selenide.executeJavaScript(
+                                        "var r = arguments[0].getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)];",
+                                        anchorEl);
+                                    if (rectObj instanceof List<?> list && list.size() >= 2)
+                                    {
+                                        cropX = ((Number) list.get(0)).intValue() + coordinateTarget.x();
+                                        cropY = ((Number) list.get(1)).intValue() + coordinateTarget.y();
+                                    }
+                                }
+                            }
+                            catch (final Exception | AssertionError ignored)
+                            {
+                            }
+                        }
+                        extracted = ScreenshotHasher.computeTileSsimMatrix(attachment.base64Data(), cropX, cropY, 32);
+                        break;
+                    }
+                }
+            }
+            currentSsimMatrix = extracted;
+        }
         else
         {
             currentSsimMatrix = VisualStabilityDetector.extractSsimMatrix(postState);
@@ -564,7 +604,7 @@ public final class VisualBaselineGateStep implements PipelineStep
 
         final double minScore = this.step.getSsimMinScore() != null
             ? this.step.getSsimMinScore()
-            : AiConfiguration.getInstance().getVisualSsimMinScore();
+            : (coordinateTarget != null ? 0.95 : AiConfiguration.getInstance().getVisualSsimMinScore());
         final double ssimScore = ScreenshotHasher.calculateSsim(recordedHash, currentSsimMatrix);
         this.step.setSsimScore(ssimScore);
         if (this.step.getSsimMinScore() != null)
@@ -575,7 +615,7 @@ public final class VisualBaselineGateStep implements PipelineStep
         this.step.setReplayMatrixPng(ScreenshotHasher.matrixToDataUri(currentSsimMatrix));
         if (this.step.getScreenshotHashDim() == null)
         {
-            this.step.setScreenshotHashDim(ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM);
+            this.step.setScreenshotHashDim(coordinateTarget != null ? ScreenshotHasher.TILE_SSIM_MATRIX_DIM : ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM);
         }
 
         final Object currentInstructionObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
