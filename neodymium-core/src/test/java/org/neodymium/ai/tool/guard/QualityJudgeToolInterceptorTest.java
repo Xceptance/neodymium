@@ -907,5 +907,282 @@ public class QualityJudgeToolInterceptorTest
             WebDriverRunner.closeWebDriver();
         }
     }
+
+    @Test
+    public void testDiscussionModeJudgeApprovalUpdatesBothSelectorAndExpectedText()
+    {
+        System.setProperty("neodymium.ai.judge.enabled", "true");
+        System.setProperty("neodymium.ai.judge.mode", "DISCUSSION");
+        try
+        {
+            final MockLlmProvider mockLlm = new MockLlmProvider();
+            final String judgeResponse = """
+                {
+                  "status": "APPROVED",
+                  "chosenLocator": "#country-trigger-btn",
+                  "chosenValue": "🇺🇸",
+                  "isRegex": false,
+                  "confidence": 0.95,
+                  "reasoning": "The navbar trigger button is visible and displays the country flag"
+                }
+                """;
+            mockLlm.addResponse(new LlmResponse(judgeResponse, new TokenUsage(30, 20, 50), "mock-judge"));
+
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockLlm);
+            registry.registerProvider(mockLlm);
+
+            final SessionData sessionData = new SessionData(new HashMap<>());
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final MockTargetExecutor targetExecutor = new MockTargetExecutor();
+            final ProbeElementSummary summary = new ProbeElementSummary(
+                    0,
+                    "button",
+                    "🇺🇸",
+                    true,
+                    true,
+                    new ProbeBoundingRect(100.0, 10.0, 50.0, 30.0)
+            );
+            targetExecutor.registerProbeResult("#country-trigger-btn",
+                    LocatorProbeResult.supported("#country-trigger-btn", 1, List.of(summary)));
+
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, targetExecutor);
+            final ExecutionContext execContext = session.getExecutionContext();
+            execContext.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            execContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Validate that United States is selected");
+            ExecutionContext.setActiveContext(execContext);
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "li.country-item.selected");
+            args.put("expectedText", "United States ($)");
+            final ArrayNode candidates = args.putArray("candidates");
+            final ObjectNode c1 = candidates.addObject();
+            c1.put("locator", "li.country-item.selected");
+            c1.put("strategy", "CLASS");
+            c1.put("score", 0.60);
+
+            final ObjectNode c2 = candidates.addObject();
+            c2.put("locator", "#country-trigger-btn");
+            c2.put("strategy", "ID");
+            c2.put("score", 0.70);
+
+            final ToolCall call = new ToolCall("call-assert-text", "assert_text", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
+            Assertions.assertNotNull(verdict.adjustedCall());
+            Assertions.assertEquals("#country-trigger-btn", verdict.adjustedCall().arguments().path("selector").asText());
+            Assertions.assertEquals("🇺🇸", verdict.adjustedCall().arguments().path("expectedText").asText());
+            Assertions.assertFalse(verdict.adjustedCall().arguments().path("regex").asBoolean(false));
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.mode");
+        }
+    }
+
+    @Test
+    public void testDiscussionModeJudgeApprovalPropagatesRegexFlag()
+    {
+        System.setProperty("neodymium.ai.judge.enabled", "true");
+        System.setProperty("neodymium.ai.judge.mode", "DISCUSSION");
+        try
+        {
+            final MockLlmProvider mockLlm = new MockLlmProvider();
+            final String judgeResponse = """
+                {
+                  "status": "APPROVED",
+                  "chosenLocator": "#country-trigger-btn",
+                  "chosenValue": ".*United States.*",
+                  "isRegex": true,
+                  "confidence": 0.95,
+                  "reasoning": "Pattern matching for country trigger"
+                }
+                """;
+            mockLlm.addResponse(new LlmResponse(judgeResponse, new TokenUsage(30, 20, 50), "mock-judge"));
+
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockLlm);
+            registry.registerProvider(mockLlm);
+
+            final SessionData sessionData = new SessionData(new HashMap<>());
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final MockTargetExecutor targetExecutor = new MockTargetExecutor();
+            final ProbeElementSummary summary = new ProbeElementSummary(
+                    0,
+                    "button",
+                    "United States ($)",
+                    true,
+                    true,
+                    new ProbeBoundingRect(100.0, 10.0, 50.0, 30.0)
+            );
+            targetExecutor.registerProbeResult("#country-trigger-btn",
+                    LocatorProbeResult.supported("#country-trigger-btn", 1, List.of(summary)));
+
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, targetExecutor);
+            final ExecutionContext execContext = session.getExecutionContext();
+            execContext.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            execContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Validate that United States is selected");
+            ExecutionContext.setActiveContext(execContext);
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "li.country-item.selected");
+            args.put("expectedText", "United States ($)");
+            final ArrayNode candidates = args.putArray("candidates");
+            final ObjectNode c1 = candidates.addObject();
+            c1.put("locator", "li.country-item.selected");
+            c1.put("strategy", "CLASS");
+            c1.put("score", 0.60);
+
+            final ToolCall call = new ToolCall("call-regex-assert", "assert_text", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
+            Assertions.assertNotNull(verdict.adjustedCall());
+            Assertions.assertEquals("#country-trigger-btn", verdict.adjustedCall().arguments().path("selector").asText());
+            Assertions.assertEquals(".*United States.*", verdict.adjustedCall().arguments().path("expectedText").asText());
+            Assertions.assertTrue(verdict.adjustedCall().arguments().path("regex").asBoolean(false));
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.mode");
+        }
+    }
+
+    @Test
+    public void testDiscussionModeJudgeApprovalUpdatesExpectedTextWhenSelectorUnchanged()
+    {
+        System.setProperty("neodymium.ai.judge.enabled", "true");
+        System.setProperty("neodymium.ai.judge.mode", "DISCUSSION");
+        try
+        {
+            final MockLlmProvider mockLlm = new MockLlmProvider();
+            final String judgeResponse = """
+                {
+                  "status": "APPROVED",
+                  "chosenLocator": "#country-trigger-btn",
+                  "chosenValue": "🇺🇸",
+                  "isRegex": false,
+                  "confidence": 0.95,
+                  "reasoning": "Element selector is valid, updating expectedText to actual visible flag"
+                }
+                """;
+            mockLlm.addResponse(new LlmResponse(judgeResponse, new TokenUsage(30, 20, 50), "mock-judge"));
+
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockLlm);
+            registry.registerProvider(mockLlm);
+
+            final SessionData sessionData = new SessionData(new HashMap<>());
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final MockTargetExecutor targetExecutor = new MockTargetExecutor();
+            final ProbeElementSummary summary = new ProbeElementSummary(
+                    0,
+                    "button",
+                    "🇺🇸",
+                    true,
+                    true,
+                    new ProbeBoundingRect(100.0, 10.0, 50.0, 30.0)
+            );
+            targetExecutor.registerProbeResult("#country-trigger-btn",
+                    LocatorProbeResult.supported("#country-trigger-btn", 1, List.of(summary)));
+
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, targetExecutor);
+            final ExecutionContext execContext = session.getExecutionContext();
+            execContext.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            execContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Validate country trigger");
+            ExecutionContext.setActiveContext(execContext);
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "#country-trigger-btn");
+            args.put("expectedText", "United States ($)");
+            final ArrayNode candidates = args.putArray("candidates");
+            final ObjectNode c1 = candidates.addObject();
+            c1.put("locator", "#country-trigger-btn");
+            c1.put("strategy", "ID");
+            c1.put("score", 0.70); // low score to trigger deliberation
+
+            final ToolCall call = new ToolCall("call-same-selector", "assert_text", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
+            Assertions.assertNotNull(verdict.adjustedCall());
+            Assertions.assertEquals("#country-trigger-btn", verdict.adjustedCall().arguments().path("selector").asText());
+            Assertions.assertEquals("🇺🇸", verdict.adjustedCall().arguments().path("expectedText").asText());
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.mode");
+        }
+    }
+
+    @Test
+    public void testSingleShotJudgeRefinementUpdatesBothSelectorAndExpectedValue()
+    {
+        System.setProperty("neodymium.ai.judge.enabled", "true");
+        System.setProperty("neodymium.ai.judge.mode", "ON_AMBIGUITY");
+        try
+        {
+            final MockLlmProvider mockLlm = new MockLlmProvider();
+            final String judgeResponse = """
+                {
+                  "judgment": "REFINED",
+                  "chosenLocator": "#search-input",
+                  "chosenValue": "Search...",
+                  "confidence": 0.96,
+                  "reasoning": "Unique search input with placeholder Search..."
+                }
+                """;
+            mockLlm.addResponse(new LlmResponse(judgeResponse, new TokenUsage(25, 15, 40), "mock-judge"));
+
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(mockLlm);
+            registry.registerProvider(mockLlm);
+
+            final SessionData sessionData = new SessionData(new HashMap<>());
+            final ExecutionEventBus eventBus = new ExecutionEventBus();
+            final MockTargetExecutor targetExecutor = new MockTargetExecutor();
+            final AiSession session = AiSession.mock(sessionData, registry, eventBus, targetExecutor);
+
+            final ExecutionContext execContext = session.getExecutionContext();
+            execContext.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+            execContext.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify placeholder");
+            ExecutionContext.setActiveContext(execContext);
+
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", ".brittle-input");
+            args.put("attribute", "placeholder");
+            args.put("expectedValue", "Type here");
+            final ArrayNode candidates = args.putArray("candidates");
+            final ObjectNode c1 = candidates.addObject();
+            c1.put("locator", ".brittle-input");
+            c1.put("strategy", "CLASS");
+            c1.put("score", 0.60);
+
+            final ToolCall call = new ToolCall("call-attr", "assert_attribute", args);
+            final InterceptionVerdict verdict = this.interceptor.intercept(call, this.context);
+
+            Assertions.assertTrue(verdict.isAllowed());
+            Assertions.assertEquals(InterceptionVerdict.Decision.DELIBERATED, verdict.decision());
+            Assertions.assertNotNull(verdict.adjustedCall());
+            Assertions.assertEquals("#search-input", verdict.adjustedCall().arguments().path("selector").asText());
+            Assertions.assertEquals("Search...", verdict.adjustedCall().arguments().path("expectedValue").asText());
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+            System.clearProperty("neodymium.ai.judge.enabled");
+            System.clearProperty("neodymium.ai.judge.mode");
+        }
+    }
 }
 

@@ -380,8 +380,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                 final Object stateObj = activeContext.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
                 final String domContext = stateObj instanceof final SutState sutState ? sutState.getTextContent() : "";
                 final String toolName = call.toolName();
-                final String actionValue = call.arguments().has("value") ? call.arguments().path("value").asText("")
-                        : (call.arguments().has("text") ? call.arguments().path("text").asText("") : "");
+                final String actionValue = extractActionValue(call.arguments());
                 @SuppressWarnings("unchecked")
                 final List<String> milestones = (List<String>) activeContext.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES);
 
@@ -466,18 +465,26 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                     {
                         final String winningLocator = !judgeResult.getChosenLocator().isBlank()
                                 ? judgeResult.getChosenLocator()
-                                : currentCandidateStrings.get(0);
+                                : (!currentCandidateStrings.isEmpty() ? currentCandidateStrings.get(0) : selector);
                         LOGGER.info("⚖️ [Quality Judge Consensus] APPROVED in Turn {}/{}: '{}' ({})", turn, maxTurns, winningLocator, judgeResult.getReasoning());
-                        if (!winningLocator.equals(selector))
+                        final boolean locatorChanged = !winningLocator.equals(selector);
+                        if (locatorChanged && isContainerHijack(selector, winningLocator, call.toolName()))
                         {
-                            if (isContainerHijack(selector, winningLocator, call.toolName()))
-                            {
-                                return InterceptionVerdict.allow("Container hijack rejected; retaining original locator: " + selector);
-                            }
-                            final ObjectNode newArgs = call.arguments().deepCopy();
-                            newArgs.put("selector", winningLocator);
+                            return InterceptionVerdict.allow("Container hijack rejected; retaining original locator: " + selector);
+                        }
+                        final ObjectNode newArgs = call.arguments().deepCopy();
+                        if (locatorChanged)
+                        {
+                            applyLocator(newArgs, winningLocator);
+                        }
+                        final boolean valueOrRegexChanged = applyJudgeValueAndRegex(newArgs, judgeResult, call.toolName());
+                        if (locatorChanged || valueOrRegexChanged)
+                        {
                             final ToolCall adjusted = new ToolCall(call.callId(), call.toolName(), newArgs);
-                            return InterceptionVerdict.deliberated(adjusted, "LLM Quality Judge approved locator: " + winningLocator + " (" + judgeResult.getReasoning() + ")");
+                            final String updateDesc = locatorChanged && valueOrRegexChanged
+                                    ? "locator: " + winningLocator + " and value/regex: " + judgeResult.getChosenValue()
+                                    : (locatorChanged ? "locator: " + winningLocator : "value/regex: " + judgeResult.getChosenValue());
+                            return InterceptionVerdict.deliberated(adjusted, "LLM Quality Judge approved " + updateDesc + " (" + judgeResult.getReasoning() + ")");
                         }
                         return InterceptionVerdict.allow("LLM Quality Judge confirmed locator: " + selector + " (" + judgeResult.getReasoning() + ")");
                     }
@@ -499,9 +506,21 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                             {
                                 LOGGER.info("⚖️ [Quality Judge Consensus] REFINED to verified candidate in Turn {}/{}: '{}'", turn, maxTurns, chosen);
                                 final ObjectNode newArgs = call.arguments().deepCopy();
-                                newArgs.put("selector", chosen);
-                                final ToolCall adjusted = new ToolCall(call.callId(), call.toolName(), newArgs);
-                                return InterceptionVerdict.deliberated(adjusted, "LLM Quality Judge selected verified candidate: " + chosen + " (" + judgeResult.getReasoning() + ")");
+                                final boolean locatorChanged = !chosen.equals(selector);
+                                if (locatorChanged)
+                                {
+                                    applyLocator(newArgs, chosen);
+                                }
+                                final boolean valueOrRegexChanged = applyJudgeValueAndRegex(newArgs, judgeResult, call.toolName());
+                                if (locatorChanged || valueOrRegexChanged)
+                                {
+                                    final ToolCall adjusted = new ToolCall(call.callId(), call.toolName(), newArgs);
+                                    final String updateDesc = locatorChanged && valueOrRegexChanged
+                                            ? "candidate: " + chosen + " and value/regex: " + judgeResult.getChosenValue()
+                                            : (locatorChanged ? "candidate: " + chosen : "value/regex: " + judgeResult.getChosenValue());
+                                    return InterceptionVerdict.deliberated(adjusted, "LLM Quality Judge selected verified " + updateDesc + " (" + judgeResult.getReasoning() + ")");
+                                }
+                                return InterceptionVerdict.allow("LLM Quality Judge confirmed locator: " + selector + " (" + judgeResult.getReasoning() + ")");
                             }
 
                             if (turn < maxTurns)
@@ -546,7 +565,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                         return InterceptionVerdict.allow("Container hijack rejected in exhaustion fallback; retaining original locator: " + selector);
                     }
                     final ObjectNode newArgs = call.arguments().deepCopy();
-                    newArgs.put("selector", lastProposal);
+                    applyLocator(newArgs, lastProposal);
                     final ToolCall adjusted = new ToolCall(call.callId(), call.toolName(), newArgs);
                     return InterceptionVerdict.deliberated(adjusted, "Max discussion turns (" + maxTurns + ") reached; proceeded with last proposal: " + lastProposal);
                 }
@@ -633,7 +652,15 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                 final Object stateObj = activeContext.getTransientData().get(ExecutionContext.KEY_LAST_STATE);
                 final String domContext = stateObj instanceof final SutState sutState ? sutState.getTextContent() : "";
 
-                final Action proposedAction = new Action(call.toolName(), selector.isEmpty() ? candidates.get(0).getLocator() : selector, "");
+                final String primaryTarget = !selector.isEmpty() ? selector : (!candidates.isEmpty() ? candidates.get(0).getLocator() : "");
+                final String actionValue = extractActionValue(call.arguments());
+                final Action proposedAction = new Action(
+                        call.toolName(),
+                        primaryTarget,
+                        actionValue,
+                        "",
+                        "",
+                        call.arguments().path("regex").asBoolean(false));
                 proposedAction.setCandidateLocators(candidates);
 
                 final QualityJudgePrompt judgePrompt = new QualityJudgePrompt();
@@ -665,21 +692,31 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
                             judgeResult.getJudgment(), judgeResult.getChosenLocator(), judgeResult.getReasoning());
 
                     final String chosen = judgeResult.getChosenLocator();
-                    if (chosen != null && !chosen.isBlank() && !chosen.equals(selector))
+                    final boolean hasChosenLocator = chosen != null && !chosen.isBlank();
+                    final boolean locatorChanged = hasChosenLocator && !chosen.equals(selector);
+                    if (locatorChanged && isContainerHijack(selector, chosen, call.toolName()))
                     {
-                        if (isContainerHijack(selector, chosen, call.toolName()))
-                        {
-                            LOGGER.warn("🚨 [Quality Judge] Single-shot proposal '{}' is a container hijack of '{}'. Retaining original locator.", chosen, selector);
-                            return InterceptionVerdict.allow(
-                                    "Container hijack rejected; retaining original locator: " + selector + " (" + judgeResult.getReasoning() + ")"
-                            );
-                        }
-                        final ObjectNode newArgs = call.arguments().deepCopy();
-                        newArgs.put("selector", chosen);
+                        LOGGER.warn("🚨 [Quality Judge] Single-shot proposal '{}' is a container hijack of '{}'. Retaining original locator.", chosen, selector);
+                        return InterceptionVerdict.allow(
+                                "Container hijack rejected; retaining original locator: " + selector + " (" + judgeResult.getReasoning() + ")"
+                        );
+                    }
+                    final ObjectNode newArgs = call.arguments().deepCopy();
+                    if (locatorChanged)
+                    {
+                        applyLocator(newArgs, chosen);
+                    }
+                    final boolean valueOrRegexChanged = applyJudgeValueAndRegex(newArgs, judgeResult, call.toolName());
+                    if (locatorChanged || valueOrRegexChanged)
+                    {
                         final ToolCall adjusted = new ToolCall(call.callId(), call.toolName(), newArgs);
+                        final String targetName = hasChosenLocator ? chosen : selector;
+                        final String updateDesc = locatorChanged && valueOrRegexChanged
+                                ? "locator: " + chosen + " and value/regex: " + judgeResult.getChosenValue()
+                                : (locatorChanged ? "locator: " + chosen : "value/regex: " + judgeResult.getChosenValue());
                         return InterceptionVerdict.deliberated(
                                 adjusted,
-                                "LLM Quality Judge selected refined locator: " + chosen + " (" + judgeResult.getReasoning() + ")"
+                                "LLM Quality Judge selected refined " + updateDesc + " (" + judgeResult.getReasoning() + ")"
                         );
                     }
                     if ("REJECTED".equalsIgnoreCase(judgeResult.getJudgment()) && this.config.isJudgeRecommendMarkerEnabled())
@@ -907,6 +944,140 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         }
 
         return false;
+    }
+
+    private static void applyLocator(final ObjectNode args, final String newLocator)
+    {
+        if (args.has("target") && !args.has("selector"))
+        {
+            args.put("target", newLocator);
+        }
+        else
+        {
+            args.put("selector", newLocator);
+        }
+    }
+
+    private static String extractActionValue(final JsonNode args)
+    {
+        if (args == null)
+        {
+            return "";
+        }
+        if (args.hasNonNull("expectedText") && !args.path("expectedText").asText().isBlank())
+        {
+            return args.path("expectedText").asText("");
+        }
+        if (args.hasNonNull("expectedValue") && !args.path("expectedValue").asText().isBlank())
+        {
+            return args.path("expectedValue").asText("");
+        }
+        if (args.hasNonNull("expected") && !args.path("expected").asText().isBlank())
+        {
+            return args.path("expected").asText("");
+        }
+        if (args.hasNonNull("text") && !args.path("text").asText().isBlank())
+        {
+            return args.path("text").asText("");
+        }
+        if (args.hasNonNull("value") && !args.path("value").asText().isBlank())
+        {
+            return args.path("value").asText("");
+        }
+        return "";
+    }
+
+    private static boolean applyJudgeValueAndRegex(
+            final ObjectNode args,
+            final QualityJudgeResult judgeResult,
+            final String toolName)
+    {
+        if (args == null || judgeResult == null)
+        {
+            return false;
+        }
+
+        boolean modified = false;
+        final String chosenValue = judgeResult.getChosenValue();
+        if (chosenValue != null)
+        {
+            if (args.has("expectedText"))
+            {
+                if (!chosenValue.equals(args.path("expectedText").asText(null)))
+                {
+                    args.put("expectedText", chosenValue);
+                    modified = true;
+                }
+            }
+            else if (args.has("expectedValue"))
+            {
+                if (!chosenValue.equals(args.path("expectedValue").asText(null)))
+                {
+                    args.put("expectedValue", chosenValue);
+                    modified = true;
+                }
+            }
+            else if (args.has("expected"))
+            {
+                if (!chosenValue.equals(args.path("expected").asText(null)))
+                {
+                    args.put("expected", chosenValue);
+                    modified = true;
+                }
+            }
+            else if (args.has("text"))
+            {
+                if (!chosenValue.equals(args.path("text").asText(null)))
+                {
+                    args.put("text", chosenValue);
+                    modified = true;
+                }
+            }
+            else if (args.has("value"))
+            {
+                if (!chosenValue.equals(args.path("value").asText(null)))
+                {
+                    args.put("value", chosenValue);
+                    modified = true;
+                }
+            }
+            else
+            {
+                final String normalizedTool = toolName != null ? toolName.toLowerCase() : "";
+                if (normalizedTool.contains("text"))
+                {
+                    args.put("expectedText", chosenValue);
+                    modified = true;
+                }
+                else if (normalizedTool.contains("attribute") || normalizedTool.contains("assert_value") || normalizedTool.contains("browser_assert_value"))
+                {
+                    args.put("expectedValue", chosenValue);
+                    modified = true;
+                }
+                else if (normalizedTool.contains("type") || normalizedTool.contains("fill"))
+                {
+                    args.put("text", chosenValue);
+                    modified = true;
+                }
+                else if (normalizedTool.contains("select"))
+                {
+                    args.put("value", chosenValue);
+                    modified = true;
+                }
+            }
+        }
+
+        if (judgeResult.isRegex())
+        {
+            final boolean currentRegex = args.path("regex").asBoolean(false);
+            if (!currentRegex)
+            {
+                args.put("regex", true);
+                modified = true;
+            }
+        }
+
+        return modified;
     }
 
     private static boolean allCandidatesScoreBelow(final List<LocatorCandidate> candidates, final double threshold)
