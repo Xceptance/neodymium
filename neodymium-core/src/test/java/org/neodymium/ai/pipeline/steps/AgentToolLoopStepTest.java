@@ -3988,6 +3988,90 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals(3, turn.get());
         Assertions.assertEquals("Badge verified", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
     }
+
+    @Test
+    public void testSessionVariablesEscapingMultilineAndQuotes() throws Exception
+    {
+        // Direct helper unit assertions
+        Assertions.assertEquals("CART\\n1", AgentToolLoopStep.escapeSessionVariableValue("CART\n1"));
+        Assertions.assertEquals("foo \\\"bar\\\"", AgentToolLoopStep.escapeSessionVariableValue("foo \"bar\""));
+        Assertions.assertEquals("col1\\tcol2", AgentToolLoopStep.escapeSessionVariableValue("col1\tcol2"));
+        Assertions.assertEquals("a\\\\b", AgentToolLoopStep.escapeSessionVariableValue("a\\b"));
+        Assertions.assertEquals("", AgentToolLoopStep.escapeSessionVariableValue(null));
+
+        final SessionData sessionData = new SessionData();
+        sessionData.set("lineItemCount", "CART\n1");
+        sessionData.set("quotedVar", "foo \"bar\"");
+        sessionData.set("tabbedVar", "col1\tcol2");
+
+        final ExecutionContext ctx = new ExecutionContext(sessionData);
+        ctx.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Inspect page");
+
+        final AtomicReference<String> capturedUserPrompt = new AtomicReference<>();
+        final AgentLoopLlmCaller caller = (req, c) -> {
+            capturedUserPrompt.set(req.userMessage());
+            return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("c-done", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+        step.execute(ctx);
+
+        final String prompt = capturedUserPrompt.get();
+        Assertions.assertNotNull(prompt);
+        Assertions.assertTrue(prompt.contains("- lineItemCount: \"CART\\n1\""), "Must escape newline in session variable");
+        Assertions.assertTrue(prompt.contains("- quotedVar: \"foo \\\"bar\\\"\""), "Must escape double quotes in session variable");
+        Assertions.assertTrue(prompt.contains("- tabbedVar: \"col1\\tcol2\""), "Must escape tabs in session variable");
+        Assertions.assertFalse(prompt.contains("CART\n1"), "Prompt must not contain raw unescaped newlines in session variables");
+    }
+
+    @Test
+    public void testCompoundInstructionPromptUnifiedFormattingWithoutDuplication() throws Exception
+    {
+        final PlaybookStep parent = new PlaybookStep("Locate the promo code input field:");
+        final List<String> milestones = List.of(
+                "clear its content",
+                "type 'FREEGIFT' into it",
+                "Submit the promo code form.",
+                "Assert that the cart items table contains a line item for 'Free Bonus Gift' ."
+        );
+
+        final SessionData sessionData = new SessionData();
+        final ExecutionContext ctx = new ExecutionContext(sessionData);
+        ctx.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, parent);
+        ctx.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, parent.getInstruction());
+        ctx.getTransientData().put(ExecutionContext.KEY_INTERNAL_MILESTONES, milestones);
+
+        final AtomicReference<String> capturedUserPrompt = new AtomicReference<>();
+        final AgentLoopLlmCaller caller = (req, c) -> {
+            capturedUserPrompt.set(req.userMessage());
+            return new LlmResponse("Done", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("c-done", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+        step.execute(ctx);
+
+        final String prompt = capturedUserPrompt.get();
+        Assertions.assertNotNull(prompt);
+
+        // Verify that parent header and numbered milestones are cleanly unified under ### Test Instruction:
+        final String expectedInstructionBlock =
+                "### Test Instruction:\n" +
+                "Locate the promo code input field:\n" +
+                "1. clear its content\n" +
+                "2. type 'FREEGIFT' into it\n" +
+                "3. Submit the promo code form.\n" +
+                "4. Assert that the cart items table contains a line item for 'Free Bonus Gift' .";
+
+        Assertions.assertTrue(prompt.contains(expectedInstructionBlock),
+                "Compound instruction must be formatted hierarchically directly under ### Test Instruction:");
+        Assertions.assertTrue(prompt.contains("This is a compound goal. You must execute tool calls to complete each of the following milestones before calling 'complete_step':"));
+
+        // Verify that the duplicate ### Compound Instruction Milestones: header was eliminated
+        Assertions.assertFalse(prompt.contains("### Compound Instruction Milestones:"),
+                "Prompt must not contain a duplicate ### Compound Instruction Milestones: section");
+    }
 }
 
 

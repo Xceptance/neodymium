@@ -279,7 +279,7 @@ public final class AgentToolLoopStep implements PipelineStep
                     Collections.sort(eligibleKeys);
                     for (final String key : eligibleKeys)
                     {
-                        userPrompt.append("- ").append(key).append(": \"").append(guardedData.get(key)).append("\"\n");
+                        userPrompt.append("- ").append(key).append(": \"").append(escapeSessionVariableValue(guardedData.get(key))).append("\"\n");
                     }
                     userPrompt.append("\n");
                 }
@@ -302,12 +302,44 @@ public final class AgentToolLoopStep implements PipelineStep
             }
         }
 
-        userPrompt.append("### Test Instruction:\n").append(displayInstruction != null ? displayInstruction : "");
-        if (isVisual && displayInstruction != null && !displayInstruction.toLowerCase().contains("(visual)") && !displayInstruction.toLowerCase().contains("(layout)"))
+        userPrompt.append("### Test Instruction:\n");
+        if (milestones != null && !milestones.isEmpty())
         {
-            userPrompt.append(" (visual)");
+            if (displayInstruction != null && !displayInstruction.isBlank())
+            {
+                String header = displayInstruction.trim();
+                final int firstNl = header.indexOf('\n');
+                if (firstNl > 0)
+                {
+                    header = header.substring(0, firstNl).trim();
+                }
+                userPrompt.append(header);
+                if (!header.endsWith(":"))
+                {
+                    userPrompt.append(":");
+                }
+                userPrompt.append("\n");
+            }
+            for (int i = 0; i < milestones.size(); i++)
+            {
+                userPrompt.append(i + 1).append(". ").append(milestones.get(i)).append("\n");
+            }
+            if (isVisual && displayInstruction != null && !displayInstruction.toLowerCase(Locale.ROOT).contains("(visual)") && !displayInstruction.toLowerCase(Locale.ROOT).contains("(layout)"))
+            {
+                userPrompt.append(" (visual)");
+            }
+            userPrompt.append("\nThis is a compound goal. You must execute tool calls to complete each of the following milestones before calling 'complete_step':\n");
+            userPrompt.append("Important: For any assertion or verification milestone (e.g. 'Assert that...', 'Verify that...'), invoke the commanded assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', etc.). If the target element or text is not found, execute the assertion tool directly to test the condition rather than retrying earlier action milestones.\n\n");
         }
-        userPrompt.append("\n\n");
+        else
+        {
+            userPrompt.append(displayInstruction != null ? displayInstruction : "");
+            if (isVisual && displayInstruction != null && !displayInstruction.toLowerCase(Locale.ROOT).contains("(visual)") && !displayInstruction.toLowerCase(Locale.ROOT).contains("(layout)"))
+            {
+                userPrompt.append(" (visual)");
+            }
+            userPrompt.append("\n\n");
+        }
 
         if (isVisual)
         {
@@ -323,17 +355,6 @@ public final class AgentToolLoopStep implements PipelineStep
             userPrompt.append("### Visual Marker Directive:\n")
                     .append("This instruction is marked with (marker). Visual element markers [1..N] have been activated on screen. ")
                     .append("A marked screenshot is attached. Target the intended element using its marker index (e.g. click(target: \"marker:3\")).\n\n");
-        }
-
-        if (milestones != null && !milestones.isEmpty())
-        {
-            userPrompt.append("### Compound Instruction Milestones:\n");
-            userPrompt.append("This is a compound goal. You must execute tool calls to complete each of the following milestones before calling 'complete_step':\n");
-            for (int i = 0; i < milestones.size(); i++)
-            {
-                userPrompt.append(i + 1).append(". ").append(milestones.get(i)).append("\n");
-            }
-            userPrompt.append("Important: For any assertion or verification milestone (e.g. 'Assert that...', 'Verify that...'), invoke the commanded assertion tool ('assert_text', 'assert_element_state', 'assert_attribute', 'assert_count', etc.). If the target element or text is not found, execute the assertion tool directly to test the condition rather than retrying earlier action milestones.\n\n");
         }
 
         List<SutAttachment> attachments = Collections.emptyList();
@@ -3726,5 +3747,35 @@ public final class AgentToolLoopStep implements PipelineStep
         sig = sig.replaceAll("\\s*frameId=\"[^\"]*\"", "");
         sig = sig.replaceAll("\\s+", " ");
         return sig;
+    }
+
+    /**
+     * Safely escapes special characters in session variable values for single-line prompt rendering.
+     *
+     * @param value raw session variable value
+     * @return safely escaped string representation
+     */
+    static String escapeSessionVariableValue(final Object value)
+    {
+        if (value == null)
+        {
+            return "";
+        }
+        final String str = String.valueOf(value);
+        final StringBuilder sb = new StringBuilder(str.length() + 8);
+        for (int i = 0; i < str.length(); i++)
+        {
+            final char c = str.charAt(i);
+            switch (c)
+            {
+                case '\\' -> sb.append("\\\\");
+                case '"' -> sb.append("\\\"");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default -> sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 }

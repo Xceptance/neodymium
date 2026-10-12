@@ -233,6 +233,14 @@ public final class ExecuteActionsStepTest
     }
 
     @Test
+    public void testPrepareInstructionPreservesNewlines()
+    {
+        final String raw = "Locate promo code (hint: #code):\n  - clear content (bug)\n  - type 'FREEGIFT' (no-replay)\n  - submit form";
+        final String prepared = ExecuteActionsStep.prepareInstruction(raw);
+        assertEquals("Locate promo code:\n- clear content\n- type 'FREEGIFT'\n- submit form", prepared);
+    }
+
+    @Test
     public void testMapPlaybookStepToPipelineStepReplay() throws Exception
     {
         final MockTargetExecutor executor = new MockTargetExecutor();

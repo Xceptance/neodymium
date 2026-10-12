@@ -932,16 +932,34 @@ public final class ExecuteActionsStep
             return null;
         }
         String prepared = instruction;
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*no-replay\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*bug(?:\\s*:\\s*[^)]+)?\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*continue-on-error\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*no-healing\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*(optional|soft)\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*layout\\s*\\)\\s*", " ");
-        prepared = prepared.replaceAll("(?i)\\s*\\(\\s*hint(?:\\s*:\\s*[^)]+)?\\s*\\)\\s*", " ");
-        return prepared.replaceAll("\\s+", " ").trim();
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*no-replay\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*bug(?:\\s*:[^)]+)?\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*continue-on-error\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*no-healing\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*(optional|soft)\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*timeout\\s*:\\s*\\d+(?:ms|s)?\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*visual(?:\\s*:\\s*full)?\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*layout\\s*\\)[ \\t]*", " ");
+        prepared = prepared.replaceAll("(?i)[ \\t]*\\(\\s*hint(?:\\s*:\\s*[^)]+)?\\s*\\)[ \\t]*", " ");
+        if (!prepared.contains("\n"))
+        {
+            return prepared.replaceAll("[ \\t]+", " ").replaceAll("[ \\t]+([:,;])", "$1").trim();
+        }
+        final String[] lines = prepared.split("\\r?\\n");
+        final StringBuilder sb = new StringBuilder(prepared.length());
+        for (final String line : lines)
+        {
+            final String cleanedLine = line.replaceAll("[ \\t]+", " ").replaceAll("[ \\t]+([:,;])", "$1").trim();
+            if (!cleanedLine.isEmpty())
+            {
+                if (sb.length() > 0)
+                {
+                    sb.append("\n");
+                }
+                sb.append(cleanedLine);
+            }
+        }
+        return sb.toString();
     }
 
     /**
