@@ -437,6 +437,9 @@ public class AuraReportViewController
         model.addAttribute("targetExecutionId", targetExecutionId);
         model.addAttribute("activeSubTab", activeSubTab);
         model.addAttribute("report", report);
+        model.addAttribute("filterModes", report.getFilterModes());
+        model.addAttribute("filterBrowsers", report.getFilterBrowsers());
+        model.addAttribute("filterLocales", report.getFilterLocales());
         model.addAttribute("pageTitle", "Run Report #" + report.getRunId());
         model.addAttribute("activeTab", "RunReport");
         model.addAttribute("viewFragment", "fragments/run-report :: runReport");
@@ -460,6 +463,9 @@ public class AuraReportViewController
         final RunReportDto filteredReport = dataService.getFilteredRunReport(runId, status, locations, browsers, bugs, failures);
         model.addAttribute("runId", runId);
         model.addAttribute("report", filteredReport);
+        model.addAttribute("filterModes", filteredReport.getFilterModes());
+        model.addAttribute("filterBrowsers", filteredReport.getFilterBrowsers());
+        model.addAttribute("filterLocales", filteredReport.getFilterLocales());
         model.addAttribute("activeStatusFilter", status);
 
         return "fragments/run-report :: allTestsContent";

@@ -455,6 +455,8 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 #pageRunsList > .panel { height: auto; flex: 0 0 auto; overflow: visible; }
 #pageBatchHistoryOverview.view-state { flex-grow: 0; }
 #pageBatchHistoryOverview .panel { height: auto; flex: 0 0 auto; overflow: visible; }
+#runReportSubTabAllTests.view-state { flex-grow: 0; }
+#runReportSubTabAllTests > .panel { height: auto; flex: 0 0 auto; overflow: visible; }
 
 /* BATCH HISTORY LIMIT TOOLBAR */
 .batch-history-toolbar { display: flex; align-items: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.65rem 1rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); }
@@ -479,13 +481,14 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 .env-meta-label { color: var(--text-muted); font-weight: 500; }
 
 /* MULTI-SELECT DROPDOWN CHECKBOX FILTERS WITH LIVE SEARCH */
-.test-filters-toolbar { display: flex; gap: 0.65rem; align-items: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.65rem 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.test-filters-toolbar { display: flex; gap: 0.65rem; align-items: center; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 0.65rem 1rem; margin-bottom: 1rem; flex-wrap: wrap; position: relative; z-index: 1000; }
 
 .multiselect-dropdown { position: relative; display: inline-block; }
+.multiselect-dropdown.active, .multiselect-dropdown:focus-within { z-index: 1050; }
 .multiselect-btn { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0.4rem 0.75rem; font-family: var(--font-family); font-size: 0.825rem; color: var(--text-main); cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; min-width: 175px; transition: border-color 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.02); }
 .multiselect-btn:hover { border-color: var(--status-fixed); }
 
-.multiselect-menu { display: none; position: absolute; top: calc(100% + 4px); left: 0; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-panel); padding: 0.5rem; min-width: 240px; max-width: 320px; z-index: 50; flex-direction: column; gap: 0.25rem; animation: fadeIn 0.15s ease-out; max-height: 280px; overflow-y: auto; }
+.multiselect-menu { display: none; position: absolute; top: calc(100% + 4px); left: 0; background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-md); box-shadow: var(--shadow-panel), 0 10px 25px -5px rgba(0, 0, 0, 0.25), 0 8px 10px -6px rgba(0, 0, 0, 0.2); padding: 0.5rem; min-width: 240px; max-width: 320px; z-index: 1060; flex-direction: column; gap: 0.25rem; animation: fadeIn 0.15s ease-out; max-height: 280px; overflow-y: auto; }
 .multiselect-menu.active, .multiselect-menu.show { display: flex; }
 
 .multiselect-search-box { padding: 0.25rem 0.25rem 0.5rem 0.25rem; border-bottom: 1px solid var(--border); margin-bottom: 0.25rem; position: sticky; top: -0.5rem; background: var(--bg-panel); z-index: 5; }
@@ -1013,7 +1016,9 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 
 /* ALLURE-STYLE SPLIT-VIEW PAGE PANEL */
 .allure-split-layout { display: flex; gap: 0; width: 100%; position: relative; align-items: stretch; }
-.allure-main-pane { flex: 1; min-width: 280px; overflow-x: auto; }
+.allure-main-pane { flex: 1; min-width: 280px; overflow: visible; }
+#runReportSubTabAllTests { min-height: 480px; }
+#runReportFilterEmptyState { display: none; text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
 
 /* Draggable Panel Resizer */
 .panel-resizer { width: 10px; cursor: col-resize; z-index: 30; display: none; position: relative; flex-shrink: 0; user-select: none; }

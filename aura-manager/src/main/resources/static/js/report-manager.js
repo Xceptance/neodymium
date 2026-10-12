@@ -23,6 +23,10 @@ const batchRunStatsRegistry = {};
 const activeClassFilters = {};
 const activeAreaFilters = {};
 let activeWholeExecutionFilter = null;
+let currentExecutionStatusFilter = 'ALL';
+let currentExecutionModeFilter = 'ALL';
+let currentGlobalStatusBadgeFilter = 'ALL';
+let currentHealedFilter = 'ALL';
 
 function formatDurationInMinutes(durMs) {
     if (durMs === null || durMs === undefined) return '0 min 0 s';
@@ -1006,15 +1010,21 @@ function filterAllTestsByStatus(statusKey) {
 }
 
 function applyRunReportFilters() {
-    const locMenu = document.getElementById('locationMultiselectMenu');
-    const browserMenu = document.getElementById('browserMultiselectMenu');
-    const bugMenu = document.getElementById('bugMultiselectMenu');
-    const failureMenu = document.getElementById('failureMultiselectMenu');
+    const modeMenu = document.getElementById('reportModesMultiselectMenu');
+    const browserMenu = document.getElementById('reportBrowsersMultiselectMenu') || document.getElementById('browserMultiselectMenu');
+    const locMenu = document.getElementById('reportLocalesMultiselectMenu') || document.getElementById('locationMultiselectMenu');
+
+    const selectedModes = modeMenu ? Array.from(modeMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.trim().toUpperCase()) : [];
+    const totalModes = modeMenu ? modeMenu.querySelectorAll('.js-chk-option').length : 0;
+
+    const selectedBrowsers = browserMenu ? Array.from(browserMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.trim().toUpperCase()) : [];
+    const totalBrowsers = browserMenu ? browserMenu.querySelectorAll('.js-chk-option').length : 0;
 
     const selectedLocs = locMenu ? Array.from(locMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.trim().toUpperCase()) : [];
-    const selectedBrowsers = browserMenu ? Array.from(browserMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value.trim().toUpperCase()) : [];
-    const selectedBugs = bugMenu ? Array.from(bugMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value) : [];
-    const selectedFailures = failureMenu ? Array.from(failureMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value) : [];
+    const totalLocs = locMenu ? locMenu.querySelectorAll('.js-chk-option').length : 0;
+
+    const searchInput = document.getElementById('searchInput');
+    const search = searchInput ? (searchInput.value || '').trim().toLowerCase() : '';
 
     document.querySelectorAll('#runReportSubTabAllTests .test-row').forEach(row => {
         let loc = (row.getAttribute('data-location') || '').trim().toUpperCase();
@@ -1023,67 +1033,85 @@ function applyRunReportFilters() {
         let browser = (row.getAttribute('data-browser') || '').trim().toUpperCase();
         if (!browser) browser = 'UNKNOWN';
 
-        const bugs = (row.getAttribute('data-bugs') || '').split(',');
-        const failure = row.getAttribute('data-failure') || 'NONE';
+        let mode = (row.getAttribute('data-mode') || '').trim().toUpperCase();
+        if (!mode) mode = 'UNKNOWN';
 
-        const matchLoc = selectedLocs.length === 0 || selectedLocs.includes(loc);
-        const matchBrowser = selectedBrowsers.length === 0 || selectedBrowsers.includes(browser);
+        const rowSearch = (row.getAttribute('data-search') || (row.innerText || '')).toLowerCase();
 
-        let matchBug = selectedBugs.length === 0;
-        if (!matchBug) {
-            if (selectedBugs.includes('NONE') && (row.getAttribute('data-bugs') === 'NONE' || !row.getAttribute('data-bugs') || bugs.length === 0)) {
-                matchBug = true;
-            } else if (bugs.some(b => selectedBugs.includes(b))) {
-                matchBug = true;
-            }
-        }
-
-        let matchFailure = selectedFailures.length === 0;
-        if (!matchFailure) {
-            if (selectedFailures.includes('NONE') && (failure === 'NONE' || !failure)) {
-                matchFailure = true;
-            } else if (selectedFailures.some(f => failure.includes(f))) {
-                matchFailure = true;
-            }
-        }
+        const matchLoc = !locMenu || totalLocs === 0 ? true : selectedLocs.includes(loc);
+        const matchBrowser = !browserMenu || totalBrowsers === 0 ? true : selectedBrowsers.includes(browser);
+        const matchMode = !modeMenu || totalModes === 0 ? true : selectedModes.includes(mode);
+        const matchSearch = (!search || rowSearch.indexOf(search) !== -1);
 
         let matchStatus = true;
-        if (activeWholeExecutionFilter) {
-            if (activeWholeExecutionFilter === 'SKIPPED' || activeWholeExecutionFilter === 'IGNORED') {
-                const rowSt = row.getAttribute('data-status') || '';
-                const rowStRaw = row.getAttribute('data-status-raw') || '';
+        const statusFilter = activeWholeExecutionFilter || (currentGlobalStatusBadgeFilter !== 'ALL' ? currentGlobalStatusBadgeFilter : null);
+        if (statusFilter) {
+            const rowSt = (row.getAttribute('data-status') || '').toUpperCase();
+            const rowStRaw = (row.getAttribute('data-status-raw') || '').toLowerCase();
+            if (statusFilter === 'SKIPPED' || statusFilter === 'IGNORED') {
                 matchStatus = rowSt === 'SKIPPED' || rowStRaw === 'ignored' || rowStRaw === 'skipped';
+            } else if (statusFilter === 'PASSED') {
+                matchStatus = rowSt === 'PASSED' || rowStRaw === 'passed-clean' || rowStRaw === 'passed' || rowStRaw === 'succeeded';
+            } else if (statusFilter === 'SUCCEEDED_FIXED' || statusFilter === 'FIXED') {
+                matchStatus = rowSt === 'SUCCEEDED_FIXED' || rowStRaw === 'succeeded-fixed' || rowStRaw === 'fixed';
+            } else if (statusFilter === 'FAILED_KNOWN' || statusFilter === 'KNOWN') {
+                matchStatus = rowSt === 'FAILED_KNOWN' || rowStRaw === 'failed-known' || rowStRaw === 'known';
+            } else if (statusFilter === 'FAILED_UNKNOWN' || statusFilter === 'UNKNOWN') {
+                matchStatus = rowSt === 'FAILED_UNKNOWN' || rowStRaw === 'failed-unknown' || rowStRaw === 'failed' || rowStRaw === 'error';
             } else {
-                matchStatus = row.getAttribute('data-status') === activeWholeExecutionFilter;
+                matchStatus = rowSt === statusFilter;
             }
         }
 
-        const isHealed = row.getAttribute('data-healed') === 'true' || Number(row.getAttribute('data-healed-count') || 0) > 0 || (row.getAttribute('data-status-raw') || '').toLowerCase() === 'healed';
-        const matchHealed = (currentHealedFilter === 'ALL') ||
-                            (currentHealedFilter === 'HEALED' && isHealed) ||
-                            (currentHealedFilter === 'NOT_HEALED' && !isHealed);
+        const areaGroup = row.closest('.area-group');
+        const areaStatusFilter = areaGroup ? (areaGroup.getAttribute('data-active-status-filter') || 'ALL') : 'ALL';
+        const classContainer = row.closest('.test-class-container');
+        const classStatusFilter = classContainer ? (classContainer.getAttribute('data-active-status-filter') || 'ALL') : 'ALL';
 
-        row.style.display = (matchLoc && matchBrowser && matchBug && matchFailure && matchStatus && matchHealed) ? '' : 'none';
+        function matchesBadge(filterKey) {
+            if (!filterKey || filterKey === 'ALL') return true;
+            const key = filterKey.toUpperCase();
+            const rowSt = (row.getAttribute('data-status') || '').toUpperCase();
+            const rowStRaw = (row.getAttribute('data-status-raw') || '').toLowerCase();
+            if (key === 'PASSED') return rowSt === 'PASSED' || rowStRaw === 'passed-clean' || rowStRaw === 'passed' || rowStRaw === 'succeeded';
+            if (key === 'SUCCEEDED_FIXED' || key === 'FIXED') return rowSt === 'SUCCEEDED_FIXED' || rowStRaw === 'succeeded-fixed' || rowStRaw === 'fixed';
+            if (key === 'FAILED_KNOWN' || key === 'KNOWN') return rowSt === 'FAILED_KNOWN' || rowStRaw === 'failed-known' || rowStRaw === 'known';
+            if (key === 'FAILED_UNKNOWN' || key === 'UNKNOWN') return rowSt === 'FAILED_UNKNOWN' || rowStRaw === 'failed-unknown' || rowStRaw === 'failed' || rowStRaw === 'error';
+            if (key === 'SKIPPED' || key === 'IGNORED') return rowSt === 'SKIPPED' || rowStRaw === 'ignored' || rowStRaw === 'skipped';
+            return rowSt.includes(key);
+        }
+
+        const matchArea = matchesBadge(areaStatusFilter);
+        const matchClass = matchesBadge(classStatusFilter);
+
+        row.style.display = (matchLoc && matchBrowser && matchMode && matchStatus && matchArea && matchClass && matchSearch) ? '' : 'none';
     });
 
     document.querySelectorAll('#runReportSubTabAllTests .test-class-container').forEach(classBox => {
-        const visibleRows = classBox.querySelectorAll('.test-row:not([style*="display: none"])');
+        const visibleRows = Array.from(classBox.querySelectorAll('.test-row')).filter(r => r.style.display !== 'none');
         classBox.style.display = visibleRows.length > 0 ? '' : 'none';
     });
 
     document.querySelectorAll('#runReportSubTabAllTests .area-group').forEach(areaBox => {
-        const visibleRows = areaBox.querySelectorAll('.test-row:not([style*="display: none"])');
+        const visibleRows = Array.from(areaBox.querySelectorAll('.test-row')).filter(r => r.style.display !== 'none');
         areaBox.style.display = visibleRows.length > 0 ? '' : 'none';
     });
+
+    const totalVisible = Array.from(document.querySelectorAll('#runReportSubTabAllTests .test-row')).filter(r => r.style.display !== 'none').length;
+    const emptyState = document.getElementById('runReportFilterEmptyState');
+    if (emptyState) {
+        emptyState.style.display = totalVisible === 0 ? 'block' : 'none';
+    }
 
     // Filter status badges on both area group headers AND test class headers
     document.querySelectorAll('#runReportSubTabAllTests .area-group-header .badge-status, #runReportSubTabAllTests .test-class-header .badge-status').forEach(badge => {
         const badgeType = badge.getAttribute('data-status-type') || badge.getAttribute('data-status-key');
-        if (activeWholeExecutionFilter) {
-            if (activeWholeExecutionFilter === 'SKIPPED' || activeWholeExecutionFilter === 'IGNORED') {
+        const stFilter = activeWholeExecutionFilter || (currentGlobalStatusBadgeFilter !== 'ALL' ? currentGlobalStatusBadgeFilter : null);
+        if (stFilter) {
+            if (stFilter === 'SKIPPED' || stFilter === 'IGNORED') {
                 badge.style.display = (badgeType === 'SKIPPED' || badgeType === 'IGNORED') ? '' : 'none';
             } else {
-                badge.style.display = (badgeType === activeWholeExecutionFilter) ? '' : 'none';
+                badge.style.display = (badgeType === stFilter) ? '' : 'none';
             }
         } else {
             badge.style.display = '';
@@ -1101,25 +1129,10 @@ function resetGlobalTestFilters() {
     currentHealedFilter = 'ALL';
     document.querySelectorAll('#runReportSubTabOverview .metric-card').forEach(card => card.classList.remove('active-filter'));
     document.querySelectorAll('.js-filter-badge').forEach(b => b.classList.remove('active-filter', 'active-filter-badge'));
-    document.querySelectorAll('#healedFilterToggle .segment-btn').forEach(btn => {
-        if (btn.getAttribute('data-val') === 'ALL') {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
-    });
-    const modeSelect = document.getElementById('modeFilter');
-    if (modeSelect) modeSelect.value = 'ALL';
-    const browserSelect = document.getElementById('browserFilter');
-    if (browserSelect) browserSelect.value = 'ALL';
-    const localeSelect = document.getElementById('localeFilter');
-    if (localeSelect) localeSelect.value = 'ALL';
+    document.querySelectorAll('.area-group, .test-class-container').forEach(el => el.removeAttribute('data-active-status-filter'));
     const searchInput = document.getElementById('searchInput');
     if (searchInput) searchInput.value = '';
-    applyFilter();
-    if (typeof applyRunReportFilters === 'function') {
-        applyRunReportFilters();
-    }
+    applyRunReportFilters();
 }
 
 function openAllTestsAndExpandArea(targetAreaGroupId) {
@@ -4029,8 +4042,10 @@ document.addEventListener('click', (e) => {
         if (menu) {
             const isOpen = menu.classList.contains('show') || menu.classList.contains('active');
             document.querySelectorAll('.multiselect-menu').forEach(m => m.classList.remove('show', 'active'));
+            document.querySelectorAll('.multiselect-dropdown').forEach(d => d.classList.remove('active'));
             if (!isOpen) {
                 menu.classList.add('show', 'active');
+                toggleBtn.closest('.multiselect-dropdown')?.classList.add('active');
             }
         }
         return;
@@ -4038,6 +4053,7 @@ document.addEventListener('click', (e) => {
 
     if (!e.target.closest('.multiselect-dropdown')) {
         document.querySelectorAll('.multiselect-menu').forEach(m => m.classList.remove('show', 'active'));
+        document.querySelectorAll('.multiselect-dropdown').forEach(d => d.classList.remove('active'));
     }
 });
 
@@ -4270,6 +4286,7 @@ function bindGlobalListeners() {
         }
 
         recalculateRunReportMetrics();
+        applyRunReportFilters();
 
         const urlParams = new URLSearchParams(window.location.search);
         let storedSubTab = urlParams.get('subTab');
@@ -4495,9 +4512,6 @@ window.redirectToTestBaseVariationHistory = redirectToTestBaseVariationHistory;
 window.recalculateRunReportMetrics = recalculateRunReportMetrics;
 
 // Client-side Execution Index Filtering and Sorting matching index.html
-let currentExecutionStatusFilter = 'ALL';
-let currentExecutionModeFilter = 'ALL';
-let currentGlobalStatusBadgeFilter = 'ALL';
 
 function filterByGlobalStatusBadge(statusKey, btnEl) {
     if (currentGlobalStatusBadgeFilter === statusKey) {
@@ -4570,10 +4584,24 @@ function filterByMode(mode) {
     if (sel && sel.value !== currentExecutionModeFilter) {
         sel.value = currentExecutionModeFilter;
     }
+    const modeMenu = document.getElementById('reportModesMultiselectMenu');
+    if (modeMenu) {
+        const allChk = modeMenu.querySelector('.js-chk-all');
+        const optionChks = modeMenu.querySelectorAll('.js-chk-option');
+        if (mode === 'ALL' || !mode) {
+            if (allChk) allChk.checked = true;
+            optionChks.forEach(o => o.checked = true);
+        } else {
+            if (allChk) allChk.checked = false;
+            optionChks.forEach(o => o.checked = (o.value.toUpperCase() === mode.toUpperCase()));
+        }
+        const summaryEl = modeMenu.closest('.multiselect-dropdown')?.querySelector('.js-selected-text');
+        if (summaryEl) {
+            summaryEl.innerText = (mode === 'ALL' || !mode) ? 'All Selected' : '1 Selected';
+        }
+    }
     applyFilter();
 }
-
-let currentHealedFilter = 'ALL';
 
 function setHealedFilter(mode) {
     currentHealedFilter = mode || 'ALL';
@@ -4622,6 +4650,44 @@ function filterAllTestsByHealedStatus(status, healedFilter) {
 }
 
 function populateBrowserAndLocaleFilters() {
+    const modeMenu = document.getElementById('reportModesMultiselectMenu');
+    const browserMenu = document.getElementById('reportBrowsersMultiselectMenu');
+    const localeMenu = document.getElementById('reportLocalesMultiselectMenu');
+
+    if (modeMenu || browserMenu || localeMenu) {
+        const rows = document.querySelectorAll('#runReportSubTabAllTests tr.execution-row, #runReportSubTabAllTests tr.test-row');
+        const modes = new Set();
+        const browsers = new Set();
+        const locales = new Set();
+
+        rows.forEach(r => {
+            const m = r.getAttribute('data-mode');
+            const b = r.getAttribute('data-browser');
+            const l = r.getAttribute('data-location');
+            if (m && m.trim() && m !== 'null') modes.add(m.trim());
+            if (b && b.trim() && b !== 'null') browsers.add(b.trim());
+            if (l && l.trim() && l !== 'null') locales.add(l.trim());
+        });
+
+        function syncMenu(menu, set, allLabel) {
+            if (!menu) return;
+            const existing = menu.querySelectorAll('.js-chk-option');
+            if (existing.length === 0 && set.size > 0) {
+                const menuId = menu.id;
+                let html = `<label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="${menuId}" value="ALL" checked> <strong>${allLabel}</strong></label><div class="multiselect-divider"></div>`;
+                Array.from(set).sort().forEach(val => {
+                    html += `<label class="multiselect-option"><input type="checkbox" class="js-chk-option" data-menu-id="${menuId}" value="${val}" checked> <span>${val}</span></label>`;
+                });
+                menu.innerHTML = html;
+            }
+        }
+
+        syncMenu(modeMenu, modes, 'Select All Modes');
+        syncMenu(browserMenu, browsers, 'Select All Browsers');
+        syncMenu(localeMenu, locales, 'Select All Locales');
+        return;
+    }
+
     const browserSelect = document.getElementById('browserFilter');
     const localeSelect = document.getElementById('localeFilter');
     if (!browserSelect && !localeSelect) return;
@@ -4663,6 +4729,11 @@ function populateBrowserAndLocaleFilters() {
 }
 
 function applyFilter() {
+    if (document.getElementById('runReportSubTabAllTests')) {
+        applyRunReportFilters();
+        return;
+    }
+
     const searchInput = document.getElementById('searchInput');
     const search = searchInput ? (searchInput.value || '').trim().toLowerCase() : '';
     const browserSelect = document.getElementById('browserFilter');

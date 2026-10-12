@@ -235,35 +235,52 @@
                         <span class="material-symbols-outlined text-accent">filter_alt</span> Execution Filters:
                     </div>
 
-                    <div class="filter-mode-group">
-                        <label class="filter-label" for="modeFilter" style="display: inline-flex; align-items: center; gap: 0.2rem;"><span class="material-symbols-outlined" style="font-size: 1rem;">settings</span> Mode:</label>
-                        <select id="modeFilter" class="mode-select" onchange="filterByMode(this.value)">
-                            <option value="ALL">All Modes</option>
-                            <option th:each="m : ${report?.filterModes}" th:value="${m}" th:text="${m}">FORCE_RECORDING</option>
-                        </select>
-                    </div>
-
-                    <div class="filter-mode-group">
-                        <label class="filter-label" style="display: inline-flex; align-items: center; gap: 0.2rem;"><span class="material-symbols-outlined" style="font-size: 1rem; color: var(--status-healed-pass);">healing</span> Healed:</label>
-                        <div class="segmented-control" id="healedFilterToggle">
-                            <button type="button" class="segment-btn active" data-val="ALL" onclick="setHealedFilter('ALL')">All</button>
-                            <button type="button" class="segment-btn" data-val="HEALED" onclick="setHealedFilter('HEALED')" title="Show only healed tests">Healed</button>
-                            <button type="button" class="segment-btn" data-val="NOT_HEALED" onclick="setHealedFilter('NOT_HEALED')" title="Show only non-healed tests">Not Healed</button>
+                    <!-- MODES MULTI-SELECT DROPDOWN -->
+                    <div class="multiselect-dropdown" id="reportModesMultiselect">
+                        <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="reportModesMultiselectMenu">
+                            <span><span class="material-symbols-outlined text-accent">settings</span> Modes: <strong class="js-selected-text">All Selected</strong></span>
+                            <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+                        </button>
+                        <div class="multiselect-menu" id="reportModesMultiselectMenu">
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="reportModesMultiselectMenu" value="ALL" checked> <strong>Select All Modes</strong></label>
+                            <div class="multiselect-divider"></div>
+                            <label class="multiselect-option" th:each="m : ${report?.filterModes ?: filterModes}">
+                                <input type="checkbox" class="js-chk-option" data-menu-id="reportModesMultiselectMenu" th:value="${m}" checked> <span th:text="${m}">FORCE_RECORDING</span>
+                            </label>
+                            <div class="p-2 text-muted text-center" style="font-size: 0.8rem;" th:if="${#lists.isEmpty(report?.filterModes ?: filterModes)}">No Modes Available</div>
                         </div>
                     </div>
 
-                    <div class="filter-mode-group">
-                        <label class="filter-label" for="browserFilter" style="display: inline-flex; align-items: center; gap: 0.2rem;"><span class="material-symbols-outlined" style="font-size: 1rem;">language</span> Browser:</label>
-                        <select id="browserFilter" class="mode-select" onchange="applyFilter()">
-                            <option value="ALL">All Browsers</option>
-                        </select>
+                    <!-- BROWSERS MULTI-SELECT DROPDOWN -->
+                    <div class="multiselect-dropdown" id="reportBrowsersMultiselect">
+                        <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="reportBrowsersMultiselectMenu">
+                            <span><span class="material-symbols-outlined text-accent">web</span> Browsers: <strong class="js-selected-text">All Selected</strong></span>
+                            <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+                        </button>
+                        <div class="multiselect-menu" id="reportBrowsersMultiselectMenu">
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="reportBrowsersMultiselectMenu" value="ALL" checked> <strong>Select All Browsers</strong></label>
+                            <div class="multiselect-divider"></div>
+                            <label class="multiselect-option" th:each="br : ${report?.filterBrowsers ?: filterBrowsers}">
+                                <input type="checkbox" class="js-chk-option" data-menu-id="reportBrowsersMultiselectMenu" th:value="${br}" checked> <span th:text="${br}">Chrome</span>
+                            </label>
+                            <div class="p-2 text-muted text-center" style="font-size: 0.8rem;" th:if="${#lists.isEmpty(report?.filterBrowsers ?: filterBrowsers)}">No Browsers Available</div>
+                        </div>
                     </div>
 
-                    <div class="filter-mode-group">
-                        <label class="filter-label" for="localeFilter" style="display: inline-flex; align-items: center; gap: 0.2rem;"><span class="material-symbols-outlined" style="font-size: 1rem;">location_on</span> Locale:</label>
-                        <select id="localeFilter" class="mode-select" onchange="applyFilter()">
-                            <option value="ALL">All Locales</option>
-                        </select>
+                    <!-- LOCALES MULTI-SELECT DROPDOWN -->
+                    <div class="multiselect-dropdown" id="reportLocalesMultiselect">
+                        <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="reportLocalesMultiselectMenu">
+                            <span><span class="material-symbols-outlined text-accent">public</span> Locales: <strong class="js-selected-text">All Selected</strong></span>
+                            <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+                        </button>
+                        <div class="multiselect-menu" id="reportLocalesMultiselectMenu">
+                            <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="reportLocalesMultiselectMenu" value="ALL" checked> <strong>Select All Locales</strong></label>
+                            <div class="multiselect-divider"></div>
+                            <label class="multiselect-option" th:each="loc : ${report?.filterLocales ?: filterLocales}">
+                                <input type="checkbox" class="js-chk-option" data-menu-id="reportLocalesMultiselectMenu" th:value="${loc}" checked> <span th:text="${loc}">en</span>
+                            </label>
+                            <div class="p-2 text-muted text-center" style="font-size: 0.8rem;" th:if="${#lists.isEmpty(report?.filterLocales ?: filterLocales)}">No Locales Available</div>
+                        </div>
                     </div>
 
                     <button class="btn-secondary" style="padding: 0.4rem 0.65rem; font-size: 0.825rem;" title="Reset filters" onclick="resetGlobalTestFilters()">
@@ -297,6 +314,16 @@
                             <span class="badge-status badge-ignored clickable-badge js-filter-badge" data-status-key="SKIPPED" onclick="filterByGlobalStatusBadge('SKIPPED', this)" title="Filter Ignored/Skipped">Ignored: <span th:text="${report?.ignoredCount ?: 0}">0</span></span>
                             <span class="badge-status badge-running clickable-badge js-filter-badge" th:if="${(report?.runningCount ?: 0) > 0}" data-status-key="RUNNING" onclick="filterByGlobalStatusBadge('RUNNING', this)" title="Filter Running">Running: <span th:text="${report?.runningCount}">0</span></span>
                         </div>
+                    </div>
+
+                    <!-- EMPTY STATE WHEN ALL TESTS ARE FILTERED OUT -->
+                    <div id="runReportFilterEmptyState" class="text-center py-5 text-muted" style="display: none; padding: 3rem 1rem;">
+                        <span class="material-symbols-outlined mb-2" style="font-size: 2.5rem; color: var(--text-muted);">filter_alt_off</span>
+                        <h6 style="font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem;">No Test Executions Match Current Filters</h6>
+                        <p style="font-size: 0.85rem; max-width: 480px; margin: 0 auto 1rem;">All tests have been filtered out. Select one or more Modes, Browsers, or Locales above to display executions.</p>
+                        <button class="btn-secondary" style="font-size: 0.825rem; padding: 0.4rem 0.85rem;" onclick="resetGlobalTestFilters()">
+                            <span class="material-symbols-outlined text-accent" style="font-size: 1rem; vertical-align: middle;">restart_alt</span> Reset All Filters
+                        </button>
                     </div>
 
                     <!-- DYNAMIC AREA GROUPS -->

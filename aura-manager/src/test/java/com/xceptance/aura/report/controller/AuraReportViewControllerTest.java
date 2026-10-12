@@ -144,6 +144,9 @@ public class AuraReportViewControllerTest
         Assertions.assertEquals("RUN-100", model.getAttribute("runId"));
         Assertions.assertEquals("EXEC-1", model.getAttribute("targetExecutionId"));
         Assertions.assertEquals("runReportSubTabAllTests", model.getAttribute("activeSubTab"));
+        Assertions.assertNotNull(model.getAttribute("filterModes"));
+        Assertions.assertNotNull(model.getAttribute("filterBrowsers"));
+        Assertions.assertNotNull(model.getAttribute("filterLocales"));
     }
 
     @Test

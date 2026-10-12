@@ -140,4 +140,41 @@ public final class RunReportDtoTest
         Assertions.assertEquals(300000L, report.getTotalDurationMs());
         Assertions.assertEquals("5 min 0 s", report.getTotalDurationFormatted());
     }
+
+    @Test
+    public void testFilterMethods_emptyExecutions()
+    {
+        final RunReportDto report = new RunReportDto("run1", "batch1", "2026-08-20", "0s", 0, 0, 0, 0, 0, 0, new ArrayList<>());
+        Assertions.assertTrue(report.getFilterModes().isEmpty());
+        Assertions.assertTrue(report.getFilterBrowsers().isEmpty());
+        Assertions.assertTrue(report.getFilterLocales().isEmpty());
+        Assertions.assertTrue(report.getFilterLocations().isEmpty());
+    }
+
+    @Test
+    public void testFilterMethods_withValidAndFallbackValues()
+    {
+        final TestExecutionDto exec1 = new TestExecutionDto(
+            "id1", "run1", "TestClassA", "TitleA", "testA", "playbookA", "testA.json",
+            "passed-clean", "Java", "US", "en_US", "Chrome", "NONE", new ArrayList<>(),
+            "", "Browsing", new ArrayList<>(), null, null, null, null,
+            "t1", "d1", "RECORDING", "RECORDING", "10:00:00", "2026-08-20",
+            "10:00:00", 1000L, 5, 0, 5000L, "5.0s", 0, 0L, 0.0, ""
+        );
+        final TestExecutionDto exec2 = new TestExecutionDto(
+            "id2", "run1", "TestClassB", "TitleB", "testB", "playbookB", "testB.json",
+            "passed-clean", "Java", null, "", "Firefox", "NONE", new ArrayList<>(),
+            "", "Browsing", new ArrayList<>(), null, null, null, null,
+            "t2", "d2", "HEALING", "HEALING", "10:00:01", "2026-08-20",
+            "10:00:01", 2000L, 5, 0, 3000L, "3.0s", 0, 0L, 0.0, ""
+        );
+
+        final List<TestExecutionDto> execs = List.of(exec1, exec2);
+        final RunReportDto report = new RunReportDto("run1", "batch1", "2026-08-20", "8.0s", 2, 2, 0, 0, 0, 0, execs);
+
+        Assertions.assertEquals(List.of("HEALING", "RECORDING"), report.getFilterModes());
+        Assertions.assertEquals(List.of("Chrome", "Firefox"), report.getFilterBrowsers());
+        Assertions.assertEquals(List.of("UNKNOWN", "en_US"), report.getFilterLocales());
+        Assertions.assertEquals(List.of("UNKNOWN", "en_US"), report.getFilterLocations());
+    }
 }

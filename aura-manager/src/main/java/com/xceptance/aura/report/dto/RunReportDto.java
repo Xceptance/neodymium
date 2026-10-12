@@ -242,11 +242,15 @@ public final class RunReportDto
             return List.of();
         }
         return executions.stream()
-            .map(TestExecutionDto::getLocation)
-            .filter(l -> l != null && !l.isBlank())
+            .map(e -> (e.getLocation() == null || e.getLocation().isBlank()) ? "Unknown" : e.getLocation().trim())
             .distinct()
             .sorted()
             .collect(Collectors.toList());
+    }
+
+    public List<String> getFilterLocales()
+    {
+        return getFilterLocations();
     }
 
     public List<String> getFilterBrowsers()
@@ -256,8 +260,7 @@ public final class RunReportDto
             return List.of();
         }
         return executions.stream()
-            .map(TestExecutionDto::getBrowser)
-            .filter(b -> b != null && !b.isBlank())
+            .map(e -> (e.getBrowser() == null || e.getBrowser().isBlank()) ? "Unknown" : e.getBrowser().trim())
             .distinct()
             .sorted()
             .collect(Collectors.toList());
