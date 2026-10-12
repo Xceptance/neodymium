@@ -539,4 +539,88 @@ public class VerifyOutcomeStepTest
         Assertions.assertEquals(ScreenshotHasher.TILE_SSIM_MATRIX_DIM, coordStep.getScreenshotHashDim(), "Coordinate target must use tile SSIM dimension (32).");
         Assertions.assertFalse(coordStep.isFullPage(), "Coordinate step must explicitly enforce fullPage=false.");
     }
+
+    /**
+     * Verifies that when an interactive step with selector-based actions escalates to VISUAL_LEAN during
+     * live execution, VerifyOutcomeStep does NOT record a visual baseline hash or set fullPage=true.
+     */
+    @Test
+    public void testInteractiveStepEscalatingToVisualLeanDoesNotRecordBaselineOrSetFullPage() throws Exception
+    {
+        final BufferedImage img = new BufferedImage(1500, 857, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(Color.LIGHT_GRAY);
+        g.fillRect(0, 0, 1500, 857);
+        g.dispose();
+
+        final String base64;
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
+        {
+            ImageIO.write(img, "png", baos);
+            base64 = Base64.getEncoder().encodeToString(baos.toByteArray());
+        }
+
+        final MockSutState state = new MockSutState(
+            "<html><body><button id='add-btn'>Add to Cart</button></body></html>",
+            List.of(new SutAttachment("image/png", "viewport.png", base64)),
+            "content_hash");
+
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+        context.getTransientData().put(ExecutionContext.KEY_POST_ACTION_STATE, state);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_LEAN);
+
+        final PlaybookStep interactiveStep = new PlaybookStep("Locate the first product card: Click Add to Cart");
+        final Action clickAction = new Action("CLICK", "#add-btn", List.of(), "Click Add to Cart", "");
+        interactiveStep.setActions(List.of(clickAction));
+
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, interactiveStep);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final VerifyOutcomeStep step = new VerifyOutcomeStep();
+        step.execute(context);
+
+        Assertions.assertNull(interactiveStep.getScreenshotHash(), "Interactive selector step must NOT record a visual baseline hash.");
+        Assertions.assertFalse(Boolean.TRUE.equals(interactiveStep.isFullPage()), "Interactive step must NOT be marked fullPage.");
+    }
+
+    /**
+     * Verifies that a viewport-scoped visual step (visual) evaluated while context level is VISUAL_LEAN
+     * records a viewport baseline hash and explicitly enforces fullPage=false rather than inheriting fullPage=true.
+     */
+    @Test
+    public void testViewportVisualStepEscalatingToVisualLeanEnforcesViewportFullPageFalse() throws Exception
+    {
+        final BufferedImage img = new BufferedImage(1500, 857, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(Color.ORANGE);
+        g.fillRect(0, 0, 1500, 857);
+        g.dispose();
+
+        final String base64;
+        try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())
+        {
+            ImageIO.write(img, "png", baos);
+            base64 = Base64.getEncoder().encodeToString(baos.toByteArray());
+        }
+
+        final MockSutState state = new MockSutState(
+            "<html><body><div>Header banner</div></body></html>",
+            List.of(new SutAttachment("image/png", "viewport.png", base64)),
+            "content_hash");
+
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_ONLY);
+        context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, state);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.VISUAL_LEAN);
+
+        final PlaybookStep visualStep = new PlaybookStep("Verify header banner matches design (visual)");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, visualStep);
+        context.getTransientData().put("semanticVerification.enabled", false);
+
+        final VerifyOutcomeStep step = new VerifyOutcomeStep();
+        step.execute(context);
+
+        Assertions.assertNotNull(visualStep.getScreenshotHash(), "Viewport visual step must record a screenshot hash.");
+        Assertions.assertEquals(ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM, visualStep.getScreenshotHashDim());
+        Assertions.assertFalse(visualStep.isFullPage(), "Viewport visual step must enforce fullPage=false even at VISUAL_LEAN.");
+    }
 }

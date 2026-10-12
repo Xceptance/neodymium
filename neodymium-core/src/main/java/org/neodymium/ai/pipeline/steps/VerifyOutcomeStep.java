@@ -105,30 +105,29 @@ public final class VerifyOutcomeStep implements PipelineStep
             context.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL) instanceof ContextLevel cl
                 ? cl
                 : ContextLevel.MINIMAL;
-        final boolean isVisualExecution = (step != null && step.isVisualOrLayoutStep()) || (activeLevel != null && activeLevel.includesScreenshot());
+        CoordinateTarget coordinateTarget = null;
+        if (step != null && step.getActions() != null)
+        {
+            for (final Action act : step.getActions())
+            {
+                if (act != null && act.getTarget() != null)
+                {
+                    final CoordinateTarget parsed = ClickAction.parseCoordinateTarget(act.getTarget());
+                    if (parsed != null)
+                    {
+                        coordinateTarget = parsed;
+                        break;
+                    }
+                }
+            }
+        }
+        final boolean isVisualExecution = (step != null && step.isVisualOrLayoutStep()) || coordinateTarget != null;
 
-        // 1. Calculate and record visual baseline hash (SSIM matrix) during live/recording execution for visual steps / escalated visual context
+        // 1. Calculate and record visual baseline hash (SSIM matrix) during live/recording execution for visual steps / coordinate targets
         if (executor != null && mode != null && !mode.isReplay() && step != null && isVisualExecution)
         {
             try
             {
-                CoordinateTarget coordinateTarget = null;
-                if (step.getActions() != null)
-                {
-                    for (final Action act : step.getActions())
-                    {
-                        if (act != null && act.getTarget() != null)
-                        {
-                            final CoordinateTarget parsed = ClickAction.parseCoordinateTarget(act.getTarget());
-                            if (parsed != null)
-                            {
-                                coordinateTarget = parsed;
-                                break;
-                            }
-                        }
-                    }
-                }
-
                 if (coordinateTarget != null)
                 {
                     step.setFullPage(false);
@@ -262,14 +261,7 @@ public final class VerifyOutcomeStep implements PipelineStep
                             {
                                 step.setScreenshotHash(ssimMatrix);
                                 step.setScreenshotHashDim(coordinateTarget != null ? ScreenshotHasher.TILE_SSIM_MATRIX_DIM : ScreenshotHasher.DEFAULT_SSIM_MATRIX_DIM);
-                                if (coordinateTarget == null && (isFullPageReq || (activeLevel != null && activeLevel.isFullPageScreenshot())))
-                                {
-                                    step.setFullPage(true);
-                                }
-                                else if (coordinateTarget != null)
-                                {
-                                    step.setFullPage(false);
-                                }
+                                step.setFullPage(isFullPageReq);
                                 final String resolvedInstr = context.getSessionData() != null
                                     ? context.getSessionData().resolveAvailableVariables(step.getInstruction())
                                     : step.getInstruction();
