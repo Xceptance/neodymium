@@ -536,6 +536,163 @@ window.currentLineCount = currentLineCount;
 window.activeLineNum = activeLineNum;
 window.lastCaretOffset = lastCaretOffset;
 
+function findInlineCommentIndex(text) {
+    if (!text || typeof text !== 'string') return -1;
+    let inSingle = false;
+    let inDouble = false;
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const prev = i > 0 ? text[i - 1] : '';
+        if (ch === '"' && prev !== '\\' && !inSingle) {
+            inDouble = !inDouble;
+        } else if (ch === "'" && prev !== '\\' && !inDouble) {
+            inSingle = !inSingle;
+        } else if (ch === '#' && !inSingle && !inDouble) {
+            if (i > 0 && (/\s/.test(prev) || prev === '"' || prev === "'")) {
+                return i;
+            }
+        }
+    }
+    return -1;
+}
+window.findInlineCommentIndex = findInlineCommentIndex;
+
+function getStepRawText(content) {
+    if (!content) return '';
+    const rawAttr = content.getAttribute('data-raw');
+    const hasPills = content.querySelector('.var-pill, .unified-include-pill, .missing-include-pill, .invalid-include-pill, .hint-badge, .substep-folded-badge, .step-inline-comment, .material-symbols-outlined');
+    
+    // If no pills or icon tokens are present, rawAttr or innerText is clean plain text
+    if (!hasPills) {
+        return (rawAttr !== null && rawAttr !== undefined && rawAttr.length > 0) ? rawAttr : (content.innerText || '');
+    }
+    
+    // If not focused, data-raw is the authoritative source of truth
+    const isFocused = (document.activeElement === content || content.contains(document.activeElement));
+    if (!isFocused && rawAttr !== null && rawAttr !== undefined && rawAttr.trim().length > 0) {
+        return rawAttr;
+    }
+    
+    // When focused or if data-raw is missing, reconstruct cleanly from DOM without icon ligatures
+    const clone = content.cloneNode(true);
+    clone.querySelectorAll('.material-symbols-outlined').forEach(el => el.remove());
+    clone.querySelectorAll('.var-pill').forEach(el => {
+        const v = el.getAttribute('data-var') || el.textContent.trim();
+        el.replaceWith(document.createTextNode(`\${${v}}`));
+    });
+    clone.querySelectorAll('.unified-include-pill, .invalid-include-pill, .missing-include-pill').forEach(el => {
+        const r = el.getAttribute('data-raw');
+        if (r) {
+            el.replaceWith(document.createTextNode(r));
+        } else {
+            const txt = el.textContent.trim();
+            el.replaceWith(document.createTextNode(txt));
+        }
+    });
+    clone.querySelectorAll('.substep-folded-badge').forEach(el => {
+        el.replaceWith(document.createTextNode('>-'));
+    });
+    return clone.textContent || '';
+}
+window.getStepRawText = getStepRawText;
+
+function checkAndUpdateCommentRow(stepContentOrRow) {
+    if (!stepContentOrRow) return;
+    const row = stepContentOrRow.classList && stepContentOrRow.classList.contains('step-row') 
+        ? stepContentOrRow 
+        : stepContentOrRow.closest('.step-row');
+    if (!row) return;
+
+    const content = row.querySelector('.step-content');
+    if (!content) return;
+
+    const text = getStepRawText(content).replace(/\r?\n+/g, ' ').trim();
+    const isComment = text.startsWith('#');
+    const wasComment = row.classList.contains('step-row-comment');
+
+    if (isComment && !wasComment) {
+        row.classList.add('step-row-comment');
+        row.classList.remove('step-row-substep', 'substep-last');
+        content.style.color = 'var(--text-secondary, #64748b)';
+        content.style.fontStyle = 'italic';
+        updateAllLineNumbers();
+        refreshAllSubstepToggleBars();
+    } else if (isComment && wasComment) {
+        content.style.color = 'var(--text-secondary, #64748b)';
+        content.style.fontStyle = 'italic';
+        // If followed by substeps, update the group title without full rebuilding
+        const next = row.nextElementSibling;
+        if (next && next.classList.contains('substeps-toggle-bar')) {
+            const titleEl = next.querySelector('.substeps-title');
+            if (titleEl) {
+                const raw = text.replace(/^#\s*/, '').trim();
+                titleEl.textContent = raw || 'Sub-steps';
+            }
+        }
+    } else if (!isComment && wasComment) {
+        row.classList.remove('step-row-comment');
+        content.style.color = '';
+        content.style.fontStyle = '';
+        updateAllLineNumbers();
+        refreshAllSubstepToggleBars();
+    }
+
+    if (!isComment) {
+        const inlineCommentIdx = findInlineCommentIndex(text);
+        const existingInlineSpan = content.querySelector('.step-inline-comment');
+        if (inlineCommentIdx >= 0) {
+            const expectedComment = text.substring(inlineCommentIdx);
+            if (!existingInlineSpan || existingInlineSpan.textContent !== expectedComment) {
+                const caret = getCaretOffset(content);
+                const instruction = text.substring(0, inlineCommentIdx);
+                const safeInstruction = instruction.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                const safeComment = expectedComment.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                content.innerHTML = safeInstruction + `<span class="step-inline-comment">${safeComment}</span>`;
+                setCaretOffset(content, caret);
+            }
+        } else if (existingInlineSpan) {
+            const caret = getCaretOffset(content);
+            content.innerText = text;
+            setCaretOffset(content, caret);
+        }
+
+        const isSubstepPrefix = text.startsWith('>-') || text.startsWith('- >-') || text.startsWith('->-') || text.startsWith('  - ');
+        const isCurrentlySubstep = row.classList.contains('step-row-substep');
+
+        if (isSubstepPrefix && !isCurrentlySubstep) {
+            row.classList.add('step-row-substep');
+            row.setAttribute('data-manual-substep', 'true');
+
+            // Strip the trigger prefix so it is not displayed in the sub-step line
+            let cleanText = text;
+            if (cleanText.startsWith('- >-')) cleanText = cleanText.substring(4).trim();
+            else if (cleanText.startsWith('->-')) cleanText = cleanText.substring(3).trim();
+            else if (cleanText.startsWith('>-')) cleanText = cleanText.substring(2).trim();
+            else if (cleanText.startsWith('  - ')) cleanText = cleanText.substring(4).trim();
+
+            const caret = getCaretOffset(content);
+            const prefixLen = text.length - cleanText.length;
+            const newCaret = Math.max(0, caret - prefixLen);
+
+            content.innerText = cleanText;
+            content.setAttribute('data-raw', cleanText);
+            setCaretOffset(content, newCaret);
+
+            updateAllLineNumbers();
+            refreshAllSubstepToggleBars();
+            compilePlaybookToYaml();
+        }
+    }
+}
+window.checkAndUpdateCommentRow = checkAndUpdateCommentRow;
+
+document.addEventListener('input', function(evt) {
+    const stepContent = evt.target && evt.target.closest ? evt.target.closest('.step-content') : null;
+    if (stepContent) {
+        checkAndUpdateCommentRow(stepContent);
+    }
+});
+
 function initVisualPlaybookEditor() {
     const stepsList = document.getElementById('stepsList');
     if (!stepsList) return;
@@ -559,9 +716,12 @@ function initVisualPlaybookEditor() {
         mainEditor.addEventListener('input', function(evt) {
             const stepContent = evt.target.closest('.step-content');
             if (stepContent) {
+                checkAndUpdateCommentRow(stepContent);
                 const hasPills = stepContent.querySelector('.var-pill, .unified-include-pill, .missing-include-pill, .hint-badge');
                 if (!hasPills) {
                     stepContent.setAttribute('data-raw', stepContent.innerText);
+                } else {
+                    stepContent.setAttribute('data-raw', getStepRawText(stepContent));
                 }
                 compilePlaybookToYaml();
                 debouncedPushSnapshot();
@@ -593,21 +753,49 @@ document.addEventListener('htmx:afterSwap', function(evt) {
 function compilePlaybookToYaml() {
     let yaml = "# Neodymium YAML Test Data File\n\n";
 
+    function serializeStepRows(rows) {
+        let block = "";
+        let inSubstepsGroup = false;
+        rows.forEach(row => {
+            const content = row.querySelector('.step-content');
+            if (content) {
+                const text = getStepRawText(content).replace(/\r?\n+/g, ' ').trim();
+                if (!text) return;
+                if (row.classList.contains('step-row-comment') || text.startsWith('#')) {
+                    inSubstepsGroup = false;
+                    const comment = text.startsWith('#') ? text : `# ${text}`;
+                    block += `  ${comment}\n`;
+                } else if (row.classList.contains('step-row-substep') || text.startsWith('>-') || text.startsWith('- >-') || text.startsWith('->-') || text.startsWith('  - ')) {
+                    if (!inSubstepsGroup) {
+                        block += `  - >-\n`;
+                        inSubstepsGroup = true;
+                    }
+                    let subText = text;
+                    if (subText.startsWith('- >-')) subText = subText.substring(4).trim();
+                    else if (subText.startsWith('->-')) subText = subText.substring(3).trim();
+                    else if (subText.startsWith('>-')) subText = subText.substring(2).trim();
+                    else if (subText.startsWith('  - ')) subText = subText.substring(4).trim();
+                    else if (subText.startsWith('- ') || subText.startsWith('* ')) subText = subText.substring(2).trim();
+                    if (subText) {
+                        block += `    ${subText}\n`;
+                    }
+                } else {
+                    inSubstepsGroup = false;
+                    const cleanText = (text.startsWith('- ') || text.startsWith('* ')) ? text.substring(2).trim() : text;
+                    block += `  ${cleanText}\n`;
+                }
+            }
+        });
+        return block;
+    }
+
     // before block
     const beforeContainer = document.getElementById('beforeStepsList');
     const beforePanel = document.getElementById('beforeCodePanel');
     if (beforePanel && beforePanel.style.display !== 'none' && beforeContainer) {
         const rows = beforeContainer.querySelectorAll(':scope > .step-row');
         if (rows.length > 0) {
-            yaml += "before: |\n";
-            rows.forEach(row => {
-                const content = row.querySelector('.step-content');
-                if (content) {
-                    const raw = content.getAttribute('data-raw') || content.innerText.trim();
-                    if (raw) yaml += `  ${raw}\n`;
-                }
-            });
-            yaml += "\n";
+            yaml += "before: |\n" + serializeStepRows(rows) + "\n";
         }
     }
 
@@ -615,15 +803,7 @@ function compilePlaybookToYaml() {
     const stepsContainer = document.getElementById('stepsList');
     if (stepsContainer) {
         const rows = stepsContainer.querySelectorAll(':scope > .step-row');
-        yaml += "steps: |\n";
-        rows.forEach(row => {
-            const content = row.querySelector('.step-content');
-            if (content) {
-                const raw = content.getAttribute('data-raw') || content.innerText.trim();
-                if (raw) yaml += `  ${raw}\n`;
-            }
-        });
-        yaml += "\n";
+        yaml += "steps: |\n" + serializeStepRows(rows) + "\n";
     }
 
     // after block
@@ -632,15 +812,7 @@ function compilePlaybookToYaml() {
     if (afterPanel && afterPanel.style.display !== 'none' && afterContainer) {
         const rows = afterContainer.querySelectorAll(':scope > .step-row');
         if (rows.length > 0) {
-            yaml += "after: |\n";
-            rows.forEach(row => {
-                const content = row.querySelector('.step-content');
-                if (content) {
-                    const raw = content.getAttribute('data-raw') || content.innerText.trim();
-                    if (raw) yaml += `  ${raw}\n`;
-                }
-            });
-            yaml += "\n";
+            yaml += "after: |\n" + serializeStepRows(rows) + "\n";
         }
     }
 
@@ -670,6 +842,10 @@ function compilePlaybookToYaml() {
     if (hiddenInput) {
         hiddenInput.value = yaml;
     }
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    if (rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
+        rawTextarea.value = yaml;
+    }
     return yaml;
 }
 window.compilePlaybookToYaml = compilePlaybookToYaml;
@@ -686,10 +862,23 @@ function updateAllLineNumbers() {
         const parentPanel = container.closest('.editor-code-panel');
         if (parentPanel && parentPanel.style.display === 'none') return;
 
+        let lastMainStepLine = 1;
+        let substepIndex = 0;
         const rootRows = container.querySelectorAll(':scope > .step-row');
         rootRows.forEach(row => {
             const rootLineNum = row.getAttribute('data-line');
             const numSpan = row.querySelector('.step-number');
+            if (row.classList.contains('step-row-comment')) {
+                if (numSpan) numSpan.innerHTML = '<span class="comment-hash-badge">#</span>';
+                return;
+            }
+            if (row.classList.contains('step-row-substep')) {
+                substepIndex++;
+                if (numSpan) numSpan.innerText = `${lastMainStepLine}.${substepIndex}`;
+                return;
+            }
+            lastMainStepLine = currentLine;
+            substepIndex = 0;
             if (numSpan) numSpan.innerText = currentLine;
             currentLine++;
 
@@ -920,7 +1109,16 @@ function handleStepFocus(lineNum) {
 
     const raw = content.getAttribute('data-raw');
     if (raw !== null && raw !== undefined) {
-        content.innerText = raw;
+        const inlineCommentIdx = findInlineCommentIndex(raw);
+        if (inlineCommentIdx >= 0 && !row.classList.contains('step-row-comment')) {
+            const instruction = raw.substring(0, inlineCommentIdx);
+            const comment = raw.substring(inlineCommentIdx);
+            const safeInstruction = instruction.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const safeComment = comment.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            content.innerHTML = safeInstruction + `<span class="step-inline-comment">${safeComment}</span>`;
+        } else {
+            content.innerText = raw;
+        }
     }
 
     const statLine = document.getElementById('statLine');
@@ -941,6 +1139,8 @@ function handleStepBlur(lineNum) {
         if (currentText !== undefined && currentText !== null) {
             content.setAttribute('data-raw', currentText);
         }
+    } else {
+        content.setAttribute('data-raw', getStepRawText(content));
     }
 
     // Auto-collapse check for empty optional sections
@@ -980,6 +1180,7 @@ window.handleStepBlur = handleStepBlur;
 /* Keyboard Navigation & Caret Operations */
 function handleKeyDown(event, lineNum) {
     const content = event.target;
+    const currentRow = content.closest ? content.closest('.step-row') : document.querySelector(`.step-row[data-line="${lineNum}"]`);
     const currentOffset = getCaretOffset(content);
     const raw = content.getAttribute('data-raw') || content.innerText || '';
 
@@ -1002,6 +1203,23 @@ function handleKeyDown(event, lineNum) {
         const currentOffset = getCaretOffset(contentEl);
         const raw = contentEl.getAttribute('data-raw') || contentEl.innerText || '';
 
+        if (undoDebounceTimer) {
+            clearTimeout(undoDebounceTimer);
+            undoDebounceTimer = null;
+            pushEditorSnapshot(false);
+        }
+
+        // If Enter is pressed in an empty sub-step line (e.g. second Enter in sub-steps area), exit the sub-steps area
+        if (currentRow && currentRow.classList.contains('step-row-substep') && raw.trim() === '') {
+            currentRow.classList.remove('step-row-substep', 'substep-last');
+            currentRow.removeAttribute('data-manual-substep');
+            updateAllLineNumbers();
+            refreshAllSubstepToggleBars();
+            compilePlaybookToYaml();
+            if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+            return;
+        }
+
         const headText = raw.substring(0, currentOffset).replace(/[\r\n]+/g, ' ').trim();
         const tailText = raw.substring(currentOffset).replace(/[\r\n]+/g, ' ').trim();
 
@@ -1020,11 +1238,31 @@ function handleKeyDown(event, lineNum) {
             }
         }
         compilePlaybookToYaml();
-        if (typeof debouncedPushSnapshot === 'function') debouncedPushSnapshot();
+        if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
     } else if (event.key === 'Backspace' && currentOffset === 0) {
+        if (currentRow.classList.contains('step-row-substep')) {
+            event.preventDefault();
+            if (undoDebounceTimer) {
+                clearTimeout(undoDebounceTimer);
+                undoDebounceTimer = null;
+                pushEditorSnapshot(false);
+            }
+            currentRow.classList.remove('step-row-substep', 'substep-last');
+            currentRow.removeAttribute('data-manual-substep');
+            updateAllLineNumbers();
+            refreshAllSubstepToggleBars();
+            compilePlaybookToYaml();
+            if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
+            return;
+        }
         const prevRow = document.querySelector(`.step-row[data-line="${lineNum - 1}"]`);
         if (prevRow) {
             event.preventDefault();
+            if (undoDebounceTimer) {
+                clearTimeout(undoDebounceTimer);
+                undoDebounceTimer = null;
+                pushEditorSnapshot(false);
+            }
             const prevContent = prevRow.querySelector('.step-content');
             if (prevContent) {
                 const prevRaw = prevContent.getAttribute('data-raw') || prevContent.innerText || '';
@@ -1036,13 +1274,18 @@ function handleKeyDown(event, lineNum) {
                 deleteStep(lineNum);
                 focusLine(lineNum - 1, joinOffset);
                 compilePlaybookToYaml();
-                if (typeof debouncedPushSnapshot === 'function') debouncedPushSnapshot();
+                if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
             }
         }
     } else if (event.key === 'Delete' && currentOffset >= raw.length) {
         const nextRow = document.querySelector(`.step-row[data-line="${lineNum + 1}"]`);
         if (nextRow) {
             event.preventDefault();
+            if (undoDebounceTimer) {
+                clearTimeout(undoDebounceTimer);
+                undoDebounceTimer = null;
+                pushEditorSnapshot(false);
+            }
             const nextContent = nextRow.querySelector('.step-content');
             if (nextContent) {
                 const nextRaw = nextContent.getAttribute('data-raw') || nextContent.innerText || '';
@@ -1053,7 +1296,7 @@ function handleKeyDown(event, lineNum) {
                 deleteStep(lineNum + 1);
                 focusLine(lineNum, currentOffset);
                 compilePlaybookToYaml();
-                if (typeof debouncedPushSnapshot === 'function') debouncedPushSnapshot();
+                if (typeof pushEditorSnapshot === 'function') pushEditorSnapshot(false);
             }
         }
     }
@@ -1088,11 +1331,16 @@ function insertStepBelow(lineNum, initialText = '') {
     newRow.className = 'step-row';
     newRow.setAttribute('data-line', currentLineCount);
 
+    if (targetRow && targetRow.classList.contains('step-row-substep')) {
+        newRow.classList.add('step-row-substep');
+        newRow.setAttribute('data-manual-substep', 'true');
+    }
+
     const safeInitial = (initialText || '').replace(/"/g, '&quot;');
 
     newRow.innerHTML = `
         <span class="step-number">${currentLineCount}</span>
-        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})">${safeInitial}</div>
+        <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${safeInitial}" onkeydown="handleKeyDown(event, ${currentLineCount})" onfocus="handleStepFocus(${currentLineCount})" onblur="handleStepBlur(${currentLineCount})" oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${safeInitial}</div>
         <div class="step-actions">
             <button class="icon-btn danger" onclick="deleteStep(${currentLineCount})"><span class="material-symbols-outlined">delete</span></button>
         </div>
@@ -1129,6 +1377,7 @@ function reindexSteps() {
                 content.setAttribute('onkeydown', `handleKeyDown(event, ${lNum})`);
                 content.setAttribute('onfocus', `handleStepFocus(${lNum})`);
                 content.setAttribute('onblur', `handleStepBlur(${lNum})`);
+                content.setAttribute('oninput', `if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);`);
             }
             const delBtn = row.querySelector('.step-actions .icon-btn');
             if (delBtn) {
@@ -1137,9 +1386,257 @@ function reindexSteps() {
         });
     });
     updateAllLineNumbers();
+    refreshAllSubstepToggleBars();
     compilePlaybookToYaml();
 }
 window.reindexSteps = reindexSteps;
+
+function toggleSubsteps(toggleBar) {
+    if (!toggleBar) return;
+    toggleBar.classList.toggle('collapsed');
+    const isCollapsed = toggleBar.classList.contains('collapsed');
+    let next = toggleBar.nextElementSibling;
+    while (next && next.classList.contains('step-row-substep')) {
+        next.style.display = isCollapsed ? 'none' : 'flex';
+        next = next.nextElementSibling;
+    }
+}
+window.toggleSubsteps = toggleSubsteps;
+
+function handleSubstepTitleClick(event, el) {
+    if (event) {
+        event.stopPropagation();
+    }
+}
+window.handleSubstepTitleClick = handleSubstepTitleClick;
+
+function handleSubstepTitleKeyDown(event, el) {
+    if (!el) return;
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+        el.blur();
+        return;
+    }
+    if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        el.blur();
+        return;
+    }
+    event.stopPropagation();
+}
+window.handleSubstepTitleKeyDown = handleSubstepTitleKeyDown;
+
+function handleSubstepTitleFocus(el) {
+    if (!el) return;
+    if (el.innerText.trim() === 'Sub-steps') {
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        const sel = window.getSelection();
+        if (sel) {
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+    }
+}
+window.handleSubstepTitleFocus = handleSubstepTitleFocus;
+
+function handleSubstepTitleInput(el) {
+    if (!el) return;
+    const toggleBar = el.closest('.substeps-toggle-bar');
+    if (!toggleBar) return;
+    const container = toggleBar.parentElement;
+    if (!container) return;
+
+    const raw = (el.innerText || '').trim();
+    const prev = toggleBar.previousElementSibling;
+    if (prev && prev.classList.contains('step-row-comment')) {
+        const commentContent = prev.querySelector('.step-content');
+        if (commentContent) {
+            const commentText = raw && raw !== 'Sub-steps' ? `# ${raw}` : '#';
+            commentContent.innerText = commentText;
+            commentContent.setAttribute('data-raw', commentText);
+        }
+    } else if (raw && raw !== 'Sub-steps') {
+        currentLineCount++;
+        const lineId = currentLineCount;
+        const newRow = document.createElement('div');
+        newRow.className = 'step-row step-row-comment';
+        newRow.setAttribute('data-line', lineId);
+        const commentText = `# ${raw}`;
+        newRow.innerHTML = `
+            <span class="step-number"><span class="comment-hash-badge">#</span></span>
+            <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${commentText.replace(/"/g, '&quot;')}"
+                 style="color: var(--text-secondary, #64748b); font-style: italic;"
+                 onkeydown="handleKeyDown(event, ${lineId})"
+                 onfocus="handleStepFocus(${lineId})"
+                 onblur="handleStepBlur(${lineId})"
+                 oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${commentText}</div>
+            <div class="step-actions">
+                <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+            </div>
+        `;
+        container.insertBefore(newRow, toggleBar);
+        updateAllLineNumbers();
+    }
+    compilePlaybookToYaml();
+    checkEditorDirtyStatus();
+}
+window.handleSubstepTitleInput = handleSubstepTitleInput;
+
+function handleSubstepTitleBlur(el) {
+    if (!el) return;
+    const toggleBar = el.closest('.substeps-toggle-bar');
+    if (!toggleBar) return;
+    const container = toggleBar.parentElement;
+    if (!container) return;
+
+    const raw = (el.innerText || '').trim();
+    const prev = toggleBar.previousElementSibling;
+
+    if (!raw || raw === 'Sub-steps') {
+        el.innerText = 'Sub-steps';
+        if (prev && prev.classList.contains('step-row-comment')) {
+            const commentContent = prev.querySelector('.step-content');
+            const commentText = (commentContent ? (commentContent.innerText || '') : '').trim();
+            if (commentText === '#' || commentText === '' || commentText === '# Sub-steps') {
+                prev.remove();
+                updateAllLineNumbers();
+            }
+        }
+    } else {
+        if (prev && prev.classList.contains('step-row-comment')) {
+            const commentContent = prev.querySelector('.step-content');
+            if (commentContent) {
+                const commentText = `# ${raw}`;
+                commentContent.innerText = commentText;
+                commentContent.setAttribute('data-raw', commentText);
+            }
+        } else {
+            currentLineCount++;
+            const lineId = currentLineCount;
+            const newRow = document.createElement('div');
+            newRow.className = 'step-row step-row-comment';
+            newRow.setAttribute('data-line', lineId);
+            const commentText = `# ${raw}`;
+            newRow.innerHTML = `
+                <span class="step-number"><span class="comment-hash-badge">#</span></span>
+                <div class="step-content" contenteditable="true" spellcheck="false" data-raw="${commentText.replace(/"/g, '&quot;')}"
+                     style="color: var(--text-secondary, #64748b); font-style: italic;"
+                     onkeydown="handleKeyDown(event, ${lineId})"
+                     onfocus="handleStepFocus(${lineId})"
+                     onblur="handleStepBlur(${lineId})"
+                     oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);">${commentText}</div>
+                <div class="step-actions">
+                    <button type="button" class="icon-btn btn-move-up" title="Move Step Up" onclick="moveStep(${lineId}, -1)"><span class="material-symbols-outlined">keyboard_arrow_up</span></button>
+                    <button type="button" class="icon-btn btn-move-down" title="Move Step Down" onclick="moveStep(${lineId}, 1)"><span class="material-symbols-outlined">keyboard_arrow_down</span></button>
+                    <button type="button" class="icon-btn danger btn-delete-step" title="Delete Step" onclick="deleteStep(${lineId})"><span class="material-symbols-outlined">delete</span></button>
+                </div>
+            `;
+            container.insertBefore(newRow, toggleBar);
+            updateAllLineNumbers();
+        }
+    }
+    compilePlaybookToYaml();
+    checkEditorDirtyStatus();
+    if (typeof debouncedPushSnapshot === 'function') {
+        debouncedPushSnapshot();
+    }
+}
+window.handleSubstepTitleBlur = handleSubstepTitleBlur;
+
+function refreshSubstepToggleBars(container) {
+    if (!container) return;
+
+    container.querySelectorAll('.substeps-toggle-bar').forEach(bar => bar.remove());
+    container.querySelectorAll('.step-row-substep').forEach(row => {
+        row.classList.remove('substep-last');
+    });
+
+    const children = Array.from(container.children);
+    let i = 0;
+    while (i < children.length) {
+        if (children[i].classList.contains('step-row-substep')) {
+            const startRow = children[i];
+            let count = 0;
+            let lastSubstep = startRow;
+
+            // Extract group title from preceding comment or step
+            let groupTitle = 'Sub-steps';
+            const prev = startRow.previousElementSibling;
+            if (prev && prev.classList.contains('step-row-comment')) {
+                const commentContent = prev.querySelector('.step-content');
+                if (commentContent) {
+                    const raw = commentContent.innerText.replace(/^#\s*/, '').trim();
+                    if (raw) {
+                        groupTitle = raw;
+                    }
+                }
+            }
+
+            while (i < children.length && children[i].classList.contains('step-row-substep')) {
+                lastSubstep = children[i];
+                count++;
+                i++;
+            }
+            if (lastSubstep) {
+                lastSubstep.classList.add('substep-last');
+            }
+            if (count > 0) {
+                const toggleBar = document.createElement('div');
+                toggleBar.className = 'substeps-toggle-bar substeps-group-header';
+                toggleBar.setAttribute('onclick', 'toggleSubsteps(this)');
+
+                const headerLeft = document.createElement('div');
+                headerLeft.className = 'substeps-header-left';
+
+                const chevron = document.createElement('span');
+                chevron.className = 'material-symbols-outlined toggle-chevron';
+                chevron.textContent = 'expand_more';
+
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'substeps-title';
+                titleSpan.contentEditable = 'true';
+                titleSpan.spellcheck = false;
+                titleSpan.title = 'Click to rename sub-steps block';
+                titleSpan.textContent = groupTitle;
+                titleSpan.setAttribute('onclick', 'handleSubstepTitleClick(event, this)');
+                titleSpan.setAttribute('onkeydown', 'handleSubstepTitleKeyDown(event, this)');
+                titleSpan.setAttribute('onfocus', 'handleSubstepTitleFocus(this)');
+                titleSpan.setAttribute('oninput', 'handleSubstepTitleInput(this)');
+                titleSpan.setAttribute('onblur', 'handleSubstepTitleBlur(this)');
+
+                headerLeft.appendChild(chevron);
+                headerLeft.appendChild(titleSpan);
+
+                const badge = document.createElement('span');
+                badge.className = 'substeps-count-badge';
+                badge.textContent = `${count} sub-step${count > 1 ? 's' : ''}`;
+
+                toggleBar.appendChild(headerLeft);
+                toggleBar.appendChild(badge);
+
+                container.insertBefore(toggleBar, startRow);
+            }
+        } else {
+            i++;
+        }
+    }
+}
+window.refreshSubstepToggleBars = refreshSubstepToggleBars;
+
+function refreshAllSubstepToggleBars() {
+    ['#beforeStepsList', '#stepsList', '#afterStepsList'].forEach(sel => {
+        const container = document.querySelector(sel);
+        if (container) {
+            refreshSubstepToggleBars(container);
+        }
+    });
+}
+window.refreshAllSubstepToggleBars = refreshAllSubstepToggleBars;
 
 /* Token Rendering Parser */
 function formatStepToTokens(lineNum) {
@@ -1148,27 +1645,50 @@ function formatStepToTokens(lineNum) {
     const content = row.querySelector('.step-content');
     if (!content) return;
 
-    const rawText = content.getAttribute('data-raw') || content.innerText;
+    const rawText = getStepRawText(content);
     if (!rawText) return;
+    content.setAttribute('data-raw', rawText);
 
-    let safeText = rawText.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    checkAndUpdateCommentRow(row);
+
+    if (row.classList.contains('step-row-comment')) {
+        content.innerText = rawText;
+        return;
+    }
+
+    const inlineCommentIdx = findInlineCommentIndex(rawText);
+    const instructionPart = inlineCommentIdx >= 0 ? rawText.substring(0, inlineCommentIdx) : rawText;
+    const commentPart = inlineCommentIdx >= 0 ? rawText.substring(inlineCommentIdx) : '';
+
+    let safeText = instructionPart.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+    if (row.classList.contains('step-row-substep')) {
+        safeText = safeText.replace(/^(?:-\s*)?&gt;-\s*/, '');
+    } else {
+        safeText = safeText.replace(/(^|\s)(?:-\s*)?&gt;-(?=\s|$)/g, '$1<span class="substep-folded-badge">&gt;-</span>');
+    }
 
     safeText = safeText.replace(/(#[a-zA-Z0-9_\-]+)/g, '<span class="hint-badge">$1</span>');
 
     safeText = safeText.replace(/_include:\s*([a-zA-Z0-9_\/\.\-]*missing[a-zA-Z0-9_\/\.\-]*)/g, function(match, path) {
-        return `<span class="missing-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">error</span>Missing Include: ${path}</span>`;
+        return `<span class="missing-include-pill" data-raw="${match.replace(/"/g, '&quot;')}" contenteditable="false"><span class="material-symbols-outlined pill-icon">error</span>Missing Include: ${path}</span>`;
     });
 
     safeText = safeText.replace(/_include:\s*([a-zA-Z0-9_\/\.\-]+)/g, function(match, path) {
         const filename = path.split('/').pop();
-        return `<span class="unified-include-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${lineNum}', '${path}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
+        return `<span class="unified-include-pill" data-raw="${match.replace(/"/g, '&quot;')}" contenteditable="false"><span class="material-symbols-outlined pill-icon">extension</span><span>include: ${filename}</span><span class="material-symbols-outlined hover-arrow" onmousedown="handleArrowMouseDown(event, '${lineNum}', '${path}')" title="Toggle steps for ${filename}">expand_more</span></span>`;
     });
 
     safeText = safeText.replace(/\$\{([a-zA-Z0-9_\.]+)\}/g, function(match, name) {
-        return `<span class="var-pill" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
+        return `<span class="var-pill" data-var="${name}" contenteditable="false"><span class="material-symbols-outlined pill-icon">data_object</span>${name}</span>`;
     });
 
-    content.innerHTML = safeText;
+    if (inlineCommentIdx >= 0) {
+        const safeComment = commentPart.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        content.innerHTML = safeText + `<span class="step-inline-comment">${safeComment}</span>`;
+    } else {
+        content.innerHTML = safeText;
+    }
 }
 window.formatStepToTokens = formatStepToTokens;
 
@@ -1598,11 +2118,29 @@ function getEditorSnapshot() {
         rows.forEach(row => {
             const content = row.querySelector('.step-content');
             if (content) {
-                list.push(content.getAttribute('data-raw') || content.innerText.trim());
+                list.push({
+                    text: content.getAttribute('data-raw') || content.innerText.trim(),
+                    isSubstep: row.classList.contains('step-row-substep'),
+                    isManualSubstep: row.getAttribute('data-manual-substep') === 'true',
+                    isComment: row.classList.contains('step-row-comment')
+                });
             }
         });
         return list;
     };
+
+    let activeLine = null;
+    let activeCaret = 0;
+    const activeEl = document.activeElement;
+    if (activeEl && activeEl.classList.contains('step-content')) {
+        const row = activeEl.closest('.step-row');
+        if (row) {
+            activeLine = row.getAttribute('data-line');
+            if (typeof getCaretOffset === 'function') {
+                activeCaret = getCaretOffset(activeEl);
+            }
+        }
+    }
 
     const beforePanel = document.getElementById('beforeCodePanel');
     const hasBefore = beforePanel && beforePanel.style.display !== 'none';
@@ -1628,7 +2166,9 @@ function getEditorSnapshot() {
         beforeSteps: captureBlock('beforeStepsList'),
         steps: captureBlock('stepsList'),
         afterSteps: captureBlock('afterStepsList'),
-        matrixData
+        matrixData,
+        activeLine,
+        activeCaret
     };
 }
 window.getEditorSnapshot = getEditorSnapshot;
@@ -1683,10 +2223,18 @@ function restoreEditorSnapshot(snap) {
         const container = document.getElementById(containerId);
         if (!container) return;
         container.innerHTML = '';
-        (stepArray || []).forEach((stepText, idx) => {
+        (stepArray || []).forEach((stepItem, idx) => {
             const lineNum = idx + 1;
+            const stepText = (typeof stepItem === 'object' && stepItem !== null) ? (stepItem.text || '') : (stepItem || '');
+            const isSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isSubstep) : false;
+            const isManualSubstep = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isManualSubstep) : false;
+            const isComment = (typeof stepItem === 'object' && stepItem !== null) ? Boolean(stepItem.isComment) : false;
+
             const row = document.createElement('div');
-            row.className = 'step-row';
+            row.className = 'step-row' + (isSubstep ? ' step-row-substep' : '') + (isComment ? ' step-row-comment' : '');
+            if (isManualSubstep) {
+                row.setAttribute('data-manual-substep', 'true');
+            }
             row.setAttribute('data-line', lineNum);
             row.innerHTML = `
                 <span class="step-number">${lineNum}</span>
@@ -1694,7 +2242,8 @@ function restoreEditorSnapshot(snap) {
                      data-raw="${stepText.replace(/"/g, '&quot;')}"
                      onkeydown="handleKeyDown(event, ${lineNum})"
                      onfocus="handleStepFocus(${lineNum})"
-                     onblur="handleStepBlur(${lineNum})"></div>
+                     onblur="handleStepBlur(${lineNum})"
+                     oninput="if(typeof checkAndUpdateCommentRow==='function') checkAndUpdateCommentRow(this);"></div>
                 <div class="step-actions">
                     <button class="icon-btn danger" onclick="deleteStep(${lineNum})"><span class="material-symbols-outlined">delete</span></button>
                 </div>
@@ -1734,19 +2283,46 @@ function restoreEditorSnapshot(snap) {
     compilePlaybookToYaml();
     checkEditorDirtyStatus();
     updateUndoRedoUI();
+
+    if (snap.activeLine) {
+        const row = document.querySelector(`.step-row[data-line="${snap.activeLine}"]`);
+        if (row) {
+            const content = row.querySelector('.step-content');
+            if (content) {
+                content.focus();
+                if (typeof setCaretOffset === 'function' && typeof snap.activeCaret === 'number') {
+                    setCaretOffset(content, snap.activeCaret);
+                }
+            }
+        }
+    }
 }
 window.restoreEditorSnapshot = restoreEditorSnapshot;
 
 function editorUndo() {
+    clearTimeout(undoDebounceTimer);
+    undoDebounceTimer = null;
+
+    const currentSnap = getEditorSnapshot();
+    const lastSnap = undoStack.length > 0 ? undoStack[undoStack.length - 1] : null;
+
+    if (lastSnap && JSON.stringify(lastSnap) !== JSON.stringify(currentSnap)) {
+        redoStack.push(currentSnap);
+        restoreEditorSnapshot(lastSnap);
+        return;
+    }
+
     if (undoStack.length <= 1) return;
-    const currentSnap = undoStack.pop();
-    redoStack.push(currentSnap);
+    const currentPopped = undoStack.pop();
+    redoStack.push(currentPopped);
     const prevSnap = undoStack[undoStack.length - 1];
     restoreEditorSnapshot(prevSnap);
 }
 window.editorUndo = editorUndo;
 
 function editorRedo() {
+    clearTimeout(undoDebounceTimer);
+    undoDebounceTimer = null;
     if (redoStack.length === 0) return;
     const nextSnap = redoStack.pop();
     undoStack.push(nextSnap);

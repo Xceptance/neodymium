@@ -3165,9 +3165,19 @@ function renderStepsForExecution(activeRow) {
                         healedBadge = `<div class="action-healed-from" style="width: 100%; display: flex; align-items: center; gap: 0.35rem; margin-top: 0.25rem; font-size: 0.78rem; color: #7e22ce;"><span>🧬 Healed from:</span> <span style="display: inline-block; padding: 0.1rem 0.4rem; background: #f3e8ff; border: 1px solid #d8b4fe; border-radius: 4px; text-decoration: line-through; color: #7e22ce; font-family: monospace;">${escapeHtml(origTarget)}</span></div>`;
                     }
 
+                    let subStepBadge = '';
+                    if (act.subStepInstruction || (act.subStepIndex !== undefined && act.subStepIndex !== null)) {
+                        const subNum = (act.subStepIndex !== undefined && act.subStepIndex !== null)
+                            ? `#${stepNum}.${act.subStepIndex + 1}`
+                            : '';
+                        const subText = act.subStepInstruction ? escapeHtml(act.subStepInstruction) : '';
+                        subStepBadge = `<span class="substep-attribution-pill" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; padding: 1px 6px; border-radius: 4px; background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; font-weight: 600;" title="${subText}">${subNum ? `${subNum} ` : ''}${subText}</span>`;
+                    }
+
                     actionsHtml += `
                         <div class="action-item-pill-row${successModifier}">
                             ${successBadge}
+                            ${subStepBadge}
                             <span class="action-type-pill">${actName}</span>
                             <span class="action-code-text">${escapeHtml(actTarget)}${escapeHtml(actVal)}${escapeHtml(actDesc)}</span>
                             ${healedBadge}
@@ -5105,6 +5115,61 @@ window.populateTbSideBatchMultiselect = populateTbSideBatchMultiselect;
 window.filterTbVariationHistoryTable = filterTbVariationHistoryTable;
 window.initPanelResizer = initPanelResizer;
 window.sortVariationHistoryTable = sortVariationHistoryTable;
+
+function deleteRunFromHistory(runId, event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    if (!runId) return;
+
+    const cleanRunId = String(runId).replace(/^#+/, '');
+    if (!confirm(`Are you sure you want to remove run #${cleanRunId} from history?\n\nThis will remove it from all run tables, batch history, and Test Base variation history.`)) {
+        return;
+    }
+
+    const currentUrl = window.location.href;
+    fetch(`/runs/${encodeURIComponent(cleanRunId)}/delete`, {
+        method: 'POST',
+        headers: {
+            'HX-Request': 'true',
+            'HX-Current-URL': currentUrl
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`Failed to remove run: HTTP ${response.status}`);
+        }
+        return response.text();
+    })
+    .then(html => {
+        const container = document.getElementById('mainViewContainer');
+        if (container) {
+            container.innerHTML = html;
+            if (window.htmx) {
+                htmx.process(container);
+            }
+        }
+        // If we are currently showing a side panel for variation history, reload it
+        const varDrawer = document.getElementById('variationHistoryDrawer');
+        if (varDrawer && varDrawer.classList.contains('active')) {
+            const activeRow = document.querySelector('.tb-entry-row.selected');
+            if (activeRow) {
+                const testClass = activeRow.getAttribute('data-test-name') || '';
+                const testMethod = activeRow.getAttribute('data-test-method') || '';
+                const dataSet = activeRow.getAttribute('data-dataset') || '';
+                const loc = activeRow.getAttribute('data-location') || '';
+                const browser = activeRow.getAttribute('data-browser') || '';
+                loadTestBaseVariationHistory(testClass, testMethod, dataSet, loc, browser);
+            }
+        }
+    })
+    .catch(err => {
+        alert('Could not remove run from history: ' + err.message);
+    });
+}
+
+window.deleteRunFromHistory = deleteRunFromHistory;
 
 
 

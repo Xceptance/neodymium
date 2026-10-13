@@ -1030,4 +1030,346 @@ public class YamlPlaybookParserTest
         assertNull(s2.getDurationMs(), "Step 2 duration must be reset to null");
         assertNull(s2.getStartTimeMs(), "Step 2 startTimeMs must be reset to null");
     }
+
+    @Test
+    public void testParsePlaybookWithFoldedBlockScalarSteps() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - Click the "Add to Cart" button.
+              - >-
+                Verify the cart header is displayed.
+                Verify the cart items section is displayed.
+                Verify the product is displayed in the cart.
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("self-include-test.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("self-include-test.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getSteps().size(), "Folded block scalar lines must be grouped under a composite parent step");
+        assertEquals("Click the \"Add to Cart\" button.", playbook.getSteps().get(0).getInstruction());
+        final PlaybookStep parent = playbook.getSteps().get(1);
+        assertEquals("Detailed verification", parent.getInstruction());
+        assertTrue(parent.hasSubSteps());
+        assertEquals(3, parent.getSubSteps().size());
+        assertEquals("Verify the cart header is displayed.", parent.getSubSteps().get(0).getInstruction());
+        assertEquals("Verify the cart items section is displayed.", parent.getSubSteps().get(1).getInstruction());
+        assertEquals("Verify the product is displayed in the cart.", parent.getSubSteps().get(2).getInstruction());
+        assertEquals(parent, parent.getSubSteps().get(0).getParent());
+    }
+
+    @Test
+    public void testParsePlaybookWithCommentPrecedingFoldedBlockScalar() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - Click the "Add to Cart" button.
+              # Detailed verification of the cart page
+              - >-
+                Verify the cart header is displayed.
+                Verify the cart items section is displayed.
+                Verify the product is displayed in the cart.
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("self-include-comment.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("self-include-comment.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getSteps().size());
+        assertEquals("Click the \"Add to Cart\" button.", playbook.getSteps().get(0).getInstruction());
+        final PlaybookStep parent = playbook.getSteps().get(1);
+        assertEquals("Detailed verification of the cart page", parent.getInstruction());
+        assertTrue(parent.hasSubSteps());
+        assertEquals(3, parent.getSubSteps().size());
+        assertEquals("Verify the cart header is displayed.", parent.getSubSteps().get(0).getInstruction());
+        assertEquals(parent, parent.getSubSteps().get(0).getParent());
+    }
+
+    @Test
+    public void testParsePlaybookWithFoldedBlockScalarChompedSteps() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - >-
+                Verify the cart header is displayed.
+                Verify the cart items section is displayed.
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("chomped-folded.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("chomped-folded.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getSteps().size());
+        final PlaybookStep parent = playbook.getSteps().get(0);
+        assertTrue(parent.hasSubSteps());
+        assertEquals(2, parent.getSubSteps().size());
+        assertEquals("Verify the cart header is displayed.", parent.getSubSteps().get(0).getInstruction());
+        assertEquals("Verify the cart items section is displayed.", parent.getSubSteps().get(1).getInstruction());
+    }
+
+    @Test
+    public void testParsePlaybookWithInlineCommentOnFoldedBlockScalar() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - >- # Cart verification
+                Verify the cart header is displayed.
+                Verify the cart items section is displayed.
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("inline-comment-folded.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("inline-comment-folded.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getSteps().size());
+        final PlaybookStep parent = playbook.getSteps().get(0);
+        assertEquals("Cart verification", parent.getInstruction());
+        assertTrue(parent.hasSubSteps());
+        assertEquals(2, parent.getSubSteps().size());
+        assertEquals("Verify the cart header is displayed.", parent.getSubSteps().get(0).getInstruction());
+        assertEquals("Verify the cart items section is displayed.", parent.getSubSteps().get(1).getInstruction());
+    }
+
+    @Test
+    public void testParsePlaybookWithLiteralBlockScalarSteps() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - |
+                Verify subtotal is displayed.
+                Verify total is displayed.
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("literal-scalar.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("literal-scalar.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getSteps().size(), "Literal scalar without - >- must parse as normal steps");
+        assertFalse(playbook.getSteps().get(0).hasSubSteps());
+        assertEquals("Verify subtotal is displayed.", playbook.getSteps().get(0).getInstruction());
+        assertFalse(playbook.getSteps().get(1).hasSubSteps());
+        assertEquals("Verify total is displayed.", playbook.getSteps().get(1).getInstruction());
+    }
+
+    @Test
+    public void testParsePlaybookWithPlainFoldedScalarWithoutDashIsNormalSteps() throws IOException
+    {
+        final String yamlContent = """
+            steps:
+              - >
+                Step 1
+                Step 2
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("plain-folded.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("plain-folded.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getSteps().size(), "Folded scalar without - >- must parse as normal steps");
+        assertFalse(playbook.getSteps().get(0).hasSubSteps());
+        assertEquals("Step 1", playbook.getSteps().get(0).getInstruction());
+        assertFalse(playbook.getSteps().get(1).hasSubSteps());
+        assertEquals("Step 2", playbook.getSteps().get(1).getInstruction());
+    }
+
+    @Test
+    public void testParsePlaybookWithMultilineBlockScalarAndFoldedSubsteps() throws IOException
+    {
+        final String yamlContent = """
+            steps: |
+              Open https://verla.xceptance.com/index.html
+              Locate product card and click Add
+              # Verification block
+              - >-
+                Verify the cart header is displayed.
+                Verify the cart items section is displayed.
+              Click checkout button
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("multiline-substeps.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("multiline-substeps.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(4, playbook.getSteps().size(), "Must parse 3 top-level steps and 1 parent step containing substeps");
+        assertEquals("Open https://verla.xceptance.com/index.html", playbook.getSteps().get(0).getInstruction());
+        assertFalse(playbook.getSteps().get(0).hasSubSteps());
+
+        assertEquals("Locate product card and click Add", playbook.getSteps().get(1).getInstruction());
+        assertFalse(playbook.getSteps().get(1).hasSubSteps());
+
+        final PlaybookStep parent = playbook.getSteps().get(2);
+        assertEquals("Verification block", parent.getInstruction());
+        assertTrue(parent.hasSubSteps());
+        assertEquals(2, parent.getSubSteps().size());
+        assertEquals("Verify the cart header is displayed.", parent.getSubSteps().get(0).getInstruction());
+        assertEquals("Verify the cart items section is displayed.", parent.getSubSteps().get(1).getInstruction());
+
+        assertEquals("Click checkout button", playbook.getSteps().get(3).getInstruction());
+        assertFalse(playbook.getSteps().get(3).hasSubSteps());
+    }
+
+    @Test
+    public void testParsePlaybookWithArrowSubstepsAndComment() throws IOException
+    {
+        final String yamlContent = """
+            steps: |
+              Navigate to homepage
+              # Detailed verification of the cart page
+              ->-
+              Verify the cart header is displayed.
+              Verify the cart items section is displayed.
+              Verify the product is displayed in the cart.
+              - Click checkout button
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("arrow-with-comment.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("arrow-with-comment.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(3, playbook.getSteps().size(), "Must contain 3 top-level steps: Navigate, parent arrow step, and Click checkout");
+        assertEquals("Navigate to homepage", playbook.getSteps().get(0).getInstruction());
+        assertFalse(playbook.getSteps().get(0).hasSubSteps());
+
+        final PlaybookStep parent = playbook.getSteps().get(1);
+        assertEquals("Detailed verification of the cart page", parent.getInstruction());
+        assertTrue(parent.hasSubSteps());
+        assertEquals(3, parent.getSubSteps().size());
+        assertEquals("Verify the cart header is displayed.", parent.getSubSteps().get(0).getInstruction());
+        assertEquals("Verify the cart items section is displayed.", parent.getSubSteps().get(1).getInstruction());
+        assertEquals("Verify the product is displayed in the cart.", parent.getSubSteps().get(2).getInstruction());
+        assertEquals(parent, parent.getSubSteps().get(0).getParent());
+
+        assertEquals("Click checkout button", playbook.getSteps().get(2).getInstruction());
+        assertFalse(playbook.getSteps().get(2).hasSubSteps());
+    }
+
+    @Test
+    public void testParsePlaybookWithArrowSubstepsWithoutComment() throws IOException
+    {
+        final String yamlContent = """
+            steps: |
+              Navigate to homepage
+              ->-
+              Verify the cart header is displayed.
+              Verify the cart items section is displayed.
+              - Click checkout button
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("arrow-without-comment.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("arrow-without-comment.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(3, playbook.getSteps().size());
+        assertEquals("Navigate to homepage", playbook.getSteps().get(0).getInstruction());
+
+        final PlaybookStep parent = playbook.getSteps().get(1);
+        assertEquals("Substeps begining with Verify the cart header is displayed.", parent.getInstruction());
+        assertTrue(parent.hasSubSteps());
+        assertEquals(2, parent.getSubSteps().size());
+        assertEquals("Verify the cart header is displayed.", parent.getSubSteps().get(0).getInstruction());
+        assertEquals("Verify the cart items section is displayed.", parent.getSubSteps().get(1).getInstruction());
+        assertEquals(parent, parent.getSubSteps().get(0).getParent());
+
+        assertEquals("Click checkout button", playbook.getSteps().get(2).getInstruction());
+    }
+
+    @Test
+    public void testParsePlaybookWithArrowSubstepsInlineAndTermination() throws IOException
+    {
+        final String yamlContent = """
+            steps: |
+              ->- Verify header is displayed.
+              Verify items section is displayed.
+              - Continue to payment
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("arrow-inline.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("arrow-inline.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getSteps().size());
+        final PlaybookStep parent = playbook.getSteps().get(0);
+        assertEquals("Substeps begining with Verify header is displayed.", parent.getInstruction());
+        assertTrue(parent.hasSubSteps());
+        assertEquals(2, parent.getSubSteps().size());
+        assertEquals("Verify header is displayed.", parent.getSubSteps().get(0).getInstruction());
+        assertEquals("Verify items section is displayed.", parent.getSubSteps().get(1).getInstruction());
+        assertEquals("Continue to payment", playbook.getSteps().get(1).getInstruction());
+    }
+
+    @Test
+    public void testParsePlaybookWithArrowSubstepsIncludingFragments() throws IOException
+    {
+        final String fragmentContent = """
+            - Set quantity to 1
+            - Click add to cart button
+            """;
+        final String mainYaml = """
+            steps: |
+              # Add to cart
+              - >-
+                Open search field
+                Type yoyo into search field
+                _include: fragments/cart.steps
+              - Proceed to checkout
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("fragments/cart.steps", fragmentContent);
+        manager.write("main.yaml", mainYaml);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("main.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getSteps().size(), "Should have 2 top-level steps (composite + checkout)");
+
+        final PlaybookStep parent = playbook.getSteps().get(0);
+        assertEquals("Add to cart", parent.getInstruction());
+        assertTrue(parent.hasSubSteps(), "Parent step should have sub-steps");
+        assertEquals(4, parent.getSubSteps().size(), "Should have 4 sub-steps (2 direct + 2 from include)");
+        assertEquals("Open search field", parent.getSubSteps().get(0).getInstruction());
+        assertEquals("Type yoyo into search field", parent.getSubSteps().get(1).getInstruction());
+        assertEquals("Set quantity to 1", parent.getSubSteps().get(2).getInstruction());
+        assertEquals("Click add to cart button", parent.getSubSteps().get(3).getInstruction());
+
+        for (final PlaybookStep child : parent.getSubSteps())
+        {
+            assertEquals(parent, child.getParent(), "Child step parent reference should point to composite parent");
+        }
+
+        assertEquals("Proceed to checkout", playbook.getSteps().get(1).getInstruction());
+    }
 }
+

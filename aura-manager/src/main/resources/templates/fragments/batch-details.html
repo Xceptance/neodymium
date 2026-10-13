@@ -71,13 +71,24 @@
                             </div>
                         </td>
                         <td>
-                            <button class="btn btn-primary btn-sm font-size-sm" 
-                                    th:attr="hx-get='/run-report?runId=' + ${run.id}" 
-                                    hx-target="#mainViewContainer" 
-                                    hx-swap="innerHTML"
-                                    hx-push-url="true">
-                                <span class="material-symbols-outlined me-1">trending_up</span> Open Report
-                            </button>
+                            <div style="display: flex; gap: 0.35rem; align-items: center;">
+                                <button class="btn btn-primary btn-sm font-size-sm" 
+                                        th:attr="hx-get='/run-report?runId=' + ${run.id}" 
+                                        hx-target="#mainViewContainer" 
+                                        hx-swap="innerHTML"
+                                        hx-push-url="true"
+                                        onclick="event.stopPropagation();">
+                                    <span class="material-symbols-outlined me-1">trending_up</span> Open Report
+                                </button>
+                                <button class="btn-danger-subtle" style="padding: 0.25rem 0.5rem;" th:title="'Remove run #' + ${run.id} + ' from history'" th:attr="onclick='deleteRunFromHistory(\'' + ${run.id} + '\', event)'">
+                                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">delete</span>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(runs)}">
+                        <td colspan="5" class="text-center py-4 text-muted">
+                            No executed runs in batch history.
                         </td>
                     </tr>
                 </tbody>

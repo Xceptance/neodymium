@@ -2465,4 +2465,46 @@ public class PreliminaryReportListenerTest
         final String mdContent = Files.readString(mdPath, StandardCharsets.UTF_8);
         assertTrue(mdContent.contains("FAILED"), "Markdown report must reflect FAILED status");
     }
+
+    @Test
+    public void testSkippedRemainingCompositeStepDoesNotCorruptPreviousFailedStep() throws Exception
+    {
+        final Path reportDir = this.tempFolder.resolve("ai-reports-skipped-composite");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        // Step 0: Passes
+        final PlaybookStep step0 = new PlaybookStep("Navigate to homepage");
+        bus.dispatch(new StepStartedEvent(step0, 0));
+        bus.dispatch(new StepFinishedEvent(step0, PlaybookStepStatus.SUCCESS));
+
+        // Step 1: Fails with timeout
+        final PlaybookStep step1 = new PlaybookStep("Allow all cookies.");
+        step1.setFailureReason("Step timeout of 60s exceeded (elapsed: 66s) for instruction: \"Allow all cookies.\"");
+        bus.dispatch(new StepStartedEvent(step1, 1));
+        bus.dispatch(new StepFinishedEvent(step1, PlaybookStepStatus.FAILED));
+
+        // Step 2 (composite step with substeps): Never started, skipped after step 1 failure
+        final PlaybookStep step2Parent = new PlaybookStep("Add to cart");
+        final PlaybookStep sub1 = new PlaybookStep("Open search field");
+        sub1.setParent(step2Parent);
+        final PlaybookStep sub2 = new PlaybookStep("Type product and press enter");
+        sub2.setParent(step2Parent);
+        step2Parent.setSubSteps(List.of(sub1, sub2));
+
+        // StateMachineRunner dispatches StepFinishedEvent for skipped steps
+        bus.dispatch(new StepFinishedEvent(step2Parent, PlaybookStepStatus.SKIPPED));
+        bus.dispatch(new SessionFinishedEvent(1000, false));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(2, report.getSteps().size());
+
+        final TestExecutionReport.ReportStepEntry reportStep1 = report.getSteps().get(1);
+        assertEquals("Allow all cookies.", reportStep1.getInstruction());
+        assertEquals("FAILED", reportStep1.getStatus());
+        assertTrue(reportStep1.getSubSteps().isEmpty(), "Step 1 must NOT acquire substeps from skipped downstream step 2");
+    }
 }

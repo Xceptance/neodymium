@@ -2648,13 +2648,204 @@ public class AuraReportDataService
     @Transactional
     public void removeRunFromHistory(final String runId)
     {
-        final Optional<TestRunEntity> runOpt = runRepository.findById(runId);
-        if (runOpt.isPresent())
+        if (runId == null || runId.trim().isEmpty())
         {
-            final TestRunEntity run = runOpt.get();
-            run.setIsDeleted(true);
-            runRepository.save(run);
-            LOG.info("Soft-deleted run runId={}", runId);
+            return;
+        }
+        final String cleanRunId = runId.trim().replaceAll("^#+", "");
+        final Optional<TestRunEntity> runOpt = runRepository.findById(cleanRunId);
+        if (runOpt.isEmpty())
+        {
+            LOG.warn("Cannot remove run {}: not found in repository", cleanRunId);
+            return;
+        }
+
+        final TestRunEntity run = runOpt.get();
+        final String batchName = run.getBatchName();
+
+        // 1. Mark run as deleted
+        run.setIsDeleted(true);
+        runRepository.save(run);
+        LOG.info("Soft-deleted run runId={}", cleanRunId);
+
+        // 2. Storage cleanup (disk JSON and attachments)
+        try
+        {
+            localRunJsonStorageService.deleteRunJson(cleanRunId);
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to delete local run JSON for runId={}: {}", cleanRunId, e.getMessage());
+        }
+
+        try
+        {
+            if (attachmentStorageService != null)
+            {
+                attachmentStorageService.deleteRunAttachments(cleanRunId);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to delete attachments for runId={}: {}", cleanRunId, e.getMessage());
+        }
+
+        // 3. Evict cache
+        runReportCache.remove(cleanRunId);
+        clearCache();
+
+        // 4. Update parent batch's latestRunId
+        if (batchName != null && !batchName.isBlank())
+        {
+            final List<TestRunEntity> remainingBatchRuns = runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(batchName);
+            final Optional<TestBatchEntity> batchOpt = batchRepository.findById(batchName);
+            if (batchOpt.isPresent())
+            {
+                final TestBatchEntity batch = batchOpt.get();
+                final String newLatestRunId = !remainingBatchRuns.isEmpty() ? remainingBatchRuns.get(0).getId() : null;
+                batch.setLatestRunId(newLatestRunId);
+                batchRepository.save(batch);
+                LOG.info("Updated batch '{}' latestRunId to '{}'", batchName, newLatestRunId);
+            }
+        }
+
+        // 5. Update Test Base variations and their history links
+        final List<TestBaseVariationEntity> allVariations = variationRepository.findAll();
+        final List<TestBaseVariationEntity> variationsToDelete = new ArrayList<>();
+
+        for (final TestBaseVariationEntity var : allVariations)
+        {
+            final String currentHistory = var.getHistoryLinks();
+            if (currentHistory == null || currentHistory.isBlank())
+            {
+                continue;
+            }
+
+            final List<String> sortedBefore = sortHistoryLinksDescending(currentHistory);
+            if (sortedBefore.isEmpty())
+            {
+                continue;
+            }
+
+            final boolean wasLastRun = cleanRunId.equalsIgnoreCase(parseQueryParams(sortedBefore.get(0)).get("runId"));
+
+            final List<String> filteredLinks = new ArrayList<>();
+            boolean removedAny = false;
+
+            for (final String link : sortedBefore)
+            {
+                final Map<String, String> params = parseQueryParams(link);
+                final String linkRunId = params.get("runId");
+                if (cleanRunId.equalsIgnoreCase(linkRunId))
+                {
+                    removedAny = true;
+                }
+                else
+                {
+                    filteredLinks.add(link);
+                }
+            }
+
+            if (!removedAny)
+            {
+                continue;
+            }
+
+            if (filteredLinks.isEmpty())
+            {
+                // No runs left for this variation - delete it from Test Base
+                variationsToDelete.add(var);
+                final List<TestBaseBugEntity> varBugs = bugRepository.findByVariationId(var.getId());
+                if (!varBugs.isEmpty())
+                {
+                    bugRepository.deleteAll(varBugs);
+                }
+                LOG.info("Pruned empty variation varId='{}' as all associated runs were removed", var.getId());
+            }
+            else
+            {
+                final String newHistoryStr = String.join(",", filteredLinks);
+                var.setHistoryLinks(newHistoryStr);
+                var.setTotalExecutionsCount(filteredLinks.size());
+
+                if (wasLastRun)
+                {
+                    // The deleted run was the last run of the variation - update variation to new last run
+                    final String newLastLink = filteredLinks.get(0);
+                    final Map<String, String> newLastParams = parseQueryParams(newLastLink);
+                    final String newLastStatus = newLastParams.get("status");
+                    final String newLastHealed = newLastParams.get("healed");
+                    final String newLastTs = newLastParams.get("ts");
+                    final String newLastRunId = newLastParams.get("runId");
+
+                    final boolean isHealed = "true".equalsIgnoreCase(newLastHealed) || "healed".equalsIgnoreCase(newLastStatus);
+                    var.setHealed(isHealed);
+
+                    // Re-evaluate bugs on variation
+                    final List<TestBaseBugEntity> activeBugs = bugRepository.findByVariationId(var.getId()).stream()
+                        .filter(b -> b.getRemovedRunId() == null)
+                        .collect(Collectors.toList());
+                    final boolean hasBugs = !activeBugs.isEmpty() || hasBugsInLatestHistoryLink(newHistoryStr);
+
+                    String effective = (newLastStatus != null && !newLastStatus.isBlank()) ? newLastStatus : "passed-clean";
+                    if ("failed".equalsIgnoreCase(effective) || "failed-unknown".equalsIgnoreCase(effective) || "failed-known".equalsIgnoreCase(effective) || "error".equalsIgnoreCase(effective))
+                    {
+                        effective = hasBugs ? "failed-known" : "failed-unknown";
+                    }
+                    else if ("passed".equalsIgnoreCase(effective) || "succeeded-fixed".equalsIgnoreCase(effective) || "passed-clean".equalsIgnoreCase(effective) || "succeeded".equalsIgnoreCase(effective) || "healed".equalsIgnoreCase(effective))
+                    {
+                        effective = hasBugs ? "succeeded-fixed" : (isHealed ? "healed" : "passed-clean");
+                    }
+                    var.setLastStatus(effective);
+
+                    if (newLastRunId != null)
+                    {
+                        final Optional<TestRunEntity> newLastRunOpt = runRepository.findById(newLastRunId);
+                        if (newLastRunOpt.isPresent() && newLastRunOpt.get().getStartTimeMs() != null)
+                        {
+                            var.setLastExecutedAt(newLastRunOpt.get().getStartTimeMs());
+                        }
+                        else if (newLastTs != null && !newLastTs.isBlank())
+                        {
+                            var.setLastExecutedAt(TestBaseVariationHistoryDto.parseTimestampToEpoch(newLastTs, newLastRunId));
+                        }
+                    }
+                }
+                else
+                {
+                    syncVariationLastStatus(var.getId());
+                }
+
+                variationRepository.save(var);
+            }
+        }
+
+        if (!variationsToDelete.isEmpty())
+        {
+            variationRepository.deleteAll(variationsToDelete);
+        }
+
+        // 6. Bug reconciliation under Option B:
+        // Clear linkedRunId on bugs linked during this run so they remain active on the variation
+        final List<TestBaseBugEntity> allBugs = bugRepository.findAll();
+        for (final TestBaseBugEntity bug : allBugs)
+        {
+            boolean bugChanged = false;
+            if (cleanRunId.equalsIgnoreCase(bug.getLinkedRunId()))
+            {
+                bug.setLinkedRunId(null);
+                bugChanged = true;
+            }
+            if (cleanRunId.equalsIgnoreCase(bug.getRemovedRunId()))
+            {
+                bug.setRemovedRunId(null);
+                bug.setRemovedAtMs(null);
+                bugChanged = true;
+            }
+            if (bugChanged)
+            {
+                bugRepository.save(bug);
+            }
         }
     }
 

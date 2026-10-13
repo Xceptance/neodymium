@@ -329,9 +329,14 @@
                             </td>
                             <td class="text-muted js-format-timestamp" th:data-timestamp-ms="${r.startTimeMs}" th:text="${r.timestampLabel}">Recently</td>
                             <td>
-                                <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:attr="hx-get='/run-report?runId=' + ${r.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" onclick="event.stopPropagation();">
-                                    <span class="material-symbols-outlined" style="font-size: 0.875rem;">visibility</span> Inspect
-                                </button>
+                                <div style="display: flex; gap: 0.35rem; align-items: center;">
+                                    <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:attr="hx-get='/run-report?runId=' + ${r.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" onclick="event.stopPropagation();">
+                                        <span class="material-symbols-outlined" style="font-size: 0.875rem;">visibility</span> Inspect
+                                    </button>
+                                    <button class="btn-danger-subtle" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:title="'Remove run #' + ${r.id} + ' from history'" th:attr="onclick='deleteRunFromHistory(\'' + ${r.id} + '\', event)'">
+                                        <span class="material-symbols-outlined" style="font-size: 0.875rem;">delete</span>
+                                    </button>
+                                </div>
                             </td>
                         </tr>
                         <tr th:if="${#lists.isEmpty(runs)}">

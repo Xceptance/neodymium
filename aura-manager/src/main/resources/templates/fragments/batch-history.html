@@ -362,13 +362,14 @@
             <table class="aura-table history-table" style="table-layout: fixed; width: 100%;">
                 <thead>
                     <tr>
-                        <th style="width: 15%; min-width: 18ch;">Run ID</th>
-                        <th style="width: 15%;">Batch Name</th>
-                        <th style="width: 14%;">Timestamp</th>
-                        <th style="width: 13%;">Trigger Source</th>
-                        <th style="width: 11%;">Total Tests</th>
-                        <th style="width: 22%;">Status Breakdown</th>
-                        <th style="width: 10%;">Pass Rate</th>
+                        <th style="width: 14%; min-width: 18ch;">Run ID</th>
+                        <th style="width: 14%;">Batch Name</th>
+                        <th style="width: 13%;">Timestamp</th>
+                        <th style="width: 12%;">Trigger Source</th>
+                        <th style="width: 10%;">Total Tests</th>
+                        <th style="width: 21%;">Status Breakdown</th>
+                        <th style="width: 9%;">Pass Rate</th>
+                        <th style="width: 7%;">Action</th>
                     </tr>
                 </thead>
                 <tbody id="batchRunsHistoryTableBody">
@@ -421,10 +422,20 @@
                             <span th:unless="${run.status == 'IN_PROGRESS'}" class="badge-status badge-pass" th:text="${run.passRate + '% Pass'}">37.5% Pass</span>
                         </td>
                         <td>
-                            <button class="btn-primary" style="padding: 0.35rem 0.75rem; font-size: 0.8rem;"
-                                    th:attr="hx-get='/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" onclick="event.stopPropagation();">
-                                <span class="material-symbols-outlined">trending_up</span> Open Run Report
-                            </button>
+                            <div style="display: flex; gap: 0.35rem; align-items: center;">
+                                <button class="btn-primary" style="padding: 0.35rem 0.65rem; font-size: 0.8rem;"
+                                        th:attr="hx-get='/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" onclick="event.stopPropagation();">
+                                    <span class="material-symbols-outlined">trending_up</span> Open
+                                </button>
+                                <button class="btn-danger-subtle" style="padding: 0.35rem 0.5rem; font-size: 0.8rem;" th:title="'Remove run #' + ${run.id} + ' from history'" th:attr="onclick='deleteRunFromHistory(\'' + ${run.id} + '\', event)'">
+                                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">delete</span>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(runs)}">
+                        <td colspan="8" class="text-center py-4 text-muted">
+                            No test runs found for this batch.
                         </td>
                     </tr>
                 </tbody>

@@ -18,10 +18,15 @@
  */
 package com.xceptance.neodymium.aura.manager.unit;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
 import com.xceptance.neodymium.aura.AuraReportingService;
+import java.io.File;
 import java.lang.reflect.Field;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Assertions;
@@ -127,6 +132,90 @@ public final class AuraQueueServiceTest
         final String extractedError = AuraQueueService.extractSubprocessErrorMessage(logs);
 
         Assertions.assertNull(extractedError, "Extracted error message should be null for log streams containing only WARN entries");
+    }
+
+    @Test
+    public void testUpdateExecutionSnapshotsAndFallbacksDoesNotCreatePhantomSecondFileWhenFirstExecutionExists() throws Exception
+    {
+        final Path tempDir = Files.createTempDirectory("aura-queue-test-");
+        try
+        {
+            final File runDir = tempDir.toFile();
+            final String className = "Aura_tests_stokke_self_include_yaml_Test";
+            final File testDir = new File(runDir, className);
+            Assertions.assertTrue(testDir.mkdirs());
+
+            final File exec1 = new File(testDir, "console-execution-1.json");
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode node = mapper.createObjectNode();
+            node.put("id", 1);
+            node.put("name", "DEU");
+            node.put("status", "running");
+            mapper.writeValue(exec1, node);
+
+            queueService.updateExecutionSnapshotsAndFallbacks(
+                "run_123",
+                className,
+                List.of("DEU"),
+                List.of("Default"),
+                List.of(runDir),
+                1,
+                true,
+                false,
+                "Playbook execution failed"
+            );
+
+            final File exec2 = new File(testDir, "console-execution-2.json");
+            Assertions.assertFalse(exec2.exists(), "Phantom console-execution-2.json should NOT be created when console-execution-1.json exists");
+
+            Assertions.assertTrue(exec1.exists());
+            final ObjectNode updatedNode = (ObjectNode) mapper.readTree(exec1);
+            Assertions.assertEquals("failed", updatedNode.path("status").asText());
+            Assertions.assertTrue(updatedNode.path("failureReason").asText().contains("Playbook execution failed"));
+        }
+        finally
+        {
+            AuraQueueService.deleteDirRecursively(tempDir.toFile());
+        }
+    }
+
+    @Test
+    public void testUpdateExecutionSnapshotsAndFallbacksCreatesFallbackWhenZeroExecutionsExist() throws Exception
+    {
+        final Path tempDir = Files.createTempDirectory("aura-queue-test-");
+        try
+        {
+            final File runDir = tempDir.toFile();
+            final String className = "Aura_tests_stokke_self_include_yaml_Test";
+            final File testDir = new File(runDir, className);
+
+            queueService.updateExecutionSnapshotsAndFallbacks(
+                "run_123",
+                className,
+                List.of("DEU"),
+                List.of("Default"),
+                List.of(runDir),
+                1,
+                true,
+                false,
+                "Early JVM failure before test startup"
+            );
+
+            final File exec1 = new File(testDir, "console-execution-1.json");
+            final File exec2 = new File(testDir, "console-execution-2.json");
+
+            Assertions.assertTrue(exec1.exists(), "Fallback console-execution-1.json should be created when no executions exist");
+            Assertions.assertFalse(exec2.exists(), "Phantom console-execution-2.json should NOT be created");
+
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode createdNode = (ObjectNode) mapper.readTree(exec1);
+            Assertions.assertEquals("failed", createdNode.path("status").asText());
+            Assertions.assertTrue(createdNode.path("failureReason").asText().contains("Early JVM failure"));
+        }
+        finally
+        {
+            AuraQueueService.deleteDirRecursively(tempDir.toFile());
+        }
     }
 }
 

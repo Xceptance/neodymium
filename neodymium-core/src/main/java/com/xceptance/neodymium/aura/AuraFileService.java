@@ -57,6 +57,31 @@ import org.yaml.snakeyaml.Yaml;
 public final class AuraFileService
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraFileService.class);
+    private static final Pattern FOLDED_BLOCK_SCALAR_PATTERN = Pattern.compile(
+        "(?m)^([ \\t]*(?:-\\s+|(?:steps|_steps|before|beforeEach|_beforeEach|after|afterEach|_afterEach):\\s*))>(-\\s*(?:#.*)?|[ \\t]*(?:#.*)?)$"
+    );
+
+    /**
+     * Normalizes folded block scalars ({@code >} and {@code >-}) to literal block scalars
+     * ({@code |} and {@code |-}) for step lists and playbook lifecycle sections.
+     * <p>
+     * Under standard YAML 1.2 specifications, folded block scalars replace single line breaks
+     * with spaces, flattening multi-line verification or step blocks into a single run-on sentence.
+     * Normalizing to literal block scalars preserves line breaks across YAML parsers, allowing
+     * individual step statements to be decomposed cleanly into discrete steps.
+     * </p>
+     *
+     * @param content the raw YAML string content
+     * @return the normalized YAML content with preserved line break semantics for steps
+     */
+    public static String normalizeBlockScalars(final String content)
+    {
+        if (content == null || content.isEmpty())
+        {
+            return content;
+        }
+        return FOLDED_BLOCK_SCALAR_PATTERN.matcher(content).replaceAll("$1|$2");
+    }
 
     private final Set<String> expandedFiles = ConcurrentHashMap.newKeySet();
     private final File customResourcesDir;
@@ -1352,22 +1377,21 @@ public final class AuraFileService
         {
             try
             {
+                final String normalizedContent = normalizeBlockScalars(content);
                 final Yaml yaml = new Yaml();
-                final Object loaded = yaml.load(content);
+                final Object loaded = yaml.load(normalizedContent);
                 if (loaded instanceof Map)
                 {
                     final Map<String, Object> root = (Map<String, Object>) loaded;
 
-                    if (root.containsKey("before"))
+                    final List<String> extractedBefore = extractSectionStepsWithComments(content, "before");
+                    if (!extractedBefore.isEmpty())
                     {
-                        final String beforeStr = String.valueOf(root.get("before"));
-                        for (final String line : beforeStr.split("\n"))
-                        {
-                            if (!line.trim().isEmpty())
-                            {
-                                beforeSteps.add(line.trim());
-                            }
-                        }
+                        beforeSteps.addAll(extractedBefore);
+                    }
+                    else if (root.containsKey("before"))
+                    {
+                        parseSectionSteps(root.get("before"), beforeSteps);
                     }
 
                     if (!root.containsKey("steps") && !root.containsKey("before") && !root.containsKey("after")
@@ -1379,84 +1403,24 @@ public final class AuraFileService
                         mainSteps.add("_include: " + incPath);
                     }
 
-                    if (root.containsKey("steps"))
+                    final List<String> extractedSteps = extractSectionStepsWithComments(content, "steps");
+                    if (!extractedSteps.isEmpty())
                     {
-                        final Object stepsObj = root.get("steps");
-                        if (stepsObj instanceof List)
-                        {
-                            for (final Object stepItem : (List<?>) stepsObj)
-                            {
-                                if (stepItem instanceof Map)
-                                {
-                                    final Map<?, ?> mapStep = (Map<?, ?>) stepItem;
-                                    if (mapStep.containsKey("_include") || mapStep.containsKey("include"))
-                                    {
-                                        final String incPath = mapStep.containsKey("_include")
-                                                ? String.valueOf(mapStep.get("_include"))
-                                                : String.valueOf(mapStep.get("include"));
-                                        mainSteps.add("_include: " + incPath);
-                                    }
-                                    else if (mapStep.containsKey("instruction"))
-                                    {
-                                        final String inst = String.valueOf(mapStep.get("instruction")).trim();
-                                        if (!inst.isEmpty())
-                                        {
-                                            mainSteps.add(inst);
-                                        }
-                                    }
-                                    else if (mapStep.size() == 1)
-                                    {
-                                        final Map.Entry<?, ?> entry = mapStep.entrySet().iterator().next();
-                                        final String keyStr = String.valueOf(entry.getKey()).trim();
-                                        final Object valObj = entry.getValue();
-                                        if (valObj == null || "null".equals(String.valueOf(valObj).trim()))
-                                        {
-                                            mainSteps.add(keyStr);
-                                        }
-                                        else
-                                        {
-                                            final String valStr = String.valueOf(valObj).trim();
-                                            mainSteps.add(valStr.isEmpty() ? keyStr : keyStr + ": " + valStr);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        final String sMap = String.valueOf(mapStep).trim();
-                                        if (!sMap.isEmpty())
-                                        {
-                                            mainSteps.add(sMap);
-                                        }
-                                    }
-                                }
-                                else if (stepItem != null && !String.valueOf(stepItem).trim().isEmpty())
-                                {
-                                    mainSteps.add(String.valueOf(stepItem).trim());
-                                }
-                            }
-                        }
-                        else
-                        {
-                            final String stepsStr = String.valueOf(stepsObj);
-                            for (final String line : stepsStr.split("\n"))
-                            {
-                                if (!line.trim().isEmpty())
-                                {
-                                    mainSteps.add(line.trim());
-                                }
-                            }
-                        }
+                        mainSteps.addAll(extractedSteps);
+                    }
+                    else if (root.containsKey("steps"))
+                    {
+                        parseSectionSteps(root.get("steps"), mainSteps);
                     }
 
-                    if (root.containsKey("after"))
+                    final List<String> extractedAfter = extractSectionStepsWithComments(content, "after");
+                    if (!extractedAfter.isEmpty())
                     {
-                        final String afterStr = String.valueOf(root.get("after"));
-                        for (final String line : afterStr.split("\n"))
-                        {
-                            if (!line.trim().isEmpty())
-                            {
-                                afterSteps.add(line.trim());
-                            }
-                        }
+                        afterSteps.addAll(extractedAfter);
+                    }
+                    else if (root.containsKey("after"))
+                    {
+                        parseSectionSteps(root.get("after"), afterSteps);
                     }
 
                     if (root.containsKey("variables") && root.get("variables") instanceof Map)
@@ -1494,63 +1458,7 @@ public final class AuraFileService
                 }
                 else if (loaded instanceof List)
                 {
-                    for (final Object stepItem : (List<?>) loaded)
-                    {
-                        if (stepItem instanceof Map)
-                        {
-                            final Map<?, ?> mapStep = (Map<?, ?>) stepItem;
-                            if (mapStep.containsKey("_include") || mapStep.containsKey("include"))
-                            {
-                                final String incPath = mapStep.containsKey("_include")
-                                        ? String.valueOf(mapStep.get("_include"))
-                                        : String.valueOf(mapStep.get("include"));
-                                mainSteps.add("_include: " + incPath);
-                            }
-                            else if (mapStep.containsKey("instruction"))
-                            {
-                                final String inst = String.valueOf(mapStep.get("instruction")).trim();
-                                if (!inst.isEmpty())
-                                {
-                                    mainSteps.add(inst);
-                                }
-                            }
-                            else if (mapStep.size() == 1)
-                            {
-                                final Map.Entry<?, ?> entry = mapStep.entrySet().iterator().next();
-                                final String keyStr = String.valueOf(entry.getKey()).trim();
-                                final Object valObj = entry.getValue();
-                                if (valObj == null || "null".equals(String.valueOf(valObj).trim()))
-                                {
-                                    mainSteps.add(keyStr);
-                                }
-                                else
-                                {
-                                    final String valStr = String.valueOf(valObj).trim();
-                                    mainSteps.add(valStr.isEmpty() ? keyStr : keyStr + ": " + valStr);
-                                }
-                            }
-                            else
-                            {
-                                final String sMap = String.valueOf(mapStep).trim();
-                                if (!sMap.isEmpty())
-                                {
-                                    mainSteps.add(sMap);
-                                }
-                            }
-                        }
-                        else if (stepItem != null)
-                        {
-                            String s = String.valueOf(stepItem).trim();
-                            if (s.startsWith("-"))
-                            {
-                                s = s.substring(1).trim();
-                            }
-                            if (!s.isEmpty())
-                            {
-                                mainSteps.add(s);
-                            }
-                        }
-                    }
+                    parseSectionSteps(loaded, mainSteps);
                 }
 
                 // Fallback for raw text lines
@@ -1671,6 +1579,242 @@ public final class AuraFileService
         result.put("varKeys", varKeys);
         result.put("fragmentVarScopes", fragmentVarScopes);
         return result;
+    }
+
+    private void parseSectionSteps(final Object stepsObj, final List<String> targetList)
+    {
+        if (stepsObj instanceof List<?> list)
+        {
+            for (final Object stepItem : list)
+            {
+                if (stepItem instanceof Map<?, ?> mapStep)
+                {
+                    if (mapStep.containsKey("_include") || mapStep.containsKey("include"))
+                    {
+                        final String incPath = mapStep.containsKey("_include")
+                                ? String.valueOf(mapStep.get("_include"))
+                                : String.valueOf(mapStep.get("include"));
+                        targetList.add("_include: " + incPath);
+                    }
+                    else if (mapStep.containsKey("instruction"))
+                    {
+                        final String inst = String.valueOf(mapStep.get("instruction")).trim();
+                        if (!inst.isEmpty())
+                        {
+                            targetList.add(inst);
+                        }
+                    }
+                    else if (mapStep.size() == 1)
+                    {
+                        final Map.Entry<?, ?> entry = mapStep.entrySet().iterator().next();
+                        final String keyStr = String.valueOf(entry.getKey()).trim();
+                        final Object valObj = entry.getValue();
+                        if (valObj == null || "null".equals(String.valueOf(valObj).trim()))
+                        {
+                            targetList.add(keyStr);
+                        }
+                        else if (valObj instanceof List<?> subList)
+                        {
+                            targetList.add(keyStr.endsWith(":") ? keyStr : keyStr + ":");
+                            for (final Object sub : subList)
+                            {
+                                if (sub != null && !String.valueOf(sub).trim().isEmpty())
+                                {
+                                    targetList.add(String.valueOf(sub).trim());
+                                }
+                            }
+                        }
+                        else
+                        {
+                            final String valStr = String.valueOf(valObj).trim();
+                            targetList.add(valStr.isEmpty() ? keyStr : keyStr + ": " + valStr);
+                        }
+                    }
+                    else
+                    {
+                        final String sMap = String.valueOf(mapStep).trim();
+                        if (!sMap.isEmpty())
+                        {
+                            targetList.add(sMap);
+                        }
+                    }
+                }
+                else if (stepItem instanceof String stepStr)
+                {
+                    if (stepStr.contains("\n"))
+                    {
+                        for (final String line : stepStr.split("\\r?\\n"))
+                        {
+                            final String trimmed = line.trim();
+                            if (!trimmed.isEmpty() && !trimmed.startsWith("#"))
+                            {
+                                final String unbulleted = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                                        ? trimmed.substring(2).trim()
+                                        : trimmed;
+                                if (!unbulleted.isEmpty() && !unbulleted.startsWith("#"))
+                                {
+                                    targetList.add(unbulleted);
+                                }
+                            }
+                        }
+                    }
+                    else if (!stepStr.trim().isEmpty())
+                    {
+                        targetList.add(stepStr.trim());
+                    }
+                }
+                else if (stepItem != null && !String.valueOf(stepItem).trim().isEmpty())
+                {
+                    targetList.add(String.valueOf(stepItem).trim());
+                }
+            }
+        }
+        else if (stepsObj != null)
+        {
+            final String stepsStr = String.valueOf(stepsObj);
+            for (final String line : stepsStr.split("\n"))
+            {
+                if (!line.trim().isEmpty())
+                {
+                    targetList.add(line.trim());
+                }
+            }
+        }
+    }
+
+    /**
+     * Extracts steps from a named playbook section (e.g. {@code "steps"}, {@code "before"},
+     * {@code "after"}) while preserving line comments (starting with {@code '#'}) and marking
+     * folded/literal block scalar sub-steps with a leading sub-step prefix ({@code "  - "}).
+     *
+     * @param content the raw YAML string content
+     * @param sectionName the section key to extract ("before", "steps", or "after")
+     * @return list of preserved steps, comments, and substeps
+     */
+    public static List<String> extractSectionStepsWithComments(final String content, final String sectionName)
+    {
+        final List<String> steps = new ArrayList<>();
+        if (content == null || content.isBlank() || sectionName == null || sectionName.isBlank())
+        {
+            return steps;
+        }
+
+        final String[] lines = content.split("\\r?\\n");
+        boolean inTargetSection = false;
+        int sectionIndent = 0;
+        boolean inBlockScalar = false;
+        int foldedScalarIndent = -1;
+
+        final Pattern sectionPattern = Pattern.compile("(?i)^[ \\t]*\"?'?" + Pattern.quote(sectionName) + "\"?'?[ \\t]*:[ \\t]*(?:[|>]-?.*)?$");
+        final Pattern topLevelSectionPattern = Pattern.compile("^[a-zA-Z0-9_-]+[ \\t]*:.*$");
+
+        for (int i = 0; i < lines.length; i++)
+        {
+            final String line = lines[i];
+            final String trimmed = line.trim();
+
+            if (!inTargetSection)
+            {
+                if (sectionPattern.matcher(line).matches())
+                {
+                    inTargetSection = true;
+                    int indent = 0;
+                    while (indent < line.length() && (line.charAt(indent) == ' ' || line.charAt(indent) == '\t'))
+                    {
+                        indent++;
+                    }
+                    sectionIndent = indent;
+                    inBlockScalar = false;
+                    foldedScalarIndent = -1;
+                }
+                continue;
+            }
+
+            int currentIndent = 0;
+            while (currentIndent < line.length() && (line.charAt(currentIndent) == ' ' || line.charAt(currentIndent) == '\t'))
+            {
+                currentIndent++;
+            }
+
+            if (!trimmed.isEmpty() && !trimmed.startsWith("#"))
+            {
+                if (currentIndent <= sectionIndent && topLevelSectionPattern.matcher(line).matches())
+                {
+                    break;
+                }
+            }
+
+            if (trimmed.isEmpty())
+            {
+                continue;
+            }
+
+            if (trimmed.startsWith("#"))
+            {
+                if (inBlockScalar && currentIndent <= foldedScalarIndent)
+                {
+                    inBlockScalar = false;
+                    foldedScalarIndent = -1;
+                }
+                steps.add(trimmed);
+                continue;
+            }
+
+            if (inBlockScalar && currentIndent <= foldedScalarIndent)
+            {
+                inBlockScalar = false;
+                foldedScalarIndent = -1;
+            }
+
+            final Matcher foldedMatcher = Pattern.compile("^-\\s*>-[ \\t]*(.*)$").matcher(trimmed);
+            if (foldedMatcher.matches())
+            {
+                inBlockScalar = true;
+                foldedScalarIndent = currentIndent;
+                final String inlineText = foldedMatcher.group(1).trim();
+                if (!inlineText.isEmpty() && !inlineText.startsWith("#"))
+                {
+                    steps.add("  - " + inlineText);
+                }
+                continue;
+            }
+
+            if (trimmed.matches("^-\\s*[|>][^\r\n]*$"))
+            {
+                inBlockScalar = false;
+                foldedScalarIndent = -1;
+                continue;
+            }
+
+            if (trimmed.startsWith("- ") || trimmed.startsWith("-\t"))
+            {
+                inBlockScalar = false;
+                foldedScalarIndent = -1;
+                final String itemContent = trimmed.substring(1).trim();
+                steps.add(itemContent);
+                continue;
+            }
+
+            if (inBlockScalar)
+            {
+                final String clean = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                    ? trimmed.substring(2).trim()
+                    : trimmed;
+                if (!clean.isEmpty())
+                {
+                    steps.add("  - " + clean);
+                }
+            }
+            else
+            {
+                final String clean = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                    ? trimmed.substring(2).trim()
+                    : trimmed;
+                steps.add(clean);
+            }
+        }
+
+        return steps;
     }
 
     /**

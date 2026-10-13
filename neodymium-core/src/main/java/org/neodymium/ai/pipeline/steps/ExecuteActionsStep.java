@@ -24,6 +24,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionListener;
@@ -174,6 +175,30 @@ public final class ExecuteActionsStep
                     if (parentStats != null)
                     {
                         parentStats.setDurationMs(parentDuration);
+                    }
+                    if (step.getActions().isEmpty())
+                    {
+                        final List<Action> aggregated = new ArrayList<>();
+                        for (int i = 0; i < step.getSubSteps().size(); i++)
+                        {
+                            final PlaybookStep sub = step.getSubSteps().get(i);
+                            if (sub.getActions() != null)
+                            {
+                                for (final Action act : sub.getActions())
+                                {
+                                    if (act.getSubStepIndex() == null)
+                                    {
+                                        act.setSubStepIndex(i);
+                                        act.setSubStepInstruction(sub.getInstruction());
+                                    }
+                                    aggregated.add(act);
+                                }
+                            }
+                        }
+                        if (!aggregated.isEmpty())
+                        {
+                            step.setActions(aggregated);
+                        }
                     }
                     if (session != null && session.getEventBus() != null)
                     {
@@ -476,6 +501,7 @@ public final class ExecuteActionsStep
 
                 if (step.hasSubSteps())
                 {
+                    AgentToolLoopStep.partitionToolCallsAndActions(step.getSubSteps(), step.getToolCalls(), step.getActions());
                     final long childDuration = step.getDurationMs() != null && !step.getSubSteps().isEmpty()
                         ? step.getDurationMs() / step.getSubSteps().size()
                         : 0L;
@@ -483,19 +509,59 @@ public final class ExecuteActionsStep
                     {
                         for (final PlaybookStep sub : step.getSubSteps())
                         {
-                            sub.setStatus(step.getStatus());
-                            sub.setFailed(step.isFailed());
-                            sub.setFailureReason(step.getFailureReason());
-                            sub.setDurationMs(childDuration);
+                            if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING)
+                            {
+                                sub.setStatus(step.getStatus());
+                            }
+                            sub.setFailed(false);
+                            sub.setFailureReason(null);
+                            if (sub.getDurationMs() == null || sub.getDurationMs() == 0L)
+                            {
+                                sub.setDurationMs(childDuration);
+                            }
                         }
                     }
                     else
                     {
-                        for (final PlaybookStep sub : step.getSubSteps())
+                        int failIdx = -1;
+                        for (int i = 0; i < step.getSubSteps().size(); i++)
                         {
+                            final PlaybookStep sub = step.getSubSteps().get(i);
+                            if (sub.getActions() == null || sub.getActions().isEmpty())
+                            {
+                                failIdx = i;
+                                break;
+                            }
+                        }
+                        if (failIdx < 0)
+                        {
+                            failIdx = step.getSubSteps().size() - 1;
+                        }
+                        for (int i = 0; i < step.getSubSteps().size(); i++)
+                        {
+                            final PlaybookStep sub = step.getSubSteps().get(i);
                             if (sub.getDurationMs() == null || sub.getDurationMs() == 0L)
                             {
                                 sub.setDurationMs(childDuration);
+                            }
+                            if (i < failIdx)
+                            {
+                                if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING)
+                                {
+                                    sub.setStatus(PlaybookStepStatus.SUCCESS);
+                                }
+                                sub.setFailed(false);
+                            }
+                            else if (i == failIdx)
+                            {
+                                sub.setStatus(PlaybookStepStatus.FAILED);
+                                sub.setFailed(true);
+                                sub.setFailureReason(step.getFailureReason());
+                            }
+                            else
+                            {
+                                sub.setStatus(PlaybookStepStatus.SKIPPED);
+                                sub.setFailed(false);
                             }
                         }
                     }

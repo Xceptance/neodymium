@@ -615,4 +615,166 @@ public class AuraFileServiceTest
             }
         }
     }
+
+    @Test
+    public void testParsePlaybookSectionsWithFoldedBlockScalarSteps()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            steps:
+              - Click the "Add to Cart" button.
+              - >
+                Verify the cart header is displayed.
+                Verify the cart items section is displayed.
+                Verify the product is displayed in the cart.
+            """;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        Assertions.assertNotNull(sections);
+
+        @SuppressWarnings("unchecked")
+        final List<String> mainSteps = (List<String>) sections.get("mainSteps");
+        Assertions.assertNotNull(mainSteps);
+        Assertions.assertEquals(4, mainSteps.size(), "Folded block scalar lines must be parsed as individual discrete steps");
+        Assertions.assertEquals("Click the \"Add to Cart\" button.", mainSteps.get(0));
+        Assertions.assertEquals("Verify the cart header is displayed.", mainSteps.get(1));
+        Assertions.assertEquals("Verify the cart items section is displayed.", mainSteps.get(2));
+        Assertions.assertEquals("Verify the product is displayed in the cart.", mainSteps.get(3));
+    }
+
+    @Test
+    public void testParsePlaybookSectionsWithFoldedBlockScalarChompedSteps()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            steps:
+              - >-
+                Verify the cart header is displayed.
+                Verify the cart items section is displayed.
+            """;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        Assertions.assertNotNull(sections);
+
+        @SuppressWarnings("unchecked")
+        final List<String> mainSteps = (List<String>) sections.get("mainSteps");
+        Assertions.assertNotNull(mainSteps);
+        Assertions.assertEquals(2, mainSteps.size());
+        Assertions.assertEquals("  - Verify the cart header is displayed.", mainSteps.get(0));
+        Assertions.assertEquals("  - Verify the cart items section is displayed.", mainSteps.get(1));
+    }
+
+    @Test
+    public void testParsePlaybookSectionsWithLiteralBlockScalarSteps()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            steps:
+              - |
+                Verify subtotal is displayed.
+                Verify total is displayed.
+            """;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        Assertions.assertNotNull(sections);
+
+        @SuppressWarnings("unchecked")
+        final List<String> mainSteps = (List<String>) sections.get("mainSteps");
+        Assertions.assertNotNull(mainSteps);
+        Assertions.assertEquals(2, mainSteps.size());
+        Assertions.assertEquals("Verify subtotal is displayed.", mainSteps.get(0));
+        Assertions.assertEquals("Verify total is displayed.", mainSteps.get(1));
+    }
+
+    @Test
+    public void testParsePlaybookSectionsWithHierarchicalMapSubSteps()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            steps:
+              - Detailed verification of the cart page:
+                - Verify the cart header is displayed.
+                - Verify the product is displayed in the cart.
+            """;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        Assertions.assertNotNull(sections);
+
+        @SuppressWarnings("unchecked")
+        final List<String> mainSteps = (List<String>) sections.get("mainSteps");
+        Assertions.assertNotNull(mainSteps);
+        Assertions.assertEquals(3, mainSteps.size());
+        Assertions.assertEquals("Detailed verification of the cart page:", mainSteps.get(0));
+        Assertions.assertEquals("Verify the cart header is displayed.", mainSteps.get(1));
+        Assertions.assertEquals("Verify the product is displayed in the cart.", mainSteps.get(2));
+    }
+
+    @Test
+    public void testParsePlaybookSectionsPreservesCommentsAndSubSteps()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            steps:
+              # Add product to cart
+              - Click the "Add to Cart" button.
+              - Close bonus product modal or added to cart confirmation if displayed (optional)
+
+              # Open cart
+              - Click on the shopping cart icon in the header to open the cart and wait for cart loading to finish.
+
+              # Detailed verification of the cart page
+              - >-
+                Verify the cart header is displayed.
+                Verify the cart items section is displayed.
+            """;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        Assertions.assertNotNull(sections);
+
+        @SuppressWarnings("unchecked")
+        final List<String> mainSteps = (List<String>) sections.get("mainSteps");
+        Assertions.assertNotNull(mainSteps);
+        Assertions.assertEquals(8, mainSteps.size(), "Must preserve comments and parse substeps");
+        Assertions.assertEquals("# Add product to cart", mainSteps.get(0));
+        Assertions.assertEquals("Click the \"Add to Cart\" button.", mainSteps.get(1));
+        Assertions.assertEquals("Close bonus product modal or added to cart confirmation if displayed (optional)", mainSteps.get(2));
+        Assertions.assertEquals("# Open cart", mainSteps.get(3));
+        Assertions.assertEquals("Click on the shopping cart icon in the header to open the cart and wait for cart loading to finish.", mainSteps.get(4));
+        Assertions.assertEquals("# Detailed verification of the cart page", mainSteps.get(5));
+        Assertions.assertEquals("  - Verify the cart header is displayed.", mainSteps.get(6));
+        Assertions.assertEquals("  - Verify the cart items section is displayed.", mainSteps.get(7));
+    }
+
+    @Test
+    public void testParsePlaybookSectionsWithMultilineStepsAndFoldedSubsteps()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            steps: |
+              Open https://verla.xceptance.com/index.html
+              Locate the first product card and click its 'Add to Cart' or 'Add' button.
+              If the page is an PDP layout then _include: fragments/configure-pdp-product.steps, else _include: fragments/add-simple-product-to-cart.steps
+              # Detailed verification of the cart page
+              - >-
+                Verify the cart header is displayed.
+                Verify the cart items section is displayed.
+              Click checkout button
+            """;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        Assertions.assertNotNull(sections);
+        Assertions.assertEquals(Boolean.FALSE, sections.get("hasError"));
+
+        @SuppressWarnings("unchecked")
+        final List<String> mainSteps = (List<String>) sections.get("mainSteps");
+        Assertions.assertNotNull(mainSteps);
+        Assertions.assertEquals(7, mainSteps.size(), "Must preserve multiline natural steps without hyphens and folded substeps");
+        Assertions.assertEquals("Open https://verla.xceptance.com/index.html", mainSteps.get(0));
+        Assertions.assertEquals("Locate the first product card and click its 'Add to Cart' or 'Add' button.", mainSteps.get(1));
+        Assertions.assertEquals("If the page is an PDP layout then _include: fragments/configure-pdp-product.steps, else _include: fragments/add-simple-product-to-cart.steps", mainSteps.get(2));
+        Assertions.assertEquals("# Detailed verification of the cart page", mainSteps.get(3));
+        Assertions.assertEquals("  - Verify the cart header is displayed.", mainSteps.get(4));
+        Assertions.assertEquals("  - Verify the cart items section is displayed.", mainSteps.get(5));
+        Assertions.assertEquals("Click checkout button", mainSteps.get(6));
+    }
 }

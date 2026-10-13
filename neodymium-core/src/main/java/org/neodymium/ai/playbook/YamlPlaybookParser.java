@@ -18,6 +18,7 @@
  */
 package org.neodymium.ai.playbook;
 
+import com.xceptance.neodymium.aura.AuraFileService;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -27,8 +28,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.model.Playbook;
@@ -310,8 +313,9 @@ public final class YamlPlaybookParser implements PlaybookParser
                 {
                     final byte[] bytes = in.readAllBytes();
                     final String fileContent = new String(bytes, StandardCharsets.UTF_8);
+                    final String normalizedContent = AuraFileService.normalizeBlockScalars(fileContent);
                     final Yaml yaml = new Yaml();
-                    final Object loadedObject = yaml.load(fileContent);
+                    final Object loadedObject = yaml.load(normalizedContent);
                     if (loadedObject instanceof Map<?, ?> loadedMap)
                     {
                         @SuppressWarnings("unchecked")
@@ -504,10 +508,11 @@ public final class YamlPlaybookParser implements PlaybookParser
 
             final byte[] bytes = in.readAllBytes();
             final String fileContent = new String(bytes, StandardCharsets.UTF_8);
+            final String normalizedContent = AuraFileService.normalizeBlockScalars(fileContent);
             final String fileName = new File(identifier).getName();
 
             final Yaml yaml = new Yaml();
-            final Object loadedObject = yaml.load(fileContent);
+            final Object loadedObject = yaml.load(normalizedContent);
 
             if (loadedObject == null)
             {
@@ -617,7 +622,59 @@ public final class YamlPlaybookParser implements PlaybookParser
                     final String str = ((String) stepItem).trim();
                     if (str.contains("\n"))
                     {
-                        parseStepBlock(str, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+                        if (isFoldedScalarStep(fileContent, str, (searchOffset != null && searchOffset.length > 0) ? searchOffset[0] : 0))
+                        {
+                            final String[] subLines = str.split("\\r?\\n");
+                            String firstPrompt = null;
+                            for (final String subLine : subLines)
+                            {
+                                final String trimmed = subLine.trim();
+                                if (trimmed.isEmpty() || trimmed.startsWith("#"))
+                                {
+                                    continue;
+                                }
+                                final String unbulleted = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                                    ? trimmed.substring(2).trim()
+                                    : trimmed;
+                                if (!unbulleted.isEmpty() && !unbulleted.startsWith("#"))
+                                {
+                                    firstPrompt = unbulleted;
+                                    break;
+                                }
+                            }
+                            final String parentInstruction = resolveParentInstruction(fileContent, str, (searchOffset != null && searchOffset.length > 0) ? searchOffset[0] : 0, firstPrompt);
+                            final PlaybookStep parentStep = new PlaybookStep(parentInstruction);
+                            initStepLocation(parentStep, fileName, fileContent, parentInstruction, searchOffset);
+
+                            for (final String subLine : subLines)
+                            {
+                                final String trimmed = subLine.trim();
+                                if (trimmed.isEmpty() || trimmed.startsWith("#"))
+                                {
+                                    continue;
+                                }
+                                final String unbulleted = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                                    ? trimmed.substring(2).trim()
+                                    : trimmed;
+                                if (unbulleted.isEmpty() || unbulleted.startsWith("#"))
+                                {
+                                    continue;
+                                }
+                                final PlaybookStep childStep = new PlaybookStep(unbulleted);
+                                childStep.setParent(parentStep);
+                                initStepLocation(childStep, fileName, fileContent, unbulleted, searchOffset);
+                                parentStep.getSubSteps().add(childStep);
+                            }
+
+                            if (!parentStep.getSubSteps().isEmpty())
+                            {
+                                outSteps.add(parentStep);
+                            }
+                        }
+                        else
+                        {
+                            parseStepBlock(str, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+                        }
                     }
                     else if (str.startsWith("_include:") || str.startsWith("include:"))
                     {
@@ -744,6 +801,9 @@ public final class YamlPlaybookParser implements PlaybookParser
         {
             final String[] lines = ((String) rawSteps).split("\\r?\\n");
             PlaybookStep currentParentStep = null;
+            PlaybookStep arrowParentStep = null;
+            boolean inArrowSubsteps = false;
+            boolean arrowParentNeedsName = false;
             int parentIndent = -1;
 
             for (final String line : lines)
@@ -758,6 +818,69 @@ public final class YamlPlaybookParser implements PlaybookParser
                 while (indent < line.length() && (line.charAt(indent) == ' ' || line.charAt(indent) == '\t'))
                 {
                     indent++;
+                }
+
+                final boolean isArrowMarker = trimmed.startsWith("->-")
+                    || trimmed.matches("^-\\s*->-[^\r\n]*$")
+                    || trimmed.startsWith("->");
+
+                final boolean startsWithDash = trimmed.startsWith("- ")
+                    || trimmed.startsWith("* ")
+                    || (trimmed.startsWith("-") && !isArrowMarker)
+                    || (trimmed.startsWith("*") && !isArrowMarker);
+
+                if (inArrowSubsteps)
+                {
+                    if (isArrowMarker || indent < parentIndent || startsWithDash)
+                    {
+                        inArrowSubsteps = false;
+                        arrowParentStep = null;
+                        currentParentStep = null;
+                        arrowParentNeedsName = false;
+                        parentIndent = -1;
+                    }
+                    else if (trimmed.startsWith("_include:") || trimmed.startsWith("include:"))
+                    {
+                        final int colonIdx = trimmed.indexOf(':');
+                        final String includeRelativePath = trimmed.substring(colonIdx + 1).trim();
+                        final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
+                        final List<PlaybookStep> includedSteps = new ArrayList<>();
+                        parseRecursive(resolvedIdentifier, manager, activeStack, includedSteps, outDataSets);
+                        for (final PlaybookStep includedStep : includedSteps)
+                        {
+                            if (includedStep != null)
+                            {
+                                includedStep.setParent(arrowParentStep);
+                                arrowParentStep.getSubSteps().add(includedStep);
+                                if (arrowParentNeedsName && includedStep.getInstruction() != null && !includedStep.getInstruction().isBlank())
+                                {
+                                    arrowParentStep.setInstruction("Substeps begining with " + includedStep.getInstruction());
+                                    arrowParentNeedsName = false;
+                                }
+                            }
+                        }
+                        continue;
+                    }
+                    else
+                    {
+                        final String unbulleted = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
+                            ? trimmed.substring(2).trim()
+                            : trimmed;
+
+                        if (!unbulleted.isEmpty() && !unbulleted.startsWith("#"))
+                        {
+                            final PlaybookStep childStep = new PlaybookStep(unbulleted);
+                            childStep.setParent(arrowParentStep);
+                            initStepLocation(childStep, fileName, fileContent, unbulleted, searchOffset);
+                            arrowParentStep.getSubSteps().add(childStep);
+                            if (arrowParentNeedsName)
+                            {
+                                arrowParentStep.setInstruction("Substeps begining with " + unbulleted);
+                                arrowParentNeedsName = false;
+                            }
+                        }
+                        continue;
+                    }
                 }
 
                 final String unbulleted = (trimmed.startsWith("- ") || trimmed.startsWith("* "))
@@ -775,15 +898,119 @@ public final class YamlPlaybookParser implements PlaybookParser
                     final String includeRelativePath = unbulleted.substring(colonIdx + 1).trim();
                     final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
 
-                    parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
-                    currentParentStep = null;
-                    parentIndent = -1;
+                    if (currentParentStep != null && indent > parentIndent)
+                    {
+                        final List<PlaybookStep> includedSteps = new ArrayList<>();
+                        parseRecursive(resolvedIdentifier, manager, activeStack, includedSteps, outDataSets);
+                        for (final PlaybookStep includedStep : includedSteps)
+                        {
+                            if (includedStep != null)
+                            {
+                                includedStep.setParent(currentParentStep);
+                                currentParentStep.getSubSteps().add(includedStep);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
+                        currentParentStep = null;
+                        arrowParentStep = null;
+                        inArrowSubsteps = false;
+                        arrowParentNeedsName = false;
+                        parentIndent = -1;
+                    }
+                    continue;
+                }
+                else if (isArrowMarker)
+                {
+                    final int offset = (searchOffset != null && searchOffset.length > 0) ? searchOffset[0] : 0;
+                    final String comment = resolvePrecedingComment(fileContent, trimmed, offset);
+                    final String parentInstruction;
+                    if (comment != null && !comment.isEmpty())
+                    {
+                        parentInstruction = comment;
+                        arrowParentNeedsName = false;
+                    }
+                    else
+                    {
+                        parentInstruction = "Substeps begining with ";
+                        arrowParentNeedsName = true;
+                    }
+
+                    final PlaybookStep parentStep = new PlaybookStep(parentInstruction);
+                    initStepLocation(parentStep, fileName, fileContent, parentInstruction, searchOffset);
+                    outSteps.add(parentStep);
+                    currentParentStep = parentStep;
+                    arrowParentStep = parentStep;
+                    inArrowSubsteps = true;
+                    parentIndent = indent;
+
+                    String inline = "";
+                    final Matcher foldedMatcher = Pattern.compile("^-\\s*->-[ \\t]*(.*)$").matcher(trimmed);
+                    if (foldedMatcher.matches())
+                    {
+                        inline = foldedMatcher.group(1).trim();
+                    }
+                    else if (trimmed.startsWith("->-"))
+                    {
+                        inline = trimmed.substring(3).trim();
+                    }
+                    else if (trimmed.startsWith("->"))
+                    {
+                        inline = trimmed.substring(2).trim();
+                    }
+
+                    if (!inline.isEmpty() && !inline.startsWith("#"))
+                    {
+                        final PlaybookStep childStep = new PlaybookStep(inline);
+                        childStep.setParent(parentStep);
+                        initStepLocation(childStep, fileName, fileContent, inline, searchOffset);
+                        parentStep.getSubSteps().add(childStep);
+                        if (arrowParentNeedsName)
+                        {
+                            parentStep.setInstruction("Substeps begining with " + inline);
+                            arrowParentNeedsName = false;
+                        }
+                    }
+                }
+                else if (trimmed.matches("^-\\s*[|>]-[^\r\n]*$") || trimmed.matches("^[|>]-[^\r\n]*$"))
+                {
+                    final String parentInstruction = resolveParentInstruction(fileContent, trimmed, (searchOffset != null && searchOffset.length > 0) ? searchOffset[0] : 0);
+                    final PlaybookStep parentStep = new PlaybookStep(parentInstruction);
+                    initStepLocation(parentStep, fileName, fileContent, parentInstruction, searchOffset);
+                    outSteps.add(parentStep);
+                    currentParentStep = parentStep;
+                    arrowParentStep = null;
+                    inArrowSubsteps = false;
+                    arrowParentNeedsName = false;
+                    parentIndent = indent;
+
+                    String inline = "";
+                    final Matcher foldedMatcher = Pattern.compile("^-\\s*[|>]-[ \\t]*(.*)$").matcher(trimmed);
+                    if (foldedMatcher.matches())
+                    {
+                        inline = foldedMatcher.group(1).trim();
+                    }
+                    else if (trimmed.startsWith(">-") || trimmed.startsWith("|-"))
+                    {
+                        inline = trimmed.substring(2).trim();
+                    }
+
+                    if (!inline.isEmpty() && !inline.startsWith("#"))
+                    {
+                        final PlaybookStep childStep = new PlaybookStep(inline);
+                        childStep.setParent(parentStep);
+                        initStepLocation(childStep, fileName, fileContent, inline, searchOffset);
+                        parentStep.getSubSteps().add(childStep);
+                    }
                 }
                 else
                 {
                     if (currentParentStep != null && indent > parentIndent)
                     {
                         final PlaybookStep childStep = new PlaybookStep(unbulleted);
+                        childStep.setParent(currentParentStep);
                         initStepLocation(childStep, fileName, fileContent, line, searchOffset);
                         currentParentStep.getSubSteps().add(childStep);
                     }
@@ -798,11 +1025,221 @@ public final class YamlPlaybookParser implements PlaybookParser
                         initStepLocation(step, fileName, fileContent, line, searchOffset);
                         outSteps.add(step);
                         currentParentStep = step;
+                        arrowParentStep = null;
+                        inArrowSubsteps = false;
+                        arrowParentNeedsName = false;
                         parentIndent = indent;
                     }
                 }
             }
         }
+    }
+
+    private boolean isFoldedScalarStep(final String fileContent, final String blockContent, final int fromIndex)
+    {
+        if (fileContent == null || blockContent == null || blockContent.isEmpty())
+        {
+            return false;
+        }
+
+        final String firstLine = blockContent.split("\\r?\\n")[0].trim();
+        int idx = fileContent.indexOf(firstLine, Math.max(0, fromIndex));
+        if (idx == -1 && fromIndex > 0)
+        {
+            idx = fileContent.indexOf(firstLine);
+        }
+
+        if (idx == -1)
+        {
+            return false;
+        }
+
+        int searchPos = idx - 1;
+        while (searchPos >= 0 && (fileContent.charAt(searchPos) == ' ' || fileContent.charAt(searchPos) == '\t' || fileContent.charAt(searchPos) == '\r' || fileContent.charAt(searchPos) == '\n'))
+        {
+            searchPos--;
+        }
+
+        if (searchPos < 0)
+        {
+            return false;
+        }
+
+        final int lineEnd = searchPos + 1;
+        int lineStart = searchPos;
+        while (lineStart > 0 && fileContent.charAt(lineStart - 1) != '\n' && fileContent.charAt(lineStart - 1) != '\r')
+        {
+            lineStart--;
+        }
+
+        final String precedingLine = fileContent.substring(lineStart, lineEnd).trim();
+        return precedingLine.matches("^-\\s*>-[^\r\n]*$") || precedingLine.matches("^-\\s*->-[^\r\n]*$");
+    }
+
+    private String resolvePrecedingComment(final String fileContent, final String targetMarker, final int fromIndex)
+    {
+        if (fileContent == null || targetMarker == null || targetMarker.isEmpty())
+        {
+            return null;
+        }
+
+        int idx = fileContent.indexOf(targetMarker, Math.max(0, fromIndex));
+        if (idx == -1 && (targetMarker.startsWith("- |-") || targetMarker.startsWith("- >-")))
+        {
+            final String target = targetMarker.startsWith("- |-") ? "- >-" + targetMarker.substring(4) : "- |-" + targetMarker.substring(4);
+            idx = fileContent.indexOf(target, Math.max(0, fromIndex));
+            if (idx == -1 && fromIndex > 0)
+            {
+                idx = fileContent.indexOf(target);
+            }
+        }
+        else if (idx == -1 && (targetMarker.startsWith("|-") || targetMarker.startsWith(">-")))
+        {
+            final String target = targetMarker.startsWith("|-") ? ">-" + targetMarker.substring(2) : "|-" + targetMarker.substring(2);
+            idx = fileContent.indexOf(target, Math.max(0, fromIndex));
+            if (idx == -1 && fromIndex > 0)
+            {
+                idx = fileContent.indexOf(target);
+            }
+        }
+        else if (idx == -1 && fromIndex > 0)
+        {
+            idx = fileContent.indexOf(targetMarker);
+        }
+
+        if (idx == -1)
+        {
+            return null;
+        }
+
+        int searchPos = idx - 1;
+        while (searchPos >= 0 && (fileContent.charAt(searchPos) == ' ' || fileContent.charAt(searchPos) == '\t' || fileContent.charAt(searchPos) == '\r' || fileContent.charAt(searchPos) == '\n'))
+        {
+            searchPos--;
+        }
+
+        if (searchPos < 0)
+        {
+            return null;
+        }
+
+        final int lineEnd = searchPos + 1;
+        int lineStart = searchPos;
+        while (lineStart > 0 && fileContent.charAt(lineStart - 1) != '\n' && fileContent.charAt(lineStart - 1) != '\r')
+        {
+            lineStart--;
+        }
+
+        final String prevLine = fileContent.substring(lineStart, lineEnd).trim();
+        final int hashIdx = prevLine.indexOf('#');
+        if (hashIdx >= 0)
+        {
+            final String comment = prevLine.substring(hashIdx + 1).trim();
+            if (!comment.isEmpty())
+            {
+                return comment;
+            }
+        }
+        else if (prevLine.startsWith("- >-") || prevLine.startsWith("->-") || prevLine.startsWith(">-") || prevLine.startsWith("|-") || prevLine.startsWith("- |-"))
+        {
+            int priorPos = lineStart - 1;
+            while (priorPos >= 0 && (fileContent.charAt(priorPos) == ' ' || fileContent.charAt(priorPos) == '\t' || fileContent.charAt(priorPos) == '\r' || fileContent.charAt(priorPos) == '\n'))
+            {
+                priorPos--;
+            }
+            if (priorPos >= 0)
+            {
+                final int priorEnd = priorPos + 1;
+                int priorStart = priorPos;
+                while (priorStart > 0 && fileContent.charAt(priorStart - 1) != '\n' && fileContent.charAt(priorStart - 1) != '\r')
+                {
+                    priorStart--;
+                }
+                final String priorLine = fileContent.substring(priorStart, priorEnd).trim();
+                if (priorLine.startsWith("#"))
+                {
+                    final String comment = priorLine.substring(1).trim();
+                    if (!comment.isEmpty())
+                    {
+                        return comment;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private boolean isPrecedingArrowMarker(final String fileContent, final String blockContent, final int fromIndex)
+    {
+        if (fileContent == null || blockContent == null || blockContent.isEmpty())
+        {
+            return false;
+        }
+        final String firstLine = blockContent.split("\\r?\\n")[0].trim();
+        int idx = fileContent.indexOf(firstLine, Math.max(0, fromIndex));
+        if (idx == -1 && fromIndex > 0)
+        {
+            idx = fileContent.indexOf(firstLine);
+        }
+        if (idx == -1)
+        {
+            return false;
+        }
+        int searchPos = idx - 1;
+        while (searchPos >= 0 && (fileContent.charAt(searchPos) == ' ' || fileContent.charAt(searchPos) == '\t' || fileContent.charAt(searchPos) == '\r' || fileContent.charAt(searchPos) == '\n'))
+        {
+            searchPos--;
+        }
+        if (searchPos < 0)
+        {
+            return false;
+        }
+        final int lineEnd = searchPos + 1;
+        int lineStart = searchPos;
+        while (lineStart > 0 && fileContent.charAt(lineStart - 1) != '\n' && fileContent.charAt(lineStart - 1) != '\r')
+        {
+            lineStart--;
+        }
+        final String precedingLine = fileContent.substring(lineStart, lineEnd).trim();
+        return precedingLine.startsWith("->-") || precedingLine.matches("^-\\s*->-[^\r\n]*$") || precedingLine.startsWith("->");
+    }
+
+    private String resolveParentInstruction(final String fileContent, final String blockContent, final int fromIndex, final String firstSubstepPrompt)
+    {
+        if (fileContent == null || blockContent == null || blockContent.isEmpty())
+        {
+            return (firstSubstepPrompt != null && !firstSubstepPrompt.isEmpty())
+                ? "Substeps begining with " + firstSubstepPrompt
+                : "Detailed verification";
+        }
+
+        final String firstLine = blockContent.split("\\r?\\n")[0].trim();
+        final String comment = resolvePrecedingComment(fileContent, firstLine, fromIndex);
+        if (comment != null && !comment.isEmpty())
+        {
+            return comment;
+        }
+
+        if (firstLine.startsWith("->-") || firstLine.startsWith("->") || firstLine.matches("^-\\s*->-[^\r\n]*$") || isPrecedingArrowMarker(fileContent, blockContent, fromIndex))
+        {
+            if (firstSubstepPrompt != null && !firstSubstepPrompt.isEmpty())
+            {
+                return "Substeps begining with " + firstSubstepPrompt;
+            }
+            return "Substeps begining with ";
+        }
+
+        if (firstLine.toLowerCase(Locale.ROOT).startsWith("verify")
+            || firstLine.matches("^[|>]-[^\r\n]*$") || firstLine.matches("^-\\s*[|>]-[^\r\n]*$"))
+        {
+            return "Detailed verification";
+        }
+        return "Step group";
+    }
+
+    private String resolveParentInstruction(final String fileContent, final String blockContent, final int fromIndex)
+    {
+        return resolveParentInstruction(fileContent, blockContent, fromIndex, null);
     }
 
     private void validateNoUnresolvedIncludeDirectives(final List<PlaybookStep> stepList, final String identifier)

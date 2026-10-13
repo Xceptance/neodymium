@@ -176,6 +176,55 @@ public class AuraReportViewController
         return batchOverview(hxRequest, model);
     }
 
+    @PostMapping({"/runs/{runId}/delete", "/runs/delete"})
+    @DeleteMapping({"/runs/{runId}", "/runs/{runId}/delete"})
+    public String deleteRun(
+        @PathVariable(value = "runId", required = false) final String pathRunId,
+        @RequestParam(value = "runId", required = false) final String paramRunId,
+        @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
+        @RequestHeader(value = "HX-Current-URL", required = false) final String currentUrl,
+        @RequestHeader(value = "Referer", required = false) final String referer,
+        final Model model)
+    {
+        final String runId = (pathRunId != null && !pathRunId.isBlank()) ? pathRunId : paramRunId;
+        if (runId != null && !runId.isBlank())
+        {
+            dataService.removeRunFromHistory(runId);
+        }
+
+        final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
+        if (targetUrl != null)
+        {
+            if (targetUrl.contains("/batch-history"))
+            {
+                final String batchName = extractQueryParam(targetUrl, "batchName");
+                final String limitParam = extractQueryParam(targetUrl, "limit");
+                Integer limit = null;
+                if (limitParam != null && !limitParam.isBlank())
+                {
+                    try
+                    {
+                        limit = Integer.parseInt(limitParam.trim());
+                    }
+                    catch (final NumberFormatException ignored)
+                    {
+                    }
+                }
+                return batchHistory(batchName != null && !batchName.isBlank() ? batchName : "Unknown", limit, hxRequest, model);
+            }
+            else if (targetUrl.contains("/test-base"))
+            {
+                final String testName = extractQueryParam(targetUrl, "testName");
+                final String dataSet = extractQueryParam(targetUrl, "dataSet");
+                final String location = extractQueryParam(targetUrl, "location");
+                final String browser = extractQueryParam(targetUrl, "browser");
+                return testBase(testName, dataSet, location, browser, hxRequest, model);
+            }
+        }
+
+        return batchOverview(hxRequest, model);
+    }
+
     private String extractQueryParam(final String url, final String paramName)
     {
         if (url == null)

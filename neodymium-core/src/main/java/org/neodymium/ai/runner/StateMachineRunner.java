@@ -56,6 +56,7 @@ import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.TokenBudgetExceededException;
+import org.neodymium.ai.pipeline.steps.AgentToolLoopStep;
 import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
@@ -566,13 +567,45 @@ public final class StateMachineRunner
                     }
                     if (currentStep.hasSubSteps())
                     {
-                        for (final PlaybookStep sub : currentStep.getSubSteps())
+                        AgentToolLoopStep.partitionToolCallsAndActions(
+                            currentStep.getSubSteps(), currentStep.getToolCalls(), currentStep.getActions());
+
+                        int failedIndex = -1;
+                        for (int i = 0; i < currentStep.getSubSteps().size(); i++)
                         {
-                            if (sub.getStatus() == null || sub.getStatus() == PlaybookStepStatus.PENDING || sub.getStatus() == PlaybookStepStatus.RUNNING)
+                            final PlaybookStep sub = currentStep.getSubSteps().get(i);
+                            if (sub.getActions() == null || sub.getActions().isEmpty())
+                            {
+                                failedIndex = i;
+                                break;
+                            }
+                        }
+
+                        if (failedIndex < 0)
+                        {
+                            failedIndex = currentStep.getSubSteps().size() - 1;
+                        }
+
+                        for (int i = 0; i < currentStep.getSubSteps().size(); i++)
+                        {
+                            final PlaybookStep sub = currentStep.getSubSteps().get(i);
+                            if (i < failedIndex)
+                            {
+                                sub.setStatus(PlaybookStepStatus.SUCCESS);
+                                sub.setFailed(false);
+                                sub.setFailureReason(null);
+                            }
+                            else if (i == failedIndex)
                             {
                                 sub.setStatus(PlaybookStepStatus.FAILED);
                                 sub.setFailed(true);
                                 sub.setFailureReason(currentStep.getFailureReason());
+                            }
+                            else
+                            {
+                                sub.setStatus(PlaybookStepStatus.SKIPPED);
+                                sub.setFailed(false);
+                                sub.setFailureReason(null);
                             }
                         }
                     }

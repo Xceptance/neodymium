@@ -18,8 +18,10 @@
 package org.neodymium.ai.executor.selenide.plugins;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+import org.neodymium.util.Neodymium;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
@@ -70,25 +72,28 @@ public final class IncludeAction implements BrowserActionPlugin
         }
 
         final String pathTemp = action.getTarget();
-        final String path = (pathTemp == null || pathTemp.isBlank()) ? action.getValue() : pathTemp;
-        if (path == null || path.isBlank())
+        final String rawPath = (pathTemp == null || pathTemp.isBlank()) ? action.getValue() : pathTemp;
+        if (rawPath == null || rawPath.isBlank())
         {
             throw new IllegalArgumentException("INCLUDE action target path is null or empty");
         }
 
+        final PlaybookResourceManager manager = new ClasspathResourceManager();
         final List<String> stack = RUNTIME_INCLUDE_STACK.get();
-        if (stack.contains(path))
+        final String resolvedPath = resolveIncludePath(rawPath, manager, stack);
+
+        if (stack.contains(resolvedPath) || stack.contains(rawPath))
         {
             final StringBuilder sb = new StringBuilder();
             for (final String s : stack)
             {
                 sb.append(s).append(" -> ");
             }
-            sb.append(path);
+            sb.append(resolvedPath);
             throw new IOException("Circular dynamic inclusion detected: " + sb.toString());
         }
 
-        stack.add(path);
+        stack.add(resolvedPath);
         try
         {
             final AiSession session = (AiSession) this.context.getTransientData().get(ExecutionContext.KEY_SESSION);
@@ -98,8 +103,7 @@ public final class IncludeAction implements BrowserActionPlugin
             }
 
             final PlaybookParser parser = new YamlPlaybookParser();
-            final PlaybookResourceManager manager = new ClasspathResourceManager();
-            final Playbook playbook = parser.parse(path, manager);
+            final Playbook playbook = parser.parse(resolvedPath, manager);
             final List<PlaybookStep> playbookSteps = playbook.getSteps();
 
             final PlaybookStep currentStep = (PlaybookStep) this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
@@ -108,6 +112,10 @@ public final class IncludeAction implements BrowserActionPlugin
                 for (final PlaybookStep subStep : playbookSteps)
                 {
                     subStep.setParent(currentStep);
+                    if (subStep.getSourceFile() == null || !subStep.getSourceFile().contains("/"))
+                    {
+                        subStep.setSourceFile(resolvedPath);
+                    }
                     if (!currentStep.getSubSteps().contains(subStep))
                     {
                         currentStep.getSubSteps().add(subStep);
@@ -130,6 +138,91 @@ public final class IncludeAction implements BrowserActionPlugin
         finally
         {
             stack.remove(stack.size() - 1);
+        }
+    }
+
+    private String resolveIncludePath(final String path, final PlaybookResourceManager manager, final List<String> stack)
+    {
+        if (resourceExists(path, manager))
+        {
+            return path;
+        }
+
+        final List<String> candidateParents = new ArrayList<>();
+
+        if (!stack.isEmpty())
+        {
+            candidateParents.add(stack.get(stack.size() - 1));
+        }
+
+        final PlaybookStep currentStep = (PlaybookStep) this.context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+        if (currentStep != null)
+        {
+            if (currentStep.getSourceFile() != null && !currentStep.getSourceFile().isBlank())
+            {
+                candidateParents.add(currentStep.getSourceFile());
+            }
+            if (currentStep.getParent() != null && currentStep.getParent().getSourceFile() != null && !currentStep.getParent().getSourceFile().isBlank())
+            {
+                candidateParents.add(currentStep.getParent().getSourceFile());
+            }
+        }
+
+        final Object playbookFileObj = this.context.getTransientData().get("playbookFile");
+        if (playbookFileObj instanceof String pb && !pb.isBlank())
+        {
+            candidateParents.add(pb);
+        }
+
+        final Object yamlSourceObj = this.context.getTransientData().get("yamlSource");
+        if (yamlSourceObj instanceof String ys && !ys.isBlank())
+        {
+            candidateParents.add(ys);
+        }
+
+        if (Neodymium.getData() != null && Neodymium.getData().exists("neodymium.sourceFile"))
+        {
+            final String sf = Neodymium.getData().asString("neodymium.sourceFile");
+            if (sf != null && !sf.isBlank())
+            {
+                candidateParents.add(sf);
+            }
+        }
+
+        final String testdataSourceFile = Neodymium.getTestdataSourceFile();
+        if (testdataSourceFile != null && !testdataSourceFile.isBlank())
+        {
+            candidateParents.add(testdataSourceFile);
+        }
+
+        for (final String parent : candidateParents)
+        {
+            if (parent != null && !parent.isBlank())
+            {
+                final String resolved = manager.resolveInclude(parent, path);
+                if (resourceExists(resolved, manager))
+                {
+                    return resolved;
+                }
+            }
+        }
+
+        return path;
+    }
+
+    private boolean resourceExists(final String identifier, final PlaybookResourceManager manager)
+    {
+        if (identifier == null || identifier.isBlank())
+        {
+            return false;
+        }
+        try (final InputStream in = manager.read(identifier))
+        {
+            return in != null;
+        }
+        catch (final Exception ignored)
+        {
+            return false;
         }
     }
 }

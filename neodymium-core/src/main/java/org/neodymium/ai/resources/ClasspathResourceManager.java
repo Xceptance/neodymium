@@ -332,19 +332,58 @@ public final class ClasspathResourceManager implements PlaybookResourceManager
         {
             return Path.of(relativePath).normalize().toString().replace('\\', '/');
         }
-        
+
         final Path parentPath = Path.of(parentIdentifier);
         final Path parentDir = parentPath.getParent();
-        
-        final Path resolved;
+
         if (parentDir == null)
         {
-            resolved = Path.of(relativePath).normalize();
+            return Path.of(relativePath).normalize().toString().replace('\\', '/');
         }
-        else
+
+        final String directResolved = parentDir.resolve(relativePath).normalize().toString().replace('\\', '/');
+        if (resourceExists(directResolved))
         {
-            resolved = parentDir.resolve(relativePath).normalize();
+            return directResolved;
         }
-        return resolved.toString().replace('\\', '/');
+
+        // Check if parent directory ends with same segment name as relativePath prefix (e.g. parent is .../fragments and include is fragments/sub.steps)
+        if (parentDir.getFileName() != null && relativePath.startsWith(parentDir.getFileName().toString() + "/"))
+        {
+            final String trimmedRelative = relativePath.substring(parentDir.getFileName().toString().length() + 1);
+            final String collapsed = parentDir.resolve(trimmedRelative).normalize().toString().replace('\\', '/');
+            if (resourceExists(collapsed))
+            {
+                return collapsed;
+            }
+        }
+
+        // Check relative to grandparent directory (e.g. playbook root enclosing fragments/)
+        if (parentDir.getParent() != null)
+        {
+            final String grandparentResolved = parentDir.getParent().resolve(relativePath).normalize().toString().replace('\\', '/');
+            if (resourceExists(grandparentResolved))
+            {
+                return grandparentResolved;
+            }
+        }
+
+        return directResolved;
+    }
+
+    private boolean resourceExists(final String identifier)
+    {
+        if (identifier == null || identifier.isBlank())
+        {
+            return false;
+        }
+        try (final InputStream in = read(identifier))
+        {
+            return in != null;
+        }
+        catch (final Throwable ignored)
+        {
+            return false;
+        }
     }
 }

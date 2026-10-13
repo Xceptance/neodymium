@@ -812,6 +812,43 @@ public final class ExecuteActionsStepTest
         assertEquals(1, sub5.getToolCalls().size());
         assertEquals("browser_assert_text", sub5.getToolCalls().get(0).toolName());
         assertEquals(1, sub5.getActions().size());
+
+        // Verify action attribution to sub-steps
+        assertEquals(0, act1.getSubStepIndex());
+        assertEquals("Capture the cart line item count in 'lineItemCount'", act1.getSubStepInstruction());
+        assertEquals(1, act2.getSubStepIndex());
+        assertEquals("Hover over the product card", act2.getSubStepInstruction());
+        assertEquals(2, act3.getSubStepIndex());
+        assertEquals("Click the 'Add to Cart' button", act3.getSubStepInstruction());
+        assertEquals(4, act4.getSubStepIndex());
+        assertEquals("Verify that the cart item count is higher than ${lineItemCount}.", act4.getSubStepInstruction());
+    }
+
+    /**
+     * Verifies that partitionToolCallsAndActions can partition actions sequentially when
+     * tool calls list is empty (e.g. from replay or non-tool runs).
+     */
+    @Test
+    public void testPartitionToolCallsAndActionsWithoutToolCalls()
+    {
+        final PlaybookStep sub1 = new PlaybookStep("Open search field");
+        final PlaybookStep sub2 = new PlaybookStep("Type query into search field");
+        final List<PlaybookStep> subSteps = List.of(sub1, sub2);
+
+        final Action act1 = new Action("CLICK", "#search-btn", List.of(), "Click search", "", false);
+        final Action act2 = new Action("TYPE", "#search-input", List.of("shoes"), "Type query", "", false);
+
+        AgentToolLoopStep.partitionToolCallsAndActions(subSteps, Collections.emptyList(), List.of(act1, act2));
+
+        assertEquals(1, sub1.getActions().size());
+        assertEquals(act1, sub1.getActions().get(0));
+        assertEquals(0, act1.getSubStepIndex());
+        assertEquals("Open search field", act1.getSubStepInstruction());
+
+        assertEquals(1, sub2.getActions().size());
+        assertEquals(act2, sub2.getActions().get(0));
+        assertEquals(1, act2.getSubStepIndex());
+        assertEquals("Type query into search field", act2.getSubStepInstruction());
     }
 
     /**

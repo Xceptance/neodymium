@@ -97,6 +97,14 @@ public class Action
     private Long durationMs;
     private Long delayMs;
 
+    @JsonProperty("subStepIndex")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private Integer subStepIndex;
+
+    @JsonProperty("subStepInstruction")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String subStepInstruction;
+
     /**
      * Self-critique generated during recording for playbook quality tracking.
      */
@@ -691,6 +699,26 @@ public class Action
     public final void setStepInstruction(final String stepInstruction)
     {
         this.stepInstruction = stepInstruction;
+    }
+
+    public final Integer getSubStepIndex()
+    {
+        return this.subStepIndex;
+    }
+
+    public final void setSubStepIndex(final Integer subStepIndex)
+    {
+        this.subStepIndex = subStepIndex;
+    }
+
+    public final String getSubStepInstruction()
+    {
+        return this.subStepInstruction;
+    }
+
+    public final void setSubStepInstruction(final String subStepInstruction)
+    {
+        this.subStepInstruction = subStepInstruction;
     }
 
     public final int getStepLine()

@@ -380,6 +380,8 @@ public final class InteractiveStateBuilder
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
             @SuppressWarnings("unchecked")
+            final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+            @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
@@ -419,11 +421,33 @@ public final class InteractiveStateBuilder
                 }
             }
 
-            if (flatSteps != null)
+            final List<PlaybookStep> stepsToSerialize;
+            if (playbookSteps != null && !playbookSteps.isEmpty())
             {
-                for (int i = 0; i < flatSteps.size(); i++)
+                stepsToSerialize = playbookSteps;
+            }
+            else if (flatSteps != null)
+            {
+                stepsToSerialize = new ArrayList<>();
+                for (final PlaybookStep step : flatSteps)
                 {
-                    final PlaybookStep step = flatSteps.get(i);
+                    if (step != null && step.getParent() != null && (flatSteps.contains(step.getParent()) || flatSteps.contains(step.getRootStep())))
+                    {
+                        continue;
+                    }
+                    stepsToSerialize.add(step);
+                }
+            }
+            else
+            {
+                stepsToSerialize = null;
+            }
+
+            if (stepsToSerialize != null)
+            {
+                for (int i = 0; i < stepsToSerialize.size(); i++)
+                {
+                    final PlaybookStep step = stepsToSerialize.get(i);
                     final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "playbook", stepsActive, stepsPassed, execReport, runnerStatus, sectionFailed);
                     if (stepObj.has("status") && "failed".equalsIgnoreCase(stepObj.get("status").getAsString()))
                     {
@@ -805,6 +829,14 @@ public final class InteractiveStateBuilder
                     {
                         actObj.addProperty("healed", true);
                     }
+                    if (action.getSubStepIndex() != null)
+                    {
+                        actObj.addProperty("subStepIndex", action.getSubStepIndex());
+                    }
+                    if (action.getSubStepInstruction() != null && !action.getSubStepInstruction().isBlank())
+                    {
+                        actObj.addProperty("subStepInstruction", action.getSubStepInstruction());
+                    }
                     actionsArray.add(actObj);
                 }
             }
@@ -818,8 +850,17 @@ public final class InteractiveStateBuilder
             {
                 if (entry != null && entry.getStepIndex() == stepIndex)
                 {
-                    reportStep = entry;
-                    break;
+                    final String entryRaw = entry.getRawInstruction();
+                    final String entryInst = entry.getInstruction();
+                    final boolean matchesInstruction = (rawInstruction != null && !rawInstruction.isBlank()
+                        && (rawInstruction.equals(entryRaw) || rawInstruction.equals(entryInst)))
+                        || (resolvedInstruction != null && !resolvedInstruction.isBlank()
+                        && (resolvedInstruction.equals(entryRaw) || resolvedInstruction.equals(entryInst)));
+                    if (matchesInstruction || entryRaw == null || rawInstruction == null || rawInstruction.isBlank())
+                    {
+                        reportStep = entry;
+                        break;
+                    }
                 }
             }
         }
@@ -873,7 +914,7 @@ public final class InteractiveStateBuilder
                 obj.add("llmCalls", serializeLlmCalls(reportStep.getLlmCalls()));
             }
             obj.add("stats", serializeStepStats(reportStep));
-            if (!reportStep.getSubSteps().isEmpty())
+            if (!reportStep.getSubSteps().isEmpty() && (step.hasSubSteps() || (rawInstruction != null && rawInstruction.contains("_include:"))))
             {
                 obj.add("subSteps", serializeSubSteps(reportStep.getSubSteps()));
             }
@@ -892,14 +933,40 @@ public final class InteractiveStateBuilder
                 if (sub != null)
                 {
                     final JsonObject subObj = new JsonObject();
+                    subObj.addProperty("stepIndex", sIdx);
                     subObj.addProperty("index", sIdx + 1);
                     final String subRaw = sub.getInstruction() != null ? sub.getInstruction() : "";
                     final String subResolved = (effContext != null && effContext.getSessionData() != null)
                         ? effContext.getSessionData().resolveAvailableVariables(subRaw)
                         : subRaw;
                     subObj.addProperty("instruction", subResolved);
+                    subObj.addProperty("rawInstruction", subRaw);
                     subObj.addProperty("file", sub.getSourceFile() != null ? sub.getSourceFile() : "");
-                    subObj.addProperty("status", sub.getStatus() != null ? sub.getStatus().name().toLowerCase() : "pending");
+                    subObj.addProperty("status", sub.getStatus() != null ? sub.getStatus().name() : "PENDING");
+                    subObj.addProperty("startTimeMs", sub.getStartTimeMs() != null ? sub.getStartTimeMs() : 0L);
+                    subObj.addProperty("durationMs", sub.getDurationMs() != null ? sub.getDurationMs() : 0L);
+                    if (sub.getActions() != null && !sub.getActions().isEmpty())
+                    {
+                        final JsonArray subActArr = new JsonArray();
+                        for (final Action subAct : sub.getActions())
+                        {
+                            if (subAct != null)
+                            {
+                                final JsonObject actObj = new JsonObject();
+                                actObj.addProperty("type", subAct.getType() != null ? subAct.getType() : "");
+                                actObj.addProperty("target", subAct.getTarget() != null ? subAct.getTarget() : "");
+                                actObj.addProperty("value", subAct.getValue() != null ? subAct.getValue() : "");
+                                actObj.addProperty("description", subAct.getDescription() != null ? subAct.getDescription() : "");
+                                actObj.addProperty("reasoning", subAct.getReasoning() != null ? subAct.getReasoning() : "");
+                                if (subAct.isHealed())
+                                {
+                                    actObj.addProperty("healed", true);
+                                }
+                                subActArr.add(actObj);
+                            }
+                        }
+                        subObj.add("actions", subActArr);
+                    }
                     subStepsArr.add(subObj);
                 }
             }
@@ -1211,6 +1278,14 @@ public final class InteractiveStateBuilder
                         actObj.addProperty("expectedTarget", expectedTarget);
                         actObj.addProperty("originalTarget", expectedTarget);
                         actObj.addProperty("healedFrom", expectedTarget);
+                    }
+                    if (action.getSubStepIndex() != null)
+                    {
+                        actObj.addProperty("subStepIndex", action.getSubStepIndex());
+                    }
+                    if (action.getSubStepInstruction() != null && !action.getSubStepInstruction().isBlank())
+                    {
+                        actObj.addProperty("subStepInstruction", action.getSubStepInstruction());
                     }
                     arr.add(actObj);
                 }

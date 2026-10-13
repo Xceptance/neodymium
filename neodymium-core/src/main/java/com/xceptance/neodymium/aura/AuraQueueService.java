@@ -35,7 +35,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -95,6 +94,7 @@ public final class AuraQueueService
     private final AtomicReference<RunRequest> lastRunRequest = new AtomicReference<>(null);
 
     private final Set<File> createdTempFiles = Collections.synchronizedSet(new HashSet<>());
+    private final Set<File> ingestedExecutionFiles = Collections.synchronizedSet(new HashSet<>());
 
     private final AuraInteractiveService interactiveService;
     private QueueRunProgressListener queueRunProgressListener;
@@ -842,117 +842,16 @@ public final class AuraQueueService
 
                     final boolean isFailedRun = exitCode != 0 || fileFailures.get() > 0 || fileErrors.get() > 0;
                     final String extractedError = isFailedRun ? extractSubprocessErrorMessage(currentRunLogs) : null;
-                    final String primaryBrowser = (!targetProfiles.isEmpty()) ? targetProfiles.get(0) : "Default";
-                    final String statusStr = testWasCancelled ? "skipped" : (isFailedRun ? "failed" : "passed");
-
-                    final ObjectMapper mapper = new ObjectMapper();
-
-                    for (final File baseDir : runStorageDirs)
-                    {
-                        final File classDir = new File(baseDir, className);
-                        if (!classDir.exists())
-                        {
-                            classDir.mkdirs();
-                        }
-                        final File[] existingExecs = classDir.listFiles((dir, name) -> name.startsWith("console-execution-") && name.endsWith(".json"));
-                        final int existingCount = (existingExecs != null) ? existingExecs.length : 0;
-
-                        int targetCount = Math.max(1, ids.size());
-                        if (existingCount > targetCount)
-                        {
-                            targetCount = existingCount;
-                        }
-
-                        if (isFailedRun || testWasCancelled)
-                        {
-                            boolean hasFailureOrCancel = false;
-                            if (existingExecs != null)
-                            {
-                                for (final File existingFile : existingExecs)
-                                {
-                                    try
-                                    {
-                                        final JsonNode node = mapper.readTree(existingFile);
-                                        if (node instanceof ObjectNode objNode)
-                                        {
-                                            final String currentStatus = objNode.has("status") ? objNode.get("status").asText("") : "";
-                                            final boolean isFailureStatus = "failed".equalsIgnoreCase(currentStatus) || "failed-unknown".equalsIgnoreCase(currentStatus)
-                                                    || "failed-known".equalsIgnoreCase(currentStatus) || "error".equalsIgnoreCase(currentStatus)
-                                                    || "skipped".equalsIgnoreCase(currentStatus) || "cancelled".equalsIgnoreCase(currentStatus);
-
-                                            final boolean isZeroStep = objNode.path("currentStepIndex").asInt(0) == 0
-                                                    && (!objNode.has("steps") || objNode.get("steps").isEmpty() || objNode.get("steps").isNull())
-                                                    && objNode.path("metrics").path("totalSteps").asInt(0) == 0;
-
-                                            if (!isFailureStatus && (isZeroStep || testWasCancelled))
-                                            {
-                                                objNode.put("status", statusStr);
-                                                objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
-                                                if (extractedError != null)
-                                                {
-                                                    objNode.put("failureReason", extractedError);
-                                                    objNode.put("error", extractedError);
-                                                }
-                                                else if (!objNode.has("failureReason"))
-                                                {
-                                                    final String defaultFallback = "Test execution failed during setup (exit code " + exitCode + "). Check process logs or API configuration.";
-                                                    objNode.put("failureReason", defaultFallback);
-                                                    objNode.put("error", defaultFallback);
-                                                }
-                                                AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
-                                                hasFailureOrCancel = true;
-                                            }
-                                            else
-                                            {
-                                                hasFailureOrCancel = true;
-                                            }
-                                        }
-                                    }
-                                    catch (final Exception e)
-                                    {
-                                        LOGGER.warn("[Aura Server] Could not update execution status in {}: {}", existingFile.getPath(), e.getMessage());
-                                    }
-                                }
-                            }
-
-                            if (!hasFailureOrCancel && isFailedRun)
-                            {
-                                targetCount = Math.max(targetCount, existingCount + 1);
-                            }
-                        }
-
-                        for (int k = 1; k <= targetCount; k++)
-                        {
-                            final File execJson = new File(classDir, "console-execution-" + k + ".json");
-                            if (!execJson.exists())
-                            {
-                                final String fallbackReason = extractedError != null
-                                    ? extractedError
-                                    : (exitCode != 0 ? "Test execution failed during setup (exit code " + exitCode + "). Check process logs or API configuration." : "");
-                                String escapedReason = "";
-                                try
-                                {
-                                    escapedReason = mapper.writeValueAsString(fallbackReason);
-                                }
-                                catch (final Exception ignored)
-                                {
-                                    escapedReason = "\"" + fallbackReason.replace("\"", "\\\"") + "\"";
-                                }
-                                final String fallbackJson = String.format(
-                                    "{\"runId\":\"%s\",\"status\":\"%s\",\"runnerStatus\":\"%s\",\"currentStepIndex\":0,\"testName\":\"%s\",\"browser\":\"%s\",\"timestamp\":\"%s\",\"failureReason\":%s,\"error\":%s}",
-                                    runId, statusStr, testWasCancelled ? "cancelled" : statusStr, className, primaryBrowser, new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").format(new Date()), escapedReason, escapedReason
-                                );
-                                try
-                                {
-                                    AtomicFileUtils.writeStringAtomic(execJson.toPath(), fallbackJson);
-                                }
-                                catch (final Exception e)
-                                {
-                                    LOGGER.warn("[Aura Server] Could not write fallback execution snapshot to {}: {}", baseDir.getPath(), e.getMessage());
-                                }
-                            }
-                        }
-                    }
+                    updateExecutionSnapshotsAndFallbacks(
+                            runId,
+                            className,
+                            ids,
+                            targetProfiles,
+                            runStorageDirs,
+                            exitCode,
+                            isFailedRun,
+                            testWasCancelled,
+                            extractedError);
 
                     if (queueRunProgressListener != null)
                     {
@@ -1046,7 +945,132 @@ public final class AuraQueueService
         thread.start();
     }
 
-    private final Set<File> ingestedExecutionFiles = Collections.synchronizedSet(new HashSet<>());
+    /**
+     * Inspects stored execution files following batch subprocess completion, marks non-final executions
+     * with the appropriate outcome, and generates fallback execution records only for missing variations
+     * strictly bounded by the expected batch variation count.
+     *
+     * @param runId active queue run identifier
+     * @param className test class name
+     * @param ids dataset identifiers requested for this batch
+     * @param targetProfiles browser profiles targeted for execution
+     * @param runStorageDirs directories where console execution JSONs are stored
+     * @param exitCode subprocess exit code
+     * @param isFailedRun true if process exited non-zero or failures/errors were reported
+     * @param testWasCancelled true if execution was manually aborted
+     * @param extractedError concise error message extracted from subprocess logs, if any
+     */
+    public void updateExecutionSnapshotsAndFallbacks(
+            final String runId,
+            final String className,
+            final List<String> ids,
+            final List<String> targetProfiles,
+            final List<File> runStorageDirs,
+            final int exitCode,
+            final boolean isFailedRun,
+            final boolean testWasCancelled,
+            final String extractedError)
+    {
+        final String primaryBrowser = (!targetProfiles.isEmpty()) ? targetProfiles.get(0) : "Default";
+        final String statusStr = testWasCancelled ? "skipped" : (isFailedRun ? "failed" : "passed");
+        final ObjectMapper mapper = new ObjectMapper();
+
+        for (final File baseDir : runStorageDirs)
+        {
+            final File classDir = new File(baseDir, className);
+            if (!classDir.exists())
+            {
+                classDir.mkdirs();
+            }
+            final File[] existingExecs = classDir.listFiles((dir, name) -> name.startsWith("console-execution-") && name.endsWith(".json"));
+            final int targetCount = Math.max(1, ids.size());
+
+            if (isFailedRun || testWasCancelled)
+            {
+                if (existingExecs != null)
+                {
+                    for (final File existingFile : existingExecs)
+                    {
+                        try
+                        {
+                            final JsonNode node = mapper.readTree(existingFile);
+                            if (node instanceof ObjectNode objNode)
+                            {
+                                final String currentStatus = objNode.has("status") ? objNode.get("status").asText("") : "";
+                                final boolean isFailureStatus = "failed".equalsIgnoreCase(currentStatus) || "failed-unknown".equalsIgnoreCase(currentStatus)
+                                        || "failed-known".equalsIgnoreCase(currentStatus) || "error".equalsIgnoreCase(currentStatus)
+                                        || "skipped".equalsIgnoreCase(currentStatus) || "cancelled".equalsIgnoreCase(currentStatus);
+
+                                final boolean isZeroStep = objNode.path("currentStepIndex").asInt(0) == 0
+                                        && (!objNode.has("steps") || objNode.get("steps").isEmpty() || objNode.get("steps").isNull())
+                                        && objNode.path("metrics").path("totalSteps").asInt(0) == 0;
+
+                                if (!isFailureStatus && (isZeroStep || testWasCancelled || !isFinalExecutionStatus(currentStatus)))
+                                {
+                                    objNode.put("status", statusStr);
+                                    objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
+                                    if (extractedError != null)
+                                    {
+                                        objNode.put("failureReason", extractedError);
+                                        objNode.put("error", extractedError);
+                                    }
+                                    else if (!objNode.has("failureReason"))
+                                    {
+                                        final String defaultFallback = "Test execution failed during setup (exit code " + exitCode + "). Check process logs or API configuration.";
+                                        objNode.put("failureReason", defaultFallback);
+                                        objNode.put("error", defaultFallback);
+                                    }
+                                    AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
+                                }
+                                else if (isFailedRun && !objNode.has("failureReason") && extractedError != null)
+                                {
+                                    objNode.put("failureReason", extractedError);
+                                    objNode.put("error", extractedError);
+                                    AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
+                                }
+                            }
+                        }
+                        catch (final Exception e)
+                        {
+                            LOGGER.warn("[Aura Server] Could not update execution status in {}: {}", existingFile.getPath(), e.getMessage());
+                        }
+                    }
+                }
+            }
+
+            for (int k = 1; k <= targetCount; k++)
+            {
+                final File execJson = new File(classDir, "console-execution-" + k + ".json");
+                if (!execJson.exists())
+                {
+                    final String fallbackReason = extractedError != null
+                        ? extractedError
+                        : (exitCode != 0 ? "Test execution failed during setup (exit code " + exitCode + "). Check process logs or API configuration." : "");
+                    String escapedReason = "";
+                    try
+                    {
+                        escapedReason = mapper.writeValueAsString(fallbackReason);
+                    }
+                    catch (final Exception ignored)
+                    {
+                        escapedReason = "\"" + fallbackReason.replace("\"", "\\\"") + "\"";
+                    }
+                    final String fallbackJson = String.format(
+                        "{\"runId\":\"%s\",\"status\":\"%s\",\"runnerStatus\":\"%s\",\"currentStepIndex\":0,\"testName\":\"%s\",\"browser\":\"%s\",\"timestamp\":\"%s\",\"failureReason\":%s,\"error\":%s}",
+                        runId, statusStr, testWasCancelled ? "cancelled" : statusStr, className, primaryBrowser, new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").format(new Date()), escapedReason, escapedReason
+                    );
+                    try
+                    {
+                        AtomicFileUtils.writeStringAtomic(execJson.toPath(), fallbackJson);
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("[Aura Server] Could not write fallback execution snapshot to {}: {}", baseDir.getPath(), e.getMessage());
+                    }
+                }
+            }
+        }
+    }
 
     /**
      * Inspects execution snapshots in storage for the given class and marks any non-final (running/in-progress)
@@ -1223,7 +1247,7 @@ public final class AuraQueueService
         }
         return switch (status.toLowerCase())
         {
-            case "passed", "failed", "error", "finished", "ignored", "skipped",
+            case "passed", "failed", "error", "finished", "ignored", "skipped", "cancelled",
                  "passed-clean", "failed-known", "failed-unknown", "succeeded-fixed",
                  "succeeded", "fixed", "healed" -> true;
             default -> false;

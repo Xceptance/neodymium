@@ -32,6 +32,7 @@ import com.codeborne.selenide.WebDriverConditions;
 import com.xceptance.aura.AuraManagerApplication;
 import com.xceptance.neodymium.aura.AuraFileService;
 import java.io.File;
+import java.io.IOException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -66,6 +67,8 @@ public final class AuraManagerEditorUiTest
     {
         Configuration.browser = "chrome";
         Configuration.headless = true;
+        Configuration.screenshots = false;
+        Configuration.savePageSource = false;
         if (new File("/usr/local/bin/google-chrome").exists())
         {
             Configuration.browserBinary = "/usr/local/bin/google-chrome";
@@ -90,7 +93,15 @@ public final class AuraManagerEditorUiTest
         }
 
         final String[] dirPaths = new String[] { "src/test/resources", "target/test-classes", "src/test/resources/fragments", "target/test-classes/fragments" };
-        final String[] fileNames = new String[] { "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps", "New Step Fragment.steps", "child.steps", "Child.steps", "Hierarchical Test.yaml", "test.yaml", "MissingIncludeTest.yaml", "nonexistent.steps", "TestDataVarIncludeTest.yaml", "testdata_var.steps", "RawYamlPasteTest.yaml" };
+        final String[] fileNames = new String[] {
+            "new-interactive-aura-test.yaml", "New Interactive Aura Test.yaml", "new-step-fragment.steps",
+            "New Step Fragment.steps", "child.steps", "Child.steps", "Hierarchical Test.yaml", "test.yaml",
+            "MissingIncludeTest.yaml", "nonexistent.steps", "TestDataVarIncludeTest.yaml", "testdata_var.steps",
+            "RawYamlPasteTest.yaml", "RawYamlSyncTest.yaml", "FoldedScalarTest.yaml", "CommentTypingTest.yaml", "InlineCommentTypingTest.yaml",
+            "SubstepTypingTest.yaml", "EnterSubstepTest.yaml", "UndoSubstepTest.yaml", "FragmentStep.steps", "GrandChild.steps", "MultiChild.steps",
+            "New Line Include Cursor Test.yaml", "ParentInclude.steps", "VariablePersistenceTest.yaml", "AuthFragment.steps", "SubstepNameTest.yaml",
+            "CleanStepsSaveTest.yaml"
+        };
 
         for (final String dirPath : dirPaths)
         {
@@ -1200,6 +1211,822 @@ public final class AuraManagerEditorUiTest
         final String savedContent = fileService.readYamlFileContent("RawYamlPasteTest.yaml");
         Assertions.assertEquals(testYaml, savedContent, "Saved YAML file content must persist original multiline formatting");
     }
+
+    @Test
+    public void testOpenFoldedScalarStepsRendersDiscreteRowsInVisualEditor() throws Exception
+    {
+        final String foldedYaml = "steps:\n"
+                                + "  - Click the \"Add to Cart\" button.\n"
+                                + "  # Detailed verification of the cart page\n"
+                                + "  - >-\n"
+                                + "    Verify the cart header is displayed.\n"
+                                + "    Verify the cart items section is displayed.\n"
+                                + "    Verify the product is displayed in the cart.\n";
+
+        fileService.saveYamlFileContent("FoldedScalarTest.yaml", foldedYaml);
+
+        // Open Aura Manager Dashboard in Visual Editor with this test file
+        open("http://localhost:" + port + "/?file=FoldedScalarTest.yaml");
+
+        // Verify editor is in Visual mode
+        final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
+
+        // Verify all 5 rows (1 normal step, 1 comment, 3 substeps) are rendered
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        stepRows.shouldHave(CollectionCondition.size(5));
+
+        // Normal step
+        stepRows.get(0).shouldNotHave(Condition.cssClass("step-row-comment"));
+        stepRows.get(0).shouldNotHave(Condition.cssClass("step-row-substep"));
+        Assertions.assertEquals("Click the \"Add to Cart\" button.", stepRows.get(0).find(".step-content").getText());
+        Assertions.assertEquals("1", stepRows.get(0).find(".step-number").getText());
+
+        // Comment row
+        stepRows.get(1).shouldHave(Condition.cssClass("step-row-comment"));
+        Assertions.assertEquals("# Detailed verification of the cart page", stepRows.get(1).find(".step-content").getText());
+        stepRows.get(1).find(".comment-hash-badge").shouldBe(Condition.visible).shouldHave(Condition.text("#"));
+
+        // Substeps under folded scalar with hierarchical numbering
+        for (int i = 2; i <= 4; i++)
+        {
+            stepRows.get(i).shouldHave(Condition.cssClass("step-row-substep"));
+        }
+        Assertions.assertEquals("1.1", stepRows.get(2).find(".step-number").getText());
+        Assertions.assertEquals("1.2", stepRows.get(3).find(".step-number").getText());
+        Assertions.assertEquals("1.3", stepRows.get(4).find(".step-number").getText());
+        stepRows.get(4).shouldHave(Condition.cssClass("substep-last"));
+
+        Assertions.assertEquals("Verify the cart header is displayed.", stepRows.get(2).find(".step-content").getText());
+        Assertions.assertEquals("Verify the cart items section is displayed.", stepRows.get(3).find(".step-content").getText());
+        Assertions.assertEquals("Verify the product is displayed in the cart.", stepRows.get(4).find(".step-content").getText());
+
+        // Verify substeps toggle bar exists and shows correct title and badge count
+        final SelenideElement toggleBar = $("#stepsList .substeps-toggle-bar").shouldBe(Condition.visible);
+        toggleBar.find(".substeps-title").shouldHave(Condition.text("Detailed verification of the cart page"));
+        toggleBar.find(".substeps-count-badge").shouldHave(Condition.text("3 sub-steps"));
+
+        // Click toggle bar to collapse substeps
+        toggleBar.click();
+        stepRows.get(2).shouldNotBe(Condition.visible);
+        stepRows.get(3).shouldNotBe(Condition.visible);
+        stepRows.get(4).shouldNotBe(Condition.visible);
+        stepRows.get(0).shouldBe(Condition.visible);
+        stepRows.get(1).shouldBe(Condition.visible);
+
+        // Click toggle bar again to expand substeps
+        toggleBar.click();
+        stepRows.get(2).shouldBe(Condition.visible);
+        stepRows.get(3).shouldBe(Condition.visible);
+        stepRows.get(4).shouldBe(Condition.visible);
+
+        // Verify comment row has transparent background
+        final String commentBg = stepRows.get(1).getCssValue("background-color");
+        Assertions.assertTrue(commentBg.contains("rgba(0, 0, 0, 0)") || "transparent".equalsIgnoreCase(commentBg),
+            "Comment row should have a transparent background, but was: " + commentBg);
+    }
+
+    @Test
+    public final void testTypeHashAtBeginningOfLineStylesRowAsCommentImmediately() throws Exception
+    {
+        final String initialYaml = "steps:\n"
+                                 + "  - Click the \"Add to Cart\" button.\n"
+                                 + "  - Fill user credentials\n";
+
+        fileService.saveYamlFileContent("CommentTypingTest.yaml", initialYaml);
+
+        // Open Aura Manager Dashboard in Visual Editor with this test file
+        open("http://localhost:" + port + "/?file=CommentTypingTest.yaml");
+
+        final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
+
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        stepRows.shouldHave(CollectionCondition.size(2));
+
+        // Row 1 is initially a normal step
+        final SelenideElement row1 = stepRows.get(0);
+        row1.shouldNotHave(Condition.cssClass("step-row-comment"));
+        row1.find(".step-number").shouldHave(Condition.text("1"));
+
+        // Type '#' at the beginning of row 1
+        final SelenideElement content1 = row1.find(".step-content");
+        content1.click();
+        Selenide.executeJavaScript("arguments[0].innerText = '#' + arguments[0].innerText; arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", content1);
+
+        // Verify row 1 immediately becomes a comment line
+        row1.shouldHave(Condition.cssClass("step-row-comment"));
+        row1.find(".step-number").find(".comment-hash-badge").shouldBe(Condition.visible).shouldHave(Condition.text("#"));
+
+        // Verify content text inside step line is styled with italic font and transparent background
+        Assertions.assertEquals("italic", content1.getCssValue("font-style"),
+            "Comment step text should have font-style: italic");
+        final String commentBg = content1.getCssValue("background-color");
+        Assertions.assertTrue(commentBg.contains("rgba(0, 0, 0, 0)") || "transparent".equalsIgnoreCase(commentBg),
+            "Comment step content should have transparent background, but was: " + commentBg);
+
+        // Verify row 2 is now numbered '1' because row 1 is a comment
+        stepRows.get(1).shouldNotHave(Condition.cssClass("step-row-comment"));
+        stepRows.get(1).find(".step-number").shouldHave(Condition.text("1"));
+
+        // Save the file with the comment line
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedYaml = fileService.readYamlFileContent("CommentTypingTest.yaml");
+        Assertions.assertTrue(savedYaml.contains("# Click the \"Add to Cart\" button.") || savedYaml.contains("#Click the \"Add to Cart\" button."),
+            "Saved YAML content should retain comment line starting with '#', but was: " + savedYaml);
+
+        // Reload the editor to verify comment styling persists after save and reload
+        open("http://localhost:" + port + "/?file=CommentTypingTest.yaml");
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection reloadedRows = $$("#stepsList .step-row");
+        reloadedRows.shouldHave(CollectionCondition.size(2));
+        final SelenideElement reloadedRow1 = reloadedRows.get(0);
+        final SelenideElement reloadedContent1 = reloadedRow1.find(".step-content");
+
+        // Verify row 1 retains comment class, comment-hash-badge, and italic styling
+        reloadedRow1.shouldHave(Condition.cssClass("step-row-comment"));
+        reloadedRow1.find(".step-number").find(".comment-hash-badge").shouldBe(Condition.visible).shouldHave(Condition.text("#"));
+        Assertions.assertEquals("italic", reloadedContent1.getCssValue("font-style"),
+            "Reloaded comment step text should retain font-style: italic");
+
+        // Verify row 2 retains step number '1'
+        reloadedRows.get(1).shouldNotHave(Condition.cssClass("step-row-comment"));
+        reloadedRows.get(1).find(".step-number").shouldHave(Condition.text("1"));
+
+        // Remove '#' from row 1 and dispatch input
+        reloadedContent1.click();
+        Selenide.executeJavaScript("arguments[0].innerText = arguments[0].innerText.substring(1); arguments[0].dispatchEvent(new Event('input', { bubbles: true }));", reloadedContent1);
+
+        // Verify row 1 immediately reverts back to normal step and normal font style
+        reloadedRow1.shouldNotHave(Condition.cssClass("step-row-comment"));
+        Assertions.assertEquals("normal", reloadedContent1.getCssValue("font-style"),
+            "Reverted step text should have font-style: normal");
+        reloadedRow1.find(".step-number").shouldHave(Condition.text("1"));
+        reloadedRows.get(1).find(".step-number").shouldHave(Condition.text("2"));
+
+        // Save again and verify normal steps persisted
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+    }
+
+    @Test
+    public final void testTypeHashInsideStepLineStylesInlineCommentImmediatelyAndPersistsOnSave() throws Exception
+    {
+        final String initialYaml = "steps:\n"
+                                 + "  - Click the \"Add to Cart\" button.\n"
+                                 + "  - Fill user credentials\n";
+
+        fileService.saveYamlFileContent("InlineCommentTypingTest.yaml", initialYaml);
+
+        // Open Aura Manager Dashboard in Visual Editor with this test file
+        open("http://localhost:" + port + "/?file=InlineCommentTypingTest.yaml");
+
+        final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
+
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        stepRows.shouldHave(CollectionCondition.size(2));
+
+        // Row 1 is initially a normal step without inline comment
+        final SelenideElement row1 = stepRows.get(0);
+        row1.shouldNotHave(Condition.cssClass("step-row-comment"));
+        row1.find(".step-number").shouldHave(Condition.text("1"));
+        final SelenideElement content1 = row1.find(".step-content");
+        content1.find(".step-inline-comment").shouldNot(Condition.exist);
+
+        // Type ' # verify cart opens' at the end of row 1
+        content1.click();
+        Selenide.executeJavaScript(
+            "arguments[0].innerText = arguments[0].innerText.trim() + ' # verify cart opens'; " +
+            "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+            content1
+        );
+
+        // Verify row 1 remains an executable step (NOT a full comment row)
+        row1.shouldNotHave(Condition.cssClass("step-row-comment"));
+        row1.find(".step-number").shouldHave(Condition.text("1"));
+        stepRows.get(1).find(".step-number").shouldHave(Condition.text("2"));
+
+        // Verify the inline comment portion is immediately wrapped and styled as a comment
+        final SelenideElement inlineComment = content1.find(".step-inline-comment").shouldBe(Condition.visible);
+        inlineComment.shouldHave(Condition.text("# verify cart opens"));
+        Assertions.assertEquals("italic", inlineComment.getCssValue("font-style"),
+            "Inline comment text should have font-style: italic");
+
+        // Save the file with the inline comment
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedYaml = fileService.readYamlFileContent("InlineCommentTypingTest.yaml");
+        Assertions.assertTrue(savedYaml.contains("Click the \"Add to Cart\" button. # verify cart opens"),
+            "Saved YAML content should retain inline comment, but was: " + savedYaml);
+
+        // Reload the editor to verify inline comment styling persists across reload
+        open("http://localhost:" + port + "/?file=InlineCommentTypingTest.yaml");
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection reloadedRows = $$("#stepsList .step-row");
+        reloadedRows.shouldHave(CollectionCondition.size(2));
+        final SelenideElement reloadedRow1 = reloadedRows.get(0);
+        final SelenideElement reloadedContent1 = reloadedRow1.find(".step-content");
+
+        // Verify row 1 retains normal step status and numbered 1
+        reloadedRow1.shouldNotHave(Condition.cssClass("step-row-comment"));
+        reloadedRow1.find(".step-number").shouldHave(Condition.text("1"));
+        reloadedRows.get(1).find(".step-number").shouldHave(Condition.text("2"));
+
+        // Verify inline comment is still present with italic styling
+        final SelenideElement reloadedInlineComment = reloadedContent1.find(".step-inline-comment").shouldBe(Condition.visible);
+        reloadedInlineComment.shouldHave(Condition.text("# verify cart opens"));
+        Assertions.assertEquals("italic", reloadedInlineComment.getCssValue("font-style"),
+            "Reloaded inline comment text should retain font-style: italic");
+
+        // Remove the inline comment and dispatch input
+        reloadedContent1.click();
+        Selenide.executeJavaScript(
+            "arguments[0].innerText = 'Click the \"Add to Cart\" button.'; " +
+            "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+            reloadedContent1
+        );
+
+        // Verify inline comment span is removed
+        reloadedContent1.find(".step-inline-comment").shouldNot(Condition.exist);
+
+        // Save again and verify update persisted
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+    }
+
+    @Test
+    public final void testTypeFoldedScalarIndicatorStylesRowAsSubstepImmediatelyAndPersistsOnSave() throws Exception
+    {
+        final String initialYaml = "steps:\n"
+                                 + "  - Click the \"Add to Cart\" button.\n"
+                                 + "  - Fill user credentials\n";
+
+        fileService.saveYamlFileContent("SubstepTypingTest.yaml", initialYaml);
+
+        // Open Aura Manager Dashboard in Visual Editor with this test file
+        open("http://localhost:" + port + "/?file=SubstepTypingTest.yaml");
+
+        final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
+
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        stepRows.shouldHave(CollectionCondition.size(2));
+
+        // Row 2 is initially a normal step numbered 2
+        final SelenideElement row1 = stepRows.get(0);
+        final SelenideElement row2 = stepRows.get(1);
+        row2.shouldNotHave(Condition.cssClass("step-row-substep"));
+        row2.find(".step-number").shouldHave(Condition.text("2"));
+        $(".substeps-toggle-bar").shouldNot(Condition.exist);
+
+        // Type '>- Verify the cart header is displayed.' into row 2
+        final SelenideElement content2 = row2.find(".step-content");
+        content2.click();
+        Selenide.executeJavaScript(
+            "arguments[0].innerText = '>- Verify the cart header is displayed.'; " +
+            "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+            content2
+        );
+
+        // Verify row 2 is immediately styled as a sub-step with hierarchical number 1.1
+        row2.shouldHave(Condition.cssClass("step-row-substep"));
+        row2.find(".step-number").shouldHave(Condition.text("1.1"));
+        row1.find(".step-number").shouldHave(Condition.text("1"));
+
+        // Verify >- chars are stripped and NOT displayed in the first sub-step line
+        content2.shouldHave(Condition.exactText("Verify the cart header is displayed."));
+
+        // Verify substeps toggle bar is rendered
+        final SelenideElement toggleBar = $(".substeps-toggle-bar").shouldBe(Condition.visible);
+        toggleBar.find(".substeps-count-badge").shouldHave(Condition.text("1 sub-step"));
+
+        // Press Backspace at offset 0 to verify un-indenting back to normal step
+        content2.click();
+        Selenide.executeJavaScript(
+            "if (typeof window.setCaretOffset === 'function') window.setCaretOffset(arguments[0], 0); " +
+            "const evt = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }); " +
+            "arguments[0].dispatchEvent(evt);",
+            content2
+        );
+
+        // Verify row 2 reverts immediately to a normal step numbered 2 and toggle bar is removed
+        row2.shouldNotHave(Condition.cssClass("step-row-substep"));
+        row2.find(".step-number").shouldHave(Condition.text("2"));
+        row1.find(".step-number").shouldHave(Condition.text("1"));
+        $(".substeps-toggle-bar").shouldNot(Condition.exist);
+
+        // Re-type '>- Verify the cart header is displayed.' to save and test persistence
+        content2.click();
+        Selenide.executeJavaScript(
+            "arguments[0].innerText = '>- Verify the cart header is displayed.'; " +
+            "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+            content2
+        );
+
+        row2.shouldHave(Condition.cssClass("step-row-substep"));
+        row2.find(".step-number").shouldHave(Condition.text("1.1"));
+        content2.shouldHave(Condition.exactText("Verify the cart header is displayed."));
+        $(".substeps-toggle-bar").shouldBe(Condition.visible);
+
+        // Save the file with the sub-step
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedYaml = fileService.readYamlFileContent("SubstepTypingTest.yaml");
+        Assertions.assertTrue(savedYaml.contains("- >-"),
+            "Saved YAML should contain folded scalar indicator '- >-', but was: " + savedYaml);
+        Assertions.assertTrue(savedYaml.contains("Verify the cart header is displayed."),
+            "Saved YAML should contain the cleaned sub-step text, but was: " + savedYaml);
+
+        // Reload the editor to verify sub-step styling and grouping persist across reload
+        open("http://localhost:" + port + "/?file=SubstepTypingTest.yaml");
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection reloadedRows = $$("#stepsList .step-row");
+        reloadedRows.shouldHave(CollectionCondition.size(2));
+        final SelenideElement reloadedRow1 = reloadedRows.get(0);
+        final SelenideElement reloadedRow2 = reloadedRows.get(1);
+
+        // Verify reloaded row 2 retains sub-step class and hierarchical number 1.1
+        reloadedRow2.shouldHave(Condition.cssClass("step-row-substep"));
+        reloadedRow2.find(".step-number").shouldHave(Condition.text("1.1"));
+        reloadedRow1.find(".step-number").shouldHave(Condition.text("1"));
+        $(".substeps-toggle-bar").shouldBe(Condition.visible);
+
+        // Verify >- badge is hidden once the substeps element is displayed
+        final SelenideElement reloadedContent2 = reloadedRow2.find(".step-content");
+        reloadedContent2.find(".substep-folded-badge").shouldNotBe(Condition.visible);
+        reloadedContent2.shouldHave(Condition.text("Verify the cart header is displayed."));
+    }
+
+    @Test
+    public final void testPressEnterInSubstepsAreaAddsNewSubstepAndDoubleEnterExitsSubstepsArea() throws Exception
+    {
+        final String initialYaml = "steps:\n"
+                                 + "  - Click the \"Add to Cart\" button.\n"
+                                 + "  - >-\n"
+                                 + "    Verify the cart header is displayed.\n";
+
+        fileService.saveYamlFileContent("EnterSubstepTest.yaml", initialYaml);
+
+        // Open Aura Manager Dashboard in Visual Editor with this test file
+        open("http://localhost:" + port + "/?file=EnterSubstepTest.yaml");
+
+        final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
+
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        stepRows.shouldHave(CollectionCondition.size(2));
+
+        // Row 1 is normal step 1, Row 2 is sub-step 1.1
+        final SelenideElement row1 = stepRows.get(0);
+        final SelenideElement row2 = stepRows.get(1);
+        row2.shouldHave(Condition.cssClass("step-row-substep"));
+        row2.find(".step-number").shouldHave(Condition.text("1.1"));
+        $(".substeps-toggle-bar .substeps-count-badge").shouldHave(Condition.text("1 sub-step"));
+
+        // Press Enter while focused at end of sub-step 1.1
+        final SelenideElement content2 = row2.find(".step-content");
+        content2.click();
+        Selenide.executeJavaScript(
+            "if (typeof window.setCaretOffset === 'function') window.setCaretOffset(arguments[0], (arguments[0].innerText || '').length); " +
+            "const evt = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }); " +
+            "arguments[0].dispatchEvent(evt);",
+            content2
+        );
+
+        // Verify a new sub-step line is added below row 2 (row 3 is now 1.2)
+        final ElementsCollection rowsAfterEnter = $$("#stepsList .step-row");
+        rowsAfterEnter.shouldHave(CollectionCondition.size(3));
+
+        final SelenideElement row3 = rowsAfterEnter.get(2);
+        row3.shouldHave(Condition.cssClass("step-row-substep"));
+        row3.find(".step-number").shouldHave(Condition.text("1.2"));
+        $(".substeps-toggle-bar .substeps-count-badge").shouldHave(Condition.text("2 sub-steps"));
+
+        // The new sub-step line is empty
+        final SelenideElement content3 = row3.find(".step-content");
+        content3.shouldHave(Condition.exactText(""));
+
+        // Press Enter a second time on the empty sub-step line -> exits the sub-steps area
+        content3.click();
+        Selenide.executeJavaScript(
+            "if (typeof window.setCaretOffset === 'function') window.setCaretOffset(arguments[0], 0); " +
+            "const evt = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }); " +
+            "arguments[0].dispatchEvent(evt);",
+            content3
+        );
+
+        // Verify row 3 has exited the sub-steps area and converted into regular top-level step 2
+        row3.shouldNotHave(Condition.cssClass("step-row-substep"));
+        row3.find(".step-number").shouldHave(Condition.text("2"));
+        $(".substeps-toggle-bar .substeps-count-badge").shouldHave(Condition.text("1 sub-step"));
+
+        // Type instruction into row 3 and save
+        content3.click();
+        Selenide.executeJavaScript(
+            "arguments[0].innerText = 'Proceed to checkout.'; " +
+            "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+            content3
+        );
+
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedYaml = fileService.readYamlFileContent("EnterSubstepTest.yaml");
+        Assertions.assertTrue(savedYaml.contains("- >-"),
+            "Saved YAML should contain folded scalar indicator '- >-', but was: " + savedYaml);
+        Assertions.assertTrue(savedYaml.contains("Verify the cart header is displayed."),
+            "Saved YAML should contain sub-step line, but was: " + savedYaml);
+        Assertions.assertTrue(savedYaml.contains("Proceed to checkout."),
+            "Saved YAML should contain top-level step line, but was: " + savedYaml);
+
+        // Reload the editor to verify persistence across reload
+        open("http://localhost:" + port + "/?file=EnterSubstepTest.yaml");
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection reloadedRows = $$("#stepsList .step-row");
+        reloadedRows.shouldHave(CollectionCondition.size(3));
+        reloadedRows.get(0).find(".step-number").shouldHave(Condition.text("1"));
+        reloadedRows.get(1).shouldHave(Condition.cssClass("step-row-substep"));
+        reloadedRows.get(1).find(".step-number").shouldHave(Condition.text("1.1"));
+        reloadedRows.get(2).shouldNotHave(Condition.cssClass("step-row-substep"));
+        reloadedRows.get(2).find(".step-number").shouldHave(Condition.text("2"));
+        reloadedRows.get(2).find(".step-content").shouldHave(Condition.exactText("Proceed to checkout."));
+    }
+
+    @Test
+    public final void testCtrlZUndoesLastActionAndPreservesSubsteps() throws Exception
+    {
+        final String initialYaml = "steps:\n"
+                                 + "  - Click the \"Add to Cart\" button.\n"
+                                 + "  - >-\n"
+                                 + "    Verify the cart header is displayed.\n";
+
+        fileService.saveYamlFileContent("UndoSubstepTest.yaml", initialYaml);
+
+        // Open Aura Manager Dashboard in Visual Editor with this test file
+        open("http://localhost:" + port + "/?file=UndoSubstepTest.yaml");
+
+        final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
+        Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
+
+        final ElementsCollection stepRows = $$("#stepsList .step-row");
+        stepRows.shouldHave(CollectionCondition.size(2));
+
+        final SelenideElement row1 = stepRows.get(0);
+        final SelenideElement row2 = stepRows.get(1);
+
+        // Baseline: row 1 is step 1, row 2 is sub-step 1.1 with toggle bar
+        row1.find(".step-number").shouldHave(Condition.text("1"));
+        row2.shouldHave(Condition.cssClass("step-row-substep"));
+        row2.find(".step-number").shouldHave(Condition.text("1.1"));
+        final SelenideElement toggleBar = $(".substeps-toggle-bar").shouldBe(Condition.visible);
+        toggleBar.find(".substeps-count-badge").shouldHave(Condition.text("1 sub-step"));
+
+        // Action 1: Press Enter at the end of sub-step 1.1 to insert sub-step 1.2
+        final SelenideElement content2 = row2.find(".step-content");
+        content2.click();
+        Selenide.executeJavaScript(
+            "if (typeof window.setCaretOffset === 'function') window.setCaretOffset(arguments[0], (arguments[0].innerText || '').length); " +
+            "const evt = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }); " +
+            "arguments[0].dispatchEvent(evt);",
+            content2
+        );
+
+        final ElementsCollection rowsAfterEnter = $$("#stepsList .step-row");
+        rowsAfterEnter.shouldHave(CollectionCondition.size(3));
+        final SelenideElement row3 = rowsAfterEnter.get(2);
+        row3.shouldHave(Condition.cssClass("step-row-substep"));
+        row3.find(".step-number").shouldHave(Condition.text("1.2"));
+        toggleBar.find(".substeps-count-badge").shouldHave(Condition.text("2 sub-steps"));
+
+        // Press Ctrl+Z to undo only the newly inserted sub-step line
+        Selenide.executeJavaScript(
+            "const evt = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }); " +
+            "document.dispatchEvent(evt);"
+        );
+
+        // Verify that row 3 was reverted and row 2 retains its sub-step status and numbering
+        final ElementsCollection rowsAfterUndo = $$("#stepsList .step-row");
+        rowsAfterUndo.shouldHave(CollectionCondition.size(2));
+        rowsAfterUndo.get(0).find(".step-number").shouldHave(Condition.text("1"));
+        rowsAfterUndo.get(1).shouldHave(Condition.cssClass("step-row-substep"));
+        rowsAfterUndo.get(1).find(".step-number").shouldHave(Condition.text("1.1"));
+        $(".substeps-toggle-bar").shouldBe(Condition.visible);
+        $(".substeps-toggle-bar .substeps-count-badge").shouldHave(Condition.text("1 sub-step"));
+
+        // Action 2: Type additional text into sub-step 1.1
+        final SelenideElement contentAfterUndo = rowsAfterUndo.get(1).find(".step-content");
+        contentAfterUndo.click();
+        Selenide.executeJavaScript(
+            "arguments[0].innerText = 'Verify the cart header is displayed and visible.'; " +
+            "arguments[0].dispatchEvent(new Event('input', { bubbles: true }));",
+            contentAfterUndo
+        );
+        contentAfterUndo.shouldHave(Condition.exactText("Verify the cart header is displayed and visible."));
+
+        // Press Ctrl+Z to undo only the typing edit
+        Selenide.executeJavaScript(
+            "const evt = new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }); " +
+            "document.dispatchEvent(evt);"
+        );
+
+        // Verify only the typing was reverted back to the previous text, and sub-step status is preserved
+        final ElementsCollection rowsAfterTextUndo = $$("#stepsList .step-row");
+        rowsAfterTextUndo.shouldHave(CollectionCondition.size(2));
+        rowsAfterTextUndo.get(1).shouldHave(Condition.cssClass("step-row-substep"));
+        rowsAfterTextUndo.get(1).find(".step-number").shouldHave(Condition.text("1.1"));
+        rowsAfterTextUndo.get(1).find(".step-content").shouldHave(Condition.exactText("Verify the cart header is displayed."));
+        $(".substeps-toggle-bar").shouldBe(Condition.visible);
+
+        // Save the file to verify folded scalar persistence
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        final String savedYaml = fileService.readYamlFileContent("UndoSubstepTest.yaml");
+        Assertions.assertTrue(savedYaml.contains("- >-"),
+            "Saved YAML should contain folded scalar indicator '- >-', but was: " + savedYaml);
+        Assertions.assertTrue(savedYaml.contains("Verify the cart header is displayed."),
+            "Saved YAML should contain sub-step line, but was: " + savedYaml);
+
+        // Reload the editor to verify persistence across reload
+        open("http://localhost:" + port + "/?file=UndoSubstepTest.yaml");
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection reloadedRowsAfterSave = $$("#stepsList .step-row");
+        reloadedRowsAfterSave.shouldHave(CollectionCondition.size(2));
+        reloadedRowsAfterSave.get(0).find(".step-number").shouldHave(Condition.text("1"));
+        reloadedRowsAfterSave.get(1).shouldHave(Condition.cssClass("step-row-substep"));
+        reloadedRowsAfterSave.get(1).find(".step-number").shouldHave(Condition.text("1.1"));
+        $(".substeps-toggle-bar").shouldBe(Condition.visible);
+    }
+
+    @Test
+    public final void testVisualEditorChangesDirectlyUpdateRawYamlContent()
+    {
+        open("http://localhost:" + this.port + "/");
+
+        // Create new test file
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("RawYamlSyncTest.yaml");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final SelenideElement rawYamlTextarea = $("#rawYamlTextarea");
+        final SelenideElement firstStep = $$("#stepsList .step-row").first().find(".step-content");
+        firstStep.click();
+        firstStep.sendKeys("Open https://example.com/live-sync");
+
+        // Verify that rawYamlTextarea immediately reflects the newly typed step BEFORE save and WITHOUT refresh
+        final String currentRawVal = rawYamlTextarea.getValue();
+        Assertions.assertTrue(currentRawVal.contains("Open https://example.com/live-sync"),
+            "Raw YAML textarea should directly contain the newly typed step text, but was: " + currentRawVal);
+
+        // Switch to Raw YAML mode
+        $("#btnModeRaw").shouldBe(Condition.visible).click();
+        $("#rawEditorPanel").shouldBe(Condition.visible);
+        $("#visualEditorContainer").shouldNotBe(Condition.visible);
+        Assertions.assertTrue(rawYamlTextarea.getValue().contains("Open https://example.com/live-sync"),
+            "Raw YAML panel when active should contain the modified step");
+
+        // Switch back to Visual mode
+        $("#btnModeVisual").shouldBe(Condition.visible).click();
+        $("#visualEditorContainer").shouldBe(Condition.visible);
+        $("#rawEditorPanel").shouldNotBe(Condition.visible);
+
+        // Add a second step in visual mode
+        firstStep.click();
+        firstStep.sendKeys(Keys.ENTER);
+        final ElementsCollection rows = $$("#stepsList .step-row");
+        rows.shouldHave(CollectionCondition.size(2));
+        final SelenideElement secondStep = rows.get(1).find(".step-content");
+        secondStep.sendKeys("Assert page contains \"Neodymium Test\"");
+
+        // Verify that rawYamlTextarea immediately updates with the second step without save or refresh
+        final String updatedRawVal = rawYamlTextarea.getValue();
+        Assertions.assertTrue(updatedRawVal.contains("Assert page contains \"Neodymium Test\""),
+            "Raw YAML textarea should directly reflect second step addition, but was: " + updatedRawVal);
+    }
+
+    @Test
+    public final void testGiveNameToSubstepsBlockRendersCommentInRawYamlBeforeFoldedScalar() throws Exception
+    {
+        open("http://localhost:" + this.port + "/");
+
+        // Create new test file
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("SubstepNameTest.yaml");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final SelenideElement firstStep = $$("#stepsList .step-row").first().find(".step-content");
+        firstStep.click();
+        firstStep.sendKeys("Open https://example.com");
+
+        // Add a second step and promote to substep via >-
+        firstStep.sendKeys(Keys.ENTER);
+        final ElementsCollection rows = $$("#stepsList .step-row");
+        rows.shouldHave(CollectionCondition.size(2));
+        final SelenideElement secondStep = rows.get(1).find(".step-content");
+        secondStep.sendKeys(">- Verify header is displayed.");
+
+        // Verify substeps toggle bar is rendered with default Sub-steps title
+        final SelenideElement toggleBar = $(".substeps-toggle-bar").shouldBe(Condition.visible);
+        final SelenideElement titleSpan = toggleBar.find(".substeps-title");
+        titleSpan.shouldHave(Condition.text("Sub-steps"));
+        toggleBar.find(".substeps-count-badge").shouldHave(Condition.text("1 sub-step"));
+
+        // Name the sub-steps block by interacting with .substeps-title
+        titleSpan.click();
+        titleSpan.sendKeys("Verify Header and Navigation", Keys.ENTER);
+
+        // Verify title updated
+        titleSpan.shouldHave(Condition.text("Verify Header and Navigation"));
+
+        // Verify comment row exists in the Visual Editor before the substeps
+        final ElementsCollection updatedRows = $$("#stepsList .step-row");
+        updatedRows.shouldHave(CollectionCondition.size(3));
+        final SelenideElement commentRow = updatedRows.get(1);
+        commentRow.shouldHave(Condition.cssClass("step-row-comment"));
+        Assertions.assertEquals("# Verify Header and Navigation", commentRow.find(".step-content").getText());
+
+        // Verify sub-step row maintains hierarchical numbering
+        final SelenideElement substepRow = updatedRows.get(2);
+        substepRow.shouldHave(Condition.cssClass("step-row-substep"));
+        Assertions.assertEquals("1.1", substepRow.find(".step-number").getText());
+
+        // Verify Raw YAML displays # <Name> on the line before - >-
+        final String rawYaml = $("#rawYamlTextarea").getValue();
+        Assertions.assertTrue(rawYaml.matches("(?s).*# Verify Header and Navigation\\s+-\\s*>-\\s+Verify header is displayed\\..*"),
+            "Raw YAML must display '# Verify Header and Navigation' on the line before '- >-', but was: " + rawYaml);
+
+        // Save the file
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Verify saved file on disk contains # <Name> before - >-
+        final String savedContent = this.fileService.readYamlFileContent("SubstepNameTest.yaml");
+        Assertions.assertTrue(savedContent.matches("(?s).*# Verify Header and Navigation\\s+-\\s*>-\\s+Verify header is displayed\\..*"),
+            "Saved YAML file must contain '# Verify Header and Navigation' before '- >-', but was: " + savedContent);
+
+        // Reload the editor and verify persistent rendering
+        open("http://localhost:" + this.port + "/?file=SubstepNameTest.yaml");
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final SelenideElement reloadedToggleBar = $(".substeps-toggle-bar").shouldBe(Condition.visible);
+        reloadedToggleBar.find(".substeps-title").shouldHave(Condition.text("Verify Header and Navigation"));
+        reloadedToggleBar.find(".substeps-count-badge").shouldHave(Condition.text("1 sub-step"));
+
+        final ElementsCollection reloadedRows = $$("#stepsList .step-row");
+        reloadedRows.shouldHave(CollectionCondition.size(3));
+        reloadedRows.get(1).shouldHave(Condition.cssClass("step-row-comment"));
+        Assertions.assertEquals("# Verify Header and Navigation", reloadedRows.get(1).find(".step-content").getText());
+        reloadedRows.get(2).shouldHave(Condition.cssClass("step-row-substep"));
+        Assertions.assertEquals("1.1", reloadedRows.get(2).find(".step-number").getText());
+    }
+
+    @Test
+    void testVariableAndIncludePersistenceAcrossSaveAndReload() throws IOException
+    {
+        final String playbookFile = "VariablePersistenceTest.yaml";
+        final String fragmentFile = "AuthFragment.steps";
+
+        final String initialPlaybook = "steps:\n"
+                                     + "  - Click the login button\n"
+                                     + "  - Wait for dashboard\n";
+        final String initialFragment = "steps:\n"
+                                     + "  - Enter credentials\n";
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+        this.fileService.saveYamlFileContent(fragmentFile, initialFragment);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection rows = $$("#stepsList .step-row");
+        rows.shouldHave(CollectionCondition.size(2));
+
+        final SelenideElement firstContent = rows.first().find(".step-content");
+        firstContent.shouldBe(Condition.visible).click();
+
+        // Update step 1 to include variable ${userName}
+        Selenide.executeJavaScript(
+            "arguments[0].innerText = 'Type ${userName} into username field'; " +
+            "arguments[0].dispatchEvent(new Event('input', { bubbles: true })); " +
+            "if (typeof formatStepToTokens === 'function') formatStepToTokens(arguments[0]);",
+            firstContent
+        );
+
+        // Update step 2 to include the fragment
+        final SelenideElement secondContent = rows.get(1).find(".step-content");
+        secondContent.shouldBe(Condition.visible).click();
+        Selenide.executeJavaScript(
+            "arguments[0].innerText = 'include: AuthFragment.steps'; " +
+            "arguments[0].dispatchEvent(new Event('input', { bubbles: true })); " +
+            "if (typeof formatStepToTokens === 'function') formatStepToTokens(arguments[0]);",
+            secondContent
+        );
+
+        // Verify visually rendered pills are visible in the DOM
+        firstContent.$(".var-pill").shouldBe(Condition.visible).shouldHave(Condition.text("userName"));
+        secondContent.$(".unified-include-pill").shouldBe(Condition.visible).shouldHave(Condition.text("include: AuthFragment.steps"));
+
+        // Save the file
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Verify the saved YAML content on disk does NOT contain icon ligature texts
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertTrue(savedContent.contains("${userName}"),
+            "Saved YAML must contain variable placeholder '${userName}', but was: " + savedContent);
+        Assertions.assertTrue(savedContent.contains("include: AuthFragment.steps"),
+            "Saved YAML must contain 'include: AuthFragment.steps', but was: " + savedContent);
+        Assertions.assertFalse(savedContent.contains("data_object"),
+            "Saved YAML must NEVER leak Material Icon text 'data_object', but was: " + savedContent);
+        Assertions.assertFalse(savedContent.contains("extension"),
+            "Saved YAML must NEVER leak Material Icon text 'extension', but was: " + savedContent);
+        Assertions.assertFalse(savedContent.contains("expand_more"),
+            "Saved YAML must NEVER leak Material Icon text 'expand_more', but was: " + savedContent);
+
+        // Reload the editor and verify clean rendering
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection reloadedRows = $$("#stepsList .step-row");
+        reloadedRows.shouldHave(CollectionCondition.size(2));
+
+        final SelenideElement reloadedFirstContent = reloadedRows.first().find(".step-content");
+        reloadedFirstContent.$(".var-pill").shouldBe(Condition.visible).shouldHave(Condition.text("userName"));
+
+        final SelenideElement reloadedSecondContent = reloadedRows.get(1).find(".step-content");
+        reloadedSecondContent.$(".unified-include-pill").shouldBe(Condition.visible).shouldHave(Condition.text("include: AuthFragment.steps"));
+    }
+
+    @Test
+    void testSavePlaybookDoesNotPrependHyphenToNormalSteps() throws IOException
+    {
+        final String playbookFile = "CleanStepsSaveTest.yaml";
+        final String initialPlaybook = "steps: |\n"
+                                     + "  Open https://verla.xceptance.com/index.html\n"
+                                     + "  Validate that country is selected.\n"
+                                     + "  # Verification block\n"
+                                     + "  - >-\n"
+                                     + "    Verify header is displayed.\n"
+                                     + "    Verify nav is displayed.\n"
+                                     + "  Click checkout button\n";
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        final ElementsCollection rows = $$("#stepsList .step-row");
+        rows.shouldHave(CollectionCondition.size(6));
+
+        // Click save button in visual editor
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Read saved file content on disk
+        final String savedContent = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedContent);
+
+        // Assert steps header is multiline block scalar
+        Assertions.assertTrue(savedContent.contains("steps: |"),
+            "Saved YAML must contain multiline block scalar 'steps: |', but was: " + savedContent);
+
+        // Assert normal steps do NOT have hyphen bullets prepended
+        Assertions.assertTrue(savedContent.contains("  Open https://verla.xceptance.com/index.html"),
+            "Normal step must not have hyphen prepended, but was: " + savedContent);
+        Assertions.assertFalse(savedContent.contains("- Open https://verla.xceptance.com/index.html"),
+            "Normal step must NEVER have hyphen bullet prepended, but was: " + savedContent);
+
+        Assertions.assertTrue(savedContent.contains("  Validate that country is selected."),
+            "Normal step must not have hyphen prepended, but was: " + savedContent);
+        Assertions.assertFalse(savedContent.contains("- Validate that country is selected."),
+            "Normal step must NEVER have hyphen bullet prepended, but was: " + savedContent);
+
+        Assertions.assertTrue(savedContent.contains("  Click checkout button"),
+            "Normal step following substeps must not have hyphen prepended, but was: " + savedContent);
+        Assertions.assertFalse(savedContent.contains("- Click checkout button"),
+            "Normal step following substeps must NEVER have hyphen bullet prepended, but was: " + savedContent);
+
+        // Assert folded scalar substeps retain - >-
+        Assertions.assertTrue(savedContent.contains("- >-"),
+            "Folded scalar substeps group must retain '- >-', but was: " + savedContent);
+        Assertions.assertTrue(savedContent.contains("Verify header is displayed."),
+            "Substep must be present, but was: " + savedContent);
+    }
 }
+
 
 

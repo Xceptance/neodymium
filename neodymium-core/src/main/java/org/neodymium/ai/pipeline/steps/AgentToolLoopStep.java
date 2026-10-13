@@ -1898,6 +1898,79 @@ public final class AgentToolLoopStep implements PipelineStep
         final List<ToolCall> safeCalls = toolCalls != null ? toolCalls : Collections.emptyList();
         final List<Action> safeActions = actions != null ? actions : Collections.emptyList();
 
+        if (safeCalls.isEmpty() && !safeActions.isEmpty())
+        {
+            if (safeActions.size() == numChildren)
+            {
+                for (int i = 0; i < numChildren; i++)
+                {
+                    final PlaybookStep child = subSteps.get(i);
+                    final Action act = safeActions.get(i);
+                    if (act != null)
+                    {
+                        act.setSubStepIndex(i);
+                        act.setSubStepInstruction(child.getInstruction());
+                        child.setActions(List.of(act));
+                    }
+                    else
+                    {
+                        child.setActions(Collections.emptyList());
+                    }
+                    if (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING)
+                    {
+                        child.setStatus(PlaybookStepStatus.SUCCESS);
+                    }
+                }
+                return;
+            }
+
+            final List<List<Action>> partitionedActions = new ArrayList<>();
+            for (int i = 0; i < numChildren; i++)
+            {
+                partitionedActions.add(new ArrayList<>());
+            }
+            int subIdx = 0;
+            for (int a = 0; a < safeActions.size(); a++)
+            {
+                final Action act = safeActions.get(a);
+                final String actType = act != null && act.getType() != null ? act.getType() : "";
+                int matchedIdx = -1;
+                for (int i = subIdx; i < numChildren; i++)
+                {
+                    if (matchesSubStep(subSteps.get(i), actType))
+                    {
+                        matchedIdx = i;
+                        break;
+                    }
+                }
+                final int targetIdx = matchedIdx >= 0 ? matchedIdx : Math.min(Math.max(0, subIdx), numChildren - 1);
+                if (act != null)
+                {
+                    act.setSubStepIndex(targetIdx);
+                    act.setSubStepInstruction(subSteps.get(targetIdx).getInstruction());
+                    partitionedActions.get(targetIdx).add(act);
+                }
+                if (matchedIdx >= 0)
+                {
+                    subIdx = matchedIdx + 1;
+                }
+                else if (subIdx < numChildren - 1)
+                {
+                    subIdx++;
+                }
+            }
+            for (int i = 0; i < numChildren; i++)
+            {
+                final PlaybookStep child = subSteps.get(i);
+                child.setActions(partitionedActions.get(i));
+                if (!partitionedActions.get(i).isEmpty() && (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING))
+                {
+                    child.setStatus(PlaybookStepStatus.SUCCESS);
+                }
+            }
+            return;
+        }
+
         if (safeCalls.size() == numChildren)
         {
             for (int i = 0; i < numChildren; i++)
@@ -1906,7 +1979,17 @@ public final class AgentToolLoopStep implements PipelineStep
                 child.setToolCalls(List.of(safeCalls.get(i)));
                 if (i < safeActions.size())
                 {
-                    child.setActions(List.of(safeActions.get(i)));
+                    final Action act = safeActions.get(i);
+                    if (act != null)
+                    {
+                        act.setSubStepIndex(i);
+                        act.setSubStepInstruction(child.getInstruction());
+                        child.setActions(List.of(act));
+                    }
+                    else
+                    {
+                        child.setActions(Collections.emptyList());
+                    }
                 }
                 else
                 {
@@ -1929,11 +2012,14 @@ public final class AgentToolLoopStep implements PipelineStep
         }
 
         int subIdx = 0;
-        for (int c = 0; c < safeCalls.size(); c++)
+        final int maxIter = Math.max(safeCalls.size(), safeActions.size());
+        for (int c = 0; c < maxIter; c++)
         {
-            final ToolCall call = safeCalls.get(c);
+            final ToolCall call = c < safeCalls.size() ? safeCalls.get(c) : null;
             final Action act = c < safeActions.size() ? safeActions.get(c) : null;
-            final String toolName = call != null && call.toolName() != null ? call.toolName() : "";
+            final String toolName = call != null && call.toolName() != null
+                ? call.toolName()
+                : (act != null && act.getType() != null ? act.getType() : "");
 
             int matchedIdx = -1;
             for (int i = subIdx; i < numChildren; i++)
@@ -1945,27 +2031,25 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
             }
 
+            final int targetIdx = matchedIdx >= 0 ? matchedIdx : Math.min(Math.max(0, subIdx), numChildren - 1);
+            if (call != null)
+            {
+                partitionedCalls.get(targetIdx).add(call);
+            }
+            if (act != null)
+            {
+                act.setSubStepIndex(targetIdx);
+                act.setSubStepInstruction(subSteps.get(targetIdx).getInstruction());
+                partitionedActions.get(targetIdx).add(act);
+            }
+
             if (matchedIdx >= 0)
             {
-                partitionedCalls.get(matchedIdx).add(call);
-                if (act != null)
-                {
-                    partitionedActions.get(matchedIdx).add(act);
-                }
                 subIdx = matchedIdx + 1;
             }
-            else
+            else if (subIdx < numChildren - 1)
             {
-                final int targetIdx = Math.min(Math.max(0, subIdx), numChildren - 1);
-                partitionedCalls.get(targetIdx).add(call);
-                if (act != null)
-                {
-                    partitionedActions.get(targetIdx).add(act);
-                }
-                if (subIdx < numChildren - 1)
-                {
-                    subIdx++;
-                }
+                subIdx++;
             }
         }
 
@@ -1974,7 +2058,8 @@ public final class AgentToolLoopStep implements PipelineStep
             final PlaybookStep child = subSteps.get(i);
             child.setToolCalls(partitionedCalls.get(i));
             child.setActions(partitionedActions.get(i));
-            if (!partitionedCalls.get(i).isEmpty() && (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING))
+            if ((!partitionedCalls.get(i).isEmpty() || !partitionedActions.get(i).isEmpty())
+                && (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING))
             {
                 child.setStatus(PlaybookStepStatus.SUCCESS);
             }
@@ -2015,7 +2100,9 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         if (toolName.contains("click"))
         {
-            return inst.contains("click") || inst.contains("press") || inst.contains("choose") || inst.matches(".*\\badd\\b.*") || inst.contains("submit");
+            return inst.contains("click") || inst.contains("press") || inst.contains("choose") || inst.matches(".*\\badd\\b.*") || inst.contains("submit")
+                || (inst.contains("open") && !inst.contains("http") && !inst.contains("url") && !inst.contains("page") && !inst.contains("browser") && !inst.contains("site"))
+                || inst.contains("close") || inst.contains("toggle") || inst.contains("expand");
         }
         if (toolName.contains("type") || toolName.contains("fill") || toolName.contains("clear"))
         {

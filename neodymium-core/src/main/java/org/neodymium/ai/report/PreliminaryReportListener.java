@@ -383,18 +383,24 @@ public final class PreliminaryReportListener implements ExecutionListener
             if (pbStep != null)
             {
                 final String pbInstr = pbStep.getInstruction();
-                if (this.currentStep != null && pbInstr != null
-                    && (pbInstr.equals(this.currentStep.getRawInstruction()) || pbInstr.equals(this.currentStep.getInstruction())))
+                final String pbRaw = pbStep.getRawInstruction();
+                if (this.currentStep != null)
                 {
-                    targetStep = this.currentStep;
+                    final boolean matchesCurrent = (pbInstr != null && (pbInstr.equals(this.currentStep.getRawInstruction()) || pbInstr.equals(this.currentStep.getInstruction())))
+                        || (pbRaw != null && (pbRaw.equals(this.currentStep.getRawInstruction()) || pbRaw.equals(this.currentStep.getInstruction())));
+                    if (matchesCurrent)
+                    {
+                        targetStep = this.currentStep;
+                    }
                 }
 
-                if (targetStep == null && pbInstr != null)
+                if (targetStep == null)
                 {
                     for (int i = this.report.getSteps().size() - 1; i >= 0; i--)
                     {
                         final TestExecutionReport.ReportStepEntry rootEntry = this.report.getSteps().get(i);
-                        if (pbInstr.equals(rootEntry.getRawInstruction()) || pbInstr.equals(rootEntry.getInstruction()))
+                        if ((pbInstr != null && (pbInstr.equals(rootEntry.getRawInstruction()) || pbInstr.equals(rootEntry.getInstruction())))
+                            || (pbRaw != null && (pbRaw.equals(rootEntry.getRawInstruction()) || pbRaw.equals(rootEntry.getInstruction()))))
                         {
                             targetStep = rootEntry;
                             break;
@@ -402,7 +408,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                         for (int j = rootEntry.getSubSteps().size() - 1; j >= 0; j--)
                         {
                             final TestExecutionReport.ReportStepEntry sub = rootEntry.getSubSteps().get(j);
-                            if (pbInstr.equals(sub.getRawInstruction()) || pbInstr.equals(sub.getInstruction()))
+                            if ((pbInstr != null && (pbInstr.equals(sub.getRawInstruction()) || pbInstr.equals(sub.getInstruction())))
+                                || (pbRaw != null && (pbRaw.equals(sub.getRawInstruction()) || pbRaw.equals(sub.getInstruction()))))
                             {
                                 targetStep = sub;
                                 break;
@@ -415,14 +422,14 @@ public final class PreliminaryReportListener implements ExecutionListener
                     }
                 }
             }
-
-            if (targetStep == null)
+            else
             {
+                // Only fall back to currentStep or last step when the event step is completely untracked (pbStep == null)
                 targetStep = this.currentStep;
-            }
-            if (targetStep == null && !this.report.getSteps().isEmpty())
-            {
-                targetStep = this.report.getSteps().get(this.report.getSteps().size() - 1);
+                if (targetStep == null && !this.report.getSteps().isEmpty())
+                {
+                    targetStep = this.report.getSteps().get(this.report.getSteps().size() - 1);
+                }
             }
 
             if (targetStep != null)
@@ -493,19 +500,48 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         targetStep.setVerificationResult(pbStep.getVerificationResult());
                     }
-                    if (targetStep.getActions().isEmpty() && pbStep.getActions() != null && !pbStep.getActions().isEmpty())
+                    if (pbStep.getActions() != null && !pbStep.getActions().isEmpty())
                     {
-                        for (final Action act : pbStep.getActions())
+                        if (targetStep.getActions().isEmpty())
                         {
-                            targetStep.addAction(new TestExecutionReport.ReportActionEntry(
-                                act.getType(),
-                                act.getTarget(),
-                                act.getValue(),
-                                act.getDescription(),
-                                act.getReasoning(),
-                                true,
-                                null
-                            ));
+                            for (final Action act : pbStep.getActions())
+                            {
+                                final TestExecutionReport.ReportActionEntry actionEntry = new TestExecutionReport.ReportActionEntry(
+                                    act.getType(),
+                                    act.getTarget(),
+                                    act.getValue(),
+                                    act.getDescription(),
+                                    act.getReasoning(),
+                                    true,
+                                    null
+                                );
+                                if (act.getSubStepIndex() != null)
+                                {
+                                    actionEntry.setSubStepIndex(act.getSubStepIndex());
+                                }
+                                if (act.getSubStepInstruction() != null)
+                                {
+                                    actionEntry.setSubStepInstruction(act.getSubStepInstruction());
+                                }
+                                targetStep.addAction(actionEntry);
+                            }
+                        }
+                        else
+                        {
+                            final int count = Math.min(targetStep.getActions().size(), pbStep.getActions().size());
+                            for (int a = 0; a < count; a++)
+                            {
+                                final TestExecutionReport.ReportActionEntry rAct = targetStep.getActions().get(a);
+                                final Action pbAct = pbStep.getActions().get(a);
+                                if (rAct.getSubStepIndex() == null && pbAct.getSubStepIndex() != null)
+                                {
+                                    rAct.setSubStepIndex(pbAct.getSubStepIndex());
+                                }
+                                if (rAct.getSubStepInstruction() == null && pbAct.getSubStepInstruction() != null)
+                                {
+                                    rAct.setSubStepInstruction(pbAct.getSubStepInstruction());
+                                }
+                            }
                         }
                     }
 
@@ -543,7 +579,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                             {
                                 for (final Action act : childStep.getActions())
                                 {
-                                    childEntry.addAction(new TestExecutionReport.ReportActionEntry(
+                                    final TestExecutionReport.ReportActionEntry actionEntry = new TestExecutionReport.ReportActionEntry(
                                         act.getType(),
                                         act.getTarget(),
                                         act.getValue(),
@@ -551,7 +587,24 @@ public final class PreliminaryReportListener implements ExecutionListener
                                         act.getReasoning(),
                                         true,
                                         null
-                                    ));
+                                    );
+                                    if (act.getSubStepIndex() != null)
+                                    {
+                                        actionEntry.setSubStepIndex(act.getSubStepIndex());
+                                    }
+                                    else
+                                    {
+                                        actionEntry.setSubStepIndex(s);
+                                    }
+                                    if (act.getSubStepInstruction() != null)
+                                    {
+                                        actionEntry.setSubStepInstruction(act.getSubStepInstruction());
+                                    }
+                                    else
+                                    {
+                                        actionEntry.setSubStepInstruction(childEntry.getInstruction());
+                                    }
+                                    childEntry.addAction(actionEntry);
                                 }
                             }
                             childEntry.setBug(childStep.isBug());
@@ -574,7 +627,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                             {
                                 for (final Action act : childStep.getActions())
                                 {
-                                    childEntry.addAction(new TestExecutionReport.ReportActionEntry(
+                                    final TestExecutionReport.ReportActionEntry actionEntry = new TestExecutionReport.ReportActionEntry(
                                         act.getType(),
                                         act.getTarget(),
                                         act.getValue(),
@@ -582,19 +635,76 @@ public final class PreliminaryReportListener implements ExecutionListener
                                         act.getReasoning(),
                                         true,
                                         null
-                                    ));
+                                    );
+                                    if (act.getSubStepIndex() != null)
+                                    {
+                                        actionEntry.setSubStepIndex(act.getSubStepIndex());
+                                    }
+                                    else
+                                    {
+                                        actionEntry.setSubStepIndex(s);
+                                    }
+                                    if (act.getSubStepInstruction() != null)
+                                    {
+                                        actionEntry.setSubStepInstruction(act.getSubStepInstruction());
+                                    }
+                                    else
+                                    {
+                                        actionEntry.setSubStepInstruction(childEntry.getInstruction());
+                                    }
+                                    childEntry.addAction(actionEntry);
                                 }
                             }
                             if (childStep.getDurationMs() != null && childStep.getDurationMs() > 0 && childEntry.getDurationMs() <= 0)
                             {
                                 childEntry.setDurationMs(childStep.getDurationMs());
                             }
-                            if (childStep.getStatus() != null && (childEntry.getStatus() == null || "PENDING".equalsIgnoreCase(childEntry.getStatus()) || "RUNNING".equalsIgnoreCase(childEntry.getStatus())))
+                            if (childStep.getStatus() != null)
                             {
                                 childEntry.setStatus(childStep.getStatus().name());
-                                if (childStep.getFailureReason() != null && childEntry.getFailureReason() == null)
+                                if (childStep.getFailureReason() != null)
                                 {
                                     childEntry.setFailureReason(childStep.getFailureReason());
+                                }
+                            }
+                        }
+                    }
+
+                    if (pbStep.getActions() != null && !pbStep.getActions().isEmpty() && !targetStep.getActions().isEmpty())
+                    {
+                        final List<Action> pActions = pbStep.getActions();
+                        final List<TestExecutionReport.ReportActionEntry> rActions = targetStep.getActions();
+                        for (int i = 0; i < pActions.size() && i < rActions.size(); i++)
+                        {
+                            final Action pa = pActions.get(i);
+                            final TestExecutionReport.ReportActionEntry ra = rActions.get(i);
+                            if (ra != null && pa != null)
+                            {
+                                if (pa.getSubStepIndex() != null)
+                                {
+                                    ra.setSubStepIndex(pa.getSubStepIndex());
+                                }
+                                if (pa.getSubStepInstruction() != null && !pa.getSubStepInstruction().isBlank())
+                                {
+                                    ra.setSubStepInstruction(pa.getSubStepInstruction());
+                                }
+                            }
+                        }
+                    }
+
+                    if (!targetStep.getSubSteps().isEmpty() && !targetStep.getActions().isEmpty())
+                    {
+                        for (int s = 0; s < targetStep.getSubSteps().size(); s++)
+                        {
+                            final TestExecutionReport.ReportStepEntry sub = targetStep.getSubSteps().get(s);
+                            if (sub.getActions().isEmpty())
+                            {
+                                for (final TestExecutionReport.ReportActionEntry act : targetStep.getActions())
+                                {
+                                    if (act.getSubStepIndex() != null && act.getSubStepIndex() == s)
+                                    {
+                                        sub.addAction(act);
+                                    }
                                 }
                             }
                         }
@@ -637,6 +747,10 @@ public final class PreliminaryReportListener implements ExecutionListener
                             failureEncountered = true;
                             continue;
                         }
+                        if ("SKIPPED".equalsIgnoreCase(sub.getStatus()))
+                        {
+                            continue;
+                        }
                         if (isStepSuccess)
                         {
                             if (sub.getStatus() == null || "PENDING".equalsIgnoreCase(sub.getStatus()) || "RUNNING".equalsIgnoreCase(sub.getStatus()))
@@ -663,7 +777,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                             }
                             else
                             {
-                                sub.setStatus("PENDING");
+                                sub.setStatus("SKIPPED");
                             }
                         }
                         else
@@ -741,6 +855,14 @@ public final class PreliminaryReportListener implements ExecutionListener
                 if (actionExecuted.getPhase() != null)
                 {
                     this.currentStep.setMultiStage(true);
+                }
+                if (action.getSubStepIndex() != null)
+                {
+                    actionEntry.setSubStepIndex(action.getSubStepIndex());
+                }
+                if (action.getSubStepInstruction() != null)
+                {
+                    actionEntry.setSubStepInstruction(action.getSubStepInstruction());
                 }
                 this.currentStep.addAction(actionEntry);
             }

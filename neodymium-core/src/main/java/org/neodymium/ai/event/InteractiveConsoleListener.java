@@ -21,6 +21,7 @@ package org.neodymium.ai.event;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
@@ -171,6 +172,17 @@ public final class InteractiveConsoleListener implements ExecutionListener
             if (currentStep != null)
             {
                 currentStep.setStatus(PlaybookStepStatus.RUNNING);
+                if (currentStep.getParent() != null)
+                {
+                    final PlaybookStep parent = currentStep.getParent();
+                    final int subIdx = parent.getSubSteps().indexOf(currentStep) + 1;
+                    LOG.info("[InteractiveConsoleListener] Executing sub-step #{}/{} (\"{}\") of parent \"{}\"",
+                        subIdx, parent.getSubSteps().size(), currentStep.getInstruction(), parent.getInstruction());
+                }
+                else
+                {
+                    LOG.info("[InteractiveConsoleListener] Executing step #{} (\"{}\")", stepIndex + 1, currentStep.getInstruction());
+                }
             }
 
             if (context != null)
@@ -198,30 +210,18 @@ public final class InteractiveConsoleListener implements ExecutionListener
         }
         else if (event instanceof StepFinishedEvent stepFinished)
         {
-            int stepIndex = 0;
-            if (context != null && stepFinished.getStep() != null)
+            if (stepFinished.getStep() != null)
             {
-                final PlaybookStep target = stepFinished.getStep();
-                @SuppressWarnings("unchecked")
-                final java.util.List<PlaybookStep> beforeSteps = (java.util.List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
-                @SuppressWarnings("unchecked")
-                final java.util.List<PlaybookStep> flatSteps = (java.util.List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
-                @SuppressWarnings("unchecked")
-                final java.util.List<PlaybookStep> afterSteps = (java.util.List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
-
-                if (beforeSteps != null && beforeSteps.contains(target))
+                final PlaybookStep finishedStep = stepFinished.getStep();
+                if (finishedStep.getParent() != null)
                 {
-                    stepIndex = beforeSteps.indexOf(target);
-                }
-                else if (flatSteps != null && flatSteps.contains(target))
-                {
-                    stepIndex = flatSteps.indexOf(target);
-                }
-                else if (afterSteps != null && afterSteps.contains(target))
-                {
-                    stepIndex = afterSteps.indexOf(target);
+                    final PlaybookStep parent = finishedStep.getParent();
+                    final int subIdx = parent.getSubSteps().indexOf(finishedStep) + 1;
+                    LOG.info("[InteractiveConsoleListener] Finished sub-step #{}/{} (\"{}\") with status {}",
+                        subIdx, parent.getSubSteps().size(), finishedStep.getInstruction(), stepFinished.getStatus());
                 }
             }
+            final int stepIndex = resolveStepIndex(context, stepFinished.getStep());
             final String stateJson = InteractiveStateBuilder.buildStateJson(
                 this.session, context, this.consoleEngine.getRunId(), stepIndex, "running", null, getReport());
 
@@ -292,16 +292,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
             return "ABORT";
         }
 
-        int stepIndex = 0;
-        if (context != null && step != null)
-        {
-            @SuppressWarnings("unchecked")
-            final java.util.List<PlaybookStep> flatSteps = (java.util.List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
-            if (flatSteps != null && flatSteps.contains(step))
-            {
-                stepIndex = flatSteps.indexOf(step);
-            }
-        }
+        final int stepIndex = resolveStepIndex(context, step);
 
         final String pauseId = java.util.UUID.randomUUID().toString();
         this.consoleEngine.registerPauseId(pauseId);
@@ -317,8 +308,11 @@ public final class InteractiveConsoleListener implements ExecutionListener
             final String parentInst = parent.getInstruction();
             final String incFile = step.getSourceFile();
             final int subIdx = parent.getSubSteps().indexOf(step) + 1;
-            LOG.warn("[InteractiveConsoleListener] Sub-step failure encountered at sub-step #{}/{} (\"{}\") inside parent include step \"{}\" (includeFile={}). Sub-steps cannot be skipped individually. Skip the parent include to skip this step.",
-                subIdx, parent.getSubSteps().size(), step.getInstruction(), parentInst, incFile);
+            final String parentContext = (incFile != null && !incFile.isBlank())
+                ? String.format("parent include step \"%s\" (includeFile=%s)", parentInst, incFile)
+                : String.format("parent step \"%s\"", parentInst);
+            LOG.warn("[InteractiveConsoleListener] Sub-step failure encountered at sub-step #{}/{} (\"{}\") inside {}. Sub-steps cannot be skipped individually. Skip the parent to skip this step.",
+                subIdx, parent.getSubSteps().size(), step.getInstruction(), parentContext);
         }
         else
         {
@@ -352,16 +346,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
             return "RUN";
         }
 
-        int stepIndex = 0;
-        if (context != null && step != null)
-        {
-            @SuppressWarnings("unchecked")
-            final java.util.List<PlaybookStep> flatSteps = (java.util.List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
-            if (flatSteps != null && flatSteps.contains(step))
-            {
-                stepIndex = flatSteps.indexOf(step);
-            }
-        }
+        final int stepIndex = resolveStepIndex(context, step);
 
         if (context != null)
         {
@@ -395,8 +380,11 @@ public final class InteractiveConsoleListener implements ExecutionListener
             final String parentInst = parent.getInstruction();
             final String incFile = step.getSourceFile();
             final int subIdx = parent.getSubSteps().indexOf(step) + 1;
-            LOG.info("[InteractiveConsoleListener] Pausing for user action review at sub-step #{}/{} (\"{}\") of parent include \"{}\" (includeFile={}, pauseId={})",
-                subIdx, parent.getSubSteps().size(), step.getInstruction(), parentInst, incFile, pauseId);
+            final String parentContext = (incFile != null && !incFile.isBlank())
+                ? String.format("parent include \"%s\" (includeFile=%s)", parentInst, incFile)
+                : String.format("parent step \"%s\"", parentInst);
+            LOG.info("[InteractiveConsoleListener] Pausing for user action review at sub-step #{}/{} (\"{}\") of {} (pauseId={})",
+                subIdx, parent.getSubSteps().size(), step.getInstruction(), parentContext, pauseId);
         }
         else
         {
@@ -429,16 +417,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
             return;
         }
 
-        int stepIndex = 0;
-        if (context != null && step != null)
-        {
-            @SuppressWarnings("unchecked")
-            final java.util.List<PlaybookStep> flatSteps = (java.util.List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
-            if (flatSteps != null && flatSteps.contains(step))
-            {
-                stepIndex = flatSteps.indexOf(step);
-            }
-        }
+        final int stepIndex = resolveStepIndex(context, step);
 
         final String stateJson = InteractiveStateBuilder.buildStateJson(
             this.session, context, this.consoleEngine.getRunId(), stepIndex, "running", null, getReport());
@@ -475,8 +454,11 @@ public final class InteractiveConsoleListener implements ExecutionListener
                         final String parentInst = parent.getInstruction();
                         final String incFile = currentStep.getSourceFile();
                         final int subIdx = parent.getSubSteps().indexOf(currentStep) + 1;
-                        LOG.warn("[InteractiveConsoleListener] Step marked as SKIPPED per user request on sub-step #{}/{} (\"{}\") inside parent include \"{}\" (includeFile={}). Note: Sub-steps cannot be skipped individually; skip the parent include to skip this fragment.",
-                            subIdx, parent.getSubSteps().size(), currentStep.getInstruction(), parentInst, incFile);
+                        final String parentContext = (incFile != null && !incFile.isBlank())
+                            ? String.format("parent include \"%s\" (includeFile=%s)", parentInst, incFile)
+                            : String.format("parent step \"%s\"", parentInst);
+                        LOG.warn("[InteractiveConsoleListener] Step marked as SKIPPED per user request on sub-step #{}/{} (\"{}\") inside {}. Note: Sub-steps cannot be skipped individually; skip the parent to skip this block.",
+                            subIdx, parent.getSubSteps().size(), currentStep.getInstruction(), parentContext);
                     }
                     else if (currentStep.hasSubSteps())
                     {
@@ -632,5 +614,43 @@ public final class InteractiveConsoleListener implements ExecutionListener
         {
             this.consoleEngine.broadcastSseEvent("fixSuggestion", new Gson().toJson(fixEvent));
         }
+    }
+
+    private int resolveStepIndex(final ExecutionContext context, final PlaybookStep step)
+    {
+        if (context == null || step == null)
+        {
+            return 0;
+        }
+        final PlaybookStep root = step.getRootStep() != null ? step.getRootStep() : step;
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+        if (beforeSteps != null && beforeSteps.contains(root))
+        {
+            return beforeSteps.indexOf(root);
+        }
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        if (playbookSteps != null && playbookSteps.contains(root))
+        {
+            return playbookSteps.indexOf(root);
+        }
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+        if (flatSteps != null && flatSteps.contains(root))
+        {
+            return flatSteps.indexOf(root);
+        }
+        if (flatSteps != null && flatSteps.contains(step))
+        {
+            return flatSteps.indexOf(step);
+        }
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+        if (afterSteps != null && afterSteps.contains(root))
+        {
+            return afterSteps.indexOf(root);
+        }
+        return 0;
     }
 }

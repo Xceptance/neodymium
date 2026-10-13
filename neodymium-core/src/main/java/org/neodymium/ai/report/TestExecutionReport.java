@@ -1031,6 +1031,8 @@ public final class TestExecutionReport
         private String phase;
         private boolean healed;
         private String expectedTarget;
+        private Integer subStepIndex;
+        private String subStepInstruction;
 
         public ReportActionEntry()
         {
@@ -1200,6 +1202,26 @@ public final class TestExecutionReport
         public void setExpectedTarget(final String expectedTarget)
         {
             this.expectedTarget = expectedTarget;
+        }
+
+        public Integer getSubStepIndex()
+        {
+            return this.subStepIndex;
+        }
+
+        public void setSubStepIndex(final Integer subStepIndex)
+        {
+            this.subStepIndex = subStepIndex;
+        }
+
+        public String getSubStepInstruction()
+        {
+            return this.subStepInstruction;
+        }
+
+        public void setSubStepInstruction(final String subStepInstruction)
+        {
+            this.subStepInstruction = subStepInstruction;
         }
     }
 

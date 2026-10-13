@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.playbook.linter.LinterCategory;
@@ -685,5 +686,209 @@ public class InteractiveConsoleEngineTest
             }
             AiConfiguration.resetInstance();
         }
+    }
+
+    @Test
+    public void testArrowSubstepsLoggedAsSubstepsInConsoleExecutionJson() throws Exception
+    {
+        final String runId = "test-arrow-substeps";
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(runId);
+
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+
+        final PlaybookStep navStep = new PlaybookStep("Navigate to homepage");
+        navStep.setLineNumber(1);
+
+        final PlaybookStep arrowParent = new PlaybookStep("Detailed verification of the cart page");
+        arrowParent.setLineNumber(3);
+
+        final PlaybookStep sub1 = new PlaybookStep("Verify the cart header is displayed.");
+        sub1.setLineNumber(4);
+        sub1.setParent(arrowParent);
+
+        final PlaybookStep sub2 = new PlaybookStep("Verify the cart items section is displayed.");
+        sub2.setLineNumber(5);
+        sub2.setParent(arrowParent);
+
+        arrowParent.setSubSteps(List.of(sub1, sub2));
+
+        final PlaybookStep checkoutStep = new PlaybookStep("Click checkout button");
+        checkoutStep.setLineNumber(6);
+
+        context.getTransientData().put("playbook.steps", List.of(navStep, arrowParent, checkoutStep));
+        context.getTransientData().put("playbook.flatSteps", List.of(navStep, sub1, sub2, checkoutStep));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, runId, 1, "running", null, null);
+        engine.pushState(stateJson);
+
+        final File logFile = new File(tempResultsDir, "console-execution-1.json");
+        assertTrue(logFile.exists(), "console-execution-1.json should exist on disk");
+
+        final String loggedJson = Files.readString(logFile.toPath());
+        final JsonNode loggedRoot = new ObjectMapper().readTree(loggedJson);
+
+        final JsonNode stepsNode = loggedRoot.path("blocks").path("steps");
+        assertEquals(3, stepsNode.size(), "blocks.steps must contain exactly 3 top-level steps (no independent substeps)");
+
+        assertEquals("Navigate to homepage", stepsNode.get(0).path("instruction").asText());
+        assertEquals("Detailed verification of the cart page", stepsNode.get(1).path("instruction").asText());
+        assertTrue(stepsNode.get(1).path("hasSubSteps").asBoolean(), "Parent step must declare hasSubSteps: true");
+
+        final JsonNode subStepsArr = stepsNode.get(1).path("subSteps");
+        assertEquals(2, subStepsArr.size(), "Parent step must contain 2 substeps");
+        assertEquals("Verify the cart header is displayed.", subStepsArr.get(0).path("instruction").asText());
+        assertEquals("Verify the cart items section is displayed.", subStepsArr.get(1).path("instruction").asText());
+
+        assertEquals("Click checkout button", stepsNode.get(2).path("instruction").asText());
+    }
+
+    @Test
+    public void testSkippedCompositeSubstepsDoNotLeakIntoPriorFailedStep() throws Exception
+    {
+        final String runId = "run_test_failed_composite_leak";
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(runId);
+
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+
+        final PlaybookStep navStep = new PlaybookStep("Navigate to homepage");
+        navStep.setLineNumber(1);
+        navStep.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep cookieStep = new PlaybookStep("Allow all cookies.");
+        cookieStep.setLineNumber(2);
+        cookieStep.setStatus(PlaybookStepStatus.FAILED);
+
+        final PlaybookStep addToCartStep = new PlaybookStep("Add to cart");
+        addToCartStep.setLineNumber(3);
+        final PlaybookStep sub1 = new PlaybookStep("Open search field");
+        sub1.setLineNumber(4);
+        sub1.setParent(addToCartStep);
+        final PlaybookStep sub2 = new PlaybookStep("Type searchTerm");
+        sub2.setLineNumber(5);
+        sub2.setParent(addToCartStep);
+        addToCartStep.setSubSteps(List.of(sub1, sub2));
+
+        context.getTransientData().put("playbook.steps", List.of(navStep, cookieStep, addToCartStep));
+
+        final TestExecutionReport report = new TestExecutionReport();
+        final ReportStepEntry rep0 = new ReportStepEntry(0, "Navigate to homepage");
+        rep0.setStatus("SUCCESS");
+        final ReportStepEntry rep1 = new ReportStepEntry(1, "Allow all cookies.");
+        rep1.setStatus("FAILED");
+        rep1.setFailureReason("Step timeout of 60s exceeded");
+        report.addStep(rep0);
+        report.addStep(rep1);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, runId, 1, "failed", null, report);
+        engine.pushState(stateJson);
+
+        final File logFile = new File(tempResultsDir, "console-execution-1.json");
+        assertTrue(logFile.exists(), "console-execution-1.json should exist on disk");
+
+        final String loggedJson = Files.readString(logFile.toPath());
+        final JsonNode loggedRoot = new ObjectMapper().readTree(loggedJson);
+
+        final JsonNode stepsNode = loggedRoot.path("blocks").path("steps");
+        assertEquals(3, stepsNode.size());
+
+        final JsonNode cookieNode = stepsNode.get(1);
+        assertEquals("Allow all cookies.", cookieNode.path("instruction").asText());
+        assertEquals("failed", cookieNode.path("status").asText());
+        assertTrue(!cookieNode.has("subSteps") || cookieNode.path("subSteps").isEmpty(),
+            "Failed flat step must NOT have substeps attached");
+
+        final JsonNode cartNode = stepsNode.get(2);
+        assertEquals("Add to cart", cartNode.path("instruction").asText());
+        assertEquals("skipped", cartNode.path("status").asText());
+        assertTrue(cartNode.path("hasSubSteps").asBoolean());
+        assertEquals(2, cartNode.path("subSteps").size());
+    }
+
+    @Test
+    public void testCompositeStepActionsAttributedToSubstepsInConsoleExecutionJson() throws Exception
+    {
+        final String runId = "run_test_composite_action_attribution";
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(runId);
+
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+
+        final PlaybookStep parentStep = new PlaybookStep("If xpdp configurator then _include: ... else _include: ...");
+        parentStep.setLineNumber(1);
+        parentStep.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep sub1 = new PlaybookStep("Open configurator modal");
+        sub1.setLineNumber(2);
+        sub1.setStatus(PlaybookStepStatus.SUCCESS);
+        sub1.setParent(parentStep);
+
+        final PlaybookStep sub2 = new PlaybookStep("Add to cart from configurator");
+        sub2.setLineNumber(3);
+        sub2.setStatus(PlaybookStepStatus.SUCCESS);
+        sub2.setParent(parentStep);
+
+        parentStep.setSubSteps(List.of(sub1, sub2));
+        context.getTransientData().put("playbook.steps", List.of(parentStep));
+
+        final TestExecutionReport report = new TestExecutionReport();
+        final ReportStepEntry repStep = new ReportStepEntry(0, "If xpdp configurator then _include: ... else _include: ...");
+        repStep.setStatus("SUCCESS");
+
+        final ReportActionEntry act1 = new ReportActionEntry("CLICK", "#config-btn", null, "Click config", "Open modal", true);
+        act1.setSubStepIndex(0);
+        act1.setSubStepInstruction("Open configurator modal");
+
+        final ReportActionEntry act2 = new ReportActionEntry("CLICK", "#add-to-cart", null, "Click add", "Add item", true);
+        act2.setSubStepIndex(1);
+        act2.setSubStepInstruction("Add to cart from configurator");
+
+        repStep.addAction(act1);
+        repStep.addAction(act2);
+
+        final ReportStepEntry repSub1 = new ReportStepEntry(0, "Open configurator modal");
+        repSub1.setStatus("SUCCESS");
+        repSub1.addAction(act1);
+
+        final ReportStepEntry repSub2 = new ReportStepEntry(1, "Add to cart from configurator");
+        repSub2.setStatus("SUCCESS");
+        repSub2.addAction(act2);
+
+        repStep.addSubStep(repSub1);
+        repStep.addSubStep(repSub2);
+        report.addStep(repStep);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, runId, 1, "passed", null, report);
+        engine.pushState(stateJson);
+
+        final File logFile = new File(tempResultsDir, "console-execution-1.json");
+        assertTrue(logFile.exists(), "console-execution-1.json should exist on disk");
+
+        final String loggedJson = Files.readString(logFile.toPath());
+        final JsonNode loggedRoot = new ObjectMapper().readTree(loggedJson);
+
+        final JsonNode stepsNode = loggedRoot.path("blocks").path("steps");
+        assertEquals(1, stepsNode.size());
+
+        final JsonNode stepNode = stepsNode.get(0);
+        final JsonNode parentActions = stepNode.path("actions");
+        assertEquals(2, parentActions.size(), "Parent step must have 2 actions");
+
+        assertEquals(0, parentActions.get(0).path("subStepIndex").asInt());
+        assertEquals("Open configurator modal", parentActions.get(0).path("subStepInstruction").asText());
+        assertEquals("#config-btn", parentActions.get(0).path("target").asText());
+
+        assertEquals(1, parentActions.get(1).path("subStepIndex").asInt());
+        assertEquals("Add to cart from configurator", parentActions.get(1).path("subStepInstruction").asText());
+        assertEquals("#add-to-cart", parentActions.get(1).path("target").asText());
+
+        final JsonNode subSteps = stepNode.path("subSteps");
+        assertEquals(2, subSteps.size(), "Parent step must have 2 subSteps");
+
+        final JsonNode sub1Node = subSteps.get(0);
+        assertEquals(1, sub1Node.path("actions").size(), "Substep 1 must have its own action");
+        assertEquals("#config-btn", sub1Node.path("actions").get(0).path("target").asText());
+
+        final JsonNode sub2Node = subSteps.get(1);
+        assertEquals(1, sub2Node.path("actions").size(), "Substep 2 must have its own action");
+        assertEquals("#add-to-cart", sub2Node.path("actions").get(0).path("target").asText());
     }
 }

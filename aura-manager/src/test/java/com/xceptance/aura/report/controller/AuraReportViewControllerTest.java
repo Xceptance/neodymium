@@ -21,6 +21,7 @@ package com.xceptance.aura.report.controller;
 import com.xceptance.aura.report.dto.AreaRunPointDto;
 import com.xceptance.aura.report.dto.AreaSummaryDto;
 import com.xceptance.aura.report.dto.BatchAreaTrendDto;
+import com.xceptance.aura.report.dto.BatchOverviewDataDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestBaseDataDto;
 import com.xceptance.aura.report.dto.TestExecutionDto;
@@ -504,5 +505,62 @@ public class AuraReportViewControllerTest
         Assertions.assertEquals("fragments/side-panel-step-list :: sidePanelBugSection", view);
         Assertions.assertEquals(existingExec, model.getAttribute("exec"));
         Assertions.assertEquals(List.of("BUG-EXISTING-1"), ((TestExecutionDto) model.getAttribute("exec")).getBugs());
+    }
+
+    @Test
+    public void testDeleteRunRemovesRunAndReturnsBatchOverview()
+    {
+        final BatchOverviewDataDto overviewData = new BatchOverviewDataDto(
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of()
+        );
+        Mockito.when(dataService.getBatchOverviewData()).thenReturn(overviewData);
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.deleteRun("RUN-100", null, "true", "http://localhost:8080/batch-overview", null, model);
+
+        Assertions.assertEquals("fragments/batch-overview :: batchOverview", view);
+        Mockito.verify(dataService).removeRunFromHistory("RUN-100");
+    }
+
+    @Test
+    public void testDeleteRunFromBatchHistoryReturnsBatchHistoryFragment()
+    {
+        final String batchName = "SmokeBatch";
+        final List<TestRunEntity> runs = List.of();
+        Mockito.when(runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(batchName)).thenReturn(runs);
+        Mockito.when(batchRepository.findById(batchName)).thenReturn(Optional.empty());
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.deleteRun(null, "RUN-200", "true", "http://localhost:8080/batch-history?batchName=" + batchName + "&limit=10", null, model);
+
+        Assertions.assertEquals("fragments/batch-history :: batchHistory", view);
+        Assertions.assertEquals(batchName, model.getAttribute("batchName"));
+        Mockito.verify(dataService).removeRunFromHistory("RUN-200");
+    }
+
+    @Test
+    public void testDeleteRunFromTestBaseReturnsTestBaseFragment()
+    {
+        final TestBaseDataDto testBaseData = new TestBaseDataDto(
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            Map.of(),
+            0,
+            0
+        );
+        Mockito.when(dataService.getTestBaseData()).thenReturn(testBaseData);
+
+        final Model model = new ConcurrentModel();
+        final String view = controller.deleteRun("RUN-300", null, "true", "http://localhost:8080/test-base?testName=CheckoutTest", null, model);
+
+        Assertions.assertEquals("fragments/test-base :: testBase", view);
+        Assertions.assertEquals("CheckoutTest", model.getAttribute("targetTestName"));
+        Mockito.verify(dataService).removeRunFromHistory("RUN-300");
     }
 }
