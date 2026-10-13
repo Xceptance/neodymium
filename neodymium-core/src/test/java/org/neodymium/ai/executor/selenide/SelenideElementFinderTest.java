@@ -23,7 +23,9 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
+import org.neodymium.ai.executor.selenide.selector.PlaywrightBy;
 import org.openqa.selenium.By;
+import org.openqa.selenium.InvalidSelectorException;
 
 /**
  * Unit tests verifying target locator splitting and candidate resolution in {@link SelenideElementFinder}.
@@ -123,9 +125,34 @@ public class SelenideElementFinderTest
     public void testResolveLocatorTransformsHashAutomationId()
     {
         final By resolvedHash = SelenideElementFinder.resolveLocator("#xc123");
-        Assertions.assertEquals(By.cssSelector("[data-ai='xc123']"), resolvedHash);
+        Assertions.assertEquals(PlaywrightBy.of("#xc123"), resolvedHash);
 
         final By resolvedCompound = SelenideElementFinder.resolveLocator("div.order-summary > #xcrxcvi");
-        Assertions.assertEquals(By.cssSelector("div.order-summary > [data-ai='xcrxcvi']"), resolvedCompound);
+        Assertions.assertEquals(PlaywrightBy.of("div.order-summary > #xcrxcvi"), resolvedCompound);
+    }
+
+    @Test
+    public void testFindElementThrowsOnInvalidSelectorSyntaxWithoutFallingBackToText()
+    {
+        // Unknown pseudo-class must throw InvalidSelectorException immediately
+        final InvalidSelectorException ex1 = Assertions.assertThrows(
+            InvalidSelectorException.class,
+            () -> SelenideElementFinder.findElement("button:frobnicate"));
+        Assertions.assertTrue(ex1.getMessage().contains(":frobnicate"));
+
+        // Unclosed attribute bracket must throw InvalidSelectorException immediately
+        final InvalidSelectorException ex2 = Assertions.assertThrows(
+            InvalidSelectorException.class,
+            () -> SelenideElementFinder.findElement("div[data-x=\"1\""));
+        Assertions.assertTrue(ex2.getMessage().contains("Unclosed attribute bracket"));
+    }
+
+    @Test
+    public void testFindAllInShadowRootsThrowsOnInvalidSelector()
+    {
+        final InvalidSelectorException ex = Assertions.assertThrows(
+            InvalidSelectorException.class,
+            () -> SelenideElementFinder.findAllInShadowRoots("button:frobnicate"));
+        Assertions.assertTrue(ex.getMessage().contains(":frobnicate"));
     }
 }

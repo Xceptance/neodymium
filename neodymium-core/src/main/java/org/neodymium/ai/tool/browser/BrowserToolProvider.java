@@ -2920,7 +2920,7 @@ public final class BrowserToolProvider
             {
                 SelenideElementFinder.ensureAutomationIdsStampedIfNeeded(selector);
             }
-            return SelenideElementFinder.resolveLocator(selector);
+            return LocatorResolver.resolveLocator(selector);
         }
         catch (final Exception ignored)
         {
@@ -2947,7 +2947,7 @@ public final class BrowserToolProvider
             return $("body");
         }
         final SelenideElement found = SelenideElementFinder.findElement(selector);
-        return found != null ? found : $(selector);
+        return found != null ? found : $(safeResolveLocator(selector));
     }
 
     private static ElementsCollection findElements(final String selector)
@@ -3979,7 +3979,7 @@ public final class BrowserToolProvider
                     return (function(sel, searchText, maxCount, ancestorLevels, passedElements) {
                         ancestorLevels = (typeof ancestorLevels === 'number' && ancestorLevels > 0) ? ancestorLevels : 0;
                         var candidates = [];
-                        if (passedElements && Array.isArray(passedElements) && passedElements.length > 0) {
+                        if (passedElements && Array.isArray(passedElements)) {
                             candidates = Array.from(passedElements);
                         } else if (sel && sel.trim()) {
                             try {
@@ -4171,16 +4171,18 @@ public final class BrowserToolProvider
                     })(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
                     """;
 
-                final boolean isComplexSelector = selector != null && !selector.isBlank()
-                        && (selector.contains(">>") || selector.contains(":has-text") || selector.contains(":contains")
-                            || selector.startsWith("text=") || selector.startsWith("//") || selector.startsWith("xpath="));
+                final boolean hasSelector = selector != null && !selector.isBlank();
 
                 List<WebElement> preResolved = null;
-                if (isComplexSelector && WebDriverRunner.hasWebDriverStarted())
+                if (hasSelector && WebDriverRunner.hasWebDriverStarted())
                 {
                     try
                     {
-                        preResolved = WebDriverRunner.getWebDriver().findElements(safeResolveLocator(selector));
+                        if (SelenideElementFinder.isAutomationIdSelector(selector))
+                        {
+                            SelenideElementFinder.ensureAutomationIdsStampedIfNeeded(selector);
+                        }
+                        preResolved = WebDriverRunner.getWebDriver().findElements(LocatorResolver.resolveLocator(selector));
                     }
                     catch (final Exception ignored)
                     {

@@ -1,14 +1,29 @@
 ## Selenide/Selenium Engine Locators
 - Supported locator formats for targeting elements:
-  1. Standard CSS Selectors: `#id`, `.class`, `tag[attr='value']`.
-  2. Neodymium Text Pseudo-Selectors (natively translated to Selenide/Selenium):
-     - Exact text match: `tag:text-is("exact text")` or `tag:exact-text("exact text")` (e.g. `button:text-is("S")` or `.quick-add-dropdown.active button:text-is("S")`).
-     - Substring text match: `tag:has-text("text")` or `tag:contains("text")`.
-     - Text prefix: `text="exact text"`.
-  3. Standard XPath: `//tag[...]` (e.g. `//button[normalize-space()='S']`).
-  4. Automation Reference ID shorthand: `[data-ai='...']` (valid fallback when no standard or text-anchored selector exists).
-  5. Playwright Chained Locators (`>>`):
+  1. Standard CSS & Playwright Extended CSS:
+     - Standard: `#id`, `.class`, `tag[attr='value']`.
+     - Transparent Shadow DOM: All CSS, text, role, and attribute locators automatically and transparently pierce open Shadow DOM boundaries in document order. You do NOT need special shadow piercing syntax like `::shadow` (legacy `::shadow` remains supported for compatibility).
+  2. Playwright Text Matchers & Pseudo-Classes:
+     - Exact text match: `tag:text-is("exact text")`, `tag:exact-text("exact text")`, or `text="exact text"`.
+     - Substring text match: `tag:has-text("text")`, `tag:contains("text")`, or `text*="text"`.
+     - Text engine prefix / shorthands: `text="exact text"`, `"exact text"`, `'exact text'`, or regex `/pattern/flags`.
+     - Element visibility: `tag:visible` or `visible=true` (matches elements that are displayed with non-zero dimensions).
+     - Subtree matching: `tag:has(subSelector)`.
+     - Positional matching: `:nth-match(subSelector, index)` (1-based index).
+     - Layout matching: `:left-of(selector[, distance])`, `:right-of(selector[, distance])`, `:above(selector[, distance])`, `:below(selector[, distance])`, `:near(selector[, distance])`.
+  3. Playwright Semantic & Accessible Role Selectors:
+     - Role and accessible name: `role=button[name="Submit Order"]`, `role=link[name="Checkout"]`, `role=textbox[name="Email"]`.
+     - Supported role options: `name="text"`, `checked=true|false`, `disabled=true|false`, `level=N`, `include-hidden=true`.
+     - Label association: `label="Form Field Label"` (targets the associated `<input>`, `<select>`, or `<textarea>`).
+     - Test ID & Attributes: `id=foo`, `placeholder="Enter email"`, `alt="Logo"`, `title="Tooltip"`, `data-testid="user-input"`.
+  4. Standard XPath:
+     - `//tag[...]` or `xpath=//tag[...]` (e.g. `//button[normalize-space()='S']`).
+     - Note: XPath strictly adheres to W3C DOM and does NOT pierce shadow roots. Use CSS/Playwright locators when targeting elements inside shadow DOM.
+  5. Automation Reference ID shorthand:
+     - `#xchexid`, `xchexid`, or `[data-ai='xchexid']` (valid fallback when stamped on page).
+  6. Playwright Chained Locators (`>>`):
      - Hierarchical filtering: `container >> child` (e.g. `#users-table >> tr:has-text("Alice") >> button.btn-edit`).
+     - Sub-locator capturing: Prefix a clause with `*` to capture that step in the chain instead of the terminal element (e.g. `*li:has(button.delete) >> button.delete`).
      - Zero-based ordinal targeting: `selector >> nth=N` (0 is 1st, 1 is 2nd; e.g. `ul >> li >> nth=2` selects 3rd list item, `.card >> nth=0` selects 1st card).
      - Negative ordinal targeting: `selector >> nth=-1` selects the last element (`nth=-2` is second to last).
      - Preference rule: Always prefer relational anchors (`tr:has-text("Alice") >> ...`) over raw positional ordinals (`nth=N`) when text/label context exists, to ensure tests remain stable across table sorting, insertions, and deletions.

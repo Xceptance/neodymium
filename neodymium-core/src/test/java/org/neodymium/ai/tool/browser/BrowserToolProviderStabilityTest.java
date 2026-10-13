@@ -49,6 +49,8 @@ import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
+import org.neodymium.ai.executor.selenide.selector.PlaywrightBy;
+import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.interactions.Interactive;
@@ -1771,6 +1773,80 @@ public class BrowserToolProviderStabilityTest
             final Object passedElements = scriptArgs.length > 5 ? scriptArgs[5] : (scriptArgs.length > 1 ? scriptArgs[scriptArgs.length - 1] : null);
             Assertions.assertNotNull(passedElements, "preResolved elements must be passed to executeJavaScript");
             Assertions.assertTrue(result.content().contains("Premium Off-White Shirts"), "Result must contain query_dom matches");
+        }
+        finally
+        {
+            WebDriverRunner.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testQueryDomResolvesPlaywrightRoleSelectorViaPreResolvedElements() throws Exception
+    {
+        final AtomicReference<By> capturedBy = new AtomicReference<>();
+        final AtomicReference<Object[]> capturedScriptArgs = new AtomicReference<>();
+
+        final WebElement buttonElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getTagName".equals(name))
+                    {
+                        return "button";
+                    }
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("executeScript".equals(name))
+                    {
+                        capturedScriptArgs.set(args);
+                        return "[{\"tag\":\"button\",\"selector\":\"button#checkout-btn\",\"text\":\"Checkout Now\",\"visible\":true,\"inViewport\":true,\"dataAi\":null,\"y\":200,\"outerHtml\":\"<button>Checkout Now</button>\"}]";
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        if (args != null && args.length > 0 && args[0] instanceof By)
+                        {
+                            capturedBy.set((By) args[0]);
+                        }
+                        return List.of(buttonElement);
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        return buttonElement;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        try
+        {
+            final AiTool tool = this.registry.getTool("query_dom").orElseThrow();
+            final ObjectNode args = MAPPER.createObjectNode();
+            final String selector = "role=button[name='Checkout Now']";
+            args.put("selector", selector);
+
+            final ToolResult result = tool.execute(new ToolCall("call-query-dom-role", "query_dom", args), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertNotNull(capturedBy.get(), "By locator must be passed to driver.findElements");
+            Assertions.assertInstanceOf(PlaywrightBy.class, capturedBy.get(), "Locator must be resolved as PlaywrightBy");
+
+            final Object[] scriptArgs = capturedScriptArgs.get();
+            Assertions.assertNotNull(scriptArgs, "Script arguments must be captured");
+            final Object passedElements = scriptArgs.length > 5 ? scriptArgs[5] : (scriptArgs.length > 1 ? scriptArgs[scriptArgs.length - 1] : null);
+            Assertions.assertNotNull(passedElements, "preResolved elements must be passed to executeJavaScript");
+            Assertions.assertTrue(result.content().contains("Checkout Now"), "Result must contain query_dom matches");
         }
         finally
         {
