@@ -126,6 +126,19 @@ Instead of executing LLM calls dynamically on every run, the framework uses **St
       - "Type \"${username}\" into the email input field"
     ```
 
+  - **Folded Scalar Format (`- >-`) for Single-Turn Batch Assertions**:
+    Standard YAML folded block scalar with strip chomping (`>-`). It folds consecutive lines of text into a single space-separated string, stripping any trailing newline:
+    ```yaml
+    steps:
+      - "Open ${verla.url}/verla-${quality}/index.html in the browser"
+      - >-
+        Verify the brand logo is displayed in the header.
+        Verify the search bar is visible.
+        Verify the navigation bar contains "Products".
+      - "Click login button"
+    ```
+    *Use this format to bundle multiple related verifications, assertions, or visual checks on the same page into a single LLM agent turn.* Instead of incurring the latency, cost, and round-trip overhead of multiple separate turns, the LLM processes all folded checks in one prompt turn and verifies them concurrently.
+
   #### B. Intra-File YAML References & Anchors (`&anchor` / `*alias`)
   To avoid repeating common sequences of steps across multiple sections of the same playbook, you can define standard YAML anchors and reference them as aliases. Neodymium automatically flattens nested lists and multiline blocks into sequential test steps:
 
@@ -984,6 +997,14 @@ steps: |
   * The goal header is provided as the overall objective, and child instructions are injected as ordered `milestones`.
   * The agent retains complete conversation history across all milestones, allowing the LLM to naturally resolve anaphora ("its", "the button") and reference earlier tool actions.
   * Turn limits dynamically scale with the number of milestones (`baseTurns + milestones.size() * 3`).
+
+#### Comparison: Individual Steps vs. Folded Steps (`>-`) vs. Compound Milestones
+
+| Format | YAML Syntax | Internal Model | Execution Behavior | Reporting Representation |
+| :--- | :--- | :--- | :--- | :--- |
+| **Individual Steps** | `steps:`<br>`  - "Step 1"`<br>`  - "Step 2"` | Multiple independent `PlaybookStep` items | Each step runs in its own pipeline turn; fresh context per step. | Rendered as separate numbered test steps (e.g. `Step 1`, `Step 2`). |
+| **Folded Step (`>-`)** | `steps:`<br>`  - >-`<br>`      Check A.`<br>`      Check B.` | 1 `PlaybookStep` with text `"Check A. Check B."` (0 `subSteps`) | Folds lines into a single sentence. Executes in a single LLM turn without sub-step orchestration. | Rendered as 1 single test step containing the combined text. |
+| **Compound Milestones** | `steps: \|`<br>`  Goal:`<br>`    Milestone 1`<br>`    Milestone 2` | 1 parent `PlaybookStep` with `subSteps` | Executes as 1 compound `AgentToolLoopStep`. Sub-steps injected into prompt context as ordered `milestones`. | Rendered as parent step with child sub-step milestones (e.g. `1.1`, `1.2`). |
 
 ---
 

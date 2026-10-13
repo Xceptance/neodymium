@@ -21,6 +21,7 @@ package org.neodymium.ai.report;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -2117,6 +2118,70 @@ public class PreliminaryReportListenerTest
             assertEquals("org.neodymium.ai.integration.verla.search.judge.SearchJudgeTest", report.getTestClass());
             assertEquals("liveAllDataSets", report.getTestMethod());
             assertEquals(List.of("integration", "verla", "mode:judge"), report.getTags());
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(null);
+        }
+    }
+
+    @Test
+    @DisplayName("Verify that when a step fails before actions run, verificationResult is suppressed and sub-steps are marked SKIPPED with 0 duration")
+    public void testStepGateFailureSuppressesVerificationResultAndMarksSubStepsAborted(@TempDir final Path tempDir)
+    {
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        try
+        {
+            final ExecutionEventBus bus = new ExecutionEventBus();
+            final PreliminaryReportListener listener = new PreliminaryReportListener(tempDir, EnumSet.of(DiskReportFormat.JSON), true);
+            bus.registerListener(listener);
+
+            final PlaybookStep parentStep = new PlaybookStep("Locate third product card and add to cart");
+            parentStep.setDurationMs(5500L);
+            parentStep.setFailureReason("Coordinate SSIM tile mismatch (score: 0.79 < 0.95)");
+
+            // Live recording had successful verification result
+            final VerificationResult.OverallVerdict overall = new VerificationResult.OverallVerdict(true, "All good");
+            final VerificationResult verifResult = new VerificationResult(null, overall);
+            parentStep.setVerificationResult(verifResult);
+
+            final PlaybookStep sub1 = new PlaybookStep("Hover over card");
+            sub1.setStatus(PlaybookStepStatus.SUCCESS);
+            sub1.setDurationMs(15000L);
+
+            final PlaybookStep sub2 = new PlaybookStep("Click add to cart");
+            sub2.setStatus(PlaybookStepStatus.SUCCESS);
+            sub2.setDurationMs(15000L);
+
+            parentStep.getSubSteps().add(sub1);
+            parentStep.getSubSteps().add(sub2);
+
+            bus.dispatch(new StepStartedEvent(parentStep, 0));
+            // Failed at pre-action gate
+            bus.dispatch(new StepFinishedEvent(parentStep, PlaybookStepStatus.FAILED));
+
+            final TestExecutionReport report = listener.getReport();
+            assertNotNull(report);
+            assertEquals(1, report.getSteps().size());
+            final TestExecutionReport.ReportStepEntry stepEntry = report.getSteps().get(0);
+            assertEquals("FAILED", stepEntry.getStatus());
+            // Stale verificationResult from live recording MUST be suppressed
+            assertNull(stepEntry.getVerificationResult(), "Failed step must not retain verificationResult");
+
+            // Sub-steps must be SKIPPED, not SUCCESS, and durations must be 0 ms
+            assertEquals(2, stepEntry.getSubSteps().size());
+            final TestExecutionReport.ReportStepEntry subEntry1 = stepEntry.getSubSteps().get(0);
+            final TestExecutionReport.ReportStepEntry subEntry2 = stepEntry.getSubSteps().get(1);
+
+            assertEquals("SKIPPED", subEntry1.getStatus());
+            assertEquals(0L, subEntry1.getDurationMs(), "Unexecuted sub-step duration must be 0 ms");
+            assertNull(subEntry1.getFailureReason());
+
+            assertEquals("SKIPPED", subEntry2.getStatus());
+            assertEquals(0L, subEntry2.getDurationMs(), "Unexecuted sub-step duration must be 0 ms");
+            assertNull(subEntry2.getFailureReason(), "Trailing sub-step must not be falsely blamed for gate failure");
         }
         finally
         {

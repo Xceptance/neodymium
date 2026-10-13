@@ -833,7 +833,7 @@ public final class HtmlReportGenerator
         {
             sb.append("              <span class=\"escalation-badge\">⚡ ").append(step.getEscalations()).append(" esc</span>\n");
         }
-        if (step.getVerificationResult() != null)
+        if (step.getVerificationResult() != null && !"FAILED".equalsIgnoreCase(step.getStatus()))
         {
             final boolean pass = step.getVerificationResult().passed();
             final String badgeCls = pass ? "verification-badge-pass" : "verification-badge-fail";
@@ -1423,7 +1423,7 @@ public final class HtmlReportGenerator
 
                 var verifBadge = document.getElementById('inspVerificationBadge');
                 var tabVerifBadge = document.getElementById('tabVerifBadge');
-                if (step.verificationResult) {
+                if (step.verificationResult && step.status !== 'FAILED') {
                     var vPass = step.verificationResult.passed !== undefined ? step.verificationResult.passed : (step.verificationResult.overallVerdict ? step.verificationResult.overallVerdict.passed : false);
                     verifBadge.style.display = 'inline-block';
                     verifBadge.textContent = vPass ? '🔍 VERIFIED' : '⚠️ VERIF FAILED';

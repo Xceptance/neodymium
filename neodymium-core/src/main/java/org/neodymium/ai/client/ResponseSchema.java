@@ -35,9 +35,6 @@ public enum ResponseSchema
     /** Quality judge second-opinion validation outcome. */
     JUDGE,
 
-    /** Instruction splitting results representing composite sub-steps. */
-    STEP_SPLITS,
-
     /** Free-form raw text response. */
     TEXT,
 
@@ -59,7 +56,6 @@ public enum ResponseSchema
 
         return switch (schema)
         {
-            case STEP_SPLITS -> 512;
             case JUDGE -> 2048;
             case TEXT -> 4096;
             case ACTIONS, ASSERTION, LINTER -> 8192;
@@ -81,7 +77,6 @@ public enum ResponseSchema
 
         return switch (schema)
         {
-            case STEP_SPLITS -> ReasoningEffort.LOW;
             case JUDGE, TEXT, LINTER -> ReasoningEffort.MEDIUM;
             case ACTIONS, ASSERTION -> ReasoningEffort.HIGH;
         };

@@ -358,7 +358,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     childEntry.setRawInstruction(cRaw);
                     childEntry.setSourceFile(childStep.getSourceFile());
                     childEntry.setLineNumber(childStep.getLineNumber());
-                    childEntry.setStatus(childStep.getStatus() != null ? childStep.getStatus().name() : "PENDING");
+                    childEntry.setStatus("PENDING");
                     childEntry.setBug(childStep.isBug());
                     childEntry.setBugDetails(childStep.getBugDetails());
                     childEntry.setOptional(childStep.isOptional());
@@ -435,6 +435,7 @@ public final class PreliminaryReportListener implements ExecutionListener
             if (targetStep != null)
             {
                 targetStep.setStatus(status != null ? status.name() : "SUCCESS");
+                final boolean isStepSuccess = "SUCCESS".equalsIgnoreCase(targetStep.getStatus()) || "PASSED".equalsIgnoreCase(targetStep.getStatus());
                 if (targetStep.getStartTimeMs() > 0)
                 {
                     targetStep.setDurationMs(System.currentTimeMillis() - targetStep.getStartTimeMs());
@@ -496,13 +497,17 @@ public final class PreliminaryReportListener implements ExecutionListener
                     {
                         targetStep.setScreenshotHashDim(pbStep.getScreenshotHashDim());
                     }
-                    if (pbStep.getVerificationResult() != null)
+                    if (isStepSuccess && pbStep.getVerificationResult() != null)
                     {
                         targetStep.setVerificationResult(pbStep.getVerificationResult());
                     }
+                    else if (!isStepSuccess)
+                    {
+                        targetStep.setVerificationResult(null);
+                    }
                     if (pbStep.getActions() != null && !pbStep.getActions().isEmpty())
                     {
-                        if (targetStep.getActions().isEmpty())
+                        if (isStepSuccess && targetStep.getActions().isEmpty())
                         {
                             for (final Action act : pbStep.getActions())
                             {
@@ -655,11 +660,13 @@ public final class PreliminaryReportListener implements ExecutionListener
                                     childEntry.addAction(actionEntry);
                                 }
                             }
-                            if (childStep.getDurationMs() != null && childStep.getDurationMs() > 0 && childEntry.getDurationMs() <= 0)
+                            if ((isStepSuccess || !targetStep.getActions().isEmpty()) && childStep.getDurationMs() != null && childStep.getDurationMs() > 0 && childEntry.getDurationMs() <= 0)
                             {
                                 childEntry.setDurationMs(childStep.getDurationMs());
                             }
-                            if (childStep.getStatus() != null)
+                            if ((isStepSuccess || !targetStep.getActions().isEmpty())
+                                && childStep.getStatus() != null
+                                && (childEntry.getStatus() == null || "PENDING".equalsIgnoreCase(childEntry.getStatus()) || "RUNNING".equalsIgnoreCase(childEntry.getStatus())))
                             {
                                 childEntry.setStatus(childStep.getStatus().name());
                                 if (childStep.getFailureReason() != null)
@@ -731,7 +738,6 @@ public final class PreliminaryReportListener implements ExecutionListener
 
                 if (!targetStep.getSubSteps().isEmpty())
                 {
-                    final boolean isStepSuccess = "SUCCESS".equalsIgnoreCase(targetStep.getStatus()) || "PASSED".equalsIgnoreCase(targetStep.getStatus());
                     final String parentFailure = targetStep.getFailureReason() != null ? targetStep.getFailureReason() : "";
                     final boolean isAbortiveFailure = parentFailure.contains("Token budget exceeded")
                             || parentFailure.contains("timeout")
@@ -804,11 +810,12 @@ public final class PreliminaryReportListener implements ExecutionListener
                             }
                             else if (sub.getStatus() == null || "PENDING".equalsIgnoreCase(sub.getStatus()) || "RUNNING".equalsIgnoreCase(sub.getStatus()))
                             {
-                                sub.setStatus("SUCCESS");
+                                final boolean hasLaterBug = targetStep.getSubSteps().stream().anyMatch(TestExecutionReport.ReportStepEntry::isBug);
+                                sub.setStatus((isStepSuccess || hasLaterBug) ? "SUCCESS" : "SKIPPED");
                             }
                         }
                     }
-                    if (!isStepSuccess && targetStep.getSubSteps().stream().noneMatch(sub -> "FAILED".equalsIgnoreCase(sub.getStatus())))
+                    if (!isStepSuccess && !targetStep.getActions().isEmpty() && targetStep.getSubSteps().stream().noneMatch(sub -> "FAILED".equalsIgnoreCase(sub.getStatus())))
                     {
                         final TestExecutionReport.ReportStepEntry lastSub = targetStep.getSubSteps().get(targetStep.getSubSteps().size() - 1);
                         final boolean lastSubSucceeded = "SUCCESS".equalsIgnoreCase(lastSub.getStatus())

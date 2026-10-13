@@ -233,6 +233,14 @@ public final class ExecuteActionsStepTest
     }
 
     @Test
+    public void testPrepareInstructionPreservesNewlines()
+    {
+        final String raw = "Locate promo code (hint: #code):\n  - clear content (bug)\n  - type 'FREEGIFT' (no-replay)\n  - submit form";
+        final String prepared = ExecuteActionsStep.prepareInstruction(raw);
+        assertEquals("Locate promo code:\n- clear content\n- type 'FREEGIFT'\n- submit form", prepared);
+    }
+
+    @Test
     public void testMapPlaybookStepToPipelineStepReplay() throws Exception
     {
         final MockTargetExecutor executor = new MockTargetExecutor();
@@ -644,6 +652,32 @@ public final class ExecuteActionsStepTest
         assertTrue(activeInstruction.contains("Locate the promo code input field:"));
         assertTrue(activeInstruction.contains("type '10p-off' into it"));
         assertTrue(activeInstruction.contains("Submit the form"));
+    }
+
+    @Test
+    public void testFoldedBlockScalarStepMapsToSingleInstructionWithoutMilestones() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.LLM_RECORDING);
+
+        final String foldedInstruction =
+            "Verify the cart header is displayed. Verify the cart items section is displayed. Verify the product is displayed in the cart.";
+        final PlaybookStep foldedStep = new PlaybookStep(foldedInstruction);
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(foldedStep, session, context);
+        pipelineStep.execute(context);
+
+        assertNull(
+            context.getTransientData().get(ExecutionContext.KEY_INTERNAL_MILESTONES),
+            "Folded scalar step must not set internal milestones");
+
+        final String activeInstruction = (String) context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION);
+        assertNotNull(activeInstruction);
+        assertEquals(foldedInstruction, activeInstruction);
     }
 
     @Test
