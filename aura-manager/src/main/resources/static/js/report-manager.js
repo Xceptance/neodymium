@@ -972,13 +972,13 @@ function filterAllTestsByStatus(statusKey) {
         }
     });
 
-    if (activeWholeExecutionFilter === statusKey) {
+    if (statusKey === 'ALL' || activeWholeExecutionFilter === statusKey || currentGlobalStatusBadgeFilter === statusKey) {
         activeWholeExecutionFilter = null;
         currentGlobalStatusBadgeFilter = 'ALL';
         statusKey = null;
     } else {
         activeWholeExecutionFilter = statusKey;
-        currentGlobalStatusBadgeFilter = statusKey || 'ALL';
+        currentGlobalStatusBadgeFilter = statusKey;
     }
 
     document.querySelectorAll('#runReportSubTabOverview .metric-card, #runReportSubTabOverview .kpi-card').forEach(card => card.classList.remove('active-filter'));
@@ -992,6 +992,7 @@ function filterAllTestsByStatus(statusKey) {
             'FAILED_UNKNOWN': 'overviewKpiUnknown',
             'SKIPPED': 'overviewKpiIgnored',
             'IGNORED': 'overviewKpiIgnored',
+            'RUNNING': 'overviewKpiRunning',
             'passed-clean': 'metricValPassed',
             'succeeded-fixed': 'metricValSucceeded',
             'failed-known': 'metricValKnownFail',
@@ -1044,7 +1045,7 @@ function applyRunReportFilters() {
         const matchSearch = (!search || rowSearch.indexOf(search) !== -1);
 
         let matchStatus = true;
-        const statusFilter = activeWholeExecutionFilter || (currentGlobalStatusBadgeFilter !== 'ALL' ? currentGlobalStatusBadgeFilter : null);
+        const statusFilter = (currentGlobalStatusBadgeFilter && currentGlobalStatusBadgeFilter !== 'ALL') ? currentGlobalStatusBadgeFilter : (activeWholeExecutionFilter && activeWholeExecutionFilter !== 'ALL' ? activeWholeExecutionFilter : null);
         if (statusFilter) {
             const rowSt = (row.getAttribute('data-status') || '').toUpperCase();
             const rowStRaw = (row.getAttribute('data-status-raw') || '').toLowerCase();
@@ -1106,7 +1107,7 @@ function applyRunReportFilters() {
     // Filter status badges on both area group headers AND test class headers
     document.querySelectorAll('#runReportSubTabAllTests .area-group-header .badge-status, #runReportSubTabAllTests .test-class-header .badge-status').forEach(badge => {
         const badgeType = badge.getAttribute('data-status-type') || badge.getAttribute('data-status-key');
-        const stFilter = activeWholeExecutionFilter || (currentGlobalStatusBadgeFilter !== 'ALL' ? currentGlobalStatusBadgeFilter : null);
+        const stFilter = (currentGlobalStatusBadgeFilter && currentGlobalStatusBadgeFilter !== 'ALL') ? currentGlobalStatusBadgeFilter : (activeWholeExecutionFilter && activeWholeExecutionFilter !== 'ALL' ? activeWholeExecutionFilter : null);
         if (stFilter) {
             if (stFilter === 'SKIPPED' || stFilter === 'IGNORED') {
                 badge.style.display = (badgeType === 'SKIPPED' || badgeType === 'IGNORED') ? '' : 'none';
@@ -4524,16 +4525,35 @@ window.recalculateRunReportMetrics = recalculateRunReportMetrics;
 // Client-side Execution Index Filtering and Sorting matching index.html
 
 function filterByGlobalStatusBadge(statusKey, btnEl) {
-    if (currentGlobalStatusBadgeFilter === statusKey) {
+    if (currentGlobalStatusBadgeFilter === statusKey || activeWholeExecutionFilter === statusKey) {
         currentGlobalStatusBadgeFilter = 'ALL';
+        activeWholeExecutionFilter = null;
     } else {
         currentGlobalStatusBadgeFilter = statusKey;
+        activeWholeExecutionFilter = statusKey;
     }
 
-    document.querySelectorAll('#wholeExecutionSummaryBadges .badge-status').forEach(b => b.classList.remove('active-filter-badge'));
+    document.querySelectorAll('#wholeExecutionSummaryBadges .badge-status').forEach(b => b.classList.remove('active-filter', 'active-filter-badge'));
 
     if (currentGlobalStatusBadgeFilter !== 'ALL') {
-        document.querySelectorAll(`#wholeExecutionSummaryBadges .badge-status[data-status-key="${statusKey}"]`).forEach(b => b.classList.add('active-filter-badge'));
+        document.querySelectorAll(`#wholeExecutionSummaryBadges .badge-status[data-status-key="${statusKey}"]`).forEach(b => b.classList.add('active-filter', 'active-filter-badge'));
+    }
+
+    document.querySelectorAll('#runReportSubTabOverview .metric-card, #runReportSubTabOverview .kpi-card').forEach(card => card.classList.remove('active-filter'));
+    if (activeWholeExecutionFilter) {
+        const cardMap = {
+            'PASSED': 'overviewKpiPassed',
+            'SUCCEEDED_FIXED': 'overviewKpiFixed',
+            'FAILED_KNOWN': 'overviewKpiKnown',
+            'FAILED_UNKNOWN': 'overviewKpiUnknown',
+            'SKIPPED': 'overviewKpiIgnored',
+            'IGNORED': 'overviewKpiIgnored',
+            'RUNNING': 'overviewKpiRunning'
+        };
+        const cardValId = cardMap[activeWholeExecutionFilter];
+        if (cardValId) {
+            document.getElementById(cardValId)?.closest('.metric-card, .kpi-card')?.classList.add('active-filter');
+        }
     }
 
     applyFilter();
@@ -4633,8 +4653,8 @@ function filterAllTestsByHealedStatus(status, healedFilter) {
     if (status) {
         currentGlobalStatusBadgeFilter = status;
         activeWholeExecutionFilter = status;
-        document.querySelectorAll('#wholeExecutionSummaryBadges .badge-status').forEach(b => b.classList.remove('active-filter-badge'));
-        document.querySelectorAll(`#wholeExecutionSummaryBadges .badge-status[data-status-key="${status}"]`).forEach(b => b.classList.add('active-filter-badge'));
+        document.querySelectorAll('#wholeExecutionSummaryBadges .badge-status').forEach(b => b.classList.remove('active-filter', 'active-filter-badge'));
+        document.querySelectorAll(`#wholeExecutionSummaryBadges .badge-status[data-status-key="${status}"]`).forEach(b => b.classList.add('active-filter', 'active-filter-badge'));
 
         document.querySelectorAll('#runReportSubTabOverview .metric-card, #runReportSubTabOverview .kpi-card').forEach(card => card.classList.remove('active-filter'));
         const cardMap = {
@@ -4643,7 +4663,8 @@ function filterAllTestsByHealedStatus(status, healedFilter) {
             'FAILED_KNOWN': 'overviewKpiKnown',
             'FAILED_UNKNOWN': 'overviewKpiUnknown',
             'SKIPPED': 'overviewKpiIgnored',
-            'IGNORED': 'overviewKpiIgnored'
+            'IGNORED': 'overviewKpiIgnored',
+            'RUNNING': 'overviewKpiRunning'
         };
         const cardValId = cardMap[status];
         if (cardValId) {

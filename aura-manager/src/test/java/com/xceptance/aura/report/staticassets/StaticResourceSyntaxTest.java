@@ -288,4 +288,119 @@ public final class StaticResourceSyntaxTest
             );
         }
     }
+
+    @Test
+    public void testRunReportStatusFilterStateTransitions() throws Exception
+    {
+        final Path indexPath = Paths.get("src/main/resources/templates/index.html");
+        Assertions.assertTrue(Files.exists(indexPath), "index.html must exist: " + indexPath.toAbsolutePath());
+        final String indexContent = Files.readString(indexPath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            indexContent.contains("report-manager.js?v=1.1.2"),
+            "index.html must reference report-manager.js with cache buster ?v=1.1.2"
+        );
+
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist: " + jsFilePath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const testScript = code + '\\n' + `\n" +
+            "function makeEl(tag) {\n" +
+            "    return {\n" +
+            "        tagName: tag,\n" +
+            "        style: {},\n" +
+            "        classList: { add: () => {}, remove: () => {}, contains: () => false },\n" +
+            "        getAttribute: () => '',\n" +
+            "        setAttribute: () => {},\n" +
+            "        removeAttribute: () => {},\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        closest: () => null\n" +
+            "    };\n" +
+            "}\n" +
+            "function makeRow(status) {\n" +
+            "    const el = makeEl('TR');\n" +
+            "    el.getAttribute = (attr) => attr === 'data-status' ? status : '';\n" +
+            "    el.innerText = status;\n" +
+            "    return el;\n" +
+            "}\n" +
+            "const row1 = makeRow('PASSED');\n" +
+            "const row2 = makeRow('FAILED_KNOWN');\n" +
+            "const row3 = makeRow('FAILED_UNKNOWN');\n" +
+            "const allRows = [row1, row2, row3];\n" +
+            "document.getElementById = (id) => makeEl('DIV');\n" +
+            "document.querySelectorAll = (sel) => sel.includes('.test-row') ? allRows : [];\n" +
+            "applyRunReportFilters();\n" +
+            "if (row1.style.display !== '' || row2.style.display !== '' || row3.style.display !== '') {\n" +
+            "    throw new Error('Initial rows display mismatch');\n" +
+            "}\n" +
+            "filterAllTestsByStatus('PASSED');\n" +
+            "if (currentGlobalStatusBadgeFilter !== 'PASSED' || activeWholeExecutionFilter !== 'PASSED') {\n" +
+            "    throw new Error('Step 1 state mismatch: ' + currentGlobalStatusBadgeFilter + ', ' + activeWholeExecutionFilter);\n" +
+            "}\n" +
+            "if (row1.style.display !== '' || row2.style.display !== 'none' || row3.style.display !== 'none') {\n" +
+            "    throw new Error('Step 1 row display mismatch');\n" +
+            "}\n" +
+            "filterByGlobalStatusBadge('PASSED');\n" +
+            "if (currentGlobalStatusBadgeFilter !== 'ALL' || activeWholeExecutionFilter !== null) {\n" +
+            "    throw new Error('Step 2 (deselect) state mismatch: ' + currentGlobalStatusBadgeFilter + ', ' + activeWholeExecutionFilter);\n" +
+            "}\n" +
+            "if (row1.style.display !== '' || row2.style.display !== '' || row3.style.display !== '') {\n" +
+            "    throw new Error('Step 2 (deselect) row display mismatch');\n" +
+            "}\n" +
+            "filterAllTestsByStatus('PASSED');\n" +
+            "filterByGlobalStatusBadge('FAILED_KNOWN');\n" +
+            "if (currentGlobalStatusBadgeFilter !== 'FAILED_KNOWN' || activeWholeExecutionFilter !== 'FAILED_KNOWN') {\n" +
+            "    throw new Error('Step 3 (switch) state mismatch: ' + currentGlobalStatusBadgeFilter + ', ' + activeWholeExecutionFilter);\n" +
+            "}\n" +
+            "if (row1.style.display !== 'none' || row2.style.display !== '' || row3.style.display !== 'none') {\n" +
+            "    throw new Error('Step 3 (switch) row display mismatch');\n" +
+            "}\n" +
+            "filterAllTestsByStatus('ALL');\n" +
+            "if (currentGlobalStatusBadgeFilter !== 'ALL' || activeWholeExecutionFilter !== null) {\n" +
+            "    throw new Error('Step 4 (ALL) state mismatch: ' + currentGlobalStatusBadgeFilter + ', ' + activeWholeExecutionFilter);\n" +
+            "}\n" +
+            "if (row1.style.display !== '' || row2.style.display !== '' || row3.style.display !== '') {\n" +
+            "    throw new Error('Step 4 (ALL) row display mismatch');\n" +
+            "}\n" +
+            "`;\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(testScript, sandbox);\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "Filter state transition test failed:\n" + output);
+    }
 }
