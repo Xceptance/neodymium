@@ -108,12 +108,19 @@ To eliminate locator ambiguity, Neodymium implements an on-demand **Set-of-Marks
 [Zero-Token Replay] ◀── coord: <container>@x,y ◀── LLM emits: click(target: "marker:3")
 ```
 
-1. **Badge Superimposition**: `VisualBadgeInjector` identifies interactive elements visible in the viewport, injecting high-contrast numbered badges (`[1..N]`) over each element with `pointer-events: none`.
-2. **Visual Targeting**: The VLM targets elements using concise marker identifiers:
-   - `target: "marker:3"`
-   - `target: "badge:3"`
-3. **Container-Anchored Resolution**: Before dispatching the click, the framework determines the element's coordinates relative to its nearest enclosing container (e.g. `#header`, `.navbar-nav`, or `.product-card`) and records the action as `coord: <container-selector>@relX,relY`.
-4. **SUT Hygiene (Auto-Purging)**: Immediately after action dispatch, `VisualBadgeInjector.clearMarkers(driver)` wipes all marker DOM nodes and styling, ensuring the SUT remains pristine for subsequent steps.
+1. **Badge Superimposition**: `VisualBadgeInjector` identifies interactive elements visible in the viewport, injecting high-contrast numbered badges (`[1..N]`) over each element with `pointer-events: none` and `data-m="N"` attributes on the marked DOM nodes.
+2. **Universal Visual Marker Targeting**: The VLM can target elements using concise marker identifiers (`"marker:3"` or `"badge:3"`) across **any** interactive browser tool (`click`, `type`, `fill`, `enter`, `press_key`, `select`, `check`, `hover`, `clear`).
+3. **Interactive Ancestor Normalization & Container-Anchored Resolution**:
+   - Before dispatching the action, `ReanchoringBridge` normalizes leaf inner child nodes (`svg`, `path`, `use`, `img`, `i`, `span`) up to their enclosing interactive ancestor (`button`, `a`, `[role="button"]`, `[onclick]`, `[tabindex]`).
+   - All synthetic `data-m` and `data-ai*` attributes are stripped from the recorded `DomFeatureVector`, while full structural context (`role`, `accessibleName`, `parentTag`, `siblingIndex`, and deterministic SVG/image `data-graphic-sig` FNV-1a fingerprints) is captured.
+   - If the resolved element yields a stable CSS selector (`score >= 40`), the recorded tool call is promoted directly to that selector (`selector: "..."`).
+   - Otherwise, `PageAnalyzer.resolveAnchorCoordinate` resolves the element's coordinates relative to its nearest repeating container—either via `#id`, `[data-testid]`/`[data-test]`/`[data-qa]`, a unique semantic class, or a heading-scoped repeating container (`coord:article:has-text("Starter Plan")@relX,relY`)—preventing layout-shift misclicks when sibling cards are inserted or reordered.
+4. **SUT Hygiene (Pre-Click Auto-Purging & Clean Visual Baseline Capture)**:
+   - Immediately after resolving `marker:N` and **before** capturing visual signatures or dispatching the click, `VisualBadgeInjector.clearMarkers(driver)` purges all marker badges and outlines from the live DOM.
+   - `BrowserToolProvider` then captures a clean pre-click screenshot and populates the recorded `DomFeatureVector` with a clean 64-bit element `visualHash` (dHash) and 64x64 `tileSsim` matrix, while storing `KEY_PRE_CLICK_COORD_TILE_MATRIX` so `step.screenshotHash` records the **pre-click** target tile rather than post-click mutated state.
+5. **Offline Replay Gating & Self-Healing (`REPLAY_WITH_HEALING`)**:
+   - **Pre-Click Visual Tile Verification**: `VisualBaselineGateStep` and `PlaybookToolReplayer` verify the live pre-click 64x64 tile SSIM against the recorded baseline before dispatching coordinate clicks, halting immediately if the visual target has shifted or disappeared.
+   - **Multi-Modal Identity & Relocation**: For textless icon buttons (`button`, `svg`, `canvas`), `PlaybookToolReplayer` verifies identity and relocates shifted elements (`score >= 0.55`) using structural ancestry (`parentTag`, `siblingIndex`), SVG/image graphic fingerprints (`data-graphic-sig`), and live cropped visual dHash/tile SSIM, while preserving any container anchor (`coord:<anchor>@newRelX,newRelY`).
 
 ### Activation Pathways
 
@@ -150,7 +157,7 @@ The LLM can autonomously invoke the visual marker tools whenever it encounters l
 To guarantee exact coordinate alignment across different developer machines, headless CI environments, and high-DPI displays:
 - **1:1 CSS Pixel Parity**: When screenshots are captured on Retina displays (macOS) or HiDPI screens where `devicePixelRatio > 1.0`, images are normalized to exact CSS viewport dimensions (`window.innerWidth`, `window.innerHeight`).
 - **Token Optimization**: Normalizing 2x Retina screenshots ($2048 \times 1536 \rightarrow 1024 \times 768$) reduces image payload size by up to $75\%$, cutting VLM latency and token billing.
-- **Responsive Layout Stability**: Because coordinates are anchored relative to their container (`#canvas-stage@300,75`), responsive shifts or vertical scrolling maintain precise click positioning.
+- **Responsive Layout Stability**: Because coordinates are anchored relative to their container (`#canvas-stage@300,75` or `article:has-text("Starter Plan")@140,220`), responsive shifts, grid reflows, or vertical scrolling maintain precise click positioning.
 
 ---
 
@@ -158,7 +165,7 @@ To guarantee exact coordinate alignment across different developer machines, hea
 
 | Action Type | Description | Replay Implementation |
 | :--- | :--- | :--- |
-| **Visual Marker Click** | Click a marked element badge (`marker:N` / `badge:N`) | Resolves to container-anchored coordinates; `moveToElement(anchor, dx, dy).click().perform()` |
+| **Visual Marker Click / Action** | Interact with a marked element badge (`marker:N` / `badge:N`) across `click`, `type`, `select`, `check`, `hover`, `press_key`, `clear` | Promotes to semantic CSS selector (`score >= 40`) or container-anchored coordinates (`coord:<container>@relX,relY`) with pre-click visual tile verification and multi-modal self-healing |
 | **Visual Direct Click** | Click a visual hotspot/button in canvas or SVG | `moveToElement(anchor, dx, dy).click().perform()` |
 | **Visual Hover** | Hover over chart nodes or visual items to reveal tooltips | `moveToElement(anchor, dx, dy).perform()` |
 | **Visual Drag & Drop** | Move sliders, draw signatures, drag diagram workflow nodes | `moveToElement(anchor, x1, y1).clickAndHold().moveToElement(anchor, x2, y2).release().perform()` |

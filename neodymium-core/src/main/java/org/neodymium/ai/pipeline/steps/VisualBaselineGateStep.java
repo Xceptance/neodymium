@@ -190,7 +190,8 @@ public final class VisualBaselineGateStep implements PipelineStep
                     }
 
                     final boolean pureVerification = isPureVerification();
-                    if (!pureVerification)
+                    final boolean isMarkerCoordinateGate = this.step.isMarker() && coordinateTarget != null;
+                    if (!pureVerification && !isMarkerCoordinateGate)
                     {
                         LOGGER.debug("   Visual step contains recorded mutating actions; deferring visual baseline check to post-action for: \"{}\"",
                             resolvedInstruction);
@@ -486,6 +487,10 @@ public final class VisualBaselineGateStep implements PipelineStep
         if (coordinateTarget != null)
         {
             this.step.setFullPage(false);
+            if (this.step.isMarker() && !this.step.isVisualOrLayoutStep())
+            {
+                return;
+            }
         }
 
         SutState postState = (SutState) context.getTransientData().get(ExecutionContext.KEY_POST_ACTION_STATE);

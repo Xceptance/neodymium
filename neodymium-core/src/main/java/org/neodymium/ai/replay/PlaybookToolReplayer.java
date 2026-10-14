@@ -50,6 +50,9 @@ import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.tool.ToolResult;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.neodymium.ai.tool.browser.ReanchoringBridge;
+import org.neodymium.ai.util.ScreenshotHasher;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -548,7 +551,8 @@ public final class PlaybookToolReplayer
                 final int y = resolvedCoords[1];
                 final WebDriver driver = WebDriverRunner.getWebDriver();
                 final ReanchoringBridge.ReanchoredElement liveEl = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
-                if (matchesRecordedIdentity(liveEl, recordedVector))
+                if (matchesRecordedIdentity(liveEl, recordedVector)
+                        && matchesCoordinateVisualTile(driver, x, y, recordedVector, context))
                 {
                     return null;
                 }
@@ -625,6 +629,7 @@ public final class PlaybookToolReplayer
 
         if (liveCandidates != null && !liveCandidates.isEmpty())
         {
+            liveCandidates = enrichCandidatesWithVisualSignatures(recordedVector, liveCandidates, context);
             // Sub-millisecond similarity healing on CPU
             final DomFeatureVector best = LocatorCascadeResolver.findBestMatch(recordedVector, liveCandidates, 0.70);
             if (best != null)
@@ -658,6 +663,27 @@ public final class PlaybookToolReplayer
                 {
                     final int newX = best.getX() + (best.getWidth() / 2);
                     final int newY = best.getY() + (best.getHeight() / 2);
+                    final CoordinateTarget origCoord = ClickAction.parseCoordinateTarget(currentTarget);
+                    final String origAnchor = (origCoord != null && origCoord.anchorSelector() != null && !origCoord.anchorSelector().isBlank())
+                            ? origCoord.anchorSelector().trim()
+                            : (args.hasNonNull("selector")
+                                    && !args.path("selector").asText().isBlank()
+                                    && !args.path("selector").asText().trim().startsWith("coord:")
+                                    ? args.path("selector").asText().trim()
+                                    : null);
+                    if (origAnchor != null)
+                    {
+                        final int[] anchorTopLeft = resolveAnchorTopLeft(origAnchor, context);
+                        final int relX = anchorTopLeft != null ? (newX - anchorTopLeft[0]) : newX;
+                        final int relY = anchorTopLeft != null ? (newY - anchorTopLeft[1]) : newY;
+                        final String newTarget = "coord:" + origAnchor + "@" + relX + "," + relY;
+                        LOGGER.info("🧬 Relocated anchored coordinate target '{}' -> '{}' using DomFeatureVector similarity", currentTarget, newTarget);
+                        updatedArgs.put("target", newTarget);
+                        updatedArgs.put("selector", origAnchor);
+                        updatedArgs.put("x", relX);
+                        updatedArgs.put("y", relY);
+                        return new ToolCall(call.callId(), call.toolName(), updatedArgs);
+                    }
                     final String newTarget = "coord: " + newX + "," + newY;
                     LOGGER.info("🧬 Relocated coordinate target '{}' -> '{}' using DomFeatureVector similarity", currentTarget, newTarget);
                     updatedArgs.put("target", newTarget);
@@ -669,6 +695,162 @@ public final class PlaybookToolReplayer
         }
 
         return null;
+    }
+
+    private static int[] resolveAnchorTopLeft(final String anchorSelector, final ToolContext context)
+    {
+        if (context != null)
+        {
+            final Optional<int[]> boundsOpt = context.getVariable("anchorBounds", int[].class);
+            if (boundsOpt.isPresent() && boundsOpt.get().length >= 2)
+            {
+                return boundsOpt.get();
+            }
+        }
+        if (WebDriverRunner.hasWebDriverStarted() && anchorSelector != null && !anchorSelector.isBlank())
+        {
+            try
+            {
+                final SelenideElement anchorEl = SelenideElementFinder.findElement(anchorSelector);
+                if (anchorEl != null && anchorEl.exists())
+                {
+                    SelenideElementFinder.scrollIntoViewIfNeeded(anchorEl);
+                    final Object rectObj = Selenide.executeJavaScript(
+                            "var r = arguments[0].getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)];",
+                            anchorEl);
+                    if (rectObj instanceof final List<?> list && list.size() >= 2)
+                    {
+                        return new int[] { ((Number) list.get(0)).intValue(), ((Number) list.get(1)).intValue() };
+                    }
+                }
+            }
+            catch (final Exception | AssertionError ignored)
+            {
+            }
+        }
+        return null;
+    }
+
+    private static List<DomFeatureVector> enrichCandidatesWithVisualSignatures(
+            final DomFeatureVector recordedVector,
+            final List<DomFeatureVector> candidates,
+            final ToolContext context)
+    {
+        if (recordedVector == null || candidates == null || candidates.isEmpty())
+        {
+            return candidates;
+        }
+        final boolean needDHash = recordedVector.hasVisualHash();
+        final boolean needTileSsim = recordedVector.getTileSsim() != null && !recordedVector.getTileSsim().isBlank();
+        if (!needDHash && !needTileSsim)
+        {
+            return candidates;
+        }
+        String base64Screenshot = context != null
+                ? context.getVariable("liveScreenshotBase64", String.class).orElse(null)
+                : null;
+        if ((base64Screenshot == null || base64Screenshot.isBlank()) && WebDriverRunner.hasWebDriverStarted())
+        {
+            final WebDriver driver = WebDriverRunner.getWebDriver();
+            if (driver instanceof final TakesScreenshot ts)
+            {
+                try
+                {
+                    base64Screenshot = ts.getScreenshotAs(OutputType.BASE64);
+                }
+                catch (final Throwable ignored)
+                {
+                }
+            }
+        }
+        if (base64Screenshot == null || base64Screenshot.isBlank())
+        {
+            return candidates;
+        }
+        final List<DomFeatureVector> enriched = new ArrayList<>(candidates.size());
+        for (final DomFeatureVector c : candidates)
+        {
+            if (c == null || c.getWidth() <= 0 || c.getHeight() <= 0)
+            {
+                enriched.add(c);
+                continue;
+            }
+            final boolean alreadyHasDHash = !needDHash || c.hasVisualHash();
+            final boolean alreadyHasTile = !needTileSsim || (c.getTileSsim() != null && !c.getTileSsim().isBlank());
+            if (alreadyHasDHash && alreadyHasTile)
+            {
+                enriched.add(c);
+                continue;
+            }
+            final String vHash = alreadyHasDHash
+                    ? c.getVisualHash()
+                    : ScreenshotHasher.computeElementDHash(base64Screenshot, c.getX(), c.getY(), c.getWidth(), c.getHeight());
+            final String tSsim = alreadyHasTile
+                    ? c.getTileSsim()
+                    : ScreenshotHasher.computeTileSsimMatrix(
+                            base64Screenshot,
+                            c.getX() + (c.getWidth() / 2),
+                            c.getY() + (c.getHeight() / 2),
+                            32);
+            enriched.add(new DomFeatureVector(
+                    c.getTag(),
+                    c.getText(),
+                    c.getClasses(),
+                    c.getAttributes(),
+                    c.getRole(),
+                    c.getAccessibleName(),
+                    c.getParentTag(),
+                    c.getSiblingIndex(),
+                    c.getX(),
+                    c.getY(),
+                    c.getWidth(),
+                    c.getHeight(),
+                    vHash != null ? vHash : "",
+                    tSsim != null ? tSsim : ""));
+        }
+        return enriched;
+    }
+
+    private static boolean matchesCoordinateVisualTile(
+            final WebDriver driver,
+            final int x,
+            final int y,
+            final DomFeatureVector recordedVector,
+            final ToolContext context)
+    {
+        if (recordedVector == null)
+        {
+            return true;
+        }
+        final String recordedTile = recordedVector.getTileSsim();
+        if (recordedTile == null || recordedTile.isBlank())
+        {
+            return true;
+        }
+        String base64Screenshot = context != null
+                ? context.getVariable("liveScreenshotBase64", String.class).orElse(null)
+                : null;
+        if ((base64Screenshot == null || base64Screenshot.isBlank()) && driver instanceof final TakesScreenshot ts)
+        {
+            try
+            {
+                base64Screenshot = ts.getScreenshotAs(OutputType.BASE64);
+            }
+            catch (final Throwable ignored)
+            {
+            }
+        }
+        if (base64Screenshot == null || base64Screenshot.isBlank())
+        {
+            return true;
+        }
+        final String liveTile = ScreenshotHasher.computeTileSsimMatrix(base64Screenshot, x, y, 32);
+        if (liveTile == null || liveTile.isBlank())
+        {
+            return true;
+        }
+        final double ssim = ScreenshotHasher.calculateSsim(recordedTile, liveTile);
+        return ssim >= 0.95;
     }
 
     /**
@@ -802,7 +984,8 @@ public final class PlaybookToolReplayer
             final int y = resolvedCoords[1];
             final WebDriver driver = WebDriverRunner.getWebDriver();
             final ReanchoringBridge.ReanchoredElement liveEl = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
-            if (!matchesRecordedIdentity(liveEl, recordedVector))
+            if (!matchesRecordedIdentity(liveEl, recordedVector)
+                    || !matchesCoordinateVisualTile(driver, x, y, recordedVector, null))
             {
                 final String actualIdentity = liveEl != null
                         ? liveEl.tagName() + (liveEl.text().isBlank() ? "" : " ['" + liveEl.text() + "']")
@@ -899,6 +1082,19 @@ public final class PlaybookToolReplayer
         return 0;
     }
 
+    private static final List<String> IDENTITY_ATTRIBUTE_KEYS = List.of(
+            "data-graphic-sig",
+            "id",
+            "name",
+            "type",
+            "role",
+            "aria-label",
+            "title",
+            "data-action",
+            "data-testid",
+            "data-canvas-item",
+            "href");
+
     static boolean matchesRecordedIdentity(final ReanchoringBridge.ReanchoredElement liveEl, final DomFeatureVector recordedVector)
     {
         if (liveEl == null || recordedVector == null)
@@ -919,10 +1115,91 @@ public final class PlaybookToolReplayer
             {
                 return false;
             }
-            final String normRecorded = recordedText.trim().toLowerCase();
-            final String normLive = liveText.trim().toLowerCase();
+            final String normRecorded = recordedText.trim().toLowerCase(Locale.ROOT);
+            final String normLive = liveText.trim().toLowerCase(Locale.ROOT);
             return normLive.contains(normRecorded) || normRecorded.contains(normLive);
         }
+
+        // Recorded element was textless (e.g. icon button, SVG action, or canvas item).
+        // If the live element at (x, y) now has visible text, it is not the same textless element.
+        if (liveEl.text() != null && !liveEl.text().isBlank())
+        {
+            return false;
+        }
+
+        final Map<String, Object> liveVecMap = liveEl.domFeatureVector();
+        if (liveVecMap == null || liveVecMap.isEmpty())
+        {
+            return true;
+        }
+
+        final Map<String, String> recordedAttrs = recordedVector.getAttributes();
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> liveAttrs = liveVecMap.get("attributes") instanceof Map<?, ?> m
+                ? (Map<String, Object>) m
+                : Map.of();
+
+        boolean anyIdentityAttrMatched = false;
+        if (recordedAttrs != null && !recordedAttrs.isEmpty())
+        {
+            for (final String key : IDENTITY_ATTRIBUTE_KEYS)
+            {
+                final String recVal = recordedAttrs.get(key);
+                if (recVal != null && !recVal.isBlank())
+                {
+                    final Object liveValObj = liveAttrs.get(key);
+                    final String liveVal = liveValObj != null ? String.valueOf(liveValObj).trim() : "";
+                    if (!recVal.trim().equalsIgnoreCase(liveVal))
+                    {
+                        return false;
+                    }
+                    anyIdentityAttrMatched = true;
+                }
+            }
+        }
+        if (liveAttrs.containsKey("data-graphic-sig")
+                && (recordedAttrs == null || !recordedAttrs.containsKey("data-graphic-sig")))
+        {
+            final String liveSig = String.valueOf(liveAttrs.get("data-graphic-sig")).trim();
+            if (!liveSig.isEmpty() && recordedAttrs != null && !recordedAttrs.isEmpty())
+            {
+                return false;
+            }
+        }
+
+        final String recordedAccName = recordedVector.getAccessibleName();
+        if (recordedAccName != null && !recordedAccName.isBlank())
+        {
+            final Object liveAccObj = liveVecMap.get("accessibleName");
+            if (liveAccObj != null)
+            {
+                final String liveAcc = String.valueOf(liveAccObj).trim().toLowerCase(Locale.ROOT);
+                final String recAcc = recordedAccName.trim().toLowerCase(Locale.ROOT);
+                if (liveAcc.isEmpty() || (!liveAcc.contains(recAcc) && !recAcc.contains(liveAcc)))
+                {
+                    return false;
+                }
+                anyIdentityAttrMatched = true;
+            }
+        }
+
+        final String recordedParent = recordedVector.getParentTag();
+        if (recordedParent != null && !recordedParent.isBlank() && liveVecMap.get("parentTag") instanceof final String liveParent && !liveParent.isBlank())
+        {
+            if (!recordedParent.trim().equalsIgnoreCase(liveParent.trim()))
+            {
+                return false;
+            }
+        }
+
+        if (!anyIdentityAttrMatched && liveVecMap.get("siblingIndex") instanceof final Number liveSibling)
+        {
+            if (liveSibling.intValue() != recordedVector.getSiblingIndex())
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 

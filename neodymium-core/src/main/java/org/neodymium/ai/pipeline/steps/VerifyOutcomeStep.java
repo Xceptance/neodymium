@@ -127,6 +127,16 @@ public final class VerifyOutcomeStep implements PipelineStep
             }
         }
         final boolean isVisualExecution = (step != null && step.isVisualOrLayoutStep()) || coordinateTarget != null;
+        final String preClickTileMatrix = (String) context.getTransientData().remove(ExecutionContext.KEY_PRE_CLICK_COORD_TILE_MATRIX);
+        if (preClickTileMatrix != null && !preClickTileMatrix.isBlank() && step != null && coordinateTarget != null && !step.isLayoutStep())
+        {
+            if (step.getScreenshotHash() == null || step.getScreenshotHash().isBlank())
+            {
+                step.setScreenshotHash(preClickTileMatrix);
+                step.setScreenshotHashDim(ScreenshotHasher.TILE_SSIM_MATRIX_DIM);
+                step.setFullPage(false);
+            }
+        }
 
         // 1. Calculate and record visual baseline hash (SSIM matrix) during live/recording execution for visual steps / coordinate targets
         if (executor != null && mode != null && !mode.isReplay() && step != null && isVisualExecution)

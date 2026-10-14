@@ -1339,19 +1339,42 @@ public final class AgentToolLoopStep implements PipelineStep
                                 updatedArgs.set("domFeatureVector", resJson.path("domFeatureVector"));
                                 updated = true;
                             }
-                            if (resJson.hasNonNull("target") && resJson.path("target").asText().startsWith("coord:"))
+                            if (resJson.hasNonNull("target"))
                             {
-                                updatedArgs.put("target", resJson.path("target").asText());
-                                if (resJson.hasNonNull("x"))
+                                final String resolvedTarget = resJson.path("target").asText();
+                                final String origSelector = updatedArgs.path("selector").asText("");
+                                final String origTarget = updatedArgs.path("target").asText("");
+                                final boolean wasMarker = origSelector.startsWith("marker:")
+                                        || origSelector.startsWith("badge:")
+                                        || origTarget.startsWith("marker:")
+                                        || origTarget.startsWith("badge:");
+                                if (resolvedTarget.startsWith("coord:"))
                                 {
-                                    updatedArgs.put("x", resJson.path("x").asInt());
+                                    updatedArgs.put("target", resolvedTarget);
+                                    if (resJson.hasNonNull("x"))
+                                    {
+                                        updatedArgs.put("x", resJson.path("x").asInt());
+                                    }
+                                    if (resJson.hasNonNull("y"))
+                                    {
+                                        updatedArgs.put("y", resJson.path("y").asInt());
+                                    }
+                                    if (resJson.hasNonNull("selector"))
+                                    {
+                                        updatedArgs.put("selector", resJson.path("selector").asText());
+                                    }
+                                    else
+                                    {
+                                        updatedArgs.remove("selector");
+                                    }
+                                    updated = true;
                                 }
-                                if (resJson.hasNonNull("y"))
+                                else if (wasMarker && !resolvedTarget.startsWith("marker:") && !resolvedTarget.startsWith("badge:"))
                                 {
-                                    updatedArgs.put("y", resJson.path("y").asInt());
+                                    updatedArgs.put("target", resolvedTarget);
+                                    updatedArgs.put("selector", resolvedTarget);
+                                    updated = true;
                                 }
-                                updatedArgs.remove("selector");
-                                updated = true;
                             }
                             if (updated)
                             {

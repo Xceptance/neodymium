@@ -339,4 +339,168 @@ public class CoordinateReplayGuardTest
         assertEquals("a", extracted.getTag());
         assertEquals("Link", extracted.getText());
     }
+
+    @Test
+    public void testMatchesRecordedIdentityForTextlessElements()
+    {
+        final DomFeatureVector recordedIcon = new DomFeatureVector(
+            "button",
+            "",
+            Set.of("icon-btn"),
+            Map.of("type", "button", "data-graphic-sig", "svg:0 0 24 24|p:M3 17"),
+            "button",
+            "Edit Item",
+            "div",
+            1
+        );
+
+        final ReanchoringBridge.ReanchoredElement matchingIcon = new ReanchoringBridge.ReanchoredElement(
+            "button",
+            "button",
+            "",
+            10,
+            10,
+            Map.of(
+                "tag", "button",
+                "attributes", Map.of("type", "button", "data-graphic-sig", "svg:0 0 24 24|p:M3 17"),
+                "accessibleName", "Edit Item",
+                "parentTag", "div",
+                "siblingIndex", 1
+            )
+        );
+        assertTrue(PlaybookToolReplayer.matchesRecordedIdentity(matchingIcon, recordedIcon));
+
+        final ReanchoringBridge.ReanchoredElement differentSvgIcon = new ReanchoringBridge.ReanchoredElement(
+            "button",
+            "button",
+            "",
+            10,
+            10,
+            Map.of(
+                "tag", "button",
+                "attributes", Map.of("type", "button", "data-graphic-sig", "svg:0 0 24 24|p:M6 19"),
+                "accessibleName", "Edit Item",
+                "parentTag", "div",
+                "siblingIndex", 1
+            )
+        );
+        assertFalse(PlaybookToolReplayer.matchesRecordedIdentity(differentSvgIcon, recordedIcon),
+                "Mismatched SVG graphic signature must fail identity check");
+
+        final ReanchoringBridge.ReanchoredElement nowHasText = new ReanchoringBridge.ReanchoredElement(
+            "button",
+            "button",
+            "Delete",
+            10,
+            10,
+            Map.of()
+        );
+        assertFalse(PlaybookToolReplayer.matchesRecordedIdentity(nowHasText, recordedIcon),
+                "Live element with text must not match recorded textless element");
+    }
+
+    @Test
+    public void testCoordinateClickHealingPreservesContainerAnchor() throws Exception
+    {
+        final PlaybookStep step = new PlaybookStep("Click canvas tool inside Starter Plan card");
+
+        final DomFeatureVector recordedVector = new DomFeatureVector(
+            "div",
+            "",
+            Set.of("w-1/2"),
+            Map.of("data-canvas-item", "brush-1"),
+            "",
+            "",
+            "article",
+            0,
+            120,
+            220,
+            40,
+            40
+        );
+
+        final ObjectNode clickArgs = MAPPER.createObjectNode();
+        clickArgs.put("target", "coord:article:has-text(\"Starter Plan\")@40,40");
+        clickArgs.put("selector", "article:has-text(\"Starter Plan\")");
+        clickArgs.put("x", 40);
+        clickArgs.put("y", 40);
+        clickArgs.set("domFeatureVector", MAPPER.valueToTree(recordedVector));
+
+        step.addToolCall(new ToolCall("call-coord-anchor", "browser_click", clickArgs));
+
+        final DomFeatureVector liveCandidate = new DomFeatureVector(
+            "div",
+            "",
+            Set.of("w-1/2"),
+            Map.of("data-canvas-item", "brush-1"),
+            "",
+            "",
+            "article",
+            0,
+            350,
+            460,
+            40,
+            40
+        );
+
+        this.context.setVariable("liveCandidates", List.of(liveCandidate));
+        this.context.setVariable("anchorBounds", new int[] { 300, 400 });
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        assertEquals(ToolResult.Status.SUCCESS, result.status());
+        assertEquals(PlaybookStepStatus.HEALED, step.getStatus());
+        assertEquals(1, this.executedCalls.size());
+
+        final ToolCall executed = this.executedCalls.get(0);
+        assertEquals("coord:article:has-text(\"Starter Plan\")@70,80", executed.arguments().path("target").asText());
+        assertEquals("article:has-text(\"Starter Plan\")", executed.arguments().path("selector").asText());
+        assertEquals(70, executed.arguments().path("x").asInt());
+        assertEquals(80, executed.arguments().path("y").asInt());
+    }
+
+    @Test
+    public void testResolveMarkedElementExtractsFullDomFeatureVector()
+    {
+        final Map<String, Object> scriptResult = new LinkedHashMap<>();
+        scriptResult.put("selector", "button[aria-label=\"Add to Wishlist\"]");
+        scriptResult.put("tagName", "button");
+        scriptResult.put("text", "");
+        scriptResult.put("classes", List.of("wishlist-btn"));
+        scriptResult.put("attributes", Map.of("aria-label", "Add to Wishlist", "data-graphic-sig", "svg:0 0 24 24|p:M12 21.35"));
+        scriptResult.put("role", "button");
+        scriptResult.put("accessibleName", "Add to Wishlist");
+        scriptResult.put("parentTag", "article");
+        scriptResult.put("siblingIndex", 2);
+        scriptResult.put("relX", 16);
+        scriptResult.put("relY", 16);
+        scriptResult.put("x", 200);
+        scriptResult.put("y", 300);
+        scriptResult.put("width", 32);
+        scriptResult.put("height", 32);
+
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            CoordinateReplayGuardTest.class.getClassLoader(),
+            new Class<?>[] { WebDriver.class, JavascriptExecutor.class },
+            (proxy, method, args) -> {
+                if ("executeScript".equals(method.getName()))
+                {
+                    return scriptResult;
+                }
+                return null;
+            }
+        );
+
+        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveMarkedElement(mockDriver, "marker:5");
+        assertNotNull(reanchored);
+        assertEquals("button[aria-label=\"Add to Wishlist\"]", reanchored.selector());
+
+        final DomFeatureVector deserialized = MAPPER.convertValue(reanchored.domFeatureVector(), DomFeatureVector.class);
+        assertNotNull(deserialized);
+        assertEquals("button", deserialized.getRole());
+        assertEquals("Add to Wishlist", deserialized.getAccessibleName());
+        assertEquals("article", deserialized.getParentTag());
+        assertEquals(2, deserialized.getSiblingIndex());
+        assertEquals("svg:0 0 24 24|p:M12 21.35", deserialized.getAttributes().get("data-graphic-sig"));
+    }
 }

@@ -676,6 +676,55 @@ public final class ScreenshotHasher
     }
 
     /**
+     * Computes a 64-bit difference hash (dHash) for a cropped element region within a Base64-encoded PNG screenshot.
+     *
+     * @param base64Png the Base64-encoded PNG screenshot string
+     * @param x top-left X coordinate of the element bounding box
+     * @param y top-left Y coordinate of the element bounding box
+     * @param width bounding box width
+     * @param height bounding box height
+     * @return 16-character hex dHash string of the cropped element, or {@code null} if invalid
+     */
+    public static String computeElementDHash(
+            final String base64Png,
+            final int x,
+            final int y,
+            final int width,
+            final int height)
+    {
+        if (base64Png == null || base64Png.isBlank() || width <= 0 || height <= 0)
+        {
+            return null;
+        }
+        try
+        {
+            final String cleanBase64 = base64Png.contains(",")
+                    ? base64Png.substring(base64Png.indexOf(",") + 1)
+                    : base64Png;
+            final byte[] bytes = Base64.getDecoder().decode(cleanBase64);
+            try (final ByteArrayInputStream bais = new ByteArrayInputStream(bytes))
+            {
+                final BufferedImage fullImg = ImageIO.read(bais);
+                if (fullImg == null)
+                {
+                    return null;
+                }
+                final int startX = Math.max(0, Math.min(x, fullImg.getWidth() - 1));
+                final int startY = Math.max(0, Math.min(y, fullImg.getHeight() - 1));
+                final int cropW = Math.max(1, Math.min(width, fullImg.getWidth() - startX));
+                final int cropH = Math.max(1, Math.min(height, fullImg.getHeight() - startY));
+                final BufferedImage subImg = fullImg.getSubimage(startX, startY, cropW, cropH);
+                return computeDHash(subImg);
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.warn("Failed to compute element dHash from Base64 PNG: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Computes the Hamming distance between two 16-hex-digit 64-bit dHash strings.
      *
      * @param hash1 first hex dHash

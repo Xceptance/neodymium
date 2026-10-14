@@ -39,6 +39,7 @@ import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.util.AiAssertions;
 import org.neodymium.ai.util.DomQuiescenceWatcher;
+import org.neodymium.ai.util.ScreenshotHasher;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -80,6 +81,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -453,6 +455,126 @@ public final class BrowserToolProvider
         return ToolResult.success(call.callId(), res.toString());
     }
 
+    private static boolean isMarkerLocator(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return false;
+        }
+        final String lower = raw.trim().toLowerCase(Locale.ROOT);
+        return lower.startsWith("marker:") || lower.startsWith("badge:");
+    }
+
+    private static ReanchoringBridge.ReanchoredElement resolveMarkerBeforeAction(final WebDriver driver, final String selector)
+    {
+        if (driver != null && isMarkerLocator(selector))
+        {
+            final int idx = selector.indexOf(':');
+            final String markerId = idx >= 0 ? selector.substring(idx + 1).trim() : selector.trim();
+            return ReanchoringBridge.resolveMarkedElement(driver, markerId);
+        }
+        return null;
+    }
+
+    private static void applyMarkerReanchoringIfPresent(
+            final WebDriver driver,
+            final String originalTarget,
+            final ReanchoringBridge.ReanchoredElement reanchoredMarker,
+            final DomFeatureVector extractedVector,
+            final ObjectNode res)
+    {
+        if (reanchoredMarker != null)
+        {
+            if (driver != null)
+            {
+                VisualBadgeInjector.removeMarkers(driver);
+            }
+            final String resolvedSel = (reanchoredMarker.selector() != null && !reanchoredMarker.selector().isBlank())
+                ? reanchoredMarker.selector()
+                : originalTarget;
+            res.put("target", resolvedSel);
+            res.put("selector", resolvedSel);
+            if (reanchoredMarker.domFeatureVector() != null)
+            {
+                res.set("domFeatureVector", MAPPER.valueToTree(reanchoredMarker.domFeatureVector()));
+            }
+            else if (extractedVector != null)
+            {
+                res.set("domFeatureVector", MAPPER.valueToTree(extractedVector));
+            }
+        }
+        else
+        {
+            if (originalTarget != null && !originalTarget.isBlank())
+            {
+                res.put("target", originalTarget);
+            }
+            if (extractedVector != null)
+            {
+                res.set("domFeatureVector", MAPPER.valueToTree(extractedVector));
+            }
+        }
+    }
+
+    private static ReanchoringBridge.ReanchoredElement enrichWithCleanPreClickVisualSignature(
+            final WebDriver driver,
+            final int viewportX,
+            final int viewportY,
+            final ReanchoringBridge.ReanchoredElement reanchored)
+    {
+        if (!(driver instanceof TakesScreenshot ts))
+        {
+            return reanchored;
+        }
+        try
+        {
+            final String base64Png = ts.getScreenshotAs(OutputType.BASE64);
+            if (base64Png == null || base64Png.isBlank())
+            {
+                return reanchored;
+            }
+            final String tileMatrix = ScreenshotHasher.computeTileSsimMatrix(base64Png, viewportX, viewportY, 32);
+            final ExecutionContext execCtx = ExecutionContext.getActiveContext();
+            if (execCtx != null && tileMatrix != null && !tileMatrix.isBlank())
+            {
+                execCtx.getTransientData().put(ExecutionContext.KEY_PRE_CLICK_COORD_TILE_MATRIX, tileMatrix);
+            }
+            if (reanchored == null || reanchored.domFeatureVector() == null)
+            {
+                return reanchored;
+            }
+
+            final Map<String, Object> fv = new LinkedHashMap<>(reanchored.domFeatureVector());
+            if (tileMatrix != null && !tileMatrix.isBlank())
+            {
+                fv.put("tileSsim", tileMatrix);
+            }
+
+            final int elX = fv.get("x") instanceof final Number nX ? nX.intValue() : (viewportX - 32);
+            final int elY = fv.get("y") instanceof final Number nY ? nY.intValue() : (viewportY - 32);
+            final int elW = fv.get("width") instanceof final Number nW && nW.intValue() > 0 ? nW.intValue() : 64;
+            final int elH = fv.get("height") instanceof final Number nH && nH.intValue() > 0 ? nH.intValue() : 64;
+            final String dHash = ScreenshotHasher.computeElementDHash(base64Png, elX, elY, elW, elH);
+            if (dHash != null && !dHash.isBlank())
+            {
+                fv.put("visualHash", dHash);
+            }
+
+            return new ReanchoringBridge.ReanchoredElement(
+                reanchored.selector(),
+                reanchored.tagName(),
+                reanchored.text(),
+                reanchored.relativeX(),
+                reanchored.relativeY(),
+                Collections.unmodifiableMap(fv)
+            );
+        }
+        catch (final Exception ignored)
+        {
+            return reanchored;
+        }
+    }
+
     private static ToolResult executeCoordinateClick(final ToolCall call, final WebDriver driver, final String selector,
             final int parsedX, final int parsedY)
     {
@@ -496,11 +618,21 @@ public final class BrowserToolProvider
             }
         }
 
+        ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, x, y);
+        if (driver != null)
+        {
+            VisualBadgeInjector.removeMarkers(driver);
+            reanchored = enrichWithCleanPreClickVisualSignature(driver, x, y, reanchored);
+        }
+
         final int[] clicked = performSafeCoordinateClick(driver, x, y);
         final int finalX = clicked[0];
         final int finalY = clicked[1];
 
-        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, finalX, finalY);
+        if (reanchored == null)
+        {
+            reanchored = ReanchoringBridge.resolveElementAtPoint(driver, finalX, finalY);
+        }
         final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
         final ObjectNode res = successNode("click");
         res.put("x", finalX);
@@ -650,7 +782,7 @@ public final class BrowserToolProvider
                             if (!anchor) {
                                 var curr = el.parentElement;
                                 while (curr && curr !== document.body && curr !== document.documentElement) {
-                                    if (curr.id) {
+                                    if (curr.id && !/[0-9]{4,}/.test(curr.id)) {
                                         try {
                                             var sel = /^[a-zA-Z][a-zA-Z0-9_-]*$/.test(curr.id) ? ('#' + curr.id) : ('[id="' + curr.id.replace(/"/g, '\\\\"') + '"]');
                                             if (document.querySelectorAll(sel).length === 1) {
@@ -660,7 +792,38 @@ public final class BrowserToolProvider
                                             }
                                         } catch (e) {}
                                     }
+                                    var testId = curr.getAttribute && (curr.getAttribute('data-testid') || curr.getAttribute('data-test') || curr.getAttribute('data-qa'));
+                                    if (testId) {
+                                        try {
+                                            var attrName = curr.getAttribute('data-testid') ? 'data-testid' : (curr.getAttribute('data-test') ? 'data-test' : 'data-qa');
+                                            var tSel = '[' + attrName + '="' + testId.replace(/"/g, '\\\\"') + '"]';
+                                            if (document.querySelectorAll(tSel).length === 1) {
+                                                anchor = curr;
+                                                anchorSelector = tSel;
+                                                break;
+                                            }
+                                        } catch (e) {}
+                                    }
                                     var tag = curr.tagName ? curr.tagName.toLowerCase() : '';
+                                    if (['article', 'tr', 'li', 'div', 'section', 'form', 'fieldset'].indexOf(tag) !== -1) {
+                                        var heading = curr.querySelector && curr.querySelector('h1, h2, h3, h4, h5, h6, [role="heading"], legend, th');
+                                        if (heading && heading !== el && !el.contains(heading)) {
+                                            var hText = (heading.innerText || heading.textContent || '').trim().replace(/\\s+/g, ' ');
+                                            if (hText && hText.length >= 2 && hText.length <= 60 && /[a-zA-Z]{2,}/.test(hText)) {
+                                                var sameContainers = document.querySelectorAll(tag);
+                                                var matchCount = 0;
+                                                for (var k = 0; k < sameContainers.length; k++) {
+                                                    var ct = (sameContainers[k].innerText || sameContainers[k].textContent || '');
+                                                    if (ct.indexOf(hText) !== -1) matchCount++;
+                                                }
+                                                if (matchCount === 1) {
+                                                    anchor = curr;
+                                                    anchorSelector = tag + ':has-text("' + hText.replace(/"/g, '\\\\"') + '")';
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
                                     if (['form', 'main', 'nav', 'header', 'footer', 'section', 'article', 'table'].indexOf(tag) !== -1) {
                                         try {
                                             if (document.querySelectorAll(tag).length === 1) {
@@ -697,7 +860,14 @@ public final class BrowserToolProvider
                         final Integer relX = coordsMap.get("relX") instanceof Number n ? n.intValue() : null;
                         final Integer relY = coordsMap.get("relY") instanceof Number n ? n.intValue() : null;
 
-                        final ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveElementAtPoint(driver, bx, by);
+                        ReanchoringBridge.ReanchoredElement reanchored = ReanchoringBridge.resolveMarkedElement(driver, markerNum);
+                        if (reanchored == null)
+                        {
+                            reanchored = ReanchoringBridge.resolveElementAtPoint(driver, bx, by);
+                        }
+                        VisualBadgeInjector.removeMarkers(driver);
+                        reanchored = enrichWithCleanPreClickVisualSignature(driver, bx, by, reanchored);
+
                         final int[] clicked = performSafeCoordinateClick(driver, bx, by);
                         final int finalX = clicked[0];
                         final int finalY = clicked[1];
@@ -725,7 +895,6 @@ public final class BrowserToolProvider
                             b.withVariable("reanchoredSelector", reanchored.selector());
                             b.withVariable("reanchoredFeatureVector", reanchored.domFeatureVector());
                         }
-                        VisualBadgeInjector.removeMarkers(driver);
                         res.put("url", getSafeUrl(driver));
                         res.put("title", getSafeTitle(driver));
                         b.withContent(res.toString());
@@ -890,6 +1059,7 @@ public final class BrowserToolProvider
                         : defaultClearFirst;
                 final boolean pressEnter = call.arguments().path("pressEnter").asBoolean(false);
 
+                final ReanchoringBridge.ReanchoredElement reanchoredMarker = resolveMarkerBeforeAction(driver, selector);
                 final SelenideElement el = findElement(selector);
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
                 DomFeatureVector featureVector = null;
@@ -960,13 +1130,9 @@ public final class BrowserToolProvider
                 }
 
                 final ObjectNode res = successNode(def.name());
-                res.put("target", selector);
                 res.put("value", text);
                 res.put("pressedEnter", pressEnter);
-                if (featureVector != null)
-                {
-                    res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
-                }
+                applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, featureVector, res);
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -1039,19 +1205,20 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 DomQuiescenceWatcher.installTracker();
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 final String rawKey = call.arguments().path("key").asText("Enter");
                 final String selector = resolveSelector(call.arguments());
                 final CharSequence key = resolveKey(rawKey);
+                final ReanchoringBridge.ReanchoredElement reanchoredMarker = resolveMarkerBeforeAction(driver, selector);
 
                 if (!selector.isBlank())
                 {
-                    $(selector).sendKeys(key);
+                    findElement(selector).sendKeys(key);
                 }
                 else
                 {
                     try
                     {
-                        final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                         if (driver != null)
                         {
                             driver.switchTo().activeElement().sendKeys(key);
@@ -1071,7 +1238,7 @@ public final class BrowserToolProvider
                 res.put("key", rawKey);
                 if (!selector.isBlank())
                 {
-                    res.put("target", selector);
+                    applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, null, res);
                 }
                 return ToolResult.success(call.callId(), res.toString());
             }
@@ -1133,7 +1300,9 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 DomQuiescenceWatcher.installTracker();
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 final String selector = resolveSelector(call.arguments());
+                final ReanchoringBridge.ReanchoredElement reanchoredMarker = resolveMarkerBeforeAction(driver, selector);
                 final SelenideElement found = findElement(selector);
                 final SelenideElement el;
                 if (found.is(Condition.visible))
@@ -1144,7 +1313,6 @@ public final class BrowserToolProvider
                 {
                     el = found.shouldBe(Condition.exist).shouldBe(Condition.enabled);
                 }
-                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 DomFeatureVector featureVector = null;
                 if (driver != null)
                 {
@@ -1165,17 +1333,12 @@ public final class BrowserToolProvider
                         el.click();
                     }
                     final ObjectNode res = successNode("select");
-                    res.put("target", selector);
                     res.put("delegatedToCheck", true);
-                    if (featureVector != null)
-                    {
-                        res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
-                    }
+                    applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, featureVector, res);
                     return ToolResult.success(call.callId(), res.toString());
                 }
 
                 final ObjectNode res = successNode("select");
-                res.put("target", selector);
                 if (call.arguments().hasNonNull("value"))
                 {
                     final String val = call.arguments().path("value").asText();
@@ -1188,10 +1351,7 @@ public final class BrowserToolProvider
                     selectDropdownOption(el, txt, false);
                     res.put("text", txt);
                 }
-                if (featureVector != null)
-                {
-                    res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
-                }
+                applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, featureVector, res);
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -1443,6 +1603,9 @@ public final class BrowserToolProvider
                 final String selector = resolveSelector(args);
                 final boolean targetChecked = !args.hasNonNull("checked") || args.path("checked").asBoolean(true);
 
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final ReanchoringBridge.ReanchoredElement reanchoredMarker = resolveMarkerBeforeAction(driver, selector);
+
                 final SelenideElement el = findElement(selector).shouldBe(Condition.exist);
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
 
@@ -1452,7 +1615,6 @@ public final class BrowserToolProvider
                             errorNode("Element is disabled and cannot be checked: " + selector).toString());
                 }
 
-                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
                 DomFeatureVector featureVector = null;
                 if (driver != null)
                 {
@@ -1520,6 +1682,7 @@ public final class BrowserToolProvider
                 {
                     res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
                 }
+                applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, featureVector, res);
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -1555,12 +1718,31 @@ public final class BrowserToolProvider
                 }
 
                 final String targetDesc = !selector.isBlank() ? selector : text;
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final ReanchoringBridge.ReanchoredElement reanchoredMarker = resolveMarkerBeforeAction(driver, selector);
+
                 final SelenideElement el = resolveElementBySelectorAndText(selector, text);
 
                 SelenideElementFinder.scrollIntoViewIfNeeded(el);
                 el.shouldBe(Condition.visible).hover();
+                DomFeatureVector featureVector = null;
+                if (driver != null)
+                {
+                    try
+                    {
+                        featureVector = new PageAnalyzer(driver).extractFeatureVector(el);
+                    }
+                    catch (final Throwable ignored)
+                    {
+                    }
+                }
                 final ObjectNode res = successNode("hover");
                 res.put("target", targetDesc);
+                if (featureVector != null)
+                {
+                    res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                }
+                applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, featureVector, res);
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -1587,7 +1769,21 @@ public final class BrowserToolProvider
             public ToolResult execute(final ToolCall call, final ToolContext context)
             {
                 final String selector = resolveSelector(call.arguments());
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final ReanchoringBridge.ReanchoredElement reanchoredMarker = resolveMarkerBeforeAction(driver, selector);
+
                 final SelenideElement el = findElement(selector).shouldBe(Condition.visible);
+                DomFeatureVector featureVector = null;
+                if (driver != null)
+                {
+                    try
+                    {
+                        featureVector = new PageAnalyzer(driver).extractFeatureVector(el);
+                    }
+                    catch (final Throwable ignored)
+                    {
+                    }
+                }
                 final String type = el.getAttribute("type");
                 final String role = el.getAttribute("role");
                 final boolean isCheckbox = "checkbox".equalsIgnoreCase(type) || "checkbox".equalsIgnoreCase(role);
@@ -1627,6 +1823,11 @@ public final class BrowserToolProvider
                 }
                 final ObjectNode res = successNode("clear");
                 res.put("target", selector);
+                if (featureVector != null)
+                {
+                    res.set("domFeatureVector", MAPPER.valueToTree(featureVector));
+                }
+                applyMarkerReanchoringIfPresent(driver, selector, reanchoredMarker, featureVector, res);
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
@@ -2913,6 +3114,12 @@ public final class BrowserToolProvider
         if (selector == null || selector.isBlank())
         {
             return By.tagName("body");
+        }
+        if (isMarkerLocator(selector))
+        {
+            final int colonIdx = selector.indexOf(':');
+            final String markerNum = colonIdx >= 0 ? selector.substring(colonIdx + 1).trim() : selector.trim();
+            return By.cssSelector("[data-m='" + markerNum + "']");
         }
         try
         {
