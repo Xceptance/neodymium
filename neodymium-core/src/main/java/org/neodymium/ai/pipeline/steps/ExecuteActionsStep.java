@@ -379,7 +379,8 @@ public final class ExecuteActionsStep
 
             final boolean hasRecordedCalls = (step.getToolCalls() != null && !step.getToolCalls().isEmpty())
                 || (step.getActions() != null && !step.getActions().isEmpty())
-                || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING);
+                || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING)
+                || (step.getRecordedStatus() != null && step.getRecordedStatus() != PlaybookStepStatus.PENDING);
             if (hasRecordedCalls && interactiveListener != null && !interactiveListener.isAutoRun())
             {
                 final String userAction = interactiveListener.pauseBeforeActionExecution(contextState, step);
@@ -463,7 +464,8 @@ public final class ExecuteActionsStep
 
             final boolean hasRecordedContent = (step.getToolCalls() != null && !step.getToolCalls().isEmpty())
                 || (step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
-                || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING);
+                || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING)
+                || (step.getRecordedStatus() != null && step.getRecordedStatus() != PlaybookStepStatus.PENDING);
             final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == ExecutionMode.REPLAY_STRICT || hasRecordedContent);
 
 
@@ -731,7 +733,8 @@ public final class ExecuteActionsStep
                     final boolean isRecorded = step.getToolCalls() != null && !step.getToolCalls().isEmpty();
                     final boolean isVisualOnly = step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty();
                     final boolean isComposite = step.getSubSteps() != null && !step.getSubSteps().isEmpty();
-                    final boolean isRecordedCompletedStep = initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING;
+                    final boolean isRecordedCompletedStep = (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING)
+                        || (step.getRecordedStatus() != null && step.getRecordedStatus() != PlaybookStepStatus.PENDING);
                     final boolean isCoalescedSubStep = step.getParent() != null;
                     if (mode == ExecutionMode.REPLAY_STRICT && !isRecorded && !isVisualOnly && !isComposite && !isRecordedCompletedStep && !isCoalescedSubStep)
                     {
@@ -742,12 +745,15 @@ public final class ExecuteActionsStep
                             "No recorded tool calls found for step '" + resolvedStrictStep + "' in REPLAY_STRICT mode. Companion JSON recording file is missing or step was not recorded.");
                     }
 
-                    if ((step.getStatus() == PlaybookStepStatus.FAILED || step.isFailed())
+                    final PlaybookStepStatus effectiveStatus = (step.getRecordedStatus() != null && step.getRecordedStatus() != PlaybookStepStatus.PENDING)
+                        ? step.getRecordedStatus()
+                        : step.getStatus();
+                    if ((effectiveStatus == PlaybookStepStatus.FAILED || step.isFailed())
                             && (step.getToolCalls() == null || step.getToolCalls().isEmpty()))
                     {
                         final String reason = step.getFailureReason() != null && !step.getFailureReason().trim().isEmpty()
                             ? step.getFailureReason()
-                            : "Recorded step execution failed.";
+                            : (step.getRecordedFailureReason() != null ? step.getRecordedFailureReason() : "Recorded step execution failed.");
                         throw new ConclusiveFailureException(reason);
                     }
 

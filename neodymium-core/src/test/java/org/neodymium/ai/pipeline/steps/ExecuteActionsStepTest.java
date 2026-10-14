@@ -168,6 +168,39 @@ public final class ExecuteActionsStepTest
     }
 
     @Test
+    public void testReplayStrictSucceedsWhenStatusIsPendingWithRecordedStatusSuccess() throws PipelineException
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final LlmRegistry registry = new LlmRegistry();
+        registry.setDefaultProvider(mockProvider);
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, registry, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+
+        final PlaybookStep recordedStep = new PlaybookStep();
+        recordedStep.setInstruction("When this string '' is not empty, enter '' as state.");
+        recordedStep.setStatus(PlaybookStepStatus.PENDING);
+        recordedStep.setRecordedStatus(PlaybookStepStatus.SUCCESS);
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(recordedStep, session, context);
+
+        // Must succeed without throwing ConclusiveFailureException
+        pipelineStep.execute(context);
+        while (context.hasSteps())
+        {
+            context.popStep().execute(context);
+        }
+
+        assertEquals(PlaybookStepStatus.SUCCESS, recordedStep.getStatus());
+    }
+
+    @Test
     public void testReplayVisualBypassSetsSuccessAndDispatchesStepFinishedEvent() throws PipelineException, IOException
     {
         final BufferedImage img = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);

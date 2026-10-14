@@ -52,6 +52,9 @@ public class LocatorResolverBrowserTest
         final String html = "<html>"
                 + "<head><title>Locator Resolver Live Test</title></head>"
                 + "<body>"
+                + "  <header class='top-nav-bar'>"
+                + "    <a href='index.html'>VÉRLA.</a>"
+                + "  </header>"
                 + "  <div id='cart-summary'>"
                 + "    <span class='cart-title'>Shopping Cart Total</span>"
                 + "    <button id='pay-btn' data-ai='c42'>Total Paid: $27.58</button>"
@@ -126,6 +129,14 @@ public class LocatorResolverBrowserTest
     }
 
     @Test
+    public void testDefectSelectorWithHrefDotHtmlAndContainsInLiveBrowser()
+    {
+        final ElementsCollection elements = LocatorResolver.findElements("header.top-nav-bar a[href=\"index.html\"]:contains(\"VÉRLA\")");
+        Assertions.assertFalse(elements.isEmpty());
+        Assertions.assertEquals("VÉRLA.", elements.first().getText().trim());
+    }
+
+    @Test
     public void testShadowDomSelectorInLiveBrowser()
     {
         final ElementsCollection elements = LocatorResolver.findElements("custom-card ::shadow .shadow-pay");
@@ -197,11 +208,31 @@ public class LocatorResolverBrowserTest
     }
 
     @Test
+    public void testTransparentShadowDomSearchInLiveBrowser()
+    {
+        // Pierces open shadow DOM transparently without ::shadow host specifications
+        final ElementsCollection shadowButton = LocatorResolver.findElements("button.shadow-pay");
+        Assertions.assertFalse(shadowButton.isEmpty());
+        Assertions.assertEquals("Shadow Pay", shadowButton.first().getText().trim());
+
+        final ElementsCollection shadowByText = LocatorResolver.findElements("text=Shadow Pay");
+        Assertions.assertFalse(shadowByText.isEmpty());
+        Assertions.assertEquals("Shadow Pay", shadowByText.first().getText().trim());
+    }
+
+    @Test
+    public void testVisiblePseudoInLiveBrowser()
+    {
+        final ElementsCollection visibleButtons = LocatorResolver.findElements("button:visible");
+        Assertions.assertFalse(visibleButtons.isEmpty());
+    }
+
+    @Test
     public void testUnsupportedSelectorThrowsInBrowser()
     {
         final InvalidSelectorException ex = Assertions.assertThrows(
                 InvalidSelectorException.class,
-                () -> LocatorResolver.resolveLocator("button:visible"));
-        Assertions.assertTrue(ex.getMessage().contains(":visible"));
+                () -> LocatorResolver.resolveLocator("button:frobnicate"));
+        Assertions.assertTrue(ex.getMessage().contains(":frobnicate"));
     }
 }

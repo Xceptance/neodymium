@@ -19,6 +19,8 @@
     "durationMs" : null,
     "delayMs" : null,
     "parameters" : { },
+    "originalTarget" : null,
+    "healedFrom" : null,
     "bestCandidateLocator" : "${verla.url}/verla-perfect/index.html",
     "allCandidateLocators" : [ "${verla.url}/verla-perfect/index.html" ],
     "else" : [ ],
@@ -26,6 +28,7 @@
     "selfCritique" : "",
     "candidateLocators" : [ ],
     "domFeatureVector" : null,
+    "healed" : false,
     "values" : [ ]
   } ],
   "status" : "SUCCESS",
@@ -43,8 +46,8 @@
   "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 3279,
-  "startTimeMs" : 1791242282111,
+  "durationMs" : 4409,
+  "startTimeMs" : 1791829099091,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -57,7 +60,7 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_292380",
+    "callId" : "call_47710",
     "toolName" : "navigate",
     "arguments" : {
       "url" : "${verla.url}/verla-perfect/index.html"
@@ -84,6 +87,8 @@
     "durationMs" : null,
     "delayMs" : null,
     "parameters" : { },
+    "originalTarget" : null,
+    "healedFrom" : null,
     "bestCandidateLocator" : "#search-input",
     "allCandidateLocators" : [ "#search-input" ],
     "else" : [ ],
@@ -116,6 +121,7 @@
       "visualHash" : "",
       "tileSsim" : ""
     },
+    "healed" : false,
     "values" : [ "${searchTerm}" ]
   } ],
   "status" : "SUCCESS",
@@ -158,8 +164,8 @@
   "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 3352,
-  "startTimeMs" : 1791242285503,
+  "durationMs" : 3682,
+  "startTimeMs" : 1791829103594,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -172,12 +178,12 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_239359",
+    "callId" : "call_53114",
     "toolName" : "fill",
     "arguments" : {
       "selector" : "#search-input",
-      "pressEnter" : false,
       "text" : "${searchTerm}",
+      "pressEnter" : false,
       "domFeatureVector" : {
         "tag" : "input",
         "text" : "Search products...",
@@ -227,6 +233,8 @@
     "durationMs" : null,
     "delayMs" : null,
     "parameters" : { },
+    "originalTarget" : null,
+    "healedFrom" : null,
     "bestCandidateLocator" : "#search-input",
     "allCandidateLocators" : [ "#search-input" ],
     "else" : [ ],
@@ -234,6 +242,7 @@
     "selfCritique" : "",
     "candidateLocators" : [ ],
     "domFeatureVector" : null,
+    "healed" : false,
     "values" : [ "Enter" ]
   } ],
   "status" : "SUCCESS",
@@ -251,8 +260,8 @@
   "contextLevel" : "STANDARD",
   "reasoning" : null,
   "reasonings" : [ ],
-  "durationMs" : 3241,
-  "startTimeMs" : 1791242289049,
+  "durationMs" : 13769,
+  "startTimeMs" : 1791829107431,
   "delayMs" : null,
   "timeoutMs" : null,
   "composite" : false,
@@ -265,7 +274,7 @@
   "noHealing" : false,
   "marker" : false,
   "toolCalls" : [ {
-    "callId" : "call_120166",
+    "callId" : "call_710358",
     "toolName" : "press_key",
     "arguments" : {
       "selector" : "#search-input",
