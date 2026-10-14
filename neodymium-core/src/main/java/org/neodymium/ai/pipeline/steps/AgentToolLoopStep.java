@@ -792,10 +792,15 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     throw new ConclusiveFailureException("Step execution aborted by user in interactive console.");
                 }
-                if ("EDIT".equalsIgnoreCase(userAction) || "UPDATE_STEP".equalsIgnoreCase(userAction) || "SAVE_STEP".equalsIgnoreCase(userAction))
+                final boolean isExplicitRun = "RUN".equalsIgnoreCase(userAction) || "AUTO".equalsIgnoreCase(userAction) || "CONTINUE".equalsIgnoreCase(userAction) || "RUN_ALL".equalsIgnoreCase(userAction);
+                final boolean bindingsEdited = Boolean.TRUE.equals(context.getTransientData().remove("KEY_BINDINGS_EDITED"));
+                final boolean isEdit = "EDIT".equalsIgnoreCase(userAction) || "UPDATE_STEP".equalsIgnoreCase(userAction) || "SAVE_STEP".equalsIgnoreCase(userAction);
+                if ((isEdit || bindingsEdited) && !isExplicitRun)
                 {
-                    LOGGER.info("   ✏️ Prompt updated during interactive pause — re-evaluating instruction and re-querying LLM");
-                    final String updatedRaw = step != null ? step.getInstruction() : null;
+                    LOGGER.info("   ✏️ Prompt or test data updated during interactive pause — re-evaluating instruction and re-querying LLM");
+                    final String updatedRaw = (step != null && step.getRawInstruction() != null)
+                        ? step.getRawInstruction()
+                        : (step != null ? step.getInstruction() : null);
                     final String updatedInstruction = (context.getSessionData() != null && updatedRaw != null)
                         ? context.getSessionData().resolveVariables(updatedRaw)
                         : updatedRaw;
@@ -805,6 +810,7 @@ public final class AgentToolLoopStep implements PipelineStep
 
                     if (step != null)
                     {
+                        step.setInstruction(updatedInstruction);
                         step.setStatus(PlaybookStepStatus.RUNNING);
                         step.setFailed(false);
                         step.setFailureReason(null);

@@ -304,4 +304,23 @@ public final class SessionDataTest
 
         assertEquals("Navigate to http://localhost:8080/checkout?token=${futureToken}", result);
     }
+
+    /**
+     * Verifies that getStaticDataVariables reflects dynamic overrides and runtime test data.
+     */
+    @Test
+    public void testGetStaticDataVariablesReflectsDynamicOverrides()
+    {
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("searchTerm", new SessionData.DataEntry("initialBoots", false));
+        staticMap.put("category", new SessionData.DataEntry("shoes", false));
+
+        final SessionData session = new SessionData(staticMap);
+        assertEquals("initialBoots", session.getStaticDataVariables().get("searchTerm"));
+
+        // Dynamically override searchTerm
+        session.set("searchTerm", "updatedSneakers");
+        assertEquals("updatedSneakers", session.getStaticDataVariables().get("searchTerm"));
+        assertEquals("shoes", session.getStaticDataVariables().get("category"));
+    }
 }

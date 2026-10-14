@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.aeonbits.owner.Accessible;
+import org.neodymium.util.Neodymium;
 
 /**
  * Layered data holder providing clean static/dynamic variables separation,
@@ -574,11 +575,20 @@ public final class SessionData
     public Map<String, String> getStaticDataVariables()
     {
         final Map<String, String> map = new HashMap<>();
+
+        for (final Map.Entry<String, DataEntry> entry : this.staticData.entrySet())
+        {
+            if (entry.getValue() != null && entry.getValue().value() != null)
+            {
+                flattenObject(entry.getKey(), entry.getValue().value(), map);
+            }
+        }
+
         try
         {
-            if (org.neodymium.util.Neodymium.getData() != null)
+            if (Neodymium.getData() != null)
             {
-                for (final Map.Entry<String, String> entry : org.neodymium.util.Neodymium.getData().entrySet())
+                for (final Map.Entry<String, String> entry : Neodymium.getData().entrySet())
                 {
                     if (entry.getValue() != null)
                     {
@@ -591,9 +601,9 @@ public final class SessionData
         {
         }
 
-        for (final Map.Entry<String, DataEntry> entry : this.staticData.entrySet())
+        for (final Map.Entry<String, DataEntry> entry : this.dynamicData.entrySet())
         {
-            if (entry.getValue() != null && entry.getValue().value() != null)
+            if (entry.getValue() != null && entry.getValue().value() != null && map.containsKey(entry.getKey()))
             {
                 flattenObject(entry.getKey(), entry.getValue().value(), map);
             }

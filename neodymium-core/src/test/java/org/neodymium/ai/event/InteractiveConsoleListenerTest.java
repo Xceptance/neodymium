@@ -48,6 +48,7 @@ import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.util.Neodymium;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -284,6 +285,74 @@ public class InteractiveConsoleListenerTest
         assertEquals("Second edit instruction", step.getInstruction());
         assertEquals(PlaybookStepStatus.RUNNING, step.getStatus());
         assertFalse(step.isFailed());
+    }
+
+    @Test
+    public void testEditActionUpdatesDataBindingsAndSessionData()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Search for ${searchTerm}");
+        step.setLineNumber(10);
+        step.setSourceFile("search.yaml");
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+        session.getExecutionContext().getSessionData().set("searchTerm", "boots");
+
+        final JsonObject editAction = new JsonObject();
+        editAction.addProperty("action", "EDIT");
+        editAction.addProperty("instruction", "Search for ${searchTerm}");
+        final JsonObject bindings = new JsonObject();
+        bindings.addProperty("searchTerm", "sneakers");
+        bindings.addProperty("customProp", "customVal");
+        editAction.add("bindings", bindings);
+        submitActionAsynchronously(editAction);
+
+        final String res = listener.pauseBeforeActionExecution(session.getExecutionContext(), step);
+        assertEquals("EDIT", res);
+
+        // Verify SessionData updated
+        assertEquals("sneakers", session.getExecutionContext().getSessionData().get("searchTerm"));
+        assertEquals("customVal", session.getExecutionContext().getSessionData().get("customProp"));
+
+        // Verify Neodymium.getData() updated
+        assertEquals("sneakers", Neodymium.getData().get("searchTerm"));
+        assertEquals("customVal", Neodymium.getData().get("customProp"));
+
+        // Verify pushCurrentState broadcasted new bindings
+        final String stateJson = consoleEngine.getCurrentStateJson();
+        assertNotNull(stateJson);
+        assertTrue(stateJson.contains("\"searchTerm\":\"sneakers\""), "State must contain updated searchTerm");
+        assertTrue(stateJson.contains("\"customProp\":\"customVal\""), "State must contain updated customProp");
+    }
+
+    @Test
+    public void testRunActionDoesNotSetKeyBindingsEdited()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Search for ${searchTerm}");
+        step.setLineNumber(11);
+        step.setSourceFile("search.yaml");
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+        session.getExecutionContext().getSessionData().set("searchTerm", "boots");
+
+        final JsonObject runAction = new JsonObject();
+        runAction.addProperty("action", "RUN");
+        final JsonObject bindings = new JsonObject();
+        bindings.addProperty("searchTerm", "sandals");
+        runAction.add("bindings", bindings);
+        submitActionAsynchronously(runAction);
+
+        final String res = listener.pauseBeforeActionExecution(session.getExecutionContext(), step);
+        assertEquals("RUN", res);
+
+        // Verify SessionData updated with bindings
+        assertEquals("sandals", session.getExecutionContext().getSessionData().get("searchTerm"));
+
+        // Verify KEY_BINDINGS_EDITED is NOT set on RUN action
+        assertNull(session.getExecutionContext().getTransientData().get("KEY_BINDINGS_EDITED"));
     }
 
     @Test

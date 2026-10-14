@@ -22,6 +22,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
@@ -35,16 +36,19 @@ import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.report.DiskReportFormat;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.util.Neodymium;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.xceptance.neodymium.ai.console.InteractiveStateBuilder;
@@ -463,6 +467,63 @@ public final class InteractiveConsoleListener implements ExecutionListener
         this.consoleEngine.pushState(stateJson);
     }
 
+    private void applyDataBindings(final JsonObject newBindings, final PlaybookStep currentStep, final ExecutionContext context, final boolean isEditAction)
+    {
+        if (newBindings == null || context == null)
+        {
+            return;
+        }
+
+        final SessionData sessionData = context.getSessionData();
+        for (final Map.Entry<String, JsonElement> entry : newBindings.entrySet())
+        {
+            final String key = entry.getKey();
+            final JsonElement el = entry.getValue();
+            if (el != null && !el.isJsonNull())
+            {
+                final String val = el.getAsString();
+                if (sessionData != null)
+                {
+                    sessionData.set(key, val);
+                }
+
+                try
+                {
+                    if (Neodymium.getData() != null)
+                    {
+                        Neodymium.getData().put(key, val);
+                    }
+                }
+                catch (final Throwable ignored)
+                {
+                }
+
+                try
+                {
+                    if (System.getProperty(key) != null)
+                    {
+                        System.setProperty(key, val);
+                    }
+                }
+                catch (final Throwable ignored)
+                {
+                }
+            }
+        }
+
+        if (sessionData != null && currentStep != null)
+        {
+            final int stepIndex = resolveStepIndex(context, currentStep);
+            sessionData.captureSnapshot(stepIndex);
+        }
+
+        if (isEditAction)
+        {
+            context.getTransientData().put("KEY_BINDINGS_EDITED", Boolean.TRUE);
+        }
+        LOG.info("[InteractiveConsoleListener] Updated {} data bindings from user action (isEditAction={})", newBindings.size(), isEditAction);
+    }
+
     private void handleUserAction(final JsonObject userAction, final PlaybookStep currentStep, final ExecutionContext context)
     {
         if (userAction == null)
@@ -471,6 +532,14 @@ public final class InteractiveConsoleListener implements ExecutionListener
         }
 
         final String action = userAction.has("action") ? userAction.get("action").getAsString() : "";
+        final boolean isEditAction = "EDIT".equalsIgnoreCase(action) || "UPDATE_STEP".equalsIgnoreCase(action) || "SAVE_STEP".equalsIgnoreCase(action);
+
+        if (userAction.has("bindings") && userAction.get("bindings").isJsonObject())
+        {
+            final JsonObject newBindings = userAction.getAsJsonObject("bindings");
+            applyDataBindings(newBindings, currentStep, context, isEditAction);
+        }
+
         LOG.info("[InteractiveConsoleListener] User action received: {}", action);
 
         switch (action.toUpperCase())
@@ -532,6 +601,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
                     if (newInst != null && !newInst.isBlank())
                     {
                         currentStep.setInstruction(newInst);
+                        currentStep.setRawInstruction(newInst);
                         currentStep.setStatus(PlaybookStepStatus.RUNNING);
                         currentStep.setFailed(false);
                         currentStep.setFailureReason(null);
@@ -564,6 +634,41 @@ public final class InteractiveConsoleListener implements ExecutionListener
                         }
                         pushCurrentState(context, currentStep);
                         LOG.info("[InteractiveConsoleListener] Step instruction updated to: \"{}\"", newInst);
+                    }
+                    else
+                    {
+                        currentStep.setStatus(PlaybookStepStatus.RUNNING);
+                        currentStep.setFailed(false);
+                        currentStep.setFailureReason(null);
+                        if (currentStep.getActions() != null)
+                        {
+                            try
+                            {
+                                currentStep.getActions().clear();
+                            }
+                            catch (final UnsupportedOperationException e)
+                            {
+                                currentStep.setActions(new ArrayList<>());
+                            }
+                        }
+                        if (currentStep.getToolCalls() != null)
+                        {
+                            try
+                            {
+                                currentStep.getToolCalls().clear();
+                            }
+                            catch (final UnsupportedOperationException e)
+                            {
+                                currentStep.setToolCalls(new ArrayList<>());
+                            }
+                        }
+                        currentStep.setReasoning(null);
+                        if (context != null)
+                        {
+                            context.getTransientData().put("KEY_STEP_EDITED", true);
+                        }
+                        pushCurrentState(context, currentStep);
+                        LOG.info("[InteractiveConsoleListener] Step re-queued with updated parameters/bindings: \"{}\"", currentStep.getInstruction());
                     }
                 }
                 break;

@@ -335,6 +335,14 @@ function applyState(state) {
         activeEditStepIdx = parseInt(editingCard.getAttribute('data-step-idx'), 10);
         const ta = editingCard.querySelector('.inline-edit-textarea');
         if (ta) activeEditText = ta.value;
+
+        // Preserve locally modified data bindings mid-edit
+        if (currentState?.dataBindings && state?.dataBindings) {
+            Object.assign(state.dataBindings, currentState.dataBindings);
+        }
+        if (currentState?.localDataBindings && state?.localDataBindings) {
+            Object.assign(state.localDataBindings, currentState.localDataBindings);
+        }
     }
     window.currentlyEditingStepIndex = activeEditStepIdx;
     window.currentEditText = activeEditText;
@@ -1260,6 +1268,9 @@ function updateDataBinding(key, val) {
             currentState.dataBindings = {};
         }
         currentState.dataBindings[key] = val;
+        if (currentState.localDataBindings && Object.prototype.hasOwnProperty.call(currentState.localDataBindings, key)) {
+            currentState.localDataBindings[key] = val;
+        }
 
         // Also update top test data body if visible
         const topTestDataBody = document.getElementById('topTestDataBody');
@@ -1660,7 +1671,12 @@ function sendAction(action, extra) {
     if (!currentPauseId || !currentRunId) return;
     const finalSaveOverlay = document.getElementById('finalSaveOverlay');
     if (finalSaveOverlay) finalSaveOverlay.classList.remove('active');
-    const payload = { runId: currentRunId, pauseId: currentPauseId, action, ...extra };
+    const payload = {
+        runId: currentRunId,
+        pauseId: currentPauseId,
+        action,
+        ...extra
+    };
     setButtonsEnabled(false);
     fetch('/api/console/action', {
         method: 'POST',
@@ -2399,6 +2415,14 @@ let userEditedFailedStep = false;
 let lastFailedStepIndex = null;
 
 function handlePrimaryAction() {
+    const editingCard = document.querySelector('.step-card.editing');
+    if (editingCard) {
+        const saveBtn = editingCard.querySelector('.step-save-btn');
+        if (saveBtn) {
+            saveBtn.click();
+            return;
+        }
+    }
     if (isErrorMode) {
         sendAction('HEAL');
     } else {
