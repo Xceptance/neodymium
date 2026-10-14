@@ -714,6 +714,23 @@ public class RunStorageSyncService
                         varEntity.setLastExecutedAt(System.currentTimeMillis());
                         varEntity.setHealed(isHealed);
 
+                        final String calculatedMode;
+                        if (isAi)
+                        {
+                            calculatedMode = "AI";
+                        }
+                        else if (isHealed)
+                        {
+                            calculatedMode = "HEALED";
+                        }
+                        else if ("PLAYBOOK".equalsIgnoreCase(execMode) || "REPLAY_STRICT".equalsIgnoreCase(execMode) || "REPLAY_WITH_HEALING".equalsIgnoreCase(execMode) || testClass.contains("_yaml_") || testClass.contains("_yml_"))
+                        {
+                            calculatedMode = "PLAYBOOK";
+                        }
+                        else
+                        {
+                            calculatedMode = "JAVA";
+                        }
                         final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
 
                         final String relUrl = "/run-report?runId=" + URLEncoder.encode(runId, StandardCharsets.UTF_8)
@@ -723,6 +740,7 @@ public class RunStorageSyncService
                             + "&ts=" + URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
                             + "&status=" + URLEncoder.encode(effectiveStatus, StandardCharsets.UTF_8)
                             + (isHealed ? "&healed=true" : "")
+                            + "&mode=" + URLEncoder.encode(calculatedMode, StandardCharsets.UTF_8)
                             + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
 
                         final String currentHistory = varEntity.getHistoryLinks();
@@ -765,16 +783,80 @@ public class RunStorageSyncService
                             final Map<String, String> latestParams = AuraReportDataService.parseQueryParams(sortedLinks.get(0));
                             final String latestStatus = latestParams.get("status");
                             final String latestHealed = latestParams.get("healed");
+                            String latestMode = latestParams.get("mode");
                             final boolean latestIsHealed = "true".equalsIgnoreCase(latestHealed) || "healed".equalsIgnoreCase(latestStatus);
                             varEntity.setHealed(latestIsHealed);
+
+                            if (latestMode == null || latestMode.isBlank())
+                            {
+                                final String latestRunId = latestParams.get("runId");
+                                if (runId.equals(latestRunId))
+                                {
+                                    latestMode = calculatedMode;
+                                }
+                                else if (latestRunId != null)
+                                {
+                                    final Optional<String> rJsonOpt = localRunJsonStorageService.readRunJson(latestRunId);
+                                    if (rJsonOpt.isPresent())
+                                    {
+                                        try
+                                        {
+                                            final JsonNode rRoot = objectMapper.readTree(rJsonOpt.get());
+                                            final JsonNode exMetrics = rRoot.path("executionMetrics");
+                                            final String latestExecId = latestParams.get("executionId");
+                                            if (exMetrics.isObject())
+                                            {
+                                                for (final JsonNode mNode : exMetrics)
+                                                {
+                                                    final String mId = mNode.path("id").asText("");
+                                                    if (latestExecId != null && !latestExecId.isEmpty() && latestExecId.equals(mId))
+                                                    {
+                                                        final String mMode = mNode.path("executionMode").asText(mNode.path("mode").asText("")).trim();
+                                                        final boolean mHealed = mNode.path("healed").asBoolean(false) || mNode.path("healedStepsCount").asInt(0) > 0;
+                                                        final int mLlm = mNode.path("llmCallsCount").asInt(0);
+                                                        final boolean mAi = "AI".equalsIgnoreCase(mMode) || "LLM_RECORDING".equalsIgnoreCase(mMode) || mLlm > 0;
+                                                        if (mAi)
+                                                        {
+                                                            latestMode = "AI";
+                                                        }
+                                                        else if (mHealed)
+                                                        {
+                                                            latestMode = "HEALED";
+                                                        }
+                                                        else if ("PLAYBOOK".equalsIgnoreCase(mMode) || "REPLAY_STRICT".equalsIgnoreCase(mMode) || testClass.contains("_yaml_") || testClass.contains("_yml_"))
+                                                        {
+                                                            latestMode = "PLAYBOOK";
+                                                        }
+                                                        else
+                                                        {
+                                                            latestMode = "JAVA";
+                                                        }
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        catch (final Exception ex)
+                                        {
+                                            LOG.debug("Unable to parse execution mode from latest run JSON for runId {}: {}", latestRunId, ex.getMessage());
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (latestMode != null && !latestMode.isBlank())
+                            {
+                                varEntity.setExecutionMode(latestMode);
+                            }
                             if (latestStatus != null && !latestStatus.isBlank())
                             {
-                                varEntity.setLastStatus(latestStatus);
+                                varEntity.setLastStatus("healed".equalsIgnoreCase(latestStatus) ? "passed-clean" : latestStatus);
                             }
                         }
                         else
                         {
-                            varEntity.setLastStatus(effectiveStatus);
+                            varEntity.setExecutionMode(calculatedMode);
+                            varEntity.setLastStatus("healed".equalsIgnoreCase(effectiveStatus) ? "passed-clean" : effectiveStatus);
                             varEntity.setHealed(isHealed);
                         }
 

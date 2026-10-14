@@ -74,6 +74,9 @@ public class TestBaseVariationEntity
     @Column(name = "healed")
     private Boolean healed = false;
 
+    @Column(name = "execution_mode", length = 40)
+    private String executionMode;
+
     @Lob
     @Column(name = "history_links", columnDefinition = "CLOB")
     private String historyLinks;
@@ -221,5 +224,54 @@ public class TestBaseVariationEntity
     public void setHealed(final Boolean healed)
     {
         this.healed = healed != null ? healed : false;
+    }
+
+    public String getExecutionMode()
+    {
+        return executionMode;
+    }
+
+    public void setExecutionMode(final String executionMode)
+    {
+        this.executionMode = executionMode;
+    }
+
+    /**
+     * Resolves the display execution mode string (AI, HEALED, PLAYBOOK, or JAVA).
+     *
+     * @return display mode string
+     */
+    public String getDisplayMode()
+    {
+        final String rawMode = this.executionMode != null ? this.executionMode.trim() : "";
+        if ("AI".equalsIgnoreCase(rawMode) || "LLM_RECORDING".equalsIgnoreCase(rawMode) || "LLM_ONLY".equalsIgnoreCase(rawMode) || "FORCE_RECORDING".equalsIgnoreCase(rawMode))
+        {
+            return "AI";
+        }
+        if ("HEALED".equalsIgnoreCase(rawMode))
+        {
+            return "HEALED";
+        }
+        if ("PLAYBOOK".equalsIgnoreCase(rawMode) || "REPLAY_STRICT".equalsIgnoreCase(rawMode) || "REPLAY_WITH_HEALING".equalsIgnoreCase(rawMode))
+        {
+            return "PLAYBOOK";
+        }
+        if ("JAVA".equalsIgnoreCase(rawMode))
+        {
+            return "JAVA";
+        }
+        if (!rawMode.isEmpty())
+        {
+            return rawMode.toUpperCase();
+        }
+        if (isHealed())
+        {
+            return "HEALED";
+        }
+        if (testClassName != null && (testClassName.contains("_yaml_") || testClassName.contains("_yml_") || testClassName.endsWith("PlaybookTest")))
+        {
+            return "PLAYBOOK";
+        }
+        return "JAVA";
     }
 }

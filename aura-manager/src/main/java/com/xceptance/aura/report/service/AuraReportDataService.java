@@ -644,9 +644,46 @@ public class AuraReportDataService
             final boolean isHealed;
             if (!sortedLinks.isEmpty())
             {
-                final Map<String, String> latestParams = parseQueryParams(sortedLinks.get(0));
+                final String latestLink = sortedLinks.get(0);
+                final Map<String, String> latestParams = parseQueryParams(latestLink);
                 final String linkStatus = latestParams.get("status");
                 final String linkHealed = latestParams.get("healed");
+                String linkMode = latestParams.get("mode");
+                if (linkMode == null || linkMode.isBlank())
+                {
+                    final String rId = latestParams.get("runId");
+                    final String eId = latestParams.get("executionId");
+                    if (rId != null && !rId.isBlank())
+                    {
+                        final RunReportDto rpt = getRunReport(rId);
+                        if (rpt != null && rpt.getExecutions() != null)
+                        {
+                            for (final TestExecutionDto exec : rpt.getExecutions())
+                            {
+                                if (eId != null && !eId.isBlank() && eId.equals(exec.getId()))
+                                {
+                                    linkMode = exec.getDisplayMode();
+                                    break;
+                                }
+                            }
+                            if (linkMode == null || linkMode.isBlank())
+                            {
+                                for (final TestExecutionDto exec : rpt.getExecutions())
+                                {
+                                    if (exec.getTestClass() != null && exec.getTestClass().equals(var.getTestClassName()))
+                                    {
+                                        linkMode = exec.getDisplayMode();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (linkMode != null && !linkMode.isBlank())
+                {
+                    var.setExecutionMode(linkMode);
+                }
                 isHealed = "true".equalsIgnoreCase(linkHealed) || "healed".equalsIgnoreCase(linkStatus);
                 curStatus = (linkStatus != null && !linkStatus.isBlank())
                     ? linkStatus
@@ -667,7 +704,7 @@ public class AuraReportDataService
             }
             else if ("passed".equalsIgnoreCase(curStatus) || "succeeded-fixed".equalsIgnoreCase(curStatus) || "passed-clean".equalsIgnoreCase(curStatus) || "succeeded".equalsIgnoreCase(curStatus) || "healed".equalsIgnoreCase(curStatus))
             {
-                effectiveLastStatus = hasBugs ? "succeeded-fixed" : (isHealed ? "healed" : "passed-clean");
+                effectiveLastStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
             }
 
             var.setLastStatus(effectiveLastStatus);
@@ -2444,13 +2481,53 @@ public class AuraReportDataService
             final String historyStr = var.getHistoryLinks();
             final boolean hasBugs = !activeBugs.isEmpty() || hasBugsInLatestHistoryLink(historyStr);
 
+            final String prevMode = var.getExecutionMode();
             final String cur;
             final boolean isHealed;
+            boolean modeChanged = false;
             if (!sortedLinks.isEmpty())
             {
-                final Map<String, String> latestParams = parseQueryParams(sortedLinks.get(0));
+                final String latestLink = sortedLinks.get(0);
+                final Map<String, String> latestParams = parseQueryParams(latestLink);
                 final String linkStatus = latestParams.get("status");
                 final String linkHealed = latestParams.get("healed");
+                String linkMode = latestParams.get("mode");
+                if (linkMode == null || linkMode.isBlank())
+                {
+                    final String rId = latestParams.get("runId");
+                    final String eId = latestParams.get("executionId");
+                    if (rId != null && !rId.isBlank())
+                    {
+                        final RunReportDto rpt = getRunReport(rId);
+                        if (rpt != null && rpt.getExecutions() != null)
+                        {
+                            for (final TestExecutionDto exec : rpt.getExecutions())
+                            {
+                                if (eId != null && !eId.isBlank() && eId.equals(exec.getId()))
+                                {
+                                    linkMode = exec.getDisplayMode();
+                                    break;
+                                }
+                            }
+                            if (linkMode == null || linkMode.isBlank())
+                            {
+                                for (final TestExecutionDto exec : rpt.getExecutions())
+                                {
+                                    if (exec.getTestClass() != null && exec.getTestClass().equals(var.getTestClassName()))
+                                    {
+                                        linkMode = exec.getDisplayMode();
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                if (linkMode != null && !linkMode.isBlank())
+                {
+                    var.setExecutionMode(linkMode);
+                    modeChanged = !Objects.equals(linkMode, prevMode);
+                }
                 isHealed = "true".equalsIgnoreCase(linkHealed) || "healed".equalsIgnoreCase(linkStatus);
                 cur = (linkStatus != null && !linkStatus.isBlank())
                     ? linkStatus
@@ -2470,9 +2547,9 @@ public class AuraReportDataService
             }
             else if ("passed".equalsIgnoreCase(cur) || "succeeded-fixed".equalsIgnoreCase(cur) || "passed-clean".equalsIgnoreCase(cur) || "succeeded".equalsIgnoreCase(cur) || "healed".equalsIgnoreCase(cur))
             {
-                effective = hasBugs ? "succeeded-fixed" : (isHealed ? "healed" : "passed-clean");
+                effective = hasBugs ? "succeeded-fixed" : "passed-clean";
             }
-            if (!effective.equalsIgnoreCase(var.getLastStatus()) || !Objects.equals(isHealed, var.getHealed()))
+            if (!effective.equalsIgnoreCase(var.getLastStatus()) || !Objects.equals(isHealed, var.getHealed()) || modeChanged)
             {
                 var.setLastStatus(effective);
                 variationRepository.save(var);
@@ -2794,7 +2871,7 @@ public class AuraReportDataService
                     }
                     else if ("passed".equalsIgnoreCase(effective) || "succeeded-fixed".equalsIgnoreCase(effective) || "passed-clean".equalsIgnoreCase(effective) || "succeeded".equalsIgnoreCase(effective) || "healed".equalsIgnoreCase(effective))
                     {
-                        effective = hasBugs ? "succeeded-fixed" : (isHealed ? "healed" : "passed-clean");
+                        effective = hasBugs ? "succeeded-fixed" : "passed-clean";
                     }
                     var.setLastStatus(effective);
 
@@ -3340,7 +3417,7 @@ public class AuraReportDataService
                                     final String execRawStatus = matchedExec.getStatus() != null ? matchedExec.getStatus() : "passed-clean";
                                     final String[] badgeInfo = getStatusBadgeInfo(execRawStatus);
                                     final String curEngine = matchedExec.getEngine() != null ? matchedExec.getEngine() : "Java";
-                                    final String curMode = matchedExec.getMode() != null && !matchedExec.getMode().isBlank() ? matchedExec.getMode() : "FORCE_RECORDING";
+                                    final String curMode = matchedExec.getMode() != null && !matchedExec.getMode().isBlank() ? matchedExec.getMode() : "JAVA";
                                     final String curTs = run.getTimestampLabel() != null ? run.getTimestampLabel() : "Recently";
                                     final List<String> curBugs = matchedExec.getBugs() != null ? matchedExec.getBugs() : List.of();
                                     final String bugsStr = !curBugs.isEmpty() ? String.join(";", curBugs) : "";
@@ -3408,7 +3485,7 @@ public class AuraReportDataService
                         }
                         else if ("passed".equalsIgnoreCase(rawLatest) || "succeeded".equalsIgnoreCase(rawLatest) || "passed-clean".equalsIgnoreCase(rawLatest) || "succeeded-fixed".equalsIgnoreCase(rawLatest) || "healed".equalsIgnoreCase(rawLatest))
                         {
-                            latestStatus = hasBugs ? "succeeded-fixed" : (isHealed ? "healed" : "passed-clean");
+                            latestStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
                         }
                         else
                         {
@@ -3490,7 +3567,7 @@ public class AuraReportDataService
                 final String[] badgeInfo = getStatusBadgeInfo(rawStatus);
                 final String timestamp = run.getTimestampLabel() != null ? run.getTimestampLabel() : "Recently";
                 final String engine = exec.getEngine() != null ? exec.getEngine() : "Java";
-                final String mode = exec.getMode() != null && !exec.getMode().isBlank() ? exec.getMode() : "FORCE_RECORDING";
+                final String mode = exec.getMode() != null && !exec.getMode().isBlank() ? exec.getMode() : "JAVA";
                 final String bugsStr = exec.getBugs() != null && !exec.getBugs().isEmpty() ? String.join(";", exec.getBugs()) : "";
 
                 final boolean isHealed = exec.isHealed();
@@ -3560,7 +3637,7 @@ public class AuraReportDataService
                 }
                 else if ("passed".equalsIgnoreCase(rawLatest) || "succeeded".equalsIgnoreCase(rawLatest) || "passed-clean".equalsIgnoreCase(rawLatest) || "succeeded-fixed".equalsIgnoreCase(rawLatest) || "healed".equalsIgnoreCase(rawLatest))
                 {
-                    latestStatus = hasBugs ? "succeeded-fixed" : (isHealed ? "healed" : "passed-clean");
+                    latestStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
                 }
                 else
                 {
@@ -3648,12 +3725,7 @@ public class AuraReportDataService
                 statusClass = "badge-fixed";
                 statusLabel = "SUCCEEDED-FIXED";
             }
-            case "healed" ->
-            {
-                statusClass = "badge-healed";
-                statusLabel = "HEALED";
-            }
-            case "passed-clean", "passed", "succeeded" ->
+            case "healed", "passed-clean", "passed", "succeeded" ->
             {
                 statusClass = "badge-pass";
                 statusLabel = "PASSED";

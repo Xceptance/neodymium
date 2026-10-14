@@ -949,6 +949,31 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
     border-left: 4px solid #2563eb !important; 
 }
 
+/* Test Base Table: Fixed layout for vertical column alignment & invisible table borders */
+#pageTestBase table.aura-table {
+    table-layout: fixed;
+    width: 100%;
+    border: none !important;
+    border-collapse: collapse;
+}
+
+#pageTestBase table.aura-table th {
+    border: none !important;
+    border-bottom: none !important;
+}
+
+#pageTestBase table.aura-table td {
+    border: none !important;
+    border-bottom: none !important;
+    overflow-wrap: break-word;
+    word-break: break-word;
+}
+
+#pageTestBase table.aura-table tr.clickable-row.selected td,
+#pageTestBase table.aura-table tr.clickable-row.active-selected-row td {
+    border-bottom: none !important;
+}
+
 .active-indicator-badge {
     background: #2563eb;
     color: #ffffff;

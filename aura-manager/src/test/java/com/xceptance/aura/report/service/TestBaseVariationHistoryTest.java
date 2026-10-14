@@ -332,6 +332,8 @@ public class TestBaseVariationHistoryTest
         Assertions.assertTrue(dto.isHealed(), "DTO should be marked as healed");
         Assertions.assertTrue(dto.isPassedHealed(), "DTO should be passed healed");
         Assertions.assertFalse(dto.isFailedHealed(), "DTO should not be failed healed");
+        Assertions.assertEquals("HEALED", dto.getDisplayMode(), "Execution mode should be resolved to HEALED");
+        Assertions.assertEquals("PASSED", dto.getStatusLabel(), "Status label should be PASSED without HEALED in status");
     }
 
     @Test
@@ -360,6 +362,8 @@ public class TestBaseVariationHistoryTest
         Assertions.assertTrue(dto.isHealed(), "DTO should be marked as healed");
         Assertions.assertTrue(dto.isPassedHealed(), "DTO should be passed healed");
         Assertions.assertFalse(dto.isFailedHealed(), "DTO should not be failed healed");
+        Assertions.assertEquals("HEALED", dto.getDisplayMode(), "Execution mode should be resolved to HEALED");
+        Assertions.assertEquals("PASSED", dto.getStatusLabel(), "Status label should be PASSED without HEALED in status");
     }
 
     @Test
@@ -508,8 +512,41 @@ public class TestBaseVariationHistoryTest
         final TestBaseClassDto classDto = area.getTestClasses().get(0);
         final TestBaseVariationEntity updatedVar = classDto.getVariations().get(0);
 
-        Assertions.assertEquals("healed", updatedVar.getLastStatus(), "Last status should be healed when latest execution link is healed");
+        Assertions.assertEquals("passed-clean", updatedVar.getLastStatus(), "Last status should be passed-clean independent of healing");
         Assertions.assertTrue(updatedVar.isHealed(), "Variation should be marked as healed");
+        Assertions.assertEquals("HEALED", updatedVar.getDisplayMode(), "Execution mode should be HEALED when latest execution is healed");
+    }
+
+    @Test
+    public void testGetTestBaseDataStrictlyResolvesLatestExecutionMode()
+    {
+        final String testClass = "com.xceptance.neodymium.test.CheckoutTest";
+        final String dataSet = "DEU";
+        final String location = "DE";
+        final String browser = "Chrome";
+        final String varId = AuraReportDataService.generateVariationId(testClass, dataSet, location, browser);
+
+        final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, "testCheckout", dataSet, "@General", location, browser);
+
+        // Three historical runs in chronological order (R1 older, R2 middle healed, R3 latest AI)
+        final String link1Java = "/run-report?runId=R1&ts=2026-09-01+10%3A00%3A00&status=passed-clean&mode=JAVA";
+        final String link2Healed = "/run-report?runId=R2&ts=2026-09-15+10%3A00%3A00&status=passed-clean&healed=true&mode=HEALED";
+        final String link3Ai = "/run-report?runId=R3&ts=2026-10-01+10%3A00%3A00&status=failed-unknown&mode=AI";
+
+        // Provide links in unordered fashion; sortHistoryLinksDescending should pick R3 as latest
+        varEntity.setHistoryLinks(link1Java + "," + link3Ai + "," + link2Healed);
+
+        Mockito.when(variationRepository.findAllByOrderByLastExecutedAtDesc()).thenReturn(List.of(varEntity));
+        Mockito.when(bugRepository.findAll()).thenReturn(List.of());
+        Mockito.when(batchRepository.findAll()).thenReturn(List.of());
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of());
+
+        final TestBaseDataDto data = dataService.getTestBaseData();
+        Assertions.assertNotNull(data);
+
+        final TestBaseVariationEntity resultVar = data.getAreas().get(0).getTestClasses().get(0).getVariations().get(0);
+        Assertions.assertEquals("AI", resultVar.getDisplayMode(), "Latest execution mode (AI) must be displayed, not older HEALED or JAVA mode");
+        Assertions.assertEquals("failed-unknown", resultVar.getLastStatus(), "Latest status must be failed-unknown");
     }
 
     @Test
@@ -579,6 +616,57 @@ public class TestBaseVariationHistoryTest
             }
             return false;
         }));
+    }
+
+    @Test
+    public void testTestBaseVariationHistoryDtoDisplayModeResolution()
+    {
+        // 1. AI Modes
+        final TestBaseVariationHistoryDto dtoAi = new TestBaseVariationHistoryDto(
+            "R1", "e1", "B1", "LLM_RECORDING", "Java", "2026-10-14 10:00:00", "passed-clean", "badge-pass", "PASSED", List.of()
+        );
+        Assertions.assertEquals("AI", dtoAi.getDisplayMode());
+
+        final TestBaseVariationHistoryDto dtoAiForce = new TestBaseVariationHistoryDto(
+            "R1b", "e1b", "B1", "FORCE_RECORDING", "Java", "2026-10-14 10:00:00", "passed-clean", "badge-pass", "PASSED", List.of()
+        );
+        Assertions.assertEquals("AI", dtoAiForce.getDisplayMode());
+
+        // 2. Playbook Modes without Healing
+        final TestBaseVariationHistoryDto dtoPlaybook = new TestBaseVariationHistoryDto(
+            "R2", "e2", "B1", "REPLAY_STRICT", "Java", "2026-10-14 10:00:00", "passed-clean", "badge-pass", "PASSED", List.of()
+        );
+        Assertions.assertEquals("PLAYBOOK", dtoPlaybook.getDisplayMode());
+
+        final TestBaseVariationHistoryDto dtoReplayNoHeal = new TestBaseVariationHistoryDto(
+            "R2b", "e2b", "B1", "REPLAY_WITH_HEALING", "Java", "2026-10-14 10:00:00", "passed-clean", "badge-pass", "PASSED", List.of(), false, false, false
+        );
+        Assertions.assertEquals("PLAYBOOK", dtoReplayNoHeal.getDisplayMode());
+
+        // 3. Healed Mode
+        final TestBaseVariationHistoryDto dtoReplayHealed = new TestBaseVariationHistoryDto(
+            "R3", "e3", "B1", "REPLAY_WITH_HEALING", "Java", "2026-10-14 10:00:00", "passed-clean", "badge-pass", "PASSED", List.of(), true, true, false
+        );
+        Assertions.assertEquals("HEALED", dtoReplayHealed.getDisplayMode());
+
+        // 4. Standard Java Mode
+        final TestBaseVariationHistoryDto dtoJava = new TestBaseVariationHistoryDto(
+            "R4", "e4", "B1", "JAVA", "Java", "2026-10-14 10:00:00", "passed-clean", "badge-pass", "PASSED", List.of()
+        );
+        Assertions.assertEquals("JAVA", dtoJava.getDisplayMode());
+
+        final TestBaseVariationHistoryDto dtoDefault = new TestBaseVariationHistoryDto(
+            "R5", "e5", "B1", "", "Java", "2026-10-14 10:00:00", "passed-clean", "badge-pass", "PASSED", List.of()
+        );
+        Assertions.assertEquals("JAVA", dtoDefault.getDisplayMode());
+    }
+
+    @Test
+    public void testGetStatusBadgeInfoNormalizesHealedToPassed()
+    {
+        final String[] badgeInfo = AuraReportDataService.getStatusBadgeInfo("healed");
+        Assertions.assertEquals("badge-pass", badgeInfo[0]);
+        Assertions.assertEquals("PASSED", badgeInfo[1]);
     }
 }
 

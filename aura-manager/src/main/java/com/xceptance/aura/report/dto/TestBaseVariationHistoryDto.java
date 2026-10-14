@@ -88,7 +88,7 @@ public final class TestBaseVariationHistoryDto
         this.runId = runId != null ? runId : "";
         this.executionId = executionId != null ? executionId : "";
         this.batchName = batchName != null ? batchName : "Unknown";
-        this.mode = mode != null && !mode.isBlank() ? mode : "FORCE_RECORDING";
+        this.mode = mode != null && !mode.isBlank() ? mode : "JAVA";
         this.engine = engine != null ? engine : "Java";
         this.timestamp = formatTimestamp(timestamp);
         this.status = status != null ? status : "passed-clean";
@@ -291,5 +291,41 @@ public final class TestBaseVariationHistoryDto
     public boolean isFailedHealed()
     {
         return failedHealed;
+    }
+
+    /**
+     * Resolves the display execution mode string (AI, HEALED, PLAYBOOK, or JAVA).
+     *
+     * @return display mode string
+     */
+    public String getDisplayMode()
+    {
+        if (isHealed())
+        {
+            return "HEALED";
+        }
+        final String rawMode = this.mode != null ? this.mode.trim() : "";
+        final String upper = rawMode.toUpperCase();
+        if ("AI".equals(upper) || "LLM_RECORDING".equals(upper) || "LLM_ONLY".equals(upper) || "FORCE_RECORDING".equals(upper))
+        {
+            return "AI";
+        }
+        if ("HEALED".equals(upper))
+        {
+            return "HEALED";
+        }
+        if ("REPLAY_STRICT".equals(upper) || "PLAYBOOK".equals(upper) || "REPLAY_WITH_HEALING".equals(upper) || "AUTO".equals(upper))
+        {
+            return "PLAYBOOK";
+        }
+        if ("JAVA".equals(upper))
+        {
+            return "JAVA";
+        }
+        if (!rawMode.isEmpty())
+        {
+            return rawMode.toUpperCase();
+        }
+        return "JAVA";
     }
 }

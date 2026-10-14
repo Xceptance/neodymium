@@ -84,20 +84,20 @@
                                     </a>
                                 </td>
                                 <td th:data-sort="${exec.batchName}"><span th:text="${exec.batchName}">Batch Name</span></td>
-                                <td th:data-sort="${exec.mode}"><span class="tag-chip tag-chip-mode" th:text="${exec.mode}">FORCE_RECORDING</span></td>
+                                <td th:data-sort="${exec.displayMode}">
+                                    <span class="badge-status" 
+                                          th:classappend="${exec.displayMode == 'AI' ? 'badge-mode-ai' : (exec.displayMode == 'PLAYBOOK' ? 'badge-mode-playbook' : (exec.displayMode == 'HEALED' ? 'badge-mode-healed' : 'badge-mode-java'))}"
+                                          style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"
+                                          th:title="${'Execution Mode: ' + (exec.mode ?: 'JAVA')}"
+                                          th:text="${exec.displayMode}">PLAYBOOK</span>
+                                </td>
                                 <td th:data-sort="${exec.timestamp}"><span class="text-muted font-mono" style="font-size: 0.82rem; white-space: nowrap;" th:text="${exec.timestamp}">Recently</span></td>
                                 <td th:data-sort="${exec.statusLabel}">
                                     <div style="display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap;">
                                         <span th:class="'badge-status ' + ${exec.statusClass}">
                                             <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;" 
-                                                  th:text="${exec.statusClass == 'badge-pass' ? 'check_circle' : (exec.statusClass == 'badge-healed' ? 'healing' : (exec.statusClass == 'badge-known-fail' or exec.statusClass == 'badge-known' or exec.statusClass == 'badge-fixed' ? 'bug_report' : (exec.statusClass == 'badge-ignored' ? 'skip_next' : 'cancel')))}">check_circle</span>
+                                                  th:text="${exec.statusClass == 'badge-pass' ? 'check_circle' : (exec.statusClass == 'badge-known-fail' or exec.statusClass == 'badge-known' or exec.statusClass == 'badge-fixed' ? 'bug_report' : (exec.statusClass == 'badge-ignored' ? 'skip_next' : 'cancel'))}">check_circle</span>
                                             <span th:text="${exec.statusLabel}">PASSED</span>
-                                        </span>
-                                        <span th:if="${exec.healed}" 
-                                              th:class="'badge-status ' + (${exec.failedHealed} ? 'badge-healed-failed' : 'badge-healed-passed')"
-                                              style="font-size: 0.72rem; padding: 0.15rem 0.45rem;"
-                                              title="Test had dynamic self-healing">
-                                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> HEALED
                                         </span>
                                         <span th:if="${exec.bugs != null and !exec.bugs.isEmpty()}" th:each="bug : ${exec.bugs}" class="tag-chip tag-bug ms-1" th:text="${bug}">BUG-123</span>
                                     </div>
