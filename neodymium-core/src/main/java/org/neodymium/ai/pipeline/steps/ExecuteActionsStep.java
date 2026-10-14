@@ -232,6 +232,7 @@ public final class ExecuteActionsStep
         {
             final PlaybookStepStatus initialStepStatus = step.getStatus();
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+            contextState.resetStepInteractivePause();
             step.setStatus(PlaybookStepStatus.RUNNING);
             final String rawInstruction = step.hasSubSteps() ? step.getFullInstruction() : step.getRawInstruction();
             final String resolvedInstruction;

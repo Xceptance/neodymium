@@ -29,6 +29,7 @@ import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.event.diagnostic.DiagnosticErrorEvent;
+import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
@@ -227,6 +228,16 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
             this.consoleEngine.pushState(stateJson);
         }
+        else if (event instanceof ActionExecutedEvent)
+        {
+            final Object stepObj = context != null ? context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP) : null;
+            final PlaybookStep currentStep = stepObj instanceof PlaybookStep ps ? ps : null;
+            final int stepIndex = resolveStepIndex(context, currentStep);
+            final String stateJson = InteractiveStateBuilder.buildStateJson(
+                this.session, context, this.consoleEngine.getRunId(), stepIndex, "running", null, getReport());
+
+            this.consoleEngine.pushState(stateJson);
+        }
         else if (event instanceof SessionFinishedEvent sessionFinished)
         {
             final TestExecutionReport rep = getReport();
@@ -246,6 +257,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 this.consoleEngine.pushState(stateJson);
 
                 LOG.info("[InteractiveConsoleListener] Session finished with status '{}'. Awaiting user final action (pauseId={})", overallStatus, pauseId);
+                final long pauseStart = System.currentTimeMillis();
                 try
                 {
                     final JsonObject userAction = this.consoleEngine.waitForAction(pauseId);
@@ -254,6 +266,14 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 catch (final InterruptedException e)
                 {
                     Thread.currentThread().interrupt();
+                }
+                finally
+                {
+                    final long pauseDurationMs = System.currentTimeMillis() - pauseStart;
+                    if (context != null)
+                    {
+                        context.recordInteractivePause(pauseDurationMs);
+                    }
                 }
             }
             else
@@ -318,6 +338,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
         {
             LOG.info("[InteractiveConsoleListener] Step failure encountered at step {}. Pausing for user recovery action (pauseId={})", stepIndex, pauseId);
         }
+        final long pauseStart = System.currentTimeMillis();
         try
         {
             final JsonObject userAction = this.consoleEngine.waitForAction(pauseId);
@@ -329,6 +350,14 @@ public final class InteractiveConsoleListener implements ExecutionListener
         {
             Thread.currentThread().interrupt();
             return "ABORT";
+        }
+        finally
+        {
+            final long pauseDurationMs = System.currentTimeMillis() - pauseStart;
+            if (context != null)
+            {
+                context.recordInteractivePause(pauseDurationMs);
+            }
         }
     }
 
@@ -390,6 +419,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
         {
             LOG.info("[InteractiveConsoleListener] Pausing for user action review at step {} (pauseId={})", stepIndex, pauseId);
         }
+        final long pauseStart = System.currentTimeMillis();
         try
         {
             final JsonObject userAction = this.consoleEngine.waitForAction(pauseId);
@@ -401,6 +431,14 @@ public final class InteractiveConsoleListener implements ExecutionListener
         {
             Thread.currentThread().interrupt();
             return "ABORT";
+        }
+        finally
+        {
+            final long pauseDurationMs = System.currentTimeMillis() - pauseStart;
+            if (context != null)
+            {
+                context.recordInteractivePause(pauseDurationMs);
+            }
         }
     }
 

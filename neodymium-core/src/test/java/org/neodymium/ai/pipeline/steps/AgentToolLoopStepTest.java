@@ -4072,6 +4072,126 @@ public class AgentToolLoopStepTest
         Assertions.assertFalse(prompt.contains("### Compound Instruction Milestones:"),
                 "Prompt must not contain a duplicate ### Compound Instruction Milestones: section");
     }
+
+    @Test
+    public void testPartitionToolCallsAndActionsLiveTurnSetsRunningAndPendingAndSuccess()
+    {
+        final PlaybookStep sub1 = new PlaybookStep("type 'Neodymium' in search input");
+        final PlaybookStep sub2 = new PlaybookStep("click search button");
+        final PlaybookStep sub3 = new PlaybookStep("assert search results header");
+        final List<PlaybookStep> subSteps = List.of(sub1, sub2, sub3);
+
+        final ToolCall typeCall = new ToolCall("c1", "type", MAPPER.createObjectNode().put("target", "#search").put("text", "Neodymium"));
+        final ToolCall clickCall = new ToolCall("c2", "click", MAPPER.createObjectNode().put("target", "#submit-btn"));
+
+        // Scenario A: Turn 1 Live where model generates both calls before ANY action executes
+        AgentToolLoopStep.partitionToolCallsAndActions(
+            subSteps,
+            Collections.emptyList(),
+            Collections.emptyList(),
+            List.of(typeCall, clickCall),
+            Collections.emptyList(),
+            true
+        );
+        Assertions.assertEquals(PlaybookStepStatus.RUNNING, sub1.getStatus(), "First proposed sub-step must be RUNNING");
+        Assertions.assertEquals(PlaybookStepStatus.PENDING, sub2.getStatus(), "Subsequent proposed sub-step must remain PENDING before prior action executes");
+        Assertions.assertEquals(PlaybookStepStatus.PENDING, sub3.getStatus(), "Unreached sub-step must remain PENDING");
+        Assertions.assertEquals(1, sub1.getToolCalls().size());
+        Assertions.assertEquals(1, sub2.getToolCalls().size());
+
+        // Scenario B: Turn 2 Live where sub1 has executed, and sub2 is proposed
+        AgentToolLoopStep.partitionToolCallsAndActions(
+            subSteps,
+            List.of(typeCall),
+            Collections.emptyList(),
+            List.of(clickCall),
+            Collections.emptyList(),
+            true
+        );
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, sub1.getStatus(), "Executed prior sub-step must be marked SUCCESS");
+        Assertions.assertEquals(PlaybookStepStatus.RUNNING, sub2.getStatus(), "Currently active proposed sub-step must be RUNNING");
+        Assertions.assertEquals(PlaybookStepStatus.PENDING, sub3.getStatus(), "Subsequent sub-steps must remain PENDING");
+        Assertions.assertEquals(1, sub1.getToolCalls().size());
+        Assertions.assertEquals(1, sub2.getToolCalls().size());
+
+        // Final completion: both sub1 and sub2 executed
+        AgentToolLoopStep.partitionToolCallsAndActions(
+            subSteps,
+            List.of(typeCall, clickCall),
+            Collections.emptyList(),
+            Collections.emptyList(),
+            Collections.emptyList(),
+            false
+        );
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, sub1.getStatus(), "Sub1 must be SUCCESS upon completion");
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, sub2.getStatus(), "Sub2 must be SUCCESS upon completion");
+        Assertions.assertEquals(PlaybookStepStatus.PENDING, sub3.getStatus(), "Unexecuted sub3 must remain PENDING");
+    }
+
+    @Test
+    public void testInteractivePauseCompensatesWallClockTimeout() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("slow_tool", "Slow tool for test", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx) throws Exception
+            {
+                Thread.sleep(1100);
+                AgentToolLoopStepTest.this.context.recordInteractivePause(1100L);
+                return ToolResult.success(call.callId(), "Slow tool done");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Completed");
+            }
+        });
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+        {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Step 1", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("call-1", "slow_tool", MAPPER.createObjectNode())));
+            }
+            if (t == 2)
+            {
+                return new LlmResponse("Step 2", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("call-2", "complete_step", MAPPER.createObjectNode().put("summary", "Done"))));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        // Timeout is 1 second. Without pause compensation, 1100ms elapsed would throw StepTimeoutExceededException.
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 1);
+        Assertions.assertDoesNotThrow(() -> step.execute(this.context));
+        Assertions.assertEquals("Done", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
 }
 
 

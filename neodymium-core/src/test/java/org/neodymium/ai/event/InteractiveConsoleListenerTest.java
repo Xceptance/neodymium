@@ -31,11 +31,13 @@ import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
+import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
@@ -43,13 +45,15 @@ import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
-import org.neodymium.ai.pipeline.ConclusiveFailureException;
+import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.session.AiSession;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import com.xceptance.neodymium.ai.console.InteractiveStateBuilder;
 
 /**
  * Unit test suite validating {@link InteractiveConsoleListener} behavior.
@@ -412,5 +416,100 @@ public class InteractiveConsoleListenerTest
         assertEquals("failed", steps.get(1).getAsJsonObject().get("status").getAsString());
         assertEquals("skipped", steps.get(2).getAsJsonObject().get("status").getAsString());
         assertFalse(steps.get(2).getAsJsonObject().has("duration"), "Skipped step should not have duration");
+    }
+
+    @Test
+    public void testPauseBeforeActionExecutionRecordsPauseDurationInExecutionContext()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Search Neodymium");
+        step.setStartTimeMs(System.currentTimeMillis());
+        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+
+        final JsonObject runAction = new JsonObject();
+        runAction.addProperty("action", "RUN");
+        submitActionAsynchronously(runAction);
+
+        listener.pauseBeforeActionExecution(session.getExecutionContext(), step);
+
+        assertTrue(session.getExecutionContext().getStepInteractivePauseMs() >= 0L,
+            "Step pause duration must be recorded in ExecutionContext");
+        assertTrue(session.getExecutionContext().getTotalInteractivePauseMs() >= 0L,
+            "Total session pause duration must be recorded in ExecutionContext");
+    }
+
+    @Test
+    public void testActionExecutedEventPushesRunningStateToConsole()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Search Neodymium");
+        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+
+        final Action action = new Action("click", "button.search", null, null, null, null, false);
+        eventBus.dispatch(new ActionExecutedEvent(action, action, true));
+
+        final String stateJson = consoleEngine.getCurrentStateJson();
+        assertNotNull(stateJson);
+        assertTrue(stateJson.contains("\"status\":\"running\""));
+    }
+
+    @Test
+    public void testSubStepStatusesSerializedDuringLiveExecution()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep parentStep = new PlaybookStep("Perform Search");
+        final PlaybookStep sub1 = new PlaybookStep("Type search term");
+        final PlaybookStep sub2 = new PlaybookStep("Click search");
+        sub1.setParent(parentStep);
+        sub2.setParent(parentStep);
+        parentStep.setSubSteps(List.of(sub1, sub2));
+
+        // Sub1 executed with SUCCESS; Sub2 is live and RUNNING
+        sub1.setStatus(PlaybookStepStatus.SUCCESS);
+        sub1.setActions(List.of(new Action("type", "#search", "Neodymium", null, null, null, false)));
+        sub2.setStatus(PlaybookStepStatus.RUNNING);
+        sub2.setActions(List.of(new Action("click", "#submit", null, null, null, null, false)));
+
+        session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, parentStep);
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(parentStep));
+
+        // Simulate an attached TestExecutionReport with preliminary PENDING entries
+        final TestExecutionReport report = new TestExecutionReport();
+        final TestExecutionReport.ReportStepEntry reportParent = new TestExecutionReport.ReportStepEntry(0, "Perform Search");
+        final TestExecutionReport.ReportStepEntry repSub1 = new TestExecutionReport.ReportStepEntry(0, "Type search term");
+        repSub1.setStatus("PENDING");
+        final TestExecutionReport.ReportStepEntry repSub2 = new TestExecutionReport.ReportStepEntry(1, "Click search");
+        repSub2.setStatus("PENDING");
+        reportParent.addSubStep(repSub1);
+        reportParent.addSubStep(repSub2);
+        report.addStep(reportParent);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(session, session.getExecutionContext(),
+            consoleEngine.getRunId(), 0, "paused", "pause-test", report);
+
+        assertNotNull(stateJson);
+        final JsonObject stateObj = JsonParser.parseString(stateJson).getAsJsonObject();
+        final JsonArray steps = stateObj.getAsJsonObject("blocks").getAsJsonArray("steps");
+        assertEquals(1, steps.size());
+        final JsonObject stepObj = steps.get(0).getAsJsonObject();
+        assertTrue(stepObj.has("subSteps"), "Step must contain subSteps");
+        final JsonArray subSteps = stepObj.getAsJsonArray("subSteps");
+        assertEquals(2, subSteps.size());
+
+        final JsonObject subObj1 = subSteps.get(0).getAsJsonObject();
+        final JsonObject subObj2 = subSteps.get(1).getAsJsonObject();
+
+        assertEquals("passed", subObj1.get("status").getAsString(), "Completed sub-step must have status 'passed'");
+        assertEquals("running", subObj2.get("status").getAsString(), "In-progress sub-step must have status 'running'");
+        assertTrue(subObj1.has("actions"), "Completed sub-step must retain its partitioned actions");
+        assertEquals(1, subObj1.getAsJsonArray("actions").size());
+        assertEquals("type", subObj1.getAsJsonArray("actions").get(0).getAsJsonObject().get("type").getAsString());
     }
 }

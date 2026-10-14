@@ -6,6 +6,9 @@ let isAutoMode = false;
 let eventSource = null;
 let helpOverlayClicked = false;
 let selectedStepIndexForDetails = null;
+let selectedSubStepIndex = null;
+const expandedSubStepsTrees = new Set();
+const collapsedSubStepsTrees = new Set();
 let autoStartStepIndex = null;
 // Flat ordered list of all step indices across all blocks (before + steps + after).
 // Used by the ↑/↓ reorder buttons to know if a step is first/last.
@@ -692,10 +695,13 @@ function renderBlock(blockName, steps) {
     const group = document.getElementById(blockName + 'Group');
     if (!container || !group) return;
 
-    // Enhanced signature to include selection, breakpoints, and other UI state
+    // Enhanced signature to include selection, sub-step selection, breakpoints, and other UI state
     const sig = JSON.stringify({
-        steps: steps.map(s => `${s.index}|${s.status}|${s.instruction}|${s.source || ''}|${s.reasoning ? s.reasoning.length : 0}|${s.actions ? s.actions.length : 0}|${s.errorMessage ? s.errorMessage.length : 0}|${s.llmCalls ? s.llmCalls.length : 0}`),
+        steps: steps.map(s => `${s.index}|${s.status}|${s.instruction}|${s.source || ''}|${s.reasoning ? s.reasoning.length : 0}|${s.actions ? s.actions.length : 0}|${s.errorMessage ? s.errorMessage.length : 0}|${s.llmCalls ? s.llmCalls.length : 0}|${Array.isArray(s.subSteps) ? s.subSteps.map(c => `${c.index}:${c.status}:${c.durationMs || 0}`).join(',') : ''}`),
         selected: selectedStepIndexForDetails,
+        selectedSubStep: selectedSubStepIndex,
+        expandedSubSteps: Array.from(expandedSubStepsTrees),
+        collapsedSubSteps: Array.from(collapsedSubStepsTrees),
         breakpoints: Array.from(activeBreakpoints),
         paused: currentPauseId !== null,
         bindings: currentState?.dataBindings
@@ -1518,6 +1524,74 @@ function renderStepCard(step) {
                     </div>`;
     }
 
+    // Sub-steps badge & tree generation (Option C)
+    let subStepsBadgeHtml = '';
+    let subStepsTreeHtml = '';
+    const subStepsList = Array.isArray(step.subSteps) ? step.subSteps : [];
+    if (subStepsList.length > 0) {
+        const totalSubs = subStepsList.length;
+        const completedSubs = subStepsList.filter(s => s.status && (s.status.toLowerCase() === 'passed' || s.status.toLowerCase() === 'success')).length;
+        const isAutoExpanded = isActive || isFailed;
+        const isExplicitlyExpanded = expandedSubStepsTrees.has(step.index);
+        const isExplicitlyCollapsed = collapsedSubStepsTrees.has(step.index);
+        const isTreeExpanded = isExplicitlyExpanded || (isAutoExpanded && !isExplicitlyCollapsed);
+
+        const chevronClass = isTreeExpanded ? 'substeps-toggle-chevron expanded' : 'substeps-toggle-chevron';
+        subStepsBadgeHtml = `
+            <span class="substeps-count-badge" onclick="toggleSubStepsTree(event, ${step.index})" title="${isTreeExpanded ? 'Collapse Sub-steps' : 'Expand Sub-steps'}" aria-label="Toggle Sub-steps (${completedSubs}/${totalSubs})">
+                <span class="material-symbols-outlined" aria-hidden="true">account_tree</span>
+                <span>${completedSubs}/${totalSubs} Sub-steps</span>
+                <span class="material-symbols-outlined ${chevronClass}" aria-hidden="true">chevron_right</span>
+            </span>`;
+
+        if (isTreeExpanded) {
+            const badgeNum = allStepIndices.indexOf(step.index) + 1;
+            const rowsHtml = subStepsList.map((sub, sIdx) => {
+                const subNum = sub.index || (sIdx + 1);
+                const subStatus = sub.status ? sub.status.toLowerCase() : 'pending';
+                let subStatusIcon = '';
+                let subStatusClass = subStatus;
+                if (subStatus === 'passed' || subStatus === 'success') {
+                    subStatusIcon = `<span class="material-symbols-outlined" style="color:var(--accent-success);font-size:15px;" aria-label="Passed">check_circle</span>`;
+                } else if (subStatus === 'failed') {
+                    subStatusIcon = `<span class="material-symbols-outlined" style="color:var(--accent-danger);font-size:15px;" aria-label="Failed">cancel</span>`;
+                } else if (subStatus === 'running') {
+                    if (currentPauseId !== null) {
+                        subStatusIcon = `<span class="material-symbols-outlined" style="color:var(--accent-primary);font-size:15px;" aria-label="Paused">pause_circle</span>`;
+                    } else {
+                        subStatusIcon = `<span class="material-symbols-outlined spinner" style="color:var(--accent-primary);font-size:15px;" aria-label="Running">progress_activity</span>`;
+                    }
+                } else if (subStatus === 'skipped') {
+                    subStatusIcon = `<span class="material-symbols-outlined" style="color:var(--text-secondary);font-size:15px;" aria-label="Skipped">do_not_disturb_on</span>`;
+                } else {
+                    subStatusIcon = `<span class="material-symbols-outlined" style="color:var(--text-muted);font-size:15px;" aria-label="Pending">radio_button_unchecked</span>`;
+                }
+
+                const isSubSelected = (selectedStepIndexForDetails == step.index) && (selectedSubStepIndex === subNum);
+                const selectedSubClass = isSubSelected ? ' selected-substep' : '';
+
+                const subDurationHtml = (sub.durationMs && sub.durationMs > 0)
+                    ? `<span class="substep-duration" title="Duration"><span class="material-symbols-outlined" style="color:var(--accent-warning);font-size:11px;" aria-hidden="true">bolt</span> ${(sub.durationMs / 1000).toFixed(2)}s</span>`
+                    : '';
+
+                const resolvedSubInstruction = resolveVariables(sub.instruction, currentState?.dataBindings);
+
+                return `
+                    <div class="substep-row ${subStatusClass}${selectedSubClass}" data-substep-idx="${subNum}"
+                         onclick="handleSubStepClick(event, ${step.index}, ${subNum})"
+                         title="Click to inspect sub-step details" role="button" tabindex="0">
+                        <span class="substep-tree-connector" aria-hidden="true"></span>
+                        <span class="substep-status-icon">${subStatusIcon}</span>
+                        <span class="substep-num">#${badgeNum}.${subNum}</span>
+                        <span class="substep-text">${escHtml(resolvedSubInstruction)}</span>
+                        ${subDurationHtml}
+                    </div>`;
+            }).join('');
+
+            subStepsTreeHtml = `<div class="substeps-tree-container" id="substeps-tree-${step.index}">${rowsHtml}</div>`;
+        }
+    }
+
     return `
                 <div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${step.index}, 'before')"></div>
                 <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}${passedClass}${noDetailsPendingClass}${editingClass}${abortedClass}" data-step-idx="${step.index}" role="listitem" tabindex="0" aria-label="${step.isTempAdd ? 'New Step' : 'Step ' + (allStepIndices.indexOf(step.index) + 1)}: ${escHtml(resolvedInstruction)}"
@@ -1527,7 +1601,7 @@ function renderStepCard(step) {
                     ${stepNumBadgeHtml}
                     <div class="${statusIconContainerClass}" ${statusClickAttr}>${statusIconMarkup}</div>
                     <div class="step-text-container">
-                        <div class="tag-row">${sourceTag}${thinkingBadge}</div>
+                        <div class="tag-row">${sourceTag}${subStepsBadgeHtml}${thinkingBadge}</div>
                         <div class="step-text">${stepTextContent}</div>
                         ${isFailed ? `<div style="margin-top:6px;"><button class="btn-suggest-fix" onclick="requestFixSuggestion(event, ${step.index})" title="Get AI Instruction Fix Suggestion"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span> Suggest Fix</button></div>` : ''}
                         <div class="step-edit-form">
@@ -1544,6 +1618,7 @@ function renderStepCard(step) {
                     ${editBtnHtml}
                     ${selectedArrowMarkup}
                 </div>
+                ${subStepsTreeHtml}
                 ${inlineReasoningHtml ? `<div style="padding-top:4px;">${inlineReasoningHtml}</div>` : ''}
                 ${hasDetails ? `<div class="step-accordion-details${accordionOpen}">${detailsHtml}</div>` : ''}
             </div>`;
@@ -1783,19 +1858,12 @@ function triggerAutoRunCheck() {
 // Event Handlers & Local UI helpers
 // -------------------------------------------------------------------------
 function handleStepClick(event, index) {
-    // Prevent toggling if clicking interactive controls, inputs, variable bindings, or the breakpoint status icon
-    if (event.target.closest('button') || event.target.closest('textarea') || event.target.closest('input') || event.target.closest('.step-status-icon') || event.target.closest('.inline-edit-bindings')) return;
+    // Prevent toggling if clicking interactive controls, inputs, variable bindings, sub-step items, or the breakpoint status icon
+    if (event.target.closest('button') || event.target.closest('textarea') || event.target.closest('input') || event.target.closest('.step-status-icon') || event.target.closest('.inline-edit-bindings') || event.target.closest('.substeps-tree-container') || event.target.closest('.substeps-count-badge')) return;
 
-    // Allow selecting any step, including future ones.
-    // Selection is now the primary trigger for reorder editing.
-    if (currentState) {
-        const allSteps = [
-            ...(currentState.blocks?.before || []),
-            ...(currentState.blocks?.steps || []),
-            ...(currentState.blocks?.after || [])
-        ];
-        const clickedStep = allSteps.find(s => s.index === index);
-        // No more blocking of pending steps selection
+    // If switching to a different step, reset sub-step selection to Overview
+    if (selectedStepIndexForDetails !== index) {
+        selectedSubStepIndex = null;
     }
 
     // Single click always selects – no toggle-off; a step stays selected once clicked
@@ -1823,6 +1891,65 @@ function handleStepClick(event, index) {
             const acc = card.querySelector('.step-accordion-details');
             if (acc && !acc.classList.contains('open')) acc.classList.add('open');
         }
+    }
+}
+
+function handleSubStepClick(event, parentIndex, subIndex) {
+    if (event) event.stopPropagation();
+    selectedStepIndexForDetails = parentIndex;
+    selectedSubStepIndex = subIndex;
+    lastFocusedStepIndex = parentIndex;
+
+    if (currentState) {
+        renderBlock('before', currentState.blocks?.before || []);
+        renderBlock('steps', currentState.blocks?.steps || []);
+        renderBlock('after', currentState.blocks?.after || []);
+    }
+    updateBigScreenDetails();
+
+    if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ action: 'stepSelected' }, '*');
+    }
+}
+
+function selectSubStepTab(event, subIndex) {
+    if (event) event.stopPropagation();
+    selectedSubStepIndex = subIndex;
+
+    if (currentState) {
+        renderBlock('before', currentState.blocks?.before || []);
+        renderBlock('steps', currentState.blocks?.steps || []);
+        renderBlock('after', currentState.blocks?.after || []);
+    }
+    updateBigScreenDetails();
+}
+
+function toggleSubStepsTree(event, stepIndex) {
+    if (event) event.stopPropagation();
+    const allSteps = [
+        ...(currentState?.blocks?.before || []),
+        ...(currentState?.blocks?.steps || []),
+        ...(currentState?.blocks?.after || [])
+    ];
+    const step = allSteps.find(s => s.index === stepIndex);
+    const isActiveOrFailed = step && (step.status === 'running' || step.status === 'failed');
+
+    const isExplicitlyExpanded = expandedSubStepsTrees.has(stepIndex);
+    const isExplicitlyCollapsed = collapsedSubStepsTrees.has(stepIndex);
+    const currentlyExpanded = isExplicitlyExpanded || (isActiveOrFailed && !isExplicitlyCollapsed);
+
+    if (currentlyExpanded) {
+        expandedSubStepsTrees.delete(stepIndex);
+        collapsedSubStepsTrees.add(stepIndex);
+    } else {
+        collapsedSubStepsTrees.delete(stepIndex);
+        expandedSubStepsTrees.add(stepIndex);
+    }
+
+    if (currentState) {
+        renderBlock('before', currentState.blocks?.before || []);
+        renderBlock('steps', currentState.blocks?.steps || []);
+        renderBlock('after', currentState.blocks?.after || []);
     }
 }
 
@@ -1866,6 +1993,41 @@ function updateBigScreenDetails() {
         return;
     }
 
+    const badgeNum = allStepIndices.indexOf(step.index) >= 0 ? allStepIndices.indexOf(step.index) + 1 : step.index;
+    const subStepsList = Array.isArray(step.subSteps) ? step.subSteps : [];
+    let substepTabsBarHtml = '';
+    let targetSubStep = null;
+
+    if (subStepsList.length > 0) {
+        if (selectedSubStepIndex !== null) {
+            targetSubStep = subStepsList.find(s => s.index === selectedSubStepIndex || s.stepIndex === selectedSubStepIndex || (s.stepIndex === (selectedSubStepIndex - 1)));
+        }
+
+        substepTabsBarHtml = `
+            <div class="substep-tabs-bar" role="tablist" aria-label="Sub-step tabs">
+                <button class="substep-tab-btn ${selectedSubStepIndex === null ? 'active' : ''}"
+                        onclick="selectSubStepTab(event, null)" role="tab" aria-selected="${selectedSubStepIndex === null}">
+                    <span class="material-symbols-outlined" style="font-size:13px;" aria-hidden="true">dashboard</span>
+                    <span>Overview</span>
+                </button>
+                ${subStepsList.map((sub, sIdx) => {
+                    const subNum = sub.index || (sIdx + 1);
+                    const subStatus = sub.status ? sub.status.toLowerCase() : 'pending';
+                    const isPaused = currentPauseId !== null;
+                    const icon = (subStatus === 'success' || subStatus === 'passed') ? '✓'
+                               : subStatus === 'failed' ? '✕'
+                               : subStatus === 'running' ? (isPaused ? '⏸' : '▶') : '⭘';
+                    const isTabActive = selectedSubStepIndex === subNum;
+                    return `
+                        <button class="substep-tab-btn ${isTabActive ? 'active' : ''} ${subStatus}"
+                                onclick="selectSubStepTab(event, ${subNum})" role="tab" aria-selected="${isTabActive}">
+                            <span>#${badgeNum}.${subNum}</span>
+                            <span>${icon}</span>
+                        </button>`;
+                }).join('')}
+            </div>`;
+    }
+
     const sourceTag = step.source === 'recording'
         ? `<div class="type-tag type-playbook"><span class="material-symbols-outlined" aria-hidden="true">album</span> Recording</div>`
         : step.source === 'healed'
@@ -1880,12 +2042,75 @@ function updateBigScreenDetails() {
         includeBreadcrumb = `<div class="include-breadcrumb"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(step.includeFile)}</div>`;
     }
 
-    const detailsHtml = buildStepDetailsHtml(step);
     const resolvedDetailInstruction = resolveVariables(step.instruction, currentState?.dataBindings);
+    let detailStepToRender = step;
+    let detailTitle = `Step #${badgeNum}: ${escHtml(resolvedDetailInstruction)}`;
+    let subFileTag = '';
+
+    if (targetSubStep) {
+        const subNum = targetSubStep.index || (subStepsList.indexOf(targetSubStep) + 1);
+        const resolvedSubInstr = resolveVariables(targetSubStep.instruction, currentState?.dataBindings);
+        detailTitle = `Sub-step #${badgeNum}.${subNum}: ${escHtml(resolvedSubInstr)}`;
+
+        if (targetSubStep.file) {
+            const fileStr = targetSubStep.line ? `${targetSubStep.file}:${targetSubStep.line}` : targetSubStep.file;
+            subFileTag = `<div class="type-tag" style="background:rgba(99,102,241,0.1);color:var(--accent-primary);"><span class="material-symbols-outlined" aria-hidden="true">description</span> ${escHtml(fileStr)}</div>`;
+        }
+
+        // Scope actions to targetSubStep
+        const targetSubIdx = targetSubStep.stepIndex !== undefined ? targetSubStep.stepIndex : (targetSubStep.index - 1);
+        let scopedActions = [];
+        if (Array.isArray(targetSubStep.actions) && targetSubStep.actions.length > 0) {
+            scopedActions = targetSubStep.actions;
+        } else if (Array.isArray(step.actions)) {
+            scopedActions = step.actions.filter(a => a.subStepIndex === targetSubIdx || a.subStepIndex === targetSubStep.index);
+        }
+
+        // Scope LLM calls
+        let scopedLlmCalls = [];
+        if (Array.isArray(targetSubStep.llmCalls) && targetSubStep.llmCalls.length > 0) {
+            scopedLlmCalls = targetSubStep.llmCalls;
+        } else if (Array.isArray(step.llmCalls)) {
+            scopedLlmCalls = step.llmCalls.filter(c => c.subStepIndex === targetSubIdx || c.subStepIndex === targetSubStep.index);
+        }
+
+        // Scope screenshot
+        let scopedScreenshot = targetSubStep.screenshot;
+        if (!scopedScreenshot && Array.isArray(targetSubStep.screenshots) && targetSubStep.screenshots.length > 0) {
+            scopedScreenshot = targetSubStep.screenshots[0].url || targetSubStep.screenshots[0].path;
+        }
+        if (!scopedScreenshot && Array.isArray(step.screenshots)) {
+            const matchSc = step.screenshots.find(sc => sc.subStepIndex === targetSubIdx || sc.subStepIndex === targetSubStep.index);
+            if (matchSc) scopedScreenshot = matchSc.url || matchSc.path;
+        }
+        if (!scopedScreenshot) {
+            scopedScreenshot = step.screenshot;
+        }
+
+        detailStepToRender = {
+            ...targetSubStep,
+            index: `${badgeNum}.${subNum}`,
+            status: targetSubStep.status ? targetSubStep.status.toLowerCase() : 'pending',
+            instruction: targetSubStep.instruction,
+            actions: scopedActions,
+            errorMessage: targetSubStep.failureReason || targetSubStep.errorMessage,
+            reasoning: targetSubStep.reasoning || (targetSubStep.status === 'running' ? 'AI is working on this sub-step...' : ''),
+            durationMs: targetSubStep.durationMs,
+            thinkingTimeMs: targetSubStep.thinkingTimeMs,
+            screenshot: scopedScreenshot,
+            llmCalls: scopedLlmCalls,
+            includeFile: targetSubStep.file || step.includeFile,
+            includeChain: step.includeChain
+        };
+    }
+
+    const isStepPaused = currentPauseId !== null && (step.status === 'running' || (targetSubStep && targetSubStep.status === 'running'));
+    const detailsHtml = buildStepDetailsHtml(detailStepToRender, isStepPaused);
 
     content.innerHTML = `
-                <div style="font-weight: 600; font-size:14px; margin-bottom: 8px;">Step #${step.index}: ${escHtml(resolvedDetailInstruction)}</div>
-                <div style="margin-bottom:12px; display:flex; gap:6px; flex-wrap:wrap;">${sourceTag}${includeBreadcrumb}</div>
+                ${substepTabsBarHtml}
+                <div style="font-weight: 600; font-size:14px; margin-bottom: 8px;">${detailTitle}</div>
+                <div style="margin-bottom:12px; display:flex; gap:6px; flex-wrap:wrap;">${sourceTag}${subFileTag}${includeBreadcrumb}</div>
                 ${detailsHtml}
             `;
     container.style.display = 'flex';

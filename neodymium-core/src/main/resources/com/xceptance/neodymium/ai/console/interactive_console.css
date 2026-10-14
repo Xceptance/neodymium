@@ -2412,3 +2412,219 @@ body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none 
     background: #f8fafc;
 }
 
+/* ==========================================================================
+   Sub-Steps Hierarchical Tree and Inspector Styling (Option C)
+   ========================================================================== */
+
+.substeps-count-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--accent-primary, #6366f1);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.15s, border-color 0.15s;
+    vertical-align: middle;
+}
+
+.substeps-count-badge:hover {
+    background: rgba(99, 102, 241, 0.22);
+    border-color: rgba(99, 102, 241, 0.45);
+}
+
+.substeps-count-badge .material-symbols-outlined {
+    font-size: 13px;
+}
+
+.substeps-toggle-chevron {
+    font-size: 14px;
+    transition: transform 0.2s ease;
+}
+
+.substeps-toggle-chevron.expanded {
+    transform: rotate(90deg);
+}
+
+.substeps-tree-container {
+    position: relative;
+    margin-top: 8px;
+    margin-left: 14px;
+    padding-left: 20px;
+    border-left: 2px solid rgba(99, 102, 241, 0.25);
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+:root.force-light .substeps-tree-container {
+    border-left-color: rgba(99, 102, 241, 0.35);
+}
+
+.substep-row {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    cursor: pointer;
+    font-size: 12px;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
+}
+
+:root.force-light .substep-row {
+    background: #ffffff;
+    border-color: rgba(226, 232, 240, 0.9);
+}
+
+.substep-row:hover {
+    background: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+:root.force-light .substep-row:hover {
+    background: rgba(99, 102, 241, 0.06);
+}
+
+.substep-row.selected-substep {
+    background: rgba(99, 102, 241, 0.14) !important;
+    border-color: var(--accent-primary, #6366f1) !important;
+    box-shadow: 0 0 0 1px var(--accent-primary, #6366f1);
+}
+
+.substep-row.running {
+    background: rgba(59, 130, 246, 0.08);
+    border-color: var(--accent-primary, #3b82f6);
+}
+
+.substep-row.failed {
+    background: rgba(239, 68, 68, 0.08);
+    border-color: var(--accent-danger, #ef4444);
+}
+
+.substep-row.passed {
+    border-color: rgba(16, 185, 129, 0.35);
+    background: rgba(16, 185, 129, 0.05);
+}
+
+:root.force-light .substep-row.passed {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.04);
+}
+
+.substep-tree-connector {
+    position: absolute;
+    left: -20px;
+    top: 50%;
+    width: 14px;
+    height: 2px;
+    background: rgba(99, 102, 241, 0.25);
+}
+
+:root.force-light .substep-tree-connector {
+    background: rgba(99, 102, 241, 0.35);
+}
+
+.substep-status-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    min-width: 16px;
+}
+
+.substep-status-icon .material-symbols-outlined {
+    font-size: 15px;
+}
+
+.substep-num {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent-primary, #6366f1);
+    opacity: 0.95;
+    white-space: nowrap;
+}
+
+.substep-text {
+    color: var(--text-main);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-grow: 1;
+    font-size: 12px;
+}
+
+.substep-duration {
+    font-size: 10.5px;
+    color: var(--text-secondary);
+    font-family: var(--font-mono);
+    margin-left: auto;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+/* Sub-step tab segmented switcher in Step Details panel */
+.substep-tabs-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.substep-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+:root.force-light .substep-tab-btn {
+    background: #f1f5f9;
+}
+
+.substep-tab-btn:hover {
+    background: rgba(99, 102, 241, 0.1);
+    color: var(--text-main);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.substep-tab-btn.active {
+    background: var(--accent-primary, #6366f1) !important;
+    color: #ffffff !important;
+    border-color: var(--accent-primary, #6366f1) !important;
+}
+
+.substep-tab-btn.failed:not(.active) {
+    border-color: rgba(239, 68, 68, 0.4);
+    color: var(--accent-danger);
+}
+
+.substep-tab-btn.running:not(.active) {
+    border-color: rgba(59, 130, 246, 0.4);
+    color: var(--accent-primary);
+}
+

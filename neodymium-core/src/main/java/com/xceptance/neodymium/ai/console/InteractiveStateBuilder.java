@@ -938,7 +938,7 @@ public final class InteractiveStateBuilder
             {
                 obj.addProperty("contextLevel", statsObj.get("contextLevel").getAsString());
             }
-            if (!reportStep.getSubSteps().isEmpty() && (step.hasSubSteps() || (rawInstruction != null && rawInstruction.contains("_include:"))))
+            if (!reportStep.getSubSteps().isEmpty() && (!step.hasSubSteps() && (rawInstruction != null && rawInstruction.contains("_include:"))))
             {
                 obj.add("subSteps", serializeSubSteps(reportStep.getSubSteps()));
             }
@@ -958,7 +958,7 @@ public final class InteractiveStateBuilder
             }
         }
 
-        if (step.hasSubSteps() && !obj.has("subSteps") && step.getSubSteps() != null && !step.getSubSteps().isEmpty())
+        if (step.hasSubSteps() && step.getSubSteps() != null && !step.getSubSteps().isEmpty())
         {
             final JsonArray subStepsArr = new JsonArray();
             for (int sIdx = 0; sIdx < step.getSubSteps().size(); sIdx++)
@@ -976,7 +976,28 @@ public final class InteractiveStateBuilder
                     subObj.addProperty("instruction", subResolved);
                     subObj.addProperty("rawInstruction", subRaw);
                     subObj.addProperty("file", sub.getSourceFile() != null ? sub.getSourceFile() : "");
-                    subObj.addProperty("status", sub.getStatus() != null ? sub.getStatus().name() : "PENDING");
+                    if (sub.getLineNumber() > 0)
+                    {
+                        subObj.addProperty("line", sub.getLineNumber());
+                    }
+                    PlaybookStepStatus subStatus = sub.getStatus();
+                    if (subStatus == null || subStatus == PlaybookStepStatus.PENDING)
+                    {
+                        if (stepIndex < activeStepIndex)
+                        {
+                            subStatus = PlaybookStepStatus.SUCCESS;
+                        }
+                    }
+                    final String subStatusStr = switch (subStatus != null ? subStatus : PlaybookStepStatus.PENDING)
+                    {
+                        case SUCCESS -> "passed";
+                        case HEALED -> "healed";
+                        case RUNNING -> "running";
+                        case FAILED -> "failed";
+                        case SKIPPED -> "skipped";
+                        case PENDING, SPLITTED -> "pending";
+                    };
+                    subObj.addProperty("status", subStatusStr);
                     if (sub.getContextLevel() != null && !sub.getContextLevel().isBlank())
                     {
                         subObj.addProperty("contextLevel", sub.getContextLevel());
@@ -984,6 +1005,14 @@ public final class InteractiveStateBuilder
                     }
                     subObj.addProperty("startTimeMs", sub.getStartTimeMs() != null ? sub.getStartTimeMs() : 0L);
                     subObj.addProperty("durationMs", sub.getDurationMs() != null ? sub.getDurationMs() : 0L);
+                    if (sub.getReasoning() != null && !sub.getReasoning().isBlank())
+                    {
+                        subObj.addProperty("reasoning", sub.getReasoning());
+                    }
+                    if (sub.getFailureReason() != null && !sub.getFailureReason().isBlank())
+                    {
+                        subObj.addProperty("failureReason", sub.getFailureReason());
+                    }
                     if (sub.getActions() != null && !sub.getActions().isEmpty())
                     {
                         final JsonArray subActArr = new JsonArray();
@@ -1006,10 +1035,29 @@ public final class InteractiveStateBuilder
                         }
                         subObj.add("actions", subActArr);
                     }
+                    if (reportStep != null && reportStep.getSubSteps() != null && reportStep.getSubSteps().size() > sIdx)
+                    {
+                        final ReportStepEntry repSub = reportStep.getSubSteps().get(sIdx);
+                        if (repSub != null)
+                        {
+                            if (!repSub.getScreenshots().isEmpty())
+                            {
+                                subObj.add("screenshots", serializeScreenshots(repSub.getScreenshots()));
+                            }
+                            if (!repSub.getLlmCalls().isEmpty())
+                            {
+                                subObj.add("llmCalls", serializeLlmCalls(repSub.getLlmCalls()));
+                            }
+                        }
+                    }
                     subStepsArr.add(subObj);
                 }
             }
             obj.add("subSteps", subStepsArr);
+        }
+        else if (!obj.has("subSteps") && reportStep != null && !reportStep.getSubSteps().isEmpty())
+        {
+            obj.add("subSteps", serializeSubSteps(reportStep.getSubSteps()));
         }
 
         if (!obj.has("llmCalls") && report != null && report.getLlmCalls() != null)
@@ -1441,9 +1489,17 @@ public final class InteractiveStateBuilder
                     }
                     final JsonObject subObj = new JsonObject();
                     subObj.addProperty("stepIndex", sub.getStepIndex());
+                    subObj.addProperty("index", sub.getStepIndex() >= 0 ? sub.getStepIndex() + 1 : 1);
                     subObj.addProperty("instruction", sub.getInstruction() != null ? sub.getInstruction() : "");
                     subObj.addProperty("rawInstruction", sub.getRawInstruction());
-                    subObj.addProperty("status", sub.getStatus());
+                    subObj.addProperty("file", sub.getSourceFile() != null ? sub.getSourceFile() : "");
+                    if (sub.getLineNumber() > 0)
+                    {
+                        subObj.addProperty("line", sub.getLineNumber());
+                    }
+                    final String rawStatus = sub.getStatus() != null ? sub.getStatus().trim() : "pending";
+                    final String normalizedStatus = "SUCCESS".equalsIgnoreCase(rawStatus) ? "passed" : rawStatus.toLowerCase(Locale.ROOT);
+                    subObj.addProperty("status", normalizedStatus);
                     subObj.addProperty("startTimeMs", sub.getStartTimeMs());
                     subObj.addProperty("durationMs", sub.getDurationMs());
                     subObj.addProperty("reasoning", sub.getReasoning());

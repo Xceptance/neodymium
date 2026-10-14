@@ -218,6 +218,8 @@ public final class AgentToolLoopStep implements PipelineStep
         final ToolContext toolContext = new SimpleToolContext(this.toolRegistry);
         toolContext.setVariable("neodymium.executionContext", context);
         final List<ToolCall> executedCalls = new ArrayList<>();
+        final List<Action> executedActions = new ArrayList<>();
+        long totalPauseDurationMs = 0L;
         context.getTransientData().remove("KEY_STEP_EXECUTION_FINALIZED");
         try
         {
@@ -533,11 +535,15 @@ public final class AgentToolLoopStep implements PipelineStep
                 throw new StepTurnLimitExceededException(instruction, turn, effectiveMaxTurns);
             }
 
-            // Stop Criterion 5: Step Wall-Clock Timeout
-            final long elapsedSeconds = (System.currentTimeMillis() - startTimeMs) / 1000;
-            if (elapsedSeconds >= this.timeoutSeconds)
+            // Stop Criterion 5: Step Wall-Clock Timeout (compensated for interactive pause durations)
+            final long stepPauseMs = Math.max(totalPauseDurationMs, context.getStepInteractivePauseMs());
+            final long elapsedSeconds = Math.max(0L, (System.currentTimeMillis() - startTimeMs - stepPauseMs) / 1000);
+            final long effectiveTimeoutSeconds = step != null && step.hasSubSteps() && !step.getSubSteps().isEmpty()
+                    ? Math.max(this.timeoutSeconds, this.timeoutSeconds * step.getSubSteps().size())
+                    : this.timeoutSeconds;
+            if (elapsedSeconds >= effectiveTimeoutSeconds)
             {
-                throw new StepTimeoutExceededException(instruction, elapsedSeconds, (int) this.timeoutSeconds);
+                throw new StepTimeoutExceededException(instruction, elapsedSeconds, (int) effectiveTimeoutSeconds);
             }
 
             if (LOGGER.isTraceEnabled())
@@ -739,18 +745,29 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     step.setToolCalls(sanitizedCalls);
                     step.setActions(proposedActions);
+                    if (step.hasSubSteps())
+                    {
+                        partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, sanitizedCalls, proposedActions, true);
+                    }
                 }
                 String userAction = null;
+                final long pauseStart = System.currentTimeMillis();
                 try
                 {
                     userAction = interactiveListener.pauseBeforeActionExecution(context, step);
                 }
                 finally
                 {
+                    final long pauseDuration = Math.max(0L, System.currentTimeMillis() - pauseStart);
+                    totalPauseDurationMs += pauseDuration;
                     if (step != null && userAction != null && !("EDIT".equalsIgnoreCase(userAction) || "UPDATE_STEP".equalsIgnoreCase(userAction) || "SAVE_STEP".equalsIgnoreCase(userAction)))
                     {
-                        step.setActions(origActions);
-                        step.setToolCalls(origCalls);
+                        step.setActions(new ArrayList<>(executedActions));
+                        step.setToolCalls(new ArrayList<>(executedCalls));
+                        if (step.hasSubSteps())
+                        {
+                            partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
+                        }
                     }
                 }
                 if ("SKIP".equalsIgnoreCase(userAction) || (step != null && step.getStatus() == PlaybookStepStatus.SKIPPED))
@@ -1170,6 +1187,16 @@ public final class AgentToolLoopStep implements PipelineStep
                                 final SessionData sessionData = context.getSessionData();
                                 final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
                                 final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                                executedActions.add(canonicalAction);
+                                if (step != null)
+                                {
+                                    step.setToolCalls(new ArrayList<>(executedCalls));
+                                    step.setActions(new ArrayList<>(executedActions));
+                                    if (step.hasSubSteps())
+                                    {
+                                        partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
+                                    }
+                                }
                                 session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, false));
                             }
                             throw e;
@@ -1341,6 +1368,16 @@ public final class AgentToolLoopStep implements PipelineStep
                             final SessionData sessionData = context.getSessionData();
                             final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
                             final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                            executedActions.add(canonicalAction);
+                            if (step != null)
+                            {
+                                step.setToolCalls(new ArrayList<>(executedCalls));
+                                step.setActions(new ArrayList<>(executedActions));
+                                if (step.hasSubSteps())
+                                {
+                                    partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
+                                }
+                            }
                             session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
                         }
                     }
@@ -1924,6 +1961,7 @@ public final class AgentToolLoopStep implements PipelineStep
             if (currentStep.hasSubSteps())
             {
                 final List<PlaybookStep> children = currentStep.getSubSteps();
+                partitionToolCallsAndActions(children, currentStep.getToolCalls(), currentStep.getActions(), false);
                 for (final PlaybookStep child : children)
                 {
                     if (child.getParent() == null)
@@ -1971,23 +2009,80 @@ public final class AgentToolLoopStep implements PipelineStep
             final List<ToolCall> toolCalls,
             final List<Action> actions)
     {
+        partitionToolCallsAndActions(subSteps, toolCalls, actions, false);
+    }
+
+    /**
+     * Partitions executed or live tool calls and actions across child sub-steps of a compound step.
+     * When isLiveTurn is true, the active sub-step corresponding to the proposed action receives
+     * RUNNING status, while prior sub-steps receive SUCCESS and upcoming sub-steps remain PENDING.
+     *
+     * @param subSteps the sub-steps to assign calls to
+     * @param toolCalls the executed tool calls
+     * @param actions the executed actions
+     * @param isLiveTurn true if partitioning during an active live turn, false if completing
+     */
+    public static void partitionToolCallsAndActions(
+            final List<PlaybookStep> subSteps,
+            final List<ToolCall> toolCalls,
+            final List<Action> actions,
+            final boolean isLiveTurn)
+    {
+        partitionToolCallsAndActions(
+            subSteps,
+            isLiveTurn ? Collections.emptyList() : toolCalls,
+            isLiveTurn ? Collections.emptyList() : actions,
+            isLiveTurn ? toolCalls : Collections.emptyList(),
+            isLiveTurn ? actions : Collections.emptyList(),
+            isLiveTurn);
+    }
+
+    /**
+     * Partitions executed and proposed tool calls and actions across child sub-steps of a compound step.
+     * When isLiveTurn is true, a sub-step is marked SUCCESS only if its assigned actions/calls were already
+     * executed. The first sub-step with pending proposed actions is marked RUNNING, and upcoming sub-steps
+     * remain PENDING.
+     *
+     * @param subSteps the sub-steps to assign calls to
+     * @param executedCalls already executed tool calls
+     * @param executedActions already executed actions
+     * @param proposedCalls proposed tool calls waiting for execution
+     * @param proposedActions proposed actions waiting for execution
+     * @param isLiveTurn true if partitioning during an active live turn, false if completing
+     */
+    public static void partitionToolCallsAndActions(
+            final List<PlaybookStep> subSteps,
+            final List<ToolCall> executedCalls,
+            final List<Action> executedActions,
+            final List<ToolCall> proposedCalls,
+            final List<Action> proposedActions,
+            final boolean isLiveTurn)
+    {
         if (subSteps == null || subSteps.isEmpty())
         {
             return;
         }
 
-        final int numChildren = subSteps.size();
-        final List<ToolCall> safeCalls = toolCalls != null ? toolCalls : Collections.emptyList();
-        final List<Action> safeActions = actions != null ? actions : Collections.emptyList();
+        final List<ToolCall> safeExecCalls = executedCalls != null ? executedCalls : Collections.emptyList();
+        final List<Action> safeExecActions = executedActions != null ? executedActions : Collections.emptyList();
+        final List<ToolCall> safePropCalls = proposedCalls != null ? proposedCalls : Collections.emptyList();
+        final List<Action> safePropActions = proposedActions != null ? proposedActions : Collections.emptyList();
 
-        if (safeCalls.isEmpty() && !safeActions.isEmpty())
+        final List<ToolCall> totalCalls = new ArrayList<>(safeExecCalls);
+        totalCalls.addAll(safePropCalls);
+        final List<Action> totalActions = new ArrayList<>(safeExecActions);
+        totalActions.addAll(safePropActions);
+
+        final int numChildren = subSteps.size();
+
+        if (totalCalls.isEmpty() && !totalActions.isEmpty())
         {
-            if (safeActions.size() == numChildren)
+            if (totalActions.size() == numChildren)
             {
                 for (int i = 0; i < numChildren; i++)
                 {
                     final PlaybookStep child = subSteps.get(i);
-                    final Action act = safeActions.get(i);
+                    final Action act = totalActions.get(i);
                     if (act != null)
                     {
                         act.setSubStepIndex(i);
@@ -1998,11 +2093,8 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         child.setActions(Collections.emptyList());
                     }
-                    if (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING)
-                    {
-                        child.setStatus(PlaybookStepStatus.SUCCESS);
-                    }
                 }
+                applySubStepStatuses(subSteps, safeExecCalls, safeExecActions, safePropCalls, safePropActions, isLiveTurn);
                 return;
             }
 
@@ -2012,9 +2104,9 @@ public final class AgentToolLoopStep implements PipelineStep
                 partitionedActions.add(new ArrayList<>());
             }
             int subIdx = 0;
-            for (int a = 0; a < safeActions.size(); a++)
+            for (int a = 0; a < totalActions.size(); a++)
             {
-                final Action act = safeActions.get(a);
+                final Action act = totalActions.get(a);
                 final String actType = act != null && act.getType() != null ? act.getType() : "";
                 int matchedIdx = -1;
                 for (int i = subIdx; i < numChildren; i++)
@@ -2045,23 +2137,20 @@ public final class AgentToolLoopStep implements PipelineStep
             {
                 final PlaybookStep child = subSteps.get(i);
                 child.setActions(partitionedActions.get(i));
-                if (!partitionedActions.get(i).isEmpty() && (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING))
-                {
-                    child.setStatus(PlaybookStepStatus.SUCCESS);
-                }
             }
+            applySubStepStatuses(subSteps, safeExecCalls, safeExecActions, safePropCalls, safePropActions, isLiveTurn);
             return;
         }
 
-        if (safeCalls.size() == numChildren)
+        if (totalCalls.size() == numChildren)
         {
             for (int i = 0; i < numChildren; i++)
             {
                 final PlaybookStep child = subSteps.get(i);
-                child.setToolCalls(List.of(safeCalls.get(i)));
-                if (i < safeActions.size())
+                child.setToolCalls(List.of(totalCalls.get(i)));
+                if (i < totalActions.size())
                 {
-                    final Action act = safeActions.get(i);
+                    final Action act = totalActions.get(i);
                     if (act != null)
                     {
                         act.setSubStepIndex(i);
@@ -2077,11 +2166,8 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     child.setActions(Collections.emptyList());
                 }
-                if (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING)
-                {
-                    child.setStatus(PlaybookStepStatus.SUCCESS);
-                }
             }
+            applySubStepStatuses(subSteps, safeExecCalls, safeExecActions, safePropCalls, safePropActions, isLiveTurn);
             return;
         }
 
@@ -2094,11 +2180,11 @@ public final class AgentToolLoopStep implements PipelineStep
         }
 
         int subIdx = 0;
-        final int maxIter = Math.max(safeCalls.size(), safeActions.size());
+        final int maxIter = Math.max(totalCalls.size(), totalActions.size());
         for (int c = 0; c < maxIter; c++)
         {
-            final ToolCall call = c < safeCalls.size() ? safeCalls.get(c) : null;
-            final Action act = c < safeActions.size() ? safeActions.get(c) : null;
+            final ToolCall call = c < totalCalls.size() ? totalCalls.get(c) : null;
+            final Action act = c < totalActions.size() ? totalActions.get(c) : null;
             final String toolName = call != null && call.toolName() != null
                 ? call.toolName()
                 : (act != null && act.getType() != null ? act.getType() : "");
@@ -2140,10 +2226,82 @@ public final class AgentToolLoopStep implements PipelineStep
             final PlaybookStep child = subSteps.get(i);
             child.setToolCalls(partitionedCalls.get(i));
             child.setActions(partitionedActions.get(i));
-            if ((!partitionedCalls.get(i).isEmpty() || !partitionedActions.get(i).isEmpty())
-                && (child.getStatus() == null || child.getStatus() == PlaybookStepStatus.PENDING))
+        }
+        applySubStepStatuses(subSteps, safeExecCalls, safeExecActions, safePropCalls, safePropActions, isLiveTurn);
+    }
+
+    private static void applySubStepStatuses(
+            final List<PlaybookStep> subSteps,
+            final List<ToolCall> executedCalls,
+            final List<Action> executedActions,
+            final List<ToolCall> proposedCalls,
+            final List<Action> proposedActions,
+            final boolean isLiveTurn)
+    {
+        if (subSteps == null || subSteps.isEmpty())
+        {
+            return;
+        }
+        final int numChildren = subSteps.size();
+        if (!isLiveTurn)
+        {
+            for (int i = 0; i < numChildren; i++)
             {
+                final PlaybookStep child = subSteps.get(i);
+                if (child.getStatus() == PlaybookStepStatus.FAILED)
+                {
+                    continue;
+                }
+                final boolean hasContent = (child.getToolCalls() != null && !child.getToolCalls().isEmpty())
+                        || (child.getActions() != null && !child.getActions().isEmpty());
+                if (hasContent)
+                {
+                    child.setStatus(PlaybookStepStatus.SUCCESS);
+                }
+            }
+            return;
+        }
+
+        // Identify which sub-steps have unexecuted proposed calls/actions vs already executed calls/actions
+        int firstProposedIdx = -1;
+        for (int i = 0; i < numChildren; i++)
+        {
+            final PlaybookStep child = subSteps.get(i);
+            final boolean hasProposed = (child.getToolCalls() != null && child.getToolCalls().stream().anyMatch(proposedCalls::contains))
+                    || (child.getActions() != null && child.getActions().stream().anyMatch(proposedActions::contains));
+            if (hasProposed)
+            {
+                firstProposedIdx = i;
+                break;
+            }
+        }
+
+        for (int i = 0; i < numChildren; i++)
+        {
+            final PlaybookStep child = subSteps.get(i);
+            if (child.getStatus() == PlaybookStepStatus.FAILED)
+            {
+                continue;
+            }
+            final boolean hasProposed = (child.getToolCalls() != null && child.getToolCalls().stream().anyMatch(proposedCalls::contains))
+                    || (child.getActions() != null && child.getActions().stream().anyMatch(proposedActions::contains));
+            final boolean hasExecuted = (child.getToolCalls() != null && child.getToolCalls().stream().anyMatch(executedCalls::contains))
+                    || (child.getActions() != null && child.getActions().stream().anyMatch(executedActions::contains));
+
+            if (!hasProposed && hasExecuted)
+            {
+                // Fully completed in a prior turn/action
                 child.setStatus(PlaybookStepStatus.SUCCESS);
+            }
+            else if (i == firstProposedIdx)
+            {
+                // Currently active sub-step waiting for approval/execution
+                child.setStatus(PlaybookStepStatus.RUNNING);
+            }
+            else
+            {
+                // Either upcoming proposed sub-step or not reached yet
+                child.setStatus(PlaybookStepStatus.PENDING);
             }
         }
     }

@@ -902,6 +902,19 @@ public final class PreliminaryReportListener implements ExecutionListener
                     actionEntry.setSubStepInstruction(action.getSubStepInstruction());
                 }
                 this.currentStep.addAction(actionEntry);
+                if (action.getSubStepIndex() != null && !this.currentStep.getSubSteps().isEmpty())
+                {
+                    final int sIdx = action.getSubStepIndex();
+                    if (sIdx >= 0 && sIdx < this.currentStep.getSubSteps().size())
+                    {
+                        final TestExecutionReport.ReportStepEntry subEntry = this.currentStep.getSubSteps().get(sIdx);
+                        subEntry.addAction(actionEntry);
+                        if (actionExecuted.isSuccess())
+                        {
+                            subEntry.setStatus("SUCCESS");
+                        }
+                    }
+                }
             }
         }
         else if (event instanceof LlmResponseReceivedEvent llmReceived)

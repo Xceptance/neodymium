@@ -22,6 +22,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.structural.EndTryStep;
 
@@ -117,6 +118,8 @@ public final class ExecutionContext
     public static final String KEY_POST_FLIGHT_LINTER_CALL_COUNT = "postFlightLinterCallCount";
     public static final String KEY_SCENARIO_DESCRIPTION = "scenarioDescription";
     public static final String KEY_INTERNAL_MILESTONES = "internalMilestones";
+    public static final String KEY_TOTAL_INTERACTIVE_PAUSE_MS = "totalInteractivePauseMs";
+    public static final String KEY_STEP_INTERACTIVE_PAUSE_MS = "stepInteractivePauseMs";
 
     /**
      * The LIFO execution stack containing steps yet to be processed.
@@ -291,5 +294,68 @@ public final class ExecutionContext
     public void clearSteps()
     {
         this.runStack.clear();
+    }
+
+    /**
+     * Records an interactive pause duration, updating the step and session pause accumulators,
+     * and compensating timestamps on the current active playbook step and its sub-steps.
+     *
+     * @param durationMs the pause duration in milliseconds
+     */
+    public void recordInteractivePause(final long durationMs)
+    {
+        if (durationMs <= 0)
+        {
+            return;
+        }
+        final Long currentStepPause = (Long) this.transientData.getOrDefault(KEY_STEP_INTERACTIVE_PAUSE_MS, 0L);
+        this.transientData.put(KEY_STEP_INTERACTIVE_PAUSE_MS, currentStepPause + durationMs);
+
+        final Long currentTotalPause = (Long) this.transientData.getOrDefault(KEY_TOTAL_INTERACTIVE_PAUSE_MS, 0L);
+        this.transientData.put(KEY_TOTAL_INTERACTIVE_PAUSE_MS, currentTotalPause + durationMs);
+
+        final Object currentStepObj = this.transientData.get(KEY_CURRENT_PLAYBOOK_STEP);
+        if (currentStepObj instanceof PlaybookStep step && step.getStartTimeMs() != null)
+        {
+            step.setStartTimeMs(step.getStartTimeMs() + durationMs);
+            if (step.hasSubSteps())
+            {
+                for (final PlaybookStep sub : step.getSubSteps())
+                {
+                    if (sub.getStartTimeMs() != null)
+                    {
+                        sub.setStartTimeMs(sub.getStartTimeMs() + durationMs);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Resets the step-level interactive pause accumulator for the start of a new step.
+     */
+    public void resetStepInteractivePause()
+    {
+        this.transientData.put(KEY_STEP_INTERACTIVE_PAUSE_MS, 0L);
+    }
+
+    /**
+     * Returns the cumulative interactive pause duration for the active step in milliseconds.
+     *
+     * @return step pause duration in milliseconds
+     */
+    public long getStepInteractivePauseMs()
+    {
+        return (Long) this.transientData.getOrDefault(KEY_STEP_INTERACTIVE_PAUSE_MS, 0L);
+    }
+
+    /**
+     * Returns the cumulative interactive pause duration for the entire session in milliseconds.
+     *
+     * @return total session pause duration in milliseconds
+     */
+    public long getTotalInteractivePauseMs()
+    {
+        return (Long) this.transientData.getOrDefault(KEY_TOTAL_INTERACTIVE_PAUSE_MS, 0L);
     }
 }
