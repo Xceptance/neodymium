@@ -38,6 +38,7 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.playbook.linter.LinterCategory;
 import org.neodymium.ai.playbook.linter.LinterSeverity;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
@@ -890,5 +891,56 @@ public class InteractiveConsoleEngineTest
         final JsonNode sub2Node = subSteps.get(1);
         assertEquals(1, sub2Node.path("actions").size(), "Substep 2 must have its own action");
         assertEquals("#add-to-cart", sub2Node.path("actions").get(0).path("target").asText());
+    }
+
+    @Test
+    public void testBuildStateJsonIncludesContextLevelsForInFlightStep() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final PlaybookStep pbStep = new PlaybookStep("Navigate to homepage");
+        pbStep.setContextLevel("LEAN");
+        context.getTransientData().put("playbook.steps", List.of(pbStep));
+
+        final StepStats stats = new StepStats("Navigate to homepage", 1000L);
+        stats.addContextLevel("LEAN");
+        context.getTransientData().put("KEY_CURRENT_STEP_STATS", stats);
+
+        final TestExecutionReport report = new TestExecutionReport();
+        final ReportStepEntry repStep = new ReportStepEntry(0, "Navigate to homepage");
+        repStep.setStatus("RUNNING");
+        report.addStep(repStep);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-ctx", 0, "running", null, report);
+        final JsonNode loggedRoot = new ObjectMapper().readTree(stateJson);
+        final JsonNode stepNode = loggedRoot.path("blocks").path("steps").get(0);
+
+        assertEquals("LEAN", stepNode.path("contextLevel").asText());
+        assertEquals("LEAN", stepNode.path("contextLevels").asText());
+        assertEquals("LEAN", stepNode.path("stats").path("contextLevel").asText());
+        assertEquals("LEAN", stepNode.path("stats").path("contextLevels").asText());
+
+        // Escalated step
+        final PlaybookStep pbStep1 = new PlaybookStep("Configure item");
+        pbStep1.setContextLevel("STANDARD");
+        context.getTransientData().put("playbook.steps", List.of(pbStep, pbStep1));
+
+        final StepStats stats1 = new StepStats("Configure item", 2000L);
+        stats1.addContextLevel("LEAN");
+        stats1.addContextLevel("STANDARD");
+        context.getTransientData().put("KEY_CURRENT_STEP_STATS", stats1);
+
+        final ReportStepEntry repStep1 = new ReportStepEntry(1, "Configure item");
+        repStep1.setStatus("RUNNING");
+        report.addStep(repStep1);
+
+        final String stateJson1 = InteractiveStateBuilder.buildStateJson(null, context, "run-ctx", 1, "running", null, report);
+        final JsonNode loggedRoot1 = new ObjectMapper().readTree(stateJson1);
+        final JsonNode stepNode1 = loggedRoot1.path("blocks").path("steps").get(1);
+
+        assertEquals("STANDARD", stepNode1.path("contextLevel").asText());
+        assertEquals("LEAN → STANDARD", stepNode1.path("contextLevels").asText());
+        assertEquals("STANDARD", stepNode1.path("stats").path("contextLevel").asText());
+        assertEquals("LEAN → STANDARD", stepNode1.path("stats").path("contextLevels").asText());
+        assertEquals(1, stepNode1.path("stats").path("escalations").asInt());
     }
 }

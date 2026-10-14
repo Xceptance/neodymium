@@ -827,6 +827,36 @@ public final class PreliminaryReportListener implements ExecutionListener
                         }
                     }
                 }
+
+                StepStats matchedStats = null;
+                if (activeCtx != null)
+                {
+                    @SuppressWarnings("unchecked")
+                    final Map<PlaybookStep, StepStats> stepStatsMap =
+                        (Map<PlaybookStep, StepStats>) activeCtx.getTransientData().get("execution.stepStatsMap");
+                    if (stepStatsMap != null && pbStep != null)
+                    {
+                        matchedStats = stepStatsMap.get(pbStep);
+                    }
+                    if (matchedStats == null)
+                    {
+                        final Object curStatsObj = activeCtx.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                        if (curStatsObj instanceof StepStats curS)
+                        {
+                            matchedStats = curS;
+                        }
+                    }
+                }
+                if (matchedStats != null)
+                {
+                    mergeStepStats(targetStep, matchedStats);
+                }
+                if (targetStep.getContextLevels() == null && pbStep != null && pbStep.getContextLevel() != null && !pbStep.getContextLevel().isBlank())
+                {
+                    targetStep.setContextLevels(pbStep.getContextLevel());
+                }
+                recalculateMetrics();
+
                 this.currentStep = targetStep;
                 if (pbStep == null || pbStep.getParent() == null || targetStep == this.currentParentStep)
                 {

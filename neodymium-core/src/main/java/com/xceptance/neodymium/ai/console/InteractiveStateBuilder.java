@@ -34,6 +34,7 @@ import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.report.TestExecutionReport.CategoryTokenUsage;
@@ -668,6 +669,10 @@ public final class InteractiveStateBuilder
         {
             obj.addProperty("hasSubSteps", true);
         }
+        if (step.getContextLevel() != null && !step.getContextLevel().isBlank())
+        {
+            obj.addProperty("contextLevel", step.getContextLevel());
+        }
 
         final ExecutionMode mode = context != null
             ? (ExecutionMode) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_MODE)
@@ -871,6 +876,16 @@ public final class InteractiveStateBuilder
             {
                 obj.addProperty("rawInstruction", reportStep.getRawInstruction());
             }
+            if (reportStep.getContextLevels() != null && !reportStep.getContextLevels().isBlank())
+            {
+                obj.addProperty("contextLevels", reportStep.getContextLevels());
+                final String cl = reportStep.getContextLevels();
+                final String[] parts = cl.split("\\s*(?:→|->)\\s*");
+                if (parts.length > 0 && !parts[parts.length - 1].isBlank())
+                {
+                    obj.addProperty("contextLevel", parts[parts.length - 1].trim());
+                }
+            }
             obj.addProperty("bug", reportStep.isBug());
             if (reportStep.getBugDetails() != null)
             {
@@ -913,7 +928,16 @@ public final class InteractiveStateBuilder
             {
                 obj.add("llmCalls", serializeLlmCalls(reportStep.getLlmCalls()));
             }
-            obj.add("stats", serializeStepStats(reportStep));
+            final JsonObject statsObj = serializeStepStats(reportStep, step, effContext);
+            obj.add("stats", statsObj);
+            if (!obj.has("contextLevels") && statsObj.has("contextLevels"))
+            {
+                obj.addProperty("contextLevels", statsObj.get("contextLevels").getAsString());
+            }
+            if (!obj.has("contextLevel") && statsObj.has("contextLevel"))
+            {
+                obj.addProperty("contextLevel", statsObj.get("contextLevel").getAsString());
+            }
             if (!reportStep.getSubSteps().isEmpty() && (step.hasSubSteps() || (rawInstruction != null && rawInstruction.contains("_include:"))))
             {
                 obj.add("subSteps", serializeSubSteps(reportStep.getSubSteps()));
@@ -922,6 +946,16 @@ public final class InteractiveStateBuilder
         else
         {
             obj.add("actions", actionsArray);
+            final JsonObject statsObj = serializeStepStats(null, step, effContext);
+            obj.add("stats", statsObj);
+            if (!obj.has("contextLevels") && statsObj.has("contextLevels"))
+            {
+                obj.addProperty("contextLevels", statsObj.get("contextLevels").getAsString());
+            }
+            if (!obj.has("contextLevel") && statsObj.has("contextLevel"))
+            {
+                obj.addProperty("contextLevel", statsObj.get("contextLevel").getAsString());
+            }
         }
 
         if (step.hasSubSteps() && !obj.has("subSteps") && step.getSubSteps() != null && !step.getSubSteps().isEmpty())
@@ -943,6 +977,11 @@ public final class InteractiveStateBuilder
                     subObj.addProperty("rawInstruction", subRaw);
                     subObj.addProperty("file", sub.getSourceFile() != null ? sub.getSourceFile() : "");
                     subObj.addProperty("status", sub.getStatus() != null ? sub.getStatus().name() : "PENDING");
+                    if (sub.getContextLevel() != null && !sub.getContextLevel().isBlank())
+                    {
+                        subObj.addProperty("contextLevel", sub.getContextLevel());
+                        subObj.addProperty("contextLevels", sub.getContextLevel());
+                    }
                     subObj.addProperty("startTimeMs", sub.getStartTimeMs() != null ? sub.getStartTimeMs() : 0L);
                     subObj.addProperty("durationMs", sub.getDurationMs() != null ? sub.getDurationMs() : 0L);
                     if (sub.getActions() != null && !sub.getActions().isEmpty())
@@ -1294,17 +1333,95 @@ public final class InteractiveStateBuilder
         return arr;
     }
 
-    private static JsonObject serializeStepStats(final ReportStepEntry step)
+    @SuppressWarnings("unchecked")
+    private static JsonObject serializeStepStats(final ReportStepEntry step, final PlaybookStep pbStep, final ExecutionContext context)
     {
         final JsonObject obj = new JsonObject();
+        StepStats matchedStats = null;
+        if (context != null)
+        {
+            final Map<PlaybookStep, StepStats> stepStatsMap =
+                (Map<PlaybookStep, StepStats>) context.getTransientData().get("execution.stepStatsMap");
+            if (stepStatsMap != null && pbStep != null)
+            {
+                matchedStats = stepStatsMap.get(pbStep);
+            }
+            if (matchedStats == null)
+            {
+                final Object curStatsObj = context.getTransientData().get("KEY_CURRENT_STEP_STATS");
+                if (curStatsObj instanceof StepStats curS)
+                {
+                    matchedStats = curS;
+                }
+            }
+        }
+
+        String statsContextLevels = null;
+        int statsEscalations = 0;
+        if (matchedStats != null && matchedStats.getContextLevels() != null && !matchedStats.getContextLevels().isEmpty())
+        {
+            final List<String> lvls = matchedStats.getContextLevels();
+            statsContextLevels = String.join(" → ", lvls);
+            statsEscalations = Math.max(0, lvls.size() - 1);
+        }
+
         if (step != null)
         {
-            obj.addProperty("escalations", step.getEscalations());
-            obj.addProperty("contextLevels", step.getContextLevels());
-            obj.addProperty("standardCalls", step.getStandardCalls());
-            obj.addProperty("standardInputTokens", step.getStandardInputTokens());
-            obj.addProperty("standardOutputTokens", step.getStandardOutputTokens());
-            obj.addProperty("standardCachedTokens", step.getStandardCachedTokens());
+            obj.addProperty("escalations", step.getEscalations() > 0 ? step.getEscalations() : statsEscalations);
+            String contextLevels = step.getContextLevels();
+            if ((contextLevels == null || contextLevels.isBlank()) && statsContextLevels != null)
+            {
+                contextLevels = statsContextLevels;
+            }
+            if ((contextLevels == null || contextLevels.isBlank()) && pbStep != null && pbStep.getContextLevel() != null)
+            {
+                contextLevels = pbStep.getContextLevel();
+            }
+            if (contextLevels != null && !contextLevels.isBlank())
+            {
+                obj.addProperty("contextLevels", contextLevels);
+                final String[] parts = contextLevels.split("\\s*(?:→|->)\\s*");
+                if (parts.length > 0 && !parts[parts.length - 1].isBlank())
+                {
+                    obj.addProperty("contextLevel", parts[parts.length - 1].trim());
+                }
+            }
+            obj.addProperty("standardCalls", step.getStandardCalls() > 0 ? step.getStandardCalls() : (matchedStats != null ? matchedStats.getStandardCalls() : 0));
+            obj.addProperty("standardInputTokens", step.getStandardInputTokens() > 0 ? step.getStandardInputTokens() : (matchedStats != null ? matchedStats.getStandardInputTokens() : 0));
+            obj.addProperty("standardOutputTokens", step.getStandardOutputTokens() > 0 ? step.getStandardOutputTokens() : (matchedStats != null ? matchedStats.getStandardOutputTokens() : 0));
+            obj.addProperty("standardCachedTokens", step.getStandardCachedTokens() > 0 ? step.getStandardCachedTokens() : (matchedStats != null ? matchedStats.getStandardCachedTokens() : 0));
+        }
+        else if (matchedStats != null)
+        {
+            obj.addProperty("escalations", statsEscalations);
+            String contextLevels = statsContextLevels;
+            if ((contextLevels == null || contextLevels.isBlank()) && pbStep != null && pbStep.getContextLevel() != null)
+            {
+                contextLevels = pbStep.getContextLevel();
+            }
+            if (contextLevels != null && !contextLevels.isBlank())
+            {
+                obj.addProperty("contextLevels", contextLevels);
+                final String[] parts = contextLevels.split("\\s*(?:→|->)\\s*");
+                if (parts.length > 0 && !parts[parts.length - 1].isBlank())
+                {
+                    obj.addProperty("contextLevel", parts[parts.length - 1].trim());
+                }
+            }
+            obj.addProperty("standardCalls", matchedStats.getStandardCalls());
+            obj.addProperty("standardInputTokens", matchedStats.getStandardInputTokens());
+            obj.addProperty("standardOutputTokens", matchedStats.getStandardOutputTokens());
+            obj.addProperty("standardCachedTokens", matchedStats.getStandardCachedTokens());
+        }
+        else if (pbStep != null && pbStep.getContextLevel() != null && !pbStep.getContextLevel().isBlank())
+        {
+            final String contextLevels = pbStep.getContextLevel();
+            obj.addProperty("contextLevels", contextLevels);
+            final String[] parts = contextLevels.split("\\s*(?:→|->)\\s*");
+            if (parts.length > 0 && !parts[parts.length - 1].isBlank())
+            {
+                obj.addProperty("contextLevel", parts[parts.length - 1].trim());
+            }
         }
         return obj;
     }
@@ -1331,6 +1448,16 @@ public final class InteractiveStateBuilder
                     subObj.addProperty("durationMs", sub.getDurationMs());
                     subObj.addProperty("reasoning", sub.getReasoning());
                     subObj.addProperty("failureReason", sub.getFailureReason());
+                    if (sub.getContextLevels() != null && !sub.getContextLevels().isBlank())
+                    {
+                        subObj.addProperty("contextLevels", sub.getContextLevels());
+                        final String cl = sub.getContextLevels();
+                        final String[] parts = cl.split("\\s*(?:→|->)\\s*");
+                        if (parts.length > 0 && !parts[parts.length - 1].isBlank())
+                        {
+                            subObj.addProperty("contextLevel", parts[parts.length - 1].trim());
+                        }
+                    }
                     if (!sub.getActions().isEmpty())
                     {
                         subObj.add("actions", serializeReportActions(sub.getActions()));

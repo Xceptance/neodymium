@@ -3003,7 +3003,7 @@ function renderStepsForExecution(activeRow) {
             
             const stepClass = isHealed ? 'step-healed' : (isPassed ? 'step-passed' : (isFailed ? 'step-failed' : 'step-ignored'));
             const stepId = `stepCard_${sectionClass}_${idx}`;
-            const rawContextLevel = s.contextLevels || s.stats?.contextLevels || 'PENDING';
+            const rawContextLevel = s.contextLevel || s.contextLevels || s.stats?.contextLevels || s.stats?.contextLevel || 'PENDING';
             const isUnexecutedOrSkipped = !isPassed && !isFailed && status !== 'running';
             const contextLevel = isUnexecutedOrSkipped ? 'PENDING' : rawContextLevel;
 
@@ -3622,7 +3622,7 @@ function renderStepsForExecution(activeRow) {
                               (isPassed ? '<span class="badge-status badge-pass" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SUCCESS</span>' :
                               (isFailed ? '<span class="badge-status badge-unknown-fail" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">FAILED</span>' :
                               '<span class="badge-status badge-ignored" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SKIPPED</span>'))}
-                            <span class="context-badge level-${contextLevel.toLowerCase()}">${contextLevel}</span>
+                            <span class="context-badge ${contextLevelClass(contextLevel)}">${contextLevel}</span>
                             <span style="color: var(--text-main); font-weight: 600; margin-left: 0.2rem;">${title}</span>
                         </div>
                         ${countsSummaryHtml}
@@ -3879,11 +3879,14 @@ function parseContextLevelCounts(json) {
 }
 
 function contextLevelClass(key) {
-    const k = String(key || '').toUpperCase();
+    const raw = String(key || '').trim();
+    const parts = raw.split(/\s*(?:→|->)\s*/);
+    const k = (parts[parts.length - 1] || '').toUpperCase();
     if (k === 'MINIMAL') return 'level-minimal';
     if (k === 'LEAN') return 'level-lean';
     if (k === 'STANDARD') return 'level-standard';
     if (k.indexOf('VISUAL') === 0) return 'level-visual';
+    if (k === 'PENDING') return 'level-pending';
     return 'level-standard';
 }
 

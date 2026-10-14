@@ -412,6 +412,10 @@ public final class AgentToolLoopStep implements PipelineStep
                 {
                     stats.addContextLevel(activeContextLevel.name());
                 }
+                if (step != null)
+                {
+                    step.setContextLevel(activeContextLevel.name());
+                }
                 if (initialState.getTextContent() != null && !initialState.getTextContent().isBlank())
                 {
                     previousElementSignatures = extractElementSignatures(initialState.getTextContent());
@@ -1633,6 +1637,10 @@ public final class AgentToolLoopStep implements PipelineStep
                         if (statsObj instanceof final StepStats stats)
                         {
                             stats.addContextLevel(activeContextLevel.name());
+                        }
+                        if (step != null)
+                        {
+                            step.setContextLevel(activeContextLevel.name());
                         }
 
                         final List<SutAttachment> freshAttachments = (pendingVisualAttachments != null && !pendingVisualAttachments.isEmpty())

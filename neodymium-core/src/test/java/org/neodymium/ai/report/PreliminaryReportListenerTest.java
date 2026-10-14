@@ -2683,4 +2683,54 @@ public class PreliminaryReportListenerTest
         assertEquals(1, contextLevelCounts.get("STANDARD"), "STANDARD must only be counted once for step 1");
         assertEquals(1, report.getMetrics().getTotalEscalations(), "Total escalations must be 1");
     }
+
+    @Test
+    @DisplayName("StepFinishedEvent populates contextLevels on ReportStepEntry immediately before session finish")
+    public void testStepFinishedEventPopulatesContextLevelsBeforeSessionFinish() throws IOException
+    {
+        final Path reportDir = tempFolder.resolve("step-finished-ctx-level-report");
+        Files.createDirectories(reportDir);
+
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        final PlaybookStep step0 = new PlaybookStep("Navigate to homepage");
+        step0.setContextLevel("LEAN");
+
+        final StepStats stats0 = new StepStats("Navigate to homepage", 1000L);
+        stats0.addContextLevel("LEAN");
+        ctx.getTransientData().put("KEY_CURRENT_STEP_STATS", stats0);
+
+        bus.dispatch(new StepStartedEvent(step0, 0));
+        bus.dispatch(new StepFinishedEvent(step0, PlaybookStepStatus.SUCCESS));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertFalse(report.getSteps().isEmpty());
+        final TestExecutionReport.ReportStepEntry finishedEntry = report.getSteps().get(0);
+        assertEquals("LEAN", finishedEntry.getContextLevels(), "Context levels must be merged immediately upon StepFinishedEvent");
+        assertEquals("SUCCESS", finishedEntry.getStatus());
+
+        // Step 1: escalated from MINIMAL to LEAN to STANDARD
+        final PlaybookStep step1 = new PlaybookStep("Click configure");
+        step1.setContextLevel("STANDARD");
+
+        final StepStats stats1 = new StepStats("Click configure", 2000L);
+        stats1.addContextLevel("MINIMAL");
+        stats1.addContextLevel("LEAN");
+        stats1.addContextLevel("STANDARD");
+        ctx.getTransientData().put("KEY_CURRENT_STEP_STATS", stats1);
+
+        bus.dispatch(new StepStartedEvent(step1, 1));
+        bus.dispatch(new StepFinishedEvent(step1, PlaybookStepStatus.SUCCESS));
+
+        assertEquals(2, report.getSteps().size());
+        final TestExecutionReport.ReportStepEntry finishedStep1 = report.getSteps().get(1);
+        assertEquals("MINIMAL → LEAN → STANDARD", finishedStep1.getContextLevels(), "Escalated context levels must be merged immediately");
+        assertEquals(2, finishedStep1.getEscalations());
+    }
 }
