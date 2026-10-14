@@ -34,7 +34,7 @@ public final class StorefrontPatcher
 {
     private static final String BASE_DIR = resolveBaseDir();
 
-    static String resolveBaseDir()
+    public static String resolveBaseDir()
     {
         final Path targetPath = Path.of("neodymium-test-server/src/main/resources/ai-test-pages/AuraGlanceTest/shop");
         if (Files.exists(targetPath))

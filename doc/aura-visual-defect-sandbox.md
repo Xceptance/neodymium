@@ -67,7 +67,7 @@ neodymium-test-server/src/main/resources/
 
 ## 3. Multi-Port HTTP & HTTPS Server Setup
 
-The embedded test runner server (`EmbeddedHtmlServer.java`) spins up **two parallel server engines** listening on dynamic, OS-allocated random free ports to eliminate network collisions:
+The embedded test runner server (`JavalinTestServer.java`) spins up **two parallel server engines** listening on dynamic, OS-allocated random free ports to eliminate network collisions:
 
 1. **HTTP Server (`http://localhost:<port>`)**: Plain HTTP instance.
 2. **HTTPS Server (`https://localhost:<httpsPort>`)**: Encrypted SSL instance.
@@ -163,9 +163,9 @@ mvn test -Pjunit-5 -Dtest=com.xceptance.neodymium.ai.Aura*Test
 There are two ways to start the embedded HTML server and keep it running indefinitely:
 
 #### Option A: Running the Main Class Directly (Recommended - No Code Modification Needed)
-Execute the `main` method of the `EmbeddedHtmlServer` class using Maven's exec plugin:
+Execute the `main` method of the `JavalinTestServer` class using Maven's exec plugin:
 ```bash
-mvn compile test-compile exec:java -Dexec.mainClass="org.neodymium.ai.util.EmbeddedHtmlServer" -Dexec.classpathScope="test"
+mvn exec:java -pl neodymium-test-server
 ```
 
 #### Option B: Running via JUnit (Requires Modifying RunServerTest)

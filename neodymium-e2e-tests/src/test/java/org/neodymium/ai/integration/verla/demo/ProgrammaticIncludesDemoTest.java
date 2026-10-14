@@ -38,7 +38,7 @@ import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.session.AiSession;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
+import org.neodymium.ai.server.JavalinTestServer;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
@@ -57,7 +57,7 @@ import org.neodymium.util.Neodymium;
 @AiOutcomeVerification(failOnError = false)
 public final class ProgrammaticIncludesDemoTest
 {
-    private static EmbeddedHtmlServer server;
+    private static JavalinTestServer server;
 
     /**
      * Constructs a default VerlaProgrammaticIncludesDemoTest.
@@ -79,7 +79,7 @@ public final class ProgrammaticIncludesDemoTest
         Neodymium.getData().put("neodymium.ai.visualRca.enabled", "false");
         AiConfiguration.resetInstance();
 
-        server = new EmbeddedHtmlServer();
+        server = new JavalinTestServer();
         server.start();
     }
 

@@ -43,7 +43,7 @@ graph TD
 A strict, from-scratch Tailwind rebuild of `verla-normal`. Where `/verla-tailwind/` is a hybrid (CDN plus a large hand-written semantic stylesheet), this variant is what a real Tailwind codebase looks like:
 
 - **No remote resources, no Node at runtime**: the stylesheet is a Tailwind v4 build committed at `neodymium-test-server/src/main/resources/ai-test-pages/shared/verla-tailwind.css` and served as a static file. `verla-tailwind-by-claude/build.sh` regenerates it and is development-only; nothing in the test path invokes Node.
-- **No semantic class names**: every element - including the fragments rendered from `EmbeddedHtmlServer` (product cards, mini cart, cart table, search suggestions, address fields) - carries utilities only. There is no `.product-card`, `.form-control`, or `.btn-primary`.
+- **No semantic class names**: every element - including the fragments rendered from `JavalinTestServer` (product cards, mini cart, cart table, search suggestions, address fields) - carries utilities only. There is no `.product-card`, `.form-control`, or `.btn-primary`.
 - **No inline styles and no embedded `<style>` block**: the layout links one stylesheet and nothing else.
 - **State as data attributes**: open/active/added states are `data-open`, `data-active`, `data-state`, `data-show`, styled with `data-[open=true]:visible`-style variants, plus `group-hover:` / `group-focus-within:` for the quick-add reveal and mini cart. JS toggles attributes, never style properties.
 - **Design tokens in `@theme`**: the terracotta/sand palette, serif/sans families, and keyframes are Tailwind theme variables, so they generate real utilities (`bg-terracotta-500`, `text-muted`, `font-serif`, `animate-fade-in`).

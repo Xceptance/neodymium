@@ -29,12 +29,14 @@ import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.server.JavalinTestServer;
 import org.neodymium.common.browser.SuppressBrowsers;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
 import org.neodymium.util.Neodymium;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
@@ -49,7 +51,7 @@ import com.codeborne.selenide.WebDriverRunner;
  */
 public abstract class BaseAiTest extends BaseLlmTest
 {
-    protected static EmbeddedHtmlServer server;
+    protected static JavalinTestServer server;
     protected String currentTestUrl;
     private TestInfo testInfo;
     private static volatile boolean shutdownHookRegistered = false;
@@ -69,7 +71,7 @@ public abstract class BaseAiTest extends BaseLlmTest
         }
         if (server == null || !server.isRunning())
         {
-            server = new EmbeddedHtmlServer();
+            server = new JavalinTestServer();
             server.start();
         }
         if (!shutdownHookRegistered)
@@ -112,13 +114,13 @@ public abstract class BaseAiTest extends BaseLlmTest
             }
             catch (final IOException e)
             {
-                throw new RuntimeException("Failed to ensure EmbeddedHtmlServer is running", e);
+                throw new RuntimeException("Failed to ensure JavalinTestServer is running", e);
             }
         }
         server.resetAll();
 
-        final boolean isInteractive = org.neodymium.ai.config.AiConfiguration.getInstance().isInteractive();
-        org.junit.jupiter.api.Assertions.assertFalse(isInteractive,
+        final boolean isInteractive = AiConfiguration.getInstance().isInteractive();
+        Assertions.assertFalse(isInteractive,
             "Interactive mode is currently active ('neodymium.ai.interactive'=true or configured in properties). Automated batch tests must run with interactive mode disabled (isInteractive=false) to prevent halting and waiting for manual UI console input.");
 
         final String className = testInfo.getTestClass().get().getSimpleName();

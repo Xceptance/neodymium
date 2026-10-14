@@ -18,10 +18,12 @@
  */
 package org.neodymium.ai.util;
 
+import org.neodymium.ai.executor.selenide.PageAnalyzer;
+import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.server.JavalinTestServer;
+
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
-import org.neodymium.ai.model.ContextLevel;
-import org.neodymium.ai.executor.selenide.PageAnalyzer;
 
 /**
  * Utility program to generate side-by-side live comparison of STANDARD vs RICH DOM captures.
@@ -37,7 +39,7 @@ public final class CompareStandardAndRich
 
     public static void main(final String[] args) throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         try
         {
             server.start();

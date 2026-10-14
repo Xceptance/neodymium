@@ -51,7 +51,7 @@ import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
+import org.neodymium.ai.server.JavalinTestServer;
 import org.openqa.selenium.JavascriptException;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.Keys;
@@ -167,7 +167,7 @@ public class BrowserToolsTest
     {
         Configuration.browser = "chrome";
         Configuration.headless = true;
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -847,6 +847,7 @@ public class BrowserToolsTest
     @Test
     public void testAssertTextOnUnstampedPageWithAutomationIdTriggersStamping() throws Exception
     {
+        System.setProperty("neodymium.ai.dataAi.enabled", "true");
         Configuration.browser = "chrome";
         Configuration.headless = true;
         try
@@ -907,6 +908,7 @@ public class BrowserToolsTest
         finally
         {
             Selenide.closeWebDriver();
+            System.clearProperty("neodymium.ai.dataAi.enabled");
         }
     }
 

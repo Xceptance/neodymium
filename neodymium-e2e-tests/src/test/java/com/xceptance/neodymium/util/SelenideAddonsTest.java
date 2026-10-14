@@ -32,7 +32,7 @@ import com.codeborne.selenide.logevents.LogEvent.EventStatus;
 import com.codeborne.selenide.logevents.LogEventListener;
 import com.codeborne.selenide.logevents.SelenideLog;
 import com.codeborne.selenide.logevents.SelenideLogger;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
+import org.neodymium.ai.server.JavalinTestServer;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.common.browser.SuppressBrowsers;
 import org.neodymium.common.retry.Retry;
@@ -46,12 +46,12 @@ import org.neodymium.junit4.NeodymiumRunner;
 @Browser("Chrome_headless")
 public class SelenideAddonsTest
 {
-    private static EmbeddedHtmlServer server;
+    private static JavalinTestServer server;
 
     @BeforeClass
     public static void startServer() throws IOException
     {
-        server = new EmbeddedHtmlServer();
+        server = new JavalinTestServer();
         server.start();
     }
 

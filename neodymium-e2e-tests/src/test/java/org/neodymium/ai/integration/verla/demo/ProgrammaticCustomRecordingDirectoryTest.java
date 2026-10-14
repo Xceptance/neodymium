@@ -36,7 +36,7 @@ import org.neodymium.ai.junit.AiPlaybook;
 import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.session.AiSession;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
+import org.neodymium.ai.server.JavalinTestServer;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
@@ -57,7 +57,7 @@ public class ProgrammaticCustomRecordingDirectoryTest
 {
     private static final String CUSTOM_REC_DIR = "target/custom-programmatic-recordings";
 
-    private static EmbeddedHtmlServer server;
+    private static JavalinTestServer server;
 
     private static boolean javaMethodBodyExecuted;
 
@@ -69,7 +69,7 @@ public class ProgrammaticCustomRecordingDirectoryTest
         Neodymium.getData().put("neodymium.ai.visualRca.enabled", "false");
         AiConfiguration.resetInstance();
 
-        server = new EmbeddedHtmlServer();
+        server = new JavalinTestServer();
         server.start();
 
         final File recDir = new File(CUSTOM_REC_DIR);

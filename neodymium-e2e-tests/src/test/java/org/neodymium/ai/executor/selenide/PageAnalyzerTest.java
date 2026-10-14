@@ -36,7 +36,7 @@ import org.neodymium.ai.junit.NeodymiumAiTest;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.testing.BaseAiTest;
-import org.neodymium.ai.util.EmbeddedHtmlServer;
+import org.neodymium.ai.server.JavalinTestServer;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.util.Neodymium;
 
@@ -70,7 +70,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testHintLevelReturnsZeroElements() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -95,7 +95,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testVisualLevelReturnsZeroElements() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -119,7 +119,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testDataTestIdAttributeRendering() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -151,7 +151,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testTextLeafAttributePreservation() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -179,7 +179,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testImageLinkAltTextFallback() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -207,7 +207,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testTableGridHierarchyPreserved() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -235,7 +235,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testLeanPrunesStaticTextWhileStandardRetainsIt() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -272,7 +272,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testParagraphWrappingAnchorRetainsAnchorElement() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -305,7 +305,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testMinimalLevelPrunesNonFormContainersAndStaticCopy() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -337,7 +337,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testSelectAndOptionPresenceInMinimalDom() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -361,7 +361,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testCaptureScreenshotWithContextLevel() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -387,7 +387,8 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testCleanDomStructureWithoutSel() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        System.setProperty("neodymium.ai.dataAi.enabled", "true");
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -404,13 +405,14 @@ public class PageAnalyzerTest extends BaseAiTest
         {
             server.stop();
             Selenide.closeWebDriver();
+            System.clearProperty("neodymium.ai.dataAi.enabled");
         }
     }
 
     @Test
     public void testExtractFeatureVectors() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -433,7 +435,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testExtractSingleElementFeatureVector() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -459,7 +461,7 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testCaptureSimplifiedDomPreservesLastLocator() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -494,7 +496,8 @@ public class PageAnalyzerTest extends BaseAiTest
     @Test
     public void testContainerClassPreservationWhenAutomationIdPresent() throws Exception
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer(0, 0);
+        System.setProperty("neodymium.ai.dataAi.enabled", "true");
+        final JavalinTestServer server = new JavalinTestServer(0, 0);
         server.start();
         try
         {
@@ -517,6 +520,7 @@ public class PageAnalyzerTest extends BaseAiTest
         {
             server.stop();
             Selenide.closeWebDriver();
+            System.clearProperty("neodymium.ai.dataAi.enabled");
         }
     }
 }

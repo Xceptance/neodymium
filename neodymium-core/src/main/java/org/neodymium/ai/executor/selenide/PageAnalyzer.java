@@ -697,7 +697,7 @@ public class PageAnalyzer
                 }
 
                 return {tree: rootNodes, forms: level >= 1 ? captureForms() : []};
-            })(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4]);
+            })(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5]);
             """;
 
     private boolean hasActiveWebDriver(final WebDriver explicitDriver) {

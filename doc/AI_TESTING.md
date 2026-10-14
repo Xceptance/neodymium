@@ -266,8 +266,8 @@ Sandbox assets reside in the classpath of `neodymium-test-server` under:
 * **Dashboard & Shop Apps**: `dashboard/` (SaaS administration) and `shop/` (Apparel storefront with `homepage-perfect.html`, `homepage-normal.html`, `homepage-bad.html`).
 * **Scenario Playground (`shop/sandbox/`)**: Isolated challenge pages testing SVG-only buttons (`svg-icons.html`), canvas clicks (`canvas-click.html`), Shadow DOM (`shadow-dom.html`), z-index click interception (`click-intercept.html`), AJAX table sorting (`table-sorting.html`), and cross-origin iframes (`cross-origin-iframe.html`).
 
-### Embedded Server (`EmbeddedHtmlServer`)
-Tests extending `BaseAiTest` in `neodymium-e2e-tests` spin up an embedded HTTP + HTTPS server automatically on free random ports via `EmbeddedHtmlServer.java` (provided by `neodymium-test-server`). The server loads `keystore.p12` for local SSL testing and shuts down automatically after test execution.
+### Embedded Server (`JavalinTestServer`)
+Tests extending `BaseAiTest` in `neodymium-e2e-tests` spin up an embedded HTTP + HTTPS server automatically on free random ports via `JavalinTestServer.java` (provided by `neodymium-test-server`). The server loads `keystore.p12` for local SSL testing and shuts down automatically after test execution.
 
 ---
 

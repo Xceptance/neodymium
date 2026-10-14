@@ -16,22 +16,25 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.neodymium.ai.util;
+package org.neodymium.ai.server;
 
 import java.io.File;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 
+import org.eclipse.jetty.server.ServerConnector;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.server.session.TestSession;
+import org.neodymium.ai.server.verla.model.User;
+import org.neodymium.ai.util.StorefrontPatcher;
 
 /**
- * Tests port fallback mechanism and lifecycle of {@link EmbeddedHtmlServer}.
+ * Tests port fallback mechanism, loopback binding, and granular state lifecycle of {@link JavalinTestServer}.
  *
- * @author AI-generated: Gemini 3.6 Flash
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
-public class EmbeddedHtmlServerTest
+public class JavalinTestServerLifecycleTest
 {
     /**
      * Tests that creating a second server on an occupied port falls back to an available dynamic port.
@@ -41,7 +44,7 @@ public class EmbeddedHtmlServerTest
     @Test
     public void testPortFallbackWhenPortOccupied() throws IOException
     {
-        final EmbeddedHtmlServer primaryServer = new EmbeddedHtmlServer();
+        final JavalinTestServer primaryServer = new JavalinTestServer();
         primaryServer.start();
 
         try
@@ -53,7 +56,7 @@ public class EmbeddedHtmlServerTest
             Assertions.assertTrue(primaryHttpsPort > 0, "Primary HTTPS port should be valid");
 
             // Attempt to create secondary server requesting the exact same ports
-            final EmbeddedHtmlServer secondaryServer = new EmbeddedHtmlServer(primaryPort, primaryHttpsPort);
+            final JavalinTestServer secondaryServer = new JavalinTestServer(primaryPort, primaryHttpsPort);
             secondaryServer.start();
 
             try
@@ -85,40 +88,42 @@ public class EmbeddedHtmlServerTest
     @Test
     public void testGranularResets() throws IOException
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer();
+        final JavalinTestServer server = new JavalinTestServer();
         server.start();
 
         try
         {
+            final TestSession defaultSession = server.getSessionManager().getDefaultSession();
+
             // Initial state has 1 default user
-            Assertions.assertEquals(1, server.getUserCount());
-            Assertions.assertTrue(server.hasUser("johndoe@example.com"));
+            Assertions.assertEquals(1, defaultSession.getUsersDb().size());
+            Assertions.assertTrue(defaultSession.getUsersDb().containsKey("johndoe@example.com"));
 
             // Add custom test user
-            final EmbeddedHtmlServer.User customUser = new EmbeddedHtmlServer.User("custom@example.com", "pass123");
-            server.addUser(customUser);
-            Assertions.assertEquals(2, server.getUserCount());
-            Assertions.assertTrue(server.hasUser("custom@example.com"));
+            final User customUser = new User("custom@example.com", "pass123");
+            defaultSession.getUsersDb().put(customUser.email, customUser);
+            Assertions.assertEquals(2, defaultSession.getUsersDb().size());
+            Assertions.assertTrue(defaultSession.getUsersDb().containsKey("custom@example.com"));
 
             // Resetting inventory or carts does not remove custom user
             server.resetInventory();
             server.resetCarts();
             server.resetOrders();
-            Assertions.assertEquals(2, server.getUserCount());
-            Assertions.assertTrue(server.hasUser("custom@example.com"));
+            Assertions.assertEquals(2, defaultSession.getUsersDb().size());
+            Assertions.assertTrue(defaultSession.getUsersDb().containsKey("custom@example.com"));
 
             // Resetting users explicitly restores only default user
             server.resetUsers();
-            Assertions.assertEquals(1, server.getUserCount());
-            Assertions.assertFalse(server.hasUser("custom@example.com"));
-            Assertions.assertTrue(server.hasUser("johndoe@example.com"));
+            Assertions.assertEquals(1, defaultSession.getUsersDb().size());
+            Assertions.assertFalse(defaultSession.getUsersDb().containsKey("custom@example.com"));
+            Assertions.assertTrue(defaultSession.getUsersDb().containsKey("johndoe@example.com"));
 
             // Resetting all cleans entire state
-            server.addUser(customUser);
-            Assertions.assertEquals(2, server.getUserCount());
+            defaultSession.getUsersDb().put(customUser.email, customUser);
+            Assertions.assertEquals(2, defaultSession.getUsersDb().size());
             server.resetAll();
-            Assertions.assertEquals(1, server.getUserCount());
-            Assertions.assertFalse(server.hasUser("custom@example.com"));
+            Assertions.assertEquals(1, defaultSession.getUsersDb().size());
+            Assertions.assertFalse(defaultSession.getUsersDb().containsKey("custom@example.com"));
         }
         finally
         {
@@ -127,22 +132,22 @@ public class EmbeddedHtmlServerTest
     }
 
     /**
-     * Tests that the HTTP server binds to a loopback address (127.0.0.1) by default.
+     * Tests that the HTTP server binds strictly to a loopback address (127.0.0.1) by default.
      *
      * @throws IOException if server fails to initialize
      */
     @Test
     public void testLoopbackBinding() throws IOException
     {
-        final EmbeddedHtmlServer server = new EmbeddedHtmlServer();
+        final JavalinTestServer server = new JavalinTestServer();
         server.start();
 
         try
         {
-            final InetSocketAddress address = server.getAddress();
-            Assertions.assertNotNull(address, "Server address should not be null");
-            Assertions.assertTrue(address.getAddress().isLoopbackAddress(), "Server should bind to a loopback address");
-            Assertions.assertEquals("127.0.0.1", address.getAddress().getHostAddress(), "Host address should be 127.0.0.1");
+            final ServerConnector connector = server.getHttpConnector();
+            Assertions.assertNotNull(connector, "HTTP connector should not be null");
+            Assertions.assertEquals("127.0.0.1", connector.getHost(), "HTTP connector host should be 127.0.0.1");
+            Assertions.assertTrue(server.getHttpUrl().startsWith("http://127.0.0.1:"), "HTTP URL must use 127.0.0.1 loopback");
         }
         finally
         {

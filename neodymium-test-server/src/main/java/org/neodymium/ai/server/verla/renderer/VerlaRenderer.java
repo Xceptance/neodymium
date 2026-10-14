@@ -16,22 +16,15 @@
  * You should have received a copy of the GNU Affero General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
-package org.neodymium.ai.util;
+package org.neodymium.ai.server.verla.renderer;
 
 import java.io.BufferedReader;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.Type;
-import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -40,730 +33,1133 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-
+import org.neodymium.ai.server.session.TestSession;
+import org.neodymium.ai.server.verla.catalog.VerlaCatalog;
+import org.neodymium.ai.server.verla.model.Address;
+import org.neodymium.ai.server.verla.model.Card;
+import org.neodymium.ai.server.verla.model.Cart;
+import org.neodymium.ai.server.verla.model.Country;
+import org.neodymium.ai.server.verla.model.Order;
+import org.neodymium.ai.server.verla.model.Product;
+import org.neodymium.ai.server.verla.model.User;
+import org.neodymium.ai.util.VerlaConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.reflect.TypeToken;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
-import com.sun.net.httpserver.HttpsConfigurator;
-import com.sun.net.httpserver.HttpsServer;
 
 /**
- * A lightweight, embedded HTTP server for testing AI actions locally without external dependencies.
- * It serves static files from the 'src/test/resources/ai-test-pages/' classpath directory
- * and handles the dynamic, HTMX-enabled VÉRLA e-commerce storefront.
- * 
- * @author AI-generated: Gemini 2.5 Pro
+ * Renders HTML templates, component fragments, and headless hydration documents for all VÉRLA storefront flavors.
+ *
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
-public final class EmbeddedHtmlServer
+public final class VerlaRenderer
 {
-    private static final Logger LOG = LoggerFactory.getLogger(EmbeddedHtmlServer.class);
-    private final HttpServer server;
-    private final HttpsServer httpsServer;
-    private final int port;
-    private final int httpsPort;
-    private volatile boolean running = false;
+    private static final Logger LOG = LoggerFactory.getLogger(VerlaRenderer.class);
 
-    // --- VÉRLA E-Commerce Domain Models ---
-    
-    public static final class Country
-    {
-        public String code;
-        public String name;
-        public Map<String, String> names;
-        public String locale;
-        public String currency;
-        public String symbol;
-        public double rate;
-        public String format;
+    private static final Gson GSON = new Gson();
 
-        public String getLocalizedName(final String targetLocale)
-        {
-            if (names != null && names.containsKey(targetLocale))
-            {
-                return names.get(targetLocale);
-            }
-            return name;
-        }
-    }
-
-    public static final class CategoryTemplate
-    {
-        public String id;
-        public Map<String, String> names;
-        public List<SubcategoryTemplate> subcategories;
-    }
-
-    public static final class SubcategoryTemplate
-    {
-        public String id;
-        public Map<String, String> names;
-        public String en;
-        public String fr;
-        public String de;
-        public String pl;
-        public String se;
-        public String fi;
-        public String ja;
-
-        public String getSubName(final String locale)
-        {
-            if (names != null && names.containsKey(locale))
-            {
-                return names.get(locale);
-            }
-            if ("de".equals(locale) && de != null) return de;
-            if ("fr".equals(locale) && fr != null) return fr;
-            if ("pl".equals(locale) && pl != null) return pl;
-            if ("se".equals(locale) && se != null) return se;
-            if ("fi".equals(locale) && fi != null) return fi;
-            if ("ja".equals(locale) && ja != null) return ja;
-            if (en != null) return en;
-            return id;
-        }
-    }
-
-    public static final class GenerationConfig
-    {
-        public List<CategoryTemplate> categories;
-        public Map<String, List<String>> adjectives;
-        public Map<String, List<String>> colors;
-        public Map<String, String> descriptions;
-    }
-
-    public static final class CatalogConfig
-    {
-        public List<Country> countries;
-        public Map<String, Map<String, String>> translations;
-        public GenerationConfig generation;
-    }
-
-    public static final class Product
-    {
-        public final String id;
-        public final String slug;
-        public final Map<String, String> names;
-        public final Map<String, String> descriptions;
-        public final String category;
-        public final String subcategory;
-        public final double basePrice;
-        public final String badge;
-        public final Double salePrice;
-        public final String svgPath;
-        public final String color;
-        public final Map<String, Integer> initialStock;
-
-        public Product(final String id, final String slug, final Map<String, String> names, final Map<String, String> descriptions,
-                       final String category, final String subcategory, final double basePrice, final String badge, final Double salePrice, final String svgPath, final String color,
-                       final Map<String, Integer> initialStock)
-        {
-            this.id = id;
-            this.slug = slug;
-            this.names = names;
-            this.descriptions = descriptions;
-            this.category = category;
-            this.subcategory = subcategory;
-            this.basePrice = basePrice;
-            this.badge = badge;
-            this.salePrice = salePrice;
-            this.svgPath = svgPath;
-            this.color = color;
-            this.initialStock = initialStock;
-        }
-    }
-
-    public static final class User
-    {
-        public final String email;
-        public String password;
-        public final List<Address> addresses = new ArrayList<>();
-        public final List<Card> cards = new ArrayList<>();
-        public final List<Order> orders = new ArrayList<>();
-
-        public User(final String email, final String password)
-        {
-            this.email = email;
-            this.password = password;
-        }
-    }
-
-    public static final class Address
-    {
-        public final String id;
-        public final String street;
-        public final String city;
-        public final String state;
-        public final String postcode;
-        public final String country;
-
-        public Address(final String id, final String street, final String city, final String state, final String postcode, final String country)
-        {
-            this.id = id;
-            this.street = street;
-            this.city = city;
-            this.state = state;
-            this.postcode = postcode;
-            this.country = country;
-        }
-    }
-
-    public static final class Card
-    {
-        public final String id;
-        public final String number;
-        public final String type;
-        public final String expiry;
-        public final String cvv;
-
-        public Card(final String id, final String number, final String type, final String expiry, final String cvv)
-        {
-            this.id = id;
-            this.number = number;
-            this.type = type;
-            this.expiry = expiry;
-            this.cvv = cvv;
-        }
-    }
-
-    public static final class Order
-    {
-        public final String orderNumber;
-        public final String email;
-        public final List<OrderItem> items;
-        public final double subtotal;
-        public final double shipping;
-        public final double tax;
-        public final double total;
-        public final String status;
-        public final Address shippingAddress;
-        public final Card paymentCard;
-        public final String discountApplied;
-        public final boolean freeGiftAdded;
-
-        public Order(final String orderNumber, final String email, final List<OrderItem> items, final double subtotal,
-                     final double shipping, final double tax, final double total, final String status,
-                     final Address shippingAddress, final Card paymentCard, final String discountApplied, final boolean freeGiftAdded)
-        {
-            this.orderNumber = orderNumber;
-            this.email = email;
-            this.items = items;
-            this.subtotal = subtotal;
-            this.shipping = shipping;
-            this.tax = tax;
-            this.total = total;
-            this.status = status;
-            this.shippingAddress = shippingAddress;
-            this.paymentCard = paymentCard;
-            this.discountApplied = discountApplied;
-            this.freeGiftAdded = freeGiftAdded;
-        }
-    }
-
-    public static final class OrderItem
-    {
-        public final String productId;
-        public final String productName;
-        public final int quantity;
-        public final double price;
-
-        public OrderItem(final String productId, final String productName, final int quantity, final double price)
-        {
-            this.productId = productId;
-            this.productName = productName;
-            this.quantity = quantity;
-            this.price = price;
-        }
-    }
-
-    public static final class Cart
-    {
-        public final String id;
-        public final Map<String, Integer> items = new ConcurrentHashMap<>();
-        public String coupon = null;
-
-        public Cart(final String id)
-        {
-            this.id = id;
-        }
-    }
-
-    // --- VÉRLA Store In-Memory Databases ---
-
-    // --- VÉRLA Store Prototype Catalog & Static Configuration ---
-
-    private static CatalogConfig catalogConfig;
-    private static final List<Product> catalogProducts = new ArrayList<>();
-    private static final Map<String, Country> countriesMap = new HashMap<>();
-
-    static
-    {
-        loadCatalogData();
-    }
-
-    // --- VÉRLA Store Instance-Scoped In-Memory Databases ---
-
-    private final Map<String, User> usersDb = new ConcurrentHashMap<>();
-    private final Map<String, String> activeSessions = new ConcurrentHashMap<>();
-    private final Map<String, Cart> activeCarts = new ConcurrentHashMap<>();
-    private final Map<String, Order> ordersDb = new ConcurrentHashMap<>();
-    private final Map<String, Map<String, Integer>> productInventory = new ConcurrentHashMap<>();
-    private final Random seededRandom = new Random(42L);
-
-    /**
-     * Epoch millisecond timestamp at which a headless session finishes its bootstrap handshake,
-     * keyed by cart id. Until that moment the BFF endpoints reject the stale customer id with
-     * HTTP 400, exactly as the reference storefront does while its two OAuth token requests race.
-     */
-    private final Map<String, Long> headlessSessionSettleAt = new ConcurrentHashMap<>();
-
-    /** Bootstrap customer id handed out before the session settles; rejected by the BFF endpoints. */
-    private final Map<String, String> headlessStaleCustomerId = new ConcurrentHashMap<>();
-
-    /** Customer id that becomes valid once the session has settled. */
-    private final Map<String, String> headlessSettledCustomerId = new ConcurrentHashMap<>();
+    public static final String TW_FORM_LABEL = "mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]";
+    public static final String TW_FORM_CONTROL = "w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white";
+    public static final String TW_ERROR = "mt-1 text-xs font-medium text-danger";
+    public static final String TW_BTN_PRIMARY = "inline-block rounded-lg bg-terracotta-500 px-5 py-2.5 text-[13px] font-semibold uppercase tracking-[0.05em] text-white transition-colors hover:bg-terracotta-700";
+    public static final String TW_COUNTRY_ITEM = "flex cursor-pointer items-center justify-between px-4 py-3 text-sm transition-colors [&:not(:last-child)]:border-b [&:not(:last-child)]:border-sand-200 hover:bg-sand-50 hover:font-medium hover:text-terracotta-500 data-[selected=true]:bg-sand-50 data-[selected=true]:font-medium data-[selected=true]:text-terracotta-500";
 
     /**
      * Remaining number of product tiles the current headless render may emit as client-hydrated
      * skeletons. Scoped per request thread and refilled at the top of every page render.
      */
-    private static final ThreadLocal<int[]> headlessTileBudget = ThreadLocal.withInitial(() -> new int[1]);
+    public static final ThreadLocal<int[]> headlessTileBudget = ThreadLocal.withInitial(() -> new int[1]);
 
     /** Products emitted as skeletons during the current render, used to seed the hydration blob. */
-    private static final ThreadLocal<List<Product>> headlessRenderedTiles = ThreadLocal.withInitial(ArrayList::new);
+    public static final ThreadLocal<List<Product>> headlessRenderedTiles = ThreadLocal.withInitial(ArrayList::new);
 
-    private static volatile EmbeddedHtmlServer lastInstance;
+    private final VerlaCatalog catalog;
 
-    /**
-     * Resets product inventory levels to initial values and resets seeded random on this server instance.
-     */
-    public void resetInventory()
+    public VerlaRenderer()
     {
-        this.seededRandom.setSeed(42L);
-        this.productInventory.clear();
-        for (final Product p : catalogProducts)
-        {
-            if (p.initialStock != null)
-            {
-                this.productInventory.put(p.id, new ConcurrentHashMap<>(p.initialStock));
-            }
-        }
-        LOG.info("VÉRLA Product inventory and random seed reset to initial state on server port {}.", this.port);
+        this(VerlaCatalog.getInstance());
     }
 
-    /**
-     * Clears active shopping carts on this server instance.
-     */
-    public void resetCarts()
+    public VerlaRenderer(final VerlaCatalog catalog)
     {
-        this.activeCarts.clear();
-        resetHeadlessSessions();
-        LOG.info("VÉRLA active carts reset on server port {}.", this.port);
+        this.catalog = catalog;
     }
 
-    /**
-     * Clears placed orders on this server instance.
-     */
-    public void resetOrders()
+    public String renderTemplate(final String quality, final String pageName, final Map<String, String> customModel,
+                                 final Country country, final Map<String, String> trans, final User user,
+                                 final Cart cart, final String requestUri, final boolean isHtmx, final TestSession session)
     {
-        this.ordersDb.clear();
-        LOG.info("VÉRLA orders database reset on server port {}.", this.port);
+        return renderTemplate(quality, pageName, customModel, country, trans, user, cart, requestUri, isHtmx, null, false, session);
     }
 
-    /**
-     * Clears all active authenticated sessions on this server instance.
-     */
-    public void resetSessions()
-    {
-        this.activeSessions.clear();
-        resetHeadlessSessions();
-        LOG.info("VÉRLA active sessions reset on server port {}.", this.port);
-    }
-
-    /**
-     * Resets registered users back to the default test user on this server instance.
-     */
-    public void resetUsers()
-    {
-        this.usersDb.clear();
-        final User defaultUser = new User("johndoe@example.com", "topsecret");
-        defaultUser.addresses.add(new Address("addr-default", "123 Main St", "Boston", "MA", "02108", "US"));
-        defaultUser.cards.add(new Card("card-default", "1111222233334100", "Visa", "12/29", "123"));
-        this.usersDb.put(defaultUser.email, defaultUser);
-        LOG.info("VÉRLA users database reset to default test user on server port {}.", this.port);
-    }
-
-    /**
-     * Resets all server state (inventory, carts, orders, sessions, and users) on this server instance.
-     */
-    public void resetAll()
-    {
-        resetInventory();
-        resetCarts();
-        resetOrders();
-        resetSessions();
-        resetUsers();
-        LOG.info("VÉRLA full server state (inventory, carts, orders, sessions, users) reset on server port {}.", this.port);
-    }
-
-    /**
-     * Alias for {@link #resetAll()} to reset full server state.
-     */
-    public void resetState()
-    {
-        resetAll();
-    }
-
-    /**
-     * Static compatibility delegate to reset inventory on the most recently created server instance.
-     */
-    public static void resetInventoryStatic()
-    {
-        final EmbeddedHtmlServer instance = lastInstance;
-        if (instance != null)
-        {
-            instance.resetInventory();
-        }
-    }
-
-    /**
-     * Static compatibility delegate to reset carts on the most recently created server instance.
-     */
-    public static void resetCartsStatic()
-    {
-        final EmbeddedHtmlServer instance = lastInstance;
-        if (instance != null)
-        {
-            instance.resetCarts();
-        }
-    }
-
-    /**
-     * Static compatibility delegate to reset orders on the most recently created server instance.
-     */
-    public static void resetOrdersStatic()
-    {
-        final EmbeddedHtmlServer instance = lastInstance;
-        if (instance != null)
-        {
-            instance.resetOrders();
-        }
-    }
-
-    /**
-     * Static compatibility delegate to reset sessions on the most recently created server instance.
-     */
-    public static void resetSessionsStatic()
-    {
-        final EmbeddedHtmlServer instance = lastInstance;
-        if (instance != null)
-        {
-            instance.resetSessions();
-        }
-    }
-
-    /**
-     * Static compatibility delegate to reset users on the most recently created server instance.
-     */
-    public static void resetUsersStatic()
-    {
-        final EmbeddedHtmlServer instance = lastInstance;
-        if (instance != null)
-        {
-            instance.resetUsers();
-        }
-    }
-
-    /**
-     * Static compatibility delegate to reset all server state on the most recently created server instance.
-     */
-    public static void resetAllStatic()
-    {
-        final EmbeddedHtmlServer instance = lastInstance;
-        if (instance != null)
-        {
-            instance.resetAll();
-        }
-    }
-
-    /**
-     * Checks if a user is registered in the server's user database.
-     *
-     * @param email the user email to check
-     * @return true if the user exists, false otherwise
-     */
-    public boolean hasUser(final String email)
-    {
-        return email != null && this.usersDb.containsKey(email);
-    }
-
-    /**
-     * Adds or overrides a user in the server's user database for test setup.
-     *
-     * @param user the user to add
-     */
-    public void addUser(final User user)
-    {
-        if (user != null && user.email != null)
-        {
-            this.usersDb.put(user.email, user);
-        }
-    }
-
-    /**
-     * Gets the count of registered users.
-     *
-     * @return registered users count
-     */
-    public int getUserCount()
-    {
-        return this.usersDb.size();
-    }
-
-    /**
-     * Gets the count of active carts.
-     *
-     * @return active carts count
-     */
-    public int getCartCount()
-    {
-        return this.activeCarts.size();
-    }
-
-    /**
-     * Gets the count of placed orders.
-     *
-     * @return placed orders count
-     */
-    public int getOrderCount()
-    {
-        return this.ordersDb.size();
-    }
-
-    /**
-     * Gets the count of active sessions.
-     *
-     * @return active sessions count
-     */
-    public int getSessionCount()
-    {
-        return this.activeSessions.size();
-    }
-
-    /**
-     * Load the JSON catalog configuration file and load or generate catalog products.
-     */
-    private static void loadCatalogData()
+    public String renderTemplate(final String quality, final String pageName, final Map<String, String> customModel,
+                                 final Country country, final Map<String, String> trans, final User user,
+                                 final Cart cart, final String requestUri, final boolean isHtmx,
+                                 final String hxTarget, final boolean isPwaRouter, final TestSession session)
     {
         try
         {
-            String json = null;
-            final java.nio.file.Path fsPath = java.nio.file.Path.of("src/test/resources/ai-test-pages/verla-catalog.json");
-            if (java.nio.file.Files.exists(fsPath))
+            final String fullPath;
+            final int qIdx = requestUri.indexOf("?");
+            if (qIdx != -1)
             {
-                json = java.nio.file.Files.readString(fsPath, StandardCharsets.UTF_8);
+                fullPath = requestUri.substring(0, qIdx);
             }
             else
             {
-                try (final InputStream is = EmbeddedHtmlServer.class.getClassLoader().getResourceAsStream("ai-test-pages/verla-catalog.json"))
+                fullPath = requestUri;
+            }
+
+            final String pageResPath = "ai-test-pages/verla-" + quality + "/" + pageName;
+            final String rawBody = readResource(pageResPath);
+            if (rawBody == null)
+            {
+                return null;
+            }
+
+            final Map<String, String> model = new HashMap<>(customModel);
+            model.put("quality", quality);
+
+            final VerlaConfiguration headlessCfg = VerlaConfiguration.getInstance();
+            headlessTileBudget.get()[0] = (isHeadless(quality) && headlessCfg.isHeadlessEnabled())
+                                          ? headlessCfg.getHeadlessTileFanout()
+                                          : 0;
+            headlessRenderedTiles.get().clear();
+
+            for (final Map.Entry<String, String> entry : trans.entrySet())
+            {
+                final String val = entry.getValue();
+                final String resolvedVal = val != null ? val.replace("${country_symbol}", country.symbol) : "";
+                model.put("lang_" + entry.getKey(), resolvedVal);
+            }
+
+            model.putIfAbsent("lang_sortDefault", trans.getOrDefault("sortDefault", "de".equals(country.locale) ? "Standard" : "Default"));
+            model.putIfAbsent("lang_promoBanner", trans.getOrDefault("promoBanner", "de".equals(country.locale) ? "Kostenloser weltweiter Versand ab 150 €" : "Free worldwide shipping on orders over $150 USD"));
+            model.putIfAbsent("lang_adding", trans.getOrDefault("adding", "de".equals(country.locale) ? "Wird hinzugefügt..." : "Adding..."));
+            model.putIfAbsent("lang_added", trans.getOrDefault("added", "de".equals(country.locale) ? "Hinzugefügt!" : "Added!"));
+
+            model.put("country_name", country.name);
+            model.put("country_code", country.code);
+            model.put("country_symbol", country.symbol);
+            model.put("currency_symbol", country.symbol);
+            model.put("country_flag", VerlaCatalog.getCountryFlag(country.code));
+            model.put("cart_count", String.valueOf(cart.items.values().stream().mapToInt(Integer::intValue).sum()));
+            model.put("cart_items_count", String.valueOf(cart.items.values().stream().mapToInt(Integer::intValue).sum()));
+            model.put("cart_badge_html", getCartBadgeWrapperHtml(cart, trans, country, quality));
+            model.put("cart_dropdown_items_html", getCartDropdownHtml(cart, trans, country, quality));
+
+            if (isApparel(quality))
+            {
+                final double drawerSubtotal = calculateSubtotal(cart);
+                final int drawerCount = cart.items.values().stream().mapToInt(Integer::intValue).sum();
+                final double freeShippingThreshold = 75.0;
+                final double remaining = Math.max(0.0, freeShippingThreshold - drawerSubtotal);
+                final int progressPct = drawerSubtotal >= freeShippingThreshold ? 100 : (int) Math.min(100, Math.round((drawerSubtotal / freeShippingThreshold) * 100));
+
+                final String shippingStatus;
+                if (drawerSubtotal <= 0)
                 {
-                    if (is != null)
-                    {
-                        json = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
-                            .lines().collect(Collectors.joining("\n"));
-                    }
+                    shippingStatus = "Add " + formatPrice(freeShippingThreshold, country) + " for FREE delivery!";
                 }
-            }
-
-            if (json == null)
-            {
-                LOG.error("verla-catalog.json not found in filesystem or classpath resources");
-                return;
-            }
-
-            final Gson gson = new Gson();
-            catalogConfig = gson.fromJson(json, CatalogConfig.class);
-
-            for (final Country c : catalogConfig.countries)
-            {
-                countriesMap.put(c.code, c);
-            }
-
-            final List<Product> generated = generateCatalogProducts(catalogConfig);
-            catalogProducts.clear();
-            catalogProducts.addAll(generated);
-            LOG.info("VÉRLA Dynamic catalog loaded. Generated {} localized products.", catalogProducts.size());
-        }
-        catch (final Exception e)
-        {
-            e.printStackTrace();
-            LOG.error("Failed to parse and generate catalog data", e);
-        }
-    }
-
-    /**
-     * Programmatically generates varying products across category templates based on catalog config.
-     * Useful for regenerating the verla-products.json file.
-     */
-    public static List<Product> generateCatalogProducts(final CatalogConfig config)
-    {
-        final List<Product> products = new ArrayList<>();
-        final List<CategoryTemplate> categories = config.generation.categories;
-        final Map<String, List<String>> adjectives = config.generation.adjectives;
-        final Map<String, List<String>> colors = config.generation.colors;
-        final String defaultDesc = config.generation.descriptions.get("en");
-
-        int idCounter = 1000;
-        final Map<String, Integer> categoryCounts = new HashMap<>();
-        categoryCounts.put("tops", 120);
-        categoryCounts.put("bottoms", 85);
-        categoryCounts.put("outerwear", 45);
-        categoryCounts.put("footwear", 30);
-        categoryCounts.put("accessories", 60);
-
-        int totalIndex = 0;
-        for (final CategoryTemplate cat : categories)
-        {
-            final int limit = categoryCounts.getOrDefault(cat.id, 100);
-            for (int i = 0; i < limit; i++)
-            {
-                final SubcategoryTemplate sub = cat.subcategories.get(i % cat.subcategories.size());
-
-                final String adjEn = adjectives.get("en").get((i * 3) % adjectives.get("en").size());
-                final String colEn = colors.get("en").get((i * 7) % colors.get("en").size());
-
-                final String id = "SKU-" + cat.id.toUpperCase().substring(0, 3) + "-" + idCounter++;
-                final String slug = (adjEn + "-" + colEn + "-" + sub.id + "-" + i).toLowerCase().replace(" ", "-");
-
-                final Map<String, String> names = new HashMap<>();
-                final Map<String, String> descs = new HashMap<>();
-
-                for (final String locale : config.translations.keySet())
+                else if (remaining <= 0)
                 {
-                    final List<String> adjList = adjectives.get(locale);
-                    final List<String> colList = colors.get(locale);
-
-                    final String adj = (adjList != null) ? adjList.get((i * 3) % adjList.size()) : adjEn;
-                    final String col = (colList != null) ? colList.get((i * 7) % colList.size()) : colEn;
-                    
-                    final String subName = sub.getSubName(locale);
-
-                    final String name;
-                    if ("ja".equals(locale))
-                    {
-                        name = adj + col + subName;
-                    }
-                    else
-                    {
-                        name = adj + " " + col + " " + subName;
-                    }
-                    names.put(locale, name);
-
-                    final String descTemplate = config.generation.descriptions.get(locale);
-                    descs.put(locale, descTemplate != null ? descTemplate : defaultDesc);
-                }
-
-                final double basePrice = 19.99 + (totalIndex % 60) * 2.00 + (totalIndex % 10) * 0.49;
-                final String badge = (totalIndex % 15 == 0) ? "Sale" : ((totalIndex % 25 == 0) ? "New" : "");
-                final Double salePrice = "Sale".equals(badge) ? Double.valueOf(Math.round(basePrice * 0.8 * 100.0) / 100.0) : null;
-                final String hexColor = getColorHex(colEn);
-                final String svgPath = getSvgPathForSubcategory(sub.id, hexColor);
-
-                // Initialize inventory: 1-10 random stock, sometimes 0 (out of stock)
-                final Map<String, Integer> stockMap = new ConcurrentHashMap<>();
-                final List<String> sizes = getSizesForCategory(cat.id);
-                if (sizes.isEmpty())
-                {
-                    final int stockVal = totalIndex % 8 == 0 ? 0 : (totalIndex % 10) + 1;
-                    stockMap.put("", stockVal);
+                    shippingStatus = "🎉 FREE delivery unlocked!";
                 }
                 else
                 {
-                    for (final String sz : sizes)
+                    shippingStatus = "Add " + formatPrice(remaining, country) + " for FREE delivery!";
+                }
+
+                final StringBuilder sbDrawerItems = new StringBuilder();
+                if (cart.items.isEmpty())
+                {
+                    sbDrawerItems.append("<p class=\"text-sm text-muted py-8 text-center\" id=\"drawer-empty-msg\">")
+                                 .append(trans.getOrDefault("cartIsEmpty", "Your shopping bag is empty."))
+                                 .append("</p>");
+                }
+                else
+                {
+                    for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
                     {
-                        final int stockVal = (totalIndex + sz.hashCode()) % 11;
-                        stockMap.put(sz, stockVal);
+                        final String cartKey = entry.getKey();
+                        final Product p = catalog.lookupProductById(cartKey);
+                        if (p == null)
+                        {
+                            continue;
+                        }
+                        final String size = cartKey.contains(":") ? " (" + cartKey.split(":")[1] + ")" : "";
+                        final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+                        final double rowTotal = price * entry.getValue();
+                        final String displayName = escapeHtml(p.names.getOrDefault(country.locale, p.names.get("en"))) + size;
+
+                        sbDrawerItems.append("<div class=\"flex items-center gap-4 py-4 first:pt-0 border-b border-sand-200 last:border-b-0\">")
+                                     .append("  <div class=\"w-16 h-16 rounded-xl bg-sand-50 border border-sand-200 flex items-center justify-center p-2 shrink-0\">")
+                                     .append("    <svg viewBox=\"0 0 100 100\" class=\"w-full h-full text-terracotta-500\">").append(p.svgPath).append("</svg>")
+                                     .append("  </div>")
+                                     .append("  <div class=\"flex-grow min-w-0\">")
+                                     .append("    <div class=\"font-serif text-sm font-bold text-espresso truncate\">").append(displayName).append("</div>")
+                                     .append("    <div class=\"text-xs text-muted mt-0.5\">").append(entry.getValue()).append(" &times; ").append(formatPrice(price, country)).append("</div>")
+                                     .append("  </div>")
+                                     .append("  <div class=\"text-right shrink-0\">")
+                                     .append("    <div class=\"text-xs font-bold text-ink\">").append(formatPrice(rowTotal, country)).append("</div>")
+                                     .append("    <button type=\"button\" class=\"text-[11px] text-terracotta-600 hover:text-terracotta-800 underline mt-1 cursor-pointer\" onclick=\"removeFromDrawer('").append(escapeHtml(cartKey)).append("')\">").append(trans.getOrDefault("remove", "Remove")).append("</button>")
+                                     .append("  </div>")
+                                     .append("</div>");
                     }
                 }
 
-                products.add(new Product(id, slug, names, descs, cat.id, sub.id, basePrice, badge, salePrice, svgPath, colEn, stockMap));
-
-                totalIndex++;
+                model.put("drawer_cart_count", String.valueOf(drawerCount));
+                model.put("drawer_subtotal", formatPrice(drawerSubtotal, country));
+                model.put("drawer_shipping_status", shippingStatus);
+                model.put("drawer_shipping_progress", String.valueOf(progressPct));
+                model.put("drawer_cart_items_html", sbDrawerItems.toString());
             }
+
+            final String loginText = trans.getOrDefault("login", "Login");
+            final String accountText = trans.getOrDefault("account", "Account");
+            final String twUtilityBtn = "flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors hover:bg-sand-50 hover:text-terracotta-500 focus:bg-sand-50 focus:text-terracotta-500";
+            final String twUserIcon = "<svg class=\"h-4 w-4 shrink-0\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg>";
+            if (user != null)
+            {
+                if (isTailwindByClaude(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"" + twUtilityBtn + "\">" + twUserIcon + " " + accountText + "</a>");
+                }
+                else if (isApparel(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"flex items-center gap-1.5 p-2 rounded-lg text-xs font-semibold uppercase tracking-[0.05em] hover:bg-sand-50 transition-colors shrink-0\" id=\"user-nav-link\"><svg class=\"w-5 h-5\"><use xlink:href=\"#icon-user\"></use></svg> <span class=\"hidden xl:inline\">" + user.email.split("@")[0] + "</span></a>");
+                }
+                else if ("pwa-chaos".equals(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"wick-button wick-popover__trigger emotion-4k1asx\" data-dan-component=\"account-logo\" aria-label=\"My account\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><path d=\"M12 2.375a6.625 6.625 0 0 1 3.143 12.457c2.732.816 4.99 2.671 6.398 5.104a.626.626 0 0 1-1.082.627c-1.712-2.958-4.812-4.938-8.459-4.938s-6.747 1.98-8.459 4.938a.626.626 0 0 1-1.082-.626c1.408-2.434 3.666-4.289 6.396-5.105A6.625 6.625 0 0 1 12 2.375\"/></svg><span style=\"font-size:12px;font-weight:600;margin-left:4px;\">" + user.email.split("@")[0] + "</span></a>");
+                }
+                else if ("apocalypse".equals(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"apoc-icon-btn\" id=\"user-account-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> <span style=\"color:var(--apoc-gold);\">" + user.email.split("@")[0] + "</span></a>");
+                }
+                else if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
+                {
+                    model.put("user_nav_status", "<div onclick=\"location.href='/verla-" + quality + "/account.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + user.email.split("@")[0] + "</div>");
+                }
+                else
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"utility-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + accountText + "</a>");
+                }
+            }
+            else
+            {
+                if (isTailwindByClaude(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"" + twUtilityBtn + "\">" + twUserIcon + " " + loginText + "</a>");
+                }
+                else if (isApparel(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"flex items-center gap-1.5 p-2 rounded-lg text-xs font-semibold uppercase tracking-[0.05em] hover:bg-sand-50 transition-colors shrink-0\" id=\"user-nav-link\"><svg class=\"w-5 h-5\"><use xlink:href=\"#icon-user\"></use></svg> <span class=\"hidden xl:inline\">" + loginText + "</span></a>");
+                }
+                else if ("pwa-chaos".equals(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"wick-button wick-popover__trigger emotion-4k1asx\" data-dan-component=\"account-logo\" aria-label=\"Sign In\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><path d=\"M12 2.375a6.625 6.625 0 0 1 3.143 12.457c2.732.816 4.99 2.671 6.398 5.104a.626.626 0 0 1-1.082.627c-1.712-2.958-4.812-4.938-8.459-4.938s-6.747 1.98-8.459 4.938a.626.626 0 0 1-1.082-.626c1.408-2.434 3.666-4.289 6.396-5.105A6.625 6.625 0 0 1 12 2.375\"/></svg><span style=\"font-size:12px;font-weight:600;margin-left:4px;\">" + loginText + "</span></a>");
+                }
+                else if ("apocalypse".equals(quality))
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"apoc-icon-btn\" id=\"user-login-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> <span class=\"ps-txt ps-txt-login\"></span></a>");
+                }
+                else if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
+                {
+                    model.put("user_nav_status", "<div onclick=\"location.href='/verla-" + quality + "/login.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + loginText + "</div>");
+                }
+                else
+                {
+                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"utility-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + loginText + "</a>");
+                }
+            }
+
+            if ("index.html".equals(pageName))
+            {
+                final StringBuilder sb = new StringBuilder();
+                final List<Product> allProds = catalog.getProducts();
+                for (int i = 0; i < 8 && i < allProds.size(); i++)
+                {
+                    sb.append(renderProductCard(allProds.get(i), country, trans, quality, session));
+                }
+                model.put("featured_products", sb.toString());
+                model.put("search_query", "");
+            }
+            else if ("plp.html".equals(pageName))
+            {
+                final String q = getQueryParam(requestUri, "q").toLowerCase();
+                final String pageStr = getQueryParam(requestUri, "page");
+                final int page = pageStr.isEmpty() ? 1 : Integer.parseInt(pageStr);
+
+                final String category;
+                if (fullPath.contains("/c/"))
+                {
+                    final String catPart = fullPath.substring(fullPath.lastIndexOf("/c/") + 3);
+                    category = catPart.contains(".html") ? catPart.substring(0, catPart.indexOf(".html")) : catPart;
+                }
+                else
+                {
+                    category = getQueryParam(requestUri, "category");
+                }
+
+                final String subcat = getQueryParam(requestUri, "subcategory");
+                final String sort = getQueryParam(requestUri, "sort");
+
+                final List<String> activeColors = getQueryParamValues(requestUri, "color");
+                final List<String> activePrices = getQueryParamValues(requestUri, "price");
+                final List<String> activeSales = getQueryParamValues(requestUri, "sale");
+
+                final List<Product> filtered = catalog.getProducts().stream().filter(p -> {
+                    if (!category.isEmpty() && !p.category.equalsIgnoreCase(category)) return false;
+                    if (!subcat.isEmpty() && !p.subcategory.equalsIgnoreCase(subcat)) return false;
+                    if (!q.isEmpty())
+                    {
+                        final boolean nameMatch = p.names.values().stream()
+                            .anyMatch((final String name) -> name.toLowerCase().contains(q));
+                        final boolean descMatch = p.descriptions.values().stream()
+                            .anyMatch((final String desc) -> desc.toLowerCase().contains(q));
+                        if (!nameMatch && !descMatch)
+                        {
+                            return false;
+                        }
+                    }
+
+                    if (!activeColors.isEmpty())
+                    {
+                        boolean colorMatch = false;
+                        for (final String col : activeColors)
+                        {
+                            if (p.color != null && p.color.equalsIgnoreCase(col))
+                            {
+                                colorMatch = true;
+                                break;
+                            }
+                        }
+                        if (!colorMatch) return false;
+                    }
+
+                    if (!activePrices.isEmpty())
+                    {
+                        final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+                        boolean priceMatch = false;
+                        for (final String pr : activePrices)
+                        {
+                            if ("0-50".equals(pr) && price < 50.0) priceMatch = true;
+                            else if ("50-100".equals(pr) && price >= 50.0 && price <= 100.0) priceMatch = true;
+                            else if ("100-200".equals(pr) && price > 100.0) priceMatch = true;
+                        }
+                        if (!priceMatch) return false;
+                    }
+
+                    if (!activeSales.isEmpty() && activeSales.contains("true"))
+                    {
+                        if (p.salePrice == null) return false;
+                    }
+
+                    return true;
+                }).collect(Collectors.toList());
+
+                if ("price-asc".equals(sort))
+                {
+                    filtered.sort((p1, p2) -> Double.compare(p1.salePrice != null ? p1.salePrice : p1.basePrice, p2.salePrice != null ? p2.salePrice : p2.basePrice));
+                }
+                else if ("price-desc".equals(sort))
+                {
+                    filtered.sort((p1, p2) -> Double.compare(p2.salePrice != null ? p2.salePrice : p2.basePrice, p1.salePrice != null ? p1.salePrice : p1.basePrice));
+                }
+
+                model.put("total_products_count", String.valueOf(filtered.size()));
+                model.put("plp_heading", category.isEmpty() ? (q.isEmpty() ? trans.getOrDefault("all", "All Products") : trans.getOrDefault("search", "Search") + ": \"" + q + "\"") : trans.getOrDefault(category, category));
+                model.put("search_query", escapeHtml(q));
+
+                model.put("color_off_white_checked", activeColors.contains("off-white") ? "checked" : "");
+                model.put("color_charcoal_checked", activeColors.contains("charcoal") ? "checked" : "");
+                model.put("color_olive_checked", activeColors.contains("olive") ? "checked" : "");
+                model.put("color_sand_checked", activeColors.contains("sand") ? "checked" : "");
+                model.put("color_navy_checked", activeColors.contains("navy") ? "checked" : "");
+                model.put("color_taupe_checked", activeColors.contains("taupe") ? "checked" : "");
+                model.put("color_sage_checked", activeColors.contains("sage") ? "checked" : "");
+                model.put("color_terracotta_checked", activeColors.contains("terracotta") ? "checked" : "");
+
+                model.put("price_0_50_checked", activePrices.contains("0-50") ? "checked" : "");
+                model.put("price_50_100_checked", activePrices.contains("50-100") ? "checked" : "");
+                model.put("price_100_200_checked", activePrices.contains("100-200") ? "checked" : "");
+
+                model.put("sale_checked", activeSales.contains("true") ? "checked" : "");
+
+                model.put("all_active_weight", category.isEmpty() ? "600" : "400");
+                model.put("all_active_color", category.isEmpty() ? "var(--color-accent)" : "var(--color-text-secondary)");
+                model.put("tops_active_weight", "tops".equals(category) ? "600" : "400");
+                model.put("tops_active_color", "tops".equals(category) ? "var(--color-accent)" : "var(--color-text-secondary)");
+                model.put("bottoms_active_weight", "bottoms".equals(category) ? "600" : "400");
+                model.put("bottoms_active_color", "bottoms".equals(category) ? "var(--color-accent)" : "var(--color-text-secondary)");
+                model.put("outerwear_active_weight", "outerwear".equals(category) ? "600" : "400");
+                model.put("outerwear_active_color", "outerwear".equals(category) ? "var(--color-accent)" : "var(--color-text-secondary)");
+                model.put("footwear_active_weight", "footwear".equals(category) ? "600" : "400");
+                model.put("footwear_active_color", "footwear".equals(category) ? "var(--color-accent)" : "var(--color-text-secondary)");
+                model.put("accessories_active_weight", "accessories".equals(category) ? "600" : "400");
+                model.put("accessories_active_color", "accessories".equals(category) ? "var(--color-accent)" : "var(--color-text-secondary)");
+
+                final String activeCls = "font-semibold text-terracotta-500";
+                final String inactiveCls = "font-normal text-muted";
+                model.put("all_active_class", category.isEmpty() ? activeCls : inactiveCls);
+                model.put("tops_active_class", "tops".equals(category) ? activeCls : inactiveCls);
+                model.put("bottoms_active_class", "bottoms".equals(category) ? activeCls : inactiveCls);
+                model.put("outerwear_active_class", "outerwear".equals(category) ? activeCls : inactiveCls);
+                model.put("footwear_active_class", "footwear".equals(category) ? activeCls : inactiveCls);
+                model.put("accessories_active_class", "accessories".equals(category) ? activeCls : inactiveCls);
+
+                model.put("sort_default_selected", sort.isEmpty() || "default".equals(sort) ? "selected" : "");
+                model.put("sort_asc_selected", "price-asc".equals(sort) ? "selected" : "");
+                model.put("sort_desc_selected", "price-desc".equals(sort) ? "selected" : "");
+
+                final String filterUrl = fullPath.contains("?") ? fullPath.substring(0, fullPath.indexOf("?")) : fullPath;
+                model.put("filter_url", filterUrl);
+
+                final int pageSize = 12;
+                final int fromIndex = (page - 1) * pageSize;
+                final int toIndex = Math.min(fromIndex + pageSize, filtered.size());
+
+                final StringBuilder sb = new StringBuilder();
+                if (fromIndex < filtered.size())
+                {
+                    final List<Product> paginated = filtered.subList(fromIndex, toIndex);
+                    for (int j = 0; j < paginated.size(); j++)
+                    {
+                        final Product p = paginated.get(j);
+                        final boolean isLast = (j == paginated.size() - 1) && (toIndex < filtered.size());
+                        if (isLast)
+                        {
+                            final StringBuilder filterParams = new StringBuilder();
+                            for (final String col : activeColors)
+                            {
+                                try
+                                {
+                                    filterParams.append("&color=").append(URLEncoder.encode(col, StandardCharsets.UTF_8.name()));
+                                }
+                                catch (final Exception e)
+                                {
+                                    filterParams.append("&color=").append(col);
+                                }
+                            }
+                            for (final String pr : activePrices)
+                            {
+                                try
+                                {
+                                    filterParams.append("&price=").append(URLEncoder.encode(pr, StandardCharsets.UTF_8.name()));
+                                }
+                                catch (final Exception e)
+                                {
+                                    filterParams.append("&price=").append(pr);
+                                }
+                            }
+                            for (final String sl : activeSales)
+                            {
+                                try
+                                {
+                                    filterParams.append("&sale=").append(URLEncoder.encode(sl, StandardCharsets.UTF_8.name()));
+                                }
+                                catch (final Exception e)
+                                {
+                                    filterParams.append("&sale=").append(sl);
+                                }
+                            }
+
+                            final String nextUrl = filterUrl + "?page=" + (page + 1) + 
+                                                   (category.isEmpty() ? "" : "&category=" + category) +
+                                                   (subcat.isEmpty() ? "" : "&subcategory=" + subcat) +
+                                                   (sort.isEmpty() ? "" : "&sort=" + sort) +
+                                                   (q.isEmpty() ? "" : "&q=" + q) +
+                                                   filterParams.toString();
+                            sb.append(renderProductCardInfinite(p, country, trans, quality, nextUrl, session));
+                        }
+                        else
+                        {
+                            sb.append(renderProductCard(p, country, trans, quality, session));
+                        }
+                    }
+                }
+                model.put("plp_products", sb.toString());
+            }
+            else if ("pdp.html".equals(pageName))
+            {
+                final String slug = fullPath.substring(fullPath.lastIndexOf("/") + 1).replace(".html", "");
+                final Product prod = catalog.lookupProductBySlug(slug);
+                if (prod != null)
+                {
+                    model.put("product_name", prod.names.getOrDefault(country.locale, prod.names.get("en")));
+                    model.put("product_id", prod.id);
+                    model.put("product_category", prod.category);
+                    model.put("product_category_name", trans.getOrDefault(prod.category, prod.category));
+                    model.put("product_subcategory_name", prod.subcategory.toUpperCase());
+
+                    if (prod.salePrice != null)
+                    {
+                        if (isTailwindByClaude(quality) || isApparel(quality))
+                        {
+                            model.put("product_price_html", "<span class=\"text-muted line-through text-lg mr-2\">" + formatPrice(prod.basePrice, country) + "</span>" +
+                                                            "<span class=\"font-bold text-terracotta-600 text-2xl\">" + formatPrice(prod.salePrice, country) + "</span>");
+                        }
+                        else
+                        {
+                            model.put("product_price_html", "<span class=\"original\" style=\"text-decoration: line-through; opacity: 0.6; margin-right: 8px;\">" + formatPrice(prod.basePrice, country) + "</span>" +
+                                                            "<span class=\"sale\" style=\"color: #c87a53;\">" + formatPrice(prod.salePrice, country) + "</span>");
+                        }
+                    }
+                    else
+                    {
+                        model.put("product_price_html", "<span>" + formatPrice(prod.basePrice, country) + "</span>");
+                    }
+                    model.put("product_desc", prod.descriptions.getOrDefault(country.locale, prod.descriptions.get("en")));
+                    model.put("product_svg_content", prod.svgPath);
+                    model.put("product_badge_html", prod.badge.isEmpty() ? "" : "<span class=\"" + (isTailwindByClaude(quality) || isApparel(quality) ? "absolute left-4 top-4 z-[5] rounded-sm bg-terracotta-500 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white" : "product-badge") + "\">" + prod.badge.toUpperCase() + "</span>");
+                    model.put("product_sizes_html", getProductSizesSelectHtml(prod.id, prod.category, trans, quality, session));
+                }
+                else
+                {
+                    return "404 Product Not Found";
+                }
+            }
+            else if ("cart.html".equals(pageName))
+            {
+                model.put("cart_content_html", getCartContentHtml(cart, country, trans, quality));
+            }
+            else if ("checkout.html".equals(pageName))
+            {
+                model.put("address_fields_html", getAddressFieldsHtml(country.code, country.locale, trans, "shipping-", quality));
+
+                final StringBuilder options = new StringBuilder();
+                for (final Country c : catalog.getCountries())
+                {
+                    final String sel = c.code.equals(country.code) ? "selected" : "";
+                    final String displayName = c.getLocalizedName(country.locale);
+                    options.append("<option value=\"").append(c.code).append("\" ").append(sel).append(">")
+                           .append(displayName).append(" (").append(c.symbol).append(")</option>");
+                }
+                model.put("country_options_html", options.toString());
+
+                final double subtotal = calculateSubtotal(cart);
+                final double discount = calculateDiscount(cart, subtotal);
+                final double shipping = calculateShipping(cart, subtotal);
+                final double tax = Math.round((subtotal - discount) * 0.1 * 100.0) / 100.0;
+                final double total = subtotal - discount + shipping + tax;
+
+                model.put("checkout_subtotal", formatPrice(subtotal, country));
+                model.put("checkout_shipping", formatPrice(shipping, country));
+                model.put("checkout_tax", formatPrice(tax, country));
+                model.put("checkout_total", formatPrice(total, country));
+
+                if (discount > 0)
+                {
+                    model.put("checkout_discount_row", "<div " + (isTailwindByClaude(quality) || isApparel(quality) ? "class=\"flex justify-between text-success\"" : "style=\"display:flex;justify-content:space-between;color:var(--color-success);\"") + ">" +
+                              "  <span>Discount (" + cart.coupon.toUpperCase() + ")</span>" +
+                              "  <span>-" + formatPrice(discount, country) + "</span>" +
+                              "</div>");
+                }
+                else
+                {
+                    model.put("checkout_discount_row", "");
+                }
+
+                final StringBuilder itemsSum = new StringBuilder();
+                for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
+                {
+                    final Product p = catalog.lookupProductById(entry.getKey());
+                    if (p != null)
+                    {
+                        final String[] parts = entry.getKey().split(":");
+                        final String size = parts.length > 1 ? " (" + parts[1] + ")" : "";
+                        final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+                        itemsSum.append("<div " + (isTailwindByClaude(quality) || isApparel(quality) ? "class=\"mb-2 flex justify-between text-[13px]\"" : "style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;\"") + ">")
+                                .append("  <span>").append(p.names.getOrDefault(country.locale, p.names.get("en"))).append(size).append(" &times; ").append(entry.getValue()).append("</span>")
+                                .append("  <span>").append(formatPrice(price * entry.getValue(), country)).append("</span>")
+                                .append("</div>");
+                    }
+                }
+                if ("freegift".equals(cart.coupon))
+                {
+                    itemsSum.append("<div " + (isTailwindByClaude(quality) || isApparel(quality) ? "class=\"mb-2 flex justify-between text-[13px] text-success\"" : "style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;color:var(--color-success);\"") + ">")
+                            .append("  <span>VÉRLA Signature Tote Bag &times; 1</span>")
+                            .append("  <span>Free Gift</span>")
+                            .append("</div>");
+                }
+                model.put("checkout_items_summary", itemsSum.toString());
+
+                if (user != null)
+                {
+                    model.putIfAbsent("input_firstName", "");
+                    model.putIfAbsent("input_lastName", "");
+                    model.putIfAbsent("input_email", user.email);
+                }
+
+                model.putIfAbsent("input_firstName", "");
+                model.putIfAbsent("input_lastName", "");
+                model.putIfAbsent("input_email", "");
+                model.putIfAbsent("input_cardNumber", "");
+                model.putIfAbsent("input_cardExpiry", "");
+                model.putIfAbsent("input_cardCvv", "");
+
+                model.putIfAbsent("err_firstName", "");
+                model.putIfAbsent("err_lastName", "");
+                model.putIfAbsent("err_email", "");
+                model.putIfAbsent("err_cardNumber", "");
+                model.putIfAbsent("err_cardExpiry", "");
+                model.putIfAbsent("err_cardCvv", "");
+
+                model.put("card_visa_selected", "");
+                model.put("card_mastercard_selected", "");
+                model.put("card_amex_selected", "");
+            }
+            else if ("account.html".equals(pageName))
+            {
+                if (user == null)
+                {
+                    return "<script>window.location='login.html'</script>";
+                }
+
+                final StringBuilder ordersList = new StringBuilder();
+                if (user.orders.isEmpty())
+                {
+                    ordersList.append("<p style=\"color:var(--color-text-secondary);\">").append(trans.getOrDefault("noOrders", "No orders found.")).append("</p>");
+                }
+                else
+                {
+                    for (final Order order : user.orders)
+                    {
+                        ordersList.append("<div style=\"border:1px solid var(--color-border);padding:16px;border-radius:var(--border-radius);background:var(--color-bg-secondary);\">")
+                                  .append("  <div style=\"display:flex;justify-content:space-between;font-weight:600;margin-bottom:10px;\">")
+                                  .append("    <span>").append(order.orderNumber).append("</span>")
+                                  .append("    <span>").append(formatPrice(order.total, country)).append("</span>")
+                                  .append("  </div>")
+                                  .append("  <div style=\"font-size:12px;color:var(--color-text-secondary);\">")
+                                  .append("    Status: <span style=\"color:var(--color-success);font-weight:500;\">").append(order.status).append("</span> &middot; ")
+                                  .append("    Shipped to: ").append(order.shippingAddress.street).append(", ").append(order.shippingAddress.city)
+                                  .append("  </div>")
+                                  .append("</div>");
+                    }
+                }
+                model.put("account_orders_html", ordersList.toString());
+
+                final StringBuilder addressList = new StringBuilder();
+                if (user.addresses.isEmpty())
+                {
+                    addressList.append("<p style=\"color:var(--color-text-secondary);\">").append(trans.getOrDefault("noAddresses", "No addresses found.")).append("</p>");
+                }
+                else
+                {
+                    for (final Address addr : user.addresses)
+                    {
+                        addressList.append("<div style=\"border:1px solid var(--color-border);padding:16px;border-radius:var(--border-radius);\">")
+                                  .append("  <div style=\"font-weight:600;margin-bottom:4px;\">").append(addr.street).append("</div>")
+                                  .append("  <div style=\"font-size:13px;color:var(--color-text-secondary);margin-bottom:12px;\">")
+                                  .append(addr.city).append(", ").append(addr.state).append(" ").append(addr.postcode).append(" &middot; ").append(addr.country)
+                                  .append("  </div>")
+                                  .append("  <button hx-post=\"api/auth/address/delete?id=").append(addr.id).append("\" hx-target=\"#account-page-container\" hx-swap=\"outerHTML\" style=\"color:var(--color-error);font-size:12px;font-weight:500;\">").append(trans.getOrDefault("delete", "Delete")).append("</button>")
+                                  .append("</div>");
+                    }
+                }
+                model.put("account_addresses_html", addressList.toString());
+
+                final StringBuilder cardList = new StringBuilder();
+                if (user.cards.isEmpty())
+                {
+                    cardList.append("<p style=\"color:var(--color-text-secondary);\">").append(trans.getOrDefault("noCards", "No cards found.")).append("</p>");
+                }
+                else
+                {
+                    for (final Card card : user.cards)
+                    {
+                        final String masked = "**** **** **** " + card.number.substring(Math.max(0, card.number.length() - 4));
+                        cardList.append("<div style=\"border:1px solid var(--color-border);padding:16px;border-radius:var(--border-radius);\">")
+                                .append("  <div style=\"font-weight:600;margin-bottom:4px;\">").append(card.type).append("</div>")
+                                .append("  <div style=\"font-size:13px;color:var(--color-text-secondary);margin-bottom:12px;\">")
+                                .append(masked).append(" (Exp: ").append(card.expiry).append(")")
+                                .append("  </div>")
+                                .append("  <button hx-post=\"api/auth/card/delete?id=").append(card.id).append("\" hx-target=\"#account-page-container\" hx-swap=\"outerHTML\" style=\"color:var(--color-error);font-size:12px;font-weight:500;\">").append(trans.getOrDefault("delete", "Delete")).append("</button>")
+                                .append("</div>");
+                    }
+                }
+                model.put("account_cards_html", cardList.toString());
+
+                model.put("address_fields_html", getAddressFieldsHtml(country.code, country.locale, trans, "account-", quality));
+
+                final StringBuilder options = new StringBuilder();
+                for (final Country c : catalog.getCountries())
+                {
+                    final String sel = c.code.equals(country.code) ? "selected" : "";
+                    final String displayName = c.getLocalizedName(country.locale);
+                    options.append("<option value=\"").append(c.code).append("\" ").append(sel).append(">")
+                           .append(displayName).append(" (").append(c.symbol).append(")</option>");
+                }
+                model.put("country_options_html", options.toString());
+
+                model.putIfAbsent("password_status", "");
+                model.putIfAbsent("password_error", "");
+            }
+
+            model.putIfAbsent("auth_error", "");
+            model.putIfAbsent("input_email", "");
+            model.putIfAbsent("err_email", "");
+            model.putIfAbsent("err_password", "");
+            model.putIfAbsent("err_confirmPassword", "");
+
+            if (LOG.isDebugEnabled())
+            {
+                LOG.debug("renderTemplate SUT page variables resolved: {}", model);
+            }
+
+            String bodyHtml = rawBody;
+            for (final Map.Entry<String, String> entry : model.entrySet())
+            {
+                bodyHtml = bodyHtml.replace("${" + entry.getKey() + "}", entry.getValue() != null ? entry.getValue() : "");
+            }
+
+            bodyHtml = bodyHtml.replaceAll("\\$\\{[a-zA-Z_0-9-]+\\}", "");
+
+            if (isHtmx)
+            {
+                if (("plp.html".equals(pageName) || "category.html".equals(pageName))
+                    && !isPwaRouter
+                    && (requestUri.contains("page=") || (hxTarget != null && (hxTarget.contains("product-grid") || hxTarget.contains("plp-product-grid") || hxTarget.contains("products")))))
+                {
+                    return model.getOrDefault("plp_products", "");
+                }
+                return bodyHtml;
+            }
+
+            final String rawLayout = readResource("ai-test-pages/verla-" + quality + "/layout.html");
+            final Map<String, String> layoutModel = new HashMap<>(model);
+            layoutModel.put("body", bodyHtml);
+
+            final StringBuilder countriesList = new StringBuilder();
+            for (final Country c : catalog.getCountries())
+            {
+                final String selectedClass = c.code.equals(country.code) ? "selected" : "";
+                if (isTailwindByClaude(quality) || isApparel(quality))
+                {
+                    countriesList.append("<li data-selected=\"").append(c.code.equals(country.code)).append("\" class=\"").append(TW_COUNTRY_ITEM).append(" flex items-center gap-2 cursor-pointer\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
+                                 .append("<span class=\"text-base leading-none\">").append(VerlaCatalog.getCountryFlag(c.code)).append("</span> ")
+                                 .append("<span>").append(c.name).append(" (").append(c.symbol).append(")</span></li>");
+                }
+                else if ("apocalypse".equals(quality))
+                {
+                    countriesList.append("<li class=\"country-item ").append(selectedClass).append("\" data-country=\"").append(c.code).append("\" style=\"display:flex; align-items:center; gap:8px; cursor:pointer;\" onclick=\"selectApocalypseCountry('").append(c.code).append("');\">")
+                                 .append("<span style=\"font-size:16px;\">").append(VerlaCatalog.getCountryFlag(c.code)).append("</span> ")
+                                 .append("<span>").append(c.name).append(" (").append(c.symbol).append(")</span></li>");
+                }
+                else if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
+                {
+                    countriesList.append("<div class=\"country-item ").append(selectedClass).append("\" style=\"padding:10px;cursor:pointer;\" onclick=\"document.cookie='verla_country=").append(c.code).append(";path=/';location.reload();\">")
+                                 .append(c.name).append(" (").append(c.symbol).append(")</div>");
+                }
+                else
+                {
+                    countriesList.append("<li class=\"country-item ").append(selectedClass).append("\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
+                                 .append(c.name).append(" (").append(c.symbol).append(")</li>");
+                }
+            }
+            layoutModel.put("country_items_list", countriesList.toString());
+
+            if (isHeadless(quality))
+            {
+                final VerlaConfiguration cfg = VerlaConfiguration.getInstance();
+                if (cfg.isHeadlessEnabled())
+                {
+                    final List<Product> tiles = new ArrayList<>(headlessRenderedTiles.get());
+                    if (tiles.isEmpty())
+                    {
+                        final List<Product> allProds = catalog.getProducts();
+                        for (int i = 0; i < 8 && i < allProds.size(); i++)
+                        {
+                            tiles.add(allProds.get(i));
+                        }
+                    }
+                    layoutModel.put("hydration_state", buildHydrationBlob(tiles, country, cfg.getHeadlessHydrationKb(), session));
+                    layoutModel.put("icon_sprite", buildIconSprite(cfg.getHeadlessSpriteKb()));
+                    layoutModel.put("injected_styles", buildInjectedStyleTags(cfg.getHeadlessStyleTagCount()));
+                    layoutModel.put("headless_boot_ms",
+                                    Long.toString(cfg.calculateDelay(cfg.getHeadlessBootMinMs(), cfg.getHeadlessBootMaxMs())));
+                    layoutModel.put("headless_enabled", "true");
+                }
+                else
+                {
+                    layoutModel.put("hydration_state", "{}");
+                    layoutModel.put("icon_sprite", "");
+                    layoutModel.put("injected_styles", "");
+                    layoutModel.put("headless_boot_ms", "0");
+                    layoutModel.put("headless_enabled", "false");
+                }
+            }
+
+            String layoutHtml = rawLayout;
+            for (final Map.Entry<String, String> entry : layoutModel.entrySet())
+            {
+                layoutHtml = layoutHtml.replace("${" + entry.getKey() + "}", entry.getValue() != null ? entry.getValue() : "");
+            }
+            return layoutHtml.replaceAll("\\$\\{[a-zA-Z_0-9-]+\\}", "");
         }
-        return products;
+        catch (final Exception e)
+        {
+            LOG.error("Failed to render template page: {}", pageName, e);
+            return "500 Internal Template Error";
+        }
     }
 
-    private static List<String> getSizesForCategory(final String category)
+    public String renderProductCard(final Product p, final Country country, final Map<String, String> trans, final String quality, final TestSession session)
     {
-        if ("accessories".equals(category))
+        final int[] budget = headlessTileBudget.get();
+        if (isHeadless(quality) && budget[0] > 0)
         {
-            return List.of();
+            budget[0]--;
+            headlessRenderedTiles.get().add(p);
+            return renderHeadlessTileSkeleton(p);
         }
-        else if ("bottoms".equals(category))
+
+        final double basePrice = p.basePrice;
+        final Double salePrice = p.salePrice;
+        final boolean tw = isTailwindByClaude(quality);
+
+        final String badgeHtml;
+        if (!p.badge.isEmpty())
         {
-            return List.of("28", "30", "32", "34", "36", "38");
-        }
-        else if ("footwear".equals(category) || "shoes".equals(category))
-        {
-            return List.of("39", "40", "41", "42", "43", "44");
+            if (isApparel(quality))
+            {
+                final String badgeTone = "sold-out".equalsIgnoreCase(p.badge) ? "bg-muted" : "bg-terracotta-500";
+                badgeHtml = "<span class=\"mbf-sale-badge rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white " + badgeTone + "\">" + p.badge.toUpperCase() + "</span>";
+            }
+            else if (tw)
+            {
+                final String badgeTone = "sold-out".equalsIgnoreCase(p.badge) ? "bg-muted" : "bg-terracotta-500";
+                badgeHtml = "<span class=\"absolute left-4 top-4 z-[5] rounded-sm px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white " + badgeTone + "\">" + p.badge.toUpperCase() + "</span>";
+            }
+            else
+            {
+                badgeHtml = "<span class=\"product-badge " + ("sold-out".equalsIgnoreCase(p.badge) ? "sold-out" : "") + "\">" + p.badge.toUpperCase() + "</span>";
+            }
         }
         else
         {
-            return List.of("XS", "S", "M", "L", "XL");
+            badgeHtml = "";
+        }
+
+        final String priceHtml;
+        if (salePrice != null)
+        {
+            if (tw || isApparel(quality))
+            {
+                priceHtml = "<span class=\"text-muted line-through\">" + formatPrice(basePrice, country) + "</span>" +
+                            "<span class=\"font-semibold text-terracotta-500\">" + formatPrice(salePrice, country) + "</span>";
+            }
+            else
+            {
+                priceHtml = "<span class=\"original\">" + formatPrice(basePrice, country) + "</span>" +
+                            "<span class=\"sale\">" + formatPrice(salePrice, country) + "</span>";
+            }
+        }
+        else
+        {
+            priceHtml = "<span>" + formatPrice(basePrice, country) + "</span>";
+        }
+
+        final String localeName = p.names.getOrDefault(country.locale, p.names.get("en"));
+        final String pdpLink = "/verla-" + quality + "/p/" + p.slug + ".html";
+
+        if (isApparel(quality))
+        {
+            final String stockJson = escapeHtml(GSON.toJson(session.getProductInventory().getOrDefault(p.id, Map.of())));
+            final String cardId = getDynamicId("mbf-tile-root", session);
+            final String nowPrice = formatPrice(salePrice != null ? salePrice : basePrice, country);
+            final String wasPrice = salePrice != null ? formatPrice(basePrice, country) : "";
+
+            return "<div id=\"" + cardId + "\" class=\"mbf-card-root group relative flex flex-col bg-white rounded-2xl border border-sand-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow\" data-mbf-component=\"product-card\" data-pid=\"" + p.id + "\">" +
+                   "  <div class=\"mbf-tile-wrapper relative flex aspect-square items-center justify-center bg-sand-50 p-4\">" +
+                   "    <div class=\"mbf-badge-layer absolute top-4 left-4 z-10 flex flex-col items-start gap-1\">" +
+                   "      <span class=\"mbf-bundle-badge bg-terracotta-500 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider\">4+1 FREE</span>" +
+                   (badgeHtml.isEmpty() ? "" : "      " + badgeHtml) +
+                   "    </div>" +
+                   "    <div class=\"mbf-link-overlay w-full h-full flex items-center justify-center cursor-pointer\" onclick=\"location.href='" + pdpLink + "'\" role=\"link\" tabindex=\"0\">" +
+                   "      <div class=\"chakra-stack w-3/4 h-3/4 flex items-center justify-center transition-transform duration-300 group-hover:scale-105\">" +
+                   "        <svg viewBox=\"0 0 100 100\" class=\"w-full h-full text-terracotta-500\">" + p.svgPath + "</svg>" +
+                   "      </div>" +
+                   "    </div>" +
+                   "  </div>" +
+                   "  <div class=\"mbf-card-body p-4 flex flex-col flex-1 justify-between\">" +
+                   "    <div class=\"mbf-swatch-pills flex items-center gap-1.5 mb-2.5\">" +
+                   "      <span class=\"mbf-swatch-dot w-3.5 h-3.5 rounded-full bg-[#1A1A1A] border-2 border-white shadow-xs cursor-pointer\" title=\"Nero\"></span>" +
+                   "      <span class=\"mbf-swatch-dot w-3.5 h-3.5 rounded-full bg-[#B66A45] border-2 border-white shadow-xs cursor-pointer\" title=\"Terracotta\"></span>" +
+                   "      <span class=\"mbf-swatch-dot w-3.5 h-3.5 rounded-full bg-[#E6E2DA] border-2 border-white shadow-xs cursor-pointer\" title=\"Sabbia\"></span>" +
+                   "    </div>" +
+                   "    <div class=\"mbf-card-meta\">" +
+                   "      <div class=\"mbf-product-title font-serif text-sm font-bold text-espresso cursor-pointer hover:text-terracotta-500 transition-colors\" onclick=\"location.href='" + pdpLink + "'\">" +
+                   "        <span>" + escapeHtml(localeName) + "</span>" +
+                   "      </div>" +
+                   "      <div class=\"mbf-price-row mt-1 flex items-baseline gap-2\">" +
+                   "        <span class=\"mbf-now-price text-sm font-bold text-ink\">" + nowPrice + "</span>" +
+                   (salePrice != null ? "        <span class=\"mbf-was-price text-xs text-muted line-through\">" + wasPrice + "</span>" : "") +
+                   "      </div>" +
+                   "    </div>" +
+                   "    <div class=\"mbf-quick-add-wrap mt-3 relative\">" +
+                   "      <button type=\"button\" class=\"product-quick-add w-full py-2.5 px-4 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold rounded-lg text-xs uppercase tracking-wider text-center cursor-pointer shadow-sm transition-colors\" " +
+                   "              data-quick-add data-state=\"idle\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" aria-label=\"Add " + escapeHtml(localeName) + " to shopping bag\">" +
+                   "        " + trans.getOrDefault("addToCart", "Add to Bag") +
+                   "      </button>" +
+                   "    </div>" +
+                   "  </div>" +
+                   "</div>";
+        }
+
+        if (tw)
+        {
+            final String stockJson = escapeHtml(GSON.toJson(session.getProductInventory().getOrDefault(p.id, Map.of())));
+
+            return "<article class=\"group relative flex flex-col overflow-hidden rounded-lg bg-white\">" +
+                   "  <div class=\"relative flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-sand-200 bg-sand-50\">" +
+                   "    " + badgeHtml +
+                   "    <a href=\"" + pdpLink + "\" aria-label=\"View details of " + escapeHtml(localeName) + "\" class=\"contents\">" +
+                   "      <svg viewBox=\"0 0 100 100\" class=\"h-[70%] w-[70%] text-terracotta-500 transition-transform duration-300 group-hover:scale-105\">" + p.svgPath + "</svg>" +
+                   "    </a>" +
+                   "    <button data-quick-add data-state=\"idle\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" aria-label=\"Add " + escapeHtml(localeName) + " to shopping cart\"" +
+                   "            class=\"absolute inset-x-0 bottom-0 w-full translate-y-full cursor-pointer bg-ink/95 py-3.5 text-center text-xs font-semibold uppercase tracking-[0.05em] text-white transition-transform duration-300 group-hover:translate-y-0 group-focus-within:translate-y-0 data-[state=adding]:translate-y-0 data-[state=adding]:cursor-not-allowed data-[state=adding]:bg-muted data-[state=added]:translate-y-0 data-[state=added]:bg-success\">" +
+                   "      " + trans.getOrDefault("addToCart", "Add to Cart") +
+                   "    </button>" +
+                   "  </div>" +
+                   "  <div class=\"pt-4\">" +
+                   "    <h3 class=\"mb-2 text-sm font-medium\"><a href=\"" + pdpLink + "\" class=\"transition-colors hover:text-terracotta-500\">" + localeName + "</a></h3>" +
+                   "    <div class=\"flex gap-3 text-sm\">" + priceHtml + "</div>" +
+                   "  </div>" +
+                   "</article>";
+        }
+
+        if ("bad".equals(quality))
+        {
+            return "<div class=\"product-card-bad\" style=\"border:1px solid #ccc;padding:10px;\" id=\"prod-info\">" +
+                   "  <div onclick=\"location.href='" + pdpLink + "'\" style=\"cursor:pointer;background:#eee;height:180px;display:flex;align-items:center;justify-content:center;\">" +
+                   "    <svg viewBox=\"0 0 100 100\" style=\"width:60%;height:60%;\">" + p.svgPath + "</svg>" +
+                   "  </div>" +
+                   "  <div style=\"padding-top:10px;\">" +
+                   "    <div class=\"product-title-bad\" style=\"font-weight:bold;\">" + localeName + "</div>" +
+                   "    <div class=\"product-price-bad\">" + priceHtml + "</div>" +
+                   "    <div class=\"add-btn product-quick-add\" style=\"background:#C87A53;color:white;text-align:center;padding:8px;margin-top:8px;cursor:pointer;\" " +
+                   "         hx-post=\"api/cart/add?productId=" + p.id + "\" hx-target=\"#cart-btn-wrapper\" hx-swap=\"outerHTML\">Add</div>" +
+                   "  </div>" +
+                   "</div>";
+        }
+        else if ("modern-bad".equals(quality))
+        {
+            final String stockJson = escapeHtml(GSON.toJson(session.getProductInventory().getOrDefault(p.id, Map.of())));
+            final String cardId = getDynamicId("react-hydrated-card", session);
+            final String btnId = getDynamicId("v-btn", session);
+
+            return "<div id=\"" + cardId + "\" class=\"" + getTailwindSoup() + "\">" +
+                   "  <div class=\"w-full flex flex-col justify-between h-full\">" +
+                   "    <div class=\"relative bg-gray-50 rounded-lg p-2 flex items-center justify-center h-44\">" +
+                   "      " + badgeHtml +
+                   "      <a href=\"" + pdpLink + "\" aria-label=\"View details of " + localeName + "\" class=\"w-full h-full flex items-center justify-center\">" +
+                   "        <svg viewBox=\"0 0 100 100\" class=\"w-24 h-24 text-gray-700\">" + p.svgPath + "</svg>" +
+                   "      </a>" +
+                   "    </div>" +
+                   "    <div class=\"mt-3 flex flex-col gap-1\">" +
+                   "      <div class=\"text-sm font-semibold text-gray-900\">" +
+                   "        <a href=\"" + pdpLink + "\">" + localeName + "</a>" +
+                   "      </div>" +
+                   "      <div class=\"text-sm font-medium text-gray-500\">" + priceHtml + "</div>" +
+                   "      <div class=\"mt-2 relative\">" +
+                   "        <button id=\"" + btnId + "\" class=\"product-quick-add w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm transition-colors text-xs uppercase tracking-wider flex items-center justify-center\" " +
+                   "                data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" aria-label=\"Add " + localeName + " to shopping cart\">" +
+                   "          " + trans.getOrDefault("addToCart", "Add to Cart") +
+                   "        </button>" +
+                   "      </div>" +
+                   "    </div>" +
+                   "  </div>" +
+                   "</div>";
+        }
+        else if ("modern-bad-nowcag".equals(quality))
+        {
+            final String stockJson = escapeHtml(GSON.toJson(session.getProductInventory().getOrDefault(p.id, Map.of())));
+            final String cardId = getDynamicId("v-node", session);
+            final String wrapId1 = getDynamicId("react-div", session);
+            final String wrapId2 = getDynamicId("v-inner", session);
+            final String btnId = getDynamicId("v-btn", session);
+
+            return "<div id=\"" + cardId + "\" class=\"" + getTailwindSoup() + "\">" +
+                   "  <div id=\"" + wrapId1 + "\" class=\"w-full flex flex-col justify-between h-full\">" +
+                   "    <div id=\"" + wrapId2 + "\" class=\"bg-slate-50 rounded-lg p-2 flex items-center justify-center h-44 cursor-pointer\" onclick=\"location.href='" + pdpLink + "'\">" +
+                   "      <div class=\"w-full h-full flex items-center justify-center\">" +
+                   "        <span class=\"block w-24 h-24\">" +
+                   "          <svg viewBox=\"0 0 100 100\" class=\"w-full h-full text-slate-700\">" + p.svgPath + "</svg>" +
+                   "        </span>" +
+                   "      </div>" +
+                   "    </div>" +
+                   "    <div class=\"mt-3 flex flex-col gap-1\">" +
+                   "      <div class=\"text-sm font-bold text-slate-900 cursor-pointer\" onclick=\"location.href='" + pdpLink + "'\">" +
+                   "        <span><span>" + localeName + "</span></span>" +
+                   "      </div>" +
+                   "      <div class=\"text-xs text-slate-500\"><span>" + priceHtml + "</span></div>" +
+                   "      <div class=\"mt-2 relative\">" +
+                   "        <div id=\"" + btnId + "\" class=\"product-quick-add w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm transition-colors text-xs uppercase tracking-wider flex items-center justify-center cursor-pointer\" " +
+                   "             data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\">" +
+                   "          <span><span>" + trans.getOrDefault("addToCart", "Add to Cart") + "</span></span>" +
+                   "        </div>" +
+                   "      </div>" +
+                   "    </div>" +
+                   "  </div>" +
+                   "</div>";
+        }
+        else if ("pwa-chaos".equals(quality))
+        {
+            final String stockJson = escapeHtml(GSON.toJson(session.getProductInventory().getOrDefault(p.id, Map.of())));
+            final String stepperId = getDynamicId("number-input::r" + UUID.randomUUID().toString().substring(0, 4) + ":", session);
+            final String nowPrice = formatPrice(salePrice != null ? salePrice : basePrice, country);
+            final String wasPrice = salePrice != null ? formatPrice(basePrice, country) : "";
+            final String categoryTitle = trans.getOrDefault(p.category, p.category);
+
+            return "<div data-dan-component=\"product-tile\" data-testid=\"product-tile-" + p.id + "\" data-pid=\"" + p.id + "\" data-shipping-method=\"shipping\" id=\"product-tile--" + p.id + "\" data-cnstrc-item-id=\"" + p.id + "\" data-cnstrc-item-name=\"" + escapeHtml(localeName) + "\" data-cnstrc-item-price=\"" + (salePrice != null ? salePrice : basePrice) + "\" class=\"emotion-1s86rl4\">" +
+                   "  <span role=\"status\" aria-live=\"polite\" class=\"emotion-lnntmy\"></span>" +
+                   "  <div class=\"wick-linkbox emotion-164b4e4\">" +
+                   "    <div class=\"wick-card__root emotion-1bfi37c\">" +
+                   "      <div class=\"emotion-brx7u0\">" +
+                   "        <div class=\"emotion-ci36qi\">" +
+                   "          <a class=\"wick-linkbox__overlay emotion-1q4f12p\" href=\"" + pdpLink + "\" data-discover=\"true\" aria-label=\"View " + escapeHtml(localeName) + "\">" +
+                   "            <div class=\"emotion-167ekqp\">" +
+                   "              <div class=\"emotion-hzkzo2\">" +
+                   "                <div class=\"emotion-5mrfce\">" +
+                   "                  <svg viewBox=\"0 0 100 100\" class=\"wick-image emotion-n45is0\">" + p.svgPath + "</svg>" +
+                   "                </div>" +
+                   "              </div>" +
+                   "            </div>" +
+                   "          </a>" +
+                   "        </div>" +
+                   (badgeHtml.isEmpty() ? "" : "        <span data-dan-component=\"product-tile--badge\" data-testid=\"product-tile--badge\" class=\"wick-badge emotion-2b9vae\">" + (!p.badge.isEmpty() ? escapeHtml(p.badge) : "Sale") + "</span>") +
+                   "      </div>" +
+                   "      <div class=\"wick-card__body emotion-ebdcim\">" +
+                   "        <div class=\"wick-stack emotion-9vvgc2\">" +
+                   "          <p data-dan-component=\"product-tile--social-proofing\" class=\"emotion-e2von4\">Trending</p>" +
+                   "          <h3 data-dan-component=\"product-tile--name\" class=\"GlobalLinkNoTx wick-card__title emotion-14lzra7\">" +
+                   "            <a class=\"wick-link emotion-kasbrq\" href=\"" + pdpLink + "\" data-discover=\"true\">" + escapeHtml(localeName) + "</a>" +
+                   "          </h3>" +
+                   "          <p data-dan-component=\"product-tile--type\" class=\"wick-card__description emotion-ht9fx4\">" + escapeHtml(categoryTitle) + "</p>" +
+                   "        </div>" +
+                   "        <div class=\"wick-stack emotion-9vvgc2\">" +
+                   "          <div class=\"wick-skeleton emotion-10nilez\">" +
+                   "            <div class=\"wick-stack emotion-15kf031\" data-dan-component=\"product-price\">" +
+                   "              <b data-dan-component=\"product-price--now-price\" class=\"emotion-1rkvoei\">" + nowPrice + "</b>" +
+                   (salePrice != null ? "              <s data-dan-component=\"product-price--sale-price\" class=\"emotion-bxysmo\">" + wasPrice + "</s>" : "") +
+                   "            </div>" +
+                   "          </div>" +
+                   "        </div>" +
+                   "        <div data-dan-component=\"product-tile--rating\" class=\"emotion-c7yo1x\">" +
+                   "          <div data-bv-show=\"inline_rating\" data-bv-productid=\"" + p.id + "\"></div>" +
+                   "        </div>" +
+                   "      </div>" +
+                   "      <div class=\"wick-card__footer emotion-1nht3qk\">" +
+                   "        <div id=\"" + stepperId + "\" data-scope=\"number-input\" data-part=\"root\" dir=\"ltr\" data-cnstrc-btn=\"add_to_cart\" data-initial-affordance-visible=\"true\" class=\"wick-number-stepper__root emotion-1bd2lri\">" +
+                   "          <label data-scope=\"number-input\" data-part=\"label\" dir=\"ltr\" id=\"" + stepperId + "::label\" for=\"" + stepperId + "::input\" class=\"wick-number-stepper__label emotion-1z119ai\">Quantity in bag</label>" +
+                   "          <div style=\"position: absolute; inset: 0px; display: flex; align-items: stretch;\">" +
+                   "            <button type=\"button\" data-dan-component=\"product-tile--add-to-bag-button\" data-rec-id=\"" + p.id + "\" data-rec-name=\"" + escapeHtml(localeName) + "\" data-rec-type=\"" + escapeHtml(categoryTitle) + "\" aria-label=\"Add " + escapeHtml(localeName) + " to Bag\" class=\"wick-button emotion-wasmr0 product-quick-add\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\">" +
+                   "              " + trans.getOrDefault("addToCart", "Add to bag") +
+                   "            </button>" +
+                   "          </div>" +
+                   "          <input data-scope=\"number-input\" data-part=\"input\" dir=\"ltr\" id=\"" + stepperId + "::input\" role=\"spinbutton\" pattern=\"-?[0-9]*(.[0-9]+)?\" inputmode=\"decimal\" autocomplete=\"off\" autocorrect=\"off\" spellcheck=\"false\" type=\"text\" aria-roledescription=\"numberfield\" aria-valuemin=\"0\" aria-valuemax=\"9\" aria-valuenow=\"0\" tabindex=\"-1\" class=\"wick-number-stepper__input emotion-ds87jz\" value=\"0\">" +
+                   "        </div>" +
+                   "      </div>" +
+                   "      <div class=\"wick-card__footer emotion-1nht3qk\">" +
+                   "        <div class=\"wick-stack emotion-1wv6ypd\" data-dan-component=\"grid-fulfillment-methods\">" +
+                   "          <p><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" class=\"wick-icon emotion-e1qt4e\"><path fill=\"currentColor\" d=\"M12 2.38a9.62 9.62 0 1 1 0 19.24 9.62 9.62 0 0 1 0-19.24m0 1.24a8.38 8.38 0 1 0 0 16.76 8.38 8.38 0 0 0 0-16.76m3.312 5.692a.62.62 0 0 1 .877.877l-5.25 5.25a.62.62 0 0 1-.877 0l-2.25-2.25a.62.62 0 0 1 .876-.877l1.812 1.811z\"></path></svg>Shipping</p>" +
+                   "        </div>" +
+                   "      </div>" +
+                   "    </div>" +
+                   "  </div>" +
+                   "</div>";
+        }
+        else if ("apocalypse".equals(quality))
+        {
+            final String stockJson = escapeHtml(GSON.toJson(session.getProductInventory().getOrDefault(p.id, Map.of())));
+            final String nowPrice = formatPrice(salePrice != null ? salePrice : basePrice, country);
+            final String wasPrice = salePrice != null ? formatPrice(basePrice, country) : "";
+
+            return "<article class=\"apoc-product-tile\" data-product-id=\"" + p.id + "\" style=\"background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; transition: all 0.25s ease; position: relative;\">" +
+                   "  <div style=\"height: 180px; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 6px; display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 14px;\">" +
+                   "    <a href=\"" + pdpLink + "\" style=\"width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;\">" +
+                   "      <svg viewBox=\"0 0 100 100\" style=\"width: 65%; height: 65%; color: var(--apoc-gold); filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));\">" + p.svgPath + "</svg>" +
+                   "    </a>" +
+                   (badgeHtml.isEmpty() ? "" : "    <span style=\"position: absolute; top: 8px; left: 8px; background: var(--apoc-gold); color: #000; font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 2px 6px; border-radius: 3px;\">" + (!p.badge.isEmpty() ? escapeHtml(p.badge) : "Private Drop") + "</span>") +
+                   "  </div>" +
+                   "  <div style=\"flex: 1; display: flex; flex-direction: column;\">" +
+                   "    <div style=\"font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-gold); margin-bottom: 4px;\"><span class=\"ps-txt ps-txt-trending\"></span></div>" +
+                   "    <h3 class=\"product-title\" style=\"font-family: var(--apoc-font-serif); font-size: 16px; font-weight: 600; color: #FFFFFF; line-height: 1.3; margin-bottom: 6px;\">" +
+                   "      <a href=\"" + pdpLink + "\" style=\"color: #fff;\">" + escapeHtml(localeName) + "</a>" +
+                   "    </h3>" +
+                   "    <div style=\"margin-top: auto; padding-top: 8px; display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px;\">" +
+                   "      <span class=\"product-price\" style=\"font-size: 16px; font-weight: 700; color: var(--apoc-gold);\">" + nowPrice + "</span>" +
+                   (salePrice != null ? "      <s style=\"font-size: 12px; color: var(--apoc-text-muted);\">" + wasPrice + "</s>" : "") +
+                   "    </div>" +
+                   "    <button type=\"button\" class=\"apoc-btn-gold product-quick-add\" id=\"apoc-add-btn-" + p.id + "\" data-interactive=\"true\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" style=\"width: 100%; padding: 10px; font-size: 12px;\" onclick=\"triggerApocalypseQuickSize(this)\">" +
+                   "      <span class=\"ps-txt ps-txt-add-to-bag\"></span>" +
+                   "      <span class=\"hydration-indicator\"></span>" +
+                   "    </button>" +
+                   "  </div>" +
+                   "</article>";
+        }
+        else
+        {
+            final String ariaLabel = "perfect".equals(quality) ? " aria-label=\"View details of " + localeName + "\"" : "";
+            final String accessibilityBtn = "perfect".equals(quality) ? " aria-label=\"Add " + localeName + " to shopping cart\"" : "";
+            final String stockJson = escapeHtml(GSON.toJson(session.getProductInventory().getOrDefault(p.id, Map.of())));
+
+            return "<article class=\"product-card\">" +
+                   "  <div class=\"product-media\">" +
+                   "    " + badgeHtml +
+                   "    <a href=\"" + pdpLink + "\"" + ariaLabel + " style=\"display:contents;\">" +
+                   "      <svg viewBox=\"0 0 100 100\">" + p.svgPath + "</svg>" +
+                   "    </a>" +
+                   "    <button class=\"product-quick-add\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\"" + accessibilityBtn + ">" +
+                   "      " + trans.getOrDefault("addToCart", "Add to Cart") +
+                   "    </button>" +
+                   "  </div>" +
+                   "  <div class=\"product-details\">" +
+                   "    <h3 class=\"product-title\"><a href=\"" + pdpLink + "\">" + localeName + "</a></h3>" +
+                   "    <div class=\"product-price\">" + priceHtml + "</div>" +
+                   "  </div>" +
+                   "</article>";
         }
     }
 
-    private static String getColorHex(final String colorName)
+    public String renderProductCardInfinite(final Product p, final Country country, final Map<String, String> trans, final String quality, final String nextUrl, final TestSession session)
     {
-        if (colorName == null)
-        {
-            return "#E6E2DA";
-        }
-        switch (colorName.toLowerCase())
-        {
-            case "off-white":
-                return "#FAF9F6";
-            case "charcoal":
-                return "#363636";
-            case "olive":
-                return "#606E50";
-            case "sand":
-                return "#D5C7B4";
-            case "navy":
-                return "#2B3E50";
-            case "taupe":
-                return "#8E8279";
-            case "sage":
-                return "#8EA38C";
-            case "terracotta":
-                return "#C87A53";
-            default:
-                return "#E6E2DA";
-        }
+        final String normalCard = renderProductCard(p, country, trans, quality, session);
+        return "<div hx-get=\"" + nextUrl + "\" hx-trigger=\"revealed\" hx-swap=\"afterend\">" + normalCard + "</div>";
     }
 
-    private String getProductSizesSelectHtml(final String productId, final String category, final Map<String, String> trans, final String quality)
+    public String renderHeadlessTileSkeleton(final Product p)
+    {
+        final String root = emotionHash("product-tile");
+        final String media = emotionHash("tile-media");
+        final String body = emotionHash("tile-body");
+        final String name = emotionHash("tile-name");
+        final String price = emotionHash("tile-price");
+        return "<article class=\"" + root + "\" data-testid=\"product-tile\" data-pid=\"" + p.id
+               + "\" data-state=\"pending\" aria-busy=\"true\">"
+               + "<div class=\"" + media + "\" data-part=\"media\"></div>"
+               + "<div class=\"" + body + "\" data-part=\"body\">"
+               + "<span class=\"" + name + "\" data-part=\"name\"></span>"
+               + "<span class=\"" + price + "\" data-part=\"price\"></span>"
+               + "</div></article>";
+    }
+
+    public String getProductSizesSelectHtml(final String productId, final String category, final Map<String, String> trans, final String quality, final TestSession session)
     {
         if ("accessories".equals(category))
         {
             return "";
         }
 
-        final Map<String, Integer> stockMap = productInventory.getOrDefault(productId, Map.of());
-        final List<String> sizes = getSizesForCategory(category);
+        final Map<String, Integer> stockMap = session.getProductInventory().getOrDefault(productId, Map.of());
+        final List<String> sizes = VerlaCatalog.getSizesForCategory(category);
 
         final String sizeLabel = trans != null ? trans.getOrDefault("size", "Size") : "Size";
         final String outOfStockText = trans != null ? trans.getOrDefault("outOfStock", "Out of stock") : "Out of stock";
@@ -861,2689 +1257,12 @@ public final class EmbeddedHtmlServer
         return sb.toString();
     }
 
-    private static String getCountryFlag(final String countryCode)
-    {
-        if (countryCode == null)
-        {
-            return "🌍";
-        }
-
-        final String upperCode = countryCode.toUpperCase();
-        final String resolvedCode;
-        if ("UK".equals(upperCode))
-        {
-            resolvedCode = "GB";
-        }
-        else if (upperCode.startsWith("CA"))
-        {
-            resolvedCode = "CA";
-        }
-        else
-        {
-            resolvedCode = upperCode;
-        }
-
-        if (resolvedCode.length() != 2)
-        {
-            return "🌍";
-        }
-
-        final int firstChar = resolvedCode.charAt(0) - 'A' + 0x1F1E6;
-        final int secondChar = resolvedCode.charAt(1) - 'A' + 0x1F1E6;
-        return new String(Character.toChars(firstChar)) + new String(Character.toChars(secondChar));
-    }
-
-    private static String getSvgPathForSubcategory(final String subcat, final String hexColor)
-    {
-        switch (subcat)
-        {
-            case "shirts":
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<path d=\"M30,35 L70,35 L75,75 L25,75 Z\" fill=\"" + hexColor + "\" stroke=\"#A8A297\" stroke-width=\"1.5\" />" +
-                       "<path d=\"M40,35 L50,45 L60,35\" fill=\"none\" stroke=\"#A8A297\" stroke-width=\"1.5\" />";
-            case "tshirts":
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<path d=\"M32,32 L68,32 L70,68 L30,68 Z\" fill=\"" + hexColor + "\" stroke=\"#8E998B\" stroke-width=\"1.5\" />";
-            case "sweaters":
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<path d=\"M25,30 L75,30 L70,70 L30,70 Z\" fill=\"" + hexColor + "\" stroke=\"#8A8A8A\" stroke-width=\"1.5\" />";
-            case "pants":
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<path d=\"M30,30 L70,30 L65,80 L52,80 L50,50 L48,80 L35,80 Z\" fill=\"" + hexColor + "\" stroke=\"#9E998E\" stroke-width=\"1.5\" />";
-            case "shorts":
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<path d=\"M30,35 L70,35 L68,65 L32,65 Z\" fill=\"" + hexColor + "\" stroke=\"#8A8A8A\" stroke-width=\"1.5\" />";
-            case "skirts":
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<path d=\"M35,35 L65,35 L75,75 L25,75 Z\" fill=\"" + hexColor + "\" stroke=\"#A78E77\" stroke-width=\"1.5\" />";
-            case "jackets":
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<path d=\"M28,28 L72,28 L68,75 L32,75 Z\" fill=\"" + hexColor + "\" stroke=\"#879583\" stroke-width=\"1.5\" />";
-            case "coats":
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<path d=\"M28,25 L72,25 L68,80 L32,80 Z\" fill=\"" + hexColor + "\" stroke=\"#908775\" stroke-width=\"1.5\" />" +
-                       "<path d=\"M42,25 L50,45 L58,25\" fill=\"none\" stroke=\"#908775\" stroke-width=\"1.5\" />" +
-                       "<line x1=\"50\" y1=\"45\" x2=\"50\" y2=\"80\" stroke=\"#908775\" stroke-width=\"1.5\" />";
-            case "sneakers":
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<path d=\"M15,65 L45,55 L75,55 L85,70 L85,80 L15,80 Z\" fill=\"" + hexColor + "\" stroke=\"#8E998B\" stroke-width=\"1.5\" />";
-            case "boots":
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<path d=\"M25,30 L45,30 L45,60 L75,60 L80,80 L20,80 Z\" fill=\"" + hexColor + "\" stroke=\"#BAA694\" stroke-width=\"1.5\" />";
-            case "bags":
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<rect x=\"25\" y=\"40\" width=\"50\" height=\"40\" rx=\"5\" fill=\"" + hexColor + "\" stroke=\"#A78E77\" stroke-width=\"1.5\" />" +
-                       "<path d=\"M35,40 C35,25 65,25 65,40\" stroke=\"#A78E77\" fill=\"none\" stroke-width=\"1.5\" />";
-            case "hats":
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<path d=\"M15,70 C15,45 85,45 85,70 L90,70 L90,75 L10,75 L10,70 Z\" fill=\"" + hexColor + "\" stroke=\"#9E998E\" stroke-width=\"1.5\" />";
-            default:
-                return "<rect width=\"100\" height=\"100\" fill=\"#FAF9F6\" />" +
-                       "<rect x=\"25\" y=\"25\" width=\"50\" height=\"50\" rx=\"5\" fill=\"" + hexColor + "\" stroke=\"#A8A297\" stroke-width=\"1.5\" />";
-        }
-    }
-
-    public static final int DEFAULT_HTTP_PORT = 8542;
-    public static final int DEFAULT_HTTPS_PORT = 8543;
-
-    /**
-     * Creates a new embedded HTTP and HTTPS server bound to the default ports (8542 / 8543)
-     * or ports configured via system properties ('neodymium.ai.http.port' / 'neodymium.ai.https.port').
-     * 
-     * @throws IOException if the server cannot be bound or created
-     */
-    public EmbeddedHtmlServer() throws IOException
-    {
-        this(Integer.getInteger("neodymium.ai.http.port", DEFAULT_HTTP_PORT),
-             Integer.getInteger("neodymium.ai.https.port", DEFAULT_HTTPS_PORT));
-    }
-
-    /**
-     * Creates a new embedded HTTP and HTTPS server bound to the specified ports.
-     * Pass 0 to bind to random available free ports.
-     * 
-     * @param httpPort the HTTP port to listen on
-     * @param httpsPort the HTTPS port to listen on
-     * @throws IOException if the server cannot be bound or created
-     */
-    /**
-     * Creates an {@link HttpServer} bound to the requested port, or falls back to port 0 (dynamic port)
-     * if the requested port is already bound or unavailable.
-     * 
-     * @param requestedPort the target HTTP port to attempt binding
-     * @return the created {@link HttpServer}
-     * @throws IOException if server creation fails completely
-     */
-    private static HttpServer createHttpServerWithFallback(final int requestedPort) throws IOException
-    {
-        final int targetPort = requestedPort < 0 ? DEFAULT_HTTP_PORT : requestedPort;
-        try
-        {
-            return HttpServer.create(new InetSocketAddress("127.0.0.1", targetPort), 0);
-        }
-        catch (final IOException e)
-        {
-            if (targetPort != 0)
-            {
-                LOG.warn("Target HTTP port {} is unavailable ({}), falling back to random available free port (0).",
-                    targetPort, e.getMessage());
-                return HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-            }
-            throw e;
-        }
-    }
-
-    /**
-     * Creates an {@link HttpsServer} bound to the requested port, or falls back to port 0 (dynamic port)
-     * if the requested port is already bound or unavailable.
-     * 
-     * @param requestedPort the target HTTPS port to attempt binding
-     * @return the created {@link HttpsServer}
-     * @throws IOException if server creation fails completely
-     */
-    private static HttpsServer createHttpsServerWithFallback(final int requestedPort) throws IOException
-    {
-        final int targetPort = requestedPort < 0 ? DEFAULT_HTTPS_PORT : requestedPort;
-        try
-        {
-            return HttpsServer.create(new InetSocketAddress("127.0.0.1", targetPort), 0);
-        }
-        catch (final IOException e)
-        {
-            if (targetPort != 0)
-            {
-                LOG.warn("Target HTTPS port {} is unavailable ({}), falling back to random available free port (0).",
-                    targetPort, e.getMessage());
-                return HttpsServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
-            }
-            throw e;
-        }
-    }
-
-    /**
-     * Creates a new embedded HTTP and HTTPS server bound to the specified ports.
-     * Pass 0 to bind to random available free ports.
-     * 
-     * @param httpPort the HTTP port to listen on
-     * @param httpsPort the HTTPS port to listen on
-     * @throws IOException if the server cannot be bound or created
-     */
-    public EmbeddedHtmlServer(final int httpPort, final int httpsPort) throws IOException
-    {
-        lastInstance = this;
-
-        // Pre-load default test user for this instance
-        final User defaultUser = new User("johndoe@example.com", "topsecret");
-        defaultUser.addresses.add(new Address("addr-default", "123 Main St", "Boston", "MA", "02108", "US"));
-        defaultUser.cards.add(new Card("card-default", "1111222233334100", "Visa", "12/29", "123"));
-        this.usersDb.put(defaultUser.email, defaultUser);
-
-        this.server = createHttpServerWithFallback(httpPort);
-        this.port = this.server.getAddress().getPort();
-        
-        resetInventory();
-
-        final ResourceHandler resourceHandler = new ResourceHandler();
-        final VerlaHandler verlaHandler = new VerlaHandler();
-
-        this.server.createContext("/", new LoggingHandler(resourceHandler));
-        this.server.createContext("/verla-tailwind-by-claude/", new LoggingHandler(verlaHandler));
-        this.server.createContext("/verla-apparel/", new LoggingHandler(verlaHandler));
-        this.server.createContext("/verla-apperal/", new LoggingHandler(verlaHandler));
-        this.server.createContext("/verla-tailwind/", new LoggingHandler(verlaHandler));
-        this.server.createContext("/verla-perfect/", new LoggingHandler(verlaHandler));
-        this.server.createContext("/verla-normal/", new LoggingHandler(verlaHandler));
-        this.server.createContext("/verla-bad/", new LoggingHandler(verlaHandler));
-        this.server.createContext("/verla-modern-bad/", new LoggingHandler(verlaHandler));
-        this.server.createContext("/verla-modern-bad-nowcag/", new LoggingHandler(verlaHandler));
-        this.server.createContext("/verla-pwa-chaos/", new LoggingHandler(verlaHandler));
-        this.server.createContext("/verla-apocalypse/", new LoggingHandler(verlaHandler));
-        this.server.createContext("/verla-headless/", new LoggingHandler(verlaHandler));
-        this.server.setExecutor(Executors.newCachedThreadPool());
-
-        this.httpsServer = createHttpsServerWithFallback(httpsPort);
-        this.httpsPort = this.httpsServer.getAddress().getPort();
-
-        try
-        {
-            final KeyStore ks = KeyStore.getInstance("PKCS12");
-            try (final InputStream ksf = EmbeddedHtmlServer.class.getClassLoader().getResourceAsStream("keystore.p12"))
-            {
-                if (ksf == null)
-                {
-                    throw new IOException("keystore.p12 resource not found on classpath.");
-                }
-                ks.load(ksf, "changeit".toCharArray());
-            }
-
-            final KeyManagerFactory kmf = KeyManagerFactory.getInstance("SunX509");
-            kmf.init(ks, "changeit".toCharArray());
-
-            final SSLContext sslContext = SSLContext.getInstance("TLS");
-            sslContext.init(kmf.getKeyManagers(), null, null);
-
-            this.httpsServer.setHttpsConfigurator(new HttpsConfigurator(sslContext));
-            this.httpsServer.createContext("/", new LoggingHandler(resourceHandler));
-            this.httpsServer.createContext("/verla-tailwind-by-claude/", new LoggingHandler(verlaHandler));
-            this.httpsServer.createContext("/verla-apparel/", new LoggingHandler(verlaHandler));
-            this.httpsServer.createContext("/verla-apperal/", new LoggingHandler(verlaHandler));
-            this.httpsServer.createContext("/verla-tailwind/", new LoggingHandler(verlaHandler));
-            this.httpsServer.createContext("/verla-perfect/", new LoggingHandler(verlaHandler));
-            this.httpsServer.createContext("/verla-normal/", new LoggingHandler(verlaHandler));
-            this.httpsServer.createContext("/verla-bad/", new LoggingHandler(verlaHandler));
-            this.httpsServer.createContext("/verla-modern-bad/", new LoggingHandler(verlaHandler));
-            this.httpsServer.createContext("/verla-modern-bad-nowcag/", new LoggingHandler(verlaHandler));
-            this.httpsServer.createContext("/verla-pwa-chaos/", new LoggingHandler(verlaHandler));
-            this.httpsServer.createContext("/verla-apocalypse/", new LoggingHandler(verlaHandler));
-            this.httpsServer.createContext("/verla-headless/", new LoggingHandler(verlaHandler));
-            this.httpsServer.setExecutor(Executors.newCachedThreadPool());
-        }
-        catch (final Exception e)
-        {
-            throw new IOException("Failed to initialize secure HttpsServer with self-signed certificate", e);
-        }
-    }
-
-    public synchronized void start()
-    {
-        if (this.running)
-        {
-            return;
-        }
-        LOG.info("Starting embedded HTML HTTP server on port {}", port);
-        server.start();
-        LOG.info("Starting embedded HTML HTTPS server on port {}", httpsPort);
-        httpsServer.start();
-        this.running = true;
-    }
-
-    public synchronized void stop()
-    {
-        if (!this.running)
-        {
-            return;
-        }
-        LOG.info("Stopping embedded HTML HTTP server on port {}", port);
-        server.stop(0);
-        LOG.info("Stopping embedded HTML HTTPS server on port {}", httpsPort);
-        httpsServer.stop(0);
-        this.running = false;
-    }
-
-    public boolean isRunning()
-    {
-        return this.running;
-    }
-
-    public int getPort()
-    {
-        return port;
-    }
-
-    public InetSocketAddress getAddress()
-    {
-        return this.server != null ? this.server.getAddress() : null;
-    }
-
-    public int getHttpsPort()
-    {
-        return httpsPort;
-    }
-
-    private static final class ResourceHandler implements HttpHandler
-    {
-        @Override
-        public void handle(final HttpExchange exchange) throws IOException
-        {
-            String path = exchange.getRequestURI().getPath();
-            
-            if (path.equals("/"))
-            {
-                path = "index.html";
-            }
-            else if (path.startsWith("/"))
-            {
-                path = path.substring(1);
-            }
-            
-            final String resourcePath = "ai-test-pages/" + path;
-            
-            try (final InputStream is = EmbeddedHtmlServer.class.getClassLoader().getResourceAsStream(resourcePath))
-            {
-                if (is == null)
-                {
-                    LOG.warn("Resource not found: {}", resourcePath);
-                    final String response = "404 Not Found";
-                    exchange.sendResponseHeaders(404, response.length());
-                    try (final OutputStream os = exchange.getResponseBody())
-                    {
-                        os.write(response.getBytes());
-                    }
-                    return;
-                }
-                
-                if (LOG.isDebugEnabled())
-                {
-                    LOG.debug("ResourceHandler: serving static resource '{}' mapped from path '{}'", resourcePath, path);
-                }
-                else
-                {
-                    LOG.info("Serving static resource: {}", path);
-                }
-                
-                final byte[] bytes = is.readAllBytes();
-                String contentType = "text/plain";
-                
-                if (path.endsWith(".html"))
-                {
-                    contentType = "text/html; charset=UTF-8";
-                }
-                else if (path.endsWith(".css"))
-                {
-                    contentType = "text/css";
-                }
-                else if (path.endsWith(".js"))
-                {
-                    contentType = "application/javascript";
-                }
-                else if (path.endsWith(".png"))
-                {
-                    contentType = "image/png";
-                }
-                else if (path.endsWith(".jpg") || path.endsWith(".jpeg"))
-                {
-                    contentType = "image/jpeg";
-                }
-                else if (path.endsWith(".gif"))
-                {
-                    contentType = "image/gif";
-                }
-                else if (path.endsWith(".svg"))
-                {
-                    contentType = "image/svg+xml";
-                }
-                else if (path.endsWith(".pdf"))
-                {
-                    contentType = "application/pdf";
-                    final String fileName = path.contains("/") ? path.substring(path.lastIndexOf('/') + 1) : path;
-                    exchange.getResponseHeaders().set("Content-Disposition", "attachment; filename=\"" + fileName + "\"");
-                }
-                else if (path.endsWith(".woff2"))
-                {
-                    contentType = "font/woff2";
-                }
-                
-                exchange.getResponseHeaders().set("Content-Type", contentType);
-                exchange.sendResponseHeaders(200, bytes.length);
-                
-                try (final OutputStream os = exchange.getResponseBody())
-                {
-                    os.write(bytes);
-                }
-            }
-            catch (final Exception e)
-            {
-                LOG.error("Error serving resource: {}", resourcePath, e);
-                final String response = "500 Internal Server Error";
-                exchange.sendResponseHeaders(500, response.length());
-                try (final OutputStream os = exchange.getResponseBody())
-                {
-                    os.write(response.getBytes());
-                }
-            }
-        }
-    }
-
-    private static final class LoggingHandler implements HttpHandler
-    {
-        private final HttpHandler delegate;
-
-        public LoggingHandler(final HttpHandler delegate)
-        {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public void handle(final HttpExchange exchange) throws IOException
-        {
-            final long startTime = System.currentTimeMillis();
-            final String method = exchange.getRequestMethod();
-            final String uri = exchange.getRequestURI().toString();
-
-            if (LOG.isDebugEnabled())
-            {
-                LOG.debug("--> Incoming Request: [{}] {}", method, uri);
-                LOG.debug("Headers: {}", exchange.getRequestHeaders());
-                final String cookieHeader = exchange.getRequestHeaders().getFirst("Cookie");
-                if (cookieHeader != null)
-                {
-                    LOG.debug("Cookies: {}", cookieHeader);
-                }
-            }
-
-            try
-            {
-                delegate.handle(exchange);
-            }
-            catch (final Exception e)
-            {
-                LOG.error("Request failed: [{}] {}", method, uri, e);
-                throw e;
-            }
-            finally
-            {
-                final int responseCode = exchange.getResponseCode();
-                final long duration = System.currentTimeMillis() - startTime;
-                if (LOG.isDebugEnabled())
-                {
-                    LOG.debug("<-- Response Status: {} ({}ms)", responseCode, duration);
-                    LOG.debug("Response Headers: {}", exchange.getResponseHeaders());
-                }
-                else
-                {
-                    LOG.info("[{}] {} -> {} ({}ms)", method, uri, responseCode, duration);
-                }
-            }
-        }
-    }
-
-    /**
-     * VÉRLA Handler: Handles e-commerce path routing, dynamic template rendering,
-     * cookies, localization, HTMX infinite scroll page loading, auth, cart, checkout actions.
-     */
-    private final class VerlaHandler implements HttpHandler
-    {
-        @Override
-        public void handle(final HttpExchange exchange) throws IOException
-        {
-            final String requestMethod = exchange.getRequestMethod();
-            final String fullPath = exchange.getRequestURI().getPath();
-            
-            if (LOG.isDebugEnabled())
-            {
-                LOG.debug("VerlaHandler: incoming SUT requestMethod='{}', fullPath='{}'", requestMethod, fullPath);
-            }
-            else
-            {
-                LOG.info("VerlaHandler request: {} {}", requestMethod, fullPath);
-            }
-            
-            // Extract the SUT Quality Suffix (perfect, normal, bad, modern-bad-wcag, modern-bad)
-            final String qualitySuffix;
-            if (fullPath.startsWith("/verla-tailwind-by-claude/"))
-            {
-                qualitySuffix = "tailwind-by-claude";
-            }
-            else if (fullPath.startsWith("/verla-apparel/") || fullPath.startsWith("/verla-apperal/"))
-            {
-                qualitySuffix = "apparel";
-            }
-            else if (fullPath.startsWith("/verla-tailwind/"))
-            {
-                qualitySuffix = "tailwind";
-            }
-            else if (fullPath.startsWith("/verla-perfect/"))
-            {
-                qualitySuffix = "perfect";
-            }
-            else if (fullPath.startsWith("/verla-normal/"))
-            {
-                qualitySuffix = "normal";
-            }
-            else if (fullPath.startsWith("/verla-bad/"))
-            {
-                qualitySuffix = "bad";
-            }
-            else if (fullPath.startsWith("/verla-modern-bad-nowcag/"))
-            {
-                qualitySuffix = "modern-bad-nowcag";
-            }
-            else if (fullPath.startsWith("/verla-modern-bad/"))
-            {
-                qualitySuffix = "modern-bad";
-            }
-            else if (fullPath.startsWith("/verla-pwa-chaos/"))
-            {
-                qualitySuffix = "pwa-chaos";
-            }
-            else if (fullPath.startsWith("/verla-apocalypse/"))
-            {
-                qualitySuffix = "apocalypse";
-            }
-            else if (fullPath.startsWith("/verla-headless/"))
-            {
-                qualitySuffix = "headless";
-            }
-            else
-            {
-                sendResponse(exchange, 400, "text/plain", "Bad Request: Invalid SUT suffix");
-                return;
-            }
-
-            final String contextPrefix = fullPath.startsWith("/verla-apperal/") ? "/verla-apperal/" : "/verla-" + qualitySuffix + "/";
-            final String pagePath = fullPath.substring(contextPrefix.length());
-
-            if (LOG.isDebugEnabled())
-            {
-                LOG.debug("VerlaHandler: SUT suffix='{}', resolved pagePath='{}'", qualitySuffix, pagePath);
-            }
-
-            // Extract cookies
-            final Map<String, String> cookies = parseCookies(exchange.getRequestHeaders().getFirst("Cookie"));
-            
-            // Session cookie tracking
-            String sessionId = cookies.get("verla_session_id");
-            User currentUser = null;
-            if (sessionId != null)
-            {
-                final String email = activeSessions.get(sessionId);
-                if (email != null)
-                {
-                    currentUser = usersDb.get(email);
-                }
-            }
-
-            // Cart cookie tracking
-            String cartId = cookies.get("verla_cart_id");
-            if (cartId == null)
-            {
-                cartId = UUID.randomUUID().toString();
-                exchange.getResponseHeaders().add("Set-Cookie", "verla_cart_id=" + cartId + "; Path=/; HttpOnly");
-            }
-            final Cart cart = activeCarts.computeIfAbsent(cartId, k -> new Cart(k));
-
-            // Selected Country tracking
-            String countryCode = cookies.get("verla_country");
-            if (countryCode == null)
-            {
-                countryCode = "US";
-            }
-            final Country activeCountry = countriesMap.getOrDefault(countryCode, countriesMap.get("US"));
-            final String locale = activeCountry.locale;
-            final Map<String, String> trans = catalogConfig.translations.getOrDefault(locale, catalogConfig.translations.get("en"));
-
-            // Parse request body parameters
-            final Map<String, String> params = parseRequestBody(exchange);
-
-            // HTMX request header or PWA micro-router
-            final boolean isPwaRouter = "true".equalsIgnoreCase(exchange.getRequestHeaders().getFirst("X-PWA-Router"));
-            final String hxTarget = exchange.getRequestHeaders().getFirst("HX-Target");
-            final boolean isHtmx = "true".equalsIgnoreCase(exchange.getRequestHeaders().getFirst("HX-Request"))
-                                || isPwaRouter;
-
-            if (LOG.isDebugEnabled())
-            {
-                LOG.debug("Parsed Parameters: {}", params);
-                LOG.debug("Is HTMX / PWA Router Request: {}", isHtmx);
-            }
-
-            // --- API Endpoint Routing ---
-            if (pagePath.startsWith("api/"))
-            {
-                final String apiMethod = pagePath.substring(4);
-                
-                if ("snippets/products".equals(apiMethod))
-                {
-                    VerlaConfiguration.getInstance().simulateProductFilter();
-                    final String reqUri = exchange.getRequestURI().toString();
-                    final String cat = getQueryParam(reqUri, "category");
-                    final String sort = getQueryParam(reqUri, "sort");
-                    final String bopis = getQueryParam(reqUri, "bopis");
-                    final List<String> activeColors = getQueryParamValues(reqUri, "color");
-                    final List<String> activePrices = getQueryParamValues(reqUri, "price");
-                    final List<String> activeSales = getQueryParamValues(reqUri, "sale");
-
-                    final List<Product> filtered = catalogProducts.stream().filter(p -> {
-                        if (!cat.isEmpty() && !"all".equalsIgnoreCase(cat) && !p.category.equalsIgnoreCase(cat)) return false;
-                        if ("true".equalsIgnoreCase(bopis) && productInventory.getOrDefault(p.id, Map.of()).values().stream().mapToInt(Integer::intValue).sum() <= 0) return false;
-                        
-                        // Color filter
-                        if (!activeColors.isEmpty())
-                        {
-                            boolean colorMatch = false;
-                            for (final String col : activeColors)
-                            {
-                                if (p.color != null && p.color.equalsIgnoreCase(col))
-                                {
-                                    colorMatch = true;
-                                    break;
-                                }
-                            }
-                            if (!colorMatch) return false;
-                        }
-
-                        // Price filter
-                        if (!activePrices.isEmpty())
-                        {
-                            final double price = p.salePrice != null ? p.salePrice : p.basePrice;
-                            boolean priceMatch = false;
-                            for (final String pr : activePrices)
-                            {
-                                if ("0-50".equals(pr) && price < 50.0) priceMatch = true;
-                                else if ("50-100".equals(pr) && price >= 50.0 && price <= 100.0) priceMatch = true;
-                                else if ("100-200".equals(pr) && price > 100.0) priceMatch = true;
-                            }
-                            if (!priceMatch) return false;
-                        }
-
-                        // Sale filter
-                        if (!activeSales.isEmpty() && activeSales.contains("true"))
-                        {
-                            if (p.salePrice == null) return false;
-                        }
-
-                        return true;
-                    }).collect(Collectors.toList());
-
-                    if ("price-asc".equals(sort))
-                    {
-                        filtered.sort((p1, p2) -> Double.compare(p1.salePrice != null ? p1.salePrice : p1.basePrice, p2.salePrice != null ? p2.salePrice : p2.basePrice));
-                    }
-                    else if ("price-desc".equals(sort))
-                    {
-                        filtered.sort((p1, p2) -> Double.compare(p2.salePrice != null ? p2.salePrice : p2.basePrice, p1.salePrice != null ? p1.salePrice : p1.basePrice));
-                    }
-
-                    // This fragment path does not go through renderTemplate, so the per-request
-                    // tile budget has to be set here too. Without it a pooled worker thread would
-                    // carry a stale budget into the next request it happens to serve.
-                    final VerlaConfiguration snippetCfg = VerlaConfiguration.getInstance();
-                    headlessTileBudget.get()[0] = (isHeadless(qualitySuffix) && snippetCfg.isHeadlessEnabled())
-                                                  ? snippetCfg.getHeadlessTileFanout()
-                                                  : 0;
-                    headlessRenderedTiles.get().clear();
-
-                    final StringBuilder sb = new StringBuilder();
-                    for (final Product p : filtered)
-                    {
-                        sb.append(renderProductCard(p, activeCountry, trans, qualitySuffix));
-                    }
-                    sendResponse(exchange, 200, "text/html", sb.toString());
-                    return;
-                }
-                // --- Headless PWA SUT endpoints -------------------------------------
-                // These model a composable storefront's client-side data layer: an OAuth
-                // handshake that races, per-entity product documents fetched one call per
-                // tile, BFF endpoints that reject a stale customer id, and CMS slots that
-                // arrive after first paint.
-                else if ("scapi/token".equals(apiMethod))
-                {
-                    VerlaConfiguration.getInstance().simulateHeadlessToken();
-                    ensureHeadlessSession(cartId);
-                    final Map<String, Object> tok = new LinkedHashMap<>();
-                    tok.put("access_token", UUID.randomUUID().toString().replace("-", ""));
-                    tok.put("token_type", "BEARER");
-                    tok.put("expires_in", 1800);
-                    tok.put("usid", UUID.randomUUID().toString());
-                    tok.put("customer_id", headlessCustomerId(cartId));
-                    tok.put("enc_user_id", Long.toHexString(cartId.hashCode() & 0xFFFFFFFFL));
-                    sendResponse(exchange, 200, "application/json; charset=utf-8", new Gson().toJson(tok));
-                    return;
-                }
-                else if ("scapi/session".equals(apiMethod))
-                {
-                    // The readiness signal a well-written test waits on instead of sleeping.
-                    final boolean settled = isHeadlessSessionSettled(cartId);
-                    final Map<String, Object> st = new LinkedHashMap<>();
-                    st.put("ready", settled);
-                    st.put("customerId", headlessCustomerId(cartId));
-                    st.put("state", settled ? "SETTLED" : "BOOTSTRAPPING");
-                    sendResponse(exchange, 200, "application/json; charset=utf-8", new Gson().toJson(st));
-                    return;
-                }
-                else if ("scapi/product".equals(apiMethod))
-                {
-                    // One request per tile. Latency is jittered so the grid settles progressively
-                    // and there is never a single moment at which "the page" is done.
-                    VerlaConfiguration.getInstance().simulateHeadlessTileFetch();
-                    final String pid = getQueryParam(exchange.getRequestURI().toString(), "id");
-                    final Product found = catalogProducts.stream()
-                                                         .filter(pr -> pr.id.equals(pid))
-                                                         .findFirst()
-                                                         .orElse(null);
-                    if (found == null)
-                    {
-                        sendResponse(exchange, 404, "application/json; charset=utf-8",
-                                     "{\"title\":\"Not Found\",\"type\":\"product-not-found\",\"detail\":\"No product with id " + escapeHtml(pid) + "\"}");
-                        return;
-                    }
-                    sendResponse(exchange, 200, "application/json; charset=utf-8",
-                                 new Gson().toJson(headlessProductDocument(found, activeCountry)));
-                    return;
-                }
-                else if ("scapi/route".equals(apiMethod))
-                {
-                    // A composable storefront resolves routes through its own data layer rather
-                    // than trusting the URL, so every client-side navigation costs an extra call
-                    // before the route body is even requested.
-                    VerlaConfiguration.getInstance().simulateHeadlessCmsSlot();
-                    final String path = getQueryParam(exchange.getRequestURI().toString(), "path");
-                    final String stripped = path.contains("?") ? path.substring(0, path.indexOf('?')) : path;
-                    // The router may pass an absolute URL or a route-relative path; normalise so
-                    // segment matching behaves the same either way.
-                    final String cleaned = stripped.startsWith("/") ? stripped : "/" + stripped;
-                    final String leaf = cleaned.substring(cleaned.lastIndexOf('/') + 1);
-
-                    final String routeType;
-                    if (cleaned.contains("/c/"))
-                    {
-                        routeType = "category";
-                    }
-                    else if (cleaned.contains("/p/"))
-                    {
-                        routeType = "product";
-                    }
-                    else if (leaf.startsWith("cart"))
-                    {
-                        routeType = "cart";
-                    }
-                    else if (leaf.startsWith("checkout"))
-                    {
-                        routeType = "checkout";
-                    }
-                    else if (leaf.startsWith("index") || leaf.isEmpty())
-                    {
-                        routeType = "home";
-                    }
-                    else
-                    {
-                        routeType = "content";
-                    }
-
-                    final Map<String, Object> route = new LinkedHashMap<>();
-                    route.put("path", cleaned);
-                    route.put("type", routeType);
-                    route.put("identifier", leaf.replace(".html", ""));
-                    route.put("locale", activeCountry.locale);
-                    route.put("ssr", false);
-                    sendResponse(exchange, 200, "application/json; charset=utf-8", new Gson().toJson(route));
-                    return;
-                }
-                else if ("scapi/image".equals(apiMethod))
-                {
-                    // The tile image is a second request per tile, and the response weight tracks
-                    // the requested width even though every tile asks for the same large rendition.
-                    VerlaConfiguration.getInstance().simulateHeadlessTileFetch();
-                    final String reqUri = exchange.getRequestURI().toString();
-                    final String pid = getQueryParam(reqUri, "id");
-                    final Product img = catalogProducts.stream()
-                                                       .filter(pr -> pr.id.equals(pid))
-                                                       .findFirst()
-                                                       .orElse(null);
-                    if (img == null)
-                    {
-                        sendResponse(exchange, 404, "text/plain", "Not Found");
-                        return;
-                    }
-                    int sw;
-                    try
-                    {
-                        sw = Integer.parseInt(getQueryParam(reqUri, "sw"));
-                    }
-                    catch (final NumberFormatException ignored)
-                    {
-                        sw = 960;
-                    }
-                    sw = Math.max(64, Math.min(2048, sw));
-
-                    final StringBuilder svg = new StringBuilder();
-                    svg.append("<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 100 100\" width=\"").append(sw)
-                       .append("\" height=\"").append(Math.round(sw * 4 / 3.0)).append("\">")
-                       .append("<rect width=\"100\" height=\"100\" fill=\"").append(getColorHex(img.color)).append("\" opacity=\"0.18\"/>")
-                       .append("<g fill=\"").append(getColorHex(img.color)).append("\">").append(img.svgPath).append("</g>");
-                    // Pad the rendition to its configured weight, scaled by how much of the
-                    // published width was actually asked for, so an oversized request costs more.
-                    final int renditionBytes = Math.round(VerlaConfiguration.getInstance().getHeadlessImageKb() * 1024f * (sw / 960f));
-                    final StringBuilder meta = new StringBuilder();
-                    final Random rnd = new Random(img.id.hashCode());
-                    while (meta.length() < renditionBytes)
-                    {
-                        meta.append(Integer.toHexString(rnd.nextInt(16)));
-                    }
-                    svg.append("<metadata>").append(meta).append("</metadata></svg>");
-
-                    exchange.getResponseHeaders().set("Cache-Control", "public, max-age=60");
-                    sendResponse(exchange, 200, "image/svg+xml; charset=utf-8", svg.toString());
-                    return;
-                }
-                else if (apiMethod.startsWith("bff/"))
-                {
-                    // basket, wishlist and getWishlist all validate the customer id. The client
-                    // fires them once with the bootstrap id (rejected) and again once settled.
-                    final String claimed = getQueryParam(exchange.getRequestURI().toString(), "customerId");
-                    ensureHeadlessSession(cartId);
-                    final boolean settled = isHeadlessSessionSettled(cartId);
-                    final String valid = headlessSettledCustomerId.get(cartId);
-                    if (!settled || claimed == null || claimed.isEmpty() || !claimed.equals(valid))
-                    {
-                        sendResponse(exchange, 400, "application/json; charset=utf-8",
-                                     "{\"title\":\"Bad Request\",\"type\":\"invalid-customer\",\"detail\":\"Customer id is not valid for this session\"}");
-                        return;
-                    }
-
-                    final String resource = apiMethod.substring(4);
-                    final Map<String, Object> payload = new LinkedHashMap<>();
-                    payload.put("customerId", valid);
-                    if (resource.startsWith("basket"))
-                    {
-                        int units = 0;
-                        for (final Integer q : cart.items.values())
-                        {
-                            units += q;
-                        }
-                        payload.put("basketId", cartId);
-                        payload.put("productItems", cart.items.size());
-                        payload.put("totalQuantity", units);
-                    }
-                    else
-                    {
-                        payload.put("wishlistId", "wl-" + Long.toHexString(cartId.hashCode() & 0xFFFFFFL));
-                        payload.put("items", List.of());
-                    }
-                    sendResponse(exchange, 200, "application/json; charset=utf-8", new Gson().toJson(payload));
-                    return;
-                }
-                else if ("cms/slot".equals(apiMethod))
-                {
-                    // Each content slot is its own document, so the footer and banners land well
-                    // after first paint and shift the layout underneath anything already clicked.
-                    VerlaConfiguration.getInstance().simulateHeadlessCmsSlot();
-                    final String slotId = getQueryParam(exchange.getRequestURI().toString(), "id");
-                    final Map<String, Object> slot = new LinkedHashMap<>();
-                    slot.put("id", slotId);
-                    slot.put("type", "content-asset");
-                    switch (slotId)
-                    {
-                        case "PWA_StripBanner":
-                            slot.put("html", "<span class=\"" + emotionHash("strip-banner") + "\">"
-                                             + escapeHtml(trans.getOrDefault("promoBanner", "Free worldwide shipping on orders over $150 USD")) + "</span>");
-                            break;
-                        case "PWA_FooterLinkList":
-                            slot.put("html", "<ul class=\"" + emotionHash("footer-links") + "\">"
-                                             + "<li><a href=\"shipping.html\">" + escapeHtml(trans.getOrDefault("shippingReturns", "Shipping &amp; Returns")) + "</a></li>"
-                                             + "<li><a href=\"faq.html\">FAQ</a></li>"
-                                             + "<li><a href=\"contact.html\">" + escapeHtml(trans.getOrDefault("contact", "Contact")) + "</a></li>"
-                                             + "<li><a href=\"stores.html\">" + escapeHtml(trans.getOrDefault("ourStores", "Our Stores")) + "</a></li>"
-                                             + "<li><a href=\"careers.html\">" + escapeHtml(trans.getOrDefault("careers", "Careers")) + "</a></li>"
-                                             + "</ul>");
-                            break;
-                        case "PWA_FooterLegal":
-                            slot.put("html", "<p class=\"" + emotionHash("footer-legal") + "\">&copy; 2026 V&Eacute;RLA. "
-                                             + escapeHtml(trans.getOrDefault("allRightsReserved", "All rights reserved.")) + "</p>");
-                            break;
-                        default:
-                            slot.put("html", "");
-                            break;
-                    }
-                    sendResponse(exchange, 200, "application/json; charset=utf-8", new Gson().toJson(slot));
-                    return;
-                }
-                else if ("country/select".equals(apiMethod))
-                {
-                    final String queryCode = exchange.getRequestURI().getQuery() != null ? getQueryParam(exchange.getRequestURI().getQuery(), "code") : null;
-                    final String selectCode = queryCode != null && !queryCode.isEmpty() ? queryCode : params.getOrDefault("code", "US");
-                    exchange.getResponseHeaders().add("Set-Cookie", "verla_country=" + selectCode + "; Path=/; Max-Age=31536000");
-                    
-                    // HX-Refresh reloads the current page so country switch is applied immediately
-                    exchange.getResponseHeaders().add("HX-Refresh", "true");
-                    sendResponse(exchange, 200, "text/html", "");
-                    return;
-                }
-                else if ("countries".equals(apiMethod))
-                {
-                    final String q = exchange.getRequestURI().getQuery() != null ? getQueryParam(exchange.getRequestURI().getQuery(), "q").toLowerCase() : "";
-                    final StringBuilder sb = new StringBuilder();
-                    for (final Country c : catalogConfig.countries)
-                    {
-                        if (q.isEmpty() || c.name.toLowerCase().contains(q) || c.code.toLowerCase().contains(q))
-                        {
-                            final String selectedClass = c.code.equals(activeCountry.code) ? "selected" : "";
-                            // Perfect vs Normal/Bad styling
-                            if (isTailwindByClaude(qualitySuffix) || isApparel(qualitySuffix))
-                            {
-                                sb.append("<li data-selected=\"").append(c.code.equals(activeCountry.code)).append("\" class=\"").append(TW_COUNTRY_ITEM).append("\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
-                                  .append(c.name).append(" (").append(c.symbol).append(")</li>");
-                            }
-                            else if ("apocalypse".equals(qualitySuffix))
-                            {
-                                sb.append("<li class=\"country-item ").append(selectedClass).append("\" data-country=\"").append(c.code).append("\" style=\"display:flex; align-items:center; gap:8px; cursor:pointer;\" onclick=\"selectApocalypseCountry('").append(c.code).append("');\">")
-                                  .append("<span style=\"font-size:16px;\">").append(getCountryFlag(c.code)).append("</span> ")
-                                  .append("<span>").append(c.name).append(" (").append(c.symbol).append(")</span></li>");
-                            }
-                            else if ("bad".equals(qualitySuffix) || "modern-bad-nowcag".equals(qualitySuffix))
-                            {
-                                sb.append("<div class=\"country-item ").append(selectedClass).append("\" style=\"padding:10px;cursor:pointer;\" onclick=\"document.cookie='verla_country=").append(c.code).append(";path=/';location.reload();\">")
-                                  .append(c.name).append(" (").append(c.symbol).append(")</div>");
-                            }
-                            else
-                            {
-                                sb.append("<li class=\"country-item ").append(selectedClass).append("\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
-                                  .append(c.name).append(" (").append(c.symbol).append(")</li>");
-                            }
-                        }
-                    }
-                    sendResponse(exchange, 200, "text/html", sb.toString());
-                    return;
-                }
-                else if ("address-form".equals(apiMethod))
-                {
-                    final String country = exchange.getRequestURI().getQuery() != null ? getQueryParam(exchange.getRequestURI().getQuery(), "country") : activeCountry.code;
-                    final String prefix = params.getOrDefault("prefix", "shipping-");
-                    sendResponse(exchange, 200, "text/html", getAddressFieldsHtml(country, locale, trans, prefix, qualitySuffix));
-                    return;
-                }
-                else if ("cart/add".equals(apiMethod))
-                {
-                    VerlaConfiguration.getInstance().simulateCartAdd();
-
-                    // The headless SUT cannot mutate a basket until its bootstrap handshake has
-                    // settled. Adds issued too early are rejected, which is what makes a naive
-                    // "click add to bag straight after load" test fail intermittently.
-                    if (isHeadless(qualitySuffix) && !isHeadlessSessionSettled(cartId))
-                    {
-                        sendResponse(exchange, 400, "application/json; charset=utf-8",
-                                     "{\"title\":\"Bad Request\",\"type\":\"session-not-ready\",\"detail\":\"Basket is not available until the session has settled\"}");
-                        return;
-                    }
-
-                    String productId = params.get("productId");
-                    final String size = params.get("size");
-                    if (productId != null)
-                    {
-                        if (size != null && !size.isEmpty() && !productId.contains(":"))
-                        {
-                            productId = productId + ":" + size;
-                        }
-                        final int qty = Integer.parseInt(params.getOrDefault("quantity", "1"));
-                        cart.items.merge(productId, qty, Integer::sum);
-                    }
-                    // Return cart badge count wrapper
-                    sendResponse(exchange, 200, "text/html", getCartBadgeWrapperHtml(cart, trans, activeCountry, qualitySuffix, true));
-                    return;
-                }
-                else if ("cart/update".equals(apiMethod))
-                {
-                    VerlaConfiguration.getInstance().simulateCartUpdate();
-                    final String productId = params.get("productId");
-                    final int qty = Integer.parseInt(params.getOrDefault("quantity", "0"));
-                    if (productId != null)
-                    {
-                        if (qty <= 0)
-                        {
-                            cart.items.remove(productId);
-                        }
-                        else
-                        {
-                            cart.items.put(productId, qty);
-                        }
-                    }
-                    sendResponse(exchange, 200, "text/html", getCartContentHtml(cart, activeCountry, trans, qualitySuffix));
-                    return;
-                }
-                else if ("cart/drawer".equals(apiMethod))
-                {
-                    if (isApparel(qualitySuffix))
-                    {
-                        sendResponse(exchange, 200, "application/json; charset=utf-8", getCartDrawerHtmlApparel(cart, activeCountry, trans));
-                        return;
-                    }
-                    sendResponse(exchange, 200, "text/html", getCartDrawerHtmlApocalypse(cart, activeCountry, trans));
-                    return;
-                }
-                else if ("cart/badge".equals(apiMethod))
-                {
-                    sendResponse(exchange, 200, "text/html", getCartBadgeWrapperHtml(cart, trans, activeCountry, qualitySuffix));
-                    return;
-                }
-                else if ("cart/remove".equals(apiMethod))
-                {
-                    VerlaConfiguration.getInstance().simulateCartRemove();
-                    final String queryProd = exchange.getRequestURI().getQuery() != null ? getQueryParam(exchange.getRequestURI().getQuery(), "productId") : null;
-                    final String productId = queryProd != null && !queryProd.isEmpty() ? queryProd : params.get("productId");
-                    if (productId != null)
-                    {
-                        cart.items.remove(productId);
-                    }
-                    if ("cart-btn-wrapper".equals(hxTarget))
-                    {
-                        sendResponse(exchange, 200, "text/html", getCartBadgeWrapperHtml(cart, trans, activeCountry, qualitySuffix));
-                    }
-                    else
-                    {
-                        sendResponse(exchange, 200, "text/html", getCartContentHtml(cart, activeCountry, trans, qualitySuffix));
-                    }
-                    return;
-                }
-                else if ("cart/coupon".equals(apiMethod))
-                {
-                    VerlaConfiguration.getInstance().simulateCartCoupon();
-                    final String coupon = params.getOrDefault("couponCode", "").trim();
-                    if (coupon.isEmpty())
-                    {
-                        cart.coupon = null;
-                        sendResponse(exchange, 200, "text/html", getCartContentHtml(cart, activeCountry, trans, qualitySuffix));
-                        return;
-                    }
-                    
-                    final String lower = coupon.toLowerCase();
-                    if ("10p-off".equals(lower) || "freegift".equals(lower) || "freeship".equals(lower) || "bogo".equals(lower))
-                    {
-                        cart.coupon = lower;
-                        sendResponse(exchange, 200, "text/html", getCartContentHtml(cart, activeCountry, trans, qualitySuffix));
-                    }
-                    else
-                    {
-                        final String errorMsg = trans.getOrDefault("error", "Error") + ": This promo code is expired or invalid.";
-                        sendResponse(exchange, 200, "text/html", getCartContentHtml(cart, activeCountry, trans, qualitySuffix, errorMsg));
-                    }
-                    return;
-                }
-                else if ("cart/dropdown".equals(apiMethod))
-                {
-                    VerlaConfiguration.getInstance().simulateCartDropdown();
-                    sendResponse(exchange, 200, "text/html", getCartDropdownHtml(cart, trans, activeCountry, qualitySuffix));
-                    return;
-                }
-                else if ("search/suggest".equals(apiMethod))
-                {
-                    VerlaConfiguration.getInstance().simulateSearchSuggest();
-                    final String query = params.getOrDefault("q", "").trim().toLowerCase();
-                    if (query.isEmpty())
-                    {
-                        sendResponse(exchange, 200, "text/html", "");
-                        return;
-                    }
-
-                    final List<Product> matches = new ArrayList<>();
-                    for (final Product p : catalogProducts)
-                    {
-                        final String enName = p.names.getOrDefault("en", "").toLowerCase();
-                        final String localName = p.names.getOrDefault(locale, "").toLowerCase();
-                        if (enName.contains(query) || localName.contains(query) || p.id.toLowerCase().contains(query))
-                        {
-                            matches.add(p);
-                        }
-                    }
-
-                    final StringBuilder sb = new StringBuilder();
-                    final int limit = Math.min(6, matches.size());
-                    for (int i = 0; i < limit; i++)
-                    {
-                        final Product p = matches.get(i);
-                        final double price = p.salePrice != null ? p.salePrice : p.basePrice;
-                        final String name = p.names.getOrDefault(locale, p.names.get("en"));
-                        if (isTailwindByClaude(qualitySuffix) || isApparel(qualitySuffix))
-                        {
-                            sb.append("<a href=\"p/").append(p.slug).append(".html\" class=\"flex items-center gap-3 border-b border-sand-200 px-4 py-2.5 text-ink transition-colors last:border-b-0 hover:bg-sand-50\">")
-                              .append("  <div class=\"flex h-9 w-9 shrink-0 items-center justify-center rounded border border-sand-200 bg-sand-50\">")
-                              .append("    <svg viewBox=\"0 0 100 100\" class=\"h-[70%] w-[70%] text-terracotta-500\">").append(p.svgPath).append("</svg>")
-                              .append("  </div>")
-                              .append("  <div class=\"flex flex-col text-left\">")
-                              .append("    <span class=\"text-[13px] font-medium\">").append(escapeHtml(name)).append("</span>")
-                              .append("    <span class=\"text-[11px] text-muted\">").append(formatPrice(price, activeCountry)).append("</span>")
-                              .append("  </div>")
-                              .append("</a>");
-                        }
-                        else
-                        {
-                            sb.append("<a href=\"p/").append(p.slug).append(".html\" class=\"search-suggestion-item\">")
-                              .append("  <div class=\"search-suggestion-thumb\">")
-                              .append("    <svg viewBox=\"0 0 100 100\">").append(p.svgPath).append("</svg>")
-                              .append("  </div>")
-                              .append("  <div class=\"search-suggestion-info\">")
-                              .append("    <span class=\"search-suggestion-name\">").append(escapeHtml(name)).append("</span>")
-                              .append("    <span class=\"search-suggestion-price\">").append(formatPrice(price, activeCountry)).append("</span>")
-                              .append("  </div>")
-                              .append("</a>");
-                        }
-                    }
-
-                    if (matches.size() > 6)
-                    {
-                        final int extra = matches.size() - 6;
-                        final String viewAllUrl = "plp.html?q=" + URLEncoder.encode(query, StandardCharsets.UTF_8.name());
-                        final String moreLinkClass = (isTailwindByClaude(qualitySuffix) || isApparel(qualitySuffix))
-                            ? "block bg-sand-50 p-2.5 text-center text-xs font-medium text-terracotta-500 transition-colors hover:text-terracotta-700"
-                            : "search-more-link";
-                        sb.append("<a href=\"").append(viewAllUrl).append("\" class=\"").append(moreLinkClass).append("\">")
-                          .append("+ ").append(extra).append(" more products. View all.")
-                          .append("</a>");
-                    }
-
-                    sendResponse(exchange, 200, "text/html", sb.toString());
-                    return;
-                }
-                else if ("auth/login".equals(apiMethod))
-                {
-                    VerlaConfiguration.getInstance().simulateAuthLogin();
-                    final String email = params.getOrDefault("email", "").trim();
-                    final String password = params.getOrDefault("password", "");
-                    
-                    final User user = usersDb.get(email);
-                    if (user != null && user.password.equals(password))
-                    {
-                        final String newSessionId = UUID.randomUUID().toString();
-                        activeSessions.put(newSessionId, email);
-                        exchange.getResponseHeaders().add("Set-Cookie", "verla_session_id=" + newSessionId + "; Path=/; HttpOnly");
-                        
-                        exchange.getResponseHeaders().add("HX-Redirect", "/verla-" + qualitySuffix + "/account.html");
-                        sendResponse(exchange, 200, "text/html", "");
-                    }
-                    else
-                    {
-                        final Map<String, String> model = new HashMap<>();
-                        model.put("auth_error", "Invalid email or password.");
-                        model.put("input_email", escapeHtml(email));
-                        sendResponse(exchange, 400, "text/html", renderTemplate(qualitySuffix, "login.html", model, activeCountry, trans, currentUser, cart, "", isHtmx));
-                    }
-                    return;
-                }
-                else if ("auth/register".equals(apiMethod))
-                {
-                    if (!"PUT".equalsIgnoreCase(exchange.getRequestMethod()))
-                    {
-                        sendResponse(exchange, 405, "text/plain", "Method Not Allowed: Registration requires PUT");
-                        return;
-                    }
-                    VerlaConfiguration.getInstance().simulateAuthRegister();
-                    if (LOG.isDebugEnabled())
-                    {
-                        LOG.debug("Processing registration: email={}", params.get("email"));
-                    }
-                    final String email = params.getOrDefault("email", "").trim();
-                    final String password = params.getOrDefault("password", "");
-                    final String confirmPassword = params.getOrDefault("confirmPassword", "");
-                    
-                    final Map<String, String> model = new HashMap<>();
-                    model.put("input_email", escapeHtml(email));
-                    
-                    if (email.isEmpty() || !email.contains("@"))
-                    {
-                        model.put("err_email", "Please enter a valid email address.");
-                        sendResponse(exchange, 400, "text/html", renderTemplate(qualitySuffix, "register.html", model, activeCountry, trans, currentUser, cart, "", isHtmx));
-                        return;
-                    }
-                    if (password.length() < 6)
-                    {
-                        model.put("err_password", "Password must be at least 6 characters.");
-                        sendResponse(exchange, 400, "text/html", renderTemplate(qualitySuffix, "register.html", model, activeCountry, trans, currentUser, cart, "", isHtmx));
-                        return;
-                    }
-                    if (!password.equals(confirmPassword))
-                    {
-                        model.put("err_confirmPassword", "Passwords do not match.");
-                        sendResponse(exchange, 400, "text/html", renderTemplate(qualitySuffix, "register.html", model, activeCountry, trans, currentUser, cart, "", isHtmx));
-                        return;
-                    }
-                    if (usersDb.containsKey(email))
-                    {
-                        model.put("auth_error", "An account with this email already exists.");
-                        sendResponse(exchange, 400, "text/html", renderTemplate(qualitySuffix, "register.html", model, activeCountry, trans, currentUser, cart, "", isHtmx));
-                        return;
-                    }
-                    
-                    final User newUser = new User(email, password);
-                    usersDb.put(email, newUser);
-                    
-                    final String newSessionId = UUID.randomUUID().toString();
-                    activeSessions.put(newSessionId, email);
-                    exchange.getResponseHeaders().add("Set-Cookie", "verla_session_id=" + newSessionId + "; Path=/; HttpOnly");
-                    
-                    exchange.getResponseHeaders().add("HX-Redirect", "/verla-" + qualitySuffix + "/account.html");
-                    sendResponse(exchange, 200, "text/html", "");
-                    return;
-                }
-                else if ("auth/change-password".equals(apiMethod))
-                {
-                    final String current = params.get("currentPassword");
-                    final String newPass = params.get("newPassword");
-                    final String confirm = params.get("confirmNewPassword");
-                    
-                    final Map<String, String> model = new HashMap<>();
-                    if (currentUser == null)
-                    {
-                        exchange.getResponseHeaders().add("HX-Redirect", "/verla-" + qualitySuffix + "/login.html");
-                        sendResponse(exchange, 200, "text/html", "");
-                        return;
-                    }
-                    if (!currentUser.password.equals(current))
-                    {
-                        model.put("password_error", "Current password is incorrect.");
-                    }
-                    else if (newPass.length() < 6)
-                    {
-                        model.put("password_error", "New password must be at least 6 characters.");
-                    }
-                    else if (!newPass.equals(confirm))
-                    {
-                        model.put("password_error", "Passwords do not match.");
-                    }
-                    else
-                    {
-                        currentUser.password = newPass;
-                        model.put("password_status", "Password updated successfully!");
-                    }
-                    sendResponse(exchange, 200, "text/html", renderTemplate(qualitySuffix, "account.html", model, activeCountry, trans, currentUser, cart, "", isHtmx));
-                    return;
-                }
-                else if ("auth/address/add".equals(apiMethod))
-                {
-                    final Map<String, String> model = new HashMap<>();
-                    if (currentUser != null)
-                    {
-                        final String street = params.get("street");
-                        final String city = params.get("city");
-                        final String state = params.getOrDefault("state", "");
-                        final String postcode = params.get("postcode");
-                        final String country = params.get("country");
-                        final String id = "addr-" + UUID.randomUUID().toString().substring(0, 8);
-                        
-                        currentUser.addresses.add(new Address(id, street, city, state, postcode, country));
-                    }
-                    sendResponse(exchange, 200, "text/html", renderTemplate(qualitySuffix, "account.html", model, activeCountry, trans, currentUser, cart, "", isHtmx));
-                    return;
-                }
-                else if ("auth/address/delete".equals(apiMethod))
-                {
-                    final Map<String, String> model = new HashMap<>();
-                    final String id = params.get("id");
-                    if (currentUser != null && id != null)
-                    {
-                        currentUser.addresses.removeIf(a -> a.id.equals(id));
-                    }
-                    sendResponse(exchange, 200, "text/html", renderTemplate(qualitySuffix, "account.html", model, activeCountry, trans, currentUser, cart, "", isHtmx));
-                    return;
-                }
-                else if ("auth/card/add".equals(apiMethod))
-                {
-                    final Map<String, String> model = new HashMap<>();
-                    if (currentUser != null)
-                    {
-                        final String number = params.get("cardNumber");
-                        final String type = params.get("cardType");
-                        final String expiry = params.get("cardExpiry");
-                        final String cvv = params.get("cardCvv");
-                        final String id = "card-" + UUID.randomUUID().toString().substring(0, 8);
-                        
-                        currentUser.cards.add(new Card(id, number, type, expiry, cvv));
-                    }
-                    sendResponse(exchange, 200, "text/html", renderTemplate(qualitySuffix, "account.html", model, activeCountry, trans, currentUser, cart, "", isHtmx));
-                    return;
-                }
-                else if ("auth/card/delete".equals(apiMethod))
-                {
-                    final Map<String, String> model = new HashMap<>();
-                    final String id = params.get("id");
-                    if (currentUser != null && id != null)
-                    {
-                        currentUser.cards.removeIf(c -> c.id.equals(id));
-                    }
-                    sendResponse(exchange, 200, "text/html", renderTemplate(qualitySuffix, "account.html", model, activeCountry, trans, currentUser, cart, "", isHtmx));
-                    return;
-                }
-                else if ("checkout/purchase".equals(apiMethod))
-                {
-                    // Simulate payment gateway and order processing latency
-                    VerlaConfiguration.getInstance().simulatePurchase();
-
-                    // Checkout processing logic
-                    final String firstName = params.getOrDefault("firstName", "").trim();
-                    final String lastName = params.getOrDefault("lastName", "").trim();
-                    final String email = params.getOrDefault("email", "").trim();
-                    final String cardType = params.getOrDefault("cardType", "");
-                    final String cardNumber = params.getOrDefault("cardNumber", "").trim().replace(" ", "");
-                    final String cardExpiry = params.getOrDefault("cardExpiry", "");
-                    final String cardCvv = params.getOrDefault("cardCvv", "");
-                    
-                    final String street = params.getOrDefault("address", params.getOrDefault("street", ""));
-                    final String city = params.getOrDefault("city", "");
-                    final String postcode = params.getOrDefault("postcode", params.getOrDefault("zipCode", ""));
-                    final String country = params.getOrDefault("country", "US");
-                    final String state = params.getOrDefault("state", "");
-
-                    final Map<String, String> model = new HashMap<>();
-                    model.put("input_firstName", escapeHtml(firstName));
-                    model.put("input_lastName", escapeHtml(lastName));
-                    model.put("input_email", escapeHtml(email));
-                    model.put("input_cardNumber", escapeHtml(cardNumber));
-                    model.put("input_cardExpiry", escapeHtml(cardExpiry));
-                    model.put("input_cardCvv", escapeHtml(cardCvv));
-
-                    boolean hasErrors = false;
-                    if (firstName.isEmpty()) { model.put("err_firstName", trans.getOrDefault("errFirstNameRequired", "First name is required.")); hasErrors = true; }
-                    if (lastName.isEmpty()) { model.put("err_lastName", trans.getOrDefault("errLastNameRequired", "Last name is required.")); hasErrors = true; }
-                    if (email.isEmpty() || !email.contains("@")) { model.put("err_email", trans.getOrDefault("errEmailRequired", "Valid email is required.")); hasErrors = true; }
-                    
-                    // Card payment validation
-                    if (cardNumber.isEmpty())
-                    {
-                        model.put("err_cardNumber", trans.getOrDefault("errCardNumberRequired", "Card number is required."));
-                        hasErrors = true;
-                    }
-                    else if (cardNumber.endsWith("200"))
-                    {
-                        model.put("err_cardNumber", trans.getOrDefault("errCardDeclined", "Payment declined for testing purposes."));
-                        hasErrors = true;
-                    }
-                    else if (!cardNumber.replaceAll("\\s+", "").matches("\\d+"))
-                    {
-                        model.put("err_cardNumber", trans.getOrDefault("errCardNumberRequired", "Card number must contain digits only."));
-                        hasErrors = true;
-                    }
-
-                    if (cardExpiry.isEmpty()) { model.put("err_cardExpiry", trans.getOrDefault("errCardExpiryRequired", "Expiry date is required.")); hasErrors = true; }
-                    if (cardCvv.isEmpty() || !cardCvv.matches("\\d{3,4}")) { model.put("err_cardCvv", trans.getOrDefault("errCardCvvRequired", "CVV is required.")); hasErrors = true; }
-
-                    if (hasErrors)
-                    {
-                        sendResponse(exchange, 400, "text/html", renderTemplate(qualitySuffix, "checkout.html", model, activeCountry, trans, currentUser, cart, "", isHtmx));
-                        return;
-                    }
-
-                    // Success!
-                    final double subtotal = calculateSubtotal(cart);
-                    final double discount = calculateDiscount(cart, subtotal);
-                    final double shipping = calculateShipping(cart, subtotal);
-                    final double tax = Math.round((subtotal - discount) * 0.1 * 100.0) / 100.0;
-                    final double total = subtotal - discount + shipping + tax;
-                    
-                    final int orderRand = ThreadLocalRandom.current().nextInt(1000000, 10000000);
-                    final String orderNum = "V-" + orderRand + "-" + activeCountry.code;
-                    final Address shippingAddr = new Address("addr-order", street, city, state, postcode, country);
-                    final Card paymentCard = new Card("card-order", cardNumber, cardType, cardExpiry, cardCvv);
-                    final boolean giftAdded = "freegift".equals(cart.coupon);
-
-                    final List<OrderItem> items = new ArrayList<>();
-                    for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
-                    {
-                        final String cartKey = entry.getKey();
-                        final String prodId;
-                        final String size;
-                        if (cartKey.contains(":"))
-                        {
-                            final String[] parts = cartKey.split(":");
-                            prodId = parts[0];
-                            size = parts[1];
-                        }
-                        else
-                        {
-                            prodId = cartKey;
-                            size = "";
-                        }
-
-                        final Product prod = lookupProductById(prodId);
-                        if (prod != null)
-                        {
-                            final double itemPrice = prod.salePrice != null ? prod.salePrice : prod.basePrice;
-                            items.add(new OrderItem(prod.id, prod.names.getOrDefault(locale, prod.names.get("en")), entry.getValue(), itemPrice));
-
-                            final Map<String, Integer> stockMap = productInventory.get(prodId);
-                            if (stockMap != null)
-                            {
-                                final int currentStock = stockMap.getOrDefault(size, 0);
-                                final int qtyBought = entry.getValue();
-                                final int newStock = Math.max(0, currentStock - qtyBought);
-                                stockMap.put(size, newStock);
-                            }
-                        }
-                    }
-
-                    final Order order = new Order(orderNum, email, items, subtotal, shipping, tax, total, "Processing", shippingAddr, paymentCard, cart.coupon, giftAdded);
-                    ordersDb.put(orderNum, order);
-
-                    // Add to user orders list if logged in
-                    if (currentUser != null)
-                    {
-                        currentUser.orders.add(order);
-                    }
-
-                    // Clear shopping cart
-                    cart.items.clear();
-                    cart.coupon = null;
-
-                    // Display confirmation fragment
-                    final String thankYouMsg = trans.getOrDefault("thankYou", "Thank you for your purchase!");
-                    final String orderPlacedMsg = trans.getOrDefault("orderPlaced", "Your order has been placed successfully.");
-                    final String orderNumLabel = trans.getOrDefault("orderNumber", "Order Number");
-                    final String zipCodeLabel = trans.getOrDefault("shippingZipCode", "Shipping Zip Code");
-                    final String totalPaidLabel = trans.getOrDefault("totalPaid", "Total Paid");
-                    final String trackMsg = trans.getOrDefault("trackInstructions", "Use the Order Number and Shipping Zip Code to track your package on the <a href=\"track-orders.html\" style=\"color: var(--color-accent); font-weight: 600;\">Track Orders</a> page.");
-                    final String continueShoppingMsg = trans.getOrDefault("continueShopping", "Continue Shopping");
-
-                    final String successHtml;
-                    if ("apocalypse".equals(qualitySuffix))
-                    {
-                        successHtml = "<div style=\"text-align:center; padding: 40px 20px; background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 12px; max-width: 600px; margin: 0 auto;\">" +
-                                      "  <svg class=\"success-icon\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" style=\"margin: 0 auto 20px auto; display: block;\">" +
-                                      "    <circle cx=\"32\" cy=\"32\" r=\"30\" fill=\"var(--apoc-gold)\" />" +
-                                      "    <path d=\"M20 32L28 40L44 24\" stroke=\"#000\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />" +
-                                      "  </svg>" +
-                                      "  <h2 id=\"success-message\" style=\"font-family: var(--apoc-font-serif); font-size: 28px; color: #fff; margin-bottom: 12px;\">" + thankYouMsg + "</h2>" +
-                                      "  <p id=\"order-placed-message\" style=\"color: var(--apoc-text-secondary); margin-bottom: 24px;\">" + orderPlacedMsg + "</p>" +
-                                      "  <div style=\"background-color: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); padding: 24px; border-radius: 8px; text-align: left; max-width: 480px; margin: 0 auto 30px auto;\">" +
-                                      "    <div style=\"margin-bottom:10px; color:var(--apoc-text-secondary);\"><strong>" + orderNumLabel + ":</strong> <span id=\"order-number-value\" style=\"color:var(--apoc-gold); font-weight:700;\">" + orderNum + "</span></div>" +
-                                      "    <div style=\"margin-bottom:10px; color:var(--apoc-text-secondary);\"><strong>" + zipCodeLabel + ":</strong> <span id=\"zip-code-value\" style=\"color:#fff;\">" + postcode + "</span></div>" +
-                                      "    <div style=\"margin-bottom:10px; color:var(--apoc-text-secondary);\"><strong>" + totalPaidLabel + ":</strong> <span style=\"color:var(--apoc-gold); font-weight:700;\">" + formatPrice(total, activeCountry) + "</span></div>" +
-                                      "    <div style=\"font-size: 12px; color: var(--apoc-text-muted); margin-top: 16px;\">" + trackMsg + "</div>" +
-                                      "  </div>" +
-                                      "  <a href=\"index.html\" class=\"apoc-btn-gold\" style=\"display:inline-block; padding: 12px 24px;\">" + continueShoppingMsg + "</a>" +
-                                      "</div>";
-                    }
-                    else
-                    {
-                        successHtml = "<div style=\"text-align:center; padding: 40px 20px;\">" +
-                                      "  <svg class=\"success-icon\" width=\"64\" height=\"64\" viewBox=\"0 0 64 64\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" style=\"margin: 0 auto 20px auto; display: block;\">" +
-                                      "    <circle cx=\"32\" cy=\"32\" r=\"30\" fill=\"#5F8766\" />" +
-                                      "    <path d=\"M20 32L28 40L44 24\" stroke=\"white\" stroke-width=\"6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-linejoin=\"round\" />" +
-                                      "  </svg>" +
-                                      "  <h2 id=\"success-message\" style=\"font-family: var(--font-family-serif); font-size: 28px; margin-bottom: 12px;\">" + thankYouMsg + "</h2>" +
-                                      "  <p id=\"order-placed-message\" style=\"color: var(--color-text-secondary); margin-bottom: 24px;\">" + orderPlacedMsg + "</p>" +
-                                      "  <div style=\"background-color: var(--color-bg-secondary); border: 1px solid var(--color-border); padding: 24px; border-radius: var(--border-radius); text-align: left; max-width: 480px; margin: 0 auto 30px auto;\">" +
-                                      "    <div style=\"margin-bottom:10px;\"><strong>" + orderNumLabel + ":</strong> <span id=\"order-number-value\">" + orderNum + "</span></div>" +
-                                      "    <div style=\"margin-bottom:10px;\"><strong>" + zipCodeLabel + ":</strong> <span id=\"zip-code-value\">" + postcode + "</span></div>" +
-                                      "    <div style=\"margin-bottom:10px;\"><strong>" + totalPaidLabel + ":</strong> " + formatPrice(total, activeCountry) + "</div>" +
-                                      "    <div style=\"font-size: 12px; color: var(--color-text-secondary); margin-top: 16px;\">" + trackMsg + "</div>" +
-                                      "  </div>" +
-                                      "  <a href=\"index.html\" class=\"btn-primary\" style=\"display:inline-block;\">" + continueShoppingMsg + "</a>" +
-                                      "</div>";
-                    }
-                    sendResponse(exchange, 200, "text/html", successHtml);
-                    return;
-                }
-                else if ("order/lookup".equals(apiMethod))
-                {
-                    VerlaConfiguration.getInstance().simulateOrderLookup();
-                    final String orderNumber = params.getOrDefault("orderNumber", "").trim();
-                    final String zipCode = params.getOrDefault("zipCode", "").trim();
-                    
-                    final String statusLabel = trans.getOrDefault("status", "Status");
-                    final String recipientLabel = trans.getOrDefault("recipient", "Recipient");
-                    final String itemsLabel = trans.getOrDefault("items", "Items");
-                    final String freeGiftLabel = trans.getOrDefault("freeGift", "Free Gift");
-                    final String totalLabel = trans.getOrDefault("total", "Total");
-
-                    final Order order = ordersDb.get(orderNumber);
-                    if (order != null && order.shippingAddress.postcode.equalsIgnoreCase(zipCode))
-                    {
-                        final StringBuilder sb = new StringBuilder();
-                        sb.append("<div style=\"background-color: var(--color-bg-primary); border: 1px solid var(--color-border); padding: 24px; border-radius: var(--border-radius); margin-top: 20px;\">")
-                          .append("  <h4 style=\"font-family: var(--font-family-serif); font-size: 18px; margin-bottom: 16px;\">Order ").append(order.orderNumber).append("</h4>")
-                          .append("  <div style=\"margin-bottom: 12px;\"><strong>").append(statusLabel).append(":</strong> <span style=\"color: var(--color-success); font-weight: 600;\">").append(order.status).append("</span></div>")
-                          .append("  <div style=\"margin-bottom: 12px;\"><strong>").append(recipientLabel).append(":</strong> ").append(order.shippingAddress.street).append(", ").append(order.shippingAddress.city).append("</div>")
-                          .append("  <h5 style=\"font-size: 13px; font-weight: 600; text-transform: uppercase; margin-bottom: 10px;\">").append(itemsLabel).append("</h5>")
-                          .append("  <ul style=\"list-style: none; display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;\">");
-                        
-                        for (final OrderItem item : order.items)
-                        {
-                            sb.append("    <li style=\"display:flex; justify-content: space-between; font-size: 13px;\">")
-                              .append("      <span>").append(item.productName).append(" &times; ").append(item.quantity).append("</span>")
-                              .append("      <span>").append(formatPrice(item.price * item.quantity, activeCountry)).append("</span>")
-                              .append("    </li>");
-                        }
-                        if (order.freeGiftAdded)
-                        {
-                            sb.append("    <li style=\"display:flex; justify-content: space-between; font-size: 13px; color: var(--color-success); font-weight: 500;\">")
-                              .append("      <span>VÉRLA Signature Tote Bag &times; 1</span>")
-                              .append("      <span>").append(freeGiftLabel).append("</span>")
-                              .append("    </li>");
-                        }
-                        sb.append("  </ul>")
-                          .append("  <div style=\"display: flex; justify-content: space-between; font-weight: 600; border-top: 1px solid var(--color-border); padding-top: 12px;\">")
-                          .append("    <span>").append(totalLabel).append("</span>")
-                          .append("    <span>").append(formatPrice(order.total, activeCountry)).append("</span>")
-                          .append("  </div>")
-                          .append("</div>");
-                        sendResponse(exchange, 200, "text/html", sb.toString());
-                    }
-                    else
-                    {
-                        sendResponse(exchange, 200, "text/html", "<div class=\"error-message\" style=\"margin-top: 20px; text-align: center;\">Order not found or invalid Zip Code.</div>");
-                    }
-                    return;
-                }
-                else if ("auth/logout".equals(apiMethod))
-                {
-                    if (sessionId != null)
-                    {
-                        activeSessions.remove(sessionId);
-                    }
-                    exchange.getResponseHeaders().add("Set-Cookie", "verla_session_id=; Path=/; Max-Age=0");
-                    exchange.getResponseHeaders().add("Location", "/verla-" + qualitySuffix + "/index.html");
-                    sendResponse(exchange, 302, "text/plain", "");
-                    return;
-                }
-            }
-
-            // --- storefront dynamic pages (full or fragments) ---
-
-            final String pageResource;
-            if (pagePath.isEmpty() || "index.html".equals(pagePath))
-            {
-                pageResource = "index.html";
-            }
-            else if (pagePath.startsWith("p/"))
-            {
-                // PDP: /p/slug.html
-                pageResource = "pdp.html";
-            }
-            else if (pagePath.startsWith("c/"))
-            {
-                // PLP: /c/category.html
-                pageResource = "plp.html";
-            }
-            else
-            {
-                pageResource = pagePath;
-            }
-
-            if ("plp.html".equals(pageResource) && exchange.getRequestURI().getQuery() != null && exchange.getRequestURI().getQuery().contains("q="))
-            {
-                VerlaConfiguration.getInstance().simulateSearchQuery();
-            }
-
-            final String templateHtml = renderTemplate(qualitySuffix, pageResource, new HashMap<>(), activeCountry, trans, currentUser, cart, exchange.getRequestURI().toString(), isHtmx, hxTarget, isPwaRouter);
-            if (templateHtml == null)
-            {
-                // Try serving it as a standard static resource from SUT folders
-                new ResourceHandler().handle(exchange);
-                return;
-            }
-
-            sendResponse(exchange, 200, "text/html; charset=UTF-8", templateHtml);
-        }
-    }
-
-    private String renderTemplate(final String quality, final String pageName, final Map<String, String> customModel,
-                                         final Country country, final Map<String, String> trans, final User user,
-                                         final Cart cart, final String requestUri, final boolean isHtmx)
-    {
-        return renderTemplate(quality, pageName, customModel, country, trans, user, cart, requestUri, isHtmx, null, false);
-    }
-
-    private String renderTemplate(final String quality, final String pageName, final Map<String, String> customModel,
-                                         final Country country, final Map<String, String> trans, final User user,
-                                         final Cart cart, final String requestUri, final boolean isHtmx,
-                                         final String hxTarget, final boolean isPwaRouter)
-    {
-        try
-        {
-            // Resolve fullPath (path portion only) and keep it for template matching
-            final String fullPath;
-            final int qIdx = requestUri.indexOf("?");
-            if (qIdx != -1)
-            {
-                fullPath = requestUri.substring(0, qIdx);
-            }
-            else
-            {
-                fullPath = requestUri;
-            }
-
-            // Load specific page template
-            final String pageResPath = "ai-test-pages/verla-" + quality + "/" + pageName;
-            
-            // Template loading log removed as per request
-            
-            final String rawBody = readResource(pageResPath);
-            if (rawBody == null)
-            {
-                return null;
-            }
-
-            // Setup variables model mapping
-            final Map<String, String> model = new HashMap<>(customModel);
-            model.put("quality", quality);
-
-            // Refill the per-request budget of client-hydrated tiles for the headless SUT.
-            final VerlaConfiguration headlessCfg = VerlaConfiguration.getInstance();
-            headlessTileBudget.get()[0] = (isHeadless(quality) && headlessCfg.isHeadlessEnabled())
-                                          ? headlessCfg.getHeadlessTileFanout()
-                                          : 0;
-            headlessRenderedTiles.get().clear();
-
-            // Generic translations mappings
-            for (final Map.Entry<String, String> entry : trans.entrySet())
-            {
-                final String val = entry.getValue();
-                final String resolvedVal = val != null ? val.replace("${country_symbol}", country.symbol) : "";
-                model.put("lang_" + entry.getKey(), resolvedVal);
-            }
-
-            model.putIfAbsent("lang_sortDefault", trans.getOrDefault("sortDefault", "de".equals(country.locale) ? "Standard" : "Default"));
-            model.putIfAbsent("lang_promoBanner", trans.getOrDefault("promoBanner", "de".equals(country.locale) ? "Kostenloser weltweiter Versand ab 150 €" : "Free worldwide shipping on orders over $150 USD"));
-            model.putIfAbsent("lang_adding", trans.getOrDefault("adding", "de".equals(country.locale) ? "Wird hinzugefügt..." : "Adding..."));
-            model.putIfAbsent("lang_added", trans.getOrDefault("added", "de".equals(country.locale) ? "Hinzugefügt!" : "Added!"));
-
-            model.put("country_name", country.name);
-            model.put("country_code", country.code);
-            model.put("country_symbol", country.symbol);
-            model.put("currency_symbol", country.symbol);
-            model.put("country_flag", getCountryFlag(country.code));
-            model.put("cart_count", String.valueOf(cart.items.values().stream().mapToInt(Integer::intValue).sum()));
-            model.put("cart_items_count", String.valueOf(cart.items.values().stream().mapToInt(Integer::intValue).sum()));
-            model.put("cart_badge_html", getCartBadgeWrapperHtml(cart, trans, country, quality));
-            model.put("cart_dropdown_items_html", getCartDropdownHtml(cart, trans, country, quality));
-
-            if (isApparel(quality))
-            {
-                final double drawerSubtotal = calculateSubtotal(cart);
-                final int drawerCount = cart.items.values().stream().mapToInt(Integer::intValue).sum();
-                final double freeShippingThreshold = 75.0;
-                final double remaining = Math.max(0.0, freeShippingThreshold - drawerSubtotal);
-                final int progressPct = drawerSubtotal >= freeShippingThreshold ? 100 : (int) Math.min(100, Math.round((drawerSubtotal / freeShippingThreshold) * 100));
-
-                final String shippingStatus;
-                if (drawerSubtotal <= 0)
-                {
-                    shippingStatus = "Add " + formatPrice(freeShippingThreshold, country) + " for FREE delivery!";
-                }
-                else if (remaining <= 0)
-                {
-                    shippingStatus = "🎉 FREE delivery unlocked!";
-                }
-                else
-                {
-                    shippingStatus = "Add " + formatPrice(remaining, country) + " for FREE delivery!";
-                }
-
-                final StringBuilder sbDrawerItems = new StringBuilder();
-                if (cart.items.isEmpty())
-                {
-                    sbDrawerItems.append("<p class=\"text-sm text-muted py-8 text-center\" id=\"drawer-empty-msg\">")
-                                 .append(trans.getOrDefault("cartIsEmpty", "Your shopping bag is empty."))
-                                 .append("</p>");
-                }
-                else
-                {
-                    for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
-                    {
-                        final String cartKey = entry.getKey();
-                        final Product p = lookupProductById(cartKey);
-                        if (p == null)
-                        {
-                            continue;
-                        }
-                        final String size = cartKey.contains(":") ? " (" + cartKey.split(":")[1] + ")" : "";
-                        final double price = p.salePrice != null ? p.salePrice : p.basePrice;
-                        final double rowTotal = price * entry.getValue();
-                        final String displayName = escapeHtml(p.names.getOrDefault(country.locale, p.names.get("en"))) + size;
-
-                        sbDrawerItems.append("<div class=\"flex items-center gap-4 py-4 first:pt-0 border-b border-sand-200 last:border-b-0\">")
-                                     .append("  <div class=\"w-16 h-16 rounded-xl bg-sand-50 border border-sand-200 flex items-center justify-center p-2 shrink-0\">")
-                                     .append("    <svg viewBox=\"0 0 100 100\" class=\"w-full h-full text-terracotta-500\">").append(p.svgPath).append("</svg>")
-                                     .append("  </div>")
-                                     .append("  <div class=\"flex-grow min-w-0\">")
-                                     .append("    <div class=\"font-serif text-sm font-bold text-espresso truncate\">").append(displayName).append("</div>")
-                                     .append("    <div class=\"text-xs text-muted mt-0.5\">").append(entry.getValue()).append(" &times; ").append(formatPrice(price, country)).append("</div>")
-                                     .append("  </div>")
-                                     .append("  <div class=\"text-right shrink-0\">")
-                                     .append("    <div class=\"text-xs font-bold text-ink\">").append(formatPrice(rowTotal, country)).append("</div>")
-                                     .append("    <button type=\"button\" class=\"text-[11px] text-terracotta-600 hover:text-terracotta-800 underline mt-1 cursor-pointer\" onclick=\"removeFromDrawer('").append(escapeHtml(cartKey)).append("')\">").append(trans.getOrDefault("remove", "Remove")).append("</button>")
-                                     .append("  </div>")
-                                     .append("</div>");
-                    }
-                }
-
-                model.put("drawer_cart_count", String.valueOf(drawerCount));
-                model.put("drawer_subtotal", formatPrice(drawerSubtotal, country));
-                model.put("drawer_shipping_status", shippingStatus);
-                model.put("drawer_shipping_progress", String.valueOf(progressPct));
-                model.put("drawer_cart_items_html", sbDrawerItems.toString());
-            }
-
-            final String loginText = trans.getOrDefault("login", "Login");
-            final String accountText = trans.getOrDefault("account", "Account");
-            final String twUtilityBtn = "flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors hover:bg-sand-50 hover:text-terracotta-500 focus:bg-sand-50 focus:text-terracotta-500";
-            final String twUserIcon = "<svg class=\"h-4 w-4 shrink-0\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg>";
-            if (user != null)
-            {
-                if (isTailwindByClaude(quality))
-                {
-                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"" + twUtilityBtn + "\">" + twUserIcon + " " + accountText + "</a>");
-                }
-                else if (isApparel(quality))
-                {
-                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"flex items-center gap-1.5 p-2 rounded-lg text-xs font-semibold uppercase tracking-[0.05em] hover:bg-sand-50 transition-colors shrink-0\" id=\"user-nav-link\"><svg class=\"w-5 h-5\"><use xlink:href=\"#icon-user\"></use></svg> <span class=\"hidden xl:inline\">" + user.email.split("@")[0] + "</span></a>");
-                }
-                else if ("pwa-chaos".equals(quality))
-                {
-                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"wick-button wick-popover__trigger emotion-4k1asx\" data-dan-component=\"account-logo\" aria-label=\"My account\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><path d=\"M12 2.375a6.625 6.625 0 0 1 3.143 12.457c2.732.816 4.99 2.671 6.398 5.104a.626.626 0 0 1-1.082.627c-1.712-2.958-4.812-4.938-8.459-4.938s-6.747 1.98-8.459 4.938a.626.626 0 0 1-1.082-.626c1.408-2.434 3.666-4.289 6.396-5.105A6.625 6.625 0 0 1 12 2.375\"/></svg><span style=\"font-size:12px;font-weight:600;margin-left:4px;\">" + user.email.split("@")[0] + "</span></a>");
-                }
-                else if ("apocalypse".equals(quality))
-                {
-                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"apoc-icon-btn\" id=\"user-account-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> <span style=\"color:var(--apoc-gold);\">" + user.email.split("@")[0] + "</span></a>");
-                }
-                else if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
-                {
-                    model.put("user_nav_status", "<div onclick=\"location.href='/verla-" + quality + "/account.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + user.email.split("@")[0] + "</div>");
-                }
-                else
-                {
-                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/account.html\" class=\"utility-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + accountText + "</a>");
-                }
-            }
-            else
-            {
-                if (isTailwindByClaude(quality))
-                {
-                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"" + twUtilityBtn + "\">" + twUserIcon + " " + loginText + "</a>");
-                }
-                else if (isApparel(quality))
-                {
-                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"flex items-center gap-1.5 p-2 rounded-lg text-xs font-semibold uppercase tracking-[0.05em] hover:bg-sand-50 transition-colors shrink-0\" id=\"user-nav-link\"><svg class=\"w-5 h-5\"><use xlink:href=\"#icon-user\"></use></svg> <span class=\"hidden xl:inline\">" + loginText + "</span></a>");
-                }
-                else if ("pwa-chaos".equals(quality))
-                {
-                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"wick-button wick-popover__trigger emotion-4k1asx\" data-dan-component=\"account-logo\" aria-label=\"Sign In\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" width=\"18\" height=\"18\" fill=\"currentColor\"><path d=\"M12 2.375a6.625 6.625 0 0 1 3.143 12.457c2.732.816 4.99 2.671 6.398 5.104a.626.626 0 0 1-1.082.627c-1.712-2.958-4.812-4.938-8.459-4.938s-6.747 1.98-8.459 4.938a.626.626 0 0 1-1.082-.626c1.408-2.434 3.666-4.289 6.396-5.105A6.625 6.625 0 0 1 12 2.375\"/></svg><span style=\"font-size:12px;font-weight:600;margin-left:4px;\">" + loginText + "</span></a>");
-                }
-                else if ("apocalypse".equals(quality))
-                {
-                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"apoc-icon-btn\" id=\"user-login-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> <span class=\"ps-txt ps-txt-login\"></span></a>");
-                }
-                else if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
-                {
-                    model.put("user_nav_status", "<div onclick=\"location.href='/verla-" + quality + "/login.html'\" style=\"cursor:pointer;\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + loginText + "</div>");
-                }
-                else
-                {
-                    model.put("user_nav_status", "<a href=\"/verla-" + quality + "/login.html\" class=\"utility-btn\"><svg class=\"icon-svg\" viewBox=\"0 0 24 24\" width=\"16\" height=\"16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2\"></path><circle cx=\"12\" cy=\"7\" r=\"4\"></circle></svg> " + loginText + "</a>");
-                }
-            }
-
-            // Fill page-specific model variables
-            if ("index.html".equals(pageName))
-            {
-                final StringBuilder sb = new StringBuilder();
-                // Select first 8 products as featured list
-                for (int i = 0; i < 8 && i < catalogProducts.size(); i++)
-                {
-                    sb.append(renderProductCard(catalogProducts.get(i), country, trans, quality));
-                }
-                model.put("featured_products", sb.toString());
-                model.put("search_query", "");
-            }
-            else if ("plp.html".equals(pageName))
-            {
-                final String q = getQueryParam(requestUri, "q").toLowerCase();
-                final String pageStr = getQueryParam(requestUri, "page");
-                final int page = pageStr.isEmpty() ? 1 : Integer.parseInt(pageStr);
-
-                final String category;
-                if (fullPath.contains("/c/"))
-                {
-                    final String catPart = fullPath.substring(fullPath.lastIndexOf("/c/") + 3);
-                    category = catPart.contains(".html") ? catPart.substring(0, catPart.indexOf(".html")) : catPart;
-                }
-                else
-                {
-                    category = getQueryParam(requestUri, "category");
-                }
-
-                final String subcat = getQueryParam(requestUri, "subcategory");
-                final String sort = getQueryParam(requestUri, "sort");
-
-                final List<String> activeColors = getQueryParamValues(requestUri, "color");
-                final List<String> activePrices = getQueryParamValues(requestUri, "price");
-                final List<String> activeSales = getQueryParamValues(requestUri, "sale");
-
-                // Filter & Sort products list
-                List<Product> filtered = catalogProducts.stream().filter(p -> {
-                    if (!category.isEmpty() && !p.category.equalsIgnoreCase(category)) return false;
-                    if (!subcat.isEmpty() && !p.subcategory.equalsIgnoreCase(subcat)) return false;
-                    if (!q.isEmpty())
-                    {
-                        final boolean nameMatch = p.names.values().stream()
-                            .anyMatch((final String name) -> name.toLowerCase().contains(q));
-                        final boolean descMatch = p.descriptions.values().stream()
-                            .anyMatch((final String desc) -> desc.toLowerCase().contains(q));
-                        if (!nameMatch && !descMatch)
-                        {
-                            return false;
-                        }
-                    }
-
-                    // Color filter
-                    if (!activeColors.isEmpty())
-                    {
-                        boolean colorMatch = false;
-                        for (final String col : activeColors)
-                        {
-                            if (p.color != null && p.color.equalsIgnoreCase(col))
-                            {
-                                colorMatch = true;
-                                break;
-                            }
-                        }
-                        if (!colorMatch) return false;
-                    }
-
-                    // Price filter
-                    if (!activePrices.isEmpty())
-                    {
-                        final double price = p.salePrice != null ? p.salePrice : p.basePrice;
-                        boolean priceMatch = false;
-                        for (final String pr : activePrices)
-                        {
-                            if ("0-50".equals(pr) && price < 50.0) priceMatch = true;
-                            else if ("50-100".equals(pr) && price >= 50.0 && price <= 100.0) priceMatch = true;
-                            else if ("100-200".equals(pr) && price > 100.0) priceMatch = true;
-                        }
-                        if (!priceMatch) return false;
-                    }
-
-                    // Sale filter
-                    if (!activeSales.isEmpty() && activeSales.contains("true"))
-                    {
-                        if (p.salePrice == null) return false;
-                    }
-
-                    return true;
-                }).collect(Collectors.toList());
-
-                if ("price-asc".equals(sort))
-                {
-                    filtered.sort((p1, p2) -> Double.compare(p1.salePrice != null ? p1.salePrice : p1.basePrice, p2.salePrice != null ? p2.salePrice : p2.basePrice));
-                }
-                else if ("price-desc".equals(sort))
-                {
-                    filtered.sort((p1, p2) -> Double.compare(p2.salePrice != null ? p2.salePrice : p2.basePrice, p1.salePrice != null ? p1.salePrice : p1.basePrice));
-                }
-
-                model.put("total_products_count", String.valueOf(filtered.size()));
-                model.put("plp_heading", category.isEmpty() ? (q.isEmpty() ? trans.getOrDefault("all", "All Products") : trans.getOrDefault("search", "Search") + ": \"" + q + "\"") : trans.getOrDefault(category, category));
-                model.put("search_query", escapeHtml(q));
-
-                // Bind checked checkbox states
-                model.put("color_off_white_checked", activeColors.contains("off-white") ? "checked" : "");
-                model.put("color_charcoal_checked", activeColors.contains("charcoal") ? "checked" : "");
-                model.put("color_olive_checked", activeColors.contains("olive") ? "checked" : "");
-                model.put("color_sand_checked", activeColors.contains("sand") ? "checked" : "");
-                model.put("color_navy_checked", activeColors.contains("navy") ? "checked" : "");
-                model.put("color_taupe_checked", activeColors.contains("taupe") ? "checked" : "");
-                model.put("color_sage_checked", activeColors.contains("sage") ? "checked" : "");
-                model.put("color_terracotta_checked", activeColors.contains("terracotta") ? "checked" : "");
-
-                model.put("price_0_50_checked", activePrices.contains("0-50") ? "checked" : "");
-                model.put("price_50_100_checked", activePrices.contains("50-100") ? "checked" : "");
-                model.put("price_100_200_checked", activePrices.contains("100-200") ? "checked" : "");
-
-                model.put("sale_checked", activeSales.contains("true") ? "checked" : "");
-
-                // Nav sidebar highlight logic
-                model.put("all_active_weight", category.isEmpty() ? "600" : "400");
-                model.put("all_active_color", category.isEmpty() ? "var(--color-accent)" : "var(--color-text-secondary)");
-                model.put("tops_active_weight", "tops".equals(category) ? "600" : "400");
-                model.put("tops_active_color", "tops".equals(category) ? "var(--color-accent)" : "var(--color-text-secondary)");
-                model.put("bottoms_active_weight", "bottoms".equals(category) ? "600" : "400");
-                model.put("bottoms_active_color", "bottoms".equals(category) ? "var(--color-accent)" : "var(--color-text-secondary)");
-                model.put("outerwear_active_weight", "outerwear".equals(category) ? "600" : "400");
-                model.put("outerwear_active_color", "outerwear".equals(category) ? "var(--color-accent)" : "var(--color-text-secondary)");
-                model.put("footwear_active_weight", "footwear".equals(category) ? "600" : "400");
-                model.put("footwear_active_color", "footwear".equals(category) ? "var(--color-accent)" : "var(--color-text-secondary)");
-                model.put("accessories_active_weight", "accessories".equals(category) ? "600" : "400");
-                model.put("accessories_active_color", "accessories".equals(category) ? "var(--color-accent)" : "var(--color-text-secondary)");
-
-                // Class-based variant of the same highlight, used by the utility-first
-                // Tailwind SUT so the sidebar needs no inline style attributes.
-                final String activeCls = "font-semibold text-terracotta-500";
-                final String inactiveCls = "font-normal text-muted";
-                model.put("all_active_class", category.isEmpty() ? activeCls : inactiveCls);
-                model.put("tops_active_class", "tops".equals(category) ? activeCls : inactiveCls);
-                model.put("bottoms_active_class", "bottoms".equals(category) ? activeCls : inactiveCls);
-                model.put("outerwear_active_class", "outerwear".equals(category) ? activeCls : inactiveCls);
-                model.put("footwear_active_class", "footwear".equals(category) ? activeCls : inactiveCls);
-                model.put("accessories_active_class", "accessories".equals(category) ? activeCls : inactiveCls);
-
-                model.put("sort_default_selected", sort.isEmpty() || "default".equals(sort) ? "selected" : "");
-                model.put("sort_asc_selected", "price-asc".equals(sort) ? "selected" : "");
-                model.put("sort_desc_selected", "price-desc".equals(sort) ? "selected" : "");
-
-                final String filterUrl = fullPath.contains("?") ? fullPath.substring(0, fullPath.indexOf("?")) : fullPath;
-                model.put("filter_url", filterUrl);
-
-                // Paginate products: size 12
-                final int pageSize = 12;
-                final int fromIndex = (page - 1) * pageSize;
-                final int toIndex = Math.min(fromIndex + pageSize, filtered.size());
-
-                final StringBuilder sb = new StringBuilder();
-                if (fromIndex < filtered.size())
-                {
-                    final List<Product> paginated = filtered.subList(fromIndex, toIndex);
-                    for (int j = 0; j < paginated.size(); j++)
-                    {
-                        final Product p = paginated.get(j);
-                        final boolean isLast = (j == paginated.size() - 1) && (toIndex < filtered.size());
-                        if (isLast)
-                        {
-                            // Build nextUrl with active refinements appended
-                            final StringBuilder filterParams = new StringBuilder();
-                            for (final String col : activeColors)
-                            {
-                                try
-                                {
-                                    filterParams.append("&color=").append(URLEncoder.encode(col, StandardCharsets.UTF_8.name()));
-                                }
-                                catch (final Exception e)
-                                {
-                                    filterParams.append("&color=").append(col);
-                                }
-                            }
-                            for (final String pr : activePrices)
-                            {
-                                try
-                                {
-                                    filterParams.append("&price=").append(URLEncoder.encode(pr, StandardCharsets.UTF_8.name()));
-                                }
-                                catch (final Exception e)
-                                {
-                                    filterParams.append("&price=").append(pr);
-                                }
-                            }
-                            for (final String sl : activeSales)
-                            {
-                                try
-                                {
-                                    filterParams.append("&sale=").append(URLEncoder.encode(sl, StandardCharsets.UTF_8.name()));
-                                }
-                                catch (final Exception e)
-                                {
-                                    filterParams.append("&sale=").append(sl);
-                                }
-                            }
-
-                            final String nextUrl = filterUrl + "?page=" + (page + 1) + 
-                                                   (category.isEmpty() ? "" : "&category=" + category) +
-                                                   (subcat.isEmpty() ? "" : "&subcategory=" + subcat) +
-                                                   (sort.isEmpty() ? "" : "&sort=" + sort) +
-                                                   (q.isEmpty() ? "" : "&q=" + q) +
-                                                   filterParams.toString();
-                            sb.append(renderProductCardInfinite(p, country, trans, quality, nextUrl));
-                        }
-                        else
-                        {
-                            sb.append(renderProductCard(p, country, trans, quality));
-                        }
-                    }
-                }
-                model.put("plp_products", sb.toString());
-            }
-            else if ("pdp.html".equals(pageName))
-            {
-                // Dynamic SKU product detail mapping
-                final String slug = fullPath.substring(fullPath.lastIndexOf("/") + 1).replace(".html", "");
-                final Product prod = lookupProductBySlug(slug);
-                if (prod != null)
-                {
-                    model.put("product_name", prod.names.getOrDefault(country.locale, prod.names.get("en")));
-                    model.put("product_id", prod.id);
-                    model.put("product_category", prod.category);
-                    model.put("product_category_name", trans.getOrDefault(prod.category, prod.category));
-                    model.put("product_subcategory_name", prod.subcategory.toUpperCase());
-                    
-                    if (prod.salePrice != null)
-                    {
-                        if (isTailwindByClaude(quality) || isApparel(quality))
-                        {
-                            model.put("product_price_html", "<span class=\"text-muted line-through text-lg mr-2\">" + formatPrice(prod.basePrice, country) + "</span>" +
-                                                            "<span class=\"font-bold text-terracotta-600 text-2xl\">" + formatPrice(prod.salePrice, country) + "</span>");
-                        }
-                        else
-                        {
-                            model.put("product_price_html", "<span class=\"original\" style=\"text-decoration: line-through; opacity: 0.6; margin-right: 8px;\">" + formatPrice(prod.basePrice, country) + "</span>" +
-                                                            "<span class=\"sale\" style=\"color: #c87a53;\">" + formatPrice(prod.salePrice, country) + "</span>");
-                        }
-                    }
-                    else
-                    {
-                        model.put("product_price_html", "<span>" + formatPrice(prod.basePrice, country) + "</span>");
-                    }
-                    model.put("product_desc", prod.descriptions.getOrDefault(country.locale, prod.descriptions.get("en")));
-                    model.put("product_svg_content", prod.svgPath);
-                    model.put("product_badge_html", prod.badge.isEmpty() ? "" : "<span class=\"" + (isTailwindByClaude(quality) || isApparel(quality) ? "absolute left-4 top-4 z-[5] rounded-sm bg-terracotta-500 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white" : "product-badge") + "\">" + prod.badge.toUpperCase() + "</span>");
-                    model.put("product_sizes_html", getProductSizesSelectHtml(prod.id, prod.category, trans, quality));
-                }
-                else
-                {
-                    return "404 Product Not Found";
-                }
-            }
-            else if ("cart.html".equals(pageName))
-            {
-                model.put("cart_content_html", getCartContentHtml(cart, country, trans, quality));
-            }
-            else if ("checkout.html".equals(pageName))
-            {
-                model.put("address_fields_html", getAddressFieldsHtml(country.code, country.locale, trans, "shipping-", quality));
-                
-                final StringBuilder options = new StringBuilder();
-                for (final Country c : catalogConfig.countries)
-                {
-                    final String sel = c.code.equals(country.code) ? "selected" : "";
-                    final String displayName = c.getLocalizedName(country.locale);
-                    options.append("<option value=\"").append(c.code).append("\" ").append(sel).append(">")
-                           .append(displayName).append(" (").append(c.symbol).append(")</option>");
-                }
-                model.put("country_options_html", options.toString());
-
-                // Order subtotal calculation
-                final double subtotal = calculateSubtotal(cart);
-                final double discount = calculateDiscount(cart, subtotal);
-                final double shipping = calculateShipping(cart, subtotal);
-                final double tax = Math.round((subtotal - discount) * 0.1 * 100.0) / 100.0;
-                final double total = subtotal - discount + shipping + tax;
-
-                model.put("checkout_subtotal", formatPrice(subtotal, country));
-                model.put("checkout_shipping", formatPrice(shipping, country));
-                model.put("checkout_tax", formatPrice(tax, country));
-                model.put("checkout_total", formatPrice(total, country));
-
-                if (discount > 0)
-                {
-                    model.put("checkout_discount_row", "<div " + (isTailwindByClaude(quality) || isApparel(quality) ? "class=\"flex justify-between text-success\"" : "style=\"display:flex;justify-content:space-between;color:var(--color-success);\"") + ">" +
-                              "  <span>Discount (" + cart.coupon.toUpperCase() + ")</span>" +
-                              "  <span>-" + formatPrice(discount, country) + "</span>" +
-                              "</div>");
-                }
-                else
-                {
-                    model.put("checkout_discount_row", "");
-                }
-
-                final StringBuilder itemsSum = new StringBuilder();
-                for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
-                {
-                    final Product p = lookupProductById(entry.getKey());
-                    if (p != null)
-                    {
-                        final String[] parts = entry.getKey().split(":");
-                        final String size = parts.length > 1 ? " (" + parts[1] + ")" : "";
-                        final double price = p.salePrice != null ? p.salePrice : p.basePrice;
-                        itemsSum.append("<div " + (isTailwindByClaude(quality) || isApparel(quality) ? "class=\"mb-2 flex justify-between text-[13px]\"" : "style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;\"") + ">")
-                                .append("  <span>").append(p.names.getOrDefault(country.locale, p.names.get("en"))).append(size).append(" &times; ").append(entry.getValue()).append("</span>")
-                                .append("  <span>").append(formatPrice(price * entry.getValue(), country)).append("</span>")
-                                .append("</div>");
-                    }
-                }
-                if ("freegift".equals(cart.coupon))
-                {
-                    itemsSum.append("<div " + (isTailwindByClaude(quality) || isApparel(quality) ? "class=\"mb-2 flex justify-between text-[13px] text-success\"" : "style=\"display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px;color:var(--color-success);\"") + ">")
-                            .append("  <span>VÉRLA Signature Tote Bag &times; 1</span>")
-                            .append("  <span>Free Gift</span>")
-                            .append("</div>");
-                }
-                model.put("checkout_items_summary", itemsSum.toString());
-
-                // Autofill forms values from logged in user if empty
-                if (user != null)
-                {
-                    model.putIfAbsent("input_firstName", "");
-                    model.putIfAbsent("input_lastName", "");
-                    model.putIfAbsent("input_email", user.email);
-                }
-
-                model.putIfAbsent("input_firstName", "");
-                model.putIfAbsent("input_lastName", "");
-                model.putIfAbsent("input_email", "");
-                model.putIfAbsent("input_cardNumber", "");
-                model.putIfAbsent("input_cardExpiry", "");
-                model.putIfAbsent("input_cardCvv", "");
-
-                model.putIfAbsent("err_firstName", "");
-                model.putIfAbsent("err_lastName", "");
-                model.putIfAbsent("err_email", "");
-                model.putIfAbsent("err_cardNumber", "");
-                model.putIfAbsent("err_cardExpiry", "");
-                model.putIfAbsent("err_cardCvv", "");
-
-                model.put("card_visa_selected", "");
-                model.put("card_mastercard_selected", "");
-                model.put("card_amex_selected", "");
-            }
-            else if ("account.html".equals(pageName))
-            {
-                if (user == null)
-                {
-                    return "<script>window.location='login.html'</script>";
-                }
-                
-                // Account Orders History list
-                final StringBuilder ordersList = new StringBuilder();
-                if (user.orders.isEmpty())
-                {
-                    ordersList.append("<p style=\"color:var(--color-text-secondary);\">").append(trans.getOrDefault("noOrders", "No orders found.")).append("</p>");
-                }
-                else
-                {
-                    for (final Order order : user.orders)
-                    {
-                        ordersList.append("<div style=\"border:1px solid var(--color-border);padding:16px;border-radius:var(--border-radius);background:var(--color-bg-secondary);\">")
-                                  .append("  <div style=\"display:flex;justify-content:space-between;font-weight:600;margin-bottom:10px;\">")
-                                  .append("    <span>").append(order.orderNumber).append("</span>")
-                                  .append("    <span>").append(formatPrice(order.total, country)).append("</span>")
-                                  .append("  </div>")
-                                  .append("  <div style=\"font-size:12px;color:var(--color-text-secondary);\">")
-                                  .append("    Status: <span style=\"color:var(--color-success);font-weight:500;\">").append(order.status).append("</span> &middot; ")
-                                  .append("    Shipped to: ").append(order.shippingAddress.street).append(", ").append(order.shippingAddress.city)
-                                  .append("  </div>")
-                                  .append("</div>");
-                    }
-                }
-                model.put("account_orders_html", ordersList.toString());
-
-                // Saved Addresses book
-                final StringBuilder addressList = new StringBuilder();
-                if (user.addresses.isEmpty())
-                {
-                    addressList.append("<p style=\"color:var(--color-text-secondary);\">").append(trans.getOrDefault("noAddresses", "No addresses found.")).append("</p>");
-                }
-                else
-                {
-                    for (final Address addr : user.addresses)
-                    {
-                        addressList.append("<div style=\"border:1px solid var(--color-border);padding:16px;border-radius:var(--border-radius);\">")
-                                  .append("  <div style=\"font-weight:600;margin-bottom:4px;\">").append(addr.street).append("</div>")
-                                  .append("  <div style=\"font-size:13px;color:var(--color-text-secondary);margin-bottom:12px;\">")
-                                  .append(addr.city).append(", ").append(addr.state).append(" ").append(addr.postcode).append(" &middot; ").append(addr.country)
-                                  .append("  </div>")
-                                  .append("  <button hx-post=\"api/auth/address/delete?id=").append(addr.id).append("\" hx-target=\"#account-page-container\" hx-swap=\"outerHTML\" style=\"color:var(--color-error);font-size:12px;font-weight:500;\">").append(trans.getOrDefault("delete", "Delete")).append("</button>")
-                                  .append("</div>");
-                    }
-                }
-                model.put("account_addresses_html", addressList.toString());
-
-                // Saved Betalkort cards
-                final StringBuilder cardList = new StringBuilder();
-                if (user.cards.isEmpty())
-                {
-                    cardList.append("<p style=\"color:var(--color-text-secondary);\">").append(trans.getOrDefault("noCards", "No cards found.")).append("</p>");
-                }
-                else
-                {
-                    for (final Card card : user.cards)
-                    {
-                        final String masked = "**** **** **** " + card.number.substring(Math.max(0, card.number.length() - 4));
-                        cardList.append("<div style=\"border:1px solid var(--color-border);padding:16px;border-radius:var(--border-radius);\">")
-                                .append("  <div style=\"font-weight:600;margin-bottom:4px;\">").append(card.type).append("</div>")
-                                .append("  <div style=\"font-size:13px;color:var(--color-text-secondary);margin-bottom:12px;\">")
-                                .append(masked).append(" (Exp: ").append(card.expiry).append(")")
-                                .append("  </div>")
-                                .append("  <button hx-post=\"api/auth/card/delete?id=").append(card.id).append("\" hx-target=\"#account-page-container\" hx-swap=\"outerHTML\" style=\"color:var(--color-error);font-size:12px;font-weight:500;\">").append(trans.getOrDefault("delete", "Delete")).append("</button>")
-                                .append("</div>");
-                    }
-                }
-                model.put("account_cards_html", cardList.toString());
-
-                model.put("address_fields_html", getAddressFieldsHtml(country.code, country.locale, trans, "account-", quality));
-
-                final StringBuilder options = new StringBuilder();
-                for (final Country c : catalogConfig.countries)
-                {
-                    final String sel = c.code.equals(country.code) ? "selected" : "";
-                    final String displayName = c.getLocalizedName(country.locale);
-                    options.append("<option value=\"").append(c.code).append("\" ").append(sel).append(">")
-                           .append(displayName).append(" (").append(c.symbol).append(")</option>");
-                }
-                model.put("country_options_html", options.toString());
-
-                model.putIfAbsent("password_status", "");
-                model.putIfAbsent("password_error", "");
-            }
-
-            model.putIfAbsent("auth_error", "");
-            model.putIfAbsent("input_email", "");
-            model.putIfAbsent("err_email", "");
-            model.putIfAbsent("err_password", "");
-            model.putIfAbsent("err_confirmPassword", "");
-
-            if (LOG.isDebugEnabled())
-            {
-                LOG.debug("renderTemplate SUT page variables resolved: {}", model);
-            }
-
-            // Build full HTML or return only body fragment depending on HTMX request
-            String bodyHtml = rawBody;
-            for (final Map.Entry<String, String> entry : model.entrySet())
-            {
-                bodyHtml = bodyHtml.replace("${" + entry.getKey() + "}", entry.getValue() != null ? entry.getValue() : "");
-            }
-
-            // Clean up unresolved variables
-            bodyHtml = bodyHtml.replaceAll("\\$\\{[a-zA-Z_0-9-]+\\}", "");
-
-            if (isHtmx)
-            {
-                if (("plp.html".equals(pageName) || "category.html".equals(pageName))
-                    && !isPwaRouter
-                    && (requestUri.contains("page=") || (hxTarget != null && (hxTarget.contains("product-grid") || hxTarget.contains("plp-product-grid") || hxTarget.contains("products")))))
-                {
-                    return model.getOrDefault("plp_products", "");
-                }
-                // HTMX requests / PWA router only require the body fragment
-                return bodyHtml;
-            }
-
-            // Serve full layout wrapped
-            final String rawLayout = readResource("ai-test-pages/verla-" + quality + "/layout.html");
-            final Map<String, String> layoutModel = new HashMap<>(model);
-            layoutModel.put("body", bodyHtml);
-
-            // Setup country selector list inside layout modal
-            final StringBuilder countriesList = new StringBuilder();
-            for (final Country c : catalogConfig.countries)
-            {
-                final String selectedClass = c.code.equals(country.code) ? "selected" : "";
-                if (isTailwindByClaude(quality) || isApparel(quality))
-                {
-                    countriesList.append("<li data-selected=\"").append(c.code.equals(country.code)).append("\" class=\"").append(TW_COUNTRY_ITEM).append(" flex items-center gap-2 cursor-pointer\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
-                                 .append("<span class=\"text-base leading-none\">").append(getCountryFlag(c.code)).append("</span> ")
-                                 .append("<span>").append(c.name).append(" (").append(c.symbol).append(")</span></li>");
-                }
-                else if ("apocalypse".equals(quality))
-                {
-                    countriesList.append("<li class=\"country-item ").append(selectedClass).append("\" data-country=\"").append(c.code).append("\" style=\"display:flex; align-items:center; gap:8px; cursor:pointer;\" onclick=\"selectApocalypseCountry('").append(c.code).append("');\">")
-                                 .append("<span style=\"font-size:16px;\">").append(getCountryFlag(c.code)).append("</span> ")
-                                 .append("<span>").append(c.name).append(" (").append(c.symbol).append(")</span></li>");
-                }
-                else if ("bad".equals(quality) || "modern-bad-nowcag".equals(quality))
-                {
-                    countriesList.append("<div class=\"country-item ").append(selectedClass).append("\" style=\"padding:10px;cursor:pointer;\" onclick=\"document.cookie='verla_country=").append(c.code).append(";path=/';location.reload();\">")
-                                 .append(c.name).append(" (").append(c.symbol).append(")</div>");
-                }
-                else
-                {
-                    countriesList.append("<li class=\"country-item ").append(selectedClass).append("\" hx-get=\"api/country/select?code=").append(c.code).append("\">")
-                                 .append(c.name).append(" (").append(c.symbol).append(")</li>");
-                }
-            }
-            layoutModel.put("country_items_list", countriesList.toString());
-
-            // Headless SUT payload: the hydration blob, the icon sprite and the CSS-in-JS style
-            // elements are all inlined into the shell, which is what makes the document heavy.
-            if (isHeadless(quality))
-            {
-                final VerlaConfiguration cfg = VerlaConfiguration.getInstance();
-                if (cfg.isHeadlessEnabled())
-                {
-                    final List<Product> tiles = new ArrayList<>(headlessRenderedTiles.get());
-                    if (tiles.isEmpty())
-                    {
-                        for (int i = 0; i < 8 && i < catalogProducts.size(); i++)
-                        {
-                            tiles.add(catalogProducts.get(i));
-                        }
-                    }
-                    layoutModel.put("hydration_state", buildHydrationBlob(tiles, country, cfg.getHeadlessHydrationKb()));
-                    layoutModel.put("icon_sprite", buildIconSprite(cfg.getHeadlessSpriteKb()));
-                    layoutModel.put("injected_styles", buildInjectedStyleTags(cfg.getHeadlessStyleTagCount()));
-                    layoutModel.put("headless_boot_ms",
-                                    Long.toString(cfg.calculateDelay(cfg.getHeadlessBootMinMs(), cfg.getHeadlessBootMaxMs())));
-                    layoutModel.put("headless_enabled", "true");
-                }
-                else
-                {
-                    layoutModel.put("hydration_state", "{}");
-                    layoutModel.put("icon_sprite", "");
-                    layoutModel.put("injected_styles", "");
-                    layoutModel.put("headless_boot_ms", "0");
-                    layoutModel.put("headless_enabled", "false");
-                }
-            }
-
-            String layoutHtml = rawLayout;
-            for (final Map.Entry<String, String> entry : layoutModel.entrySet())
-            {
-                layoutHtml = layoutHtml.replace("${" + entry.getKey() + "}", entry.getValue() != null ? entry.getValue() : "");
-            }
-            return layoutHtml.replaceAll("\\$\\{[a-zA-Z_0-9-]+\\}", "");
-        }
-        catch (final Exception e)
-        {
-            LOG.error("Failed to render template page: {}", pageName, e);
-            return "500 Internal Template Error";
-        }
-    }
-
-    private String getDynamicId(final String prefix)
-    {
-        final int rand = 100000 + this.seededRandom.nextInt(900000);
-        return prefix + "-" + rand;
-    }
-
-    private static String getTailwindSoup()
-    {
-        return "flex flex-col min-w-0 break-words bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-4 m-1";
-    }
-
-    /**
-     * True for the utility-first Tailwind SUT served at /verla-tailwind-by-claude/.
-     * That variant carries no semantic class names at all: every fragment rendered
-     * here emits Tailwind utilities, and every state is expressed as a data
-     * attribute so the styling stays in the class list.
-     */
-    private static boolean isTailwindByClaude(final String quality)
-    {
-        return "tailwind-by-claude".equals(quality);
-    }
-
-    /**
-     * True for the apparel SUT variant served at /verla-apparel/ (or alias /verla-apperal/).
-     */
-    private static boolean isApparel(final String quality)
-    {
-        return "apparel".equals(quality);
-    }
-
-    /** Shared utility strings for the Tailwind SUT, kept here so the class lists stay in one place. */
-    private static final String TW_FORM_LABEL = "mb-2 block text-[13px] font-semibold uppercase tracking-[0.05em]";
-
-    private static final String TW_FORM_CONTROL = "w-full rounded-lg border border-sand-200 bg-sand-50 px-4 py-3 outline-none transition-colors focus:border-terracotta-500 focus:bg-white";
-
-    private static final String TW_ERROR = "mt-1 text-xs font-medium text-danger";
-
-    private static final String TW_BTN_PRIMARY = "inline-block rounded-lg bg-terracotta-500 px-5 py-2.5 text-[13px] font-semibold uppercase tracking-[0.05em] text-white transition-colors hover:bg-terracotta-700";
-
-    private static final String TW_COUNTRY_ITEM = "flex cursor-pointer items-center justify-between px-4 py-3 text-sm transition-colors [&:not(:last-child)]:border-b [&:not(:last-child)]:border-sand-200 hover:bg-sand-50 hover:font-medium hover:text-terracotta-500 data-[selected=true]:bg-sand-50 data-[selected=true]:font-medium data-[selected=true]:text-terracotta-500";
-
-    private String renderProductCard(final Product p, final Country country, final Map<String, String> trans, final String quality)
-    {
-        // The headless SUT ships tiles as empty skeletons and lets the client fetch each product
-        // document separately. Nothing about the product is in the markup except its id, so a test
-        // that reads the grid before the fan-out completes sees structure but no data.
-        final int[] budget = headlessTileBudget.get();
-        if (isHeadless(quality) && budget[0] > 0)
-        {
-            budget[0]--;
-            headlessRenderedTiles.get().add(p);
-            return renderHeadlessTileSkeleton(p);
-        }
-
-        final double basePrice = p.basePrice;
-        final Double salePrice = p.salePrice;
-        final boolean tw = isTailwindByClaude(quality);
-
-        final String badgeHtml;
-        if (!p.badge.isEmpty())
-        {
-            if (isApparel(quality))
-            {
-                final String badgeTone = "sold-out".equalsIgnoreCase(p.badge) ? "bg-muted" : "bg-terracotta-500";
-                badgeHtml = "<span class=\"mbf-sale-badge rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white " + badgeTone + "\">" + p.badge.toUpperCase() + "</span>";
-            }
-            else if (tw)
-            {
-                final String badgeTone = "sold-out".equalsIgnoreCase(p.badge) ? "bg-muted" : "bg-terracotta-500";
-                badgeHtml = "<span class=\"absolute left-4 top-4 z-[5] rounded-sm px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-white " + badgeTone + "\">" + p.badge.toUpperCase() + "</span>";
-            }
-            else
-            {
-                badgeHtml = "<span class=\"product-badge " + ("sold-out".equalsIgnoreCase(p.badge) ? "sold-out" : "") + "\">" + p.badge.toUpperCase() + "</span>";
-            }
-        }
-        else
-        {
-            badgeHtml = "";
-        }
-
-        final String priceHtml;
-        if (salePrice != null)
-        {
-            if (tw || isApparel(quality))
-            {
-                priceHtml = "<span class=\"text-muted line-through\">" + formatPrice(basePrice, country) + "</span>" +
-                            "<span class=\"font-semibold text-terracotta-500\">" + formatPrice(salePrice, country) + "</span>";
-            }
-            else
-            {
-                priceHtml = "<span class=\"original\">" + formatPrice(basePrice, country) + "</span>" +
-                            "<span class=\"sale\">" + formatPrice(salePrice, country) + "</span>";
-            }
-        }
-        else
-        {
-            priceHtml = "<span>" + formatPrice(basePrice, country) + "</span>";
-        }
-
-        final String localeName = p.names.getOrDefault(country.locale, p.names.get("en"));
-        final String pdpLink = "/verla-" + quality + "/p/" + p.slug + ".html";
-
-        if (isApparel(quality))
-        {
-            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
-            final String cardId = getDynamicId("mbf-tile-root");
-            final String nowPrice = formatPrice(salePrice != null ? salePrice : basePrice, country);
-            final String wasPrice = salePrice != null ? formatPrice(basePrice, country) : "";
-
-            return "<div id=\"" + cardId + "\" class=\"mbf-card-root group relative flex flex-col bg-white rounded-2xl border border-sand-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow\" data-mbf-component=\"product-card\" data-pid=\"" + p.id + "\">" +
-                   "  <div class=\"mbf-tile-wrapper relative flex aspect-square items-center justify-center bg-sand-50 p-4\">" +
-                   "    <div class=\"mbf-badge-layer absolute top-4 left-4 z-10 flex flex-col items-start gap-1\">" +
-                   "      <span class=\"mbf-bundle-badge bg-terracotta-500 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider\">4+1 FREE</span>" +
-                   (badgeHtml.isEmpty() ? "" : "      " + badgeHtml) +
-                   "    </div>" +
-                   "    <div class=\"mbf-link-overlay w-full h-full flex items-center justify-center cursor-pointer\" onclick=\"location.href='" + pdpLink + "'\" role=\"link\" tabindex=\"0\">" +
-                   "      <div class=\"chakra-stack w-3/4 h-3/4 flex items-center justify-center transition-transform duration-300 group-hover:scale-105\">" +
-                   "        <svg viewBox=\"0 0 100 100\" class=\"w-full h-full text-terracotta-500\">" + p.svgPath + "</svg>" +
-                   "      </div>" +
-                   "    </div>" +
-                   "  </div>" +
-                   "  <div class=\"mbf-card-body p-4 flex flex-col flex-1 justify-between\">" +
-                   "    <div class=\"mbf-swatch-pills flex items-center gap-1.5 mb-2.5\">" +
-                   "      <span class=\"mbf-swatch-dot w-3.5 h-3.5 rounded-full bg-[#1A1A1A] border-2 border-white shadow-xs cursor-pointer\" title=\"Nero\"></span>" +
-                   "      <span class=\"mbf-swatch-dot w-3.5 h-3.5 rounded-full bg-[#B66A45] border-2 border-white shadow-xs cursor-pointer\" title=\"Terracotta\"></span>" +
-                   "      <span class=\"mbf-swatch-dot w-3.5 h-3.5 rounded-full bg-[#E6E2DA] border-2 border-white shadow-xs cursor-pointer\" title=\"Sabbia\"></span>" +
-                   "    </div>" +
-                   "    <div class=\"mbf-card-meta\">" +
-                   "      <div class=\"mbf-product-title font-serif text-sm font-bold text-espresso cursor-pointer hover:text-terracotta-500 transition-colors\" onclick=\"location.href='" + pdpLink + "'\">" +
-                   "        <span>" + escapeHtml(localeName) + "</span>" +
-                   "      </div>" +
-                   "      <div class=\"mbf-price-row mt-1 flex items-baseline gap-2\">" +
-                   "        <span class=\"mbf-now-price text-sm font-bold text-ink\">" + nowPrice + "</span>" +
-                   (salePrice != null ? "        <span class=\"mbf-was-price text-xs text-muted line-through\">" + wasPrice + "</span>" : "") +
-                   "      </div>" +
-                   "    </div>" +
-                   "    <div class=\"mbf-quick-add-wrap mt-3 relative\">" +
-                   "      <button type=\"button\" class=\"product-quick-add w-full py-2.5 px-4 bg-terracotta-500 hover:bg-terracotta-600 text-white font-bold rounded-lg text-xs uppercase tracking-wider text-center cursor-pointer shadow-sm transition-colors\" " +
-                   "              data-quick-add data-state=\"idle\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" aria-label=\"Add " + escapeHtml(localeName) + " to shopping bag\">" +
-                   "        " + trans.getOrDefault("addToCart", "Add to Bag") +
-                   "      </button>" +
-                   "    </div>" +
-                   "  </div>" +
-                   "</div>";
-        }
-
-        // Generate card layout based on perfect/normal/bad/modern-bad-wcag/modern-bad rules
-        if (tw)
-        {
-            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
-
-            return "<article class=\"group relative flex flex-col overflow-hidden rounded-lg bg-white\">" +
-                   "  <div class=\"relative flex aspect-square items-center justify-center overflow-hidden rounded-lg border border-sand-200 bg-sand-50\">" +
-                   "    " + badgeHtml +
-                   "    <a href=\"" + pdpLink + "\" aria-label=\"View details of " + escapeHtml(localeName) + "\" class=\"contents\">" +
-                   "      <svg viewBox=\"0 0 100 100\" class=\"h-[70%] w-[70%] text-terracotta-500 transition-transform duration-300 group-hover:scale-105\">" + p.svgPath + "</svg>" +
-                   "    </a>" +
-                   "    <button data-quick-add data-state=\"idle\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" aria-label=\"Add " + escapeHtml(localeName) + " to shopping cart\"" +
-                   "            class=\"absolute inset-x-0 bottom-0 w-full translate-y-full cursor-pointer bg-ink/95 py-3.5 text-center text-xs font-semibold uppercase tracking-[0.05em] text-white transition-transform duration-300 group-hover:translate-y-0 group-focus-within:translate-y-0 data-[state=adding]:translate-y-0 data-[state=adding]:cursor-not-allowed data-[state=adding]:bg-muted data-[state=added]:translate-y-0 data-[state=added]:bg-success\">" +
-                   "      " + trans.getOrDefault("addToCart", "Add to Cart") +
-                   "    </button>" +
-                   "  </div>" +
-                   "  <div class=\"pt-4\">" +
-                   "    <h3 class=\"mb-2 text-sm font-medium\"><a href=\"" + pdpLink + "\" class=\"transition-colors hover:text-terracotta-500\">" + localeName + "</a></h3>" +
-                   "    <div class=\"flex gap-3 text-sm\">" + priceHtml + "</div>" +
-                   "  </div>" +
-                   "</article>";
-        }
-
-        if ("bad".equals(quality))
-        {
-            return "<div class=\"product-card-bad\" style=\"border:1px solid #ccc;padding:10px;\" id=\"prod-info\">" +
-                   "  <div onclick=\"location.href='" + pdpLink + "'\" style=\"cursor:pointer;background:#eee;height:180px;display:flex;align-items:center;justify-content:center;\">" +
-                   "    <svg viewBox=\"0 0 100 100\" style=\"width:60%;height:60%;\">" + p.svgPath + "</svg>" +
-                   "  </div>" +
-                   "  <div style=\"padding-top:10px;\">" +
-                   "    <div class=\"product-title-bad\" style=\"font-weight:bold;\">" + localeName + "</div>" +
-                   "    <div class=\"product-price-bad\">" + priceHtml + "</div>" +
-                   "    <div class=\"add-btn product-quick-add\" style=\"background:#C87A53;color:white;text-align:center;padding:8px;margin-top:8px;cursor:pointer;\" " +
-                   "         hx-post=\"api/cart/add?productId=" + p.id + "\" hx-target=\"#cart-btn-wrapper\" hx-swap=\"outerHTML\">Add</div>" +
-                   "  </div>" +
-                   "</div>";
-        }
-        else if ("modern-bad".equals(quality))
-        {
-            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
-            final String cardId = getDynamicId("react-hydrated-card");
-            final String btnId = getDynamicId("v-btn");
-
-            return "<div id=\"" + cardId + "\" class=\"" + getTailwindSoup() + "\">" +
-                   "  <div class=\"w-full flex flex-col justify-between h-full\">" +
-                   "    <div class=\"relative bg-gray-50 rounded-lg p-2 flex items-center justify-center h-44\">" +
-                   "      " + badgeHtml +
-                   "      <a href=\"" + pdpLink + "\" aria-label=\"View details of " + localeName + "\" class=\"w-full h-full flex items-center justify-center\">" +
-                   "        <svg viewBox=\"0 0 100 100\" class=\"w-24 h-24 text-gray-700\">" + p.svgPath + "</svg>" +
-                   "      </a>" +
-                   "    </div>" +
-                   "    <div class=\"mt-3 flex flex-col gap-1\">" +
-                   "      <div class=\"text-sm font-semibold text-gray-900\">" +
-                   "        <a href=\"" + pdpLink + "\">" + localeName + "</a>" +
-                   "      </div>" +
-                   "      <div class=\"text-sm font-medium text-gray-500\">" + priceHtml + "</div>" +
-                   "      <div class=\"mt-2 relative\">" +
-                   "        <button id=\"" + btnId + "\" class=\"product-quick-add w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm transition-colors text-xs uppercase tracking-wider flex items-center justify-center\" " +
-                   "                data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" aria-label=\"Add " + localeName + " to shopping cart\">" +
-                   "          " + trans.getOrDefault("addToCart", "Add to Cart") +
-                   "        </button>" +
-                   "      </div>" +
-                   "    </div>" +
-                   "  </div>" +
-                   "</div>";
-        }
-        else if ("modern-bad-nowcag".equals(quality))
-        {
-            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
-            final String cardId = getDynamicId("v-node");
-            final String wrapId1 = getDynamicId("react-div");
-            final String wrapId2 = getDynamicId("v-inner");
-            final String btnId = getDynamicId("v-btn");
-
-            return "<div id=\"" + cardId + "\" class=\"" + getTailwindSoup() + "\">" +
-                   "  <div id=\"" + wrapId1 + "\" class=\"w-full flex flex-col justify-between h-full\">" +
-                   "    <div id=\"" + wrapId2 + "\" class=\"bg-slate-50 rounded-lg p-2 flex items-center justify-center h-44 cursor-pointer\" onclick=\"location.href='" + pdpLink + "'\">" +
-                   "      <div class=\"w-full h-full flex items-center justify-center\">" +
-                   "        <span class=\"block w-24 h-24\">" +
-                   "          <svg viewBox=\"0 0 100 100\" class=\"w-full h-full text-slate-700\">" + p.svgPath + "</svg>" +
-                   "        </span>" +
-                   "      </div>" +
-                   "    </div>" +
-                   "    <div class=\"mt-3 flex flex-col gap-1\">" +
-                   "      <div class=\"text-sm font-bold text-slate-900 cursor-pointer\" onclick=\"location.href='" + pdpLink + "'\">" +
-                   "        <span><span>" + localeName + "</span></span>" +
-                   "      </div>" +
-                   "      <div class=\"text-xs text-slate-500\"><span>" + priceHtml + "</span></div>" +
-                   "      <div class=\"mt-2 relative\">" +
-                   "        <div id=\"" + btnId + "\" class=\"product-quick-add w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm transition-colors text-xs uppercase tracking-wider flex items-center justify-center cursor-pointer\" " +
-                   "             data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\">" +
-                   "          <span><span>" + trans.getOrDefault("addToCart", "Add to Cart") + "</span></span>" +
-                   "        </div>" +
-                   "      </div>" +
-                   "    </div>" +
-                   "  </div>" +
-                   "</div>";
-        }
-        else if ("pwa-chaos".equals(quality))
-        {
-            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
-            final String stepperId = getDynamicId("number-input::r" + UUID.randomUUID().toString().substring(0, 4) + ":");
-            final String nowPrice = formatPrice(salePrice != null ? salePrice : basePrice, country);
-            final String wasPrice = salePrice != null ? formatPrice(basePrice, country) : "";
-            final String categoryTitle = trans.getOrDefault(p.category, p.category);
-
-            return "<div data-dan-component=\"product-tile\" data-testid=\"product-tile-" + p.id + "\" data-pid=\"" + p.id + "\" data-shipping-method=\"shipping\" id=\"product-tile--" + p.id + "\" data-cnstrc-item-id=\"" + p.id + "\" data-cnstrc-item-name=\"" + escapeHtml(localeName) + "\" data-cnstrc-item-price=\"" + (salePrice != null ? salePrice : basePrice) + "\" class=\"emotion-1s86rl4\">" +
-                   "  <span role=\"status\" aria-live=\"polite\" class=\"emotion-lnntmy\"></span>" +
-                   "  <div class=\"wick-linkbox emotion-164b4e4\">" +
-                   "    <div class=\"wick-card__root emotion-1bfi37c\">" +
-                   "      <div class=\"emotion-brx7u0\">" +
-                   "        <div class=\"emotion-ci36qi\">" +
-                   "          <a class=\"wick-linkbox__overlay emotion-1q4f12p\" href=\"" + pdpLink + "\" data-discover=\"true\" aria-label=\"View " + escapeHtml(localeName) + "\">" +
-                   "            <div class=\"emotion-167ekqp\">" +
-                   "              <div class=\"emotion-hzkzo2\">" +
-                   "                <div class=\"emotion-5mrfce\">" +
-                   "                  <svg viewBox=\"0 0 100 100\" class=\"wick-image emotion-n45is0\">" + p.svgPath + "</svg>" +
-                   "                </div>" +
-                   "              </div>" +
-                   "            </div>" +
-                   "          </a>" +
-                   "        </div>" +
-                   (badgeHtml.isEmpty() ? "" : "        <span data-dan-component=\"product-tile--badge\" data-testid=\"product-tile--badge\" class=\"wick-badge emotion-2b9vae\">" + (!p.badge.isEmpty() ? escapeHtml(p.badge) : "Sale") + "</span>") +
-                   "      </div>" +
-                   "      <div class=\"wick-card__body emotion-ebdcim\">" +
-                   "        <div class=\"wick-stack emotion-9vvgc2\">" +
-                   "          <p data-dan-component=\"product-tile--social-proofing\" class=\"emotion-e2von4\">Trending</p>" +
-                   "          <h3 data-dan-component=\"product-tile--name\" class=\"GlobalLinkNoTx wick-card__title emotion-14lzra7\">" +
-                   "            <a class=\"wick-link emotion-kasbrq\" href=\"" + pdpLink + "\" data-discover=\"true\">" + escapeHtml(localeName) + "</a>" +
-                   "          </h3>" +
-                   "          <p data-dan-component=\"product-tile--type\" class=\"wick-card__description emotion-ht9fx4\">" + escapeHtml(categoryTitle) + "</p>" +
-                   "        </div>" +
-                   "        <div class=\"wick-stack emotion-9vvgc2\">" +
-                   "          <div class=\"wick-skeleton emotion-10nilez\">" +
-                   "            <div class=\"wick-stack emotion-15kf031\" data-dan-component=\"product-price\">" +
-                   "              <b data-dan-component=\"product-price--now-price\" class=\"emotion-1rkvoei\">" + nowPrice + "</b>" +
-                   (salePrice != null ? "              <s data-dan-component=\"product-price--sale-price\" class=\"emotion-bxysmo\">" + wasPrice + "</s>" : "") +
-                   "            </div>" +
-                   "          </div>" +
-                   "        </div>" +
-                   "        <div data-dan-component=\"product-tile--rating\" class=\"emotion-c7yo1x\">" +
-                   "          <div data-bv-show=\"inline_rating\" data-bv-productid=\"" + p.id + "\"></div>" +
-                   "        </div>" +
-                   "      </div>" +
-                   "      <div class=\"wick-card__footer emotion-1nht3qk\">" +
-                   "        <div id=\"" + stepperId + "\" data-scope=\"number-input\" data-part=\"root\" dir=\"ltr\" data-cnstrc-btn=\"add_to_cart\" data-initial-affordance-visible=\"true\" class=\"wick-number-stepper__root emotion-1bd2lri\">" +
-                   "          <label data-scope=\"number-input\" data-part=\"label\" dir=\"ltr\" id=\"" + stepperId + "::label\" for=\"" + stepperId + "::input\" class=\"wick-number-stepper__label emotion-1z119ai\">Quantity in bag</label>" +
-                   "          <div style=\"position: absolute; inset: 0px; display: flex; align-items: stretch;\">" +
-                   "            <button type=\"button\" data-dan-component=\"product-tile--add-to-bag-button\" data-rec-id=\"" + p.id + "\" data-rec-name=\"" + escapeHtml(localeName) + "\" data-rec-type=\"" + escapeHtml(categoryTitle) + "\" aria-label=\"Add " + escapeHtml(localeName) + " to Bag\" class=\"wick-button emotion-wasmr0 product-quick-add\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\">" +
-                   "              " + trans.getOrDefault("addToCart", "Add to bag") +
-                   "            </button>" +
-                   "          </div>" +
-                   "          <input data-scope=\"number-input\" data-part=\"input\" dir=\"ltr\" id=\"" + stepperId + "::input\" role=\"spinbutton\" pattern=\"-?[0-9]*(.[0-9]+)?\" inputmode=\"decimal\" autocomplete=\"off\" autocorrect=\"off\" spellcheck=\"false\" type=\"text\" aria-roledescription=\"numberfield\" aria-valuemin=\"0\" aria-valuemax=\"9\" aria-valuenow=\"0\" tabindex=\"-1\" class=\"wick-number-stepper__input emotion-ds87jz\" value=\"0\">" +
-                   "        </div>" +
-                   "      </div>" +
-                   "      <div class=\"wick-card__footer emotion-1nht3qk\">" +
-                   "        <div class=\"wick-stack emotion-1wv6ypd\" data-dan-component=\"grid-fulfillment-methods\">" +
-                   "          <p><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" class=\"wick-icon emotion-e1qt4e\"><path fill=\"currentColor\" d=\"M12 2.38a9.62 9.62 0 1 1 0 19.24 9.62 9.62 0 0 1 0-19.24m0 1.24a8.38 8.38 0 1 0 0 16.76 8.38 8.38 0 0 0 0-16.76m3.312 5.692a.62.62 0 0 1 .877.877l-5.25 5.25a.62.62 0 0 1-.877 0l-2.25-2.25a.62.62 0 0 1 .876-.877l1.812 1.811z\"></path></svg>Shipping</p>" +
-                   "        </div>" +
-                   "      </div>" +
-                   "    </div>" +
-                   "  </div>" +
-                   "</div>";
-        }
-        else if ("apocalypse".equals(quality))
-        {
-            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
-            final String nowPrice = formatPrice(salePrice != null ? salePrice : basePrice, country);
-            final String wasPrice = salePrice != null ? formatPrice(basePrice, country) : "";
-
-            return "<article class=\"apoc-product-tile\" data-product-id=\"" + p.id + "\" style=\"background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 8px; padding: 18px; display: flex; flex-direction: column; transition: all 0.25s ease; position: relative;\">" +
-                   "  <div style=\"height: 180px; background: var(--apoc-bg-elevated); border: 1px solid var(--apoc-border); border-radius: 6px; display: flex; align-items: center; justify-content: center; position: relative; margin-bottom: 14px;\">" +
-                   "    <a href=\"" + pdpLink + "\" style=\"width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;\">" +
-                   "      <svg viewBox=\"0 0 100 100\" style=\"width: 65%; height: 65%; color: var(--apoc-gold); filter: drop-shadow(0 4px 12px rgba(0,0,0,0.5));\">" + p.svgPath + "</svg>" +
-                   "    </a>" +
-                   (badgeHtml.isEmpty() ? "" : "    <span style=\"position: absolute; top: 8px; left: 8px; background: var(--apoc-gold); color: #000; font-size: 10px; font-weight: 800; text-transform: uppercase; padding: 2px 6px; border-radius: 3px;\">" + (!p.badge.isEmpty() ? escapeHtml(p.badge) : "Private Drop") + "</span>") +
-                   "  </div>" +
-                   "  <div style=\"flex: 1; display: flex; flex-direction: column;\">" +
-                   "    <div style=\"font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--apoc-gold); margin-bottom: 4px;\"><span class=\"ps-txt ps-txt-trending\"></span></div>" +
-                   "    <h3 class=\"product-title\" style=\"font-family: var(--apoc-font-serif); font-size: 16px; font-weight: 600; color: #FFFFFF; line-height: 1.3; margin-bottom: 6px;\">" +
-                   "      <a href=\"" + pdpLink + "\" style=\"color: #fff;\">" + escapeHtml(localeName) + "</a>" +
-                   "    </h3>" +
-                   "    <div style=\"margin-top: auto; padding-top: 8px; display: flex; align-items: baseline; gap: 8px; margin-bottom: 12px;\">" +
-                   "      <span class=\"product-price\" style=\"font-size: 16px; font-weight: 700; color: var(--apoc-gold);\">" + nowPrice + "</span>" +
-                   (salePrice != null ? "      <s style=\"font-size: 12px; color: var(--apoc-text-muted);\">" + wasPrice + "</s>" : "") +
-                   "    </div>" +
-                   "    <button type=\"button\" class=\"apoc-btn-gold product-quick-add\" id=\"apoc-add-btn-" + p.id + "\" data-interactive=\"true\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\" style=\"width: 100%; padding: 10px; font-size: 12px;\" onclick=\"triggerApocalypseQuickSize(this)\">" +
-                   "      <span class=\"ps-txt ps-txt-add-to-bag\"></span>" +
-                   "      <span class=\"hydration-indicator\"></span>" +
-                   "    </button>" +
-                   "  </div>" +
-                   "</article>";
-        }
-        else
-        {
-            // Perfect and Normal layout structure
-            final String ariaLabel = "perfect".equals(quality) ? " aria-label=\"View details of " + localeName + "\"" : "";
-            final String accessibilityBtn = "perfect".equals(quality) ? " aria-label=\"Add " + localeName + " to shopping cart\"" : "";
-            final String stockJson = escapeHtml(new Gson().toJson(productInventory.getOrDefault(p.id, Map.of())));
-
-            return "<article class=\"product-card\">" +
-                   "  <div class=\"product-media\">" +
-                   "    " + badgeHtml +
-                   "    <a href=\"" + pdpLink + "\"" + ariaLabel + " style=\"display:contents;\">" +
-                   "      <svg viewBox=\"0 0 100 100\">" + p.svgPath + "</svg>" +
-                   "    </a>" +
-                   "    <button class=\"product-quick-add\" data-product-id=\"" + p.id + "\" data-category=\"" + p.category + "\" data-stock=\"" + stockJson + "\"" + accessibilityBtn + ">" +
-                   "      " + trans.getOrDefault("addToCart", "Add to Cart") +
-                   "    </button>" +
-                   "  </div>" +
-                   "  <div class=\"product-details\">" +
-                   "    <h3 class=\"product-title\"><a href=\"" + pdpLink + "\">" + localeName + "</a></h3>" +
-                   "    <div class=\"product-price\">" + priceHtml + "</div>" +
-                   "  </div>" +
-                   "</article>";
-        }
-    }
-
-    private String renderProductCardInfinite(final Product p, final Country country, final Map<String, String> trans, final String quality, final String nextUrl)
-    {
-        // Wrap normal card in hx-get revealed trigger tag
-        final String normalCard = renderProductCard(p, country, trans, quality);
-        
-        // Wrap it so that when this card is revealed, it loads the next page in-place
-        return "<div hx-get=\"" + nextUrl + "\" hx-trigger=\"revealed\" hx-swap=\"afterend\">" + normalCard + "</div>";
-    }
-
-    private String getCartBadgeWrapperHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality)
+    public String getCartBadgeWrapperHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality)
     {
         return getCartBadgeWrapperHtml(cart, trans, country, quality, false);
     }
 
-    private String getCartBadgeWrapperHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality, final boolean showTemp)
+    public String getCartBadgeWrapperHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality, final boolean showTemp)
     {
         final int count = cart.items.values().stream().mapToInt(Integer::intValue).sum();
         final String dropdownHtml = getCartDropdownHtml(cart, trans, country, quality, showTemp);
@@ -3588,7 +1307,6 @@ public final class EmbeddedHtmlServer
 
         if (isTailwindByClaude(quality))
         {
-            // "group" lets the dropdown open on hover purely through group-hover utilities.
             return "<div class=\"group relative inline-block\" id=\"cart-btn-wrapper\">" +
                    "  <a href=\"cart.html\" class=\"flex items-center gap-1.5 rounded-lg px-3 py-2 text-[13px] font-medium uppercase tracking-[0.05em] transition-colors hover:bg-sand-50 hover:text-terracotta-500 focus:bg-sand-50 focus:text-terracotta-500\" id=\"cart-btn-anchor\" aria-label=\"Shopping Cart with " + count + " items\">" +
                    "    <svg class=\"h-4 w-4 shrink-0\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><rect x=\"3\" y=\"8\" width=\"18\" height=\"13\" rx=\"2\" ry=\"2\"></rect><path d=\"M16 8a4 4 0 0 0-8 0\"></path></svg> " + trans.getOrDefault("cart", "Cart") +
@@ -3616,12 +1334,12 @@ public final class EmbeddedHtmlServer
                "</div>";
     }
 
-    private String getCartDropdownHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality)
+    public String getCartDropdownHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality)
     {
         return getCartDropdownHtml(cart, trans, country, quality, false);
     }
 
-    private String getCartDropdownHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality, final boolean showTemp)
+    public String getCartDropdownHtml(final Cart cart, final Map<String, String> trans, final Country country, final String quality, final boolean showTemp)
     {
         if (isTailwindByClaude(quality) || isApparel(quality))
         {
@@ -3658,7 +1376,7 @@ public final class EmbeddedHtmlServer
             double subtotal = 0;
             for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
             {
-                final Product p = lookupProductById(entry.getKey());
+                final Product p = catalog.lookupProductById(entry.getKey());
                 if (p == null)
                 {
                     continue;
@@ -3718,7 +1436,7 @@ public final class EmbeddedHtmlServer
             double subtotal = 0;
             for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
             {
-                final Product p = lookupProductById(entry.getKey());
+                final Product p = catalog.lookupProductById(entry.getKey());
                 if (p == null)
                 {
                     continue;
@@ -3753,11 +1471,6 @@ public final class EmbeddedHtmlServer
         return sb.toString();
     }
 
-    /**
-     * Mini-cart panel for the Tailwind SUT. Visibility is driven by the wrapper's
-     * group-hover plus a data-show attribute that the layout script flips after an
-     * add-to-cart swap, so no stateful CSS class is needed.
-     */
     private String getCartDropdownHtmlTailwind(final Cart cart, final Map<String, String> trans, final Country country, final boolean showTemp)
     {
         final StringBuilder sb = new StringBuilder();
@@ -3778,7 +1491,7 @@ public final class EmbeddedHtmlServer
             double subtotal = 0;
             for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
             {
-                final Product p = lookupProductById(entry.getKey());
+                final Product p = catalog.lookupProductById(entry.getKey());
                 if (p == null)
                 {
                     continue;
@@ -3829,7 +1542,7 @@ public final class EmbeddedHtmlServer
             sb.append("<div style=\"display:flex; flex-direction:column; gap:16px;\">");
             for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
             {
-                final Product p = lookupProductById(entry.getKey());
+                final Product p = catalog.lookupProductById(entry.getKey());
                 if (p == null)
                 {
                     continue;
@@ -3880,7 +1593,7 @@ public final class EmbeddedHtmlServer
         for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
         {
             final String cartKey = entry.getKey();
-            final Product p = lookupProductById(cartKey);
+            final Product p = catalog.lookupProductById(cartKey);
             if (p == null)
             {
                 continue;
@@ -3917,7 +1630,6 @@ public final class EmbeddedHtmlServer
         sb.append("      </tbody></table>");
         sb.append("  </div>");
 
-        // Summary Sidebar
         sb.append("  <div style=\"background: var(--apoc-bg-surface); border: 1px solid var(--apoc-border); border-radius: 12px; padding: 28px;\">");
         sb.append("    <h3 style=\"font-family: var(--apoc-font-serif); font-size: 20px; font-weight: 700; color: #fff; margin-bottom: 20px; border-bottom: 1px solid var(--apoc-border); padding-bottom: 10px;\">Order Summary</h3>");
         sb.append("    <div style=\"display: flex; flex-direction: column; gap: 12px; font-size: 14px; margin-bottom: 20px;\">");
@@ -3937,10 +1649,11 @@ public final class EmbeddedHtmlServer
         sb.append("    </a>");
         sb.append("  </div>");
         sb.append("</div>");
+
         return sb.toString();
     }
 
-    private String getCartDrawerHtmlApparel(final Cart cart, final Country country, final Map<String, String> trans)
+    public String getCartDrawerHtmlApparel(final Cart cart, final Country country, final Map<String, String> trans)
     {
         final double subtotal = calculateSubtotal(cart);
         final int count = cart.items.values().stream().mapToInt(Integer::intValue).sum();
@@ -3974,7 +1687,7 @@ public final class EmbeddedHtmlServer
             for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
             {
                 final String cartKey = entry.getKey();
-                final Product p = lookupProductById(cartKey);
+                final Product p = catalog.lookupProductById(cartKey);
                 if (p == null)
                 {
                     continue;
@@ -4007,10 +1720,10 @@ public final class EmbeddedHtmlServer
         json.put("shippingProgress", progressPct);
         json.put("itemsHtml", sbItems.toString());
 
-        return new Gson().toJson(json);
+        return GSON.toJson(json);
     }
 
-    private String getCartDrawerHtmlApocalypse(final Cart cart, final Country country, final Map<String, String> trans)
+    public String getCartDrawerHtmlApocalypse(final Cart cart, final Country country, final Map<String, String> trans)
     {
         final StringBuilder sb = new StringBuilder();
         if (cart.items.isEmpty())
@@ -4030,7 +1743,7 @@ public final class EmbeddedHtmlServer
             final String[] parts = cartKey.split(":");
             final String productId = parts[0];
             final String size = parts.length > 1 ? parts[1] : "";
-            final Product p = lookupProductById(productId);
+            final Product p = catalog.lookupProductById(productId);
             if (p == null)
             {
                 continue;
@@ -4069,12 +1782,12 @@ public final class EmbeddedHtmlServer
         return sb.toString();
     }
 
-    private String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality)
+    public String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality)
     {
         return getCartContentHtml(cart, country, trans, quality, null);
     }
 
-    private String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality, final String couponError)
+    public String getCartContentHtml(final Cart cart, final Country country, final Map<String, String> trans, final String quality, final String couponError)
     {
         if (isTailwindByClaude(quality) || isApparel(quality))
         {
@@ -4130,7 +1843,7 @@ public final class EmbeddedHtmlServer
             for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
             {
                 final String cartKey = entry.getKey();
-                final Product p = lookupProductById(cartKey);
+                final Product p = catalog.lookupProductById(cartKey);
                 if (p == null) continue;
 
                 final double price = p.salePrice != null ? p.salePrice : p.basePrice;
@@ -4185,7 +1898,7 @@ public final class EmbeddedHtmlServer
 
             sb.append("        </div></div></div>");
             sb.append("        <div class=\"wick-stack emotion-120khze\" data-dan-display=\"cart--gift-messaging\"><svg focusable=\"false\" aria-hidden=\"true\" viewBox=\"0 0 24 24\" class=\"wick-icon emotion-1xj7d2j\"><path fill=\"currentColor\" d=\"M12.939 2.512c1.09-1.234 2.983-1.12 4.077-.028 1.093 1.094 1.206 2.988-.028 4.08q-.19.168-.397.31h3.659c.76.001 1.375.617 1.375 1.376v3c0 .76-.616 1.375-1.375 1.375h-.125v6.125a1.376 1.376 0 0 1-1.375 1.375H5.25a1.376 1.376 0 0 1-1.375-1.375v-6.125H3.75c-.76 0-1.375-.616-1.375-1.375v-3c0-.76.616-1.375 1.375-1.375h3.658q-.207-.144-.396-.31c-1.234-1.093-1.122-2.987-.028-4.08 1.094-1.094 2.987-1.207 4.078.027l.148.176c.341.431.596.927.789 1.426.22-.569.523-1.132.94-1.602M5.124 18.75q0 .051.036.089a.13.13 0 0 0 .089.036h6.125v-6.25h-6.25zm7.5.125h6.125a.13.13 0 0 0 .089-.036.13.13 0 0 0 .036-.09v-6.124h-6.25zM3.75 8.125a.125.125 0 0 0-.125.125v3c0 .069.056.125.125.125h7.625v-3.25zm8.875 3.25h7.625a.125.125 0 0 0 .125-.125v-3a.125.125 0 0 0-.125-.125h-7.625zM10.017 3.23c-.569-.509-1.532-.48-2.149.137-.657.657-.648 1.71-.027 2.26l.128.108c.66.52 1.598.815 2.453.974.34.063.654.099.911.123-.024-.257-.06-.572-.123-.911-.17-.912-.496-1.918-1.084-2.581zm6.115.137c-.617-.617-1.58-.646-2.149-.137l-.109.11c-.588.663-.914 1.67-1.084 2.58-.063.34-.1.655-.124.912.258-.024.572-.06.912-.123.912-.17 1.918-.494 2.581-1.081.62-.55.63-1.604-.027-2.261\"></path></svg><div><span class=\"emotion-17zaex6\">Shipping a gift?</span> Add a gift receipt and message at checkout.</div></div>");
-            sb.append("      </div>"); // End .cart-main-col
+            sb.append("      </div>");
 
             sb.append("      <div class=\"cart-sidebar-col\">");
             sb.append("        <div class=\"emotion-2qrmgs\"><div class=\"wick-stack emotion-xhikg2\" data-testid=\"sf-order-summary\">");
@@ -4221,10 +1934,10 @@ public final class EmbeddedHtmlServer
 
             sb.append("          <div class=\"wick-stack emotion-p4b27s\"><p data-dan-component=\"cart--order-summary--legal-disclaimer\" class=\"emotion-10txwal\">By completing my order, I confirm that (1) I have read and agree to the <span class=\"GlobalLinkNoTx\">VÉRLA</span> <a href=\"about.html\" id=\"terms-of-use-link\" class=\"wick-link emotion-vvb98k\">Terms of Use</a> and <a href=\"about.html\" id=\"privacy-policy-link\" class=\"wick-link emotion-vvb98k\">Privacy Policy</a>.</p></div>");
             sb.append("        </div></div>");
-            sb.append("      </div>"); // End .cart-sidebar-col
-            sb.append("    </div>"); // End .cart-layout-grid
-            sb.append("  </div>"); // End .chakra-container.emotion-1sntv1k
-            sb.append("</div>"); // End #cart-content-wrapper
+            sb.append("      </div>");
+            sb.append("    </div>");
+            sb.append("  </div>");
+            sb.append("</div>");
 
             return sb.toString();
         }
@@ -4259,22 +1972,14 @@ public final class EmbeddedHtmlServer
         for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
         {
             final String cartKey = entry.getKey();
-            final String size;
-            if (cartKey.contains(":"))
-            {
-                size = cartKey.split(":")[1];
-            }
-            else
-            {
-                size = "";
-            }
+            final String size = cartKey.contains(":") ? cartKey.split(":")[1] : "";
 
-            final Product p = lookupProductById(cartKey);
+            final Product p = catalog.lookupProductById(cartKey);
             if (p == null)
             {
                 continue;
             }
-            
+
             final double price = p.salePrice != null ? p.salePrice : p.basePrice;
             final double rowTotal = price * entry.getValue();
             final String displayName = p.names.getOrDefault(country.locale, p.names.get("en")) + (size.isEmpty() ? "" : " (" + size + ")");
@@ -4389,70 +2094,7 @@ public final class EmbeddedHtmlServer
         return sb.toString();
     }
 
-    private static double calculateSubtotal(final Cart cart)
-    {
-        double subtotal = 0;
-        for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
-        {
-            final Product p = lookupProductById(entry.getKey());
-            if (p != null)
-            {
-                final double price = p.salePrice != null ? p.salePrice : p.basePrice;
-                subtotal += price * entry.getValue();
-            }
-        }
-        return Math.round(subtotal * 100.0) / 100.0;
-    }
-
-    private static double calculateDiscount(final Cart cart, final double subtotal)
-    {
-        if (cart.coupon == null) return 0;
-        switch (cart.coupon)
-        {
-            case "10p-off":
-                return Math.round(subtotal * 0.1 * 100.0) / 100.0;
-            case "bogo":
-                // Buy one, get one free on any item with quantity >= 2
-                double bogoDiscount = 0;
-                for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
-                {
-                    if (entry.getValue() >= 2)
-                    {
-                        final Product p = lookupProductById(entry.getKey());
-                        if (p != null)
-                        {
-                            final double price = p.salePrice != null ? p.salePrice : p.basePrice;
-                            bogoDiscount += price * (entry.getValue() / 2);
-                        }
-                    }
-                }
-                return Math.round(bogoDiscount * 100.0) / 100.0;
-            default:
-                return 0;
-        }
-    }
-
-    private static double calculateShipping(final Cart cart, final double subtotal)
-    {
-        if ("freeship".equals(cart.coupon) || subtotal >= 150.0)
-        {
-            return 0.00;
-        }
-        return 9.99;
-    }
-
-    private static String formatPrice(final double usdPrice, final Country country)
-    {
-        final double localPrice = usdPrice * country.rate;
-        if ("JPY".equals(country.currency))
-        {
-            return String.format(Locale.US, country.format, String.format(Locale.US, "%,d", (long)Math.round(localPrice)));
-        }
-        return String.format(Locale.US, country.format, String.format(Locale.US, "%,.2f", localPrice));
-    }
-
-    /** Cart page for the Tailwind SUT: utility classes only, no inline styles. */
-    private String getCartContentHtmlTailwind(final Cart cart, final Country country, final Map<String, String> trans, final String couponError)
+    public String getCartContentHtmlTailwind(final Cart cart, final Country country, final Map<String, String> trans, final String couponError)
     {
         if (cart.items.isEmpty())
         {
@@ -4486,7 +2128,7 @@ public final class EmbeddedHtmlServer
             final String cartKey = entry.getKey();
             final String size = cartKey.contains(":") ? cartKey.split(":")[1] : "";
 
-            final Product p = lookupProductById(cartKey);
+            final Product p = catalog.lookupProductById(cartKey);
             if (p == null)
             {
                 continue;
@@ -4593,10 +2235,8 @@ public final class EmbeddedHtmlServer
         return sb.toString();
     }
 
-    private String getAddressFieldsHtml(final String countryCode, final String locale, final Map<String, String> trans, final String prefix, final String quality)
+    public String getAddressFieldsHtml(final String countryCode, final String locale, final Map<String, String> trans, final String prefix, final String quality)
     {
-        // The Tailwind SUT swaps every semantic form class for its utility equivalent;
-        // the field structure itself is identical across variants.
         final boolean tw = isTailwindByClaude(quality) || isApparel(quality);
         final boolean apoc = "apocalypse".equals(quality);
         final String cGroup = tw ? "mb-5" : (apoc ? "apoc-form-group" : "form-group");
@@ -4679,94 +2319,257 @@ public final class EmbeddedHtmlServer
         }
     }
 
-    private static Product lookupProductById(final String id)
+    public String getDynamicId(final String prefix)
     {
-        final String cleanId = id.contains(":") ? id.split(":")[0] : id;
-        for (final Product p : catalogProducts)
-        {
-            if (p.id.equals(cleanId)) return p;
-        }
-        return null;
+        return getDynamicId(prefix, null);
     }
 
-    private static Product lookupProductBySlug(final String slug)
+    public String getDynamicId(final String prefix, final TestSession session)
     {
-        for (final Product p : catalogProducts)
-        {
-            if (p.slug.equals(slug)) return p;
-        }
-        return null;
+        final int rand = (session != null)
+            ? 100000 + session.getSeededRandom().nextInt(900000)
+            : 100000 + ThreadLocalRandom.current().nextInt(900000);
+        return prefix + "-" + rand;
     }
 
-    private static Map<String, String> parseCookies(final String cookieHeader)
+    public static String getTailwindSoup()
     {
-        final Map<String, String> cookies = new HashMap<>();
-        if (cookieHeader != null)
+        return "flex flex-col min-w-0 break-words bg-white border border-slate-200 rounded-xl shadow-sm hover:shadow-md transition-all duration-200 p-4 m-1";
+    }
+
+    public static boolean isTailwindByClaude(final String quality)
+    {
+        return "tailwind-by-claude".equals(quality);
+    }
+
+    public static boolean isApparel(final String quality)
+    {
+        return "apparel".equals(quality) || "apperal".equals(quality);
+    }
+
+    public static boolean isHeadless(final String quality)
+    {
+        return "headless".equals(quality);
+    }
+
+    public double calculateSubtotal(final Cart cart)
+    {
+        double subtotal = 0;
+        for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
         {
-            final String[] pairs = cookieHeader.split(";");
-            for (final String pair : pairs)
+            final Product p = catalog.lookupProductById(entry.getKey());
+            if (p != null)
             {
-                final String[] kv = pair.trim().split("=", 2);
-                if (kv.length == 2)
-                {
-                    cookies.put(kv[0], kv[1]);
-                }
+                final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+                subtotal += price * entry.getValue();
             }
         }
-        return cookies;
+        return Math.round(subtotal * 100.0) / 100.0;
     }
 
-    private static Map<String, String> parseRequestBody(final HttpExchange exchange) throws IOException
+    public double calculateDiscount(final Cart cart, final double subtotal)
     {
-        final Map<String, String> params = new HashMap<>();
-        if (exchange.getRequestURI().getQuery() != null)
+        if (cart.coupon == null) return 0;
+        switch (cart.coupon)
         {
-            final String query = exchange.getRequestURI().getQuery();
-            final String[] pairs = query.split("&");
-            for (final String pair : pairs)
-            {
-                final String[] kv = pair.split("=", 2);
-                if (kv.length == 2)
+            case "10p-off":
+                return Math.round(subtotal * 0.1 * 100.0) / 100.0;
+            case "bogo":
+                double bogoDiscount = 0;
+                for (final Map.Entry<String, Integer> entry : cart.items.entrySet())
                 {
-                    params.put(URLDecoder.decode(kv[0], StandardCharsets.UTF_8.name()),
-                               URLDecoder.decode(kv[1], StandardCharsets.UTF_8.name()));
-                }
-                else if (kv.length == 1)
-                {
-                    params.put(URLDecoder.decode(kv[0], StandardCharsets.UTF_8.name()), "");
-                }
-            }
-        }
-
-        if ("POST".equalsIgnoreCase(exchange.getRequestMethod()) || "PUT".equalsIgnoreCase(exchange.getRequestMethod()))
-        {
-            try (final InputStream is = exchange.getRequestBody();
-                 final BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8)))
-            {
-                final String query = br.lines().collect(Collectors.joining("\n"));
-                if (!query.isEmpty())
-                {
-                    final String[] pairs = query.split("&");
-                    for (final String pair : pairs)
+                    if (entry.getValue() >= 2)
                     {
-                        final String[] kv = pair.split("=", 2);
-                        if (kv.length == 2)
+                        final Product p = catalog.lookupProductById(entry.getKey());
+                        if (p != null)
                         {
-                            params.put(URLDecoder.decode(kv[0], StandardCharsets.UTF_8.name()),
-                                       URLDecoder.decode(kv[1], StandardCharsets.UTF_8.name()));
-                        }
-                        else if (kv.length == 1)
-                        {
-                            params.put(URLDecoder.decode(kv[0], StandardCharsets.UTF_8.name()), "");
+                            final double price = p.salePrice != null ? p.salePrice : p.basePrice;
+                            bogoDiscount += price * (entry.getValue() / 2);
                         }
                     }
                 }
-            }
+                return Math.round(bogoDiscount * 100.0) / 100.0;
+            default:
+                return 0;
         }
-        return params;
     }
 
-    private static String getQueryParam(final String queryOrPath, final String key)
+    public static double calculateShipping(final Cart cart, final double subtotal)
+    {
+        if ("freeship".equals(cart.coupon) || subtotal >= 150.0)
+        {
+            return 0.00;
+        }
+        return 9.99;
+    }
+
+    public static String formatPrice(final double usdPrice, final Country country)
+    {
+        final double localPrice = usdPrice * country.rate;
+        if ("JPY".equals(country.currency))
+        {
+            return String.format(Locale.US, country.format, String.format(Locale.US, "%,d", (long)Math.round(localPrice)));
+        }
+        return String.format(Locale.US, country.format, String.format(Locale.US, "%,.2f", localPrice));
+    }
+
+    public static String readResource(final String resourcePath)
+    {
+        try (final InputStream is = VerlaRenderer.class.getClassLoader().getResourceAsStream(resourcePath))
+        {
+            if (is == null) return null;
+            return new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
+                .lines().collect(Collectors.joining("\n"));
+        }
+        catch (final Exception e)
+        {
+            LOG.error("Failed to read resource path: {}", resourcePath, e);
+            return null;
+        }
+    }
+
+    public static String escapeHtml(final String raw)
+    {
+        if (raw == null) return "";
+        return raw.replace("&", "&amp;")
+                  .replace("<", "&lt;")
+                  .replace(">", "&gt;")
+                  .replace("\"", "&quot;")
+                  .replace("'", "&#x27;");
+    }
+
+    public static String emotionHash(final String seed)
+    {
+        int h = 0;
+        for (int i = 0; i < seed.length(); i++)
+        {
+            h = 31 * h + seed.charAt(i);
+        }
+        final String base = Integer.toString(Math.abs(h), 36);
+        return "css-" + (base.length() > 7 ? base.substring(0, 7) : base + "0".repeat(7 - base.length()));
+    }
+
+    public String buildHydrationBlob(final List<Product> products, final Country country, final int targetKb, final TestSession session)
+    {
+        final Map<String, Object> state = new LinkedHashMap<>();
+        state.put("__INITIAL_CORRELATION_ID__", Long.toHexString(ThreadLocalRandom.current().nextLong() & 0xFFFFFFFFFFFFL) + "-VRL");
+        final Map<String, Object> config = new LinkedHashMap<>();
+        config.put("app", Map.of("url", Map.of("site", "path", "locale", "path"),
+                                 "defaultSite", "verla-headless",
+                                 "commerceApi", Map.of("organizationId", "f_ecom_verla_prd", "shortCode", "vrl0001")));
+        state.put("__CONFIG__", config);
+        state.put("locale", country.locale);
+        state.put("currency", country.symbol);
+
+        final Map<String, Object> productCache = new LinkedHashMap<>();
+        for (final Product p : products)
+        {
+            productCache.put(p.id, headlessProductDocument(p, country, session));
+        }
+        state.put("queryCache", Map.of("products", productCache));
+
+        String json = GSON.toJson(state);
+
+        final int targetBytes = Math.max(0, targetKb) * 1024;
+        if (json.length() < targetBytes)
+        {
+            final int padLen = targetBytes - json.length() - 32;
+            if (padLen > 0)
+            {
+                final StringBuilder pad = new StringBuilder(padLen);
+                final String alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+                final Random rnd = new Random(1337L);
+                while (pad.length() < padLen)
+                {
+                    pad.append(alphabet.charAt(rnd.nextInt(alphabet.length())));
+                }
+                json = json.substring(0, json.length() - 1) + ",\"_ssrPayload\":\"" + pad + "\"}";
+            }
+        }
+        return json;
+    }
+
+    public Map<String, Object> headlessProductDocument(final Product p, final Country country, final TestSession session)
+    {
+        final Map<String, Object> doc = new LinkedHashMap<>();
+        doc.put("id", p.id);
+        doc.put("name", p.names.getOrDefault(country.locale, p.names.getOrDefault("en", p.id)));
+        doc.put("shortDescription", p.descriptions.getOrDefault(country.locale, p.descriptions.getOrDefault("en", "")));
+        doc.put("slug", p.slug);
+        doc.put("primaryCategoryId", p.category);
+        doc.put("currency", country.symbol);
+        doc.put("price", p.salePrice != null ? p.salePrice : p.basePrice);
+        doc.put("listPrice", p.basePrice);
+        doc.put("c_badge", p.badge);
+        doc.put("c_color", p.color);
+        final Map<String, Integer> inv = session.getProductInventory().getOrDefault(p.id, Map.of());
+        doc.put("inventory", Map.of("orderable", inv.values().stream().mapToInt(Integer::intValue).sum() > 0,
+                                    "stockLevel", inv.values().stream().mapToInt(Integer::intValue).sum()));
+
+        final List<Map<String, Object>> variants = new ArrayList<>();
+        for (final String size : VerlaCatalog.getSizesForCategory(p.category))
+        {
+            final int stock = inv.getOrDefault(size, 0);
+            variants.add(Map.of("size", size, "stock", stock, "orderable", stock > 0));
+        }
+        doc.put("variants", variants);
+        doc.put("requiresSize", !variants.isEmpty());
+        doc.put("imageGroups", List.of(Map.of("viewType", "large",
+                                              "images", List.of(Map.of("link", "api/scapi/image?id=" + p.id + "&sw=960", "alt", "")))));
+        return doc;
+    }
+
+    public static String buildIconSprite(final int targetKb)
+    {
+        final String[] names = {
+            "cart", "search", "account", "heart", "close", "chevron-down", "chevron-right", "filter",
+            "star", "truck", "gift", "lock", "globe", "menu", "plus", "minus", "check", "info"
+        };
+        final StringBuilder sb = new StringBuilder();
+        sb.append("<svg id=\"__SVG_SPRITE_NODE__\" aria-hidden=\"true\" style=\"position:absolute;width:0;height:0;overflow:hidden\">");
+        final Random rnd = new Random(4242L);
+        final int targetBytes = Math.max(0, targetKb) * 1024;
+        int i = 0;
+        while (sb.length() < targetBytes || i < names.length)
+        {
+            final String name = i < names.length ? names[i] : names[i % names.length] + "-" + (i / names.length);
+            sb.append("<symbol id=\"icn-").append(name).append("\" viewBox=\"0 0 24 24\"><path d=\"");
+            final int segments = 8 + rnd.nextInt(12);
+            sb.append('M').append(rnd.nextInt(24)).append(' ').append(rnd.nextInt(24));
+            for (int sIdx = 0; sIdx < segments; sIdx++)
+            {
+                sb.append(" C").append(rnd.nextInt(24)).append(' ').append(rnd.nextInt(24))
+                  .append(',').append(rnd.nextInt(24)).append(' ').append(rnd.nextInt(24))
+                  .append(',').append(rnd.nextInt(24)).append(' ').append(rnd.nextInt(24));
+            }
+            sb.append("Z\"/></symbol>");
+            i++;
+            if (i > 4000)
+            {
+                break;
+            }
+        }
+        sb.append("</svg>");
+        return sb.toString();
+    }
+
+    public static String buildInjectedStyleTags(final int count)
+    {
+        final StringBuilder sb = new StringBuilder();
+        final Random rnd = new Random(99L);
+        for (int i = 0; i < Math.max(0, count); i++)
+        {
+            final String cls = emotionHash("vrl-component-" + i);
+            sb.append("<style data-emotion=\"css ").append(cls.substring(4)).append("\">.")
+              .append(cls).append("{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;")
+              .append("-webkit-box-pack:").append(rnd.nextBoolean() ? "justify" : "center").append(';')
+              .append("padding:").append(rnd.nextInt(3)).append("rem ").append(rnd.nextInt(2)).append("rem;")
+              .append("margin:0;box-sizing:border-box;}</style>");
+        }
+        return sb.toString();
+    }
+
+    public static String getQueryParam(final String queryOrPath, final String key)
     {
         final int qIdx = queryOrPath.indexOf("?");
         final String query = qIdx != -1 ? queryOrPath.substring(qIdx + 1) : queryOrPath;
@@ -4789,7 +2592,7 @@ public final class EmbeddedHtmlServer
         return "";
     }
 
-    private static List<String> getQueryParamValues(final String queryOrPath, final String key)
+    public static List<String> getQueryParamValues(final String queryOrPath, final String key)
     {
         final List<String> values = new ArrayList<>();
         final int qIdx = queryOrPath.indexOf("?");
@@ -4811,386 +2614,5 @@ public final class EmbeddedHtmlServer
             }
         }
         return values;
-    }
-
-    private static String readResource(final String resourcePath)
-    {
-        try (final InputStream is = EmbeddedHtmlServer.class.getClassLoader().getResourceAsStream(resourcePath))
-        {
-            if (is == null) return null;
-            return new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))
-                .lines().collect(Collectors.joining("\n"));
-        }
-        catch (final Exception e)
-        {
-            LOG.error("Failed to read resource path: {}", resourcePath, e);
-            return null;
-        }
-    }
-
-    // =========================================================================
-    // Headless PWA SUT (/verla-headless/) - runtime quality simulation
-    //
-    // The variant models a composable storefront: the server ships a shell plus a
-    // large hydration blob, and the browser assembles the page from per-entity API
-    // calls. The traps this creates for automation are request fan-out (no single
-    // "page loaded" signal), a session handshake that races, and content slots that
-    // arrive after first paint. Magnitude is driven by verla.headless.* properties.
-    // =========================================================================
-
-    /**
-     * Renders an unpopulated product tile. Only the product id is present; the name, price, image
-     * and availability arrive later over a per-tile request.
-     *
-     * @param p the product the tile will eventually show
-     * @return skeleton markup carrying no product text
-     */
-    private String renderHeadlessTileSkeleton(final Product p)
-    {
-        final String root = emotionHash("product-tile");
-        final String media = emotionHash("tile-media");
-        final String body = emotionHash("tile-body");
-        final String name = emotionHash("tile-name");
-        final String price = emotionHash("tile-price");
-        return "<article class=\"" + root + "\" data-testid=\"product-tile\" data-pid=\"" + p.id
-               + "\" data-state=\"pending\" aria-busy=\"true\">"
-               + "<div class=\"" + media + "\" data-part=\"media\"></div>"
-               + "<div class=\"" + body + "\" data-part=\"body\">"
-               + "<span class=\"" + name + "\" data-part=\"name\"></span>"
-               + "<span class=\"" + price + "\" data-part=\"price\"></span>"
-               + "</div></article>";
-    }
-
-    /** True for the headless SUT served at /verla-headless/. */
-    private static boolean isHeadless(final String quality)
-    {
-        return "headless".equals(quality);
-    }
-
-    /**
-     * Registers a headless session for the given cart if one does not exist yet, choosing a
-     * randomized settle deadline. Returns the moment the session becomes usable.
-     *
-     * @param cartId the cart cookie value identifying the browser session
-     * @return epoch millisecond timestamp at which the session settles
-     */
-    private long ensureHeadlessSession(final String cartId)
-    {
-        return this.headlessSessionSettleAt.computeIfAbsent(cartId, id -> {
-            final VerlaConfiguration cfg = VerlaConfiguration.getInstance();
-            final long settleIn = cfg.isHeadlessSessionRaceEnabled() ? cfg.calculateHeadlessSessionSettleMs() : 0L;
-            this.headlessStaleCustomerId.put(id, "guest" + Long.toHexString(ThreadLocalRandom.current().nextLong() & 0xFFFFFFFFFFL));
-            this.headlessSettledCustomerId.put(id, "cust" + Long.toHexString(ThreadLocalRandom.current().nextLong() & 0xFFFFFFFFFFL));
-            return System.currentTimeMillis() + settleIn;
-        });
-    }
-
-    /**
-     * Reports whether the headless bootstrap handshake for a cart has completed.
-     *
-     * @param cartId the cart cookie value
-     * @return true once the session is usable for basket and wishlist operations
-     */
-    private boolean isHeadlessSessionSettled(final String cartId)
-    {
-        return System.currentTimeMillis() >= ensureHeadlessSession(cartId);
-    }
-
-    /**
-     * Returns the customer id the client should currently be using. Before the session settles
-     * this is the stale bootstrap id that the BFF endpoints reject.
-     *
-     * @param cartId the cart cookie value
-     * @return the active customer id
-     */
-    private String headlessCustomerId(final String cartId)
-    {
-        ensureHeadlessSession(cartId);
-        return isHeadlessSessionSettled(cartId)
-               ? this.headlessSettledCustomerId.get(cartId)
-               : this.headlessStaleCustomerId.get(cartId);
-    }
-
-    /** Clears headless session bookkeeping. Invoked from the session reset helpers. */
-    private void resetHeadlessSessions()
-    {
-        this.headlessSessionSettleAt.clear();
-        this.headlessStaleCustomerId.clear();
-        this.headlessSettledCustomerId.clear();
-    }
-
-    /**
-     * Produces a stable CSS-in-JS style hash for a logical component name, mirroring the
-     * {@code css-1tpd03i} convention that Emotion emits.
-     *
-     * @param seed the logical component name
-     * @return a class name such as {@code css-1tpd03i}
-     */
-    private static String emotionHash(final String seed)
-    {
-        int h = 0;
-        for (int i = 0; i < seed.length(); i++)
-        {
-            h = 31 * h + seed.charAt(i);
-        }
-        final String base = Integer.toString(Math.abs(h), 36);
-        return "css-" + (base.length() > 7 ? base.substring(0, 7) : base + "0".repeat(7 - base.length()));
-    }
-
-    /**
-     * Builds the inlined hydration state blob. It carries the real catalog documents for the
-     * tiles on the page, which means the data is present in the DOM as JSON well before it is
-     * rendered as text - a deliberate trap for scrapers that read the source instead of the page.
-     *
-     * @param products the products referenced by the current page
-     * @param country the active country
-     * @param targetKb the configured blob size in kilobytes
-     * @return a JSON string
-     */
-    private String buildHydrationBlob(final List<Product> products, final Country country, final int targetKb)
-    {
-        final Map<String, Object> state = new LinkedHashMap<>();
-        state.put("__INITIAL_CORRELATION_ID__", Long.toHexString(ThreadLocalRandom.current().nextLong() & 0xFFFFFFFFFFFFL) + "-VRL");
-        final Map<String, Object> config = new LinkedHashMap<>();
-        config.put("app", Map.of("url", Map.of("site", "path", "locale", "path"),
-                                 "defaultSite", "verla-headless",
-                                 "commerceApi", Map.of("organizationId", "f_ecom_verla_prd", "shortCode", "vrl0001")));
-        state.put("__CONFIG__", config);
-        state.put("locale", country.locale);
-        state.put("currency", country.symbol);
-
-        final Map<String, Object> productCache = new LinkedHashMap<>();
-        for (final Product p : products)
-        {
-            productCache.put(p.id, headlessProductDocument(p, country));
-        }
-        state.put("queryCache", Map.of("products", productCache));
-
-        final com.google.gson.Gson gson = new com.google.gson.Gson();
-        String json = gson.toJson(state);
-
-        // Pad to the configured weight with a filler field, the way a real preloaded store ends up
-        // carrying merchandising metadata, translations and A/B assignments nothing on screen uses.
-        final int targetBytes = Math.max(0, targetKb) * 1024;
-        if (json.length() < targetBytes)
-        {
-            final int padLen = targetBytes - json.length() - 32;
-            if (padLen > 0)
-            {
-                final StringBuilder pad = new StringBuilder(padLen);
-                final String alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
-                final Random rnd = new Random(1337L);
-                while (pad.length() < padLen)
-                {
-                    pad.append(alphabet.charAt(rnd.nextInt(alphabet.length())));
-                }
-                json = json.substring(0, json.length() - 1) + ",\"_ssrPayload\":\"" + pad + "\"}";
-            }
-        }
-        return json;
-    }
-
-    /**
-     * Serializes one product into the shopper-products style document returned per tile.
-     *
-     * @param p the product
-     * @param country the active country
-     * @return a map ready for JSON serialization
-     */
-    private Map<String, Object> headlessProductDocument(final Product p, final Country country)
-    {
-        final Map<String, Object> doc = new LinkedHashMap<>();
-        doc.put("id", p.id);
-        doc.put("name", p.names.getOrDefault(country.locale, p.names.getOrDefault("en", p.id)));
-        doc.put("shortDescription", p.descriptions.getOrDefault(country.locale, p.descriptions.getOrDefault("en", "")));
-        doc.put("slug", p.slug);
-        doc.put("primaryCategoryId", p.category);
-        doc.put("currency", country.symbol);
-        doc.put("price", p.salePrice != null ? p.salePrice : p.basePrice);
-        doc.put("listPrice", p.basePrice);
-        doc.put("c_badge", p.badge);
-        doc.put("c_color", p.color);
-        final Map<String, Integer> inv = this.productInventory.getOrDefault(p.id, Map.of());
-        doc.put("inventory", Map.of("orderable", inv.values().stream().mapToInt(Integer::intValue).sum() > 0,
-                                    "stockLevel", inv.values().stream().mapToInt(Integer::intValue).sum()));
-
-        // Per-size availability travels with the product document rather than with the markup,
-        // so the tile cannot offer a quick add until its own request has come back.
-        final List<Map<String, Object>> variants = new ArrayList<>();
-        for (final String size : getSizesForCategory(p.category))
-        {
-            final int stock = inv.getOrDefault(size, 0);
-            variants.add(Map.of("size", size, "stock", stock, "orderable", stock > 0));
-        }
-        doc.put("variants", variants);
-        doc.put("requiresSize", !variants.isEmpty());
-        // Only the large rendition is published, so tiles a few hundred pixels wide still pull it.
-        doc.put("imageGroups", List.of(Map.of("viewType", "large",
-                                              "images", List.of(Map.of("link", "api/scapi/image?id=" + p.id + "&sw=960", "alt", "")))));
-        return doc;
-    }
-
-    /**
-     * Builds the inlined SVG icon sprite. Icons are referenced with {@code <use>}, so icon-only
-     * controls carry no text node at all.
-     *
-     * @param targetKb the configured sprite size in kilobytes
-     * @return an inline svg element
-     */
-    private static String buildIconSprite(final int targetKb)
-    {
-        final String[] names = {
-            "cart", "search", "account", "heart", "close", "chevron-down", "chevron-right", "filter",
-            "star", "truck", "gift", "lock", "globe", "menu", "plus", "minus", "check", "info"
-        };
-        final StringBuilder sb = new StringBuilder();
-        sb.append("<svg id=\"__SVG_SPRITE_NODE__\" aria-hidden=\"true\" style=\"position:absolute;width:0;height:0;overflow:hidden\">");
-        final Random rnd = new Random(4242L);
-        final int targetBytes = Math.max(0, targetKb) * 1024;
-        int i = 0;
-        while (sb.length() < targetBytes || i < names.length)
-        {
-            final String name = i < names.length ? names[i] : names[i % names.length] + "-" + (i / names.length);
-            sb.append("<symbol id=\"icn-").append(name).append("\" viewBox=\"0 0 24 24\"><path d=\"");
-            // Path data is what makes a real sprite heavy; generate a plausible amount of it.
-            final int segments = 8 + rnd.nextInt(12);
-            sb.append('M').append(rnd.nextInt(24)).append(' ').append(rnd.nextInt(24));
-            for (int sIdx = 0; sIdx < segments; sIdx++)
-            {
-                sb.append(" C").append(rnd.nextInt(24)).append(' ').append(rnd.nextInt(24))
-                  .append(',').append(rnd.nextInt(24)).append(' ').append(rnd.nextInt(24))
-                  .append(',').append(rnd.nextInt(24)).append(' ').append(rnd.nextInt(24));
-            }
-            sb.append("Z\"/></symbol>");
-            i++;
-            if (i > 4000)
-            {
-                break;
-            }
-        }
-        sb.append("</svg>");
-        return sb.toString();
-    }
-
-    /**
-     * Emits the per-component style elements a CSS-in-JS runtime injects. Each is its own
-     * element, so the document ends up with dozens of style nodes rather than one stylesheet.
-     *
-     * @param count how many style elements to emit
-     * @return concatenated style elements
-     */
-    private static String buildInjectedStyleTags(final int count)
-    {
-        final StringBuilder sb = new StringBuilder();
-        final Random rnd = new Random(99L);
-        for (int i = 0; i < Math.max(0, count); i++)
-        {
-            final String cls = emotionHash("vrl-component-" + i);
-            sb.append("<style data-emotion=\"css ").append(cls.substring(4)).append("\">.")
-              .append(cls).append("{display:-webkit-box;display:-webkit-flex;display:-ms-flexbox;display:flex;")
-              .append("-webkit-box-pack:").append(rnd.nextBoolean() ? "justify" : "center").append(';')
-              .append("padding:").append(rnd.nextInt(3)).append("rem ").append(rnd.nextInt(2)).append("rem;")
-              .append("margin:0;box-sizing:border-box;}</style>");
-        }
-        return sb.toString();
-    }
-
-    private static void sendResponse(final HttpExchange exchange, final int code, final String contentType, final String response) throws IOException
-    {
-        final byte[] bytes = response.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", contentType);
-        exchange.sendResponseHeaders(code, bytes.length);
-        try (final OutputStream os = exchange.getResponseBody())
-        {
-            os.write(bytes);
-        }
-    }
-
-    private static String escapeHtml(final String raw)
-    {
-        if (raw == null) return "";
-        return raw.replace("&", "&amp;")
-                  .replace("<", "&lt;")
-                  .replace(">", "&gt;")
-                  .replace("\"", "&quot;")
-                  .replace("'", "&#x27;");
-    }
-
-    public static void main(final String[] args)
-    {
-        try
-        {
-            loadCatalogData();
-            if (args.length > 0 && "generate".equals(args[0]))
-            {
-                final String jsonStr = new GsonBuilder().setPrettyPrinting().create().toJson(catalogProducts);
-                Path targetPath = Path.of("neodymium-test-server/src/main/resources/ai-test-pages/verla-products.json");
-                if (!Files.exists(targetPath.getParent()))
-                {
-                    targetPath = Path.of("src/main/resources/ai-test-pages/verla-products.json");
-                }
-                Files.writeString(targetPath, jsonStr, StandardCharsets.UTF_8);
-                System.out.println("Successfully regenerated verla-products.json with " + catalogProducts.size() + " products at " + targetPath);
-                return;
-            }
-
-            final EmbeddedHtmlServer server = new EmbeddedHtmlServer();
-            server.start();
-
-            System.out.println("========================================================================");
-            System.out.println("  Neodymium Aura AI: Embedded HTML Server Running Successfully!");
-            System.out.println("========================================================================");
-            System.out.println("  Access the test applications via the following URLs:");
-            System.out.println();
-            System.out.println("  [HTTP Contexts]");
-            System.out.println("    - Starter Hub Portal:   http://localhost:" + server.getPort() + "/AuraGlanceTest/index.html");
-            System.out.println("    - Shop Home:            http://localhost:" + server.getPort() + "/AuraGlanceTest/shop/index.html");
-            System.out.println("    - Forms Demo:           http://localhost:" + server.getPort() + "/AuraGlanceTest/shop/forms.html");
-            System.out.println("    - Dashboard:            http://localhost:" + server.getPort() + "/AuraGlanceTest/dashboard/index.html");
-            System.out.println("    - Accessibility:        http://localhost:" + server.getPort() + "/AuraGlanceTest/a11y/index.html");
-            System.out.println("    - React SPA:            http://localhost:" + server.getPort() + "/AuraGlanceTest/spa/index.html");
-            System.out.println("    - VÉRLA Tailwind Store:     http://localhost:" + server.getPort() + "/verla-tailwind/index.html");
-            System.out.println("    - VÉRLA Tailwind (by Claude): http://localhost:" + server.getPort() + "/verla-tailwind-by-claude/index.html");
-            System.out.println("    - VÉRLA Apparel Store:      http://localhost:" + server.getPort() + "/verla-apparel/index.html");
-            System.out.println("    - VÉRLA Perfect Store:      http://localhost:" + server.getPort() + "/verla-perfect/index.html");
-            System.out.println("    - VÉRLA Normal Store:       http://localhost:" + server.getPort() + "/verla-normal/index.html");
-            System.out.println("    - VÉRLA Bad Store:          http://localhost:" + server.getPort() + "/verla-bad/index.html");
-            System.out.println("    - VÉRLA Modern Bad (WCAG):  http://localhost:" + server.getPort() + "/verla-modern-bad/index.html");
-            System.out.println("    - VÉRLA Modern Bad (No WCAG): http://localhost:" + server.getPort() + "/verla-modern-bad-nowcag/index.html");
-            System.out.println("    - VÉRLA PWA Chaos Store:    http://localhost:" + server.getPort() + "/verla-pwa-chaos/index.html");
-            System.out.println("    - VÉRLA Headless Store:     http://localhost:" + server.getPort() + "/verla-headless/index.html");
-            System.out.println("    - VÉRLA Apocalypse Store:   http://localhost:" + server.getPort() + "/verla-apocalypse/index.html");
-            System.out.println();
-            System.out.println("  [HTTPS Secure Contexts]");
-            System.out.println("    - Starter Hub Portal:       https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/index.html");
-            System.out.println("    - Shop Home:                https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/shop/index.html");
-            System.out.println("    - Forms Demo:               https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/shop/forms.html");
-            System.out.println("    - Dashboard:                https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/dashboard/index.html");
-            System.out.println("    - Accessibility:            https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/a11y/index.html");
-            System.out.println("    - React SPA:                https://localhost:" + server.getHttpsPort() + "/AuraGlanceTest/spa/index.html");
-            System.out.println("    - VÉRLA Tailwind Store:     https://localhost:" + server.getHttpsPort() + "/verla-tailwind/index.html");
-            System.out.println("    - VÉRLA Tailwind (by Claude): https://localhost:" + server.getHttpsPort() + "/verla-tailwind-by-claude/index.html");
-            System.out.println("    - VÉRLA Apparel Store:      https://localhost:" + server.getHttpsPort() + "/verla-apparel/index.html");
-            System.out.println("    - VÉRLA Perfect Store:      https://localhost:" + server.getHttpsPort() + "/verla-perfect/index.html");
-            System.out.println("    - VÉRLA Normal Store:       https://localhost:" + server.getHttpsPort() + "/verla-normal/index.html");
-            System.out.println("    - VÉRLA Bad Store:          https://localhost:" + server.getHttpsPort() + "/verla-bad/index.html");
-            System.out.println("    - VÉRLA Modern Bad (WCAG):  https://localhost:" + server.getHttpsPort() + "/verla-modern-bad/index.html");
-            System.out.println("    - VÉRLA Modern Bad (No WCAG): https://localhost:" + server.getHttpsPort() + "/verla-modern-bad-nowcag/index.html");
-            System.out.println("    - VÉRLA PWA Chaos Store:    https://localhost:" + server.getHttpsPort() + "/verla-pwa-chaos/index.html");
-            System.out.println("    - VÉRLA Headless Store:     https://localhost:" + server.getHttpsPort() + "/verla-headless/index.html");
-            System.out.println("    - VÉRLA Apocalypse Store:   https://localhost:" + server.getHttpsPort() + "/verla-apocalypse/index.html");
-            System.out.println();
-            System.out.println("  NOTE: For HTTPS, you will get a self-signed certificate warning.");
-            System.out.println("        You can safely bypass this or run with Chrome's '--ignore-certificate-errors' flag.");
-            System.out.println("  Press Ctrl+C to terminate the server.");
-            System.out.println("========================================================================");
-
-            Thread.currentThread().join();
-        }
-        catch (final Exception e)
-        {
-            System.err.println("Failed to start Embedded HTML Server: " + e.getMessage());
-            e.printStackTrace();
-        }
     }
 }
