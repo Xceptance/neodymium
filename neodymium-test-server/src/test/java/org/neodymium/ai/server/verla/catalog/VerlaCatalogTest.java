@@ -21,6 +21,7 @@ package org.neodymium.ai.server.verla.catalog;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.neodymium.ai.server.verla.model.Country;
 import org.neodymium.ai.server.verla.model.Product;
 
 /**
@@ -117,5 +118,55 @@ public class VerlaCatalogTest
         Assertions.assertNull(catalog.getProductBySlug(null), "Null slug should return null");
         Assertions.assertNull(catalog.getProductById("UNKNOWN-SKU"), "Unknown ID should return null");
         Assertions.assertNull(catalog.getProductBySlug("unknown-slug"), "Unknown slug should return null");
+    }
+
+    @Test
+    public void testCountryFlagResolutionForAllCatalogCountries()
+    {
+        for (final Country country : catalog.getCountries())
+        {
+            final String flag = VerlaCatalog.getCountryFlag(country.code);
+            Assertions.assertNotNull(flag, "Flag should not be null for country " + country.code);
+            Assertions.assertNotEquals("🏳️", flag, "Country " + country.code + " should have a valid flag emoji");
+        }
+        Assertions.assertEquals("🇨🇦", VerlaCatalog.getCountryFlag("CA_FR"));
+        Assertions.assertEquals("🇨🇦", VerlaCatalog.getCountryFlag("CA_EN"));
+        Assertions.assertEquals("🇨🇦", VerlaCatalog.getCountryFlag("CA"));
+        Assertions.assertEquals("🇬🇧", VerlaCatalog.getCountryFlag("UK"));
+        Assertions.assertEquals("🇺🇸", VerlaCatalog.getCountryFlag("US"));
+        Assertions.assertEquals("🇩🇪", VerlaCatalog.getCountryFlag("DE"));
+    }
+
+    @Test
+    public void testCountryFlagFallbacksAndEdgeCases()
+    {
+        Assertions.assertEquals("🏳️", VerlaCatalog.getCountryFlag(null));
+        Assertions.assertEquals("🏳️", VerlaCatalog.getCountryFlag(""));
+        Assertions.assertEquals("🏳️", VerlaCatalog.getCountryFlag("   "));
+        Assertions.assertEquals("🏳️", VerlaCatalog.getCountryFlag("XYZ"));
+        Assertions.assertEquals("🏳️", VerlaCatalog.getCountryFlag("12"));
+        Assertions.assertEquals("🇨🇦", VerlaCatalog.getCountryFlag("ca_fr"));
+        Assertions.assertEquals("🇨🇦", VerlaCatalog.getCountryFlag("ca-fr"));
+        Assertions.assertEquals("🇩🇪", VerlaCatalog.getCountryFlag("de"));
+    }
+
+    @Test
+    public void testCountryLookupWithCaAliasAndDefaults()
+    {
+        final Country caDefault = catalog.getCountry("CA");
+        Assertions.assertNotNull(caDefault);
+        Assertions.assertEquals("CA_EN", caDefault.code);
+
+        final Country caFr = catalog.getCountry("CA_FR");
+        Assertions.assertNotNull(caFr);
+        Assertions.assertEquals("CA_FR", caFr.code);
+
+        final Country nullFallback = catalog.getCountry(null);
+        Assertions.assertNotNull(nullFallback);
+        Assertions.assertEquals("US", nullFallback.code);
+
+        final Country unknownFallback = catalog.getCountry("UNKNOWN");
+        Assertions.assertNotNull(unknownFallback);
+        Assertions.assertEquals("US", unknownFallback.code);
     }
 }

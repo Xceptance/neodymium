@@ -216,6 +216,24 @@ public class JavalinVerlaServerTest
         final HttpResponse<String> searchRes = client.send(searchReq, HttpResponse.BodyHandlers.ofString());
         assertEquals(200, searchRes.statusCode());
         assertTrue(searchRes.body().contains("shirt") || searchRes.body().contains("Shirt"));
+
+        final HttpRequest selectCaReq = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + server.getPort() + "/verla-perfect/api/country/select?code=CA_FR"))
+            .GET()
+            .build();
+
+        final HttpResponse<String> selectCaRes = client.send(selectCaReq, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, selectCaRes.statusCode());
+        assertTrue(selectCaRes.headers().allValues("set-cookie").stream().anyMatch(c -> c.contains("verla_country=CA_FR")));
+
+        final HttpRequest homeCaReq = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:" + server.getPort() + "/verla-perfect/index.html"))
+            .header("Cookie", "verla_country=CA_FR")
+            .GET()
+            .build();
+        final HttpResponse<String> homeCaRes = client.send(homeCaReq, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, homeCaRes.statusCode());
+        assertTrue(homeCaRes.body().contains("🇨🇦"), "Page should render Canadian flag emoji for CA_FR");
     }
 
     @Test
