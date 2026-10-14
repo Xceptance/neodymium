@@ -184,4 +184,58 @@ public class PlaywrightSelectorEvaluatorBrowserTest
         Assertions.assertEquals(1, results.size(), "Link should be located to the right of the button");
         Assertions.assertEquals("VÉRLA.", results.get(0).getText().trim());
     }
+
+    @Test
+    public void testTextIsExactMatchExcludesSubstrings()
+    {
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body>
+              <div class="dropdown">
+                <button class="size-btn" type="button" data-size="S">S</button>
+                <button class="size-btn" type="button" data-size="L">L</button>
+                <button class="size-btn" type="button" data-size="XL">XL</button>
+              </div>
+            </body>
+            </html>
+            """;
+        Selenide.open("data:text/html;charset=utf-8," + html);
+        final WebDriver driver = WebDriverRunner.getWebDriver();
+
+        final List<WebElement> resultsL = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "button.size-btn:text-is(\"L\")");
+        Assertions.assertEquals(1, resultsL.size(), "button.size-btn:text-is(\"L\") must match only 'L' and not 'XL'");
+        Assertions.assertEquals("L", resultsL.get(0).getText().trim());
+
+        final List<WebElement> resultsXL = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "button.size-btn:text-is(\"XL\")");
+        Assertions.assertEquals(1, resultsXL.size(), "button.size-btn:text-is(\"XL\") must match 'XL'");
+        Assertions.assertEquals("XL", resultsXL.get(0).getText().trim());
+
+        final List<WebElement> resultsSingleQuote = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "button.size-btn:text-is('L')");
+        Assertions.assertEquals(1, resultsSingleQuote.size(), "Single-quoted :text-is('L') must match 'L'");
+
+        final List<WebElement> resultsExactText = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "button.size-btn:exact-text(\"L\")");
+        Assertions.assertEquals(1, resultsExactText.size(), ":exact-text(\"L\") must match 'L'");
+    }
+
+    @Test
+    public void testTextIsWithChildWrapper()
+    {
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body>
+              <button id="wrapped-btn" type="button"><span>Submit Order</span></button>
+            </body>
+            </html>
+            """;
+        Selenide.open("data:text/html;charset=utf-8," + html);
+        final WebDriver driver = WebDriverRunner.getWebDriver();
+
+        final List<WebElement> results = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "button:text-is(\"Submit Order\")");
+        Assertions.assertEquals(1, results.size(), "button:text-is must return button even when text is inside child <span>");
+        Assertions.assertEquals("wrapped-btn", results.get(0).getAttribute("id"));
+    }
 }

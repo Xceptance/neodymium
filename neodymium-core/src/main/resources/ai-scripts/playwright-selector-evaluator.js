@@ -212,7 +212,8 @@ return (function(contextRoot, rawSelector) {
 
         // Extract Playwright custom pseudos if present: :has-text, :text, :contains, :visible, :has, etc.
         var hasTextMatch = transformedCss.match(/:has-text\((["']?)(.*?)\1\)/i) || transformedCss.match(/:contains\((["']?)(.*?)\1\)/i);
-        var textMatch = transformedCss.match(/:text\((["']?)(.*?)\1\)/i) || transformedCss.match(/:exact-text\((["']?)(.*?)\1\)/i) || transformedCss.match(/:text-is\((["']?)(.*?)\1\)/i);
+        var exactTextMatch = transformedCss.match(/:text-is\((["']?)(.*?)\1\)/i) || transformedCss.match(/:exact-text\((["']?)(.*?)\1\)/i) || transformedCss.match(/:has-text-is\((["']?)(.*?)\1\)/i);
+        var textMatch = transformedCss.match(/:text\((["']?)(.*?)\1\)/i);
         var visibleMatch = /:visible\b/i.test(transformedCss);
 
         // Extract layout and complex pseudos
@@ -222,15 +223,16 @@ return (function(contextRoot, rawSelector) {
 
         // Strip known Playwright pseudos for the native querySelectorAll call
         var nativeCss = transformedCss
+            .replace(/:has-text-is\((["']?).*?\1\)/gi, '')
             .replace(/:has-text\((["']?).*?\1\)/gi, '')
             .replace(/:contains\((["']?).*?\1\)/gi, '')
-            .replace(/:text(-is)?\((["']?).*?\1\)/gi, '')
+            .replace(/:text-is\((["']?).*?\1\)/gi, '')
             .replace(/:exact-text\((["']?).*?\1\)/gi, '')
-            .replace(/:has-text-is\((["']?).*?\1\)/gi, '')
+            .replace(/:text\((["']?).*?\1\)/gi, '')
             .replace(/:visible\b/gi, '')
             .replace(/:has\((.*?)\)/gi, '')
             .replace(/:nth-match\((.*?)\)/gi, '')
-            .replace(/:(left-of|right-of|above|below|near)\((.*?)\)/gi, '')
+            .replace(/:(?:left-of|right-of|above|below|near)\((.*?)\)/gi, '')
             .trim();
 
         if (!nativeCss || nativeCss === '') nativeCss = '*';
@@ -245,23 +247,44 @@ return (function(contextRoot, rawSelector) {
             return [];
         }
 
-        // Filter by :has-text / :contains
+        // Filter by :has-text / :contains (case-insensitive substring match)
         if (hasTextMatch) {
-            var matcher = createTextMatcher(hasTextMatch[2]);
+            var hasTextArg = hasTextMatch[1] ? (hasTextMatch[1] + hasTextMatch[2] + hasTextMatch[1]) : hasTextMatch[2];
+            var matcher = createTextMatcher(hasTextArg, true);
             elements = elements.filter(function(el) {
                 return matcher(getElementText(el));
             });
         }
 
-        // Filter by :text / :text-is (innermost smallest matching element)
-        if (textMatch) {
-            var exactMatcher = createTextMatcher(textMatch[2]);
+        // Filter by :text-is / :exact-text / :has-text-is (strict exact text match)
+        if (exactTextMatch) {
+            var exactTarget = unquote(exactTextMatch[2]);
+            var exactMatcher = function(text) {
+                return normalizeText(text) === exactTarget;
+            };
             elements = elements.filter(function(el) {
                 if (!exactMatcher(getElementText(el))) return false;
-                // Verify no child element also matches (smallest depth)
+                // If selector is scoped to specific elements (not bare '*'), keep matched element
+                if (nativeCss !== '*') return true;
+                // For bare '*' selectors, ensure innermost smallest element is selected
                 var children = el.querySelectorAll('*');
                 for (var ci = 0; ci < children.length; ci++) {
                     if (exactMatcher(getElementText(children[ci]))) return false;
+                }
+                return true;
+            });
+        }
+
+        // Filter by :text (quoted = exact, unquoted = substring)
+        if (textMatch) {
+            var rawTextArg = textMatch[1] ? (textMatch[1] + textMatch[2] + textMatch[1]) : textMatch[2];
+            var generalMatcher = createTextMatcher(rawTextArg);
+            elements = elements.filter(function(el) {
+                if (!generalMatcher(getElementText(el))) return false;
+                if (nativeCss !== '*') return true;
+                var children = el.querySelectorAll('*');
+                for (var ci = 0; ci < children.length; ci++) {
+                    if (generalMatcher(getElementText(children[ci]))) return false;
                 }
                 return true;
             });
