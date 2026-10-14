@@ -729,7 +729,7 @@ public abstract class AiSession implements AutoCloseable
         return new PlaybookRecording(playbookSteps, recordingMetadata, this.executionMode);
     }
 
-    private static int aggregateStepStats(final StepStats stats, final Map<String, Integer> contextLevelCounts)
+    static int aggregateStepStats(final StepStats stats, final Map<String, Integer> contextLevelCounts)
     {
         if (stats == null)
         {
@@ -740,13 +740,19 @@ public abstract class AiSession implements AutoCloseable
         if (levels != null && !levels.isEmpty())
         {
             escalations += Math.max(0, levels.size() - 1);
-            for (final String lvl : levels)
+            String finalLevel = null;
+            for (int i = levels.size() - 1; i >= 0; i--)
             {
+                final String lvl = levels.get(i);
                 if (lvl != null && !lvl.isBlank())
                 {
-                    final String normalized = lvl.trim().toUpperCase();
-                    contextLevelCounts.put(normalized, contextLevelCounts.getOrDefault(normalized, 0) + 1);
+                    finalLevel = lvl.trim().toUpperCase();
+                    break;
                 }
+            }
+            if (finalLevel != null)
+            {
+                contextLevelCounts.put(finalLevel, contextLevelCounts.getOrDefault(finalLevel, 0) + 1);
             }
         }
         for (final StepStats child : stats.getSubStats())

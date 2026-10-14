@@ -3790,7 +3790,11 @@ function extractStepContextLevelCounts(activeRow) {
                 const stepsObj = JSON.parse(stepsAttr);
                 if (stepsObj && stepsObj.tries) {
                     const try1 = stepsObj.tries['1'] || Object.values(stepsObj.tries)[0];
-                    if (Array.isArray(try1)) stepsList = try1;
+                    if (Array.isArray(try1)) {
+                        stepsList = try1;
+                    } else if (try1 && typeof try1 === 'object') {
+                        stepsList = [...(try1.beforeSteps || []), ...(try1.coreSteps || []), ...(try1.afterSteps || [])];
+                    }
                 } else if (Array.isArray(stepsObj)) {
                     stepsList = stepsObj;
                 }
@@ -3801,39 +3805,45 @@ function extractStepContextLevelCounts(activeRow) {
     if (stepsList.length === 0) return null;
 
     const counts = {};
-    stepsList.forEach(s => {
+    function processStep(s) {
         if (!s) return;
         const st = (s.status || '').toUpperCase();
         if (st === 'SKIPPED' || st === 'PENDING' || st === 'UNEXECUTED') return;
 
         const rawContextLevel = s.contextLevel || s.contextLevels || s.stats?.contextLevels;
-        if (!rawContextLevel) return;
-
-        let highestLevel = null;
-        if (Array.isArray(rawContextLevel)) {
-            const validLevels = rawContextLevel.filter(lvl => lvl && typeof lvl === 'string' && lvl.trim().toUpperCase() !== 'PENDING');
-            if (validLevels.length > 0) {
-                highestLevel = validLevels[validLevels.length - 1].trim().toUpperCase();
+        if (rawContextLevel) {
+            let highestLevel = null;
+            if (Array.isArray(rawContextLevel)) {
+                const validLevels = rawContextLevel.filter(lvl => lvl && typeof lvl === 'string' && lvl.trim().toUpperCase() !== 'PENDING');
+                if (validLevels.length > 0) {
+                    highestLevel = validLevels[validLevels.length - 1].trim().toUpperCase();
+                }
+            } else if (typeof rawContextLevel === 'string') {
+                const parts = rawContextLevel.split(/\s*(?:→|->)\s*/).map(p => p.trim().toUpperCase()).filter(p => p && p !== 'PENDING');
+                if (parts.length > 0) {
+                    highestLevel = parts[parts.length - 1];
+                }
             }
-        } else if (typeof rawContextLevel === 'string') {
-            const parts = rawContextLevel.split('→').map(p => p.trim().toUpperCase()).filter(p => p && p !== 'PENDING');
-            if (parts.length > 0) {
-                highestLevel = parts[parts.length - 1];
+
+            if (highestLevel) {
+                counts[highestLevel] = (counts[highestLevel] || 0) + 1;
             }
         }
 
-        if (highestLevel) {
-            counts[highestLevel] = (counts[highestLevel] || 0) + 1;
+        if (Array.isArray(s.subSteps)) {
+            s.subSteps.forEach(processStep);
         }
-    });
+    }
+
+    stepsList.forEach(processStep);
 
     return Object.keys(counts).length > 0 ? counts : null;
 }
 
 function renderContextLevelBadges(ctxBadgesEl, countsJson, stepsTotal, activeRow) {
-    let counts = parseContextLevelCounts(countsJson);
-    if (!counts && activeRow) {
-        counts = extractStepContextLevelCounts(activeRow);
+    let counts = activeRow ? extractStepContextLevelCounts(activeRow) : null;
+    if (!counts) {
+        counts = parseContextLevelCounts(countsJson);
     }
 
     const defaultLevels = ['MINIMAL', 'LEAN', 'STANDARD', 'VISUAL'];

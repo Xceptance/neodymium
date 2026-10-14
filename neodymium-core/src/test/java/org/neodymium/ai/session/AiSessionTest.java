@@ -20,6 +20,7 @@ package org.neodymium.ai.session;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -38,6 +39,7 @@ import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.StepStats;
 
 /**
  * Unit tests verifying static factory methods and execution on {@link AiSession}.
@@ -412,6 +414,30 @@ public class AiSessionTest
             );
             Assertions.assertTrue(ex.getMessage().contains("Replay step count mismatch"), "Exception should report count mismatch");
         }
+    }
+
+    @Test
+    @DisplayName("aggregateStepStats in AiSession increments only final context level per step")
+    public void testAiSessionAggregateStepStatsIncrementsOnlyFinalContextLevel()
+    {
+        final Map<String, Integer> counts = new HashMap<>();
+
+        final StepStats stats1 = new StepStats("Step 1", 1000L);
+        stats1.addContextLevel("LEAN");
+        final int esc1 = AiSession.aggregateStepStats(stats1, counts);
+
+        Assertions.assertEquals(0, esc1);
+        Assertions.assertEquals(1, counts.get("LEAN"));
+        Assertions.assertNull(counts.get("STANDARD"));
+
+        final StepStats stats2 = new StepStats("Step 2", 2000L);
+        stats2.addContextLevel("LEAN");
+        stats2.addContextLevel("STANDARD");
+        final int esc2 = AiSession.aggregateStepStats(stats2, counts);
+
+        Assertions.assertEquals(1, esc2);
+        Assertions.assertEquals(1, counts.get("LEAN"));
+        Assertions.assertEquals(1, counts.get("STANDARD"));
     }
 }
 

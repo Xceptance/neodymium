@@ -2572,4 +2572,115 @@ public class PreliminaryReportListenerTest
         assertEquals("FAILED", reportStep1.getStatus());
         assertTrue(reportStep1.getSubSteps().isEmpty(), "Step 1 must NOT acquire substeps from skipped downstream step 2");
     }
+
+    @Test
+    @DisplayName("aggregateStepStats increments only the final context level per step when escalation occurs")
+    public void testAggregateStepStatsIncrementsOnlyFinalContextLevelOnEscalation()
+    {
+        final Map<String, Integer> counts = new HashMap<>();
+
+        // Step 1: Executed only at LEAN
+        final StepStats stats1 = new StepStats("Navigate to URL", 1000L);
+        stats1.addContextLevel("LEAN");
+        final int esc1 = PreliminaryReportListener.aggregateStepStats(stats1, counts);
+
+        assertEquals(0, esc1);
+        assertEquals(1, counts.get("LEAN"));
+        assertNull(counts.get("STANDARD"));
+
+        // Step 2: Escalated from LEAN to STANDARD
+        final StepStats stats2 = new StepStats("Allow all cookies.", 2000L);
+        stats2.addContextLevel("LEAN");
+        stats2.addContextLevel("STANDARD");
+        final int esc2 = PreliminaryReportListener.aggregateStepStats(stats2, counts);
+
+        assertEquals(1, esc2);
+        // LEAN must remain 1, only STANDARD gets incremented
+        assertEquals(1, counts.get("LEAN"));
+        assertEquals(1, counts.get("STANDARD"));
+
+        // Step 3: Multi-level escalation HINT -> MINIMAL -> STANDARD -> VISUAL
+        final StepStats stats3 = new StepStats("Click hero CTA", 3000L);
+        stats3.addContextLevel("HINT");
+        stats3.addContextLevel("MINIMAL");
+        stats3.addContextLevel("STANDARD");
+        stats3.addContextLevel("VISUAL");
+        final int esc3 = PreliminaryReportListener.aggregateStepStats(stats3, counts);
+
+        assertEquals(3, esc3);
+        assertEquals(1, counts.get("LEAN"));
+        assertEquals(1, counts.get("STANDARD"));
+        assertEquals(1, counts.get("VISUAL"));
+        assertNull(counts.get("HINT"));
+        assertNull(counts.get("MINIMAL"));
+    }
+
+    @Test
+    @DisplayName("aggregateStepStats handles composite steps with sub-stats correctly")
+    public void testAggregateStepStatsWithSubSteps()
+    {
+        final Map<String, Integer> counts = new HashMap<>();
+
+        final StepStats parent = new StepStats("Checkout flow", 1000L);
+        final StepStats child1 = new StepStats("Fill address", 1050L);
+        child1.addContextLevel("MINIMAL");
+        child1.addContextLevel("LEAN");
+
+        final StepStats child2 = new StepStats("Select payment", 1100L);
+        child2.addContextLevel("STANDARD");
+
+        parent.getSubStats().add(child1);
+        parent.getSubStats().add(child2);
+
+        final int escalations = PreliminaryReportListener.aggregateStepStats(parent, counts);
+
+        assertEquals(1, escalations);
+        assertNull(counts.get("MINIMAL"));
+        assertEquals(1, counts.get("LEAN"));
+        assertEquals(1, counts.get("STANDARD"));
+    }
+
+    @Test
+    @DisplayName("PreliminaryReportListener records only final context levels in report metrics on session finish")
+    public void testPreliminaryReportListenerRecordsOnlyFinalContextLevelsInReportMetrics() throws IOException
+    {
+        final Path reportDir = tempFolder.resolve("ctx-level-report");
+        Files.createDirectories(reportDir);
+
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        final PlaybookStep step0 = new PlaybookStep("Navigate to homepage");
+        bus.dispatch(new StepStartedEvent(step0, 0));
+        bus.dispatch(new StepFinishedEvent(step0, PlaybookStepStatus.SUCCESS));
+
+        final PlaybookStep step1 = new PlaybookStep("Allow all cookies.");
+        bus.dispatch(new StepStartedEvent(step1, 1));
+        bus.dispatch(new StepFinishedEvent(step1, PlaybookStepStatus.FAILED));
+
+        final StepStats stats0 = new StepStats("Navigate to homepage", 1000L);
+        stats0.addContextLevel("LEAN");
+
+        final StepStats stats1 = new StepStats("Allow all cookies.", 2000L);
+        stats1.addContextLevel("LEAN");
+        stats1.addContextLevel("STANDARD");
+
+        ctx.getTransientData().put("execution.stepStatsList", List.of(stats0, stats1));
+
+        bus.dispatch(new SessionFinishedEvent(3000L, false));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertNotNull(report.getMetrics());
+
+        final Map<String, Integer> contextLevelCounts = report.getMetrics().getContextLevelCounts();
+        assertNotNull(contextLevelCounts);
+        assertEquals(1, contextLevelCounts.get("LEAN"), "LEAN must only be counted for step 0, not incremented again for step 1 escalation");
+        assertEquals(1, contextLevelCounts.get("STANDARD"), "STANDARD must only be counted once for step 1");
+        assertEquals(1, report.getMetrics().getTotalEscalations(), "Total escalations must be 1");
+    }
 }
