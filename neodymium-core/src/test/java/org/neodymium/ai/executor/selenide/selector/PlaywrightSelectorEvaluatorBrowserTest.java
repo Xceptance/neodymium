@@ -18,6 +18,8 @@
  */
 package org.neodymium.ai.executor.selenide.selector;
 
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 
 import com.codeborne.selenide.Configuration;
@@ -237,5 +239,47 @@ public class PlaywrightSelectorEvaluatorBrowserTest
         final List<WebElement> results = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "button:text-is(\"Submit Order\")");
         Assertions.assertEquals(1, results.size(), "button:text-is must return button even when text is inside child <span>");
         Assertions.assertEquals("wrapped-btn", results.get(0).getAttribute("id"));
+    }
+
+    @Test
+    public void testChainedHasTextNestedContainersExcludeParent()
+    {
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body>
+              <div id="virtual-list-container" class="virtual-scroll-viewport">
+                <div id="virtual-content" class="virtual-content">
+                  <div class="virtual-item" id="item-38">
+                    <div class="item-title">Product #38: Plasma Conduit</div>
+                    <button id="select-product-38" class="select-btn">Select</button>
+                  </div>
+                  <div class="virtual-item" id="item-42">
+                    <div class="item-title">Product #42: Quantum Sensor</div>
+                    <button id="select-product-42" class="select-btn">Select</button>
+                  </div>
+                </div>
+              </div>
+            </body>
+            </html>
+            """;
+        Selenide.open("data:text/html;base64," + Base64.getEncoder().encodeToString(html.getBytes(StandardCharsets.UTF_8)));
+        final WebDriver driver = WebDriverRunner.getWebDriver();
+
+        // 1. Verify specific class container matches item-42
+        final List<WebElement> containerResults = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "div.virtual-item:has-text(\"Product #42\")");
+        Assertions.assertEquals(1, containerResults.size(), "div.virtual-item:has-text should match only item-42");
+        Assertions.assertEquals("item-42", containerResults.get(0).getAttribute("id"));
+
+        // 2. Verify chained selector selects only item-42's Select button, never item-38 from ancestor container
+        final List<WebElement> buttonResults = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "div:has-text(\"Product #42\") >> button:has-text(\"Select\")");
+        Assertions.assertEquals(1, buttonResults.size(), "Chained selector must resolve only Product #42's button");
+        Assertions.assertEquals("select-product-42", buttonResults.get(0).getAttribute("id"));
+
+        // 3. Verify captured clause *div:has-text(...) prunes outer virtual-list-container and captures item-42
+        final List<WebElement> capturedResults = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "*div:has-text(\"Product #42\") >> button:has-text(\"Select\")");
+        Assertions.assertEquals(1, capturedResults.size(), "Captured container selector must resolve to item-42");
+        Assertions.assertEquals("item-42", capturedResults.get(0).getAttribute("id"));
     }
 }

@@ -263,15 +263,7 @@ return (function(contextRoot, rawSelector) {
                 return normalizeText(text) === exactTarget;
             };
             elements = elements.filter(function(el) {
-                if (!exactMatcher(getElementText(el))) return false;
-                // If selector is scoped to specific elements (not bare '*'), keep matched element
-                if (nativeCss !== '*') return true;
-                // For bare '*' selectors, ensure innermost smallest element is selected
-                var children = el.querySelectorAll('*');
-                for (var ci = 0; ci < children.length; ci++) {
-                    if (exactMatcher(getElementText(children[ci]))) return false;
-                }
-                return true;
+                return exactMatcher(getElementText(el));
             });
         }
 
@@ -280,13 +272,7 @@ return (function(contextRoot, rawSelector) {
             var rawTextArg = textMatch[1] ? (textMatch[1] + textMatch[2] + textMatch[1]) : textMatch[2];
             var generalMatcher = createTextMatcher(rawTextArg);
             elements = elements.filter(function(el) {
-                if (!generalMatcher(getElementText(el))) return false;
-                if (nativeCss !== '*') return true;
-                var children = el.querySelectorAll('*');
-                for (var ci = 0; ci < children.length; ci++) {
-                    if (generalMatcher(getElementText(children[ci]))) return false;
-                }
-                return true;
+                return generalMatcher(getElementText(el));
             });
         }
 
@@ -678,6 +664,34 @@ return (function(contextRoot, rawSelector) {
         }
         currentNodes = stepResult.elements;
         if (currentNodes.length === 0) break;
+        if (i < clauses.length - 1 && currentNodes.length > 1) {
+            var productiveNodes = [];
+            for (var c = 0; c < currentNodes.length; c++) {
+                var testSubRes = executeStep([currentNodes[c]], clauses[i + 1]);
+                if (testSubRes.elements.length > 0) {
+                    productiveNodes.push(currentNodes[c]);
+                }
+            }
+
+            if (productiveNodes.length > 1) {
+                var innermostProductive = productiveNodes.filter(function(a) {
+                    return !productiveNodes.some(function(b) {
+                        return a !== b && composedContains(a, b);
+                    });
+                });
+                if (innermostProductive.length > 0) {
+                    currentNodes = innermostProductive;
+                    if (stepResult.captured) {
+                        capturedElements = currentNodes;
+                    }
+                }
+            } else if (productiveNodes.length === 1) {
+                currentNodes = productiveNodes;
+                if (stepResult.captured) {
+                    capturedElements = currentNodes;
+                }
+            }
+        }
     }
 
     return capturedElements !== null ? capturedElements : currentNodes;
