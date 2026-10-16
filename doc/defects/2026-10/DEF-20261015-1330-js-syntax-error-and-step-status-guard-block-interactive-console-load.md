@@ -1,0 +1,21 @@
+# [DEF-20261015-1330] Interactive Console Fails to Load and Hangs on Loading Screen Due to Duplicate Identifier SyntaxError and Erroneous Step Status Guard
+
+- **Status:** `Resolved`
+- **Opened:** 2026-10-15 13:30
+- **Closed:** 2026-10-15 13:35
+- **Component:** `neodymium-core`
+- **Scope:** `Framework`
+- **Symptom:** Interactive mode fails to load; the browser window remains frozen displaying the initial full-screen loading overlay (`#initialLoadingOverlay`: "Loading. Waiting for test data...") while the test runner blocks waiting for user input. The user cannot see test steps or confirm any actions. Furthermore, even if the loading overlay had been dismissed, the "Run" button remained permanently disabled when paused before executing the active step.
+- **Root Cause:** Three interconnected root causes:
+  1. In `interactive_console.js:checkActionApprovals()`: `const runBtn = document.getElementById('btnRun');` was declared on line 721 and re-declared on line 748 within the exact same function scope. In modern ECMAScript engines (V8, SpiderMonkey), duplicate `const` declarations trigger a fatal `Uncaught SyntaxError: Identifier 'runBtn' has already been declared`, which completely halted script evaluation on load before `DOMContentLoaded` or SSE listeners could be attached. As a result, the default HTML loading overlay was never hidden.
+  2. In `interactive_console.js:checkActionApprovals()`: Line 738 checked `if (s && (... || s.status === 'running')) { runBtn.disabled = true; return; }`. In Neodymium's state model (`InteractiveStateBuilder.java:734`), when the runner is paused before executing actions for the active step (`pauseBeforeActionExecution`), the active step's status in the serialized blocks is `"running"` (`PlaybookStepStatus.RUNNING`), while `currentState.status` is `"paused"`. Checking `s.status === 'running'` disabled the "Run" button on the very step waiting for user confirmation. Active execution is already properly guarded by lines 722–727 via `!currentPauseId || (currentState && currentState.status === 'running')`.
+  3. In `interactive_console.js:applyState()`: Line 390 wiped `currentPauseId = null` if `state.status === 'passed' || state.status === 'failed'`. At test completion, `InteractiveConsoleListener` pushes `status: "passed"` or `"failed"` along with a valid `pauseId: "pause-final-..."` to prompt the user to save or discard YAML edits. Wiping `currentPauseId` stripped the token and broke the final save dialog actions.
+- **Detection Gap ("What did we miss?"):** Previous unit tests in `InteractiveConsoleEngineTest` verified Java state serialization and pause token rotation, but did not perform static syntax verification or scope declaration audits on `interactive_console.js`.
+- **Resolution:**
+  1. In `interactive_console.js:checkActionApprovals()`: Removed the duplicate `const runBtn` declaration, reusing the single function-scoped `runBtn` reference.
+  2. In `interactive_console.js:checkActionApprovals()`: Removed `|| s.status === 'running'` from the completed step check, ensuring that only already completed steps (`passed`, `skipped`, `healed`) disable the button when clicked, while the active step waiting for confirmation remains actionable.
+  3. In `interactive_console.js:applyState()`: Updated pause token extraction so only `state.status === 'running'` purges `currentPauseId`. When `status` is `'passed'` or `'failed'` with an explicit `pauseId` (e.g. `pause-final-...`), `currentPauseId` is preserved.
+  4. Added `dismissInitialLoadingOverlay()` helper function in `interactive_console.js` called upon initial state application and upon `pause` event receipt as a defensive safety fallback.
+- **Safety Net Added:** Added automated unit tests in `InteractiveConsoleServerTest`:
+  - `testInteractiveConsoleJsIntegrityAndNoDuplicateDeclarations`: Verifies that `interactive_console.js` is present on the classpath, defines `dismissInitialLoadingOverlay()`, contains exactly one declaration of `runBtn` in `checkActionApprovals()`, and does not check `s.status === 'running'`.
+  - `testInteractiveConsoleJsApplyStatePreservesFinalPauseToken`: Verifies that `applyState` checks `state.status === 'running'` to invalidate `currentPauseId` and does not unconditionally wipe pause tokens on `passed` or `failed` statuses.

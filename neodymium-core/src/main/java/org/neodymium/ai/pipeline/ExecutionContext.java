@@ -19,12 +19,16 @@
 package org.neodymium.ai.pipeline;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.pipeline.structural.EndTryStep;
+import org.neodymium.ai.session.AiSession;
 
 /**
  * Thread-isolated execution context tracking the LIFO step execution queue,
@@ -357,5 +361,50 @@ public final class ExecutionContext
     public long getTotalInteractivePauseMs()
     {
         return (Long) this.transientData.getOrDefault(KEY_TOTAL_INTERACTIVE_PAUSE_MS, 0L);
+    }
+
+    /**
+     * Updates the remaining playbook steps on the execution stack.
+     * Preserves intra-step boundary hooks (e.g. end-hook, verification, or try-catch markers)
+     * and sub-steps of the active parent step currently at the top of the stack, removes any
+     * obsolete pending top-level {@link PlaybookPipelineStep}s, and schedules the new sequence
+     * of remaining steps in order.
+     *
+     * @param remainingSteps the updated list of remaining playbook steps to execute
+     * @param session the active AI session
+     */
+    public void updateRemainingPlaybookSteps(final List<PlaybookStep> remainingSteps, final AiSession session)
+    {
+        final List<PipelineStep> preserved = new ArrayList<>();
+        while (!this.runStack.isEmpty())
+        {
+            final PipelineStep top = this.runStack.peek();
+            if (top instanceof PlaybookPipelineStep pps)
+            {
+                final PlaybookStep pbStep = pps.getPlaybookStep();
+                if (pbStep == null || pbStep.getParent() == null)
+                {
+                    // Top-level playbook step found; stop preserving
+                    break;
+                }
+            }
+            preserved.add(this.runStack.pop());
+        }
+        this.runStack.clear();
+        if (remainingSteps != null)
+        {
+            for (int i = remainingSteps.size() - 1; i >= 0; i--)
+            {
+                final PlaybookStep s = remainingSteps.get(i);
+                if (s != null)
+                {
+                    this.runStack.push(ExecuteActionsStep.mapPlaybookStepToPipelineStep(s, session, this));
+                }
+            }
+        }
+        for (int i = preserved.size() - 1; i >= 0; i--)
+        {
+            this.runStack.push(preserved.get(i));
+        }
     }
 }

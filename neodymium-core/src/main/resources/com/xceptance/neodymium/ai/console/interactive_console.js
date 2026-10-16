@@ -3,6 +3,12 @@ let currentState = null;
 let currentPauseId = null;
 let currentRunId = null;
 let isAutoMode = false;
+let isStructuralActionInFlight = false;
+let structuralActionPauseId = null;
+let isRunActionInFlight = false;
+let runActionPauseId = null;
+let pendingRunAfterSync = false;
+let pendingSkipAfterSync = false;
 let eventSource = null;
 let helpOverlayClicked = false;
 let selectedStepIndexForDetails = null;
@@ -23,6 +29,26 @@ function connectSSE() {
 
     eventSource.addEventListener('state', (e) => {
         const data = JSON.parse(e.data);
+        if (data && data.pauseId) {
+            if (structuralActionPauseId) {
+                if (data.pauseId !== structuralActionPauseId) {
+                    isStructuralActionInFlight = false;
+                    structuralActionPauseId = null;
+                }
+            } else {
+                isStructuralActionInFlight = false;
+            }
+            if (runActionPauseId) {
+                if (data.pauseId !== runActionPauseId) {
+                    isRunActionInFlight = false;
+                    runActionPauseId = null;
+                } else {
+                    data.pauseId = null;
+                }
+            } else {
+                isRunActionInFlight = false;
+            }
+        }
         applyState(data);
     });
 
@@ -33,8 +59,23 @@ function connectSSE() {
 
     eventSource.addEventListener('pause', (e) => {
         const data = JSON.parse(e.data);
+        if (runActionPauseId && data.pauseId === runActionPauseId) {
+            return;
+        }
+        if (runActionPauseId && data.pauseId !== runActionPauseId) {
+            isRunActionInFlight = false;
+            runActionPauseId = null;
+        } else if (!runActionPauseId) {
+            isRunActionInFlight = false;
+        }
         currentPauseId = data.pauseId;
         window.currentPauseId = currentPauseId;
+        if (structuralActionPauseId && data.pauseId !== structuralActionPauseId) {
+            isStructuralActionInFlight = false;
+            structuralActionPauseId = null;
+        } else if (!structuralActionPauseId) {
+            isStructuralActionInFlight = false;
+        }
         // Mirror into currentState so local re-renders (toggleBp, handleStepClick, …)
         // that call applyState(currentState) pick up the token via the 'pauseId' in state guard.
         if (currentState) {
@@ -47,8 +88,20 @@ function connectSSE() {
             showStaleBanner(data.runId);
         } else {
             currentRunId = data.runId;
-            setButtonsEnabled(true);
-            checkActionApprovals();
+            if (currentState) {
+                applyState(currentState);
+            } else {
+                dismissInitialLoadingOverlay();
+                setButtonsEnabled(true);
+                checkActionApprovals();
+            }
+            if (pendingSkipAfterSync) {
+                pendingSkipAfterSync = false;
+                sendAction('SKIP');
+            } else if (pendingRunAfterSync) {
+                pendingRunAfterSync = false;
+                sendAction('RUN');
+            }
             if (currentPauseId && currentPauseId.startsWith('pause-final-')) {
                 isAutoMode = false;
                 autoStartStepIndex = null;
@@ -322,6 +375,17 @@ console.error = function(...args) {
     oldError.apply(console, args);
 };
 
+function dismissInitialLoadingOverlay() {
+    const overlay = document.getElementById('initialLoadingOverlay');
+    if (overlay) {
+        overlay.style.opacity = '0';
+        setTimeout(() => {
+            overlay.style.visibility = 'hidden';
+            overlay.style.display = 'none';
+        }, 300);
+    }
+}
+
 const activeBreakpoints = new Set();
 
 function applyState(state) {
@@ -350,20 +414,28 @@ function applyState(state) {
     const isFirstLoad = currentState === null;
 
     if (isFirstLoad) {
-        const overlay = document.getElementById('initialLoadingOverlay');
-        if (overlay) {
-            overlay.style.opacity = '0';
-            setTimeout(() => {
-                overlay.style.visibility = 'hidden';
-                overlay.style.display = 'none';
-            }, 300);
-        }
+        dismissInitialLoadingOverlay();
     }
 
-    if (state.pauseId) {
+    if (state.pauseId && runActionPauseId && state.pauseId === runActionPauseId) {
+        state.pauseId = null;
+    }
+
+    if (state.status === 'running') {
+        currentPauseId = null;
+        window.currentPauseId = null;
+    } else if (state.pauseId) {
+        if (runActionPauseId && state.pauseId !== runActionPauseId) {
+            isRunActionInFlight = false;
+            runActionPauseId = null;
+        }
         currentPauseId = state.pauseId;
         window.currentPauseId = currentPauseId;
-    } else if (state.status === 'running' || state.status === 'passed' || state.status === 'failed') {
+        if (pendingSkipAfterSync) {
+            pendingSkipAfterSync = false;
+            sendAction('SKIP');
+        }
+    } else {
         currentPauseId = null;
         window.currentPauseId = null;
     }
@@ -373,15 +445,24 @@ function applyState(state) {
         selectedStepIndexForDetails = null;
     }
 
-    // Preserve local temporary steps (isTempAdd) when applying a new state from the server
-    if (currentState && currentState.blocks && state && state.blocks) {
+    // If a structural action is currently in-flight, preserve our optimistic blocks
+    // so stale in-flight state events from the server do not revert the UI before the
+    // rotated pause token is received.
+    if (isStructuralActionInFlight && currentState && currentState.blocks && state && state.blocks) {
+        state.blocks = currentState.blocks;
+    } else if (currentState && currentState.blocks && state && state.blocks) {
+        // Preserve local temporary/pending steps when applying a new state from the server
         for (const blockName of ['before', 'steps', 'after']) {
             const oldList = currentState.blocks[blockName] || [];
             const newList = state.blocks[blockName] || [];
-            const tempSteps = oldList.filter(s => s.isTempAdd);
-            for (const tempStep of tempSteps) {
-                if (!newList.some(s => s.index === tempStep.index)) {
-                    newList.push(tempStep);
+            const pendingSteps = oldList.filter(s => s.isTempAdd || s.isPendingAdd);
+            for (const pendingStep of pendingSteps) {
+                const alreadyInNewList = newList.some(s =>
+                    s.index === pendingStep.index ||
+                    (!s.isTempAdd && !s.isPendingAdd && s.instruction === pendingStep.instruction)
+                );
+                if (!alreadyInNewList) {
+                    newList.push(pendingStep);
                 }
             }
             state.blocks[blockName] = newList;
@@ -479,12 +560,74 @@ function applyState(state) {
         mLabel.textContent = `Step ${currentStep} of ${totalSteps}`;
         mFill.style.width = Math.round((currentStep / totalSteps) * 100) + '%';
     }
-    // Rebuild the flat step index list for the ↑/↓ reorder buttons
-    allStepIndices = [
+    // Rebuild the flat step index list and all steps collection
+    const allSteps = [
         ...beforeSteps,
         ...mainSteps,
         ...afterSteps
-    ].map(s => s.index);
+    ];
+    allStepIndices = allSteps.map(s => s.index);
+
+    // Auto-advance: always track the currently relevant step.
+    // Priority: running/failed step first, then next pending after the last passed one.
+    if (state && allSteps.length > 0) {
+        const steps = allSteps;
+        const activeStep = steps.find(s => s.status === 'running' || s.status === 'failed');
+        const selStep = (selectedStepIndexForDetails !== null) ? steps.find(s => s.index === selectedStepIndexForDetails) : null;
+        const lastPassedIdx = steps.findLastIndex(s => s.status === 'passed');
+
+        if (selStep && (selStep.status === 'passed' || selStep.status === 'skipped' || selStep.status === 'healed')) {
+            // If the currently selected step has completed, jump forward to active or next pending step
+            if (activeStep) {
+                selectedStepIndexForDetails = activeStep.index;
+            } else if (lastPassedIdx !== -1 && lastPassedIdx < steps.length - 1) {
+                selectedStepIndexForDetails = steps[lastPassedIdx + 1].index;
+            } else {
+                selectedStepIndexForDetails = steps[0].index;
+            }
+        } else if (currentPauseId !== null && selStep) {
+            // Keep user's explicit selection during pause if it is not completed
+        } else if (activeStep) {
+            selectedStepIndexForDetails = activeStep.index;
+        } else {
+            if (lastPassedIdx !== -1 && lastPassedIdx < steps.length - 1) {
+                selectedStepIndexForDetails = steps[lastPassedIdx + 1].index;
+            } else if (selectedStepIndexForDetails === null || !selStep) {
+                selectedStepIndexForDetails = steps[0].index;
+            }
+        }
+
+        // Auto-advance selected sub-step if target step has sub-steps
+        if (selectedStepIndexForDetails !== null) {
+            const targetStep = steps.find(s => s.index === selectedStepIndexForDetails);
+            if (targetStep && Array.isArray(targetStep.subSteps) && targetStep.subSteps.length > 0) {
+                const runningSub = targetStep.subSteps.find(s => s.status === 'running');
+                if (runningSub) {
+                    const selSub = selectedSubStepIndex !== null
+                        ? targetStep.subSteps.find(s => (s.index || s.stepIndex) === selectedSubStepIndex)
+                        : null;
+                    if (selectedSubStepIndex === null || (selSub && (selSub.status === 'passed' || selSub.status === 'success' || selSub.status === 'skipped'))) {
+                        selectedSubStepIndex = runningSub.index || (targetStep.subSteps.indexOf(runningSub) + 1);
+                    }
+                }
+            }
+        }
+    }
+
+    // Handle default/latest screenshot display
+    let activeScreenshot = null;
+    const activeStepForShot = allSteps.find(s => s.status === 'running' || s.status === 'failed');
+    if (activeStepForShot && activeStepForShot.screenshot) {
+        activeScreenshot = activeStepForShot.screenshot;
+    } else {
+        const passedSteps = allSteps.filter(s => s.status === 'passed' && s.screenshot);
+        if (passedSteps.length > 0) {
+            activeScreenshot = passedSteps[passedSteps.length - 1].screenshot;
+        }
+    }
+    if (activeScreenshot) {
+        showScreenshot(activeScreenshot);
+    }
 
     // Test source files (Java + YAML + Playbook)
     const topTestSource = document.getElementById('topTestSource');
@@ -532,7 +675,7 @@ function applyState(state) {
         }
     }
 
-    if (state.status === 'passed' || state.status === 'failed') {
+    if (['passed', 'failed'].includes(state.status)) {
         isAutoMode = false;
         autoStartStepIndex = null;
     } else if (isFirstLoad) {
@@ -544,6 +687,12 @@ function applyState(state) {
     renderBlock('before', beforeSteps);
     renderBlock('steps', mainSteps);
     renderBlock('after', afterSteps);
+
+    // Auto-scroll active card into view
+    const activeCardEl = document.querySelector('.step-card.active') || document.querySelector('.step-card.selected-details');
+    if (activeCardEl) {
+        activeCardEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
 
     // Render Data Bindings Table
     const tbody = document.getElementById('dataBindingsTableBody');
@@ -586,57 +735,7 @@ function applyState(state) {
 
     restoreFocus();
 
-    // Handle default/latest screenshot display
-    let activeScreenshot = null;
-    const allSteps = [
-        ...beforeSteps,
-        ...mainSteps,
-        ...afterSteps
-    ];
-    // Find active/failed/running step screenshot, or last executed one
-    const activeStep = allSteps.find(s => s.status === 'running' || s.status === 'failed');
-    if (activeStep && activeStep.screenshot) {
-        activeScreenshot = activeStep.screenshot;
-    } else {
-        const passedSteps = allSteps.filter(s => s.status === 'passed' && s.screenshot);
-        if (passedSteps.length > 0) {
-            activeScreenshot = passedSteps[passedSteps.length - 1].screenshot;
-        }
-    }
-    if (activeScreenshot) {
-        showScreenshot(activeScreenshot);
-    }
-
-    // Auto-advance: always track the currently relevant step.
-    // Priority: running/failed step first, then next pending after the last passed one.
-    if (state && allSteps.length > 0) {
-        const steps = allSteps;
-        const activeStep = steps.find(s => s.status === 'running' || s.status === 'failed');
-        if (activeStep) {
-            // A step is currently executing or errored – select it unconditionally
-            selectedStepIndexForDetails = activeStep.index;
-        } else {
-            // No running step: advance to the next pending step after the last completed one
-            const lastPassedIdx = steps.findLastIndex(s => s.status === 'passed');
-            if (lastPassedIdx !== -1 && lastPassedIdx < steps.length - 1) {
-                // Next step after the last passed one becomes the selection
-                selectedStepIndexForDetails = steps[lastPassedIdx + 1].index;
-            } else if (selectedStepIndexForDetails === null) {
-                // Nothing passed yet – default to the first step
-                selectedStepIndexForDetails = steps[0].index;
-            }
-            // If the user manually selected a step that is now passed,
-            // jump forward to the next one automatically
-            if (selectedStepIndexForDetails !== null) {
-                const selStep = steps.find(s => s.index === selectedStepIndexForDetails);
-                if (selStep && selStep.status === 'passed' && lastPassedIdx < steps.length - 1) {
-                    selectedStepIndexForDetails = steps[lastPassedIdx + 1].index;
-                }
-            }
-        }
-    }
-
-    if (!currentPauseId) {
+    if (!currentPauseId || state.status === 'running' || isRunActionInFlight) {
         setButtonsEnabled(false);
     } else {
         setButtonsEnabled(true);
@@ -661,21 +760,45 @@ function applyState(state) {
 }
 
 function checkActionApprovals() {
-    if (!currentPauseId) return;
-    const activeCard = document.querySelector('.step-card.active');
-    if (!activeCard) return;
-    const idx = parseInt(activeCard.getAttribute('data-step-idx'), 10);
+    const runBtn = document.getElementById('btnRun');
     const allSteps = [
         ...(currentState?.blocks?.before || []),
         ...(currentState?.blocks?.steps || []),
         ...(currentState?.blocks?.after || [])
     ];
+    const isExecuting = !currentPauseId || (currentState && currentState.status === 'running') || isStructuralActionInFlight || isRunActionInFlight || isAutoMode;
+    if (isExecuting) {
+        if (runBtn) {
+            runBtn.disabled = true;
+            runBtn.setAttribute('disabled', 'true');
+        }
+        return;
+    }
+    const activeCard = document.querySelector('.step-card.active');
+    const targetCard = activeCard || (currentPauseId ? document.querySelector('.step-card.selected-details') : null);
+    if (!targetCard) {
+        if (runBtn) {
+            runBtn.disabled = true;
+            runBtn.setAttribute('disabled', 'true');
+        }
+        return;
+    }
+    const idx = parseInt(targetCard.getAttribute('data-step-idx'), 10);
     const s = allSteps.find(st => st.index === idx);
-    const isThinking = s && s.status === 'running' && !s.reasoning && currentPauseId === null;
+    if (s && (s.status === 'passed' || s.status === 'skipped' || s.status === 'healed' || s.status === 'aborted')) {
+        if (runBtn) {
+            runBtn.disabled = true;
+            runBtn.setAttribute('disabled', 'true');
+        }
+        return;
+    }
+    const isTopThinking = currentState && typeof currentState.reasoning === 'string' && currentState.reasoning.toLowerCase().includes('thinking');
+    const isStepThinking = s && typeof s.reasoning === 'string' && s.reasoning.toLowerCase().includes('thinking');
+    const hasPlannedActions = s && Array.isArray(s.actions) && s.actions.length > 0;
+    const isThinking = (s && !s.reasoning && !hasPlannedActions && !isStructuralActionInFlight) || isTopThinking || isStepThinking;
 
-    const runBtn = document.getElementById('btnRun');
     if (runBtn) {
-        if (isThinking || isAutoMode) {
+        if (isThinking || isExecuting || isRunActionInFlight) {
             runBtn.disabled = true;
             runBtn.setAttribute('disabled', 'true');
         } else {
@@ -734,11 +857,10 @@ function renderBlock(blockName, steps) {
     }
 
     group.style.display = 'flex';
-    container.innerHTML = steps.map(renderStepCard).join('');
+    container.innerHTML = steps.map(s => renderStepCard(s, blockName)).join('');
 
-    // Only add a final zone to the 'after' block to avoid redundant targets,
-    // as every card already has a zone 'before' it.
-    if (blockName === 'after') {
+    // In interactive mode, append a final drop zone to each block so items can be dropped at the end.
+    if (!document.body.classList.contains('mode-results')) {
         container.innerHTML += `<div class="drop-target-area final-drop-zone" data-block="${blockName}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, -1, 'after', '${blockName}')"></div>`;
     }
 }
@@ -775,9 +897,12 @@ function buildStepDetailsHtml(step, isActiveStep) {
             }).join('')
             : '<div style="color:var(--text-muted); font-size:12px; padding:8px 0;">No actions recorded yet.</div>';
 
-    const actionsLabel = (isActiveStep || isLlmProcessing)
-        ? `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><span class="material-symbols-outlined" style="color:var(--accent-primary);">checklist</span> Proposed Actions</div>`
-        : `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><span class="material-symbols-outlined">checklist</span> Actions performed</div>`;
+    const isActivelyExecuting = step.status === 'running' && (currentPauseId === null || (currentState && currentState.status === 'running'));
+    const actionsLabel = isActivelyExecuting
+        ? `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--accent-primary);margin-bottom:6px;"><span class="material-symbols-outlined spinner" style="color:var(--accent-primary);font-size:13px;vertical-align:middle;margin-right:4px;">progress_activity</span> Executing Actions...</div>`
+        : (isActiveStep || isLlmProcessing)
+            ? `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><span class="material-symbols-outlined" style="color:var(--accent-primary);">checklist</span> Proposed Actions</div>`
+            : `<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--text-secondary);margin-bottom:6px;"><span class="material-symbols-outlined">checklist</span> Actions performed</div>`;
 
     const actionListBlock = isSkipped ? '' : `<div class="llm-action-list">${actionsLabel}${actionsHtml}</div>`;
 
@@ -795,7 +920,8 @@ function buildStepDetailsHtml(step, isActiveStep) {
         : '';
 
     // Right-column panel compact reasoning (not shown for active steps; the card has the bubble)
-    const isThinking = step.status === 'running' && !step.reasoning && currentPauseId === null;
+    const hasPlannedActions = Array.isArray(step.actions) && step.actions.length > 0;
+    const isThinking = step.status === 'running' && !step.reasoning && !hasPlannedActions && currentPauseId === null && !isStructuralActionInFlight;
     const reasoningText = !isActiveStep && (isThinking || step.reasoning)
         ? (isThinking
             ? `<div class="acc-reasoning" style="margin-bottom:12px;"><span class="material-symbols-outlined spinner" style="color:var(--accent-purple)" aria-hidden="true">progress_activity</span> AI is thinking...</div>`
@@ -1324,7 +1450,7 @@ function resolveVariables(text, bindings) {
     return result;
 }
 
-function renderStepCard(step) {
+function renderStepCard(step, blockName = 'steps') {
     if (!step) return '';
     const status = step.status || 'pending';
     const isSkipped = status === 'skipped';
@@ -1372,7 +1498,7 @@ function renderStepCard(step) {
         statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--text-secondary)" aria-label="Skipped">do_not_disturb_on</span>`;
     } else if (step.status === 'aborted') {
         statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--text-muted)" aria-label="Aborted">stop_circle</span>`;
-    } else if (step.status === 'running' && currentPauseId === null) {
+    } else if (step.status === 'running' && (currentPauseId === null || (currentState && currentState.status === 'running'))) {
         statusIconMarkup = `<span class="material-symbols-outlined spinner" style="color:var(--accent-primary)" aria-label="Running">progress_activity</span>`;
     } else if (step.status === 'running') {
         statusIconMarkup = `<span class="material-symbols-outlined" style="color:var(--accent-primary)" aria-label="Paused">pause_circle</span>`;
@@ -1420,13 +1546,16 @@ function renderStepCard(step) {
         includeBreadcrumb = `<div class="include-breadcrumb"><span class="material-symbols-outlined" aria-hidden="true">folder_open</span> ${escHtml(step.includeFile)}</div>`;
     }
 
-    const isPausedRunning = step.status === 'running' && currentPauseId !== null;
+    const isPausedRunning = step.status === 'running' && currentPauseId !== null && (currentState ? currentState.status !== 'running' : false);
     const isPendingOrPausedRunning = !step.status || step.status === 'pending' || isPausedRunning;
     // hasDetails is declared above (needed for noDetailsPendingClass) — do not redeclare here.
 
     const showEdit = step.status !== 'passed' && step.status !== 'skipped';
     const editBtnHtml = showEdit
         ? `<button class="step-edit-btn" onclick="enableEdit(this)" title="Edit Step (Alt+E)" aria-label="Edit step instruction (Alt+E)"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>`
+        : '';
+    const addBtnHtml = !step.isTempAdd
+        ? `<button class="step-add-after-btn" onclick="addStepAfter(event, ${step.index})" title="Add step after this" aria-label="Add step after this"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span></button>`
         : '';
 
     // Rewind only makes sense for steps that have already been executed (passed/failed/skipped).
@@ -1436,18 +1565,29 @@ function renderStepCard(step) {
         : '';
 
     // Reorder system overhaul: Drag handle only in controls
+    const isPaused = currentPauseId !== null;
     const showReorder = step.status !== 'passed' && step.status !== 'skipped';
     let reorderHandleHtml = '';
     if (showReorder) {
-        reorderHandleHtml = `
+        if (isPaused) {
+            reorderHandleHtml = `
                     <div class="step-reorder-controls">
                         <div class="step-reorder-handle" draggable="true"
-                             ondragstart="handleDragStart(event, ${step.index})"
+                             ondragstart="handleDragStart(event, ${step.index}, '${blockName}')"
                              ondragend="handleDragEnd(event)"
                              title="Drag handle to reorder step" aria-label="Drag handle to reorder step">
                              <span class="material-symbols-outlined">drag_indicator</span>
                         </div>
                     </div>`;
+        } else {
+            reorderHandleHtml = `
+                    <div class="step-reorder-controls">
+                        <div class="step-reorder-handle reorder-disabled" draggable="false"
+                             title="Execution in progress — pause test to reorder steps" aria-label="Execution in progress — pause test to reorder steps">
+                             <span class="material-symbols-outlined">drag_indicator</span>
+                        </div>
+                    </div>`;
+        }
     }
 
     const statusIconContainerClass = isPendingOrPausedRunning ? 'step-status-icon pending-step' : 'step-status-icon';
@@ -1463,7 +1603,8 @@ function renderStepCard(step) {
     // Build inline reasoning / playbook note for active step
     let inlineReasoningHtml = '';
     if (isActive) {
-        const isThinking = step.status === 'running' && !step.reasoning && currentPauseId === null && step.source !== 'recording';
+        const hasPlannedActions = Array.isArray(step.actions) && step.actions.length > 0;
+        const isThinking = step.status === 'running' && !step.reasoning && !hasPlannedActions && currentPauseId === null && step.source !== 'recording' && !isStructuralActionInFlight;
         if (isThinking) {
             inlineReasoningHtml = `<div class="inline-reasoning-bubble inline-reasoning-thinking">
                         <div class="inline-reasoning-label"><span class="material-symbols-outlined" aria-hidden="true">psychology</span> AI Thinking</div>
@@ -1525,11 +1666,13 @@ function renderStepCard(step) {
         const badgeNum = allStepIndices.indexOf(step.index) + 1;
         stepNumBadgeHtml = `
                     <div class="step-num-badge">
-                        ${isSelected ? `
+                        ${isSelected && isPaused ? `
                             <input type="number" value="${badgeNum}"
                                    min="1" max="${allStepIndices.length}"
-                                   onkeydown="handleStepInputKeyDown(event, ${step.index})"
-                                   onblur="reorderStepDirect(event, ${step.index})"
+                                   onkeydown="handleStepInputKeyDown(event, ${step.index}, '${blockName}')"
+                                   oninput="handleStepInputInput(event, ${step.index}, '${blockName}')"
+                                   onchange="reorderStepDirect(event, ${step.index}, '${blockName}')"
+                                   onblur="reorderStepDirect(event, ${step.index}, '${blockName}')"
                                    aria-label="Step position. Type a new number to move this step. Use Ctrl + Up/Down arrows to move.">
                         ` : `#${badgeNum}`}
                     </div>`;
@@ -1604,8 +1747,8 @@ function renderStepCard(step) {
     }
 
     return `
-                <div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${step.index}, 'before')"></div>
-                <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}${passedClass}${noDetailsPendingClass}${editingClass}${abortedClass}" data-step-idx="${step.index}" role="listitem" tabindex="0" aria-label="${step.isTempAdd ? 'New Step' : 'Step ' + (allStepIndices.indexOf(step.index) + 1)}: ${escHtml(resolvedInstruction)}"
+                <div class="drop-target-area" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, ${step.index}, 'before', '${blockName}')"></div>
+                <div class="step-card${activeClass}${selectedClass}${lvlClass}${skippedClass}${passedClass}${noDetailsPendingClass}${editingClass}${abortedClass}" data-step-idx="${step.index}" data-step-block="${blockName}" role="listitem" tabindex="0" aria-label="${step.isTempAdd ? 'New Step' : 'Step ' + (allStepIndices.indexOf(step.index) + 1)}: ${escHtml(resolvedInstruction)}"
                      onclick="handleStepClick(event, ${step.index})" ondragend="handleDragEnd(event)">
                 ${activeBadge}
                 <div class="step-row">
@@ -1627,6 +1770,7 @@ function renderStepCard(step) {
                     ${rewindBtnHtml}
                     ${reorderHandleHtml}
                     ${editBtnHtml}
+                    ${addBtnHtml}
                     ${selectedArrowMarkup}
                 </div>
                 ${subStepsTreeHtml}
@@ -1667,17 +1811,64 @@ function toggleTextExpand(event, id) {
     if (textNode) textNode.textContent = expanding ? ' Show less' : ' Show more';
 }
 
+function isStructuralAction(action, extra) {
+    if (action === 'REORDER' || action === 'ADD' || action === 'DUMP' || action === 'SUGGEST_FIX' || action === 'TOGGLE_BREAKPOINT') {
+        return true;
+    }
+    if (action === 'EDIT' || action === 'UPDATE_STEP' || action === 'SAVE_STEP') {
+        const activeCard = document.querySelector('.step-card.active');
+        const activeIdx = activeCard ? parseInt(activeCard.getAttribute('data-step-idx'), 10) : null;
+        if (extra && extra.index !== undefined && activeIdx !== null && extra.index !== activeIdx) {
+            return true;
+        }
+    }
+    return false;
+}
+
 function sendAction(action, extra) {
-    if (!currentPauseId || !currentRunId) return;
+    if (action === 'RUN' || action === 'ABORT') {
+        pendingSkipAfterSync = false;
+    }
+    if (!currentPauseId || !currentRunId) {
+        if (action === 'SKIP' && currentRunId) {
+            pendingSkipAfterSync = true;
+            console.log('[InteractiveConsole] Skip armed; will skip upon next step pause.');
+        }
+        return;
+    }
+    if (action === 'SKIP') {
+        pendingSkipAfterSync = false;
+    }
+
+    if (isStructuralActionInFlight && (action === 'RUN' || action === 'SKIP' || action === 'HEAL')) {
+        if (action === 'RUN') {
+            pendingRunAfterSync = true;
+        }
+        return;
+    }
+
     const finalSaveOverlay = document.getElementById('finalSaveOverlay');
     if (finalSaveOverlay) finalSaveOverlay.classList.remove('active');
+
+    const structural = isStructuralAction(action, extra);
+    if (structural) {
+        isStructuralActionInFlight = true;
+        structuralActionPauseId = currentPauseId;
+    }
+    if (action === 'RUN' || action === 'HEAL' || action === 'SKIP') {
+        isRunActionInFlight = true;
+        runActionPauseId = currentPauseId;
+    }
+
     const payload = {
         runId: currentRunId,
         pauseId: currentPauseId,
         action,
         ...extra
     };
+
     setButtonsEnabled(false);
+
     fetch('/api/console/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1687,13 +1878,46 @@ function sendAction(action, extra) {
             showStaleBanner(res.activeRunId);
         }
     }).catch(() => {
+        isStructuralActionInFlight = false;
+        structuralActionPauseId = null;
+        isRunActionInFlight = false;
+        runActionPauseId = null;
+        pendingRunAfterSync = false;
         setButtonsEnabled(true);
     });
-    currentPauseId = null;
-    window.currentPauseId = null;
-    // Keep currentState in sync so local re-renders see no active pause token.
-    if (currentState) {
-        currentState.pauseId = null;
+
+    if (!structural) {
+        currentPauseId = null;
+        window.currentPauseId = null;
+        // Keep currentState in sync so local re-renders see no active pause token.
+        if (currentState) {
+            currentState.pauseId = null;
+            if (action === 'RUN' || action === 'HEAL' || action === 'AUTO') {
+                currentState.status = 'running';
+                const allSteps = [
+                    ...(currentState.blocks?.before || []),
+                    ...(currentState.blocks?.steps || []),
+                    ...(currentState.blocks?.after || [])
+                ];
+                const activeCard = document.querySelector('.step-card.active') || document.querySelector('.step-card.selected-details');
+                const activeIdx = activeCard ? parseInt(activeCard.getAttribute('data-step-idx'), 10) : selectedStepIndexForDetails;
+                const activeStep = (activeIdx !== null ? allSteps.find(s => s.index === activeIdx) : null) || allSteps.find(s => s.status === 'running');
+                if (activeStep) {
+                    activeStep.status = 'running';
+                    if (Array.isArray(activeStep.subSteps)) {
+                        const runningSub = activeStep.subSteps.find(sub => sub.status === 'running')
+                            || activeStep.subSteps.find(sub => sub.status === 'pending');
+                        if (runningSub) {
+                            runningSub.status = 'running';
+                        }
+                    }
+                }
+                renderBlock('before', currentState.blocks?.before || []);
+                renderBlock('steps', currentState.blocks?.steps || []);
+                renderBlock('after', currentState.blocks?.after || []);
+                updateBigScreenDetails();
+            }
+        }
     }
 }
 
@@ -1981,11 +2205,12 @@ function updateBigScreenDetails() {
             ...(currentState.blocks?.after || [])
         ];
         const activeStep = allSteps.find(s => s.status === 'running' || s.status === 'failed');
+        const selStep = (selectedStepIndexForDetails !== null) ? allSteps.find(s => s.index === selectedStepIndexForDetails) : null;
         if (selectedStepIndexForDetails === null && activeStep) {
             selectedStepIndexForDetails = activeStep.index;
-        }
-        // Don't auto-switch if user has manually selected a step unless the selected step is gone
-        if (selectedStepIndexForDetails !== null) {
+        } else if (selStep && (selStep.status === 'passed' || selStep.status === 'skipped' || selStep.status === 'healed') && activeStep) {
+            selectedStepIndexForDetails = activeStep.index;
+        } else if (selectedStepIndexForDetails !== null) {
             const selStepExists = allSteps.some(s => s.index === selectedStepIndexForDetails);
             if (!selStepExists && activeStep) {
                 selectedStepIndexForDetails = activeStep.index;
@@ -2015,8 +2240,16 @@ function updateBigScreenDetails() {
     let targetSubStep = null;
 
     if (subStepsList.length > 0) {
+        const runningSub = subStepsList.find(s => s.status === 'running');
         if (selectedSubStepIndex !== null) {
             targetSubStep = subStepsList.find(s => s.index === selectedSubStepIndex || s.stepIndex === selectedSubStepIndex || (s.stepIndex === (selectedSubStepIndex - 1)));
+            if (targetSubStep && (targetSubStep.status === 'success' || targetSubStep.status === 'passed') && runningSub) {
+                targetSubStep = runningSub;
+                selectedSubStepIndex = runningSub.index || (subStepsList.indexOf(runningSub) + 1);
+            }
+        } else if (runningSub) {
+            targetSubStep = runningSub;
+            selectedSubStepIndex = runningSub.index || (subStepsList.indexOf(runningSub) + 1);
         }
 
         substepTabsBarHtml = `
@@ -2256,13 +2489,17 @@ function saveEdit(btnElement) {
             if (targetStep) {
                 targetStep.instruction = newVal;
                 targetStep.rawInstruction = newVal;
-                targetStep.status = 'running';
-                targetStep.isLlmProcessing = true;
+                targetStep.status = 'pending';
+                delete targetStep.isTempAdd;
+                targetStep.isPendingAdd = true;
+                targetStep.isLlmProcessing = false;
                 targetStep.actions = [];
                 targetStep.reasoning = null;
                 targetStep.errorMessage = null;
             }
-            sendAction('ADD', { instruction: newVal, block: blockName });
+            const targetList = (currentState.blocks && currentState.blocks[blockName]) ? currentState.blocks[blockName] : [];
+            const targetRelIdx = targetStep ? targetList.indexOf(targetStep) : -1;
+            sendAction('ADD', { instruction: newVal, block: blockName, index: targetRelIdx });
         } else {
             cancelEdit(btnElement);
             return;
@@ -2272,8 +2509,7 @@ function saveEdit(btnElement) {
         card.classList.remove('editing');
         const bindingsDiv = card.querySelector('.inline-edit-bindings');
         if (bindingsDiv) bindingsDiv.style.display = 'none';
-        selectedStepIndexForDetails = idx;
-        setButtonsEnabled(true);
+        selectedStepIndexForDetails = null;
         applyState(currentState);
     } else {
         console.error('Found step in state blocks:', blockName, idx, 'oldVal:', oldVal, 'newVal:', newVal, 'activePauseId:', activePauseId);
@@ -2295,7 +2531,20 @@ function saveEdit(btnElement) {
             userEditedFailedStep = true;
             isErrorMode = false;
             updateToolbarControls(true);
-            sendAction('EDIT', { index: idx, instruction: newVal, bindings: currentState?.dataBindings });
+            const activeCard = document.querySelector('.step-card.active');
+            const activeIdx = activeCard ? parseInt(activeCard.getAttribute('data-step-idx'), 10) : null;
+            const isCurrentStep = (activeIdx !== null && idx === activeIdx)
+                || card.classList.contains('active')
+                || (targetStep && (targetStep.status === 'running' || targetStep.status === 'failed'));
+            const flatIdx = allStepIndices.indexOf(idx);
+            sendAction('EDIT', {
+                index: flatIdx >= 0 ? flatIdx : idx,
+                rawIndex: idx,
+                block: blockName,
+                isCurrentStep: isCurrentStep,
+                instruction: newVal,
+                bindings: currentState?.dataBindings
+            });
         }
         card.classList.remove('editing');
         const bindingsDiv = card.querySelector('.inline-edit-bindings');
@@ -2390,7 +2639,14 @@ function applySuggestionAndRun() {
         userEditedFailedStep = true;
         isErrorMode = false;
         updateToolbarControls(true);
-        sendAction('EDIT', { index: currentSuggestionStepIndex, instruction: newInstruction, bindings: currentState?.dataBindings });
+        const flatIdx = allStepIndices.indexOf(currentSuggestionStepIndex);
+        sendAction('EDIT', {
+            index: flatIdx >= 0 ? flatIdx : currentSuggestionStepIndex,
+            rawIndex: currentSuggestionStepIndex,
+            isCurrentStep: true,
+            instruction: newInstruction,
+            bindings: currentState?.dataBindings
+        });
         setTimeout(() => {
             sendAction('RUN');
         }, 150);
@@ -2405,7 +2661,14 @@ function applySuggestionOnly() {
         userEditedFailedStep = true;
         isErrorMode = false;
         updateToolbarControls(true);
-        sendAction('EDIT', { index: currentSuggestionStepIndex, instruction: newInstruction, bindings: currentState?.dataBindings });
+        const flatIdx = allStepIndices.indexOf(currentSuggestionStepIndex);
+        sendAction('EDIT', {
+            index: flatIdx >= 0 ? flatIdx : currentSuggestionStepIndex,
+            rawIndex: currentSuggestionStepIndex,
+            isCurrentStep: true,
+            instruction: newInstruction,
+            bindings: currentState?.dataBindings
+        });
     }
     closeOverlay('suggestionOverlay');
 }
@@ -2484,7 +2747,8 @@ function setButtonsEnabled(enabled) {
     });
 
 
-    if (!enabled && currentState && currentState.status !== 'running') {
+    const isTestFinished = currentState && (currentState.status === 'passed' || currentState.status === 'failed' || currentState.status === 'aborted');
+    if (!enabled && isTestFinished) {
         if (runBtn) runBtn.style.display = 'none';
         if (skipBtn) skipBtn.style.display = 'none';
         if (backBtn) backBtn.style.display = 'none';
@@ -2499,18 +2763,23 @@ function setButtonsEnabled(enabled) {
 
         if (isAutoMode) {
             if (runBtn) { runBtn.disabled = true; runBtn.setAttribute('disabled', 'true'); }
-            if (skipBtn) { skipBtn.disabled = true; skipBtn.setAttribute('disabled', 'true'); }
+            if (skipBtn) { skipBtn.disabled = isEditing; if (isEditing) skipBtn.setAttribute('disabled', 'true'); else skipBtn.removeAttribute('disabled'); }
             if (backBtn) { backBtn.disabled = true; backBtn.setAttribute('disabled', 'true'); }
             if (autoBtn) { autoBtn.disabled = isEditing; if (isEditing) autoBtn.setAttribute('disabled', 'true'); else autoBtn.removeAttribute('disabled'); }
             if (btnCancel) { btnCancel.disabled = isEditing; if (isEditing) btnCancel.setAttribute('disabled', 'true'); else btnCancel.removeAttribute('disabled'); }
         } else {
-            if (runBtn) { runBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) runBtn.setAttribute('disabled', 'true'); else runBtn.removeAttribute('disabled'); }
-            if (skipBtn) { skipBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) skipBtn.setAttribute('disabled', 'true'); else skipBtn.removeAttribute('disabled'); }
+            const isExecuting = (!currentPauseId) || (currentState && currentState.status === 'running') || isStructuralActionInFlight || isRunActionInFlight;
+            const runDisabled = !enabled || isEditing || isExecuting;
+            if (runBtn) { runBtn.disabled = runDisabled; if (runDisabled) runBtn.setAttribute('disabled', 'true'); else runBtn.removeAttribute('disabled'); }
+            if (skipBtn) { skipBtn.disabled = isEditing; if (isEditing) skipBtn.setAttribute('disabled', 'true'); else skipBtn.removeAttribute('disabled'); }
             if (backBtn) { backBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) backBtn.setAttribute('disabled', 'true'); else backBtn.removeAttribute('disabled'); }
-            if (autoBtn) { autoBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) autoBtn.setAttribute('disabled', 'true'); else autoBtn.removeAttribute('disabled'); }
+            if (autoBtn) { autoBtn.disabled = isEditing; if (isEditing) autoBtn.setAttribute('disabled', 'true'); else autoBtn.removeAttribute('disabled'); }
             if (btnCancel) { btnCancel.disabled = isEditing; if (isEditing) btnCancel.setAttribute('disabled', 'true'); else btnCancel.removeAttribute('disabled'); }
             const kebabBtn = document.getElementById('btnKebab');
             if (kebabBtn) { kebabBtn.disabled = !enabled || isEditing; if (!enabled || isEditing) kebabBtn.setAttribute('disabled', 'true'); else kebabBtn.removeAttribute('disabled'); }
+            if (enabled && !isExecuting) {
+                checkActionApprovals();
+            }
         }
     }
     updateToolbarControls(enabled);
@@ -2791,7 +3060,7 @@ function toggleTopDetails() {
         if (chevron) chevron.style.transform = 'rotate(0deg)';
     }
 }
-function openAddStepOverlay(blockName) {
+function openAddStepOverlay(blockName, targetIndex) {
     const finalBlock = blockName || currentState?.activeBlock || 'steps';
     if (!currentState) {
         currentState = { activeBlock: 'steps', blocks: { before: [], steps: [], after: [] } };
@@ -2810,7 +3079,12 @@ function openAddStepOverlay(blockName) {
         isTempAdd: true
     };
 
-    currentState.blocks[finalBlock].push(tempStep);
+    const targetList = currentState.blocks[finalBlock];
+    if (typeof targetIndex === 'number' && targetIndex >= 0 && targetIndex <= targetList.length) {
+        targetList.splice(targetIndex, 0, tempStep);
+    } else {
+        targetList.push(tempStep);
+    }
     applyState(currentState);
 
     const card = document.querySelector(`.step-card[data-step-idx='${nextIdx}']`);
@@ -2820,7 +3094,24 @@ function openAddStepOverlay(blockName) {
     }
 }
 
+function addStepAfter(event, stepIndex) {
+    if (event) event.stopPropagation();
+    if (!currentState || !currentState.blocks) return;
+    for (const bKey of ['before', 'steps', 'after']) {
+        const arr = currentState.blocks[bKey];
+        if (arr) {
+            const idx = arr.findIndex(s => s.index === stepIndex);
+            if (idx !== -1) {
+                openAddStepOverlay(bKey, idx + 1);
+                return;
+            }
+        }
+    }
+    openAddStepOverlay('steps');
+}
+
 let draggedStepIndex = null;
+let draggedBlockName = null;
 
 // -------------------------------------------------------------------------
 // Reorder System Overhaul Logic
@@ -2867,7 +3158,30 @@ function resolveBlock(targetFlatIdx) {
     return { block: 'after', relIdx: (currentState.blocks.after || []).length };
 }
 
-function reorderStepDirect(event, fromStepIndex) {
+let stepInputDebounceTimer = null;
+
+function handleStepInputInput(event, stepIndex, blockName) {
+    if (stepInputDebounceTimer) {
+        clearTimeout(stepInputDebounceTimer);
+        stepInputDebounceTimer = null;
+    }
+    const val = parseInt(event.target.value, 10);
+    if (isNaN(val) || val < 1 || val > allStepIndices.length) return;
+    const currentPos = allStepIndices.indexOf(stepIndex) + 1;
+    if (val === currentPos) return;
+
+    stepInputDebounceTimer = setTimeout(() => {
+        stepInputDebounceTimer = null;
+        reorderStepDirect(event, stepIndex, blockName);
+    }, 450);
+}
+
+function reorderStepDirect(event, fromStepIndex, blockName) {
+    if (stepInputDebounceTimer) {
+        clearTimeout(stepInputDebounceTimer);
+        stepInputDebounceTimer = null;
+    }
+    if (isStructuralActionInFlight || !currentPauseId) return;
     const input = event.target;
     const newPos = parseInt(input.value, 10);
     if (isNaN(newPos) || !currentState) return;
@@ -2882,13 +3196,18 @@ function reorderStepDirect(event, fromStepIndex) {
     if (newPos === currentPos) return;
 
     // Find source block and relative index
-    let fromBlock = null;
+    let fromBlock = blockName || null;
     let fromRelIdx = -1;
-    for (const bKey of ['before', 'steps', 'after']) {
-        const arr = currentState.blocks[bKey];
-        if (arr) {
-            const idx = arr.findIndex(s => s.index === fromStepIndex);
-            if (idx !== -1) { fromBlock = bKey; fromRelIdx = idx; break; }
+    if (fromBlock && currentState.blocks[fromBlock]) {
+        fromRelIdx = currentState.blocks[fromBlock].findIndex(s => s.index === fromStepIndex);
+    }
+    if (!fromBlock || fromRelIdx === -1) {
+        for (const bKey of ['before', 'steps', 'after']) {
+            const arr = currentState.blocks[bKey];
+            if (arr) {
+                const idx = arr.findIndex(s => s.index === fromStepIndex);
+                if (idx !== -1) { fromBlock = bKey; fromRelIdx = idx; break; }
+            }
         }
     }
     if (!fromBlock || fromRelIdx === -1) return;
@@ -2898,25 +3217,41 @@ function reorderStepDirect(event, fromStepIndex) {
     const target = resolveBlock(targetFlatIdx);
     if (!target) return;
 
-    // Store focus intent and update selection to the new position
-    lastFocusedStepIndex = targetFlatIdx;
-    selectedStepIndexForDetails = targetFlatIdx;
+    // Store focus intent and update selection to the moved step
+    lastFocusedStepIndex = fromStepIndex;
+    selectedStepIndexForDetails = fromStepIndex;
 
     announceMove(`Moved step to position ${newPos} of ${totalCount}`);
     flashMovedRow(fromStepIndex);
+
+    const item = currentState.blocks[fromBlock].splice(fromRelIdx, 1)[0];
+    let targetInsertIdx = target.relIdx;
+    if (targetInsertIdx > currentState.blocks[target.block].length) {
+        targetInsertIdx = currentState.blocks[target.block].length;
+    }
+    currentState.blocks[target.block].splice(targetInsertIdx, 0, item);
+    applyState(currentState);
 
     sendAction('REORDER', {
         fromBlock: fromBlock,
         fromIndex: fromRelIdx,
         toBlock: target.block,
-        toIndex: target.relIdx
+        toIndex: targetInsertIdx
     });
 }
 
-function handleStepInputKeyDown(event, stepIndex) {
+function handleStepInputKeyDown(event, stepIndex, blockName) {
+    if (stepInputDebounceTimer) {
+        clearTimeout(stepInputDebounceTimer);
+        stepInputDebounceTimer = null;
+    }
+    if (!currentPauseId) {
+        event.preventDefault();
+        return;
+    }
     if (event.key === 'Enter') {
         event.preventDefault();
-        reorderStepDirect(event, stepIndex);
+        reorderStepDirect(event, stepIndex, blockName);
         return;
     }
 
@@ -2929,12 +3264,13 @@ function handleStepInputKeyDown(event, stepIndex) {
         if (newPos >= 1 && newPos <= allStepIndices.length) {
             // Update input value and trigger move
             event.target.value = newPos;
-            reorderStepDirect(event, stepIndex);
+            reorderStepDirect(event, stepIndex, blockName);
         }
     }
 }
 
-function reorderStep(event, stepIndex, direction) {
+function reorderStep(event, stepIndex, direction, blockName) {
+    if (!currentPauseId) return;
     const currentPos = allStepIndices.indexOf(stepIndex) + 1;
     const newPos = direction === 'up' ? currentPos - 1 : currentPos + 1;
     if (newPos >= 1 && newPos <= allStepIndices.length) {
@@ -2943,20 +3279,21 @@ function reorderStep(event, stepIndex, direction) {
         const input = card ? card.querySelector('.step-num-badge input') : null;
         if (input) {
             input.value = newPos;
-            reorderStepDirect({ target: input }, stepIndex);
+            reorderStepDirect({ target: input }, stepIndex, blockName);
         } else {
             // Fallback to mock target if input is not found
-            reorderStepDirect({ target: { value: newPos } }, stepIndex);
+            reorderStepDirect({ target: { value: newPos } }, stepIndex, blockName);
         }
     }
 }
 
-function handleDragStart(event, index) {
-    if (document.querySelector('.step-card.editing')) {
+function handleDragStart(event, index, blockName) {
+    if (!currentPauseId || document.querySelector('.step-card.editing')) {
         event.preventDefault();
         return;
     }
     draggedStepIndex = index;
+    draggedBlockName = blockName || null;
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', String(index));
     // Find the card from the handle
@@ -2973,6 +3310,7 @@ function handleDragEnd(event) {
     if (sc) sc.classList.remove('dragging-active');
     document.querySelectorAll('.drop-target-area').forEach(t => t.classList.remove('active'));
     draggedStepIndex = null;
+    draggedBlockName = null;
     stopAutoScroll();
 }
 
@@ -3050,19 +3388,24 @@ function stopAutoScroll() {
 function handleDrop(event, targetStepIndex, position, targetBlockName) {
     event.preventDefault();
 
-    if (draggedStepIndex === null) {
+    if (isStructuralActionInFlight || !currentPauseId || draggedStepIndex === null) {
         handleDragEnd();
         return;
     }
 
     // Find source block and relative index
-    let fromBlock = null;
+    let fromBlock = draggedBlockName || null;
     let fromRelIdx = -1;
-    for (const bKey of ['before', 'steps', 'after']) {
-        const arr = currentState.blocks[bKey];
-        if (arr) {
-            const idx = arr.findIndex(s => s.index === draggedStepIndex);
-            if (idx !== -1) { fromBlock = bKey; fromRelIdx = idx; break; }
+    if (fromBlock && currentState.blocks[fromBlock]) {
+        fromRelIdx = currentState.blocks[fromBlock].findIndex(s => s.index === draggedStepIndex);
+    }
+    if (!fromBlock || fromRelIdx === -1) {
+        for (const bKey of ['before', 'steps', 'after']) {
+            const arr = currentState.blocks[bKey];
+            if (arr) {
+                const idx = arr.findIndex(s => s.index === draggedStepIndex);
+                if (idx !== -1) { fromBlock = bKey; fromRelIdx = idx; break; }
+            }
         }
     }
 
@@ -3081,24 +3424,48 @@ function handleDrop(event, targetStepIndex, position, targetBlockName) {
         targetRelIdx = (currentState.blocks[targetBlock] || []).length;
     } else {
         // Drop on or before a specific step
-        for (const bKey of ['before', 'steps', 'after']) {
-            const arr = currentState.blocks[bKey];
-            if (arr) {
-                const tIdx = arr.findIndex(s => s.index === targetStepIndex);
-                if (tIdx !== -1) {
-                    targetBlock = bKey;
-                    targetRelIdx = tIdx;
-                    if (position === 'after') targetRelIdx++;
-                    break;
+        if (targetBlockName && currentState.blocks[targetBlockName]) {
+            const arr = currentState.blocks[targetBlockName];
+            const tIdx = arr.findIndex(s => s.index === targetStepIndex);
+            if (tIdx !== -1) {
+                targetBlock = targetBlockName;
+                targetRelIdx = tIdx;
+                if (position === 'after') targetRelIdx++;
+            }
+        }
+        if (!targetBlock || targetRelIdx === -1) {
+            for (const bKey of ['before', 'steps', 'after']) {
+                const arr = currentState.blocks[bKey];
+                if (arr) {
+                    const tIdx = arr.findIndex(s => s.index === targetStepIndex);
+                    if (tIdx !== -1) {
+                        targetBlock = bKey;
+                        targetRelIdx = tIdx;
+                        if (position === 'after') targetRelIdx++;
+                        break;
+                    }
                 }
             }
         }
     }
 
-    if (!targetBlock || targetRelIdx === -1) {
+    if (!currentPauseId || !targetBlock || targetRelIdx === -1) {
         handleDragEnd();
         return;
     }
+
+    // Local reorder
+    const item = currentState.blocks[fromBlock].splice(fromRelIdx, 1)[0];
+    let adjustedToIdx = targetRelIdx;
+    if (fromBlock === targetBlock && adjustedToIdx > fromRelIdx) adjustedToIdx--;
+    if (adjustedToIdx > currentState.blocks[targetBlock].length) {
+        adjustedToIdx = currentState.blocks[targetBlock].length;
+    }
+    currentState.blocks[targetBlock].splice(adjustedToIdx, 0, item);
+    lastFocusedStepIndex = draggedStepIndex;
+    selectedStepIndexForDetails = draggedStepIndex;
+    applyState(currentState);
+    flashMovedRow(draggedStepIndex);
 
     // Send to server
     if (currentPauseId) {
@@ -3106,15 +3473,8 @@ function handleDrop(event, targetStepIndex, position, targetBlockName) {
             fromBlock: fromBlock,
             fromIndex: fromRelIdx,
             toBlock: targetBlock,
-            toIndex: targetRelIdx
+            toIndex: adjustedToIdx
         });
-    } else {
-        // Local reorder if not paused
-        const item = currentState.blocks[fromBlock].splice(fromRelIdx, 1)[0];
-        let adjustedToIdx = targetRelIdx;
-        if (fromBlock === targetBlock && adjustedToIdx > fromRelIdx) adjustedToIdx--;
-        currentState.blocks[targetBlock].splice(adjustedToIdx, 0, item);
-        applyState(currentState);
     }
 
     handleDragEnd();

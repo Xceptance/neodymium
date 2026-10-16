@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
@@ -34,6 +35,7 @@ import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
+import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
@@ -44,9 +46,12 @@ import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.util.Neodymium;
+import org.openqa.selenium.OutputType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.codeborne.selenide.Selenide;
+import com.codeborne.selenide.WebDriverRunner;
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -194,9 +199,9 @@ public final class InteractiveConsoleListener implements ExecutionListener
             {
                 try
                 {
-                    if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+                    if (WebDriverRunner.hasWebDriverStarted())
                     {
-                        final String base64 = com.codeborne.selenide.Selenide.screenshot(org.openqa.selenium.OutputType.BASE64);
+                        final String base64 = Selenide.screenshot(OutputType.BASE64);
                         if (base64 != null && !base64.isEmpty())
                         {
                             context.getTransientData().put("currentScreenshot", "data:image/png;base64," + base64);
@@ -252,7 +257,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
             if (this.interactive)
             {
-                final String pauseId = "pause-final-" + java.util.UUID.randomUUID().toString();
+                final String pauseId = "pause-final-" + UUID.randomUUID().toString();
                 this.consoleEngine.registerPauseId(pauseId);
 
                 final String stateJson = InteractiveStateBuilder.buildStateJson(
@@ -318,49 +323,65 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
         final int stepIndex = resolveStepIndex(context, step);
 
-        final String pauseId = java.util.UUID.randomUUID().toString();
-        this.consoleEngine.registerPauseId(pauseId);
+        while (true)
+        {
+            final String pauseId = UUID.randomUUID().toString();
+            this.consoleEngine.registerPauseId(pauseId);
 
-        final String stateJson = InteractiveStateBuilder.buildStateJson(
-            this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", pauseId, getReport());
+            final String stateJson = InteractiveStateBuilder.buildStateJson(
+                this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", pauseId, getReport());
 
-        this.consoleEngine.pushState(stateJson);
+            this.consoleEngine.pushState(stateJson);
 
-        if (step != null && step.getParent() != null)
-        {
-            final PlaybookStep parent = step.getParent();
-            final String parentInst = parent.getInstruction();
-            final String incFile = step.getSourceFile();
-            final int subIdx = parent.getSubSteps().indexOf(step) + 1;
-            final String parentContext = (incFile != null && !incFile.isBlank())
-                ? String.format("parent include step \"%s\" (includeFile=%s)", parentInst, incFile)
-                : String.format("parent step \"%s\"", parentInst);
-            LOG.warn("[InteractiveConsoleListener] Sub-step failure encountered at sub-step #{}/{} (\"{}\") inside {}. Sub-steps cannot be skipped individually. Skip the parent to skip this step.",
-                subIdx, parent.getSubSteps().size(), step.getInstruction(), parentContext);
-        }
-        else
-        {
-            LOG.info("[InteractiveConsoleListener] Step failure encountered at step {}. Pausing for user recovery action (pauseId={})", stepIndex, pauseId);
-        }
-        final long pauseStart = System.currentTimeMillis();
-        try
-        {
-            final JsonObject userAction = this.consoleEngine.waitForAction(pauseId);
-            final String action = userAction != null && userAction.has("action") ? userAction.get("action").getAsString().toUpperCase() : "ABORT";
-            handleUserAction(userAction, step, context);
-            return action;
-        }
-        catch (final InterruptedException e)
-        {
-            Thread.currentThread().interrupt();
-            return "ABORT";
-        }
-        finally
-        {
-            final long pauseDurationMs = System.currentTimeMillis() - pauseStart;
-            if (context != null)
+            if (step != null && step.getParent() != null)
             {
-                context.recordInteractivePause(pauseDurationMs);
+                final PlaybookStep parent = step.getParent();
+                final String parentInst = parent.getInstruction();
+                final String incFile = step.getSourceFile();
+                final int subIdx = parent.getSubSteps().indexOf(step) + 1;
+                final String parentContext = (incFile != null && !incFile.isBlank())
+                    ? String.format("parent include step \"%s\" (includeFile=%s)", parentInst, incFile)
+                    : String.format("parent step \"%s\"", parentInst);
+                LOG.warn("[InteractiveConsoleListener] Sub-step failure encountered at sub-step #{}/{} (\"{}\") inside {}. Sub-steps cannot be skipped individually. Skip the parent to skip this step.",
+                    subIdx, parent.getSubSteps().size(), step.getInstruction(), parentContext);
+            }
+            else
+            {
+                LOG.info("[InteractiveConsoleListener] Step failure encountered at step {}. Pausing for user recovery action (pauseId={})", stepIndex, pauseId);
+            }
+            final long pauseStart = System.currentTimeMillis();
+            final JsonObject userAction;
+            try
+            {
+                userAction = this.consoleEngine.waitForAction(pauseId);
+            }
+            catch (final InterruptedException e)
+            {
+                Thread.currentThread().interrupt();
+                return "ABORT";
+            }
+            finally
+            {
+                final long pauseDurationMs = System.currentTimeMillis() - pauseStart;
+                if (context != null)
+                {
+                    context.recordInteractivePause(pauseDurationMs);
+                }
+            }
+
+            final String action = userAction != null && userAction.has("action") ? userAction.get("action").getAsString().toUpperCase() : "ABORT";
+            final boolean shouldKeepPausing = handleUserAction(userAction, step, context);
+            if (!shouldKeepPausing)
+            {
+                if ("HEAL".equalsIgnoreCase(action) || "RETRY".equalsIgnoreCase(action) || "RUN".equalsIgnoreCase(action))
+                {
+                    if (step != null)
+                    {
+                        step.setStatus(PlaybookStepStatus.RUNNING);
+                    }
+                    pushCurrentState(context, step);
+                }
+                return action;
             }
         }
     }
@@ -379,69 +400,93 @@ public final class InteractiveConsoleListener implements ExecutionListener
             return "RUN";
         }
 
-        final int stepIndex = resolveStepIndex(context, step);
+        boolean isInitialPause = true;
 
-        if (context != null)
+        while (true)
         {
-            try
+            final int stepIndex = resolveStepIndex(context, step);
+
+            if (context != null && isInitialPause)
             {
-                if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+                try
                 {
-                    final String base64 = com.codeborne.selenide.Selenide.screenshot(org.openqa.selenium.OutputType.BASE64);
-                    if (base64 != null && !base64.isEmpty())
+                    if (WebDriverRunner.hasWebDriverStarted())
                     {
-                        context.getTransientData().put("currentScreenshot", "data:image/png;base64," + base64);
+                        final String base64 = Selenide.screenshot(OutputType.BASE64);
+                        if (base64 != null && !base64.isEmpty())
+                        {
+                            context.getTransientData().put("currentScreenshot", "data:image/png;base64," + base64);
+                        }
                     }
                 }
+                catch (final Throwable ignored)
+                {
+                }
             }
-            catch (final Throwable ignored)
+            isInitialPause = false;
+
+            final String pauseId = UUID.randomUUID().toString();
+            this.consoleEngine.registerPauseId(pauseId);
+
+            final String stateJson = InteractiveStateBuilder.buildStateJson(
+                this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", pauseId, getReport());
+
+            this.consoleEngine.pushState(stateJson);
+
+            if (step != null && step.getParent() != null)
             {
+                final PlaybookStep parent = step.getParent();
+                final String parentInst = parent.getInstruction();
+                final String incFile = step.getSourceFile();
+                final int subIdx = parent.getSubSteps().indexOf(step) + 1;
+                final String parentContext = (incFile != null && !incFile.isBlank())
+                    ? String.format("parent include \"%s\" (includeFile=%s)", parentInst, incFile)
+                    : String.format("parent step \"%s\"", parentInst);
+                LOG.info("[InteractiveConsoleListener] Pausing for user action review at sub-step #{}/{} (\"{}\") of {} (pauseId={})",
+                    subIdx, parent.getSubSteps().size(), step.getInstruction(), parentContext, pauseId);
             }
-        }
+            else
+            {
+                LOG.info("[InteractiveConsoleListener] Pausing for user action review at step {} (pauseId={})", stepIndex, pauseId);
+            }
+            final long pauseStart = System.currentTimeMillis();
+            final JsonObject userAction;
+            try
+            {
+                userAction = this.consoleEngine.waitForAction(pauseId);
+            }
+            catch (final InterruptedException e)
+            {
+                Thread.currentThread().interrupt();
+                return "ABORT";
+            }
+            finally
+            {
+                final long pauseDurationMs = System.currentTimeMillis() - pauseStart;
+                if (context != null)
+                {
+                    context.recordInteractivePause(pauseDurationMs);
+                }
+            }
 
-        final String pauseId = java.util.UUID.randomUUID().toString();
-        this.consoleEngine.registerPauseId(pauseId);
-
-        final String stateJson = InteractiveStateBuilder.buildStateJson(
-            this.session, context, this.consoleEngine.getRunId(), stepIndex, "paused", pauseId, getReport());
-
-        this.consoleEngine.pushState(stateJson);
-
-        if (step != null && step.getParent() != null)
-        {
-            final PlaybookStep parent = step.getParent();
-            final String parentInst = parent.getInstruction();
-            final String incFile = step.getSourceFile();
-            final int subIdx = parent.getSubSteps().indexOf(step) + 1;
-            final String parentContext = (incFile != null && !incFile.isBlank())
-                ? String.format("parent include \"%s\" (includeFile=%s)", parentInst, incFile)
-                : String.format("parent step \"%s\"", parentInst);
-            LOG.info("[InteractiveConsoleListener] Pausing for user action review at sub-step #{}/{} (\"{}\") of {} (pauseId={})",
-                subIdx, parent.getSubSteps().size(), step.getInstruction(), parentContext, pauseId);
-        }
-        else
-        {
-            LOG.info("[InteractiveConsoleListener] Pausing for user action review at step {} (pauseId={})", stepIndex, pauseId);
-        }
-        final long pauseStart = System.currentTimeMillis();
-        try
-        {
-            final JsonObject userAction = this.consoleEngine.waitForAction(pauseId);
             final String action = userAction != null && userAction.has("action") ? userAction.get("action").getAsString().toUpperCase() : "RUN";
-            handleUserAction(userAction, step, context);
-            return action;
-        }
-        catch (final InterruptedException e)
-        {
-            Thread.currentThread().interrupt();
-            return "ABORT";
-        }
-        finally
-        {
-            final long pauseDurationMs = System.currentTimeMillis() - pauseStart;
-            if (context != null)
+            final boolean shouldKeepPausing = handleUserAction(userAction, step, context);
+            if (!shouldKeepPausing)
             {
-                context.recordInteractivePause(pauseDurationMs);
+                if (Boolean.TRUE.equals(context != null ? context.getTransientData().get("KEY_STEP_RESCHEDULED") : null))
+                {
+                    return "RESCHEDULE";
+                }
+                if ("RUN".equalsIgnoreCase(action) || "STEP".equalsIgnoreCase(action) || "AUTO".equalsIgnoreCase(action)
+                    || "RUN_ALL".equalsIgnoreCase(action) || "CONTINUE".equalsIgnoreCase(action))
+                {
+                    if (step != null)
+                    {
+                        step.setStatus(PlaybookStepStatus.RUNNING);
+                    }
+                    pushCurrentState(context, step);
+                }
+                return action;
             }
         }
     }
@@ -524,11 +569,11 @@ public final class InteractiveConsoleListener implements ExecutionListener
         LOG.info("[InteractiveConsoleListener] Updated {} data bindings from user action (isEditAction={})", newBindings.size(), isEditAction);
     }
 
-    private void handleUserAction(final JsonObject userAction, final PlaybookStep currentStep, final ExecutionContext context)
+    private boolean handleUserAction(final JsonObject userAction, final PlaybookStep currentStep, final ExecutionContext context)
     {
         if (userAction == null)
         {
-            return;
+            return false;
         }
 
         final String action = userAction.has("action") ? userAction.get("action").getAsString() : "";
@@ -544,12 +589,18 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
         switch (action.toUpperCase())
         {
+            case "ADD":
+                return handleAddStep(userAction, currentStep, context);
+
+            case "REORDER":
+                return handleReorderStep(userAction, currentStep, context);
+
             case "AUTO":
             case "RUN_ALL":
             case "CONTINUE":
                 this.autoRun = true;
                 LOG.info("[InteractiveConsoleListener] Resuming auto-run execution mode");
-                break;
+                return false;
 
             case "SKIP":
                 if (currentStep != null)
@@ -582,12 +633,42 @@ public final class InteractiveConsoleListener implements ExecutionListener
                     }
                     pushCurrentState(context, currentStep);
                 }
-                break;
+                return false;
 
             case "EDIT":
             case "UPDATE_STEP":
             case "SAVE_STEP":
-                if (currentStep != null)
+                int targetStepIdx = -1;
+                if (userAction.has("stepIndex") && !userAction.get("stepIndex").isJsonNull())
+                {
+                    try
+                    {
+                        targetStepIdx = userAction.get("stepIndex").getAsInt();
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+                else if (userAction.has("index") && !userAction.get("index").isJsonNull())
+                {
+                    try
+                    {
+                        targetStepIdx = userAction.get("index").getAsInt();
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+
+                final boolean hasExplicitCurrent = userAction.has("isCurrentStep") && !userAction.get("isCurrentStep").isJsonNull();
+                final boolean isExplicitCurrent = hasExplicitCurrent && userAction.get("isCurrentStep").getAsBoolean();
+                final boolean isExplicitNonCurrent = hasExplicitCurrent && !userAction.get("isCurrentStep").getAsBoolean();
+
+                final int currentIdx = resolveStepIndex(context, currentStep);
+                final boolean isCurrentStepEdit = isExplicitCurrent
+                    || (!isExplicitNonCurrent && (targetStepIdx == -1 || targetStepIdx == currentIdx));
+
+                if (isCurrentStepEdit && currentStep != null)
                 {
                     String newInst = null;
                     if (userAction.has("newInstruction"))
@@ -670,25 +751,58 @@ public final class InteractiveConsoleListener implements ExecutionListener
                         pushCurrentState(context, currentStep);
                         LOG.info("[InteractiveConsoleListener] Step re-queued with updated parameters/bindings: \"{}\"", currentStep.getInstruction());
                     }
+                    return false;
                 }
-                break;
+                else if (context != null && targetStepIdx != -1)
+                {
+                    final String blockName = userAction.has("block") && !userAction.get("block").isJsonNull()
+                        ? userAction.get("block").getAsString()
+                        : null;
+                    PlaybookStep targetStep = findStepByIndex(context, targetStepIdx, blockName);
+                    if (targetStep == null && targetStepIdx > 0)
+                    {
+                        targetStep = findStepByIndex(context, targetStepIdx - 1, blockName);
+                    }
+                    if (targetStep != null)
+                    {
+                        String newInst = null;
+                        if (userAction.has("newInstruction"))
+                        {
+                            newInst = userAction.get("newInstruction").getAsString();
+                        }
+                        else if (userAction.has("instruction"))
+                        {
+                            newInst = userAction.get("instruction").getAsString();
+                        }
+                        if (newInst != null && !newInst.isBlank())
+                        {
+                            targetStep.setInstruction(newInst);
+                            targetStep.setRawInstruction(newInst);
+                            updateFlatSteps(context);
+                            rescheduleRemainingSteps(context, currentStep);
+                            LOG.info("[InteractiveConsoleListener] Updated pending step #{} instruction to: \"{}\"", targetStepIdx, newInst);
+                        }
+                    }
+                    return true;
+                }
+                return false;
 
             case "HEAL":
                 this.autoRun = false;
                 LOG.info("[InteractiveConsoleListener] AI Healing requested by user for step");
-                break;
+                return false;
 
             case "SUGGEST_FIX":
                 this.autoRun = false;
                 LOG.info("[InteractiveConsoleListener] AI Fix Suggestion requested by user for step");
                 handleSuggestFix(userAction, currentStep, context);
-                break;
+                return true;
 
             case "FINISH":
             case "ACCEPT_FINISH":
                 this.autoRun = false;
                 LOG.info("[InteractiveConsoleListener] User accepted current state and requested to finish test");
-                break;
+                return false;
 
             case "ABORT":
             case "STOP":
@@ -699,18 +813,532 @@ public final class InteractiveConsoleListener implements ExecutionListener
             case "CLOSE":
                 this.autoRun = false;
                 LOG.info("[InteractiveConsoleListener] Session final action completed ({})", action);
-                break;
+                return false;
 
             case "RUN":
             case "NEXT":
             case "STEP":
             case "EXECUTE":
             default:
-                // Single step execution; run current step and pause again on next StepStartedEvent
                 this.autoRun = false;
                 LOG.info("[InteractiveConsoleListener] Executing single step; will pause on next step");
-                break;
+                return false;
         }
+    }
+
+    private boolean handleAddStep(final JsonObject userAction, final PlaybookStep currentStep, final ExecutionContext context)
+    {
+        if (userAction == null || context == null)
+        {
+            return false;
+        }
+
+        final String instruction = userAction.has("instruction") ? userAction.get("instruction").getAsString() : "";
+        if (instruction == null || instruction.isBlank())
+        {
+            return false;
+        }
+
+        final String blockName = userAction.has("block") ? userAction.get("block").getAsString().toLowerCase() : "steps";
+        final String listKey = switch (blockName)
+        {
+            case "before" -> "playbook.beforeSteps";
+            case "after" -> "playbook.afterSteps";
+            default -> "playbook.steps";
+        };
+
+        @SuppressWarnings("unchecked")
+        List<PlaybookStep> targetList = (List<PlaybookStep>) context.getTransientData().get(listKey);
+        if (targetList == null)
+        {
+            final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+            if (pbObj instanceof Playbook pb && "steps".equals(blockName))
+            {
+                targetList = new ArrayList<>(pb.getSteps());
+            }
+            else
+            {
+                targetList = new ArrayList<>();
+            }
+            context.getTransientData().put(listKey, targetList);
+        }
+        else if (!(targetList instanceof ArrayList))
+        {
+            targetList = new ArrayList<>(targetList);
+            context.getTransientData().put(listKey, targetList);
+        }
+
+        final PlaybookStep newStep = new PlaybookStep();
+        newStep.setInstruction(instruction);
+        newStep.setRawInstruction(instruction);
+        newStep.setStatus(PlaybookStepStatus.PENDING);
+        newStep.setFailed(false);
+        newStep.setSourceFile(context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_IDENTIFIER) != null
+            ? String.valueOf(context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_IDENTIFIER))
+            : "interactive");
+
+        int targetIndex = -1;
+        if (userAction.has("index") && !userAction.get("index").isJsonNull())
+        {
+            try
+            {
+                targetIndex = userAction.get("index").getAsInt();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        final int currentIdx = resolveStepIndex(context, currentStep);
+        final boolean isInsertBeforeOrAtCurrent = "steps".equals(blockName) && targetIndex >= 0 && targetIndex <= currentIdx;
+
+        if (targetIndex >= 0 && targetIndex <= targetList.size())
+        {
+            targetList.add(targetIndex, newStep);
+        }
+        else
+        {
+            targetList.add(newStep);
+        }
+
+        final Object playbookObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+        if (playbookObj instanceof Playbook playbook && "steps".equals(blockName))
+        {
+            context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK,
+                new Playbook(targetList, playbook.getDataSets(), playbook.getPromptAddons(), playbook.getDescription()));
+        }
+        else if ("steps".equals(blockName))
+        {
+            context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK,
+                new Playbook(targetList, Collections.emptyList()));
+        }
+        if ("steps".equals(blockName))
+        {
+            context.getTransientData().put("playbook.steps", targetList);
+        }
+
+        if (isInsertBeforeOrAtCurrent && currentStep != null)
+        {
+            if (currentStep.getActions() != null)
+            {
+                try
+                {
+                    currentStep.getActions().clear();
+                }
+                catch (final UnsupportedOperationException e)
+                {
+                    currentStep.setActions(new ArrayList<>());
+                }
+            }
+            if (currentStep.getToolCalls() != null)
+            {
+                try
+                {
+                    currentStep.getToolCalls().clear();
+                }
+                catch (final UnsupportedOperationException e)
+                {
+                    currentStep.setToolCalls(new ArrayList<>());
+                }
+            }
+            currentStep.setReasoning(null);
+            currentStep.setStatus(PlaybookStepStatus.PENDING);
+            context.getTransientData().put("KEY_STEP_RESCHEDULED", Boolean.TRUE);
+        }
+
+        updateFlatSteps(context);
+        rescheduleRemainingSteps(context, currentStep);
+
+        LOG.info("[InteractiveConsoleListener] Added new step to '{}' at index {}: \"{}\"", blockName, targetIndex, instruction);
+        return !isInsertBeforeOrAtCurrent;
+    }
+
+    private boolean handleReorderStep(final JsonObject userAction, final PlaybookStep currentStep, final ExecutionContext context)
+    {
+        if (userAction == null || context == null)
+        {
+            return false;
+        }
+
+        final String fromBlock = userAction.has("fromBlock")
+            ? userAction.get("fromBlock").getAsString().toLowerCase()
+            : (userAction.has("block") ? userAction.get("block").getAsString().toLowerCase() : "steps");
+
+        final String toBlock = userAction.has("toBlock")
+            ? userAction.get("toBlock").getAsString().toLowerCase()
+            : fromBlock;
+
+        int fromIndex = -1;
+        if (userAction.has("fromIndex") && !userAction.get("fromIndex").isJsonNull())
+        {
+            try
+            {
+                fromIndex = userAction.get("fromIndex").getAsInt();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        else if (userAction.has("sourceIndex") && !userAction.get("sourceIndex").isJsonNull())
+        {
+            try
+            {
+                fromIndex = userAction.get("sourceIndex").getAsInt();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        int toIndex = -1;
+        if (userAction.has("toIndex") && !userAction.get("toIndex").isJsonNull())
+        {
+            try
+            {
+                toIndex = userAction.get("toIndex").getAsInt();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        else if (userAction.has("targetIndex") && !userAction.get("targetIndex").isJsonNull())
+        {
+            try
+            {
+                toIndex = userAction.get("targetIndex").getAsInt();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (fromIndex == -1 || toIndex == -1)
+        {
+            return true;
+        }
+
+        final String fromKey = switch (fromBlock)
+        {
+            case "before" -> "playbook.beforeSteps";
+            case "after" -> "playbook.afterSteps";
+            default -> "playbook.steps";
+        };
+        final String toKey = switch (toBlock)
+        {
+            case "before" -> "playbook.beforeSteps";
+            case "after" -> "playbook.afterSteps";
+            default -> "playbook.steps";
+        };
+
+        @SuppressWarnings("unchecked")
+        List<PlaybookStep> fromList = (List<PlaybookStep>) context.getTransientData().get(fromKey);
+        if (fromList == null)
+        {
+            final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+            if (pbObj instanceof Playbook pb && "steps".equals(fromBlock))
+            {
+                fromList = new ArrayList<>(pb.getSteps());
+                context.getTransientData().put(fromKey, fromList);
+            }
+        }
+        @SuppressWarnings("unchecked")
+        List<PlaybookStep> toList = (List<PlaybookStep>) context.getTransientData().get(toKey);
+        if (toList == null)
+        {
+            if (fromBlock.equals(toBlock))
+            {
+                toList = fromList;
+            }
+            else
+            {
+                final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+                if (pbObj instanceof Playbook pb && "steps".equals(toBlock))
+                {
+                    toList = new ArrayList<>(pb.getSteps());
+                }
+                else
+                {
+                    toList = new ArrayList<>();
+                }
+                context.getTransientData().put(toKey, toList);
+            }
+        }
+
+        if (fromList == null || fromIndex < 0 || fromIndex >= fromList.size())
+        {
+            return true;
+        }
+        if (!(fromList instanceof ArrayList))
+        {
+            fromList = new ArrayList<>(fromList);
+            context.getTransientData().put(fromKey, fromList);
+        }
+        if (fromBlock.equals(toBlock))
+        {
+            toList = fromList;
+        }
+        else if (toList == null)
+        {
+            toList = new ArrayList<>();
+            context.getTransientData().put(toKey, toList);
+        }
+        else if (!(toList instanceof ArrayList))
+        {
+            toList = new ArrayList<>(toList);
+            context.getTransientData().put(toKey, toList);
+        }
+
+        final int currentIdx = resolveStepIndex(context, currentStep);
+        final PlaybookStep removed = fromList.remove(fromIndex);
+        int adjustedToIndex = toIndex;
+        if (adjustedToIndex < 0)
+        {
+            adjustedToIndex = 0;
+        }
+        if (adjustedToIndex > toList.size())
+        {
+            adjustedToIndex = toList.size();
+        }
+        toList.add(adjustedToIndex, removed);
+
+        final Object playbookObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> mainSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        if (playbookObj instanceof Playbook playbook && mainSteps != null)
+        {
+            context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK,
+                new Playbook(mainSteps, playbook.getDataSets(), playbook.getPromptAddons(), playbook.getDescription()));
+        }
+        else if (mainSteps != null)
+        {
+            context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, new Playbook(mainSteps, Collections.emptyList()));
+        }
+
+        final boolean isFromCurrent = "steps".equals(fromBlock) && fromIndex == currentIdx;
+        final boolean isToBeforeOrAtCurrent = "steps".equals(toBlock) && adjustedToIndex <= currentIdx;
+        final boolean isTargetBefore = "before".equals(toBlock);
+        final boolean isRescheduleNeeded = isFromCurrent || isToBeforeOrAtCurrent || isTargetBefore;
+
+        if (isRescheduleNeeded && currentStep != null)
+        {
+            if (currentStep.getActions() != null)
+            {
+                try
+                {
+                    currentStep.getActions().clear();
+                }
+                catch (final UnsupportedOperationException e)
+                {
+                    currentStep.setActions(new ArrayList<>());
+                }
+            }
+            if (currentStep.getToolCalls() != null)
+            {
+                try
+                {
+                    currentStep.getToolCalls().clear();
+                }
+                catch (final UnsupportedOperationException e)
+                {
+                    currentStep.setToolCalls(new ArrayList<>());
+                }
+            }
+            currentStep.setReasoning(null);
+            currentStep.setStatus(PlaybookStepStatus.PENDING);
+            context.getTransientData().put("KEY_STEP_RESCHEDULED", Boolean.TRUE);
+        }
+
+        updateFlatSteps(context);
+        rescheduleRemainingSteps(context, currentStep);
+
+        LOG.info("[InteractiveConsoleListener] Reordered step from '{}:{}' to '{}:{}' (rescheduled={})",
+            fromBlock, fromIndex, toBlock, adjustedToIndex, isRescheduleNeeded);
+        return !isRescheduleNeeded;
+    }
+
+    private void updateFlatSteps(final ExecutionContext context)
+    {
+        if (context == null)
+        {
+            return;
+        }
+        @SuppressWarnings("unchecked")
+        List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        if (playbookSteps == null)
+        {
+            final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+            if (pbObj instanceof Playbook pb)
+            {
+                playbookSteps = pb.getSteps();
+                context.getTransientData().put("playbook.steps", playbookSteps);
+            }
+        }
+        @SuppressWarnings("unchecked")
+        List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+        if (flatSteps == null)
+        {
+            flatSteps = new ArrayList<>();
+            context.getTransientData().put("playbook.flatSteps", flatSteps);
+        }
+        flatSteps.clear();
+        if (playbookSteps != null)
+        {
+            flattenSteps(playbookSteps, flatSteps);
+        }
+    }
+
+    private static void flattenSteps(final List<PlaybookStep> source, final List<PlaybookStep> target)
+    {
+        if (source == null || target == null)
+        {
+            return;
+        }
+        for (final PlaybookStep s : source)
+        {
+            target.add(s);
+            if (s.getSubSteps() != null && !s.getSubSteps().isEmpty())
+            {
+                flattenSteps(s.getSubSteps(), target);
+            }
+        }
+    }
+
+    private void rescheduleRemainingSteps(final ExecutionContext context, final PlaybookStep activeStep)
+    {
+        if (context == null)
+        {
+            return;
+        }
+
+        @SuppressWarnings("unchecked")
+        List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        if (playbookSteps == null)
+        {
+            final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+            if (pbObj instanceof Playbook pb)
+            {
+                playbookSteps = pb.getSteps();
+            }
+        }
+        if (playbookSteps == null)
+        {
+            return;
+        }
+
+        PlaybookStep currentStep = activeStep;
+        if (currentStep == null)
+        {
+            final Object currentStepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+            currentStep = currentStepObj instanceof PlaybookStep ps ? ps : null;
+        }
+        final PlaybookStep rootCurrent = (currentStep != null && currentStep.getRootStep() != null)
+            ? currentStep.getRootStep()
+            : currentStep;
+
+        final List<PlaybookStep> remaining = new ArrayList<>();
+        final boolean isRescheduled = Boolean.TRUE.equals(context.getTransientData().get("KEY_STEP_RESCHEDULED"));
+
+        if (isRescheduled)
+        {
+            int firstPendingIdx = -1;
+            for (int i = 0; i < playbookSteps.size(); i++)
+            {
+                if (playbookSteps.get(i).getStatus() == PlaybookStepStatus.PENDING)
+                {
+                    firstPendingIdx = i;
+                    break;
+                }
+            }
+            if (firstPendingIdx >= 0)
+            {
+                for (int i = firstPendingIdx; i < playbookSteps.size(); i++)
+                {
+                    remaining.add(playbookSteps.get(i));
+                }
+            }
+        }
+        else if (rootCurrent != null)
+        {
+            final int currentIdx = playbookSteps.indexOf(rootCurrent);
+            if (currentIdx >= 0)
+            {
+                for (int i = currentIdx + 1; i < playbookSteps.size(); i++)
+                {
+                    remaining.add(playbookSteps.get(i));
+                }
+            }
+            else
+            {
+                for (final PlaybookStep s : playbookSteps)
+                {
+                    if (s.getStatus() == PlaybookStepStatus.PENDING)
+                    {
+                        remaining.add(s);
+                    }
+                }
+            }
+        }
+        else
+        {
+            for (final PlaybookStep s : playbookSteps)
+            {
+                if (s.getStatus() == PlaybookStepStatus.PENDING)
+                {
+                    remaining.add(s);
+                }
+            }
+        }
+
+        context.updateRemainingPlaybookSteps(remaining, this.session);
+    }
+
+    private PlaybookStep findStepByIndex(final ExecutionContext context, final int targetIndex)
+    {
+        return findStepByIndex(context, targetIndex, null);
+    }
+
+    private PlaybookStep findStepByIndex(final ExecutionContext context, final int targetIndex, final String blockName)
+    {
+        if (context == null || targetIndex < 0)
+        {
+            return null;
+        }
+        if (blockName != null && !blockName.isBlank())
+        {
+            final String listKey = switch (blockName.toLowerCase())
+            {
+                case "before" -> "playbook.beforeSteps";
+                case "after" -> "playbook.afterSteps";
+                default -> "playbook.steps";
+            };
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> blockSteps = (List<PlaybookStep>) context.getTransientData().get(listKey);
+            if (blockSteps != null && targetIndex < blockSteps.size())
+            {
+                return blockSteps.get(targetIndex);
+            }
+        }
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+        if (flatSteps != null && targetIndex < flatSteps.size())
+        {
+            return flatSteps.get(targetIndex);
+        }
+        @SuppressWarnings("unchecked")
+        List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        if (playbookSteps == null)
+        {
+            final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+            if (pbObj instanceof Playbook pb)
+            {
+                playbookSteps = pb.getSteps();
+            }
+        }
+        if (playbookSteps != null && targetIndex < playbookSteps.size())
+        {
+            return playbookSteps.get(targetIndex);
+        }
+        return null;
     }
 
     private void handleSuggestFix(final JsonObject userAction, final PlaybookStep currentStep, final ExecutionContext context)

@@ -1,0 +1,12 @@
+# [DEF-20261015-1725] Run Button Enabled During Step Execution and AI Thinking
+
+- **Status:** `Resolved`
+- **Opened:** 2026-10-15 17:25
+- **Closed:** 2026-10-15 17:30
+- **Component:** `neodymium-core`
+- **Scope:** `Framework`
+- **Symptom:** In the Aura interactive web console, the `#btnRun` ("Run") toolbar button became enabled while step actions were executing or while the AI was still in its reasoning/planning phase (before proposed actions or thoughts were returned). This caused user confusion about whether the step was finished or awaiting another confirmation.
+- **Root Cause:** In `interactive_console.js`, `checkActionApprovals()` contains an early return when `!currentPauseId` is true (lines 732-739). Consequently, when execution reaches line 759, `currentPauseId` is guaranteed to be non-null. The calculation `const isThinking = s && !s.reasoning && !hasPlannedActions && currentPauseId === null && !isStructuralActionInFlight;` included a contradictory condition `currentPauseId === null`. This condition evaluated to `false` 100% of the time, permanently forcing `isThinking` to `false`. As a result, line 766 (`runBtn.disabled = false`) was reached even when the active step had no planned actions and no reasoning (i.e. while the AI was actively thinking).
+- **Detection Gap ("What did we miss?"):** The unit test in `InteractiveConsoleServerTest.java` (`testInteractiveConsoleJsRunButtonDisabledDuringExecutionAndThinking`) asserted the presence of the literal text containing `currentPauseId === null` rather than verifying the logical invariant that `isThinking` must be independent of pause token absence once inside the non-executing branch.
+- **Resolution:** Removed the contradictory `currentPauseId === null` check from `isThinking` in `interactive_console.js` (`const isThinking = s && !s.reasoning && !hasPlannedActions && !isStructuralActionInFlight;`). This ensures `#btnRun` remains disabled while AI thinking is in progress (`s.actions` is empty and `s.reasoning` is empty). Once the AI yields reasoning or proposed actions, `isThinking` evaluates to `false` and `#btnRun` is enabled, preserving step confirmation for Step 1 as well as subsequent steps. Updated `InteractiveConsoleServerTest.java` to verify the corrected `isThinking` logic.
+- **Safety Net Added:** `InteractiveConsoleServerTest#testInteractiveConsoleJsRunButtonDisabledDuringExecutionAndThinking` verifying that `isThinking` is evaluated without `currentPauseId === null`.

@@ -95,6 +95,11 @@ public final class VerifyOutcomeStep implements PipelineStep
 
     private void executeInternal(final ExecutionContext context) throws PipelineException
     {
+        if (Boolean.TRUE.equals(context.getTransientData().get("KEY_STEP_RESCHEDULED")))
+        {
+            return;
+        }
+
         final AiConfiguration config = AiConfiguration.getInstance();
         final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
         final TargetExecutor executor = (TargetExecutor) context.getTransientData().get(ExecutionContext.KEY_TARGET_EXECUTOR);

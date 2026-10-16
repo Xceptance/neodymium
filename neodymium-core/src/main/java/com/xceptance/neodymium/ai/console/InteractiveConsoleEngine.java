@@ -290,17 +290,35 @@ public final class InteractiveConsoleEngine {
             // Inject the LAN IP so the UI can use it for QR codes/links
             state.addProperty("lanIp", this.lanIp);
 
-            if (state.has("pauseId") && !state.get("pauseId").isJsonNull())
+            final String statusStr = (state.has("status") && !state.get("status").isJsonNull())
+                ? state.get("status").getAsString()
+                : null;
+            final boolean isRunning = "running".equalsIgnoreCase(statusStr);
+
+            if (isRunning)
+            {
+                // Never retain or re-inject a pauseId when the state is actively executing
+                this.currentPauseId.set(null);
+                state.remove("pauseId");
+            }
+            else if (state.has("pauseId") && !state.get("pauseId").isJsonNull())
             {
                 final String pid = state.get("pauseId").getAsString();
                 if (pid != null && !pid.isEmpty())
                 {
                     this.currentPauseId.set(pid);
                 }
+                else
+                {
+                    this.currentPauseId.set(null);
+                    state.remove("pauseId");
+                }
             }
-            else if (this.currentPauseId.get() != null)
+            else
             {
-                state.addProperty("pauseId", this.currentPauseId.get());
+                // If state does not provide an explicit pauseId, do not retain or re-inject stale tokens
+                this.currentPauseId.set(null);
+                state.remove("pauseId");
             }
 
             minified = GSON.toJson(state);
@@ -707,82 +725,87 @@ public final class InteractiveConsoleEngine {
      */
     public JsonObject waitForAction(final String customPauseId, final long timeoutMs) throws InterruptedException
     {
-        if (AiConfiguration.getInstance().isManagerActive())
+        try
         {
-            try
+            if (AiConfiguration.getInstance().isManagerActive())
             {
-                final String managerUrl = AiConfiguration.getInstance().getProperty("neodymium.managerUrl", null);
-                final HttpClient client = HttpClient.newBuilder()
-                    .connectTimeout(java.time.Duration.ofSeconds(10))
-                    .build();
-                String uriStr = managerUrl + "/api/console/internal/waitForAction";
-                if (customPauseId != null && !customPauseId.isEmpty())
+                try
                 {
-                    uriStr += "?pauseId=" + URLEncoder.encode(customPauseId, StandardCharsets.UTF_8);
+                    final String managerUrl = AiConfiguration.getInstance().getProperty("neodymium.managerUrl", null);
+                    final HttpClient client = HttpClient.newBuilder()
+                        .connectTimeout(java.time.Duration.ofSeconds(10))
+                        .build();
+                    String uriStr = managerUrl + "/api/console/internal/waitForAction";
+                    if (customPauseId != null && !customPauseId.isEmpty())
+                    {
+                        uriStr += "?pauseId=" + URLEncoder.encode(customPauseId, StandardCharsets.UTF_8);
+                    }
+                    final HttpRequest request = HttpRequest.newBuilder()
+                        .uri(URI.create(uriStr))
+                        .timeout(java.time.Duration.ofMillis(timeoutMs + 5000))
+                        .GET()
+                        .build();
+                    LOG.info("[InteractiveConsole] Proxying waitForAction to Manager at {}", managerUrl);
+                    final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+                    if (response.statusCode() == 200)
+                    {
+                        final JsonObject action = JsonParser.parseString(response.body()).getAsJsonObject();
+                        LOG.info("[InteractiveConsole] Action received from Manager: {}", action);
+                        return action;
+                    }
+                    else
+                    {
+                        throw new RuntimeException("Manager returned error status: " + response.statusCode());
+                    }
                 }
-                final HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(uriStr))
-                    .timeout(java.time.Duration.ofMillis(timeoutMs + 5000))
-                    .GET()
-                    .build();
-                LOG.info("[InteractiveConsole] Proxying waitForAction to Manager at {}", managerUrl);
-                final HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                if (response.statusCode() == 200)
+                catch (InterruptedException e)
                 {
-                    final JsonObject action = JsonParser.parseString(response.body()).getAsJsonObject();
-                    LOG.info("[InteractiveConsole] Action received from Manager: {}", action);
-                    return action;
+                    throw e;
                 }
-                else
+                catch (Exception e)
                 {
-                    throw new RuntimeException("Manager returned error status: " + response.statusCode());
+                    throw new RuntimeException("Failed to proxy waitForAction to Aura Manager", e);
                 }
             }
-            catch (InterruptedException e)
-            {
-                throw e;
-            }
-            catch (Exception e)
-            {
-                throw new RuntimeException("Failed to proxy waitForAction to Aura Manager", e);
-            }
-        }
 
-        // Generate a fresh pause token and clear any stale pending action,
-        // UNLESS the pauseId was already pre-registered.
-        final String pauseId = (customPauseId != null && !customPauseId.isEmpty()) ? customPauseId : UUID.randomUUID().toString();
-        if (!pauseId.equals(this.currentPauseId.get()))
+            // Generate a fresh pause token and clear any stale pending action,
+            // UNLESS the pauseId was already pre-registered.
+            final String pauseId = (customPauseId != null && !customPauseId.isEmpty()) ? customPauseId : UUID.randomUUID().toString();
+            if (!pauseId.equals(this.currentPauseId.get()))
+            {
+                this.currentPauseId.set(pauseId);
+                this.pendingAction.set(null);
+            }
+
+            // Broadcast the updated state including the new pauseId so all tabs know they can act.
+            broadcastSseEvent("pause", buildPausePayload(pauseId));
+
+            LOG.info("[InteractiveConsole] Paused — waiting for user action (runId={}, pauseId={})", this.runId, pauseId);
+
+            synchronized (this.lock)
+            {
+                final long deadline = System.currentTimeMillis() + timeoutMs;
+                while (this.pendingAction.get() == null)
+                {
+                    final long remaining = deadline - System.currentTimeMillis();
+                    if (remaining <= 0)
+                    {
+                        throw new RuntimeException(
+                            "Interactive Console: no user action received within " + timeoutMs + " ms. Halting execution.");
+                    }
+                    this.lock.wait(Math.min(remaining, 5_000));
+                }
+            }
+
+            final JsonObject action = this.pendingAction.getAndSet(null);
+            LOG.info("[InteractiveConsole] Action received: {}", action);
+            return action;
+        }
+        finally
         {
-            this.currentPauseId.set(pauseId);
-            this.pendingAction.set(null);
+            // Invalidate the pause token so duplicate clicks are ignored and running state does not retain stale tokens.
+            this.currentPauseId.set(null);
         }
-
-        // Broadcast the updated state including the new pauseId so all tabs know they can act.
-        broadcastSseEvent("pause", buildPausePayload(pauseId));
-
-        LOG.info("[InteractiveConsole] Paused — waiting for user action (runId={}, pauseId={})", this.runId, pauseId);
-
-        synchronized (this.lock)
-        {
-            final long deadline = System.currentTimeMillis() + timeoutMs;
-            while (this.pendingAction.get() == null)
-            {
-                final long remaining = deadline - System.currentTimeMillis();
-                if (remaining <= 0)
-                {
-                    throw new RuntimeException(
-                        "Interactive Console: no user action received within " + timeoutMs + " ms. Halting execution.");
-                }
-                this.lock.wait(Math.min(remaining, 5_000));
-            }
-        }
-
-        // Invalidate the pause token so duplicate clicks are ignored.
-        this.currentPauseId.set(null);
-
-        final JsonObject action = this.pendingAction.getAndSet(null);
-        LOG.info("[InteractiveConsole] Action received: {}", action);
-        return action;
     }
 
     public JsonObject waitForAction(final String customPauseId) throws InterruptedException

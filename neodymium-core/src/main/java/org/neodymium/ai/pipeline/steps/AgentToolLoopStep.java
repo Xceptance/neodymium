@@ -770,6 +770,12 @@ public final class AgentToolLoopStep implements PipelineStep
                         }
                     }
                 }
+                if ("RESCHEDULE".equalsIgnoreCase(userAction) || Boolean.TRUE.equals(context.getTransientData().get("KEY_STEP_RESCHEDULED")))
+                {
+                    LOGGER.info("   🔄 Step rescheduled due to newly inserted step; yielding execution to run newly inserted step first");
+                    finishLoop(context, executedCalls, "Rescheduled");
+                    return;
+                }
                 if ("SKIP".equalsIgnoreCase(userAction) || (step != null && step.getStatus() == PlaybookStepStatus.SKIPPED))
                 {
                     if (step != null && step.getParent() != null)

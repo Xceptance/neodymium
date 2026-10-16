@@ -31,6 +31,7 @@ import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
@@ -381,7 +382,15 @@ public final class InteractiveStateBuilder
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
             @SuppressWarnings("unchecked")
-            final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+            List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+            if (playbookSteps == null)
+            {
+                final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+                if (pbObj instanceof Playbook pb)
+                {
+                    playbookSteps = pb.getSteps();
+                }
+            }
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
             @SuppressWarnings("unchecked")
@@ -708,7 +717,7 @@ public final class InteractiveStateBuilder
         {
             status = PlaybookStepStatus.SKIPPED;
         }
-        else if (status == null || status == PlaybookStepStatus.PENDING)
+        else if (status == null)
         {
             if (isRunFailed)
             {
@@ -736,6 +745,17 @@ public final class InteractiveStateBuilder
             else
             {
                 status = PlaybookStepStatus.PENDING;
+            }
+        }
+        else if (status == PlaybookStepStatus.PENDING)
+        {
+            if (isRunFailed && precedingStepFailed)
+            {
+                status = PlaybookStepStatus.SKIPPED;
+            }
+            else if (isCurrentSection && stepIndex == activeStepIndex && "running".equalsIgnoreCase(runnerStatus))
+            {
+                status = PlaybookStepStatus.RUNNING;
             }
         }
 
@@ -1040,6 +1060,10 @@ public final class InteractiveStateBuilder
                         final ReportStepEntry repSub = reportStep.getSubSteps().get(sIdx);
                         if (repSub != null)
                         {
+                            if (!subObj.has("actions") && !repSub.getActions().isEmpty())
+                            {
+                                subObj.add("actions", serializeReportActions(repSub.getActions()));
+                            }
                             if (!repSub.getScreenshots().isEmpty())
                             {
                                 subObj.add("screenshots", serializeScreenshots(repSub.getScreenshots()));

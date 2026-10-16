@@ -742,7 +742,7 @@
             border: 1px solid rgba(245, 158, 11, 0.2);
         }
 
-        .step-edit-btn {
+        .step-edit-btn, .step-add-after-btn {
             opacity: 0;
             background: rgba(255, 255, 255, 0.1);
             border: none;
@@ -758,16 +758,16 @@
             flex-shrink: 0;
         }
 
-        .step-card:hover .step-edit-btn {
+        .step-card:hover .step-edit-btn, .step-card:hover .step-add-after-btn {
             opacity: 1;
         }
 
-        .step-edit-btn:hover {
+        .step-edit-btn:hover, .step-add-after-btn:hover {
             background: var(--accent-primary);
         }
 
         @media (hover: none) {
-            .step-edit-btn {
+            .step-edit-btn, .step-add-after-btn {
                 opacity: 1;
                 background: rgba(255, 255, 255, 0.05);
             }
@@ -1962,14 +1962,17 @@
         }
 /* Hide edit icon and reorder controls in edit mode */
 .step-card.editing .step-edit-btn,
+.step-card.editing .step-add-after-btn,
 .step-card.editing .step-reorder-controls {
     display: none !important;
 }
 
-/* Disable drag handles cursor when in edit mode */
-.steps-block-content.drag-disabled .step-reorder-handle {
-    cursor: not-allowed;
-    opacity: 0.5;
+/* Disable drag handles cursor when in edit mode or when execution is running */
+.steps-block-content.drag-disabled .step-reorder-handle,
+.step-reorder-handle.reorder-disabled {
+    cursor: not-allowed !important;
+    opacity: 0.3 !important;
+    pointer-events: none !important;
 }
 
 .final-save-overlay {
@@ -2232,6 +2235,7 @@ body.mode-results .help-hover-container   { display: none !important; }
 body.mode-results #staleBanner            { display: none !important; }
 body.mode-results #kebabMenuWrapper       { display: none !important; }
 body.mode-results .step-edit-btn          { display: none !important; }
+body.mode-results .step-add-after-btn     { display: none !important; }
 body.mode-results .step-reorder-controls  { display: none !important; }
 body.mode-results .step-rewind-btn         { display: none !important; }
 body.mode-results .btn-mobile-qr          { display: none !important; }

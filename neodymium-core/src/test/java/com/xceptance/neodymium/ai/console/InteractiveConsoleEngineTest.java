@@ -50,6 +50,7 @@ import org.neodymium.ai.report.TestExecutionReport.ReportStepEntry;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.JsonObject;
 
 /**
  * Unit test suite validating {@link InteractiveConsoleEngine} console execution logging.
@@ -942,5 +943,115 @@ public class InteractiveConsoleEngineTest
         assertEquals("STANDARD", stepNode1.path("stats").path("contextLevel").asText());
         assertEquals("LEAN → STANDARD", stepNode1.path("stats").path("contextLevels").asText());
         assertEquals(1, stepNode1.path("stats").path("escalations").asInt());
+    }
+
+    @Test
+    public void testPushStateRunningStatusPurgesPauseIdAndClearsCurrentPauseId() throws Exception
+    {
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run-pause-test");
+        engine.registerPauseId("pre-registered-pause-token");
+        assertEquals("pre-registered-pause-token", engine.getCurrentPauseId());
+
+        final String runningStateJson = """
+            {
+                "runId": "run-pause-test",
+                "status": "running",
+                "pauseId": "stale-token-123"
+            }
+            """;
+        engine.pushState(runningStateJson);
+
+        assertNull(engine.getCurrentPauseId(), "currentPauseId must be cleared when state is running");
+
+        final JsonNode loggedRoot = new ObjectMapper().readTree(engine.getCurrentStateJson());
+        assertFalse(loggedRoot.has("pauseId"), "pauseId property must be stripped from running state payload");
+    }
+
+    @Test
+    public void testPushStateCompletedStatusWithoutPauseIdPurgesPauseId() throws Exception
+    {
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run-pause-test");
+        for (final String status : List.of("passed", "failed", "aborted"))
+        {
+            engine.registerPauseId("token-" + status);
+            assertEquals("token-" + status, engine.getCurrentPauseId());
+
+            final String stateJson = String.format("{\"runId\":\"run-pause-test\",\"status\":\"%s\"}", status);
+            engine.pushState(stateJson);
+
+            assertNull(engine.getCurrentPauseId(), "currentPauseId must be cleared when status is " + status);
+            final JsonNode root = new ObjectMapper().readTree(engine.getCurrentStateJson());
+            assertFalse(root.has("pauseId"), "pauseId must be purged when status is " + status);
+        }
+    }
+
+    @Test
+    public void testPushStateCompletedStatusWithExplicitPauseIdPreservesPauseId() throws Exception
+    {
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run-pause-test");
+        final String stateJson = "{\"runId\":\"run-pause-test\",\"status\":\"passed\",\"pauseId\":\"pause-final-123\"}";
+        engine.pushState(stateJson);
+
+        assertEquals("pause-final-123", engine.getCurrentPauseId());
+        final JsonNode root = new ObjectMapper().readTree(engine.getCurrentStateJson());
+        assertEquals("pause-final-123", root.path("pauseId").asText());
+    }
+
+    @Test
+    public void testWaitForActionClearsCurrentPauseIdOnCompletion() throws Exception
+    {
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run-wait-test");
+        final String pauseId = "pause-wait-123";
+        engine.registerPauseId(pauseId);
+        assertEquals(pauseId, engine.getCurrentPauseId());
+
+        final Thread actionThread = new Thread(() ->
+        {
+            try
+            {
+                Thread.sleep(100);
+                final JsonObject req = new JsonObject();
+                req.addProperty("runId", "run-wait-test");
+                req.addProperty("pauseId", pauseId);
+                req.addProperty("action", "RUN");
+                engine.submitAction(req);
+            }
+            catch (final InterruptedException ignored)
+            {
+                Thread.currentThread().interrupt();
+            }
+        });
+        actionThread.start();
+
+        final JsonObject result = engine.waitForAction(pauseId, 5000);
+        assertEquals("RUN", result.get("action").getAsString());
+        assertNull(engine.getCurrentPauseId(), "currentPauseId must be null after waitForAction completes");
+
+        actionThread.join(2000);
+    }
+
+    @Test
+    public void testPendingStepBeforeActiveStepIndexIsNotCoercedToSuccess() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(null);
+        final PlaybookStep step0 = new PlaybookStep("Step 0 - Home");
+        step0.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep step1 = new PlaybookStep("Step 1 - Inserted");
+        step1.setStatus(PlaybookStepStatus.PENDING);
+
+        final PlaybookStep step2 = new PlaybookStep("Step 2 - Login");
+        step2.setStatus(PlaybookStepStatus.RUNNING);
+
+        context.getTransientData().put("playbook.steps", List.of(step0, step1, step2));
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-step-pending-test", 2, "paused", "pause-token-123", null);
+        final JsonNode root = new ObjectMapper().readTree(stateJson);
+        final JsonNode stepsNode = root.path("blocks").path("steps");
+
+        assertEquals(3, stepsNode.size());
+        assertEquals("passed", stepsNode.get(0).path("status").asText(), "Step 0 must be reported as passed");
+        assertEquals("pending", stepsNode.get(1).path("status").asText(), "Inserted pending step before activeStepIndex must NOT be coerced to passed");
+        assertEquals("running", stepsNode.get(2).path("status").asText(), "Step 2 must be reported as running");
     }
 }

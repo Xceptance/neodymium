@@ -44,6 +44,7 @@ import org.neodymium.ai.pipeline.ExpectedBugNotReproducedException;
 import org.neodymium.ai.pipeline.HealingRequiredException;
 import org.neodymium.ai.pipeline.PipelineException;
 import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.pipeline.PlaybookPipelineStep;
 import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.pipeline.structural.SequenceStep;
 import org.neodymium.ai.pipeline.structural.TryCatchStep;
@@ -92,8 +93,18 @@ public final class ExecuteActionsStep
     {
         if (step == null)
         {
-            return c ->
+            return new PlaybookPipelineStep()
             {
+                @Override
+                public void execute(final ExecutionContext c) throws PipelineException
+                {
+                }
+
+                @Override
+                public PlaybookStep getPlaybookStep()
+                {
+                    return null;
+                }
             };
         }
 
@@ -112,8 +123,11 @@ public final class ExecuteActionsStep
         // If the step is an include file, a recorded sub-step replay, or a legacy replay, schedule the sub-steps in sequence
         if ((isInclude || isLegacySubStepReplay || (isReplayStep && hasSubStepToolCalls)) && step.getSubSteps() != null && !step.getSubSteps().isEmpty())
         {
-            return contextState ->
+            return new PlaybookPipelineStep()
             {
+                @Override
+                public void execute(final ExecutionContext contextState) throws PipelineException
+                {
                 contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
                 step.setStatus(PlaybookStepStatus.RUNNING);
                 final long parentStartTime = System.currentTimeMillis();
@@ -224,12 +238,22 @@ public final class ExecuteActionsStep
                     }
                     contextState.pushStep(mapPlaybookStepToPipelineStep(child, session, contextState));
                 }
-            };
-        }
+            }
+
+            @Override
+            public PlaybookStep getPlaybookStep()
+            {
+                return step;
+            }
+        };
+    }
 
         // For leaf steps (or compound turn groups), return a pipeline step wrapper setting the active instruction and pushing execution loop
-        return contextState ->
+        return new PlaybookPipelineStep()
         {
+            @Override
+            public void execute(final ExecutionContext contextState) throws PipelineException
+            {
             final PlaybookStepStatus initialStepStatus = step.getStatus();
             contextState.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
             contextState.resetStepInteractivePause();
@@ -385,6 +409,10 @@ public final class ExecuteActionsStep
             if (hasRecordedCalls && interactiveListener != null && !interactiveListener.isAutoRun())
             {
                 final String userAction = interactiveListener.pauseBeforeActionExecution(contextState, step);
+                if ("RESCHEDULE".equalsIgnoreCase(userAction) || Boolean.TRUE.equals(contextState.getTransientData().get("KEY_STEP_RESCHEDULED")))
+                {
+                    return;
+                }
                 if ("SKIP".equalsIgnoreCase(userAction) || step.getStatus() == PlaybookStepStatus.SKIPPED)
                 {
                     if (step.getParent() != null)
@@ -476,6 +504,11 @@ public final class ExecuteActionsStep
             final VerifyOutcomeStep verifyStep = new VerifyOutcomeStep();
             final PipelineStep endHookStep = c ->
             {
+                if (Boolean.TRUE.equals(c.getTransientData().remove("KEY_STEP_RESCHEDULED")))
+                {
+                    step.setStatus(PlaybookStepStatus.PENDING);
+                    return;
+                }
                 final Object isHealed = c.getTransientData().remove(ExecutionContext.KEY_IS_HEALED_STEP);
                 if (!step.isFailed() && step.getStatus() != PlaybookStepStatus.SKIPPED)
                 {
@@ -955,7 +988,14 @@ public final class ExecuteActionsStep
             // Push end-hook step first, so it runs AFTER tryCatch executes
             contextState.pushStep(endHookStep);
             contextState.pushStep(tryCatch);
-        };
+        }
+
+        @Override
+        public PlaybookStep getPlaybookStep()
+        {
+            return step;
+        }
+    };
     }
 
     private static StepStats getOrCreateStatsForStep(
