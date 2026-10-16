@@ -15,6 +15,7 @@ Currently, `BrowserToolProvider` exposes 38 interactive and discovery tools (cli
 - Implement passive diagnostic enrichment in `AgentToolLoopStep` to inject concise failure notices when actions fail repeatedly, cutting locator thrashing immediately.
 - Filter out non-fatal background noise (tracking pixels, analytics, fonts) via regex configurable in `neodymium.properties`.
 - Guarantee zero replay overhead or mutation in recorded JSON playbooks.
+- Deliver an automated, multi-tiered test suite (Unit, Mock Sandbox E2E, Live Sandbox E2E) backed by a self-contained challenge fixture in `neodymium-test-server`.
 
 **Non-Goals:**
 - Full network body capture / payload recording (only metadata, URLs, headers, and status codes are stored to conserve memory).
@@ -54,6 +55,26 @@ Currently, `BrowserToolProvider` exposes 38 interactive and discovery tools (cli
 ### Decision 5: Non-Mutating Playbook Lifecycle
 - **Choice**: Tool calls to `browser_get_network_failures` and `browser_get_console_errors` are tagged as non-mutating query operations.
 - **Rationale**: Avoids polluting recorded companion JSON playbooks with transient troubleshooting steps that have no bearing on happy-path test execution during replay.
+
+### Decision 6: Testing Strategy & Test Sandbox Fixture Architecture
+- **Choice**: Build a dedicated challenge page (`AuraGlanceTest/shop/sandbox/protocol-introspection.html`) and endpoints in `neodymium-test-server` paired with full unit, offline mock, and live test suites.
+- **Test Matrix**:
+  1. **Sandbox Fixture (`neodymium-test-server`)**:
+     - Endpoints in `JavalinTestServer`:
+       - `/AuraGlanceTest/api/faulty-backend`: returns HTTP 500 `{"error": "Internal server fault"}`.
+       - `/AuraGlanceTest/api/missing-endpoint`: returns HTTP 404 `{"error": "Resource missing"}`.
+       - `/AuraGlanceTest/api/analytics`: returns HTTP 404 `{"error": "Ignored telemetry"}`.
+     - Interactive challenge page `protocol-introspection.html` with explicit triggers for 404, 500, unhandled JS exceptions, console errors, and ignored analytics.
+  2. **Core Unit Tests (`neodymium-core`)**:
+     - `NetworkTrafficMonitorTest`: circular buffer bounds, thread safety, status filtering, ignore pattern regex evaluation, and draining.
+     - `ConsoleLogMonitorTest`: severity thresholds, exception stack formatting, buffer eviction, and draining.
+     - `BrowserToolProviderTest`: parameter parsing, schema validity, and tool output formatting.
+     - `AgentToolLoopStepTest`: passive alert generation on action failure, prompt formatting, and thrashing circuit breakers.
+     - `PlaybookToolReplayerTest`: verification that introspection calls execute as transparent no-ops during replay.
+  3. **Mock Sandbox Integration Tests (`neodymium-e2e-tests`)**:
+     - `ProtocolIntrospectionSandboxMockTest`: offline validation using `MockLlmProvider` and embedded Javalin server testing 500 detection, JS exception capture, ignore pattern filtering, passive alert stopping thrashing, and strict replay.
+  4. **Live Sandbox Integration Tests (`neodymium-e2e-tests`)**:
+     - `ProtocolIntrospectionSandboxLiveTest`: real LLM agent execution verifying that live agents recognize protocol failures and report SUT bugs immediately without locator thrashing loops.
 
 ## Risks / Trade-offs
 
