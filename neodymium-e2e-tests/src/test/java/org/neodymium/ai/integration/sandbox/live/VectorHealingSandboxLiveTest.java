@@ -119,4 +119,82 @@ public class VectorHealingSandboxLiveTest extends BaseAiTest
             $("#status-message").shouldHave(text("Coupon APPLIED successfully!"));
         }
     }
+
+    /**
+     * Tests live recording on clean DOM and replay with DOM vector self-healing on structural hierarchy drift
+     * (deeply wrapped input and unwrapped standalone button).
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(recordingFileName = "live_vector_wrapper_drift_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testVectorStructuralWrapperDriftHealingLive(final AiSession session) throws Exception
+    {
+        final String baseUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/vector-drift-healing.html", server.getPort());
+        final boolean isDrift = session.getExecutionMode().supportsHealing();
+        final String wrapperUrl = isDrift ? (baseUrl + "?drift=wrapper") : baseUrl;
+        session.data().putDynamic("drift.live.wrapper.url", wrapperUrl, false);
+
+        session.execute("""
+            steps: |
+              Open ${drift.live.wrapper.url} in the browser
+              Type "SAVE20" into the coupon input field
+              Click the apply coupon button
+              Verify that #status-message shows "Coupon APPLIED successfully!"
+            """);
+
+        $("#status-message").shouldHave(text("Coupon APPLIED successfully!"));
+    }
+
+    /**
+     * Tests live recording on clean DOM with a {@code <button>} and replay with DOM vector self-healing
+     * when the control migrated into an interactive {@code <a role="button">} link element.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(recordingFileName = "live_vector_tag_drift_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testVectorTagMigrationDriftHealingLive(final AiSession session) throws Exception
+    {
+        final String baseUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/vector-drift-healing.html", server.getPort());
+        final boolean isDrift = session.getExecutionMode().supportsHealing();
+        final String tagUrl = isDrift ? (baseUrl + "?drift=tag") : baseUrl;
+        session.data().putDynamic("drift.live.tag.url", tagUrl, false);
+
+        session.execute("""
+            steps: |
+              Open ${drift.live.tag.url} in the browser
+              Type "SAVE20" into the coupon input field
+              Click the apply coupon button
+              Verify that #status-message shows "Coupon APPLIED successfully!"
+            """);
+
+        $("#status-message").shouldHave(text("Coupon APPLIED successfully!"));
+    }
+
+    /**
+     * Tests live recording on clean DOM and replay with DOM vector self-healing across multi-candidate
+     * ambiguous sibling controls whose IDs and classes are completely randomized.
+     *
+     * @param session the thread-isolated AiSession
+     */
+    @AiPlaybook(recordingFileName = "live_vector_disambig_drift_playbook")
+    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    public void testVectorDisambiguationDriftHealingLive(final AiSession session) throws Exception
+    {
+        final String baseUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/vector-drift-healing.html", server.getPort());
+        final boolean isDrift = session.getExecutionMode().supportsHealing();
+        final String disambigUrl = isDrift ? (baseUrl + "?drift=disambiguation") : baseUrl;
+        session.data().putDynamic("drift.live.disambig.url", disambigUrl, false);
+
+        session.execute("""
+            steps: |
+              Open ${drift.live.disambig.url} in the browser
+              Type "SAVE20" into the coupon input field
+              Click the apply coupon button
+              Verify that #status-message shows "Coupon APPLIED successfully!"
+            """);
+
+        $("#status-message").shouldHave(text("Coupon APPLIED successfully!"));
+    }
 }

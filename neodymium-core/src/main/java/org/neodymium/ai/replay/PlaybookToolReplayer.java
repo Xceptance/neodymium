@@ -21,6 +21,7 @@ package org.neodymium.ai.replay;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
+import com.codeborne.selenide.ex.ElementNotFound;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -50,13 +51,19 @@ import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.tool.ToolResult;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.neodymium.ai.tool.browser.ReanchoringBridge;
+import org.neodymium.ai.util.DomQuiescenceWatcher;
 import org.neodymium.ai.util.ScreenshotHasher;
+import org.openqa.selenium.ElementNotInteractableException;
+import org.openqa.selenium.NoSuchElementException;
 import org.openqa.selenium.OutputType;
+import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.TakesScreenshot;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -225,7 +232,7 @@ public final class PlaybookToolReplayer
 
             // Check if tool is registered
             final Optional<AiTool> toolOpt = effectiveRegistry.getTool(finalCall.toolName());
-            final ToolResult result;
+            ToolResult result;
             if (toolOpt.isPresent())
             {
                 try
@@ -248,15 +255,56 @@ public final class PlaybookToolReplayer
                 }
                 catch (final Exception e)
                 {
-                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
-                    step.setStatus(PlaybookStepStatus.FAILED);
-                    step.setFailed(true);
-                    step.setFailureReason(e.getMessage());
-                    if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                    ToolResult retryResult = null;
+                    if (!isToolHealed && executionMode != ExecutionMode.REPLAY_STRICT
+                            && (executionMode == null || executionMode.supportsHealing())
+                            && isRecoverableElementFailure(e))
                     {
-                        throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                        LOGGER.info("⚠️ Replay tool call '{}' failed with {}. Attempting reactive fallback self-healing...", finalCall.toolName(), e.getClass().getSimpleName());
+                        DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(1200), Duration.ofMillis(100));
+                        ToolCall reactiveHealedCall = null;
+                        try
+                        {
+                            reactiveHealedCall = attemptHealing(variableResolvedCall, step, i, effectiveContext);
+                        }
+                        catch (final AssertionError | Exception healEx)
+                        {
+                            LOGGER.debug("Reactive fallback self-healing evaluation skipped due to exception: {}", healEx.getMessage());
+                        }
+
+                        if (reactiveHealedCall != null && !reactiveHealedCall.equals(finalCall))
+                        {
+                            LOGGER.info("🧬 Reactive fallback healed locator to: {}", reactiveHealedCall.arguments());
+                            try
+                            {
+                                retryResult = toolOpt.get().execute(reactiveHealedCall, effectiveContext);
+                                dispatchActionEvent(session, variableResolvedCall, reactiveHealedCall, true, true);
+                                syncStepActionOnSuccess(step, i, variableResolvedCall, reactiveHealedCall, true);
+                                anyHealed = true;
+                            }
+                            catch (final Exception retryEx)
+                            {
+                                LOGGER.warn("Reactive fallback healed execution failed: {}", retryEx.getMessage());
+                            }
+                        }
                     }
-                    throw e;
+
+                    if (retryResult != null)
+                    {
+                        result = retryResult;
+                    }
+                    else
+                    {
+                        dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
+                        step.setStatus(PlaybookStepStatus.FAILED);
+                        step.setFailed(true);
+                        step.setFailureReason(e.getMessage());
+                        if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                        {
+                            throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                        }
+                        throw e;
+                    }
                 }
             }
             else if (effectiveExecutor != null)
@@ -283,15 +331,57 @@ public final class PlaybookToolReplayer
                 }
                 catch (final Exception e)
                 {
-                    dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
-                    step.setStatus(PlaybookStepStatus.FAILED);
-                    step.setFailed(true);
-                    step.setFailureReason(e.getMessage());
-                    if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                    ToolResult retryResult = null;
+                    if (!isToolHealed && executionMode != ExecutionMode.REPLAY_STRICT
+                            && (executionMode == null || executionMode.supportsHealing())
+                            && isRecoverableElementFailure(e))
                     {
-                        throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                        LOGGER.info("⚠️ Replay executor action failed with {}. Attempting reactive fallback self-healing...", e.getClass().getSimpleName());
+                        DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(1200), Duration.ofMillis(100));
+                        ToolCall reactiveHealedCall = null;
+                        try
+                        {
+                            reactiveHealedCall = attemptHealing(variableResolvedCall, step, i, effectiveContext);
+                        }
+                        catch (final AssertionError | Exception healEx)
+                        {
+                            LOGGER.debug("Reactive fallback self-healing evaluation skipped due to exception: {}", healEx.getMessage());
+                        }
+
+                        if (reactiveHealedCall != null && !reactiveHealedCall.equals(finalCall))
+                        {
+                            final Action reactiveMapped = AgentToolLoopStep.mapToolCallToAction(reactiveHealedCall);
+                            try
+                            {
+                                effectiveExecutor.execute(reactiveMapped);
+                                retryResult = ToolResult.success(reactiveHealedCall.callId(), "Action executed via TargetExecutor after reactive self-healing");
+                                dispatchActionEvent(session, variableResolvedCall, reactiveHealedCall, true, true);
+                                syncStepActionOnSuccess(step, i, variableResolvedCall, reactiveHealedCall, true);
+                                anyHealed = true;
+                            }
+                            catch (final Exception retryEx)
+                            {
+                                LOGGER.warn("Reactive fallback executor execution failed: {}", retryEx.getMessage());
+                            }
+                        }
                     }
-                    throw e;
+
+                    if (retryResult != null)
+                    {
+                        result = retryResult;
+                    }
+                    else
+                    {
+                        dispatchActionEvent(session, variableResolvedCall, finalCall, isToolHealed, false);
+                        step.setStatus(PlaybookStepStatus.FAILED);
+                        step.setFailed(true);
+                        step.setFailureReason(e.getMessage());
+                        if (PlaybookStep.isAssertionToolName(finalCall.toolName()) || (step != null && step.isAssertionStep()))
+                        {
+                            throw new ConclusiveFailureException("Assertion failed during replay: " + e.getMessage(), e);
+                        }
+                        throw e;
+                    }
                 }
             }
             else
@@ -596,25 +686,13 @@ public final class PlaybookToolReplayer
         }
         else if (WebDriverRunner.hasWebDriverStarted())
         {
-            // For standard CSS or ID locators, do a brief poll (up to 300ms) in case an async element (e.g. dropdown) is currently rendering
+            // For standard CSS or ID locators, wait for in-flight DOM mutations and network requests to settle cleanly
             if (!currentTarget.contains("data-ai=") && !currentTarget.contains("#xc"))
             {
-                final long quickPollStart = System.currentTimeMillis();
-                while (System.currentTimeMillis() - quickPollStart < 300)
+                DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(400), Duration.ofMillis(50));
+                if (SelenideElementFinder.isDirectlyPresent(currentTarget))
                 {
-                    try
-                    {
-                        Thread.sleep(50);
-                    }
-                    catch (final InterruptedException e)
-                    {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
-                    if (SelenideElementFinder.isDirectlyPresent(currentTarget))
-                    {
-                        return null;
-                    }
+                    return null;
                 }
             }
 
@@ -1395,6 +1473,37 @@ public final class PlaybookToolReplayer
         }
 
         // For any other assertion tools, do not allow healing without exact validation
+        return false;
+    }
+
+    private static boolean isRecoverableElementFailure(final Throwable t)
+    {
+        if (t == null)
+        {
+            return false;
+        }
+        if (t instanceof ElementNotFound
+                || t instanceof NoSuchElementException
+                || t instanceof StaleElementReferenceException
+                || t instanceof ElementNotInteractableException
+                || t instanceof TimeoutException)
+        {
+            return true;
+        }
+        if (t.getCause() != null && isRecoverableElementFailure(t.getCause()))
+        {
+            return true;
+        }
+        final String msg = t.getMessage();
+        if (msg != null)
+        {
+            final String lower = msg.toLowerCase(Locale.ROOT);
+            return lower.contains("element not found")
+                    || lower.contains("nosuchelement")
+                    || lower.contains("not interactable")
+                    || lower.contains("stale element")
+                    || lower.contains("cannot locate");
+        }
         return false;
     }
 
