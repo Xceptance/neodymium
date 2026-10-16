@@ -62,10 +62,8 @@ public class DynamicRevealAjaxSandboxMockTest extends BaseAiTest
     @AfterEach
     public void resetServerLatency()
     {
-        if (server != null && server.getSessionManager() != null)
-        {
-            server.getSessionManager().getDefaultSession().getAuraGlanceState().setArtificialDelayMs(0);
-        }
+        resetSession("mock-ajax-latency");
+        resetSession(null);
     }
 
     /**
@@ -76,7 +74,7 @@ public class DynamicRevealAjaxSandboxMockTest extends BaseAiTest
     @BeforeEach
     public void setupPropertiesAndMock(final AiSession session) throws Exception
     {
-        final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/dynamic-reveal-ajax.html", server.getPort());
+        final String pageUrl = getSandboxUrl("/shop/sandbox/dynamic-reveal-ajax.html");
         session.data().putDynamic("reveal.ajax.url", pageUrl, false);
 
         LlmProvider provider = session.getLlmRegistry().getProvider(LlmCapability.TEXT_ONLY);
@@ -189,11 +187,14 @@ public class DynamicRevealAjaxSandboxMockTest extends BaseAiTest
     @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
     public void testDynamicRevealAjaxWithServerLatency(final AiSession session) throws Exception
     {
-        server.getSessionManager().getDefaultSession().getAuraGlanceState().setArtificialDelayMs(250);
+        final String sessionId = "mock-ajax-latency";
+        configureSessionLatency(sessionId, 200, 300);
+        final String latencyUrl = getSandboxUrl("/shop/sandbox/dynamic-reveal-ajax.html", sessionId);
+        session.data().putDynamic("reveal.ajax.latency.url", latencyUrl, false);
 
         session.execute("""
             steps: |
-              Open ${reveal.ajax.url} in the browser
+              Open ${reveal.ajax.latency.url} in the browser
               Click the promotional toggle button to reveal the coupon section
               Type DISCOUNT into the coupon input field
               Click the apply coupon button
