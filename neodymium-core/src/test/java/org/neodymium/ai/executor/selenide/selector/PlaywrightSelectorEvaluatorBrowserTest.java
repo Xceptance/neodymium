@@ -282,4 +282,76 @@ public class PlaywrightSelectorEvaluatorBrowserTest
         Assertions.assertEquals(1, capturedResults.size(), "Captured container selector must resolve to item-42");
         Assertions.assertEquals("item-42", capturedResults.get(0).getAttribute("id"));
     }
+
+    @Test
+    public void testCssDescendantCombinatorPiercesShadowBoundary()
+    {
+        final WebDriver driver = WebDriverRunner.getWebDriver();
+
+        // 1. Host in light DOM, descendant in shadow DOM
+        final List<WebElement> results = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "c-custom-login .shadow-login-btn");
+        Assertions.assertEquals(1, results.size(), "Should find button via host descendant combinator");
+        Assertions.assertEquals("Log In Now", results.get(0).getText().trim());
+
+        // 2. Host ID in light DOM, input in shadow DOM
+        final List<WebElement> inputResults = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "#login-comp input");
+        Assertions.assertEquals(1, inputResults.size(), "Should find input via host ID descendant combinator");
+        Assertions.assertEquals("shadow-user", inputResults.get(0).getAttribute("id"));
+
+        // 3. Child combinator across shadow boundary: host > direct shadow child
+        final List<WebElement> wrapperResults = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "c-custom-login > .login-wrapper");
+        Assertions.assertEquals(1, wrapperResults.size(), "Should find direct shadow child via child combinator");
+        Assertions.assertEquals("login-wrapper", wrapperResults.get(0).getAttribute("class"));
+
+        // 4. Multi-level combinator: host > wrapper button
+        final List<WebElement> chainedResults = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "c-custom-login > .login-wrapper button");
+        Assertions.assertEquals(1, chainedResults.size(), "Should find button through multi-level combinator across shadow root");
+        Assertions.assertEquals("Log In Now", chainedResults.get(0).getText().trim());
+    }
+
+    @Test
+    public void testTripleNestedShadowRootsCombinator()
+    {
+        final String html = """
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset="utf-8"></head>
+            <body>
+              <c-portal id="portal-app"></c-portal>
+              <script>
+                class CInput extends HTMLElement {
+                  connectedCallback() {
+                    const shadow = this.attachShadow({mode: 'open'});
+                    shadow.innerHTML = '<div class="wrap"><input id="field-input" type="email"></div>';
+                  }
+                }
+                customElements.define('c-input', CInput);
+
+                class CStepper extends HTMLElement {
+                  connectedCallback() {
+                    const shadow = this.attachShadow({mode: 'open'});
+                    shadow.innerHTML = '<div class="form"><c-input id="email-field"></c-input></div>';
+                  }
+                }
+                customElements.define('c-stepper', CStepper);
+
+                class CPortal extends HTMLElement {
+                  connectedCallback() {
+                    const shadow = this.attachShadow({mode: 'open'});
+                    shadow.innerHTML = '<div class="card"><c-stepper id="auth-stepper"></c-stepper></div>';
+                  }
+                }
+                customElements.define('c-portal', CPortal);
+              </script>
+            </body>
+            </html>
+            """;
+        Selenide.open("data:text/html;base64," + Base64.getEncoder().encodeToString(html.getBytes(StandardCharsets.UTF_8)));
+        final WebDriver driver = WebDriverRunner.getWebDriver();
+
+        // Query deep nested component and input inside it
+        final List<WebElement> inputResults = PlaywrightSelectorEvaluatorLoader.evaluate(driver, "c-input#email-field input");
+        Assertions.assertEquals(1, inputResults.size(), "Should find input in triple nested shadow roots");
+        Assertions.assertEquals("field-input", inputResults.get(0).getAttribute("id"));
+    }
 }

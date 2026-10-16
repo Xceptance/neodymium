@@ -23,19 +23,26 @@ return (function(contextRoot, rawSelector) {
 
     // Helper: Collect all open shadow roots recursively starting from a root node
     function collectAllRoots(start) {
-        var roots = [start];
-        function walk(node) {
-            if (!node || !node.querySelectorAll) return;
-            var els = node.querySelectorAll('*');
-            for (var i = 0; i < els.length; i++) {
-                var el = els[i];
-                if (el.shadowRoot) {
-                    roots.push(el.shadowRoot);
-                    walk(el.shadowRoot);
+        var roots = [];
+        var visited = new Set();
+        function addRoot(node) {
+            if (!node || visited.has(node)) return;
+            visited.add(node);
+            roots.push(node);
+            if (node.shadowRoot) {
+                addRoot(node.shadowRoot);
+            }
+            if (node.querySelectorAll) {
+                var els = node.querySelectorAll('*');
+                for (var i = 0; i < els.length; i++) {
+                    var el = els[i];
+                    if (el.shadowRoot) {
+                        addRoot(el.shadowRoot);
+                    }
                 }
             }
         }
-        walk(start);
+        addRoot(start);
         return roots;
     }
 
@@ -369,32 +376,14 @@ return (function(contextRoot, rawSelector) {
         return scored.map(function(s) { return s.element; });
     }
 
-    // Engine: Query CSS across root and all open shadow roots
-    function evaluateCss(startNodes, cssClause) {
-        var results = [];
-        var seen = new Set();
-
-        for (var n = 0; n < startNodes.length; n++) {
-            var roots = collectAllRoots(startNodes[n]);
-            for (var r = 0; r < roots.length; r++) {
-                var matched = queryCssSingleRoot(roots[r], cssClause);
-                for (var m = 0; m < matched.length; m++) {
-                    if (!seen.has(matched[m])) {
-                        seen.add(matched[m]);
-                        results.push(matched[m]);
-                    }
-                }
-            }
-        }
-        return results;
-    }
-
     // Helper: Checks if parent contains child across light and shadow DOM boundaries
     function composedContains(parent, child) {
         if (!parent || !child || parent === child) return false;
         var curr = child;
         while (curr) {
-            if (curr.parentNode) {
+            if (curr.assignedSlot) {
+                curr = curr.assignedSlot;
+            } else if (curr.parentNode) {
                 curr = curr.parentNode;
             } else if (curr.host) {
                 curr = curr.host;
@@ -404,6 +393,355 @@ return (function(contextRoot, rawSelector) {
             if (curr === parent) return true;
         }
         return false;
+    }
+
+    // Helper: Test if a single element matches a compound selector (with custom pseudos)
+    function matchesCompound(el, compound) {
+        if (!el || el.nodeType !== 1) return false;
+
+        // Handle Neodymium automation IDs: #xc... -> [data-ai="xc..."]
+        var transformedCss = compound.replace(/#xc([a-zA-Z0-9_\-]+)/g, '[data-ai="xc$1"]');
+
+        var hasTextMatch = transformedCss.match(/:has-text\((["']?)(.*?)\1\)/i) || transformedCss.match(/:contains\((["']?)(.*?)\1\)/i);
+        var exactTextMatch = transformedCss.match(/:text-is\((["']?)(.*?)\1\)/i) || transformedCss.match(/:exact-text\((["']?)(.*?)\1\)/i) || transformedCss.match(/:has-text-is\((["']?)(.*?)\1\)/i);
+        var textMatch = transformedCss.match(/:text\((["']?)(.*?)\1\)/i);
+        var visibleMatch = /:visible\b/i.test(transformedCss);
+        var hasMatch = transformedCss.match(/:has\((.*?)\)/i);
+
+        var nativeCss = transformedCss
+            .replace(/:has-text-is\((["']?).*?\1\)/gi, '')
+            .replace(/:has-text\((["']?).*?\1\)/gi, '')
+            .replace(/:contains\((["']?).*?\1\)/gi, '')
+            .replace(/:text-is\((["']?).*?\1\)/gi, '')
+            .replace(/:exact-text\((["']?).*?\1\)/gi, '')
+            .replace(/:text\((["']?).*?\1\)/gi, '')
+            .replace(/:visible\b/gi, '')
+            .replace(/:has\((.*?)\)/gi, '')
+            .replace(/:nth-match\((.*?)\)/gi, '')
+            .replace(/:(?:left-of|right-of|above|below|near)\((.*?)\)/gi, '')
+            .trim();
+
+        if (!nativeCss || nativeCss === '') nativeCss = '*';
+
+        if (nativeCss !== '*') {
+            try {
+                if (!el.matches(nativeCss)) return false;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        if (hasTextMatch) {
+            var hasTextArg = hasTextMatch[1] ? (hasTextMatch[1] + hasTextMatch[2] + hasTextMatch[1]) : hasTextMatch[2];
+            var matcher = createTextMatcher(hasTextArg, true);
+            if (!matcher(getElementText(el))) return false;
+        }
+
+        if (exactTextMatch) {
+            var exactTarget = unquote(exactTextMatch[2]);
+            if (normalizeText(getElementText(el)) !== exactTarget) return false;
+        }
+
+        if (textMatch) {
+            var rawTextArg = textMatch[1] ? (textMatch[1] + textMatch[2] + textMatch[1]) : textMatch[2];
+            var generalMatcher = createTextMatcher(rawTextArg);
+            if (!generalMatcher(getElementText(el))) return false;
+        }
+
+        if (hasMatch) {
+            var subSel = hasMatch[1].trim();
+            if (evaluateCss([el], subSel).length === 0) return false;
+        }
+
+        if (visibleMatch) {
+            if (!isElementVisible(el)) return false;
+        }
+
+        return true;
+    }
+
+    // Helper: Split CSS by commas outside quotes, brackets, and parens
+    function splitCssBranches(css) {
+        var branches = [];
+        var start = 0;
+        var inQuote = null;
+        var bracketDepth = 0;
+        var parenDepth = 0;
+        var len = css.length;
+
+        for (var i = 0; i < len; i++) {
+            var c = css.charAt(i);
+            if (c === '\\' && i + 1 < len) {
+                i++;
+                continue;
+            }
+            if (inQuote) {
+                if (c === inQuote) inQuote = null;
+                continue;
+            }
+            if (c === '"' || c === "'") {
+                inQuote = c;
+                continue;
+            }
+            if (c === '[') { bracketDepth++; continue; }
+            if (c === ']') { if (bracketDepth > 0) bracketDepth--; continue; }
+            if (c === '(') { parenDepth++; continue; }
+            if (c === ')') { if (parenDepth > 0) parenDepth--; continue; }
+
+            if (bracketDepth === 0 && parenDepth === 0 && c === ',') {
+                var branch = css.substring(start, i).trim();
+                if (branch.length > 0) branches.push(branch);
+                start = i + 1;
+            }
+        }
+        var last = css.substring(start).trim();
+        if (last.length > 0) branches.push(last);
+        return branches;
+    }
+
+    // Helper: Split a single CSS branch into compound selectors and combinators
+    function splitCssCombinators(css) {
+        var parts = [];
+        var currentToken = '';
+        var pendingCombinator = null;
+        var inQuote = null;
+        var bracketDepth = 0;
+        var parenDepth = 0;
+        var i = 0;
+
+        css = css.trim();
+
+        while (i < css.length) {
+            var ch = css[i];
+
+            if (ch === '\\' && i + 1 < css.length) {
+                currentToken += ch + css[i + 1];
+                i += 2;
+                continue;
+            }
+
+            if (inQuote) {
+                currentToken += ch;
+                if (ch === inQuote) inQuote = null;
+                i++;
+                continue;
+            } else if (ch === '"' || ch === "'") {
+                inQuote = ch;
+                currentToken += ch;
+                i++;
+                continue;
+            }
+
+            if (ch === '[') {
+                bracketDepth++;
+                currentToken += ch;
+                i++;
+                continue;
+            } else if (ch === ']') {
+                if (bracketDepth > 0) bracketDepth--;
+                currentToken += ch;
+                i++;
+                continue;
+            } else if (ch === '(') {
+                parenDepth++;
+                currentToken += ch;
+                i++;
+                continue;
+            } else if (ch === ')') {
+                if (parenDepth > 0) parenDepth--;
+                currentToken += ch;
+                i++;
+                continue;
+            }
+
+            if (bracketDepth === 0 && parenDepth === 0) {
+                if (ch === '>' || ch === '+' || ch === '~') {
+                    if (currentToken.trim().length > 0) {
+                        parts.push({ combinator: pendingCombinator, selector: currentToken.trim() });
+                        currentToken = '';
+                    }
+                    pendingCombinator = ch;
+                    i++;
+                    while (i < css.length && /\s/.test(css[i])) i++;
+                    continue;
+                } else if (/\s/.test(ch)) {
+                    var j = i;
+                    while (j < css.length && /\s/.test(css[j])) j++;
+                    if (j < css.length && (css[j] === '>' || css[j] === '+' || css[j] === '~')) {
+                        if (currentToken.trim().length > 0) {
+                            parts.push({ combinator: pendingCombinator, selector: currentToken.trim() });
+                            currentToken = '';
+                        }
+                        pendingCombinator = css[j];
+                        i = j + 1;
+                        while (i < css.length && /\s/.test(css[i])) i++;
+                        continue;
+                    } else {
+                        if (currentToken.trim().length > 0) {
+                            parts.push({ combinator: pendingCombinator, selector: currentToken.trim() });
+                            currentToken = '';
+                            pendingCombinator = ' ';
+                        }
+                        i = j;
+                        continue;
+                    }
+                }
+            }
+
+            currentToken += ch;
+            i++;
+        }
+
+        if (currentToken.trim().length > 0) {
+            parts.push({ combinator: pendingCombinator, selector: currentToken.trim() });
+        }
+
+        return parts;
+    }
+
+    // Helper: Find composed descendants of parent matching compound across light and shadow DOM
+    function findComposedDescendants(parent, compound) {
+        var matched = [];
+        var seen = new Set();
+        var roots = collectAllRoots(parent);
+        for (var r = 0; r < roots.length; r++) {
+            var elements = queryCssSingleRoot(roots[r], compound);
+            for (var i = 0; i < elements.length; i++) {
+                var el = elements[i];
+                if (el !== parent && !seen.has(el)) {
+                    if (composedContains(parent, el)) {
+                        seen.add(el);
+                        matched.push(el);
+                    }
+                }
+            }
+        }
+        return matched;
+    }
+
+    // Helper: Find direct children of parent in composed tree (light children + shadowRoot children)
+    function findComposedChildren(parent, compound) {
+        var candidates = [];
+        if (parent.children) {
+            for (var i = 0; i < parent.children.length; i++) {
+                candidates.push(parent.children[i]);
+            }
+        }
+        if (parent.shadowRoot && parent.shadowRoot.children) {
+            for (var j = 0; j < parent.shadowRoot.children.length; j++) {
+                candidates.push(parent.shadowRoot.children[j]);
+            }
+        }
+        return candidates.filter(function(el) {
+            return matchesCompound(el, compound);
+        });
+    }
+
+    // Helper: Find adjacent next element sibling
+    function findNextSibling(element, compound) {
+        var sib = element.nextElementSibling;
+        if (sib && matchesCompound(sib, compound)) {
+            return [sib];
+        }
+        return [];
+    }
+
+    // Helper: Find all following element siblings
+    function findSubsequentSiblings(element, compound) {
+        var matched = [];
+        var sib = element.nextElementSibling;
+        while (sib) {
+            if (matchesCompound(sib, compound)) {
+                matched.push(sib);
+            }
+            sib = sib.nextElementSibling;
+        }
+        return matched;
+    }
+
+    // Helper: Evaluate a single CSS branch (without top-level commas)
+    function evaluateCssBranch(startNodes, branch) {
+        var tokens = splitCssCombinators(branch);
+        if (tokens.length === 0) return [];
+
+        var currentElements = [];
+        var seen = new Set();
+
+        // Step 0: Initial compound selector
+        var firstCompound = tokens[0].selector;
+        for (var n = 0; n < startNodes.length; n++) {
+            var startNode = startNodes[n];
+            var roots = collectAllRoots(startNode);
+            for (var r = 0; r < roots.length; r++) {
+                var matched = queryCssSingleRoot(roots[r], firstCompound);
+                for (var m = 0; m < matched.length; m++) {
+                    var el = matched[m];
+                    if (!seen.has(el)) {
+                        if (startNode.nodeType === 1 && !composedContains(startNode, el)) {
+                            continue;
+                        }
+                        seen.add(el);
+                        currentElements.push(el);
+                    }
+                }
+            }
+        }
+
+        // Subsequent compound selectors connected by combinators
+        for (var k = 1; k < tokens.length; k++) {
+            if (currentElements.length === 0) break;
+            var combinator = tokens[k].combinator;
+            var compound = tokens[k].selector;
+            var nextElements = [];
+            var nextSeen = new Set();
+
+            for (var i = 0; i < currentElements.length; i++) {
+                var parent = currentElements[i];
+                var subList = [];
+
+                if (combinator === '>') {
+                    subList = findComposedChildren(parent, compound);
+                } else if (combinator === '+') {
+                    subList = findNextSibling(parent, compound);
+                } else if (combinator === '~') {
+                    subList = findSubsequentSiblings(parent, compound);
+                } else {
+                    subList = findComposedDescendants(parent, compound);
+                }
+
+                for (var s = 0; s < subList.length; s++) {
+                    var cand = subList[s];
+                    if (!nextSeen.has(cand)) {
+                        nextSeen.add(cand);
+                        nextElements.push(cand);
+                    }
+                }
+            }
+            currentElements = nextElements;
+        }
+
+        return currentElements;
+    }
+
+    // Engine: Query CSS across root and all open shadow roots with combinator support
+    function evaluateCss(startNodes, cssClause) {
+        var branches = splitCssBranches(cssClause);
+        if (branches.length === 0) return [];
+
+        var results = [];
+        var seen = new Set();
+
+        for (var b = 0; b < branches.length; b++) {
+            var branchMatches = evaluateCssBranch(startNodes, branches[b]);
+            for (var m = 0; m < branchMatches.length; m++) {
+                var el = branchMatches[m];
+                if (!seen.has(el)) {
+                    seen.add(el);
+                    results.push(el);
+                }
+            }
+        }
+        return results;
     }
 
     // Engine: Query text= across open shadow roots
