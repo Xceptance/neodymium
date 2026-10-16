@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.tool.Tool;
 
 /**
  * Unit tests verifying the functionality of the JavaMethodAction reflection invocation plugin.
@@ -47,6 +48,8 @@ public final class JavaMethodActionTest
         this.actionPlugin = new JavaMethodAction(this.context);
         DummyHelper.methodCalled = false;
         DummyHelper.lastParam = null;
+        ToolHelper.methodCalled = false;
+        ToolHelper.lastParam = null;
     }
 
     @Test
@@ -97,6 +100,32 @@ public final class JavaMethodActionTest
         });
     }
 
+    @Test
+    public void testInvokeToolStaticMethodSuccess() throws Exception
+    {
+        System.setProperty("neodymium.ai.agent.methods.classes", ToolHelper.class.getName());
+
+        final Action action = new Action("JAVA_METHOD", "toolStaticMethod", List.of("tool-test"), "call tool method", "reason");
+        this.actionPlugin.execute(action);
+
+        assertTrue(ToolHelper.methodCalled);
+        assertEquals("tool-test", ToolHelper.lastParam);
+    }
+
+    public static class ToolHelper
+    {
+        public static boolean methodCalled;
+        public static String lastParam;
+
+        @Tool(description = "A dummy tool method")
+        public static void toolStaticMethod(final String param)
+        {
+            methodCalled = true;
+            lastParam = param;
+        }
+    }
+
+    @SuppressWarnings("removal")
     public static class DummyHelper
     {
         public static boolean methodCalled;
@@ -117,6 +146,7 @@ public final class JavaMethodActionTest
         }
     }
 
+    @SuppressWarnings("removal")
     public static class TestInstance
     {
         public boolean instanceCalled;

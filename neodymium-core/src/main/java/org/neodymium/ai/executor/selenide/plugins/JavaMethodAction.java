@@ -34,6 +34,7 @@ import java.util.jar.JarFile;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.tool.Tool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -115,7 +116,7 @@ public final class JavaMethodAction implements BrowserActionPlugin
 
         // Nothing found anywhere
         throw new IllegalArgumentException(
-                String.format("JAVA_METHOD: no public method '%s' annotated with @AiMethod found on class '%s', or configured utility classes/packages",
+                String.format("JAVA_METHOD: no public method '%s' annotated with @Tool or @AiMethod found on class '%s', or configured utility classes/packages",
                         methodName, testInstance != null ? testInstance.getClass().getSimpleName() : "null"));
     }
 
@@ -209,19 +210,29 @@ public final class JavaMethodAction implements BrowserActionPlugin
                 }
             }
 
-            // Populate the static configuration methods map (must be annotated with @AiMethod)
+            // Populate the static configuration methods map (must be annotated with @Tool or @AiMethod)
             for (final Class<?> clazz : staticConfigurationClasses)
             {
                 final Method[] methods = clazz.getMethods();
                 for (final Method method : methods)
                 {
                     final int modifiers = method.getModifiers();
-                    if (Modifier.isPublic(modifiers) && Modifier.isStatic(modifiers) && method.isAnnotationPresent(AiMethod.class))
+                    if (Modifier.isPublic(modifiers) && Modifier.isStatic(modifiers))
                     {
-                        final String sig = formatMethodSignature(method);
-                        final String desc = method.getAnnotation(AiMethod.class).value();
-                        final String formatted = sig + (desc.isEmpty() ? "" : ": " + desc);
-                        staticConfigurationMethods.putIfAbsent(method.getName(), formatted);
+                        if (method.isAnnotationPresent(Tool.class))
+                        {
+                            final String sig = formatMethodSignature(method);
+                            final String desc = method.getAnnotation(Tool.class).description();
+                            final String formatted = sig + (desc.isEmpty() ? "" : ": " + desc);
+                            staticConfigurationMethods.putIfAbsent(method.getName(), formatted);
+                        }
+                        else if (isLegacyAiMethodPresent(method))
+                        {
+                            final String sig = formatMethodSignature(method);
+                            final String desc = getLegacyAiMethodValue(method);
+                            final String formatted = sig + (desc.isEmpty() ? "" : ": " + desc);
+                            staticConfigurationMethods.putIfAbsent(method.getName(), formatted);
+                        }
                     }
                 }
             }
@@ -230,6 +241,19 @@ public final class JavaMethodAction implements BrowserActionPlugin
             lastScannedPackages = new ArrayList<>(packages);
             configurationScanned = true;
         }
+    }
+
+    @SuppressWarnings("removal")
+    private static boolean isLegacyAiMethodPresent(final Method method)
+    {
+        return method.isAnnotationPresent(AiMethod.class);
+    }
+
+    @SuppressWarnings("removal")
+    private static String getLegacyAiMethodValue(final Method method)
+    {
+        final AiMethod annotation = method.getAnnotation(AiMethod.class);
+        return annotation != null ? annotation.value() : "";
     }
 
     private static String formatMethodSignature(final Method method)
@@ -271,7 +295,7 @@ public final class JavaMethodAction implements BrowserActionPlugin
             {
                 continue;
             }
-            if (!method.isAnnotationPresent(AiMethod.class))
+            if (!method.isAnnotationPresent(Tool.class) && !isLegacyAiMethodPresent(method))
             {
                 continue;
             }
