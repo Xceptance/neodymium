@@ -16,9 +16,30 @@ let selectedSubStepIndex = null;
 const expandedSubStepsTrees = new Set();
 const collapsedSubStepsTrees = new Set();
 let autoStartStepIndex = null;
-// Flat ordered list of all step indices across all blocks (before + steps + after).
-// Used by the ↑/↓ reorder buttons to know if a step is first/last.
 let allStepIndices = [];
+
+// Watchdog safety net for structural action sync (auto-recovers if SSE event is missed)
+let structuralSyncWatchdogTimer = null;
+
+function startStructuralSyncWatchdog() {
+    clearStructuralSyncWatchdog();
+    structuralSyncWatchdogTimer = setTimeout(() => {
+        if (isStructuralActionInFlight) {
+            console.warn('[InteractiveConsole] Structural action timed out after 5s without server state event. Resetting sync lock.');
+            isStructuralActionInFlight = false;
+            structuralActionPauseId = null;
+            pendingRunAfterSync = false;
+            setButtonsEnabled(true);
+        }
+    }, 5000);
+}
+
+function clearStructuralSyncWatchdog() {
+    if (structuralSyncWatchdogTimer) {
+        clearTimeout(structuralSyncWatchdogTimer);
+        structuralSyncWatchdogTimer = null;
+    }
+}
 
 // -------------------------------------------------------------------------
 // SSE Connection
@@ -34,9 +55,11 @@ function connectSSE() {
                 if (data.pauseId !== structuralActionPauseId) {
                     isStructuralActionInFlight = false;
                     structuralActionPauseId = null;
+                    clearStructuralSyncWatchdog();
                 }
             } else {
                 isStructuralActionInFlight = false;
+                clearStructuralSyncWatchdog();
             }
             if (runActionPauseId) {
                 if (data.pauseId !== runActionPauseId) {
@@ -73,8 +96,10 @@ function connectSSE() {
         if (structuralActionPauseId && data.pauseId !== structuralActionPauseId) {
             isStructuralActionInFlight = false;
             structuralActionPauseId = null;
+            clearStructuralSyncWatchdog();
         } else if (!structuralActionPauseId) {
             isStructuralActionInFlight = false;
+            clearStructuralSyncWatchdog();
         }
         // Mirror into currentState so local re-renders (toggleBp, handleStepClick, …)
         // that call applyState(currentState) pick up the token via the 'pauseId' in state guard.
@@ -1550,18 +1575,22 @@ function renderStepCard(step, blockName = 'steps') {
     const isPendingOrPausedRunning = !step.status || step.status === 'pending' || isPausedRunning;
     // hasDetails is declared above (needed for noDetailsPendingClass) — do not redeclare here.
 
+    const isSyncing = isStructuralActionInFlight;
+    const syncDisabledAttr = isSyncing ? ' disabled="true"' : '';
+    const syncDisabledClass = isSyncing ? ' disabled' : '';
+
     const showEdit = step.status !== 'passed' && step.status !== 'skipped';
     const editBtnHtml = showEdit
-        ? `<button class="step-edit-btn" onclick="enableEdit(this)" title="Edit Step (Alt+E)" aria-label="Edit step instruction (Alt+E)"><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>`
+        ? `<button class="step-edit-btn${syncDisabledClass}" onclick="enableEdit(this)" title="Edit Step (Alt+E)" aria-label="Edit step instruction (Alt+E)"${syncDisabledAttr}><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>`
         : '';
     const addBtnHtml = !step.isTempAdd
-        ? `<button class="step-add-after-btn" onclick="addStepAfter(event, ${step.index})" title="Add step after this" aria-label="Add step after this"><span class="material-symbols-outlined" aria-hidden="true">add_circle</span></button>`
+        ? `<button class="step-add-after-btn${syncDisabledClass}" onclick="addStepAfter(event, ${step.index})" title="Add step after this" aria-label="Add step after this"${syncDisabledAttr}><span class="material-symbols-outlined" aria-hidden="true">add_circle</span></button>`
         : '';
 
     // Rewind only makes sense for steps that have already been executed (passed/failed/skipped).
     // Showing it on future/active steps is confusing and not actionable.
     const rewindBtnHtml = (isPassed || isFailed || isSkipped) && !showEdit
-        ? `<button class="step-rewind-btn" onclick="triggerRewind(event, ${step.index})" title="Rewind execution back here" aria-label="Rewind execution back here"><span class="material-symbols-outlined" aria-hidden="true">undo</span></button>`
+        ? `<button class="step-rewind-btn${syncDisabledClass}" onclick="triggerRewind(event, ${step.index})" title="Rewind execution back here" aria-label="Rewind execution back here"${syncDisabledAttr}><span class="material-symbols-outlined" aria-hidden="true">undo</span></button>`
         : '';
 
     // Reorder system overhaul: Drag handle only in controls
@@ -1665,10 +1694,11 @@ function renderStepCard(step, blockName = 'steps') {
     if (!step.isTempAdd) {
         const badgeNum = allStepIndices.indexOf(step.index) + 1;
         stepNumBadgeHtml = `
-                    <div class="step-num-badge">
+                    <div class="step-num-badge${isSyncing ? ' sync-disabled' : ''}">
                         ${isSelected && isPaused ? `
                             <input type="number" value="${badgeNum}"
                                    min="1" max="${allStepIndices.length}"
+                                   ${isSyncing ? 'disabled readonly ' : ''}
                                    onkeydown="handleStepInputKeyDown(event, ${step.index}, '${blockName}')"
                                    oninput="handleStepInputInput(event, ${step.index}, '${blockName}')"
                                    onchange="reorderStepDirect(event, ${step.index}, '${blockName}')"
@@ -1854,6 +1884,7 @@ function sendAction(action, extra) {
     if (structural) {
         isStructuralActionInFlight = true;
         structuralActionPauseId = currentPauseId;
+        startStructuralSyncWatchdog();
     }
     if (action === 'RUN' || action === 'HEAL' || action === 'SKIP') {
         isRunActionInFlight = true;
@@ -1880,6 +1911,7 @@ function sendAction(action, extra) {
     }).catch(() => {
         isStructuralActionInFlight = false;
         structuralActionPauseId = null;
+        clearStructuralSyncWatchdog();
         isRunActionInFlight = false;
         runActionPauseId = null;
         pendingRunAfterSync = false;
@@ -2367,7 +2399,7 @@ function updateBigScreenDetails() {
 
 function triggerRewind(event, index) {
     if (event) event.stopPropagation();
-    if (!currentPauseId) return;
+    if (!currentPauseId || isStructuralActionInFlight) return;
     selectedStepIndexForDetails = index;
     sendAction('REWIND', { targetIndex: index });
 }
@@ -2385,6 +2417,7 @@ function pasteBinding(el, key) {
 }
 
 function enableEdit(btnElement) {
+    if (isStructuralActionInFlight) return;
     const card = btnElement.closest('.step-card');
     card.classList.add('editing');
 
@@ -2729,25 +2762,83 @@ function setButtonsEnabled(enabled) {
     const autoBtn = document.getElementById('btnAuto');
     const btnCancel = document.getElementById('btnCancel');
     const isEditing = document.querySelector('.step-card.editing') !== null;
+    const isSyncing = isStructuralActionInFlight;
 
-    // Disable Drag/Drop if editing
+    // Toggle sync indicator pill
+    const syncIndicator = document.getElementById('timelineSyncIndicator');
+    if (syncIndicator) {
+        syncIndicator.style.display = isSyncing ? 'flex' : 'none';
+    }
+
+    // Disable Drag/Drop if editing or syncing
     const blocks = document.querySelectorAll('.steps-block-content');
     blocks.forEach(block => {
-        if (isEditing) {
+        if (isEditing || isSyncing) {
             block.classList.add('drag-disabled');
         } else {
             block.classList.remove('drag-disabled');
         }
     });
 
-    // Control visibility of Add Step buttons
+    // Control visibility and disabled state of Add Step buttons
+    const isTestFinished = currentState && (currentState.status === 'passed' || currentState.status === 'failed' || currentState.status === 'aborted');
     const addStepBtns = document.querySelectorAll('.add-step-card-btn');
     addStepBtns.forEach(btn => {
-        btn.style.display = enabled ? '' : 'none';
+        if (isTestFinished) {
+            btn.style.display = 'none';
+        } else {
+            btn.style.display = '';
+            const shouldDisable = !enabled || isEditing || isSyncing;
+            btn.disabled = shouldDisable;
+            if (shouldDisable) {
+                btn.classList.add('disabled');
+                btn.setAttribute('disabled', 'true');
+            } else {
+                btn.classList.remove('disabled');
+                btn.removeAttribute('disabled');
+            }
+        }
+    });
+
+    // Disable step badge inputs during sync or when disabled
+    const badgeInputs = document.querySelectorAll('.step-num-badge input');
+    badgeInputs.forEach(input => {
+        const shouldDisable = isSyncing || !enabled;
+        input.disabled = isSyncing || !enabled;
+        if (shouldDisable) {
+            input.setAttribute('disabled', 'true');
+            input.setAttribute('readonly', 'true');
+            if (isSyncing) input.blur();
+        } else {
+            input.removeAttribute('disabled');
+            input.removeAttribute('readonly');
+        }
+    });
+
+    const badges = document.querySelectorAll('.step-num-badge');
+    badges.forEach(badge => {
+        if (isSyncing || !enabled) {
+            badge.classList.add('sync-disabled');
+        } else {
+            badge.classList.remove('sync-disabled');
+        }
+    });
+
+    // Disable inline card action buttons during sync
+    const cardActionBtns = document.querySelectorAll('.step-edit-btn, .step-add-after-btn, .step-rewind-btn, .step-delete-btn');
+    cardActionBtns.forEach(btn => {
+        const shouldDisable = isSyncing || !enabled;
+        btn.disabled = shouldDisable;
+        if (shouldDisable) {
+            btn.classList.add('disabled');
+            btn.setAttribute('disabled', 'true');
+        } else {
+            btn.classList.remove('disabled');
+            btn.removeAttribute('disabled');
+        }
     });
 
 
-    const isTestFinished = currentState && (currentState.status === 'passed' || currentState.status === 'failed' || currentState.status === 'aborted');
     if (!enabled && isTestFinished) {
         if (runBtn) runBtn.style.display = 'none';
         if (skipBtn) skipBtn.style.display = 'none';
@@ -3061,6 +3152,7 @@ function toggleTopDetails() {
     }
 }
 function openAddStepOverlay(blockName, targetIndex) {
+    if (isStructuralActionInFlight) return;
     const finalBlock = blockName || currentState?.activeBlock || 'steps';
     if (!currentState) {
         currentState = { activeBlock: 'steps', blocks: { before: [], steps: [], after: [] } };
@@ -3096,7 +3188,7 @@ function openAddStepOverlay(blockName, targetIndex) {
 
 function addStepAfter(event, stepIndex) {
     if (event) event.stopPropagation();
-    if (!currentState || !currentState.blocks) return;
+    if (isStructuralActionInFlight || !currentState || !currentState.blocks) return;
     for (const bKey of ['before', 'steps', 'after']) {
         const arr = currentState.blocks[bKey];
         if (arr) {
@@ -3135,11 +3227,12 @@ function flashMovedRow(stepIndex) {
 }
 
 function restoreFocus() {
+    if (isStructuralActionInFlight) return;
     if (lastFocusedStepIndex !== null) {
         const card = document.querySelector(`.step-card[data-step-idx="${lastFocusedStepIndex}"]`);
         if (card) {
             const input = card.querySelector('.step-num-badge input');
-            if (input) input.focus();
+            if (input && !input.disabled) input.focus();
         }
     }
 }
@@ -3164,6 +3257,10 @@ function handleStepInputInput(event, stepIndex, blockName) {
     if (stepInputDebounceTimer) {
         clearTimeout(stepInputDebounceTimer);
         stepInputDebounceTimer = null;
+    }
+    if (isStructuralActionInFlight || !currentPauseId) {
+        if (event && event.preventDefault) event.preventDefault();
+        return;
     }
     const val = parseInt(event.target.value, 10);
     if (isNaN(val) || val < 1 || val > allStepIndices.length) return;
@@ -3245,7 +3342,7 @@ function handleStepInputKeyDown(event, stepIndex, blockName) {
         clearTimeout(stepInputDebounceTimer);
         stepInputDebounceTimer = null;
     }
-    if (!currentPauseId) {
+    if (!currentPauseId || isStructuralActionInFlight) {
         event.preventDefault();
         return;
     }
@@ -3270,7 +3367,7 @@ function handleStepInputKeyDown(event, stepIndex, blockName) {
 }
 
 function reorderStep(event, stepIndex, direction, blockName) {
-    if (!currentPauseId) return;
+    if (!currentPauseId || isStructuralActionInFlight) return;
     const currentPos = allStepIndices.indexOf(stepIndex) + 1;
     const newPos = direction === 'up' ? currentPos - 1 : currentPos + 1;
     if (newPos >= 1 && newPos <= allStepIndices.length) {
@@ -3288,7 +3385,7 @@ function reorderStep(event, stepIndex, direction, blockName) {
 }
 
 function handleDragStart(event, index, blockName) {
-    if (!currentPauseId || document.querySelector('.step-card.editing')) {
+    if (!currentPauseId || isStructuralActionInFlight || document.querySelector('.step-card.editing')) {
         event.preventDefault();
         return;
     }
@@ -3483,7 +3580,7 @@ function handleDrop(event, targetStepIndex, position, targetBlockName) {
 function moveStep(event, index, direction) {
     // Deprecated in favor of Drag & Drop, but kept for internal logic if needed
     if (event) event.stopPropagation();
-    if (!currentState || !currentState.blocks) return;
+    if (isStructuralActionInFlight || !currentState || !currentState.blocks) return;
 
     let blockName = null;
     let list = null;
@@ -3585,11 +3682,12 @@ document.addEventListener('keydown', function (e) {
     } else if (e.altKey && key === 'n') {
         e.preventDefault();
         const runBtn = document.getElementById('btnRun');
-        if (runBtn && !runBtn.disabled) {
+        if (runBtn && !runBtn.disabled && !isStructuralActionInFlight) {
             openAddStepOverlay();
         }
     } else if (e.altKey && key === 'e') {
         e.preventDefault();
+        if (isStructuralActionInFlight) return;
         const activeCard = document.querySelector('.step-card.active');
         if (activeCard) {
             const editBtn = activeCard.querySelector('.step-edit-btn');
@@ -3597,7 +3695,7 @@ document.addEventListener('keydown', function (e) {
         }
     } else if (e.ctrlKey && (key === 'arrowup' || key === 'arrowdown')) {
         // Global reorder shortcut when a step is selected but input is not focused
-        if (selectedStepIndexForDetails !== null) {
+        if (selectedStepIndexForDetails !== null && !isStructuralActionInFlight) {
             e.preventDefault();
             reorderStep(e, selectedStepIndexForDetails, key === 'arrowup' ? 'up' : 'down');
         }

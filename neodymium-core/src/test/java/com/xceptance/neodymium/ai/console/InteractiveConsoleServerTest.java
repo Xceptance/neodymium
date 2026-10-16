@@ -27,11 +27,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.config.AiConfiguration;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
 
 /**
  * Unit test suite validating {@link InteractiveConsoleServer} network binding and CORS origin isolation.
@@ -341,5 +346,350 @@ public class InteractiveConsoleServerTest
             assertTrue(pauseListenerBody.contains("if (runActionPauseId && data.pauseId !== runActionPauseId)"),
                 "pause SSE listener must release latch only upon receiving a distinct pause token");
         }
+    }
+
+    @Test
+    public void testStructuralMutationLockAndVisualSyncIndicator() throws IOException
+    {
+        final String htmlPath = "com/xceptance/neodymium/ai/console/interactive_console.html";
+        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(htmlPath))
+        {
+            assertNotNull(in, "interactive_console.html must be present on the classpath");
+            final String htmlContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+            assertTrue(htmlContent.contains("id=\"timelineSyncIndicator\""),
+                "interactive_console.html must declare #timelineSyncIndicator for visual feedback");
+            assertTrue(htmlContent.contains("Structuring changes..."),
+                "timelineSyncIndicator must communicate structural changes to the user");
+        }
+
+        final String cssPath = "com/xceptance/neodymium/ai/console/interactive_console.css";
+        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(cssPath))
+        {
+            assertNotNull(in, "interactive_console.css must be present on the classpath");
+            final String cssContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+            assertTrue(cssContent.contains(".step-add-after-btn:disabled"),
+                "interactive_console.css must define disabled styles for .step-add-after-btn");
+            assertTrue(cssContent.contains(".steps-block-content.drag-disabled .step-add-after-btn"),
+                "interactive_console.css must suppress inline card add button in drag-disabled containers");
+            assertTrue(cssContent.contains(".step-card:hover .step-add-after-btn:not(:disabled):not(.disabled)"),
+                "interactive_console.css must guard hover visibility against disabled step-add-after-btn");
+            assertTrue(cssContent.contains(".step-add-after-btn:not(:disabled):not(.disabled):hover"),
+                "interactive_console.css must guard hover background accent against disabled step-add-after-btn");
+            assertTrue(cssContent.contains(".step-num-badge input:disabled"),
+                "interactive_console.css must define disabled styles for .step-num-badge input");
+            assertTrue(cssContent.contains(".steps-block-content.drag-disabled .step-num-badge"),
+                "interactive_console.css must suppress pointer events on step-num-badge in drag-disabled containers");
+            assertTrue(cssContent.contains(".step-card.selected .step-num-badge.sync-disabled"),
+                "interactive_console.css must neutralize active border and cursor on selected step-num-badge when syncing");
+        }
+
+        final String jsPath = "com/xceptance/neodymium/ai/console/interactive_console.js";
+        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(jsPath))
+        {
+            assertNotNull(in, "interactive_console.js must be present on the classpath");
+            final String jsContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+            // Verify watchdog safety net
+            assertTrue(jsContent.contains("function startStructuralSyncWatchdog()"),
+                "interactive_console.js must define startStructuralSyncWatchdog");
+            assertTrue(jsContent.contains("function clearStructuralSyncWatchdog()"),
+                "interactive_console.js must define clearStructuralSyncWatchdog");
+
+            // Verify setButtonsEnabled structural lock
+            final int setButtonsStart = jsContent.indexOf("function setButtonsEnabled(enabled)");
+            assertTrue(setButtonsStart >= 0, "setButtonsEnabled function must exist");
+            final int setButtonsEnd = jsContent.indexOf("function syncAutoButton()", setButtonsStart);
+            final String setButtonsBody = jsContent.substring(setButtonsStart, setButtonsEnd);
+
+            assertTrue(setButtonsBody.contains("const isSyncing = isStructuralActionInFlight;"),
+                "setButtonsEnabled must track isSyncing from isStructuralActionInFlight");
+            assertTrue(setButtonsBody.contains("syncIndicator.style.display = isSyncing ? 'flex' : 'none';"),
+                "setButtonsEnabled must toggle timelineSyncIndicator visibility based on isSyncing");
+            assertTrue(setButtonsBody.contains("block.classList.add('drag-disabled');"),
+                "setButtonsEnabled must add drag-disabled class to step blocks during sync");
+            assertTrue(setButtonsBody.contains("const shouldDisable = !enabled || isEditing || isSyncing;"),
+                "add-step buttons must be disabled during sync or editing");
+            assertTrue(setButtonsBody.contains("input.disabled = isSyncing || !enabled;"),
+                "badge inputs must be disabled during sync or execution");
+            assertTrue(setButtonsBody.contains("input.setAttribute('disabled', 'true');"),
+                "badge inputs must receive disabled attribute during sync");
+            assertTrue(setButtonsBody.contains("input.setAttribute('readonly', 'true');"),
+                "badge inputs must receive readonly attribute during sync");
+            assertTrue(setButtonsBody.contains("if (isSyncing) input.blur();"),
+                "badge inputs must be blurred when syncing begins");
+            assertTrue(setButtonsBody.contains("const cardActionBtns = document.querySelectorAll('.step-edit-btn, .step-add-after-btn, .step-rewind-btn, .step-delete-btn');"),
+                "setButtonsEnabled must target inline card action buttons including rewind and add");
+
+            // Verify step card inline action button generation disabled during sync
+            assertTrue(jsContent.contains("const syncDisabledAttr = isSyncing ? ' disabled=\"true\"' : '';"),
+                "interactive_console.js must set disabled attribute for card buttons during sync");
+            assertTrue(jsContent.contains("${isSyncing ? 'disabled readonly ' : ''}"),
+                "interactive_console.js must render step number input with disabled and readonly attributes during sync");
+
+            // Verify action guards against in-flight structural actions
+            assertTrue(jsContent.contains("function restoreFocus() {\n    if (isStructuralActionInFlight) return;"),
+                "restoreFocus must not steal focus to badge input while a structural action is in-flight");
+            assertTrue(jsContent.contains("if (isStructuralActionInFlight || !currentPauseId) {\n        if (event && event.preventDefault) event.preventDefault();\n        return;\n    }"),
+                "handleStepInputInput must guard against typing or debounce timers during structural sync");
+            assertTrue(jsContent.contains("function enableEdit(btnElement) {\n    if (isStructuralActionInFlight) return;"),
+                "enableEdit must guard against concurrent in-flight structural mutations");
+            assertTrue(jsContent.contains("function triggerRewind(event, index) {\n    if (event) event.stopPropagation();\n    if (!currentPauseId || isStructuralActionInFlight) return;"),
+                "triggerRewind must guard against in-flight structural mutations");
+            assertTrue(jsContent.contains("function openAddStepOverlay(blockName, targetIndex) {\n    if (isStructuralActionInFlight) return;"),
+                "openAddStepOverlay must guard against concurrent in-flight structural mutations");
+            assertTrue(jsContent.contains("function handleDragStart(event, index, blockName) {\n    if (!currentPauseId || isStructuralActionInFlight || document.querySelector('.step-card.editing')) {"),
+                "handleDragStart must prevent dragging while a structural action is in-flight");
+            assertTrue(jsContent.contains("function reorderStep(event, stepIndex, direction, blockName) {\n    if (!currentPauseId || isStructuralActionInFlight) return;"),
+                "reorderStep must prevent reordering while a structural action is in-flight");
+        }
+    }
+
+    private JsonObject createStep(final int index, final String instruction, final String status)
+    {
+        final JsonObject step = new JsonObject();
+        step.addProperty("index", index);
+        step.addProperty("instruction", instruction);
+        step.addProperty("status", status);
+        step.addProperty("source", "playbook");
+        step.addProperty("includeLevel", 0);
+        step.add("actions", new JsonArray());
+        return step;
+    }
+
+    private JsonObject createSimulationState(final JsonArray before, final JsonArray steps, final JsonArray after)
+    {
+        final JsonObject state = new JsonObject();
+        final JsonObject blocks = new JsonObject();
+        blocks.add("before", before);
+        blocks.add("steps", steps);
+        blocks.add("after", after);
+        state.add("blocks", blocks);
+        return state;
+    }
+
+    @Test
+    public void testApplyReorderForwardWithinSameBlock()
+    {
+        final JsonArray stepsArray = new JsonArray();
+        stepsArray.add(createStep(0, "Step A", "pending"));
+        stepsArray.add(createStep(1, "Step B", "pending"));
+        stepsArray.add(createStep(2, "Step C", "pending"));
+
+        final JsonObject state = createSimulationState(new JsonArray(), stepsArray, new JsonArray());
+        final List<JsonObject> allSteps = new ArrayList<>();
+
+        final JsonObject response = new JsonObject();
+        response.addProperty("action", "REORDER");
+        response.addProperty("fromBlock", "steps");
+        response.addProperty("fromIndex", 0);
+        response.addProperty("toBlock", "steps");
+        response.addProperty("toIndex", 1);
+
+        final int newStepIndex = InteractiveConsoleServer.applyReorder(state, allSteps, response, 0);
+
+        assertEquals(0, newStepIndex);
+        assertTrue(state.get("interactivePromptChanged").getAsBoolean());
+        assertEquals(3, allSteps.size());
+
+        // Step 0 was moved to index 1 -> new order: Step B, Step A, Step C
+        assertEquals("Step B", allSteps.get(0).get("instruction").getAsString());
+        assertEquals(0, allSteps.get(0).get("index").getAsInt());
+
+        assertEquals("Step A", allSteps.get(1).get("instruction").getAsString());
+        assertEquals(1, allSteps.get(1).get("index").getAsInt());
+
+        assertEquals("Step C", allSteps.get(2).get("instruction").getAsString());
+        assertEquals(2, allSteps.get(2).get("index").getAsInt());
+
+        // Now move Step B (now at index 0) to index 2 (end of block)
+        final JsonObject response2 = new JsonObject();
+        response2.addProperty("action", "REORDER");
+        response2.addProperty("fromBlock", "steps");
+        response2.addProperty("fromIndex", 0);
+        response2.addProperty("toBlock", "steps");
+        response2.addProperty("toIndex", 2);
+
+        InteractiveConsoleServer.applyReorder(state, allSteps, response2, 0);
+
+        // New order: Step A, Step C, Step B
+        assertEquals("Step A", allSteps.get(0).get("instruction").getAsString());
+        assertEquals(0, allSteps.get(0).get("index").getAsInt());
+
+        assertEquals("Step C", allSteps.get(1).get("instruction").getAsString());
+        assertEquals(1, allSteps.get(1).get("index").getAsInt());
+
+        assertEquals("Step B", allSteps.get(2).get("instruction").getAsString());
+        assertEquals(2, allSteps.get(2).get("index").getAsInt());
+    }
+
+    @Test
+    public void testApplyReorderBackwardWithinSameBlock()
+    {
+        final JsonArray stepsArray = new JsonArray();
+        stepsArray.add(createStep(0, "Step A", "pending"));
+        stepsArray.add(createStep(1, "Step B", "pending"));
+        stepsArray.add(createStep(2, "Step C", "pending"));
+
+        final JsonObject state = createSimulationState(new JsonArray(), stepsArray, new JsonArray());
+        final List<JsonObject> allSteps = new ArrayList<>();
+
+        // Move Step C (index 2) to index 0
+        final JsonObject response = new JsonObject();
+        response.addProperty("action", "REORDER");
+        response.addProperty("fromBlock", "steps");
+        response.addProperty("fromIndex", 2);
+        response.addProperty("toBlock", "steps");
+        response.addProperty("toIndex", 0);
+
+        InteractiveConsoleServer.applyReorder(state, allSteps, response, 0);
+
+        assertEquals(3, allSteps.size());
+        assertEquals("Step C", allSteps.get(0).get("instruction").getAsString());
+        assertEquals(0, allSteps.get(0).get("index").getAsInt());
+
+        assertEquals("Step A", allSteps.get(1).get("instruction").getAsString());
+        assertEquals(1, allSteps.get(1).get("index").getAsInt());
+
+        assertEquals("Step B", allSteps.get(2).get("instruction").getAsString());
+        assertEquals(2, allSteps.get(2).get("index").getAsInt());
+
+        // Move Step B (index 2) to index 1
+        final JsonObject response2 = new JsonObject();
+        response2.addProperty("action", "REORDER");
+        response2.addProperty("fromBlock", "steps");
+        response2.addProperty("fromIndex", 2);
+        response2.addProperty("toBlock", "steps");
+        response2.addProperty("toIndex", 1);
+
+        InteractiveConsoleServer.applyReorder(state, allSteps, response2, 0);
+
+        assertEquals("Step C", allSteps.get(0).get("instruction").getAsString());
+        assertEquals("Step B", allSteps.get(1).get("instruction").getAsString());
+        assertEquals("Step A", allSteps.get(2).get("instruction").getAsString());
+    }
+
+    @Test
+    public void testApplyReorderCrossBlock()
+    {
+        final JsonArray beforeArray = new JsonArray();
+        beforeArray.add(createStep(0, "Setup A", "passed"));
+
+        final JsonArray stepsArray = new JsonArray();
+        stepsArray.add(createStep(1, "Action B", "running"));
+        stepsArray.add(createStep(2, "Action C", "pending"));
+
+        final JsonArray afterArray = new JsonArray();
+        afterArray.add(createStep(3, "Teardown D", "pending"));
+
+        final JsonObject state = createSimulationState(beforeArray, stepsArray, afterArray);
+        final List<JsonObject> allSteps = new ArrayList<>();
+
+        // Move Setup A from "before" (index 0) to "steps" at index 1 (between Action B and Action C)
+        final JsonObject response = new JsonObject();
+        response.addProperty("action", "REORDER");
+        response.addProperty("fromBlock", "before");
+        response.addProperty("fromIndex", 0);
+        response.addProperty("toBlock", "steps");
+        response.addProperty("toIndex", 1);
+
+        final int newStepIndex = InteractiveConsoleServer.applyReorder(state, allSteps, response, 1);
+
+        final JsonObject blocks = state.getAsJsonObject("blocks");
+        assertEquals(0, blocks.getAsJsonArray("before").size());
+        assertEquals(3, blocks.getAsJsonArray("steps").size());
+        assertEquals(1, blocks.getAsJsonArray("after").size());
+        assertEquals(4, allSteps.size());
+
+        assertEquals("Action B", allSteps.get(0).get("instruction").getAsString());
+        assertEquals(0, allSteps.get(0).get("index").getAsInt());
+
+        assertEquals("Setup A", allSteps.get(1).get("instruction").getAsString());
+        assertEquals(1, allSteps.get(1).get("index").getAsInt());
+
+        assertEquals("Action C", allSteps.get(2).get("instruction").getAsString());
+        assertEquals(2, allSteps.get(2).get("index").getAsInt());
+
+        assertEquals("Teardown D", allSteps.get(3).get("instruction").getAsString());
+        assertEquals(3, allSteps.get(3).get("index").getAsInt());
+
+        // Running step was Action B, which is now at index 0
+        assertEquals(0, newStepIndex);
+    }
+
+    @Test
+    public void testApplyReorderBoundaryClamping()
+    {
+        final JsonArray stepsArray = new JsonArray();
+        stepsArray.add(createStep(0, "Step A", "pending"));
+        stepsArray.add(createStep(1, "Step B", "pending"));
+
+        final JsonObject state = createSimulationState(new JsonArray(), stepsArray, new JsonArray());
+        final List<JsonObject> allSteps = new ArrayList<>();
+
+        // Negative toIndex clamped to 0
+        final JsonObject responseNeg = new JsonObject();
+        responseNeg.addProperty("action", "REORDER");
+        responseNeg.addProperty("fromBlock", "steps");
+        responseNeg.addProperty("fromIndex", 1);
+        responseNeg.addProperty("toBlock", "steps");
+        responseNeg.addProperty("toIndex", -10);
+
+        InteractiveConsoleServer.applyReorder(state, allSteps, responseNeg, 0);
+
+        assertEquals("Step B", allSteps.get(0).get("instruction").getAsString());
+        assertEquals("Step A", allSteps.get(1).get("instruction").getAsString());
+
+        // Out-of-bounds excessive toIndex clamped to size
+        final JsonObject responseExcess = new JsonObject();
+        responseExcess.addProperty("action", "REORDER");
+        responseExcess.addProperty("fromBlock", "steps");
+        responseExcess.addProperty("fromIndex", 0);
+        responseExcess.addProperty("toBlock", "steps");
+        responseExcess.addProperty("toIndex", 999);
+
+        InteractiveConsoleServer.applyReorder(state, allSteps, responseExcess, 0);
+
+        assertEquals("Step A", allSteps.get(0).get("instruction").getAsString());
+        assertEquals("Step B", allSteps.get(1).get("instruction").getAsString());
+    }
+
+    @Test
+    public void testApplyReorderTracksRunningStepIndex()
+    {
+        final JsonArray stepsArray = new JsonArray();
+        stepsArray.add(createStep(0, "Step A", "passed"));
+        stepsArray.add(createStep(1, "Step B", "running"));
+        stepsArray.add(createStep(2, "Step C", "pending"));
+
+        final JsonObject state = createSimulationState(new JsonArray(), stepsArray, new JsonArray());
+        final List<JsonObject> allSteps = new ArrayList<>();
+
+        // Move Step A (index 0) to end (index 2) -> running Step B becomes index 0
+        final JsonObject response = new JsonObject();
+        response.addProperty("action", "REORDER");
+        response.addProperty("fromBlock", "steps");
+        response.addProperty("fromIndex", 0);
+        response.addProperty("toBlock", "steps");
+        response.addProperty("toIndex", 2);
+
+        final int newStepIndex = InteractiveConsoleServer.applyReorder(state, allSteps, response, 1);
+        assertEquals(0, newStepIndex);
+        assertEquals("running", allSteps.get(newStepIndex).get("status").getAsString());
+        assertEquals("Step B", allSteps.get(newStepIndex).get("instruction").getAsString());
+
+        // Move running Step B (index 0) to index 2
+        final JsonObject response2 = new JsonObject();
+        response2.addProperty("action", "REORDER");
+        response2.addProperty("fromBlock", "steps");
+        response2.addProperty("fromIndex", 0);
+        response2.addProperty("toBlock", "steps");
+        response2.addProperty("toIndex", 2);
+
+        final int newStepIndex2 = InteractiveConsoleServer.applyReorder(state, allSteps, response2, 0);
+        assertEquals(2, newStepIndex2);
+        assertEquals("running", allSteps.get(newStepIndex2).get("status").getAsString());
+        assertEquals("Step B", allSteps.get(newStepIndex2).get("instruction").getAsString());
     }
 }

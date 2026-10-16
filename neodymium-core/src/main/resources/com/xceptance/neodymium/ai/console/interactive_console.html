@@ -193,6 +193,10 @@
     <div class="workspace" role="main">
         <div class="column" style="display:flex; flex-direction:column; justify-content:space-between; height:100%;"
             role="region" aria-label="Steps Timeline">
+            <div id="timelineSyncIndicator" class="sync-indicator-pill" style="display: none;" role="status" aria-live="polite">
+                <span class="material-symbols-outlined spinner" aria-hidden="true">progress_activity</span>
+                <span>Structuring changes...</span>
+            </div>
             <div class="scrollable-content" id="timelineList" style="flex-grow:1;"
                 ondragover="handleContainerDragOver(event)">
 
