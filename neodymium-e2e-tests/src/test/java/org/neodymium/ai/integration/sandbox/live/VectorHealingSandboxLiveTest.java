@@ -63,8 +63,8 @@ public class VectorHealingSandboxLiveTest extends BaseAiTest
     public void setupProperties(final AiSession session) throws Exception
     {
         final String baseUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/vector-drift-healing.html", server.getPort());
-        final boolean isReplay = session.getExecutionMode().isReplay();
-        final String attrUrl = isReplay ? (baseUrl + "?drift=attribute") : baseUrl;
+        final boolean isDrift = session.getExecutionMode().supportsHealing();
+        final String attrUrl = isDrift ? (baseUrl + "?drift=attribute") : baseUrl;
         session.data().putDynamic("drift.live.url", attrUrl, false);
     }
 
