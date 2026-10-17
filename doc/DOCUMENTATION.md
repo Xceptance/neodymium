@@ -11,6 +11,7 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [1.2 Session-Centric Architecture, Thread Isolation & Lifecycle Hooks](#12-session-centric-architecture-thread-isolation--lifecycle-hooks)
    - [1.3 Target Framework Inscription & Cross-Framework Fast-Fail Lock](#13-target-framework-inscription--cross-framework-fast-fail-lock)
    - [1.4 Session-Level Authentication Setup](#14-session-level-authentication-setup)
+   - [1.5 Unified In-Process Tool Architecture & Complete Tool Catalog](#15-unified-in-process-tool-architecture--complete-tool-catalog)
 2. [Test Authoring & Execution Patterns](#2-test-authoring--execution-patterns)
    - [2.1 The Structured Playbook Model & Replay Cache](#21-the-structured-playbook-model--replay-cache)
    - [2.2 Execution Patterns & Developer APIs (The 9 Patterns)](#22-execution-patterns--developer-apis-the-9-patterns)
@@ -19,6 +20,7 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [2.5 Dynamic Variable Parameterization & Outbound Secret Masking](#25-dynamic-variable-parameterization--outbound-secret-masking)
    - [2.6 Interactive Multi-Stage Instructions & Language-Agnostic `CONTINUE` Protocol](#26-interactive-multi-stage-instructions--language-agnostic-continue-protocol)
    - [2.7 Execution Timing Recording & Paced Replay Playback](#27-execution-timing-recording--paced-replay-playback)
+   - [2.8 Local Test Server & Aura Test Suite Hub (neodymium-test-server)](#28-local-test-server--aura-test-suite-hub-neodymium-test-server)
 3. [Unified Perception & 5-Tier Locator Engine](#3-unified-perception--5-tier-locator-engine)
    - [3.1 Unified Perception Model (UPM) & `DomFeatureVector`](#31-unified-perception-model-upm--domfeaturevector)
    - [3.2 The 5-Tier Cascading Locator Engine (`LocatorCascadeResolver`)](#32-the-5-tier-cascading-locator-engine-locatorcascaderesolver)
@@ -48,6 +50,7 @@ Neodymium AI (contained in `org.neodymium.ai.*`) is an intelligent, domain-neutr
    - [6.4 Universal Candidate Playbook Capture & Invalidation Lifecycle](#64-universal-candidate-playbook-capture--invalidation-lifecycle)
    - [6.5 Visual Root Cause Analysis (RCA) & Failure Diagnostics](#65-visual-root-cause-analysis-rca--failure-diagnostics)
    - [6.6 Fuzzy Layout Snapshot Testing ((layout) & (layout: full))](#66-fuzzy-layout-snapshot-testing-layout--layout-full)
+   - [6.7 Protocol-Level Introspection & Active Diagnostics (Network & Console)](#67-protocol-level-introspection--active-diagnostics-network--console)
 7. [Performance, Telemetry & Assertions](#7-performance-telemetry--assertions)
    - [7.1 Event-Driven Architecture, EventBus & HUD Overlays](#71-event-driven-architecture-eventbus--hud-overlays)
    - [7.2 Real-Time Token Budget Guard, Step Limits & Turn Bounds](#72-real-time-token-budget-guard-step-limits--turn-bounds)
@@ -98,6 +101,123 @@ To prevent cross-framework execution hazards (e.g. attempting to execute unsuppo
 ### 1.4 Session-Level Authentication Setup
 * **`TargetExecutor.registerBasicAuth(user, pass)`**: Registers credentials (username/password) dynamically on `AiSession` setup on the active execution target.
 * **CDP Interception**: Intercepts basic auth browser challenges via low-level Chrome DevTools Protocol mechanisms, ensuring seamless authentication setup for headless SUT environments.
+
+### 1.5 Unified In-Process Tool Architecture & Complete Tool Catalog
+
+Neodymium AI executes all interactions, assertions, and diagnostic inspections via a strictly typed, in-process tool calling architecture (`org.neodymium.ai.tool.*`). Rather than spawning external subprocesses or separate server instances, tools execute directly inside the JVM on the active Selenide/Selenium thread, providing sub-millisecond execution latency and zero inter-process overhead.
+
+#### A. Standard In-Process Tool Contract
+Every executable tool implements the `AiTool` interface and registers a typed `ToolDefinition` with an OpenAPI/JSON Schema:
+* **`AiTool`**: Core interface providing `getDefinition()` and `execute(ToolCall call, ToolContext context) -> ToolResult`.
+* **`ToolDefinition`**: Encapsulates the tool name, human-readable description for LLM guidance, and an OpenAPI 3.0 schema specifying parameter types, required fields, and constraints.
+* **`ToolContext`**: Carries the thread-isolated `AiSession`, active `WebDriver`, and execution state.
+* **`ToolResult`**: Immutable container returning `callId`, execution `status` (`SUCCESS`, `ERROR`, `RETRY_WITH_FEEDBACK`), and payload string.
+* **`ToolRegistry`**: Session-scoped registry populated at session initialization. Tool providers register their definitions into the registry, which formats them dynamically into Gemini, Mistral, and OpenAI tool declaration schemas.
+
+#### B. The Complete Built-in Browser Tool Catalog (40 Tools)
+
+The framework bundles 40 built-in browser automation tools registered via `BrowserToolProvider.registerBrowserTools(ToolRegistry)`:
+
+##### 1. Interaction Tools (12 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`click`** | • `selector` (string, optional)<br>• `x`, `y` (integer, optional)<br>• `button` (string: `"left"`, `"right"`, `"middle"`)<br>• `click_count` (integer: 1 or 2)<br>• `modifiers` (array of strings) | Clicks an interactive element or viewport coordinate in the browser. Supports marker indices (`marker:3`), CSS/XPath locators, or spatial anchor coordinates. |
+| **`fill`** | • `selector` (string, required)<br>• `value` (string, required) | Clears existing text and enters new text into an input or textarea element. Default tool for entering, typing, or setting form field values. |
+| **`fill_form`** | • `fields` (array of objects, required: `selector`, `value`, optional `type`) | Fills multiple form fields (inputs, textareas, selects) in a single operation. Use to fill entire forms (e.g. checkout, registration) efficiently without multiple sequential turns. |
+| **`type`** | • `selector` (string, required)<br>• `text` (string, required) | Types text into an input or textarea element without clearing existing text (appends text). Use only when intentionally appending to existing content. |
+| **`press_key`** | • `key` (string, required)<br>• `selector` (string, optional)<br>• `modifiers` (array of strings) | Presses a keyboard key (e.g. `Enter`, `Tab`, `Escape`, `ArrowDown`) on the active element or specified element. |
+| **`clear`** | • `selector` (string, required) | Clears text in an input or textarea element, or unchecks a checkbox element. |
+| **`select`** | • `selector` (string, required)<br>• `value`, `text`, `index` (optional) | Selects an option from a dropdown `<select>` element by value, visible text, or index. |
+| **`check`** | • `selector` (string, required)<br>• `checked` (boolean, optional, default: true) | Checks or unchecks a checkbox or radio button element, ensuring it reaches the desired state. Idempotent: does nothing if already in target state. |
+| **`hover`** | • `selector` (string, required) | Hovers the mouse cursor over an element to reveal hover menus, tooltips, or trigger CSS `:hover` states. |
+| **`drag`** | • `selector` (string, required)<br>• `delta_x`, `delta_y` (integer, required) | Drags an interactive element by horizontal and vertical pixel offsets. |
+| **`drag_to`** | • `source_selector` (string, required)<br>• `target_selector` (string, required) | Drags a source element and drops it onto a target destination element. |
+| **`upload_file`** | • `selector` (string, required)<br>• `file_path` (string, required) | Uploads a local file to the targeted file input element or styled dropzone container without opening native OS dialogs. Automatically discovers nested or associated `<input type='file'>` elements. |
+
+##### 2. Navigation & Browser State Tools (7 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`navigate`** | • `url` (string, required) | Navigates the browser to the specified URL. |
+| **`back`** | *(none)* | Navigates back in browser history. |
+| **`forward`** | *(none)* | Navigates forward in browser history. |
+| **`refresh`** | *(none)* | Refreshes the current browser page. |
+| **`clear_cookies`** | *(none)* | Clears all browser cookies for the current domain. |
+| **`handle_alert`** | • `action` (string: `"accept"`, `"dismiss"`, default: `"accept"`)<br>• `prompt_text` (string, optional) | Interacts with and resolves native browser modal dialogs (`window.alert`, `window.confirm`, `window.prompt`). |
+| **`wait`** | • `duration_ms` (integer, required) | Pauses execution for a specified duration in milliseconds to allow animations or background tasks to complete. |
+
+##### 3. Window & Tab Management Tools (3 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`list_tabs`** | *(none)* | Lists all open browser tabs/windows with their handle ID, index, title, URL, and whether it is currently active. |
+| **`switch_tab`** | • `target` (string, optional) | Switches the active browser focus to another tab or window by handle, index, or title/URL substring. If target is omitted, switches to the newest window. |
+| **`close_tab`** | *(none)* | Closes the current active browser tab or window, and automatically switches focus back to the parent/primary tab. |
+
+##### 4. Active Discovery & Visual Inspection Tools (7 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`query_dom`** | • `selector` (string, optional)<br>• `text` (string, optional)<br>• `limit` (integer, optional, default: 20)<br>• `attributes` (array of strings, optional) | Searches the live DOM for elements matching a selector or text, returning clean subtrees with attributes and visibility. |
+| **`inspect`** | • `selector` (string, required) | Inspects a specific DOM element, returning its full outerHTML, attributes, and visibility. |
+| **`request_context`** | • `level` (string, required: `"STANDARD"`, `"RICH"`, `"VISUAL_LEAN"`, `"VISUAL_RICH"`)<br>• `fullPage` (boolean, optional, default: false) | Requests a fresh page DOM snapshot at a specified depth and scope, including full-page screenshots. |
+| **`screenshot`** | • `full_page` (boolean, optional, default: false)<br>• `mark_elements` (boolean, optional, default: false) | Captures a screenshot of the browser viewport with optional Set-of-Marks visual badges. |
+| **`mark_elements`** | • `active` (boolean, optional, default: true)<br>• `filter` (string, optional) | Activates or deactivates high-contrast visual marker overlays on screen and stamps compact `[data-m="N"]` attributes into the DOM for visual multimodal grounding. |
+| **`inspect_visual`** | • `selector` (string, required)<br>• `padding` (integer, optional, default: 0) | Captures a targeted visual crop of a specific element or container for multimodal inspection. |
+| **`scroll`** | • `direction` (string: `"up"`, `"down"`, `"left"`, `"right"`)<br>• `amount` (integer, optional)<br>• `selector` (string, optional)<br>• `x`, `y` (integer, optional) | Scrolls the viewport, an element, or inside a container. Note: browser actions automatically scroll elements into view; use scroll only for lazy loading or visual repositioning. |
+
+##### 5. Assertions (6 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`assert_text`** | • `selector` (string, required)<br>• `expected` (string, optional)<br>• `pattern` (string, optional)<br>• `case_sensitive` (boolean, optional, default: true)<br>• `negate` (boolean, optional, default: false) | Asserts that an element contains or matches the expected text or regular expression pattern. |
+| **`assert_count`** | • `selector` (string, required)<br>• `expected` / `count` (integer, required)<br>• `comparison` (string: `"EQUALS"`, `"GREATER_THAN"`, `"LESS_THAN"`, `"NOT_EQUALS"`, default: `"EQUALS"`) | Asserts that the count of elements matching a selector satisfies expected criteria. |
+| **`assert_url`** | • `expected` (string, optional)<br>• `pattern` (string, optional)<br>• `case_sensitive` (boolean, optional, default: true)<br>• `negate` (boolean, optional, default: false) | Asserts that the current browser page URL contains or matches the expected URL or pattern. |
+| **`assert_title`** | • `expected` (string, optional)<br>• `pattern` (string, optional)<br>• `case_sensitive` (boolean, optional, default: true)<br>• `negate` (boolean, optional, default: false) | Asserts that the current browser page title contains or matches the expected title or pattern. |
+| **`assert_element_state`** | • `selector` (string, required)<br>• `state` (string, required: e.g. `"visible"`, `"hidden"`, `"enabled"`, `"disabled"`, `"checked"`, `"unchecked"`, `"focused"`, `"exists"`, `"absent"`, or compound `"visible, enabled"`) | Asserts that an element satisfies one or more states. |
+| **`assert_attribute`** | • `selector` (string, required)<br>• `attribute` (string, required)<br>• `expected` (string, optional)<br>• `pattern` (string, optional)<br>• `negate` (boolean, optional, default: false) | Asserts that an element has a specified attribute and optionally verifies its value (exact, substring, or regex). |
+
+##### 6. Scripting & Test State Tools (3 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`execute_script`** | • `script` (string, required)<br>• `args` (array, optional) | Executes JavaScript in the browser context and returns the evaluation result. |
+| **`store`** | • `name` (string, required)<br>• `selector` (string, optional)<br>• `value` (string, optional)<br>• `attribute` (string, optional) | Captures text or an attribute value from a DOM element, or stores a specified value into an execution session variable for later use in subsequent steps (`${varName}`). |
+| **`include`** | • `playbook_path` (string, required) | Includes and executes steps from an external playbook file into the current execution flow. |
+
+##### 7. Protocol Introspection Tools (2 Tools)
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`browser_get_network_failures`** | • `status_filter` (string: `"all_failures"`, `"4xx"`, `"5xx"`, `"blocked"`, default: `"all_failures"`)<br>• `limit` (integer, optional, default: 20)<br>• `clear_buffer` (boolean, optional, default: true) | Queries recent failed HTTP network requests and network-level aborts. Returns structured JSON containing URL, HTTP status code, method, timestamp, and failure description. *(See Section 6.7 for architectural details)*. |
+| **`browser_get_console_errors`** | • `min_level` (string: `"SEVERE"`, `"WARNING"`, `"INFO"`, default: `"SEVERE"`)<br>• `limit` (integer, optional, default: 20)<br>• `clear_buffer` (boolean, optional, default: true) | Queries recent browser console log entries and unhandled JavaScript exceptions. Returns structured JSON containing log level, error message, source script URL, line number, and stack trace. *(See Section 6.7 for architectural details)*. |
+
+#### C. Terminal Milestone Tool (`complete_step`)
+During autonomous multi-turn loops (`AgentToolLoopStep`), the LLM signals completion of the current milestone step by invoking:
+* **`complete_step`**:
+  - Parameters: `summary` (string, description of what was accomplished), `status` (string, default `"SUCCESS"`).
+  - Calling `complete_step` cleanly terminates the step loop and commits the extracted action sequence to the companion JSON replay cache.
+
+#### D. Reflective Java Method Extension Tools (`@Tool` & `JavaToolFactory`)
+Teams can expose domain-specific Java helper methods directly to the LLM agent as in-process tools using `JavaToolFactory`:
+```java
+public class CustomDatabaseTools
+{
+    @Tool(name = "reset_test_user", description = "Resets user password and cart state in the test database")
+    public static boolean resetUser(
+        @ToolParam(name = "email", description = "Target test user email") final String email)
+    {
+        // Execute direct database query or microservice call
+        return DatabaseClient.resetUser(email);
+    }
+}
+```
+* **Dynamic Schema Generation**: `JavaToolFactory.createToolsFromClass(...)` or `createToolsFromInstance(...)` reflectively generates the OpenAPI JSON Schema from Java method signatures and `@ToolParam` annotations.
+* **Registration**: Register the created tools on the session registry before execution:
+  ```java
+  session.getToolRegistry().registerAll(JavaToolFactory.createToolsFromClass(CustomDatabaseTools.class));
+  ```
+* **Zero Overhead**: Calls to custom Java tools execute synchronously in-process on the test thread with typed parameter conversion.
+
+#### E. Domain Plugin Tools (`wcag_accessibility_audit`)
+Modular domain tools implement the `AiTool` contract as optional plugins:
+* **`wcag_accessibility_audit`** (`WcagAccessibilityTool`):
+  - Parameters: `standard` (string: `"WCAG2AA"`, `"WCAG2AAA"`, default: `"WCAG2AA"`), `impact` (string: `"critical"`, `"serious"`, `"moderate"`, `"minor"`), `run_only` (array of strings, specific rule tags).
+  - Evaluates WCAG compliance against the live DOM and returns structured violation reports with element selectors, failure impact, and remediation guidance.
 
 ---
 
@@ -696,6 +816,48 @@ To ensure faithful replay execution for asynchronous Single Page Applications (S
 | `neodymium.ai.replay.delayScale` | `0.0` | Multiplier applied to recorded delays (`0.0` = off / instant execution for fast CI/CD builds; `1.0` = real-time pacing; `0.5` = 2x speed). |
 | `neodymium.ai.replay.useRecordedDelays` | `false` | (Legacy) When `true` without `delayScale`, enables replay pacing at scale `1.0`. |
 | `neodymium.ai.visual.postActionSettleMs` | `1000` | Minimum settling pause in milliseconds before capturing visual screenshots for SSIM baseline checks. |
+
+---
+
+### 2.8 Local Test Server & Aura Test Suite Hub (neodymium-test-server)
+
+To enable 100% self-contained, deterministic integration testing without external web dependencies or live third-party sites, the repository provides the `neodymium-test-server` module.
+
+#### A. Architecture & Dynamic Dual-Port Lifecycle
+`JavalinTestServer` embeds a lightweight Javalin / Jetty engine serving both plain HTTP and encrypted HTTPS contexts:
+* **Zero Port Collisions**: Ports are allocated dynamically at runtime via OS-assigned ephemeral free ports (or configured via system properties), allowing multiple Maven test runs to execute concurrently in CI/CD without `BindException` failures.
+* **HTTPS & Keystore Configuration**: An embedded self-signed PKCS12 certificate (`keystore.p12`) serves SSL traffic on `https://localhost:<httpsPort>`. Chrome is automatically configured with `-ignore-certificate-errors` via Neodymium's browser profile properties to bypass SSL warnings.
+* **Automated Test Lifecycle via `BaseAiTest`**: Integration tests in `neodymium-e2e-tests` extend `BaseAiTest`, which automatically boots `JavalinTestServer` before the test suite and terminates it on JVM shutdown:
+  ```java
+  public class ProtocolIntrospectionSandboxLiveTest extends BaseAiTest
+  {
+      @Test
+      public void testNetworkFailureIntrospection()
+      {
+          final String url = getSandboxUrl("AuraGlanceTest/shop/sandbox/protocol-introspection.html");
+          Selenide.open(url);
+          // Execute AI playbook or programmatic session
+      }
+  }
+  ```
+  - `getSandboxUrl(path)`: Resolves an HTTP URL targeting the dynamic local port.
+  - `getSandboxHttpsUrl(path)`: Resolves an HTTPS URL targeting the secure local port.
+
+#### B. Aura Test Suite Hub
+All sandbox pages are bundled in `neodymium-test-server/src/main/resources/ai-test-pages/AuraGlanceTest/`:
+* **Apparel Storefront (`shop/`)**: Multi-quality implementations (`homepage-perfect.html`, `homepage-normal.html`, `homepage-bad.html`, `plp-*.html`) to benchmark selector stability and self-healing locators.
+* **SaaS Dashboard (`dashboard/`)**: Dynamic SVG charts, iframe content, and metric widgets.
+* **Chaos Drawer (`controls.js`)**: Sliding drawer UI allowing live programmatic injection of visual anomalies (contrast degradation, layout shifts, clipped text).
+* **Escalation Playground (`shop/escalation.html`, `visual-escalation.html`)**: Interactive challenges testing context escalation from `AXTREE` to `LEAN`, `STANDARD`, and `VISUAL`.
+* **Scenario Challenges (`shop/sandbox/`)**: Isolated test grounds for Shadow DOM, canvas clicks, SVG icon naming, click interception, dynamic reveal timing, and protocol introspection.
+
+#### C. Standalone Server Execution
+For manual browser testing, visual inspection, or exploratory playbook development, developers can launch `JavalinTestServer` indefinitely from the terminal:
+```bash
+mvn exec:java -pl neodymium-test-server
+# Optional custom ports:
+mvn exec:java -pl neodymium-test-server -Dexec.args="--port 8542 --httpsPort 8543"
+```
 
 ---
 
@@ -1437,6 +1599,88 @@ public void testHomepageLayout(final AiSession session) throws Exception
 
 ---
 
+### 6.7 Protocol-Level Introspection & Active Diagnostics (Network & Console)
+
+When web application interactions fail due to asynchronous backend API errors (e.g. HTTP 500) or unhandled client-side JavaScript crashes (e.g. `TypeError`), standard UI test runners often enter wasteful 10–15 turn locator thrashing loops assuming the element locator was flawed. Neodymium AI solves this by introducing protocol-level network and console monitoring alongside dedicated introspection tools and passive diagnostic enrichment.
+
+```mermaid
+flowchart TD
+    Browser["Browser Execution Context<br/>(Chromium / WebKit / Gecko)"] --> CDP["CDP Event Interceptors<br/>(Network & Runtime Domains)"]
+    Browser --> Fallback["W3C & Performance API Fallback<br/>(getEntriesByType / LogType.BROWSER)"]
+    CDP --> Monitors["Bounded Ring Monitors<br/>(NetworkTrafficMonitor & ConsoleLogMonitor)"]
+    Fallback --> Monitors
+    Monitors --> ActiveTools["Active Introspection Tools<br/>(browser_get_network_failures / browser_get_console_errors)"]
+    Monitors --> PassiveAlerts["Passive Diagnostic Alert Injection<br/>(AgentToolLoopStep Failure Handler)"]
+    PassiveAlerts --> Agent["LLM Agent / Diagnostic Report<br/>(Instant Root Cause Discovery)"]
+```
+
+#### A. Dual-Engine Capture & Bounded Ring Buffering
+
+1. **Chromium DevTools Protocol (CDP)**:
+   When running on Chromium-based drivers (Chrome, Edge), Neodymium attaches asynchronous CDP listeners directly to the browser protocol:
+   - `Network.responseReceived` and `Network.loadingFailed`: Captures failed HTTP requests ($\ge 400$), network aborts, and CORS errors.
+   - `Runtime.exceptionThrown` and `Runtime.consoleAPICalled`: Captures unhandled JavaScript exceptions, runtime stack traces, and console logs.
+2. **Universal W3C & JavaScript Performance Fallback**:
+   On non-CDP environments (Firefox, Safari, remote grids with restricted protocol access), Neodymium transparently synchronizes:
+   - Browser logs via `driver.manage().logs().get(LogType.BROWSER)`.
+   - Network failure timing via `window.performance.getEntriesByType('resource')`.
+3. **Thread-Safe Ring Buffering & Deduplication**:
+   - Captured entries are buffered in memory-bounded circular FIFO queues (capacity: 100 entries per driver session) ensuring zero memory leak hazard.
+   - Dual-source deduplication applies a 2-second timestamp window to prevent duplicate records when both CDP and fallback synchronization are active.
+
+#### B. Tool Catalog: Active Protocol Introspection Tools
+
+Neodymium AI exposes two standard in-process tools in `BrowserToolProvider`:
+
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| **`browser_get_network_failures`** | • `status_filter` (string, optional: `"all_failures"`, `"4xx"`, `"5xx"`, `"blocked"`, default: `"all_failures"`)<br>• `limit` (integer, optional, default: 20)<br>• `clear_buffer` (boolean, optional, default: true) | Queries recent failed HTTP network requests and network-level aborts. Returns structured JSON containing URL, HTTP status code, method, timestamp, and failure description. |
+| **`browser_get_console_errors`** | • `min_level` (string, optional: `"SEVERE"`, `"WARNING"`, `"INFO"`, default: `"SEVERE"`)<br>• `limit` (integer, optional, default: 20)<br>• `clear_buffer` (boolean, optional, default: true) | Queries recent browser console log entries and unhandled JavaScript exceptions. Returns structured JSON containing log level, error message, source script URL, line number, and stack trace. |
+
+#### C. Passive Diagnostic Alert Enrichment (`AgentToolLoopStep`)
+
+To eliminate the cognitive burden on the LLM to remember to call introspection tools after an unexpected failure:
+* When any interactive browser action (such as `click` or `fill`) fails repeatedly, `AgentToolLoopStep` inspects the active session's `NetworkTrafficMonitor` and `ConsoleLogMonitor`.
+* If recent HTTP 5xx errors or `SEVERE` runtime JavaScript exceptions occurred during the turn window, Neodymium injects a concise one-line alert into the assistant conversation:
+  ```text
+  [Diagnostic Alert]: Detected 1 HTTP 500 error(s) during this turn:
+    - 500 POST /api/cart/add (Internal Server Error)
+  If the application UI did not update due to a backend or script failure, report the defect rather than retrying alternate element locators.
+  ```
+* **Thrashing Prevention**: Upon receiving this passive notice, autonomous agents immediately halt locator exploration and output an accurate defect diagnosis.
+* **Clean Suppression**: If no protocol-level network or console failures occurred, the alert is suppressed, preserving minimal token context.
+
+#### D. Non-Mutating Replay Fidelity in Playbooks
+
+- Calls to `browser_get_network_failures` and `browser_get_console_errors` are classified as non-mutating query inspections.
+- During offline playback (`REPLAY_STRICT`, `REPLAY_WITH_HEALING`), introspection tool calls execute as fast query operations without causing test failures or network side effects.
+
+#### E. Sandbox Infrastructure & Simulation Endpoints
+
+To test active protocol introspection and passive diagnostic enrichment under real browser conditions, `neodymium-test-server` provides dedicated REST simulation endpoints and an interactive test page:
+
+##### 1. Synthetic REST Simulation Endpoints (`JavalinTestServer`)
+| Endpoint | Method | Status | Behavior / Payload |
+| :--- | :--- | :--- | :--- |
+| **`/api/faulty-backend`** | `POST` / `GET` | **500 Internal Server Error** | Returns `{"error": "Simulated backend failure"}`. Simulates a failing order placement, crash in downstream microservice, or database deadlock. |
+| **`/api/missing-endpoint`** | `GET` | **404 Not Found** | Returns `{"error": "Route not found"}`. Simulates broken links or removed backend routes. |
+| **`/api/analytics`** | `POST` | **400 Bad Request** | Returns `{"error": "Invalid payload format"}`. Simulates bad request tracking or client payload validation failures. |
+
+##### 2. Interactive Protocol Challenge Page (`protocol-introspection.html`)
+Located at `AuraGlanceTest/shop/sandbox/protocol-introspection.html`, this page provides interactive trigger buttons:
+* **Trigger 500 Network Error**: Dispatches `fetch('/api/faulty-backend', { method: 'POST' })`, recording an HTTP 500 failure in `NetworkTrafficMonitor`.
+* **Trigger 404 Network Error**: Dispatches `fetch('/api/missing-endpoint')`, recording an HTTP 404 failure.
+* **Trigger Console Error**: Calls `console.error("CartService: checkout pipeline halted due to missing authentication token")`, recording a `SEVERE` entry in `ConsoleLogMonitor`.
+* **Trigger Unhandled Exception**: Throws an unhandled runtime error `new Error("Uncaught TypeError: Cannot read properties of undefined (reading 'cartId')")`, captured via CDP `Runtime.exceptionThrown`.
+* **Simulate Failing Checkout Action**: A button that looks like a normal "Place Order" button, but on click triggers a 500 error while the UI spinner spins forever without updating.
+
+##### 3. Integration Testing Patterns with `BaseAiTest`
+Tests in `neodymium-e2e-tests` validate both active inspection and passive thrashing enrichment:
+* **`ProtocolIntrospectionSandboxMockTest`**: Validates agent tool handling, filtering (`4xx`, `5xx`, `SEVERE`), and turn-level memory bounds using recorded tool executions.
+* **`ProtocolIntrospectionSandboxLiveTest`**: Boots Chrome, opens `protocol-introspection.html`, triggers simulated network and console failures, and asserts that `browser_get_network_failures` and `browser_get_console_errors` query and clear the real-time buffer accurately.
+
+---
+
 ## 7. Performance, Telemetry & Assertions
 
 ### 7.1 Event-Driven Architecture, EventBus & HUD Overlays
@@ -1616,6 +1860,8 @@ mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-g
 * `neodymium.ai.judge.enabled` - (Boolean) LLM Quality Judge second-opinion evaluation. (Default: `false`)
 * `neodymium.ai.judge.mode` - Mode of Quality Judge (`ON_AMBIGUITY`, `ALWAYS`, `ON_FAIL`). (Default: `ON_AMBIGUITY`)
 * `neodymium.ai.judge.recommendMarker` - (Boolean) Whether Quality Judge and selector evaluation recommend invoking visual element markers (`mark_elements`) when proposed locators are fragile with no resilient DOM alternatives. (Default: `true`)
+* `neodymium.ai.network.monitorEnabled` - (Boolean) Protocol-level network traffic and console log monitoring for introspection tools and passive diagnostic enrichment. (Default: `true`)
+* `neodymium.ai.network.ignorePattern` - (String, Regex) Regular expression matching URLs of benign background requests (e.g. analytics, telemetry, tracking pixels) to exclude from captured network failure buffers. (Default: `""`)
 
 ### 8.4 Network and Budget Limits
 * `neodymium.ai.step.maxTokens` - Maximum cumulative token budget per individual step loop. Throws `TokenBudgetExceededException` if exceeded. Aliases: `neodymium.ai.tokenBudget.step`, `neodymium.ai.step.tokenBudget`, `tokenBudget.step`. (Default: `100000`, recommended `250000` when `contextLevel = STANDARD`)

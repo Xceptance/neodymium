@@ -36,6 +36,10 @@ import org.neodymium.ai.executor.selenide.plugins.FillFormAction.FormFieldEntry;
 import org.neodymium.ai.executor.selenide.plugins.IncludeAction;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.monitor.ConsoleLogEntry;
+import org.neodymium.ai.monitor.ConsoleLogMonitor;
+import org.neodymium.ai.monitor.NetworkFailure;
+import org.neodymium.ai.monitor.NetworkTrafficMonitor;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.util.AiAssertions;
 import org.neodymium.ai.util.DomQuiescenceWatcher;
@@ -127,8 +131,65 @@ public final class BrowserToolProvider
         return node;
     }
 
+    private static final ThreadLocal<NetworkTrafficMonitor> NETWORK_MONITOR = ThreadLocal.withInitial(NetworkTrafficMonitor::new);
+    private static final ThreadLocal<ConsoleLogMonitor> CONSOLE_MONITOR = ThreadLocal.withInitial(ConsoleLogMonitor::new);
+
     /**
-     * Registers all standard browser tools and active discovery tools into the given registry.
+     * Gets the thread-local {@link NetworkTrafficMonitor} for the active test session.
+     *
+     * @return the active network traffic monitor
+     */
+    public static NetworkTrafficMonitor getNetworkTrafficMonitor()
+    {
+        return NETWORK_MONITOR.get();
+    }
+
+    /**
+     * Sets or resets the thread-local {@link NetworkTrafficMonitor}.
+     *
+     * @param monitor the monitor to set, or null to clear
+     */
+    public static void setNetworkTrafficMonitor(final NetworkTrafficMonitor monitor)
+    {
+        if (monitor != null)
+        {
+            NETWORK_MONITOR.set(monitor);
+        }
+        else
+        {
+            NETWORK_MONITOR.remove();
+        }
+    }
+
+    /**
+     * Gets the thread-local {@link ConsoleLogMonitor} for the active test session.
+     *
+     * @return the active console log monitor
+     */
+    public static ConsoleLogMonitor getConsoleLogMonitor()
+    {
+        return CONSOLE_MONITOR.get();
+    }
+
+    /**
+     * Sets or resets the thread-local {@link ConsoleLogMonitor}.
+     *
+     * @param monitor the monitor to set, or null to clear
+     */
+    public static void setConsoleLogMonitor(final ConsoleLogMonitor monitor)
+    {
+        if (monitor != null)
+        {
+            CONSOLE_MONITOR.set(monitor);
+        }
+        else
+        {
+            CONSOLE_MONITOR.remove();
+        }
+    }
+
+    /**
+     * Registers all standard browser tools, introspection tools, and active discovery tools into the given registry.
      *
      * @param registry tool registry to populate
      */
@@ -177,6 +238,18 @@ public final class BrowserToolProvider
         registry.register(createDragTool());
         registry.register(createDragToTool());
         registry.register(createIncludeTool());
+        registry.register(createGetNetworkFailuresTool());
+        registry.register(createGetConsoleErrorsTool());
+    }
+
+    /**
+     * Alias for {@link #registerBrowserTools(ToolRegistry)} conforming to standard tool provider nomenclature.
+     *
+     * @param registry tool registry to populate
+     */
+    public static void registerStandardTools(final ToolRegistry registry)
+    {
+        registerBrowserTools(registry);
     }
 
     private static int[] performSafeCoordinateClick(final WebDriver driver, final int targetX, final int targetY)
@@ -6063,4 +6136,151 @@ public final class BrowserToolProvider
             }
         }
     }
+
+    /**
+     * Creates the {@code browser_get_network_failures} tool allowing agents to query captured
+     * failed HTTP network requests (status &gt;= 400, aborts, CORS blocks).
+     *
+     * @return the network introspection tool
+     */
+    public static AiTool createGetNetworkFailuresTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("status_filter")
+             .put("type", "string")
+             .put("description", "Filter failures by status category: 'all_failures', '4xx', '5xx', or 'blocked' (default: 'all_failures')");
+        props.putObject("limit")
+             .put("type", "integer")
+             .put("description", "Maximum number of failure entries to return (default: 20)");
+        props.putObject("clear_buffer")
+             .put("type", "boolean")
+             .put("description", "Whether to drain the returned entries from the internal buffer (default: true)");
+
+        final ToolDefinition def = new ToolDefinition(
+            "browser_get_network_failures",
+            "Queries captured network failures (HTTP 4xx, 5xx, or network aborts/CORS errors) since the last check",
+            schema
+        );
+
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final JsonNode args = call.arguments();
+                final String statusFilter = args.hasNonNull("status_filter") ? args.path("status_filter").asText() : "all_failures";
+                final int limit = args.hasNonNull("limit") ? args.path("limit").asInt(20) : 20;
+                final boolean clearBuffer = !args.hasNonNull("clear_buffer") || args.path("clear_buffer").asBoolean(true);
+
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final NetworkTrafficMonitor monitor = getNetworkTrafficMonitor();
+                if (driver != null)
+                {
+                    monitor.attach(driver);
+                    monitor.syncFromPerformanceApi(driver);
+                }
+
+                final List<NetworkFailure> failures = monitor.getFailures(statusFilter, limit, clearBuffer);
+
+                final ObjectNode resultNode = successNode("browser_get_network_failures");
+                resultNode.put("count", failures.size());
+                final ArrayNode failuresArr = resultNode.putArray("failures");
+                for (final NetworkFailure failure : failures)
+                {
+                    final ObjectNode entry = failuresArr.addObject();
+                    entry.put("url", failure.url());
+                    entry.put("statusCode", failure.statusCode());
+                    entry.put("method", failure.method());
+                    entry.put("error", failure.errorDescription());
+                    entry.put("timestamp", failure.timestamp());
+                }
+
+                return ToolResult.success(call.callId(), resultNode.toString());
+            }
+        };
+    }
+
+    /**
+     * Creates the {@code browser_get_console_errors} tool allowing agents to inspect captured
+     * JavaScript console errors, warnings, and unhandled runtime exceptions.
+     *
+     * @return the console introspection tool
+     */
+    public static AiTool createGetConsoleErrorsTool()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        final ObjectNode props = schema.putObject("properties");
+        props.putObject("min_level")
+             .put("type", "string")
+             .put("description", "Minimum severity level: 'SEVERE', 'WARNING', or 'INFO' (default: 'SEVERE')");
+        props.putObject("limit")
+             .put("type", "integer")
+             .put("description", "Maximum number of log entries to return (default: 20)");
+        props.putObject("clear_buffer")
+             .put("type", "boolean")
+             .put("description", "Whether to drain the returned entries from the internal buffer (default: true)");
+
+        final ToolDefinition def = new ToolDefinition(
+            "browser_get_console_errors",
+            "Queries captured JavaScript console errors, warnings, and unhandled runtime exceptions",
+            schema
+        );
+
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context)
+            {
+                final JsonNode args = call.arguments();
+                final String minLevel = args.hasNonNull("min_level") ? args.path("min_level").asText() : "SEVERE";
+                final int limit = args.hasNonNull("limit") ? args.path("limit").asInt(20) : 20;
+                final boolean clearBuffer = !args.hasNonNull("clear_buffer") || args.path("clear_buffer").asBoolean(true);
+
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                final ConsoleLogMonitor monitor = getConsoleLogMonitor();
+                if (driver != null)
+                {
+                    monitor.attach(driver);
+                    monitor.syncFromW3cLogs(driver);
+                }
+
+                final List<ConsoleLogEntry> logs = monitor.getLogs(minLevel, limit, clearBuffer);
+
+                final ObjectNode resultNode = successNode("browser_get_console_errors");
+                resultNode.put("count", logs.size());
+                final ArrayNode logsArr = resultNode.putArray("logs");
+                for (final ConsoleLogEntry log : logs)
+                {
+                    final ObjectNode entry = logsArr.addObject();
+                    entry.put("level", log.level());
+                    entry.put("message", log.message());
+                    entry.put("source", log.source());
+                    entry.put("lineNumber", log.lineNumber());
+                    if (log.stackTrace() != null)
+                    {
+                        entry.put("stackTrace", log.stackTrace());
+                    }
+                    entry.put("timestamp", log.timestamp());
+                }
+
+                return ToolResult.success(call.callId(), resultNode.toString());
+            }
+        };
+    }
 }
+

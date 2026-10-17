@@ -244,6 +244,35 @@ public class JavalinAuraGlanceServerTest
         assertTrue(httpsResp.body().contains("Neodymium Aura AI - Aura Test Suite Hub"));
     }
 
+    @Test
+    public void testProtocolIntrospectionSimulationEndpoints() throws IOException, InterruptedException
+    {
+        final HttpResponse<String> faultyResp = get(server.getHttpUrl() + "/AuraGlanceTest/api/faulty-backend");
+        assertEquals(500, faultyResp.statusCode());
+        assertTrue(faultyResp.body().contains("Internal server fault"));
+        assertEquals("application/json", faultyResp.headers().firstValue("Content-Type").orElse("").split(";")[0].trim());
+
+        final HttpResponse<String> missingResp = get(server.getHttpUrl() + "/AuraGlanceTest/api/missing-endpoint");
+        assertEquals(404, missingResp.statusCode());
+        assertTrue(missingResp.body().contains("Resource missing"));
+        assertEquals("application/json", missingResp.headers().firstValue("Content-Type").orElse("").split(";")[0].trim());
+
+        final HttpResponse<String> analyticsResp = get(server.getHttpUrl() + "/AuraGlanceTest/api/analytics");
+        assertEquals(404, analyticsResp.statusCode());
+        assertTrue(analyticsResp.body().contains("Ignored telemetry"));
+        assertEquals("application/json", analyticsResp.headers().firstValue("Content-Type").orElse("").split(";")[0].trim());
+
+        // 4. Challenge page is served
+        final HttpResponse<String> pageResp = get(server.getHttpUrl() + "/AuraGlanceTest/shop/sandbox/protocol-introspection.html");
+        assertEquals(200, pageResp.statusCode());
+        assertTrue(pageResp.body().contains("Protocol & Console Introspection Challenge"));
+        assertTrue(pageResp.body().contains("trigger500Btn"));
+        assertTrue(pageResp.body().contains("trigger404Btn"));
+        assertTrue(pageResp.body().contains("triggerJsErrorBtn"));
+        assertTrue(pageResp.body().contains("triggerConsoleErrorBtn"));
+        assertTrue(pageResp.body().contains("triggerAnalyticsBtn"));
+    }
+
     private static HttpResponse<String> get(final String url) throws IOException, InterruptedException
     {
         final HttpRequest request = HttpRequest.newBuilder()

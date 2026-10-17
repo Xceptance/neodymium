@@ -42,6 +42,7 @@ import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.tool.ToolResult;
+import org.neodymium.ai.tool.browser.BrowserToolProvider;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -1445,5 +1446,29 @@ public class PlaybookToolReplayTest
         Assertions.assertTrue(ex.getMessage().contains("Assertion failed during replay"));
         Assertions.assertTrue(ex.getMessage().contains("Text mismatch"));
         Assertions.assertEquals(PlaybookStepStatus.FAILED, step.getStatus());
+    }
+
+    @Test
+    public void testIntrospectionToolsReplaySuccessfullyInReplayStrict() throws Exception
+    {
+        BrowserToolProvider.registerStandardTools(this.registry);
+
+        final PlaybookStep step = new PlaybookStep("Troubleshoot network and console state");
+        final ObjectNode netArgs = MAPPER.createObjectNode()
+                .put("status_filter", "all_failures")
+                .put("clear_buffer", false);
+        final ObjectNode consoleArgs = MAPPER.createObjectNode()
+                .put("min_level", "SEVERE")
+                .put("clear_buffer", false);
+
+        step.addToolCall(new ToolCall("call-net-1", "browser_get_network_failures", netArgs));
+        step.addToolCall(new ToolCall("call-con-1", "browser_get_console_errors", consoleArgs));
+
+        this.context.setVariable("neodymium.executionMode", ExecutionMode.REPLAY_STRICT);
+
+        final ToolResult result = PlaybookToolReplayer.replayStep(step, this.registry, this.context);
+
+        Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+        Assertions.assertEquals(PlaybookStepStatus.SUCCESS, step.getStatus());
     }
 }

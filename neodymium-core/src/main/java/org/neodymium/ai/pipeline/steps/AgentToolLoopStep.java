@@ -47,9 +47,13 @@ import org.neodymium.ai.executor.selenide.BrowserSutState;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
+import org.neodymium.ai.model.ContextLevel;
+import org.neodymium.ai.monitor.ConsoleLogEntry;
+import org.neodymium.ai.monitor.ConsoleLogMonitor;
+import org.neodymium.ai.monitor.NetworkFailure;
+import org.neodymium.ai.monitor.NetworkTrafficMonitor;
 import org.neodymium.ai.pipeline.AgentThrashingException;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
-import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.InvalidAgentResponseException;
 import org.neodymium.ai.pipeline.PipelineException;
@@ -1526,7 +1530,18 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
 
                 // Task 3.3: Append structured ToolResult JSON directly to role: "TOOL"
-                final String toolContent = result != null ? result.content() : "{\"status\":\"SUCCESS\"}";
+                String toolContent = result != null ? result.content() : "{\"status\":\"SUCCESS\"}";
+                if (result == null || result.status() != ToolResult.Status.SUCCESS)
+                {
+                    final String alert = generatePassiveDiagnosticAlert(
+                        BrowserToolProvider.getNetworkTrafficMonitor(),
+                        BrowserToolProvider.getConsoleLogMonitor()
+                    );
+                    if (alert != null)
+                    {
+                        toolContent = toolContent + "\n\n" + alert;
+                    }
+                }
                 conversation.add(ChatMessage.tool(effectiveCall.callId(), effectiveCall.toolName(), toolContent));
                 logToolResult(effectiveCall.toolName(), toolContent);
 
@@ -3447,6 +3462,8 @@ public final class AgentToolLoopStep implements PipelineStep
             case "inspect" -> "inspect";
             case "execute_script" -> "execute_script";
             case "store" -> "store";
+            case "get_network_failures", "network_failures" -> "browser_get_network_failures";
+            case "get_console_errors", "console_errors" -> "browser_get_console_errors";
             case "none" -> "complete_step";
             default -> clean;
         };
@@ -4065,5 +4082,57 @@ public final class AgentToolLoopStep implements PipelineStep
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * Generates a passive diagnostic alert string if any server-side HTTP 5xx failures or
+     * unhandled SEVERE JavaScript errors are present in the monitor buffers.
+     *
+     * @param netMonitor active network traffic monitor
+     * @param consoleMonitor active console log monitor
+     * @return concise diagnostic alert text, or null if buffers are clean or contain no severe errors
+     */
+    public static String generatePassiveDiagnosticAlert(
+        final NetworkTrafficMonitor netMonitor,
+        final ConsoleLogMonitor consoleMonitor)
+    {
+        final StringBuilder alert = new StringBuilder();
+
+        if (netMonitor != null)
+        {
+            final List<NetworkFailure> serverFailures = netMonitor.getFailures("5xx", 5, false);
+            if (!serverFailures.isEmpty())
+            {
+                final NetworkFailure first = serverFailures.get(0);
+                alert.append("[Diagnostic Alert]: Detected ")
+                     .append(serverFailures.size())
+                     .append(" HTTP ")
+                     .append(first.statusCode())
+                     .append(" on endpoint '")
+                     .append(first.url())
+                     .append("'. Avoid retrying selectors if the SUT state did not update due to application failure.");
+            }
+        }
+
+        if (consoleMonitor != null)
+        {
+            final List<ConsoleLogEntry> severeLogs = consoleMonitor.getLogs("SEVERE", 5, false);
+            if (!severeLogs.isEmpty())
+            {
+                if (alert.length() > 0)
+                {
+                    alert.append("\n");
+                }
+                final ConsoleLogEntry first = severeLogs.get(0);
+                alert.append("[Diagnostic Alert]: Detected unhandled JavaScript error: ")
+                     .append(first.message())
+                     .append(" in ")
+                     .append(first.source())
+                     .append(first.lineNumber() > 0 ? (":" + first.lineNumber()) : "")
+                     .append(". SUT state may not have updated due to application crash.");
+            }
+        }
+
+        return alert.length() > 0 ? alert.toString() : null;
     }
 }

@@ -1364,4 +1364,26 @@ public final class AiConfiguration
     {
         return Math.max(320, getInt("neodymium.ai.wireImageOptimization.maxDimension", 1280));
     }
+
+    /**
+     * Gets the regular expression pattern of URLs to ignore when capturing network failures.
+     * Default ignores analytics, telemetry, and favicon requests.
+     *
+     * @return regex pattern for ignored URLs
+     */
+    public String getNetworkIgnorePattern()
+    {
+        return getProperty("neodymium.ai.network.ignorePattern", ".*(google-analytics|analytics|telemetry|favicon\\.ico).*");
+    }
+
+    /**
+     * Checks whether background protocol-level network failure monitoring is enabled.
+     * Default is true.
+     *
+     * @return true if network monitoring is enabled, false otherwise
+     */
+    public boolean isNetworkMonitorEnabled()
+    {
+        return getBoolean("neodymium.ai.network.monitorEnabled", true);
+    }
 }
