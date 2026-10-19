@@ -169,10 +169,15 @@ public class YamlPlaybookParserTest
         final Playbook playbook = parser.parse("before-steps.yaml", manager);
 
         assertNotNull(playbook);
-        assertEquals(3, playbook.getSteps().size());
-        assertEquals("Open https://www.example.com", playbook.getSteps().get(0).getInstruction());
-        assertEquals("Select English", playbook.getSteps().get(1).getInstruction());
-        assertEquals("Click button", playbook.getSteps().get(2).getInstruction());
+        assertEquals(2, playbook.getBeforeSteps().size());
+        assertEquals(1, playbook.getSteps().size());
+        assertEquals(3, playbook.getAllSteps().size());
+        assertEquals("Open https://www.example.com", playbook.getBeforeSteps().get(0).getInstruction());
+        assertEquals("Select English", playbook.getBeforeSteps().get(1).getInstruction());
+        assertEquals("Click button", playbook.getSteps().get(0).getInstruction());
+        assertEquals("before", playbook.getBeforeSteps().get(0).getBlock());
+        assertEquals("before", playbook.getBeforeSteps().get(1).getBlock());
+        assertEquals("steps", playbook.getSteps().get(0).getBlock());
     }
 
     @Test
@@ -197,13 +202,19 @@ public class YamlPlaybookParserTest
         final Playbook playbook = parser.parse("lifecycle-playbook.yaml", manager);
 
         assertNotNull(playbook);
-        assertEquals(6, playbook.getSteps().size());
-        assertEquals("Open https://www.example.com", playbook.getSteps().get(0).getInstruction());
-        assertEquals("Accept cookies", playbook.getSteps().get(1).getInstruction());
-        assertEquals("Search for product", playbook.getSteps().get(2).getInstruction());
-        assertEquals("Add to cart", playbook.getSteps().get(3).getInstruction());
-        assertEquals("Clear cookies", playbook.getSteps().get(4).getInstruction());
-        assertEquals("Close banner", playbook.getSteps().get(5).getInstruction());
+        assertEquals(2, playbook.getBeforeSteps().size());
+        assertEquals(2, playbook.getSteps().size());
+        assertEquals(2, playbook.getAfterSteps().size());
+        assertEquals(6, playbook.getAllSteps().size());
+        assertEquals("Open https://www.example.com", playbook.getBeforeSteps().get(0).getInstruction());
+        assertEquals("Accept cookies", playbook.getBeforeSteps().get(1).getInstruction());
+        assertEquals("Search for product", playbook.getSteps().get(0).getInstruction());
+        assertEquals("Add to cart", playbook.getSteps().get(1).getInstruction());
+        assertEquals("Clear cookies", playbook.getAfterSteps().get(0).getInstruction());
+        assertEquals("Close banner", playbook.getAfterSteps().get(1).getInstruction());
+        assertEquals("before", playbook.getBeforeSteps().get(0).getBlock());
+        assertEquals("steps", playbook.getSteps().get(0).getBlock());
+        assertEquals("after", playbook.getAfterSteps().get(0).getBlock());
     }
 
     @Test
@@ -229,12 +240,14 @@ public class YamlPlaybookParserTest
         final Playbook playbook = parser.parse("before-aliases.yaml", manager);
 
         assertNotNull(playbook);
-        assertEquals(5, playbook.getSteps().size());
-        assertEquals("Step before", playbook.getSteps().get(0).getInstruction());
-        assertEquals("Step beforeEach", playbook.getSteps().get(1).getInstruction());
-        assertEquals("Step _beforeEach", playbook.getSteps().get(2).getInstruction());
-        assertEquals("Step _beforeAll", playbook.getSteps().get(3).getInstruction());
-        assertEquals("Main step", playbook.getSteps().get(4).getInstruction());
+        assertEquals(4, playbook.getBeforeSteps().size());
+        assertEquals(1, playbook.getSteps().size());
+        assertEquals(5, playbook.getAllSteps().size());
+        assertEquals("Step before", playbook.getBeforeSteps().get(0).getInstruction());
+        assertEquals("Step beforeEach", playbook.getBeforeSteps().get(1).getInstruction());
+        assertEquals("Step _beforeEach", playbook.getBeforeSteps().get(2).getInstruction());
+        assertEquals("Step _beforeAll", playbook.getBeforeSteps().get(3).getInstruction());
+        assertEquals("Main step", playbook.getSteps().get(0).getInstruction());
     }
 
     @Test
@@ -260,12 +273,14 @@ public class YamlPlaybookParserTest
         final Playbook playbook = parser.parse("after-aliases.yaml", manager);
 
         assertNotNull(playbook);
-        assertEquals(5, playbook.getSteps().size());
+        assertEquals(1, playbook.getSteps().size());
+        assertEquals(4, playbook.getAfterSteps().size());
+        assertEquals(5, playbook.getAllSteps().size());
         assertEquals("Main step", playbook.getSteps().get(0).getInstruction());
-        assertEquals("Step after", playbook.getSteps().get(1).getInstruction());
-        assertEquals("Step afterEach", playbook.getSteps().get(2).getInstruction());
-        assertEquals("Step _afterEach", playbook.getSteps().get(3).getInstruction());
-        assertEquals("Step _afterAll", playbook.getSteps().get(4).getInstruction());
+        assertEquals("Step after", playbook.getAfterSteps().get(0).getInstruction());
+        assertEquals("Step afterEach", playbook.getAfterSteps().get(1).getInstruction());
+        assertEquals("Step _afterEach", playbook.getAfterSteps().get(2).getInstruction());
+        assertEquals("Step _afterAll", playbook.getAfterSteps().get(3).getInstruction());
     }
 
     @Test
@@ -295,18 +310,21 @@ public class YamlPlaybookParserTest
         final Playbook playbook = parser.parse("structured-lifecycle.yaml", manager);
 
         assertNotNull(playbook);
-        assertEquals(3, playbook.getSteps().size());
-        assertEquals("Open home page", playbook.getSteps().get(0).getInstruction());
+        assertEquals(1, playbook.getBeforeSteps().size());
+        assertEquals(1, playbook.getSteps().size());
+        assertEquals(1, playbook.getAfterSteps().size());
+        assertEquals(3, playbook.getAllSteps().size());
+        assertEquals("Open home page", playbook.getBeforeSteps().get(0).getInstruction());
+        assertEquals(1, playbook.getBeforeSteps().get(0).getActions().size());
+        assertEquals("NAVIGATE", playbook.getBeforeSteps().get(0).getActions().get(0).getType());
+
+        assertEquals("Click login button", playbook.getSteps().get(0).getInstruction());
         assertEquals(1, playbook.getSteps().get(0).getActions().size());
-        assertEquals("NAVIGATE", playbook.getSteps().get(0).getActions().get(0).getType());
+        assertEquals("CLICK", playbook.getSteps().get(0).getActions().get(0).getType());
 
-        assertEquals("Click login button", playbook.getSteps().get(1).getInstruction());
-        assertEquals(1, playbook.getSteps().get(1).getActions().size());
-        assertEquals("CLICK", playbook.getSteps().get(1).getActions().get(0).getType());
-
-        assertEquals("Clear session", playbook.getSteps().get(2).getInstruction());
-        assertEquals(1, playbook.getSteps().get(2).getActions().size());
-        assertEquals("CLEAR_COOKIES", playbook.getSteps().get(2).getActions().get(0).getType());
+        assertEquals("Clear session", playbook.getAfterSteps().get(0).getInstruction());
+        assertEquals(1, playbook.getAfterSteps().get(0).getActions().size());
+        assertEquals("CLEAR_COOKIES", playbook.getAfterSteps().get(0).getActions().get(0).getType());
     }
 
     @Test
@@ -341,19 +359,22 @@ public class YamlPlaybookParserTest
         final Playbook playbook = parser.parse("main.yaml", manager);
 
         assertNotNull(playbook);
-        assertEquals(4, playbook.getSteps().size(), "Should parse 4 inlined steps across before, steps, and after blocks");
+        assertEquals(2, playbook.getBeforeSteps().size());
+        assertEquals(1, playbook.getSteps().size());
+        assertEquals(1, playbook.getAfterSteps().size());
+        assertEquals(4, playbook.getAllSteps().size(), "Should parse 4 inlined steps across before, steps, and after blocks");
 
-        assertEquals("Setup step 1", playbook.getSteps().get(0).getInstruction());
-        assertEquals("setup.yaml", playbook.getSteps().get(0).getSourceFile());
+        assertEquals("Setup step 1", playbook.getBeforeSteps().get(0).getInstruction());
+        assertEquals("setup.yaml", playbook.getBeforeSteps().get(0).getSourceFile());
 
-        assertEquals("Setup step 2", playbook.getSteps().get(1).getInstruction());
-        assertEquals("setup.yaml", playbook.getSteps().get(1).getSourceFile());
+        assertEquals("Setup step 2", playbook.getBeforeSteps().get(1).getInstruction());
+        assertEquals("setup.yaml", playbook.getBeforeSteps().get(1).getSourceFile());
 
-        assertEquals("Main step", playbook.getSteps().get(2).getInstruction());
-        assertEquals("main.yaml", playbook.getSteps().get(2).getSourceFile());
+        assertEquals("Main step", playbook.getSteps().get(0).getInstruction());
+        assertEquals("main.yaml", playbook.getSteps().get(0).getSourceFile());
 
-        assertEquals("Teardown step 1", playbook.getSteps().get(3).getInstruction());
-        assertEquals("teardown.yaml", playbook.getSteps().get(3).getSourceFile());
+        assertEquals("Teardown step 1", playbook.getAfterSteps().get(0).getInstruction());
+        assertEquals("teardown.yaml", playbook.getAfterSteps().get(0).getSourceFile());
     }
 
     @Test
@@ -1440,6 +1461,90 @@ public class YamlPlaybookParserTest
         assertEquals(parentStep, parentStep.getSubSteps().get(0).getParent());
 
         assertEquals("Submit order", steps.get(2).getInstruction());
+    }
+
+    @Test
+    public void testParsePlaybookWithBeforeAndAfterBlocks() throws IOException
+    {
+        final String yamlContent = """
+            before:
+              - "Open login page"
+              - "Verify logo is displayed"
+            steps:
+              - "Enter username and password"
+              - "Click submit"
+            after:
+              - "Click logout"
+              - "Clean up session cookies"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("lifecycle-playbook.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("lifecycle-playbook.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals(2, playbook.getBeforeSteps().size(), "Should parse 2 before steps");
+        assertEquals(2, playbook.getSteps().size(), "Should parse 2 core steps");
+        assertEquals(2, playbook.getAfterSteps().size(), "Should parse 2 after steps");
+        assertEquals(6, playbook.getAllSteps().size(), "Should aggregate 6 total steps in getAllSteps");
+
+        assertEquals("Open login page", playbook.getBeforeSteps().get(0).getInstruction());
+        assertEquals("before", playbook.getBeforeSteps().get(0).getBlock());
+        assertEquals("Verify logo is displayed", playbook.getBeforeSteps().get(1).getInstruction());
+        assertEquals("before", playbook.getBeforeSteps().get(1).getBlock());
+
+        assertEquals("Enter username and password", playbook.getSteps().get(0).getInstruction());
+        assertEquals("steps", playbook.getSteps().get(0).getBlock());
+        assertEquals("Click submit", playbook.getSteps().get(1).getInstruction());
+        assertEquals("steps", playbook.getSteps().get(1).getBlock());
+
+        assertEquals("Click logout", playbook.getAfterSteps().get(0).getInstruction());
+        assertEquals("after", playbook.getAfterSteps().get(0).getBlock());
+        assertEquals("Clean up session cookies", playbook.getAfterSteps().get(1).getInstruction());
+        assertEquals("after", playbook.getAfterSteps().get(1).getBlock());
+    }
+
+    @Test
+    public void testParseJsonRecordingWithBeforeAndAfterBlocks() throws IOException
+    {
+        final String jsonContent = """
+            [
+              {
+                "instruction": "Setup test database",
+                "block": "before"
+              },
+              {
+                "instruction": "Execute core transaction",
+                "block": "steps"
+              },
+              {
+                "instruction": "Teardown test database",
+                "block": "after"
+              }
+            ]
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("lifecycle-recording.json", jsonContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("lifecycle-recording.json", manager);
+
+        assertNotNull(playbook);
+        assertEquals(1, playbook.getBeforeSteps().size(), "Should partition before step");
+        assertEquals(1, playbook.getSteps().size(), "Should partition core step");
+        assertEquals(1, playbook.getAfterSteps().size(), "Should partition after step");
+
+        assertEquals("Setup test database", playbook.getBeforeSteps().get(0).getInstruction());
+        assertEquals("before", playbook.getBeforeSteps().get(0).getBlock());
+
+        assertEquals("Execute core transaction", playbook.getSteps().get(0).getInstruction());
+        assertEquals("steps", playbook.getSteps().get(0).getBlock());
+
+        assertEquals("Teardown test database", playbook.getAfterSteps().get(0).getInstruction());
+        assertEquals("after", playbook.getAfterSteps().get(0).getBlock());
     }
 }
 

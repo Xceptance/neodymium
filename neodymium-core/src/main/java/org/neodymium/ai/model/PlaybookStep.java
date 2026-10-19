@@ -100,6 +100,13 @@ public final class PlaybookStep
     private boolean marker;
 
     /**
+     * The lifecycle block to which this step belongs (e.g. "before", "steps", "after").
+     */
+    @JsonProperty("block")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String block = "steps";
+
+    /**
      * Nested child steps in the composite hierarchy if this step was split or structured.
      */
     private final List<PlaybookStep> subSteps = new ArrayList<>();
@@ -299,6 +306,26 @@ public final class PlaybookStep
     public void setContextLevel(final String contextLevel)
     {
         this.contextLevel = contextLevel;
+    }
+
+    /**
+     * Returns the lifecycle block to which this step belongs.
+     *
+     * @return the block name (e.g. "before", "steps", "after")
+     */
+    public String getBlock()
+    {
+        return this.block != null ? this.block : "steps";
+    }
+
+    /**
+     * Sets the lifecycle block to which this step belongs.
+     *
+     * @param block the block name (e.g. "before", "steps", "after")
+     */
+    public void setBlock(final String block)
+    {
+        this.block = block;
     }
 
     /**

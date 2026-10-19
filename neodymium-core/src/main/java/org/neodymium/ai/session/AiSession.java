@@ -21,6 +21,7 @@ package org.neodymium.ai.session;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -36,6 +37,7 @@ import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.model.ExecutionMetrics;
@@ -494,7 +496,10 @@ public abstract class AiSession implements AutoCloseable
         this.executionContext.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, playbook);
         this.executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_MODEL, Neodymium.aiConfiguration().aiModel());
 
+        final List<PlaybookStep> beforeSteps = playbook.getBeforeSteps();
         final List<PlaybookStep> playbookSteps = playbook.getSteps();
+        final List<PlaybookStep> afterSteps = playbook.getAfterSteps();
+        final List<PlaybookStep> allSteps = playbook.getAllSteps();
 
         @SuppressWarnings("unchecked")
         List<PlaybookStep> sessionSteps = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.steps");
@@ -519,7 +524,7 @@ public abstract class AiSession implements AutoCloseable
             {
                 int cursor = (Integer) this.executionContext.getTransientData().getOrDefault("playbook.replayCursor", 0);
 
-                for (final PlaybookStep parsed : playbookSteps)
+                for (final PlaybookStep parsed : allSteps)
                 {
                     if (cursor < recordedSteps.size())
                     {
@@ -661,33 +666,106 @@ public abstract class AiSession implements AutoCloseable
             }
         }
 
-        @SuppressWarnings("unchecked")
-        List<PlaybookStep> flatSteps = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.flatSteps");
-        if (flatSteps == null)
-        {
-            flatSteps = new ArrayList<>();
-            this.executionContext.getTransientData().put("playbook.flatSteps", flatSteps);
-        }
-        if (flatSteps != playbookSteps)
-        {
-            flattenSteps(playbookSteps, flatSteps);
-        }
+        this.executionContext.getTransientData().put("playbook.beforeSteps", new ArrayList<>(beforeSteps));
+        this.executionContext.getTransientData().put("playbook.steps", new ArrayList<>(playbookSteps));
+        this.executionContext.getTransientData().put("playbook.afterSteps", new ArrayList<>(afterSteps));
 
-        for (int i = playbookSteps.size() - 1; i >= 0; i--)
-        {
-            this.executionContext.pushStep(
-                ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookSteps.get(i), this, this.executionContext)
-            );
-        }
+        final List<PlaybookStep> flatSteps = new ArrayList<>();
+        flattenSteps(allSteps, flatSteps);
+        this.executionContext.getTransientData().put("playbook.flatSteps", flatSteps);
 
+        final long sessionStartTime = System.currentTimeMillis();
+        this.executionContext.getTransientData().put("playbook.deferSessionFinished", Boolean.TRUE);
+
+        Throwable primaryFailure = null;
         try
         {
-            final StateMachineRunner runner = new StateMachineRunner(this);
-            runner.run();
+            if (beforeSteps != null && !beforeSteps.isEmpty())
+            {
+                for (int i = beforeSteps.size() - 1; i >= 0; i--)
+                {
+                    this.executionContext.pushStep(
+                        ExecuteActionsStep.mapPlaybookStepToPipelineStep(beforeSteps.get(i), this, this.executionContext)
+                    );
+                }
+                final StateMachineRunner runner = new StateMachineRunner(this);
+                runner.run();
+            }
+
+            if (playbookSteps != null && !playbookSteps.isEmpty())
+            {
+                for (int i = playbookSteps.size() - 1; i >= 0; i--)
+                {
+                    this.executionContext.pushStep(
+                        ExecuteActionsStep.mapPlaybookStepToPipelineStep(playbookSteps.get(i), this, this.executionContext)
+                    );
+                }
+                final StateMachineRunner runner = new StateMachineRunner(this);
+                runner.run();
+            }
         }
-        catch (final Exception e)
+        catch (final Throwable t)
         {
-            Throwable root = e;
+            primaryFailure = t;
+            this.executionContext.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, t);
+        }
+        finally
+        {
+            try
+            {
+                if (afterSteps != null && !afterSteps.isEmpty())
+                {
+                    for (int i = afterSteps.size() - 1; i >= 0; i--)
+                    {
+                        this.executionContext.pushStep(
+                            ExecuteActionsStep.mapPlaybookStepToPipelineStep(afterSteps.get(i), this, this.executionContext)
+                        );
+                    }
+                    final StateMachineRunner runner = new StateMachineRunner(this);
+                    runner.run();
+                }
+            }
+            catch (final Throwable afterEx)
+            {
+                this.executionContext.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, afterEx);
+                if (primaryFailure != null)
+                {
+                    primaryFailure.addSuppressed(afterEx);
+                }
+                else
+                {
+                    primaryFailure = afterEx;
+                }
+            }
+            finally
+            {
+                this.executionContext.getTransientData().remove("playbook.deferSessionFinished");
+                if (!Boolean.TRUE.equals(this.executionContext.getTransientData().get("sessionFinishedHandled")))
+                {
+                    this.executionContext.getTransientData().put("sessionFinishedHandled", true);
+                    final boolean overallSuccess = (primaryFailure == null);
+                    final long totalDurationMs = Math.max(1, System.currentTimeMillis() - sessionStartTime);
+                    @SuppressWarnings("unchecked")
+                    final List<String> warningsList = (List<String>) this.executionContext.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+                    final ExecutionContext prev = ExecutionContext.getActiveContext();
+                    try
+                    {
+                        ExecutionContext.setActiveContext(this.executionContext);
+                        this.eventBus.dispatch(new SessionFinishedEvent(totalDurationMs, overallSuccess, warningsList != null ? warningsList : Collections.emptyList()));
+                        StateMachineRunner.logFinalStatsSummary(this.executionContext, totalDurationMs, overallSuccess, primaryFailure);
+                        this.runPostHooks(overallSuccess);
+                    }
+                    finally
+                    {
+                        ExecutionContext.setActiveContext(prev);
+                    }
+                }
+            }
+        }
+
+        if (primaryFailure != null)
+        {
+            Throwable root = primaryFailure;
             while (root != null)
             {
                 if (root instanceof AssertionError ae)
@@ -700,7 +778,19 @@ public abstract class AiSession implements AutoCloseable
                 }
                 root = root.getCause();
             }
-            throw e;
+            if (primaryFailure instanceof PipelineException pe)
+            {
+                throw pe;
+            }
+            if (primaryFailure instanceof RuntimeException re)
+            {
+                throw re;
+            }
+            if (primaryFailure instanceof Error err)
+            {
+                throw err;
+            }
+            throw new RuntimeException(primaryFailure);
         }
 
         final Map<String, Object> recordingMetadata = new HashMap<>(this.executionContext.getRecordingMetadata());
@@ -726,7 +816,7 @@ public abstract class AiSession implements AutoCloseable
         recordingMetadata.put("totalEscalations", totalEscalations);
         recordingMetadata.put("contextLevelCounts", contextLevelCounts);
 
-        return new PlaybookRecording(playbookSteps, recordingMetadata, this.executionMode);
+        return new PlaybookRecording(allSteps, recordingMetadata, this.executionMode);
     }
 
     static int aggregateStepStats(final StepStats stats, final Map<String, Integer> contextLevelCounts)

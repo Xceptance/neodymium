@@ -200,6 +200,16 @@ public final class ExecutionContext
     }
 
     /**
+     * Peeks at the top step of the execution stack without removing it.
+     *
+     * @return the top step, or null if the stack is empty
+     */
+    public PipelineStep peekStep()
+    {
+        return this.runStack.peek();
+    }
+
+    /**
      * Checks if the execution stack contains any remaining steps.
      *
      * @return true if steps exist, false otherwise

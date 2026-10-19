@@ -407,6 +407,7 @@ public final class TestExecutionReport
         private long durationMs;
         private String sourceFile;
         private int lineNumber;
+        private String block = "steps";
         private String reasoning;
         private final List<String> reasonings = new ArrayList<>();
         private String failureReason;
@@ -529,6 +530,16 @@ public final class TestExecutionReport
         public void setLineNumber(final int lineNumber)
         {
             this.lineNumber = lineNumber;
+        }
+
+        public String getBlock()
+        {
+            return this.block != null ? this.block : "steps";
+        }
+
+        public void setBlock(final String block)
+        {
+            this.block = block;
         }
 
         public String getReasoning()

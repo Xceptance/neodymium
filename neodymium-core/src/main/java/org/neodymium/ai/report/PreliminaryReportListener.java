@@ -229,6 +229,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                 stepEntry.setNoHealing(pbStep.isNoHealing());
                 stepEntry.setVisual(pbStep.isVisualOrLayoutStep());
                 stepEntry.setMarker(pbStep.isMarker());
+                stepEntry.setBlock(pbStep.getBlock());
 
                 if (pbStep.getReasoning() != null)
                 {
@@ -287,6 +288,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     parentEntry.setRawInstruction(pRaw);
                     parentEntry.setSourceFile(rootPb.getSourceFile());
                     parentEntry.setLineNumber(rootPb.getLineNumber());
+                    parentEntry.setBlock(rootPb.getBlock());
                     parentEntry.setStatus("SUCCESS");
                     parentEntry.setBug(rootPb.isBug());
                     parentEntry.setBugDetails(rootPb.getBugDetails());
@@ -358,6 +360,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     childEntry.setRawInstruction(cRaw);
                     childEntry.setSourceFile(childStep.getSourceFile());
                     childEntry.setLineNumber(childStep.getLineNumber());
+                    childEntry.setBlock(childStep.getBlock());
                     childEntry.setStatus("PENDING");
                     childEntry.setBug(childStep.isBug());
                     childEntry.setBugDetails(childStep.getBugDetails());
@@ -435,6 +438,11 @@ public final class PreliminaryReportListener implements ExecutionListener
             if (targetStep != null)
             {
                 targetStep.setStatus(status != null ? status.name() : "SUCCESS");
+                if (status == PlaybookStepStatus.FAILED && !targetStep.isOptional())
+                {
+                    this.report.setStatus("FAILED");
+                    this.report.setSuccess(false);
+                }
                 final boolean isStepSuccess = "SUCCESS".equalsIgnoreCase(targetStep.getStatus()) || "PASSED".equalsIgnoreCase(targetStep.getStatus());
                 if (targetStep.getStartTimeMs() > 0)
                 {
@@ -571,6 +579,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                             childEntry.setRawInstruction(cRaw);
                             childEntry.setSourceFile(childStep.getSourceFile());
                             childEntry.setLineNumber(childStep.getLineNumber());
+                            childEntry.setBlock(childStep.getBlock());
                             childEntry.setStatus(childStep.getStatus() != null ? childStep.getStatus().name() : "PENDING");
                             if (childStep.getFailureReason() != null)
                             {
@@ -1134,7 +1143,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                 : sessionFinished.getDurationMs();
             this.report.setDurationMs(totalDuration);
 
-            final boolean wasAlreadyFailed = "FAILED".equalsIgnoreCase(this.report.getStatus());
+            final boolean hasFailingSteps = hasNonOptionalFailedSteps();
+            final boolean wasAlreadyFailed = "FAILED".equalsIgnoreCase(this.report.getStatus()) || hasFailingSteps;
             final boolean cumulativeSuccess = !wasAlreadyFailed && sessionFinished.isSuccess();
             this.report.setSuccess(cumulativeSuccess);
             this.report.setStatus(cumulativeSuccess ? "PASSED" : "FAILED");
@@ -1149,8 +1159,34 @@ public final class PreliminaryReportListener implements ExecutionListener
             populateContextMetadata();
             resolveUnfinishedSteps();
             recalculateMetrics();
+
+            if (hasNonOptionalFailedSteps() || (this.report.getMetrics() != null && this.report.getMetrics().getFailedSteps() > 0))
+            {
+                this.report.setSuccess(false);
+                this.report.setStatus("FAILED");
+            }
+
             flushReport();
         }
+    }
+
+    private boolean hasNonOptionalFailedSteps()
+    {
+        for (final TestExecutionReport.ReportStepEntry step : this.report.getSteps())
+        {
+            if ("FAILED".equalsIgnoreCase(step.getStatus()) && !step.isOptional())
+            {
+                return true;
+            }
+            for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+            {
+                if ("FAILED".equalsIgnoreCase(sub.getStatus()) && !sub.isOptional())
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private void resolveUnfinishedSteps()
@@ -2050,6 +2086,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                         entry.getSubSteps().size(),
                         sub.getInstruction() != null ? sub.getInstruction() : "Sub-step " + (s + 1)
                     );
+                    subEntry.setBlock(entry.getBlock());
                     mergeStepStats(subEntry, sub);
                     subEntry.setStatus(sub.getFailureReason() != null ? "FAILED" : "SUCCESS");
                     entry.addSubStep(subEntry);

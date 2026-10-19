@@ -105,7 +105,9 @@ public final class YamlPlaybookParser implements PlaybookParser
         final Playbook playbook = parseInternal(identifier, manager, allowEmptySteps);
         if (playbook != null)
         {
+            setParentReferences(playbook.getBeforeSteps(), null);
             setParentReferences(playbook.getSteps(), null);
+            setParentReferences(playbook.getAfterSteps(), null);
         }
         return playbook;
     }
@@ -258,7 +260,9 @@ public final class YamlPlaybookParser implements PlaybookParser
     private Playbook parseInternal(final String identifier, final PlaybookResourceManager manager, final boolean allowEmptySteps) throws IOException
     {
         final LinkedHashSet<String> activeStack = new LinkedHashSet<>();
+        final List<PlaybookStep> beforeSteps = new ArrayList<>();
         final List<PlaybookStep> steps = new ArrayList<>();
+        final List<PlaybookStep> afterSteps = new ArrayList<>();
         final List<Map<String, SessionData.DataEntry>> dataSets = new ArrayList<>();
 
         if (identifier.endsWith(".json"))
@@ -299,7 +303,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                 try
                 {
                     final Playbook merged = parseAndMerge(identifier, yamlPath, manager);
-                    if (merged != null && merged.getSteps() != null && !merged.getSteps().isEmpty())
+                    if (merged != null && !merged.getAllSteps().isEmpty())
                     {
                         return merged;
                     }
@@ -362,9 +366,28 @@ public final class YamlPlaybookParser implements PlaybookParser
                         {
                             throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
                         }
-                        setParentReferences(parsedSteps, null);
-                        resetExecutionState(parsedSteps);
-                        return new Playbook(parsedSteps, dataSets, promptAddons, description);
+                        for (final PlaybookStep s : parsedSteps)
+                        {
+                            if ("before".equalsIgnoreCase(s.getBlock()))
+                            {
+                                beforeSteps.add(s);
+                            }
+                            else if ("after".equalsIgnoreCase(s.getBlock()))
+                            {
+                                afterSteps.add(s);
+                            }
+                            else
+                            {
+                                steps.add(s);
+                            }
+                        }
+                        setParentReferences(beforeSteps, null);
+                        setParentReferences(steps, null);
+                        setParentReferences(afterSteps, null);
+                        resetExecutionState(beforeSteps);
+                        resetExecutionState(steps);
+                        resetExecutionState(afterSteps);
+                        return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description);
                     }
                 }
                 catch (final IllegalArgumentException e)
@@ -408,6 +431,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         else
                         {
                             currentStep = new PlaybookStep(stepDesc);
+                            currentStep.setBlock("steps");
                             currentStep.getActions().add(action);
                             currentStep.setSourceFile(stepFile);
                             if (stepLine != -1)
@@ -422,20 +446,22 @@ public final class YamlPlaybookParser implements PlaybookParser
                         }
                     }
                 }
-                return new Playbook(steps, dataSets, promptAddons, description);
+                return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description);
             }
         }
 
-        parseRecursive(identifier, manager, activeStack, steps, dataSets);
+        parseRecursive(identifier, manager, activeStack, beforeSteps, steps, afterSteps, dataSets, "steps");
 
-        if (!allowEmptySteps && steps.isEmpty())
+        if (!allowEmptySteps && beforeSteps.isEmpty() && steps.isEmpty() && afterSteps.isEmpty())
         {
             throw new IllegalArgumentException("Playbook cannot be empty: " + identifier + " parsed to 0 executable steps.");
         }
 
+        validateNoUnresolvedIncludeDirectives(beforeSteps, identifier);
         validateNoUnresolvedIncludeDirectives(steps, identifier);
+        validateNoUnresolvedIncludeDirectives(afterSteps, identifier);
 
-        return new Playbook(steps, dataSets, promptAddons, description);
+        return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description);
     }
 
     private Map<String, String> parsePromptAddons(final Map<String, Object> loadedMap)
@@ -497,8 +523,11 @@ public final class YamlPlaybookParser implements PlaybookParser
         final String identifier,
         final PlaybookResourceManager manager,
         final LinkedHashSet<String> activeStack,
+        final List<PlaybookStep> outBeforeSteps,
         final List<PlaybookStep> outSteps,
-        final List<Map<String, SessionData.DataEntry>> outDataSets) throws IOException
+        final List<PlaybookStep> outAfterSteps,
+        final List<Map<String, SessionData.DataEntry>> outDataSets,
+        final String defaultBlock) throws IOException
     {
         // 1. Cycle detection: if current path is already in the active stack, fail immediately
         if (!activeStack.add(identifier))
@@ -572,40 +601,73 @@ public final class YamlPlaybookParser implements PlaybookParser
                 final String[] beforeKeys = {"before", "beforeEach", "_beforeEach", "_beforeAll"};
                 for (final String key : beforeKeys)
                 {
-                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outBeforeSteps, outDataSets, searchOffset, "before");
                 }
 
                 final String[] stepKeys = {"steps", "_steps"};
                 for (final String key : stepKeys)
                 {
-                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset, "steps");
                 }
 
                 final String[] afterKeys = {"after", "afterEach", "_afterEach", "_afterAll"};
                 for (final String key : afterKeys)
                 {
-                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+                    parseStepBlock(loadedMap.get(key), identifier, fileName, fileContent, manager, activeStack, outAfterSteps, outDataSets, searchOffset, "after");
                 }
 
-                if (outSteps.isEmpty() && (loadedMap.containsKey("_include") || loadedMap.containsKey("include")))
+                if (outBeforeSteps.isEmpty() && outSteps.isEmpty() && outAfterSteps.isEmpty() && (loadedMap.containsKey("_include") || loadedMap.containsKey("include")))
                 {
                     final String actualIncludeKey = loadedMap.containsKey("_include") ? "_include" : "include";
                     final String includeRelativePath = String.valueOf(loadedMap.get(actualIncludeKey));
                     final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
 
-                    parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
+                    parseRecursive(resolvedIdentifier, manager, activeStack, outBeforeSteps, outSteps, outAfterSteps, outDataSets, defaultBlock);
                 }
             }
             else if (loadedObject instanceof List<?> || loadedObject instanceof String)
             {
                 final int[] searchOffset = new int[]{0};
-                parseStepBlock(loadedObject, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+                final String targetBlock = (defaultBlock != null && !defaultBlock.isBlank()) ? defaultBlock : "steps";
+                final List<PlaybookStep> targetList = "before".equalsIgnoreCase(targetBlock) ? outBeforeSteps
+                    : "after".equalsIgnoreCase(targetBlock) ? outAfterSteps
+                    : outSteps;
+                parseStepBlock(loadedObject, identifier, fileName, fileContent, manager, activeStack, targetList, outDataSets, searchOffset, targetBlock);
             }
         }
         finally
         {
             // Pop the identifier off the stack once its children are fully parsed
             activeStack.remove(identifier);
+        }
+    }
+
+    private void parseRecursiveFragment(
+        final String identifier,
+        final PlaybookResourceManager manager,
+        final LinkedHashSet<String> activeStack,
+        final List<PlaybookStep> outSteps,
+        final List<Map<String, SessionData.DataEntry>> outDataSets,
+        final String blockName) throws IOException
+    {
+        final List<PlaybookStep> subBefore = new ArrayList<>();
+        final List<PlaybookStep> subSteps = new ArrayList<>();
+        final List<PlaybookStep> subAfter = new ArrayList<>();
+        parseRecursive(identifier, manager, activeStack, subBefore, subSteps, subAfter, outDataSets, blockName);
+        for (final PlaybookStep s : subBefore)
+        {
+            s.setBlock(blockName);
+            outSteps.add(s);
+        }
+        for (final PlaybookStep s : subSteps)
+        {
+            s.setBlock(blockName);
+            outSteps.add(s);
+        }
+        for (final PlaybookStep s : subAfter)
+        {
+            s.setBlock(blockName);
+            outSteps.add(s);
         }
     }
 
@@ -619,8 +681,11 @@ public final class YamlPlaybookParser implements PlaybookParser
         final LinkedHashSet<String> activeStack,
         final List<PlaybookStep> outSteps,
         final List<Map<String, SessionData.DataEntry>> outDataSets,
-        final int[] searchOffset) throws IOException
+        final int[] searchOffset,
+        final String blockName) throws IOException
     {
+        final String effBlock = blockName != null && !blockName.isBlank() ? blockName : "steps";
+
         if (rawSteps instanceof List)
         {
             for (final Object stepItem : (List<?>) rawSteps)
@@ -652,6 +717,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                             }
                             final String parentInstruction = resolveParentInstruction(fileContent, str, (searchOffset != null && searchOffset.length > 0) ? searchOffset[0] : 0, firstPrompt);
                             final PlaybookStep parentStep = new PlaybookStep(parentInstruction);
+                            parentStep.setBlock(effBlock);
                             initStepLocation(parentStep, fileName, fileContent, parentInstruction, searchOffset);
 
                             for (final String subLine : subLines)
@@ -669,6 +735,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                                     continue;
                                 }
                                 final PlaybookStep childStep = new PlaybookStep(unbulleted);
+                                childStep.setBlock(effBlock);
                                 childStep.setParent(parentStep);
                                 initStepLocation(childStep, fileName, fileContent, unbulleted, searchOffset);
                                 parentStep.getSubSteps().add(childStep);
@@ -681,7 +748,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         }
                         else
                         {
-                            parseStepBlock(str, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+                            parseStepBlock(str, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset, effBlock);
                         }
                     }
                     else if (str.startsWith("_include:") || str.startsWith("include:"))
@@ -690,11 +757,12 @@ public final class YamlPlaybookParser implements PlaybookParser
                         final String includeRelativePath = str.substring(colonIdx + 1).trim();
                         final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
 
-                        parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
+                        parseRecursiveFragment(resolvedIdentifier, manager, activeStack, outSteps, outDataSets, effBlock);
                     }
                     else
                     {
                         final PlaybookStep step = new PlaybookStep(str);
+                        step.setBlock(effBlock);
                         initStepLocation(step, fileName, fileContent, str, searchOffset);
                         outSteps.add(step);
                     }
@@ -708,7 +776,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         final String includeRelativePath = String.valueOf(mapStep.get(actualIncludeKey));
                         final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
 
-                        parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
+                        parseRecursiveFragment(resolvedIdentifier, manager, activeStack, outSteps, outDataSets, effBlock);
                     }
                     else if (mapStep.containsKey("instruction") || mapStep.containsKey("promptLine") || mapStep.containsKey("step"))
                     {
@@ -716,6 +784,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                             ? String.valueOf(mapStep.get("instruction"))
                             : (mapStep.containsKey("promptLine") ? String.valueOf(mapStep.get("promptLine")) : String.valueOf(mapStep.get("step")));
                         final PlaybookStep step = new PlaybookStep(instruction);
+                        step.setBlock(effBlock);
                         initStepLocation(step, fileName, fileContent, instruction, searchOffset);
 
                         final Object rawActions = mapStep.get("actions");
@@ -741,7 +810,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         final Object rawSubSteps = mapStep.containsKey("subSteps") ? mapStep.get("subSteps") : mapStep.get("steps");
                         if (rawSubSteps != null)
                         {
-                            parseStepBlock(rawSubSteps, identifier, fileName, fileContent, manager, activeStack, step.getSubSteps(), outDataSets, searchOffset);
+                            parseStepBlock(rawSubSteps, identifier, fileName, fileContent, manager, activeStack, step.getSubSteps(), outDataSets, searchOffset, effBlock);
                         }
 
                         outSteps.add(step);
@@ -758,11 +827,12 @@ public final class YamlPlaybookParser implements PlaybookParser
                                 parentInstruction = parentInstruction.substring(0, parentInstruction.length() - 1).trim();
                             }
                             final PlaybookStep step = new PlaybookStep(parentInstruction);
+                            step.setBlock(effBlock);
                             initStepLocation(step, fileName, fileContent, String.valueOf(entry.getKey()), searchOffset);
 
                             if (val != null)
                             {
-                                parseStepBlock(val, identifier, fileName, fileContent, manager, activeStack, step.getSubSteps(), outDataSets, searchOffset);
+                                parseStepBlock(val, identifier, fileName, fileContent, manager, activeStack, step.getSubSteps(), outDataSets, searchOffset, effBlock);
                             }
                             outSteps.add(step);
                         }
@@ -778,11 +848,12 @@ public final class YamlPlaybookParser implements PlaybookParser
                                 final String includeRelativePath = fullText.substring(colonIdx + 1).trim();
                                 final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
 
-                                parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
+                                parseRecursiveFragment(resolvedIdentifier, manager, activeStack, outSteps, outDataSets, effBlock);
                             }
                             else
                             {
                                 final PlaybookStep step = new PlaybookStep(fullText);
+                                step.setBlock(effBlock);
                                 initStepLocation(step, fileName, fileContent, keyStr, searchOffset);
                                 outSteps.add(step);
                             }
@@ -796,7 +867,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                 }
                 else if (stepItem instanceof List)
                 {
-                    parseStepBlock(stepItem, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset);
+                    parseStepBlock(stepItem, identifier, fileName, fileContent, manager, activeStack, outSteps, outDataSets, searchOffset, effBlock);
                 }
                 else
                 {
@@ -853,11 +924,12 @@ public final class YamlPlaybookParser implements PlaybookParser
                         final String includeRelativePath = trimmed.substring(colonIdx + 1).trim();
                         final String resolvedIdentifier = manager.resolveInclude(identifier, includeRelativePath);
                         final List<PlaybookStep> includedSteps = new ArrayList<>();
-                        parseRecursive(resolvedIdentifier, manager, activeStack, includedSteps, outDataSets);
+                        parseRecursiveFragment(resolvedIdentifier, manager, activeStack, includedSteps, outDataSets, effBlock);
                         for (final PlaybookStep includedStep : includedSteps)
                         {
                             if (includedStep != null)
                             {
+                                includedStep.setBlock(effBlock);
                                 includedStep.setParent(arrowParentStep);
                                 arrowParentStep.getSubSteps().add(includedStep);
                                 if (arrowParentNeedsName && includedStep.getInstruction() != null && !includedStep.getInstruction().isBlank())
@@ -878,6 +950,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         if (!unbulleted.isEmpty() && !unbulleted.startsWith("#"))
                         {
                             final PlaybookStep childStep = new PlaybookStep(unbulleted);
+                            childStep.setBlock(effBlock);
                             childStep.setParent(arrowParentStep);
                             initStepLocation(childStep, fileName, fileContent, unbulleted, searchOffset);
                             arrowParentStep.getSubSteps().add(childStep);
@@ -909,11 +982,12 @@ public final class YamlPlaybookParser implements PlaybookParser
                     if (currentParentStep != null && indent > parentIndent)
                     {
                         final List<PlaybookStep> includedSteps = new ArrayList<>();
-                        parseRecursive(resolvedIdentifier, manager, activeStack, includedSteps, outDataSets);
+                        parseRecursiveFragment(resolvedIdentifier, manager, activeStack, includedSteps, outDataSets, effBlock);
                         for (final PlaybookStep includedStep : includedSteps)
                         {
                             if (includedStep != null)
                             {
+                                includedStep.setBlock(effBlock);
                                 includedStep.setParent(currentParentStep);
                                 currentParentStep.getSubSteps().add(includedStep);
                             }
@@ -921,7 +995,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                     }
                     else
                     {
-                        parseRecursive(resolvedIdentifier, manager, activeStack, outSteps, outDataSets);
+                        parseRecursiveFragment(resolvedIdentifier, manager, activeStack, outSteps, outDataSets, effBlock);
                         currentParentStep = null;
                         arrowParentStep = null;
                         inArrowSubsteps = false;
@@ -947,6 +1021,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                     }
 
                     final PlaybookStep parentStep = new PlaybookStep(parentInstruction);
+                    parentStep.setBlock(effBlock);
                     initStepLocation(parentStep, fileName, fileContent, parentInstruction, searchOffset);
                     outSteps.add(parentStep);
                     currentParentStep = parentStep;
@@ -972,6 +1047,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                     if (!inline.isEmpty() && !inline.startsWith("#"))
                     {
                         final PlaybookStep childStep = new PlaybookStep(inline);
+                        childStep.setBlock(effBlock);
                         childStep.setParent(parentStep);
                         initStepLocation(childStep, fileName, fileContent, inline, searchOffset);
                         parentStep.getSubSteps().add(childStep);
@@ -986,6 +1062,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                 {
                     final String parentInstruction = resolveParentInstruction(fileContent, trimmed, (searchOffset != null && searchOffset.length > 0) ? searchOffset[0] : 0);
                     final PlaybookStep parentStep = new PlaybookStep(parentInstruction);
+                    parentStep.setBlock(effBlock);
                     initStepLocation(parentStep, fileName, fileContent, parentInstruction, searchOffset);
                     outSteps.add(parentStep);
                     currentParentStep = parentStep;
@@ -1008,6 +1085,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                     if (!inline.isEmpty() && !inline.startsWith("#"))
                     {
                         final PlaybookStep childStep = new PlaybookStep(inline);
+                        childStep.setBlock(effBlock);
                         childStep.setParent(parentStep);
                         initStepLocation(childStep, fileName, fileContent, inline, searchOffset);
                         parentStep.getSubSteps().add(childStep);
@@ -1018,6 +1096,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                     if (currentParentStep != null && indent > parentIndent)
                     {
                         final PlaybookStep childStep = new PlaybookStep(unbulleted);
+                        childStep.setBlock(effBlock);
                         childStep.setParent(currentParentStep);
                         initStepLocation(childStep, fileName, fileContent, line, searchOffset);
                         currentParentStep.getSubSteps().add(childStep);
@@ -1030,6 +1109,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                             parentInstruction = parentInstruction.substring(0, parentInstruction.length() - 1).trim();
                         }
                         final PlaybookStep step = new PlaybookStep(parentInstruction);
+                        step.setBlock(effBlock);
                         initStepLocation(step, fileName, fileContent, line, searchOffset);
                         outSteps.add(step);
                         currentParentStep = step;
@@ -1341,7 +1421,7 @@ public final class YamlPlaybookParser implements PlaybookParser
     {
         // 1. Parse the YAML playbook
         final Playbook yamlPlaybook = parse(yamlIdentifier, manager);
-        final List<PlaybookStep> yamlSteps = yamlPlaybook.getSteps();
+        final List<PlaybookStep> allYamlSteps = yamlPlaybook.getAllSteps();
 
         // 2. Parse the JSON actions
         final List<Action> actions;
@@ -1359,9 +1439,31 @@ public final class YamlPlaybookParser implements PlaybookParser
                 try
                 {
                     final List<PlaybookStep> jsonSteps = mapper.readValue(content, new TypeReference<List<PlaybookStep>>(){});
-                    setParentReferences(jsonSteps, null);
-                    resetExecutionState(jsonSteps);
-                    return new Playbook(jsonSteps, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons());
+                    final List<PlaybookStep> jBefore = new ArrayList<>();
+                    final List<PlaybookStep> jSteps = new ArrayList<>();
+                    final List<PlaybookStep> jAfter = new ArrayList<>();
+                    for (final PlaybookStep s : jsonSteps)
+                    {
+                        if ("before".equalsIgnoreCase(s.getBlock()))
+                        {
+                            jBefore.add(s);
+                        }
+                        else if ("after".equalsIgnoreCase(s.getBlock()))
+                        {
+                            jAfter.add(s);
+                        }
+                        else
+                        {
+                            jSteps.add(s);
+                        }
+                    }
+                    setParentReferences(jBefore, null);
+                    setParentReferences(jSteps, null);
+                    setParentReferences(jAfter, null);
+                    resetExecutionState(jBefore);
+                    resetExecutionState(jSteps);
+                    resetExecutionState(jAfter);
+                    return new Playbook(jBefore, jSteps, jAfter, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons(), yamlPlaybook.getDescription());
                 }
                 catch (final Exception e)
                 {
@@ -1382,9 +1484,9 @@ public final class YamlPlaybookParser implements PlaybookParser
 
             // Find the matching YAML step sequentially starting from the current index
             int foundIndex = -1;
-            for (int i = yamlIndex; i < yamlSteps.size(); i++)
+            for (int i = yamlIndex; i < allYamlSteps.size(); i++)
             {
-                final PlaybookStep yamlStep = yamlSteps.get(i);
+                final PlaybookStep yamlStep = allYamlSteps.get(i);
                 if (yamlStep.getInstruction().trim().equalsIgnoreCase(stepDesc.trim()))
                 {
                     foundIndex = i;
@@ -1395,9 +1497,9 @@ public final class YamlPlaybookParser implements PlaybookParser
             // If not found from current pointer, scan from the beginning as fallback
             if (foundIndex == -1)
             {
-                for (int i = 0; i < yamlSteps.size(); i++)
+                for (int i = 0; i < allYamlSteps.size(); i++)
                 {
-                    final PlaybookStep yamlStep = yamlSteps.get(i);
+                    final PlaybookStep yamlStep = allYamlSteps.get(i);
                     if (yamlStep.getInstruction().trim().equalsIgnoreCase(stepDesc.trim()))
                     {
                         foundIndex = i;
@@ -1408,7 +1510,7 @@ public final class YamlPlaybookParser implements PlaybookParser
 
             if (foundIndex != -1)
             {
-                final PlaybookStep yamlStep = yamlSteps.get(foundIndex);
+                final PlaybookStep yamlStep = allYamlSteps.get(foundIndex);
                 yamlStep.getActions().add(action);
                 if (action.getStepScreenshotHash() != null && !action.getStepScreenshotHash().isEmpty())
                 {

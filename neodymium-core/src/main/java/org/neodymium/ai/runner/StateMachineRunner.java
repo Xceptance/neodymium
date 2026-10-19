@@ -24,6 +24,8 @@ import com.codeborne.selenide.WebDriverRunner;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
+import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRequest;
@@ -62,6 +64,7 @@ import org.neodymium.ai.pipeline.structural.TryCatchStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinter;
 import org.neodymium.ai.playbook.linter.PlaybookLinterException;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.prompt.VerificationIssue;
 import org.neodymium.ai.prompt.VisualRcaResult;
 import org.neodymium.ai.playbook.linter.PostFlightPlaybookLinter;
 import org.neodymium.ai.prompt.VisualRcaPrompt;
@@ -410,7 +413,7 @@ public final class StateMachineRunner
                         // Add failure to warnings/reporting list
                         @SuppressWarnings("unchecked")
                         final List<String> warnings = (List<String>) context.getTransientData()
-                            .computeIfAbsent("verificationWarnings", k -> new java.util.ArrayList<String>());
+                            .computeIfAbsent("verificationWarnings", k -> new ArrayList<String>());
 
                         final String resolvedOptInstruction = (context.getSessionData() != null && playbookStep.getInstruction() != null)
                             ? context.getSessionData().resolveAvailableVariables(playbookStep.getInstruction())
@@ -526,7 +529,10 @@ public final class StateMachineRunner
             }
             }
             success = true;
-            context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+            if (!Boolean.TRUE.equals(context.getTransientData().get("playbook.deferSessionFinished")))
+            {
+                context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+            }
         }
         catch (final PipelineException e)
         {
@@ -654,19 +660,27 @@ public final class StateMachineRunner
                 LOGGER.warn("⚠️ Post-flight empirical linter encountered an unexpected error: {}", t.getMessage(), t);
             }
 
-            @SuppressWarnings("unchecked")
-            final List<String> warningsList = (List<String>) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
-
-            try
+            if (Boolean.TRUE.equals(context.getTransientData().get("playbook.deferSessionFinished")))
             {
-                context.getTransientData().put("sessionFinishedHandled", true);
-                this.session.getEventBus().dispatch(new SessionFinishedEvent(durationMs, success, warningsList != null ? warningsList : Collections.emptyList()));
-                logFinalStatsSummary(context, durationMs, success, failureCause);
-                this.session.runPostHooks(success);
-            }
-            finally
-            {
+                LOGGER.debug("Playbook intermediate block finished; SessionFinishedEvent deferred until remaining blocks execute.");
                 ExecutionContext.setActiveContext(previousContext);
+            }
+            else
+            {
+                @SuppressWarnings("unchecked")
+                final List<String> warningsList = (List<String>) context.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+
+                try
+                {
+                    context.getTransientData().put("sessionFinishedHandled", true);
+                    this.session.getEventBus().dispatch(new SessionFinishedEvent(durationMs, success, warningsList != null ? warningsList : Collections.emptyList()));
+                    logFinalStatsSummary(context, durationMs, success, failureCause);
+                    this.session.runPostHooks(success);
+                }
+                finally
+                {
+                    ExecutionContext.setActiveContext(previousContext);
+                }
             }
         }
     }
@@ -674,17 +688,17 @@ public final class StateMachineRunner
     /**
      * Logs both the cumulative AI execution statistics and the step-by-step trace statistics.
      */
-    private void logFinalStatsSummary(final ExecutionContext context, final long durationMs, final boolean success, final Throwable failureCause)
+    public static void logFinalStatsSummary(final ExecutionContext context, final long durationMs, final boolean success, final Throwable failureCause)
     {
         @SuppressWarnings("unchecked")
-        final List<org.neodymium.ai.pipeline.StepStats> stepStatsList = 
-            (List<org.neodymium.ai.pipeline.StepStats>) context.getTransientData().get("execution.stepStatsList");
+        final List<StepStats> stepStatsList = 
+            (List<StepStats>) context.getTransientData().get("execution.stepStatsList");
         
         if (stepStatsList != null && !stepStatsList.isEmpty())
         {
             if (!success && failureCause != null)
             {
-                final org.neodymium.ai.pipeline.StepStats lastStats = stepStatsList.get(stepStatsList.size() - 1);
+                final StepStats lastStats = stepStatsList.get(stepStatsList.size() - 1);
                 if (lastStats.getDurationMs() == 0)
                 {
                     lastStats.setDurationMs(System.currentTimeMillis() - lastStats.getStartTime());
@@ -696,8 +710,8 @@ public final class StateMachineRunner
                     lastStats.setFailureReason(root.getMessage() != null ? root.getMessage() : root.toString());
                     
                     @SuppressWarnings("unchecked")
-                    final List<org.neodymium.ai.action.Action> stepActions = 
-                        (List<org.neodymium.ai.action.Action>) context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
+                    final List<Action> stepActions = 
+                        (List<Action>) context.getTransientData().get(ExecutionContext.KEY_CURRENT_STEP_ACTIONS);
                     if (stepActions != null)
                     {
                         lastStats.getActions().addAll(stepActions);
@@ -716,13 +730,13 @@ public final class StateMachineRunner
             }
 
             LOGGER.debug("======== 📊 AI Step Execution Statistics ========");
-            for (final org.neodymium.ai.pipeline.StepStats stats : stepStatsList)
+            for (final StepStats stats : stepStatsList)
             {
                 calculateDuration(stats);
             }
             for (int i = 0; i < stepStatsList.size(); i++)
             {
-                final org.neodymium.ai.pipeline.StepStats stats = stepStatsList.get(i);
+                final StepStats stats = stepStatsList.get(i);
                 if (stats.isExecuted())
                 {
                     logStats(stats, "  ", String.valueOf(i + 1));
@@ -820,7 +834,7 @@ public final class StateMachineRunner
                 final Object warnObj = warnings.get(i);
                 final int issueNum = i + 1;
 
-                if (warnObj instanceof org.neodymium.ai.prompt.VerificationIssue issue)
+                if (warnObj instanceof VerificationIssue issue)
                 {
                     LOGGER.warn("  📌 [Issue {}/{}] Step {}", issueNum, warnings.size(), issue.stepLocation());
                     if (issue.instruction() != null && !issue.instruction().isBlank())
@@ -1046,7 +1060,7 @@ public final class StateMachineRunner
         }
     }
 
-    private long calculateDuration(final org.neodymium.ai.pipeline.StepStats stats)
+    private static long calculateDuration(final StepStats stats)
     {
         if (stats.getDurationMs() > 0)
         {
@@ -1055,7 +1069,7 @@ public final class StateMachineRunner
         if (stats.getSubStats() != null && !stats.getSubStats().isEmpty())
         {
             long sum = 0;
-            for (final org.neodymium.ai.pipeline.StepStats child : stats.getSubStats())
+            for (final StepStats child : stats.getSubStats())
             {
                 sum += calculateDuration(child);
             }
@@ -1065,7 +1079,7 @@ public final class StateMachineRunner
         return 0;
     }
 
-    private void logStats(final org.neodymium.ai.pipeline.StepStats stats, final String prefix, final String stepNum)
+    private static void logStats(final StepStats stats, final String prefix, final String stepNum)
     {
         LOGGER.debug("{}Step {}: {}", prefix, stepNum, stats.getInstruction());
         final String indent = prefix + "    ";
@@ -1077,12 +1091,12 @@ public final class StateMachineRunner
             LOGGER.debug("{}Context Levels: {}", indent, String.join(" -> ", stats.getContextLevels()));
         }
         
-        final List<org.neodymium.ai.action.Action> actions = stats.getActions();
+        final List<Action> actions = stats.getActions();
         if (actions != null && !actions.isEmpty())
         {
             final String actionTypes = actions.stream()
                 .map(act -> act.getType())
-                .collect(java.util.stream.Collectors.joining(", "));
+                .collect(Collectors.joining(", "));
             LOGGER.debug("{}Actions:        {} ({})", indent, actions.size(), actionTypes);
         }
         else
@@ -1126,7 +1140,7 @@ public final class StateMachineRunner
         {
             for (int j = 0; j < stats.getSubStats().size(); j++)
             {
-                final org.neodymium.ai.pipeline.StepStats child = stats.getSubStats().get(j);
+                final StepStats child = stats.getSubStats().get(j);
                 if (child.isExecuted())
                 {
                     logStats(child, prefix + "  ", stepNum + "." + (j + 1));
@@ -1170,34 +1184,75 @@ public final class StateMachineRunner
             return;
         }
 
-        final List<PlaybookStep> targetSteps = new ArrayList<>();
         @SuppressWarnings("unchecked")
-        final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
-        if (flatSteps != null && !flatSteps.isEmpty())
-        {
-            targetSteps.addAll(flatSteps);
-        }
+        final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
         @SuppressWarnings("unchecked")
         final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
-        if (sessionSteps != null && !sessionSteps.isEmpty())
-        {
-            for (final PlaybookStep s : sessionSteps)
-            {
-                if (!targetSteps.contains(s))
-                {
-                    targetSteps.add(s);
-                }
-            }
-        }
         @SuppressWarnings("unchecked")
         final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
-        if (afterSteps != null && !afterSteps.isEmpty())
+
+        final boolean failedInAfter;
+        if (failedStepObj instanceof final PlaybookStep fs)
         {
-            for (final PlaybookStep s : afterSteps)
+            if ("after".equalsIgnoreCase(fs.getBlock()))
             {
-                if (!targetSteps.contains(s))
+                failedInAfter = true;
+            }
+            else if (afterSteps != null && !afterSteps.isEmpty())
+            {
+                failedInAfter = afterSteps.contains(fs)
+                    || afterSteps.stream().anyMatch(s -> s.hasSubSteps() && s.getSubSteps().contains(fs));
+            }
+            else
+            {
+                failedInAfter = false;
+            }
+        }
+        else
+        {
+            failedInAfter = false;
+        }
+
+        final List<PlaybookStep> targetSteps = new ArrayList<>();
+        if (failedInAfter)
+        {
+            if (afterSteps != null && !afterSteps.isEmpty())
+            {
+                targetSteps.addAll(afterSteps);
+            }
+        }
+        else
+        {
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+            if (flatSteps != null && !flatSteps.isEmpty())
+            {
+                for (final PlaybookStep s : flatSteps)
                 {
-                    targetSteps.add(s);
+                    if (!"after".equalsIgnoreCase(s.getBlock()) && (afterSteps == null || !afterSteps.contains(s)))
+                    {
+                        targetSteps.add(s);
+                    }
+                }
+            }
+            if (beforeSteps != null && !beforeSteps.isEmpty())
+            {
+                for (final PlaybookStep s : beforeSteps)
+                {
+                    if (!targetSteps.contains(s))
+                    {
+                        targetSteps.add(s);
+                    }
+                }
+            }
+            if (sessionSteps != null && !sessionSteps.isEmpty())
+            {
+                for (final PlaybookStep s : sessionSteps)
+                {
+                    if (!targetSteps.contains(s) && !"after".equalsIgnoreCase(s.getBlock()) && (afterSteps == null || !afterSteps.contains(s)))
+                    {
+                        targetSteps.add(s);
+                    }
                 }
             }
         }

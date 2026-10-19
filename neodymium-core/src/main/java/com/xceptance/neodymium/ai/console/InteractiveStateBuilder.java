@@ -31,6 +31,11 @@ import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
+import org.openqa.selenium.HasCapabilities;
+import org.openqa.selenium.WebDriver;
+
+import com.codeborne.selenide.WebDriverRunner;
+import com.xceptance.neodymium.util.Neodymium;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
@@ -288,7 +293,7 @@ public final class InteractiveStateBuilder
         {
             try
             {
-                browser = com.xceptance.neodymium.util.Neodymium.getBrowserProfileName();
+                browser = Neodymium.getBrowserProfileName();
             }
             catch (final Throwable ignored)
             {
@@ -298,7 +303,7 @@ public final class InteractiveStateBuilder
         {
             try
             {
-                browser = com.xceptance.neodymium.util.Neodymium.getBrowserName();
+                browser = Neodymium.getBrowserName();
             }
             catch (final Throwable ignored)
             {
@@ -306,14 +311,14 @@ public final class InteractiveStateBuilder
         }
         if (browser == null || browser.isEmpty())
         {
-            if (com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+            if (WebDriverRunner.hasWebDriverStarted())
             {
                 try
                 {
-                    final org.openqa.selenium.WebDriver webDriver = com.codeborne.selenide.WebDriverRunner.getWebDriver();
-                    if (webDriver instanceof org.openqa.selenium.HasCapabilities)
+                    final WebDriver webDriver = WebDriverRunner.getWebDriver();
+                    if (webDriver instanceof HasCapabilities capabilities)
                     {
-                        browser = ((org.openqa.selenium.HasCapabilities) webDriver).getCapabilities().getBrowserName();
+                        browser = capabilities.getCapabilities().getBrowserName();
                     }
                 }
                 catch (final Throwable ignored)
@@ -351,7 +356,7 @@ public final class InteractiveStateBuilder
 
         // Test execution start time
         final long testStartTimeMs = context != null ? context.getStartTimeMs() : System.currentTimeMillis();
-        state.addProperty("startTime", java.time.Instant.ofEpochMilli(testStartTimeMs).toString());
+        state.addProperty("startTime", Instant.ofEpochMilli(testStartTimeMs).toString());
 
         // Data bindings from SessionData
         if (context != null && context.getSessionData() != null)
@@ -380,7 +385,15 @@ public final class InteractiveStateBuilder
         if (context != null)
         {
             @SuppressWarnings("unchecked")
-            final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+            List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+            if (beforeSteps == null)
+            {
+                final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+                if (pbObj instanceof Playbook pb && !pb.getBeforeSteps().isEmpty())
+                {
+                    beforeSteps = pb.getBeforeSteps();
+                }
+            }
             @SuppressWarnings("unchecked")
             List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
             if (playbookSteps == null)
@@ -394,40 +407,81 @@ public final class InteractiveStateBuilder
             @SuppressWarnings("unchecked")
             final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
             @SuppressWarnings("unchecked")
-            final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+            List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+            if (afterSteps == null)
+            {
+                final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+                if (pbObj instanceof Playbook pb && !pb.getAfterSteps().isEmpty())
+                {
+                    afterSteps = pb.getAfterSteps();
+                }
+            }
+
+            PlaybookStep currentStep = null;
+            final Object curObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+            if (curObj instanceof PlaybookStep ps)
+            {
+                currentStep = ps;
+            }
 
             boolean beforeActive = false;
             boolean stepsActive = false;
             boolean afterActive = false;
 
-            if (beforeSteps != null && beforeSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.RUNNING))
+            if (currentStep != null)
             {
-                beforeActive = true;
-            }
-            else if (afterSteps != null && afterSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.RUNNING))
-            {
-                afterActive = true;
+                final PlaybookStep root = currentStep.getRootStep() != null ? currentStep.getRootStep() : currentStep;
+                if (beforeSteps != null && (beforeSteps.contains(root) || beforeSteps.contains(currentStep)))
+                {
+                    beforeActive = true;
+                }
+                else if (afterSteps != null && (afterSteps.contains(root) || afterSteps.contains(currentStep)))
+                {
+                    afterActive = true;
+                }
+                else
+                {
+                    stepsActive = true;
+                }
             }
             else
             {
-                stepsActive = true;
+                if (beforeSteps != null && beforeSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.RUNNING))
+                {
+                    beforeActive = true;
+                }
+                else if (afterSteps != null && afterSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.RUNNING))
+                {
+                    afterActive = true;
+                }
+                else if (beforeSteps != null && beforeSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.PENDING)
+                    && (playbookSteps == null || playbookSteps.stream().allMatch(s -> s.getStatus() == PlaybookStepStatus.PENDING)))
+                {
+                    beforeActive = true;
+                }
+                else
+                {
+                    stepsActive = true;
+                }
             }
 
             final boolean beforePassed = !beforeActive && (stepsActive || afterActive);
             final boolean stepsPassed = !beforeActive && !stepsActive && afterActive;
 
+            int globalIndex = 0;
             boolean sectionFailed = false;
             if (beforeSteps != null)
             {
                 for (int i = 0; i < beforeSteps.size(); i++)
                 {
                     final PlaybookStep step = beforeSteps.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "before", beforeActive, beforePassed, execReport, runnerStatus, sectionFailed);
+                    final JsonObject stepObj = serializeStep(step, i, globalIndex, activeStepIndex, context, "before", beforeActive, beforePassed, execReport, runnerStatus, sectionFailed, currentStep);
                     if (stepObj.has("status") && "failed".equalsIgnoreCase(stepObj.get("status").getAsString()))
                     {
                         sectionFailed = true;
                     }
                     beforeArray.add(stepObj);
+                    globalIndex++;
                 }
             }
 
@@ -458,12 +512,13 @@ public final class InteractiveStateBuilder
                 for (int i = 0; i < stepsToSerialize.size(); i++)
                 {
                     final PlaybookStep step = stepsToSerialize.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "playbook", stepsActive, stepsPassed, execReport, runnerStatus, sectionFailed);
+                    final JsonObject stepObj = serializeStep(step, i, globalIndex, activeStepIndex, context, "playbook", stepsActive, stepsPassed, execReport, runnerStatus, sectionFailed, currentStep);
                     if (stepObj.has("status") && "failed".equalsIgnoreCase(stepObj.get("status").getAsString()))
                     {
                         sectionFailed = true;
                     }
                     stepsArray.add(stepObj);
+                    globalIndex++;
                 }
             }
 
@@ -472,8 +527,13 @@ public final class InteractiveStateBuilder
                 for (int i = 0; i < afterSteps.size(); i++)
                 {
                     final PlaybookStep step = afterSteps.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, activeStepIndex, context, "after", afterActive, false, execReport, runnerStatus, sectionFailed);
+                    final JsonObject stepObj = serializeStep(step, i, globalIndex, activeStepIndex, context, "after", afterActive, false, execReport, runnerStatus, sectionFailed, currentStep);
+                    if (stepObj.has("status") && "failed".equalsIgnoreCase(stepObj.get("status").getAsString()))
+                    {
+                        sectionFailed = true;
+                    }
                     afterArray.add(stepObj);
+                    globalIndex++;
                 }
             }
         }
@@ -513,6 +573,38 @@ public final class InteractiveStateBuilder
         if (anyStepHealed && state.has("status") && ("passed".equalsIgnoreCase(state.get("status").getAsString()) || "succeeded".equalsIgnoreCase(state.get("status").getAsString())))
         {
             state.addProperty("status", "healed");
+        }
+
+        boolean anyStepFailed = (execReport != null && ("FAILED".equalsIgnoreCase(execReport.getStatus()) || "ERROR".equalsIgnoreCase(execReport.getStatus())));
+        if (!anyStepFailed)
+        {
+            for (final JsonArray arr : List.of(beforeArray, stepsArray, afterArray))
+            {
+                for (final JsonElement elem : arr)
+                {
+                    if (elem.isJsonObject())
+                    {
+                        final JsonObject stepObj = elem.getAsJsonObject();
+                        final String st = stepObj.has("status") && !stepObj.get("status").isJsonNull() ? stepObj.get("status").getAsString() : "";
+                        final boolean optional = stepObj.has("optional") && !stepObj.get("optional").isJsonNull() && stepObj.get("optional").getAsBoolean();
+                        if ("failed".equalsIgnoreCase(st) && !optional)
+                        {
+                            anyStepFailed = true;
+                            break;
+                        }
+                    }
+                }
+                if (anyStepFailed)
+                {
+                    break;
+                }
+            }
+        }
+        final boolean isExecutionFinished = (execReport != null && ("FAILED".equalsIgnoreCase(execReport.getStatus()) || "ERROR".equalsIgnoreCase(execReport.getStatus())))
+            || (state.has("status") && ("passed".equalsIgnoreCase(state.get("status").getAsString()) || "succeeded".equalsIgnoreCase(state.get("status").getAsString())));
+        if (anyStepFailed && (isExecutionFinished || "failed".equalsIgnoreCase(runnerStatus)))
+        {
+            state.addProperty("status", "failed");
         }
 
         // Enrich with TestExecutionReport data if available
@@ -645,6 +737,7 @@ public final class InteractiveStateBuilder
     private static JsonObject serializeStep(
         final PlaybookStep step,
         final int stepIndex,
+        final int globalIndex,
         final int activeStepIndex,
         final ExecutionContext context,
         final String source,
@@ -652,12 +745,15 @@ public final class InteractiveStateBuilder
         final boolean isPastSection,
         final TestExecutionReport report,
         final String runnerStatus,
-        final boolean precedingStepFailed
+        final boolean precedingStepFailed,
+        final PlaybookStep currentPlaybookStep
     )
     {
         final JsonObject obj = new JsonObject();
         obj.addProperty("id", source + "_" + stepIndex);
-        obj.addProperty("index", stepIndex + 1);
+        obj.addProperty("index", globalIndex + 1);
+        obj.addProperty("blockIndex", stepIndex);
+        obj.addProperty("block", "playbook".equalsIgnoreCase(source) ? "steps" : source);
         final String rawInstruction = step.getInstruction() != null ? step.getInstruction() : "";
         final ExecutionContext effContext = context != null ? context : ExecutionContext.getActiveContext();
         final String resolvedInstruction = (effContext != null && effContext.getSessionData() != null)
@@ -710,6 +806,13 @@ public final class InteractiveStateBuilder
         obj.addProperty("source", stepEngine);
         obj.addProperty("origin", origin);
 
+        final PlaybookStep rootStep = currentPlaybookStep != null
+            ? (currentPlaybookStep.getRootStep() != null ? currentPlaybookStep.getRootStep() : currentPlaybookStep)
+            : null;
+        final boolean isThisStepActive = currentPlaybookStep != null
+            ? (step == currentPlaybookStep || step == rootStep)
+            : (isCurrentSection && (stepIndex == activeStepIndex || globalIndex == activeStepIndex));
+
         final boolean isRunFailed = runnerStatus != null && ("failed".equalsIgnoreCase(runnerStatus) || "aborted".equalsIgnoreCase(runnerStatus));
 
         PlaybookStepStatus status = step.getStatus();
@@ -723,22 +826,11 @@ public final class InteractiveStateBuilder
             {
                 status = PlaybookStepStatus.SKIPPED;
             }
-            else if (isCurrentSection)
+            else if (isThisStepActive)
             {
-                if (stepIndex < activeStepIndex)
-                {
-                    status = PlaybookStepStatus.SUCCESS;
-                }
-                else if (stepIndex == activeStepIndex)
-                {
-                    status = PlaybookStepStatus.RUNNING;
-                }
-                else
-                {
-                    status = PlaybookStepStatus.PENDING;
-                }
+                status = PlaybookStepStatus.RUNNING;
             }
-            else if (isPastSection)
+            else if (isPastSection || (isCurrentSection && (stepIndex < activeStepIndex || globalIndex < activeStepIndex)))
             {
                 status = PlaybookStepStatus.SUCCESS;
             }
@@ -753,7 +845,7 @@ public final class InteractiveStateBuilder
             {
                 status = PlaybookStepStatus.SKIPPED;
             }
-            else if (isCurrentSection && stepIndex == activeStepIndex && "running".equalsIgnoreCase(runnerStatus))
+            else if (isThisStepActive && "running".equalsIgnoreCase(runnerStatus))
             {
                 status = PlaybookStepStatus.RUNNING;
             }
@@ -775,7 +867,7 @@ public final class InteractiveStateBuilder
         }
 
         Long stepStart = step.getStartTimeMs();
-        if (stepStart == null && isCurrentSection && stepIndex == activeStepIndex && context != null)
+        if (stepStart == null && isThisStepActive && context != null)
         {
             stepStart = (Long) context.getTransientData().get("KEY_STEP_START_TIME");
         }
@@ -800,7 +892,7 @@ public final class InteractiveStateBuilder
             obj.addProperty("failureReason", step.getFailureReason());
         }
 
-        if (isCurrentSection && stepIndex == activeStepIndex && context != null)
+        if (isThisStepActive && context != null)
         {
             final String currentScreenshot = (String) context.getTransientData().get("currentScreenshot");
             if (currentScreenshot != null && !currentScreenshot.isEmpty())
@@ -871,10 +963,17 @@ public final class InteractiveStateBuilder
         ReportStepEntry reportStep = null;
         if (report != null && report.getSteps() != null)
         {
+            final String expectedBlock = "playbook".equalsIgnoreCase(source) ? "steps" : source;
             for (final ReportStepEntry entry : report.getSteps())
             {
-                if (entry != null && entry.getStepIndex() == stepIndex)
+                if (entry != null && (entry.getStepIndex() == stepIndex || entry.getStepIndex() == globalIndex))
                 {
+                    final String entryBlock = entry.getBlock();
+                    final boolean blockMatches = (entryBlock == null || expectedBlock == null || expectedBlock.equalsIgnoreCase(entryBlock));
+                    if (!blockMatches)
+                    {
+                        continue;
+                    }
                     final String entryRaw = entry.getRawInstruction();
                     final String entryInst = entry.getInstruction();
                     final boolean matchesInstruction = (rawInstruction != null && !rawInstruction.isBlank()
@@ -1003,7 +1102,7 @@ public final class InteractiveStateBuilder
                     PlaybookStepStatus subStatus = sub.getStatus();
                     if (subStatus == null || subStatus == PlaybookStepStatus.PENDING)
                     {
-                        if (stepIndex < activeStepIndex)
+                        if (isPastSection || (isCurrentSection && (stepIndex < activeStepIndex || globalIndex < activeStepIndex)))
                         {
                             subStatus = PlaybookStepStatus.SUCCESS;
                         }
@@ -1089,7 +1188,7 @@ public final class InteractiveStateBuilder
             final List<ReportLlmCallEntry> matchingCalls = new ArrayList<>();
             for (final ReportLlmCallEntry call : report.getLlmCalls())
             {
-                if (call != null && call.getStepIndex() == stepIndex)
+                if (call != null && (call.getStepIndex() == stepIndex || call.getStepIndex() == globalIndex))
                 {
                     matchingCalls.add(call);
                 }

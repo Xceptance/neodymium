@@ -1489,4 +1489,217 @@ public class InteractiveConsoleListenerTest
         assertEquals(1, beforeSteps.size());
         assertEquals(step2, beforeSteps.get(0));
     }
+
+    @Test
+    public void testReorderCoreStepToFirstPlaceWhilePausedInBeforeBlockDoesNotSkipBeforeStep()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep beforeStep = new PlaybookStep("Before Step 1 (Setup)");
+        beforeStep.setBlock("before");
+        beforeStep.setLineNumber(1);
+        beforeStep.setSourceFile("test.yaml");
+        beforeStep.setStatus(PlaybookStepStatus.RUNNING);
+        beforeStep.setReasoning("Initialize database connection");
+        final Action setupAction = new Action("open", "https://example.com/setup", null);
+        beforeStep.setActions(new ArrayList<>(List.of(setupAction)));
+
+        final PlaybookStep coreStep1 = new PlaybookStep("Core Step 1 (Login)");
+        coreStep1.setBlock("steps");
+        coreStep1.setLineNumber(2);
+        coreStep1.setSourceFile("test.yaml");
+        coreStep1.setStatus(PlaybookStepStatus.PENDING);
+
+        final PlaybookStep coreStep2 = new PlaybookStep("Core Step 2 (Search)");
+        coreStep2.setBlock("steps");
+        coreStep2.setLineNumber(3);
+        coreStep2.setSourceFile("test.yaml");
+        coreStep2.setStatus(PlaybookStepStatus.PENDING);
+
+        final List<PlaybookStep> beforeSteps = new ArrayList<>(List.of(beforeStep));
+        final List<PlaybookStep> coreSteps = new ArrayList<>(List.of(coreStep1, coreStep2));
+        final Playbook playbook = new Playbook(beforeSteps, coreSteps, Collections.emptyList(), Collections.emptyList(), Collections.emptyMap(), null);
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, playbook);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, beforeStep);
+        context.getTransientData().put("playbook.beforeSteps", beforeSteps);
+        context.getTransientData().put("playbook.steps", coreSteps);
+        context.getTransientData().put("playbook.mainSteps", coreSteps);
+        final List<PlaybookStep> flat = new ArrayList<>();
+        flat.add(beforeStep);
+        flat.addAll(coreSteps);
+        context.getTransientData().put("playbook.flatSteps", flat);
+
+        // Execution stack holds the pipeline step for beforeStep
+        context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(beforeStep, session, context));
+
+        // Submit REORDER: move coreStep2 (index 1 of steps) to index 0 of steps, followed by RUN
+        final JsonObject reorderAction = new JsonObject();
+        reorderAction.addProperty("action", "REORDER");
+        reorderAction.addProperty("fromBlock", "steps");
+        reorderAction.addProperty("fromIndex", 1);
+        reorderAction.addProperty("toBlock", "steps");
+        reorderAction.addProperty("toIndex", 0);
+
+        final JsonObject runAction = new JsonObject();
+        runAction.addProperty("action", "RUN");
+
+        submitActionsSequentiallyAsynchronously(List.of(reorderAction, runAction));
+
+        final String result = listener.pauseBeforeActionExecution(context, beforeStep);
+
+        // Execution must proceed with RUN (NOT RESCHEDULE)
+        assertEquals("RUN", result);
+        assertFalse(Boolean.TRUE.equals(context.getTransientData().get("KEY_STEP_RESCHEDULED")));
+
+        // Before step must NOT be reset or have its actions wiped
+        assertEquals(PlaybookStepStatus.RUNNING, beforeStep.getStatus());
+        assertEquals("Initialize database connection", beforeStep.getReasoning());
+        assertFalse(beforeStep.getActions().isEmpty());
+        assertEquals(setupAction, beforeStep.getActions().get(0));
+
+        // Core steps must be correctly reordered in memory
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> updatedCoreSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        assertNotNull(updatedCoreSteps);
+        assertEquals(2, updatedCoreSteps.size());
+        assertEquals(coreStep2, updatedCoreSteps.get(0));
+        assertEquals(coreStep1, updatedCoreSteps.get(1));
+
+        // Playbook object must retain beforeSteps and updated core steps
+        final Playbook updatedPlaybook = (Playbook) context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+        assertNotNull(updatedPlaybook);
+        assertEquals(1, updatedPlaybook.getBeforeSteps().size());
+        assertEquals(beforeStep, updatedPlaybook.getBeforeSteps().get(0));
+        assertEquals(2, updatedPlaybook.getSteps().size());
+        assertEquals(coreStep2, updatedPlaybook.getSteps().get(0));
+
+        // Execution stack must still have beforeStep preserved
+        assertTrue(context.hasSteps());
+        final PipelineStep stackTop = context.popStep();
+        assertTrue(stackTop instanceof PlaybookPipelineStep);
+        assertEquals(beforeStep, ((PlaybookPipelineStep) stackTop).getPlaybookStep());
+    }
+
+    @Test
+    public void testAddCoreStepAtFirstPlaceWhilePausedInBeforeBlockDoesNotSkipBeforeStep()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep beforeStep = new PlaybookStep("Before Step 1 (Setup)");
+        beforeStep.setBlock("before");
+        beforeStep.setLineNumber(1);
+        beforeStep.setSourceFile("test.yaml");
+        beforeStep.setStatus(PlaybookStepStatus.RUNNING);
+        final Action setupAction = new Action("open", "https://example.com/setup", null);
+        beforeStep.setActions(new ArrayList<>(List.of(setupAction)));
+
+        final PlaybookStep coreStep1 = new PlaybookStep("Core Step 1 (Login)");
+        coreStep1.setBlock("steps");
+        coreStep1.setLineNumber(2);
+        coreStep1.setSourceFile("test.yaml");
+        coreStep1.setStatus(PlaybookStepStatus.PENDING);
+
+        final List<PlaybookStep> beforeSteps = new ArrayList<>(List.of(beforeStep));
+        final List<PlaybookStep> coreSteps = new ArrayList<>(List.of(coreStep1));
+        final Playbook playbook = new Playbook(beforeSteps, coreSteps, Collections.emptyList(), Collections.emptyList(), Collections.emptyMap(), null);
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, playbook);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, beforeStep);
+        context.getTransientData().put("playbook.beforeSteps", beforeSteps);
+        context.getTransientData().put("playbook.steps", coreSteps);
+        context.getTransientData().put("playbook.mainSteps", coreSteps);
+
+        context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(beforeStep, session, context));
+
+        // Submit ADD at index 0 of steps, followed by RUN
+        final JsonObject addAction = new JsonObject();
+        addAction.addProperty("action", "ADD");
+        addAction.addProperty("block", "steps");
+        addAction.addProperty("index", 0);
+        addAction.addProperty("instruction", "Newly added first core step");
+
+        final JsonObject runAction = new JsonObject();
+        runAction.addProperty("action", "RUN");
+
+        submitActionsSequentiallyAsynchronously(List.of(addAction, runAction));
+
+        final String result = listener.pauseBeforeActionExecution(context, beforeStep);
+
+        assertEquals("RUN", result);
+        assertFalse(Boolean.TRUE.equals(context.getTransientData().get("KEY_STEP_RESCHEDULED")));
+        assertEquals(PlaybookStepStatus.RUNNING, beforeStep.getStatus());
+        assertFalse(beforeStep.getActions().isEmpty());
+
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> updatedCoreSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        assertNotNull(updatedCoreSteps);
+        assertEquals(2, updatedCoreSteps.size());
+        assertEquals("Newly added first core step", updatedCoreSteps.get(0).getInstruction());
+        assertEquals(coreStep1, updatedCoreSteps.get(1));
+
+        assertTrue(context.hasSteps());
+    }
+
+    @Test
+    public void testReorderWithinBeforeBlockReschedulesExecutionStack()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep before1 = new PlaybookStep("Before 1 (Active)");
+        before1.setBlock("before");
+        before1.setLineNumber(1);
+        before1.setSourceFile("test.yaml");
+        before1.setStatus(PlaybookStepStatus.RUNNING);
+        before1.setActions(new ArrayList<>(List.of(new Action("click", "#btn1", null))));
+
+        final PlaybookStep before2 = new PlaybookStep("Before 2 (Pending)");
+        before2.setBlock("before");
+        before2.setLineNumber(2);
+        before2.setSourceFile("test.yaml");
+        before2.setStatus(PlaybookStepStatus.PENDING);
+
+        final List<PlaybookStep> beforeSteps = new ArrayList<>(List.of(before1, before2));
+        final Playbook playbook = new Playbook(beforeSteps, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), Collections.emptyMap(), null);
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, playbook);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, before1);
+        context.getTransientData().put("playbook.beforeSteps", beforeSteps);
+        context.getTransientData().put("playbook.steps", new ArrayList<PlaybookStep>());
+
+        context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(before2, session, context));
+
+        // Submit REORDER within before block: move before2 (index 1) to index 0
+        final JsonObject reorderAction = new JsonObject();
+        reorderAction.addProperty("action", "REORDER");
+        reorderAction.addProperty("fromBlock", "before");
+        reorderAction.addProperty("fromIndex", 1);
+        reorderAction.addProperty("toBlock", "before");
+        reorderAction.addProperty("toIndex", 0);
+
+        submitActionAsynchronously(reorderAction);
+
+        final String result = listener.pauseBeforeActionExecution(context, before1);
+
+        assertEquals("RESCHEDULE", result);
+        assertEquals(Boolean.TRUE, context.getTransientData().get("KEY_STEP_RESCHEDULED"));
+        assertEquals(PlaybookStepStatus.PENDING, before1.getStatus());
+
+        // Stack must have before2 at top, followed by before1
+        assertTrue(context.hasSteps());
+        final PipelineStep top = context.popStep();
+        assertTrue(top instanceof PlaybookPipelineStep);
+        assertEquals(before2, ((PlaybookPipelineStep) top).getPlaybookStep());
+
+        final PipelineStep second = context.popStep();
+        assertTrue(second instanceof PlaybookPipelineStep);
+        assertEquals(before1, ((PlaybookPipelineStep) second).getPlaybookStep());
+        assertFalse(context.hasSteps());
+    }
 }

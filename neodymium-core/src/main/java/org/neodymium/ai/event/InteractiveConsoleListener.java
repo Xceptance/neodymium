@@ -22,6 +22,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
@@ -41,6 +42,8 @@ import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.pipeline.PipelineStep;
+import org.neodymium.ai.pipeline.PlaybookPipelineStep;
 import org.neodymium.ai.report.DiskReportFormat;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.report.TestExecutionReport;
@@ -799,7 +802,12 @@ public final class InteractiveConsoleListener implements ExecutionListener
                             targetStep.setInstruction(newInst);
                             targetStep.setRawInstruction(newInst);
                             updateFlatSteps(context);
-                            rescheduleRemainingSteps(context, currentStep);
+                            final String targetBlock = resolveStepBlock(context, targetStep);
+                            final String currentBlock = resolveActiveBlock(context, currentStep);
+                            if (targetBlock.equalsIgnoreCase(currentBlock))
+                            {
+                                rescheduleRemainingSteps(context, currentStep);
+                            }
                             LOG.info("[InteractiveConsoleListener] Updated pending step #{} instruction to: \"{}\"", targetStepIdx, newInst);
                         }
                     }
@@ -859,7 +867,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
             return false;
         }
 
-        final String blockName = userAction.has("block") ? userAction.get("block").getAsString().toLowerCase() : "steps";
+        final String blockName = userAction.has("block") ? userAction.get("block").getAsString().toLowerCase(Locale.ROOT) : "steps";
         final String listKey = switch (blockName)
         {
             case "before" -> "playbook.beforeSteps";
@@ -872,9 +880,14 @@ public final class InteractiveConsoleListener implements ExecutionListener
         if (targetList == null)
         {
             final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
-            if (pbObj instanceof Playbook pb && "steps".equals(blockName))
+            if (pbObj instanceof Playbook pb)
             {
-                targetList = new ArrayList<>(pb.getSteps());
+                targetList = switch (blockName)
+                {
+                    case "before" -> new ArrayList<>(pb.getBeforeSteps());
+                    case "after" -> new ArrayList<>(pb.getAfterSteps());
+                    default -> new ArrayList<>(pb.getSteps());
+                };
             }
             else
             {
@@ -891,6 +904,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
         final PlaybookStep newStep = new PlaybookStep();
         newStep.setInstruction(instruction);
         newStep.setRawInstruction(instruction);
+        newStep.setBlock(blockName);
         newStep.setStatus(PlaybookStepStatus.PENDING);
         newStep.setFailed(false);
         newStep.setSourceFile(context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_IDENTIFIER) != null
@@ -909,8 +923,9 @@ public final class InteractiveConsoleListener implements ExecutionListener
             }
         }
 
+        final String currentBlock = resolveActiveBlock(context, currentStep);
         final int currentIdx = resolveStepIndex(context, currentStep);
-        final boolean isInsertBeforeOrAtCurrent = "steps".equals(blockName) && targetIndex >= 0 && targetIndex <= currentIdx;
+        final boolean isInsertBeforeOrAtCurrent = blockName.equalsIgnoreCase(currentBlock) && targetIndex >= 0 && targetIndex <= currentIdx;
 
         if (targetIndex >= 0 && targetIndex <= targetList.size())
         {
@@ -921,20 +936,34 @@ public final class InteractiveConsoleListener implements ExecutionListener
             targetList.add(newStep);
         }
 
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> beforeStepsList = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> mainStepsList = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> afterStepsList = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+
         final Object playbookObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
-        if (playbookObj instanceof Playbook playbook && "steps".equals(blockName))
+        if (playbookObj instanceof Playbook playbook)
         {
+            final List<PlaybookStep> effBefore = beforeStepsList != null ? beforeStepsList : playbook.getBeforeSteps();
+            final List<PlaybookStep> effMain = mainStepsList != null ? mainStepsList : playbook.getSteps();
+            final List<PlaybookStep> effAfter = afterStepsList != null ? afterStepsList : playbook.getAfterSteps();
             context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK,
-                new Playbook(targetList, playbook.getDataSets(), playbook.getPromptAddons(), playbook.getDescription()));
+                new Playbook(effBefore, effMain, effAfter, playbook.getDataSets(), playbook.getPromptAddons(), playbook.getDescription()));
         }
-        else if ("steps".equals(blockName))
+
+        if (mainStepsList != null && context.getTransientData().containsKey("playbook.mainSteps"))
         {
-            context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK,
-                new Playbook(targetList, Collections.emptyList()));
+            context.getTransientData().put("playbook.mainSteps", mainStepsList);
         }
-        if ("steps".equals(blockName))
+        if (beforeStepsList != null && context.getTransientData().containsKey("playbook.beforeStepsToRun"))
         {
-            context.getTransientData().put("playbook.steps", targetList);
+            context.getTransientData().put("playbook.beforeStepsToRun", beforeStepsList);
+        }
+        if (afterStepsList != null && context.getTransientData().containsKey("playbook.afterStepsToRun"))
+        {
+            context.getTransientData().put("playbook.afterStepsToRun", afterStepsList);
         }
 
         if (isInsertBeforeOrAtCurrent && currentStep != null)
@@ -967,7 +996,10 @@ public final class InteractiveConsoleListener implements ExecutionListener
         }
 
         updateFlatSteps(context);
-        rescheduleRemainingSteps(context, currentStep);
+        if (blockName.equalsIgnoreCase(currentBlock))
+        {
+            rescheduleRemainingSteps(context, currentStep);
+        }
 
         LOG.info("[InteractiveConsoleListener] Added new step to '{}' at index {}: \"{}\"", blockName, targetIndex, instruction);
         return !isInsertBeforeOrAtCurrent;
@@ -1108,8 +1140,17 @@ public final class InteractiveConsoleListener implements ExecutionListener
             context.getTransientData().put(toKey, toList);
         }
 
+        final String currentBlock = resolveActiveBlock(context, currentStep);
         final int currentIdx = resolveStepIndex(context, currentStep);
         final PlaybookStep removed = fromList.remove(fromIndex);
+        removed.setBlock(toBlock);
+        if (removed.hasSubSteps())
+        {
+            for (final PlaybookStep sub : removed.getSubSteps())
+            {
+                sub.setBlock(toBlock);
+            }
+        }
         int adjustedToIndex = toIndex;
         if (adjustedToIndex < 0)
         {
@@ -1121,22 +1162,39 @@ public final class InteractiveConsoleListener implements ExecutionListener
         }
         toList.add(adjustedToIndex, removed);
 
-        final Object playbookObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
         @SuppressWarnings("unchecked")
-        final List<PlaybookStep> mainSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
-        if (playbookObj instanceof Playbook playbook && mainSteps != null)
+        final List<PlaybookStep> beforeStepsList = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> mainStepsList = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> afterStepsList = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+
+        final Object playbookObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
+        if (playbookObj instanceof Playbook playbook)
         {
+            final List<PlaybookStep> effBefore = beforeStepsList != null ? beforeStepsList : playbook.getBeforeSteps();
+            final List<PlaybookStep> effMain = mainStepsList != null ? mainStepsList : playbook.getSteps();
+            final List<PlaybookStep> effAfter = afterStepsList != null ? afterStepsList : playbook.getAfterSteps();
             context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK,
-                new Playbook(mainSteps, playbook.getDataSets(), playbook.getPromptAddons(), playbook.getDescription()));
-        }
-        else if (mainSteps != null)
-        {
-            context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, new Playbook(mainSteps, Collections.emptyList()));
+                new Playbook(effBefore, effMain, effAfter, playbook.getDataSets(), playbook.getPromptAddons(), playbook.getDescription()));
         }
 
-        final boolean isFromCurrent = "steps".equals(fromBlock) && fromIndex == currentIdx;
-        final boolean isToBeforeOrAtCurrent = "steps".equals(toBlock) && adjustedToIndex <= currentIdx;
-        final boolean isTargetBefore = "before".equals(toBlock);
+        if (mainStepsList != null && context.getTransientData().containsKey("playbook.mainSteps"))
+        {
+            context.getTransientData().put("playbook.mainSteps", mainStepsList);
+        }
+        if (beforeStepsList != null && context.getTransientData().containsKey("playbook.beforeStepsToRun"))
+        {
+            context.getTransientData().put("playbook.beforeStepsToRun", beforeStepsList);
+        }
+        if (afterStepsList != null && context.getTransientData().containsKey("playbook.afterStepsToRun"))
+        {
+            context.getTransientData().put("playbook.afterStepsToRun", afterStepsList);
+        }
+
+        final boolean isFromCurrent = currentBlock.equalsIgnoreCase(fromBlock) && fromIndex == currentIdx;
+        final boolean isToBeforeOrAtCurrent = currentBlock.equalsIgnoreCase(toBlock) && adjustedToIndex <= currentIdx;
+        final boolean isTargetBefore = "before".equalsIgnoreCase(toBlock) && !"before".equalsIgnoreCase(currentBlock);
         final boolean isRescheduleNeeded = isFromCurrent || isToBeforeOrAtCurrent || isTargetBefore;
 
         if (isRescheduleNeeded && currentStep != null)
@@ -1169,7 +1227,10 @@ public final class InteractiveConsoleListener implements ExecutionListener
         }
 
         updateFlatSteps(context);
-        rescheduleRemainingSteps(context, currentStep);
+        if (fromBlock.equalsIgnoreCase(currentBlock) || toBlock.equalsIgnoreCase(currentBlock))
+        {
+            rescheduleRemainingSteps(context, currentStep);
+        }
 
         LOG.info("[InteractiveConsoleListener] Reordered step from '{}:{}' to '{}:{}' (rescheduled={})",
             fromBlock, fromIndex, toBlock, adjustedToIndex, isRescheduleNeeded);
@@ -1183,16 +1244,12 @@ public final class InteractiveConsoleListener implements ExecutionListener
             return;
         }
         @SuppressWarnings("unchecked")
-        List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
-        if (playbookSteps == null)
-        {
-            final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
-            if (pbObj instanceof Playbook pb)
-            {
-                playbookSteps = pb.getSteps();
-                context.getTransientData().put("playbook.steps", playbookSteps);
-            }
-        }
+        final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+
         @SuppressWarnings("unchecked")
         List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
         if (flatSteps == null)
@@ -1201,9 +1258,17 @@ public final class InteractiveConsoleListener implements ExecutionListener
             context.getTransientData().put("playbook.flatSteps", flatSteps);
         }
         flatSteps.clear();
+        if (beforeSteps != null)
+        {
+            flattenSteps(beforeSteps, flatSteps);
+        }
         if (playbookSteps != null)
         {
             flattenSteps(playbookSteps, flatSteps);
+        }
+        if (afterSteps != null)
+        {
+            flattenSteps(afterSteps, flatSteps);
         }
     }
 
@@ -1230,27 +1295,38 @@ public final class InteractiveConsoleListener implements ExecutionListener
             return;
         }
 
+        final PlaybookStep currentStep = activeStep != null
+            ? activeStep
+            : (context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP) instanceof PlaybookStep ps ? ps : null);
+
+        final String activeBlock = resolveActiveBlock(context, currentStep);
+        final String listKey = switch (activeBlock)
+        {
+            case "before" -> "playbook.beforeSteps";
+            case "after" -> "playbook.afterSteps";
+            default -> "playbook.steps";
+        };
+
         @SuppressWarnings("unchecked")
-        List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
-        if (playbookSteps == null)
+        List<PlaybookStep> blockSteps = (List<PlaybookStep>) context.getTransientData().get(listKey);
+        if (blockSteps == null)
         {
             final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
             if (pbObj instanceof Playbook pb)
             {
-                playbookSteps = pb.getSteps();
+                blockSteps = switch (activeBlock)
+                {
+                    case "before" -> pb.getBeforeSteps();
+                    case "after" -> pb.getAfterSteps();
+                    default -> pb.getSteps();
+                };
             }
         }
-        if (playbookSteps == null)
+        if (blockSteps == null)
         {
             return;
         }
 
-        PlaybookStep currentStep = activeStep;
-        if (currentStep == null)
-        {
-            final Object currentStepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
-            currentStep = currentStepObj instanceof PlaybookStep ps ? ps : null;
-        }
         final PlaybookStep rootCurrent = (currentStep != null && currentStep.getRootStep() != null)
             ? currentStep.getRootStep()
             : currentStep;
@@ -1261,9 +1337,9 @@ public final class InteractiveConsoleListener implements ExecutionListener
         if (isRescheduled)
         {
             int firstPendingIdx = -1;
-            for (int i = 0; i < playbookSteps.size(); i++)
+            for (int i = 0; i < blockSteps.size(); i++)
             {
-                if (playbookSteps.get(i).getStatus() == PlaybookStepStatus.PENDING)
+                if (blockSteps.get(i).getStatus() == PlaybookStepStatus.PENDING)
                 {
                     firstPendingIdx = i;
                     break;
@@ -1271,25 +1347,25 @@ public final class InteractiveConsoleListener implements ExecutionListener
             }
             if (firstPendingIdx >= 0)
             {
-                for (int i = firstPendingIdx; i < playbookSteps.size(); i++)
+                for (int i = firstPendingIdx; i < blockSteps.size(); i++)
                 {
-                    remaining.add(playbookSteps.get(i));
+                    remaining.add(blockSteps.get(i));
                 }
             }
         }
         else if (rootCurrent != null)
         {
-            final int currentIdx = playbookSteps.indexOf(rootCurrent);
+            final int currentIdx = blockSteps.indexOf(rootCurrent);
             if (currentIdx >= 0)
             {
-                for (int i = currentIdx + 1; i < playbookSteps.size(); i++)
+                for (int i = currentIdx + 1; i < blockSteps.size(); i++)
                 {
-                    remaining.add(playbookSteps.get(i));
+                    remaining.add(blockSteps.get(i));
                 }
             }
             else
             {
-                for (final PlaybookStep s : playbookSteps)
+                for (final PlaybookStep s : blockSteps)
                 {
                     if (s.getStatus() == PlaybookStepStatus.PENDING)
                     {
@@ -1300,7 +1376,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
         }
         else
         {
-            for (final PlaybookStep s : playbookSteps)
+            for (final PlaybookStep s : blockSteps)
             {
                 if (s.getStatus() == PlaybookStepStatus.PENDING)
                 {
@@ -1443,5 +1519,86 @@ public final class InteractiveConsoleListener implements ExecutionListener
             return afterSteps.indexOf(root);
         }
         return 0;
+    }
+
+    private String resolveStepBlock(final ExecutionContext context, final PlaybookStep step)
+    {
+        if (step != null)
+        {
+            final PlaybookStep root = step.getRootStep() != null ? step.getRootStep() : step;
+            if (context != null)
+            {
+                @SuppressWarnings("unchecked")
+                final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+                if (beforeSteps != null && (beforeSteps.contains(root) || beforeSteps.contains(step)))
+                {
+                    return "before";
+                }
+                @SuppressWarnings("unchecked")
+                final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+                if (afterSteps != null && (afterSteps.contains(root) || afterSteps.contains(step)))
+                {
+                    return "after";
+                }
+                @SuppressWarnings("unchecked")
+                final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+                if (playbookSteps != null && (playbookSteps.contains(root) || playbookSteps.contains(step)))
+                {
+                    return "steps";
+                }
+            }
+            if (root.getBlock() != null && !root.getBlock().isBlank())
+            {
+                return root.getBlock().toLowerCase(Locale.ROOT);
+            }
+            if (step.getBlock() != null && !step.getBlock().isBlank())
+            {
+                return step.getBlock().toLowerCase(Locale.ROOT);
+            }
+        }
+        return "steps";
+    }
+
+    private String resolveActiveBlock(final ExecutionContext context, final PlaybookStep activeStep)
+    {
+        if (activeStep != null)
+        {
+            return resolveStepBlock(context, activeStep);
+        }
+        if (context != null)
+        {
+            final Object curObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
+            if (curObj instanceof PlaybookStep ps)
+            {
+                return resolveStepBlock(context, ps);
+            }
+            if (context.hasSteps())
+            {
+                final PipelineStep top = context.peekStep();
+                if (top instanceof PlaybookPipelineStep pps && pps.getPlaybookStep() != null)
+                {
+                    return resolveStepBlock(context, pps.getPlaybookStep());
+                }
+            }
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+            if (beforeSteps != null && beforeSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.PENDING || s.getStatus() == PlaybookStepStatus.RUNNING))
+            {
+                return "before";
+            }
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> steps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+            if (steps != null && steps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.PENDING || s.getStatus() == PlaybookStepStatus.RUNNING))
+            {
+                return "steps";
+            }
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+            if (afterSteps != null && afterSteps.stream().anyMatch(s -> s.getStatus() == PlaybookStepStatus.PENDING || s.getStatus() == PlaybookStepStatus.RUNNING))
+            {
+                return "after";
+            }
+        }
+        return "steps";
     }
 }

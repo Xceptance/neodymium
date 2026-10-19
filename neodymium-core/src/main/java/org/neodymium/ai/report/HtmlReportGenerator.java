@@ -437,9 +437,25 @@ public final class HtmlReportGenerator
 
             // Left Column: Full-Width Step List
             sb.append("      <div class=\"steps-master-pane\" id=\"stepsMasterList\">\n");
+            String currentBlock = null;
+            final boolean hasMultipleBlocks = steps.stream().map(s -> s.getBlock() != null ? s.getBlock().toLowerCase() : "steps").distinct().count() > 1;
             for (int i = 0; i < steps.size(); i++)
             {
                 final TestExecutionReport.ReportStepEntry step = steps.get(i);
+                if (hasMultipleBlocks)
+                {
+                    final String effBlock = (step.getBlock() != null && !step.getBlock().isBlank()) ? step.getBlock().toLowerCase() : "steps";
+                    if (!effBlock.equals(currentBlock))
+                    {
+                        currentBlock = effBlock;
+                        final String icon = "before".equals(effBlock) ? "⚡" : "after".equals(effBlock) ? "🧹" : "🎯";
+                        final String title = "before".equals(effBlock) ? "Before Block" : "after".equals(effBlock) ? "After Block" : "Core Steps";
+                        sb.append("        <div class=\"step-block-separator step-block-").append(escapeHtml(effBlock)).append("\" style=\"margin: 16px 0 8px 0; padding: 6px 12px; background: rgba(0,0,0,0.04); border-radius: 6px; font-weight: 600; font-size: 0.9rem; display: flex; align-items: center; gap: 6px;\">\n");
+                        sb.append("          <span>").append(icon).append("</span>\n");
+                        sb.append("          <span>").append(escapeHtml(title)).append("</span>\n");
+                        sb.append("        </div>\n");
+                    }
+                }
                 renderStepCardWithSubSteps(sb, step, i);
             }
             sb.append("      </div>\n");
@@ -823,6 +839,14 @@ public final class HtmlReportGenerator
         if (step.isMultiStage())
         {
             sb.append("              <span class=\"badge-flag continuation-badge\" title=\"Step required dynamic multi-stage continuation (CONTINUE)\">🔄 MULTI-STAGE</span>\n");
+        }
+        if (step.getBlock() != null && "before".equalsIgnoreCase(step.getBlock()))
+        {
+            sb.append("              <span class=\"badge-flag before-badge\" style=\"background:#e0f2fe;color:#0369a1;border:1px solid #bae6fd;\">⚡ BEFORE</span>\n");
+        }
+        else if (step.getBlock() != null && "after".equalsIgnoreCase(step.getBlock()))
+        {
+            sb.append("              <span class=\"badge-flag after-badge\" style=\"background:#fef3c7;color:#b45309;border:1px solid #fde68a;\">🧹 AFTER</span>\n");
         }
 
         if (step.getContextLevels() != null && !step.getContextLevels().isBlank())

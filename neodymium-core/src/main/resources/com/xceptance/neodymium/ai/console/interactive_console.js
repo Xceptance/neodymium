@@ -826,7 +826,10 @@ function checkActionApprovals() {
         return;
     }
     const idx = parseInt(targetCard.getAttribute('data-step-idx'), 10);
-    const s = allSteps.find(st => st.index === idx);
+    const blockName = targetCard.getAttribute('data-step-block');
+    const s = (blockName && currentState?.blocks?.[blockName])
+        ? currentState.blocks[blockName].find(st => st.index === idx)
+        : allSteps.find(st => st.index === idx);
     if (s && (s.status === 'passed' || s.status === 'skipped' || s.status === 'healed' || s.status === 'aborted')) {
         if (runBtn) {
             runBtn.disabled = true;

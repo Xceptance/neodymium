@@ -319,10 +319,27 @@ public final class MarkdownReportGenerator
         if (!steps.isEmpty())
         {
             sb.append("## Step Details\n\n");
+            final boolean hasMultipleBlocks = steps.stream().map(s -> s.getBlock() != null ? s.getBlock().toLowerCase() : "steps").distinct().count() > 1;
+            String currentBlock = null;
             for (int i = 0; i < steps.size(); i++)
             {
                 final TestExecutionReport.ReportStepEntry step = steps.get(i);
-                renderStepMarkdown(sb, step, String.valueOf(i + 1), "###");
+                if (hasMultipleBlocks)
+                {
+                    final String effBlock = (step.getBlock() != null && !step.getBlock().isBlank()) ? step.getBlock().toLowerCase() : "steps";
+                    if (!effBlock.equals(currentBlock))
+                    {
+                        currentBlock = effBlock;
+                        final String icon = "before".equals(effBlock) ? "⚡" : "after".equals(effBlock) ? "🧹" : "🎯";
+                        final String title = "before".equals(effBlock) ? "Before Block" : "after".equals(effBlock) ? "After Block" : "Core Steps";
+                        sb.append("### ").append(icon).append(" ").append(title).append("\n\n");
+                    }
+                    renderStepMarkdown(sb, step, String.valueOf(i + 1), "####");
+                }
+                else
+                {
+                    renderStepMarkdown(sb, step, String.valueOf(i + 1), "###");
+                }
             }
         }
 
@@ -483,6 +500,10 @@ public final class MarkdownReportGenerator
 
         sb.append(headingPrefix).append(" Step ").append(stepLabel).append(": ").append(stepStatusEmoji).append(" ").append(escapeMarkdown(step.getInstruction())).append("\n\n");
         sb.append("- **Status:** `").append(step.getStatus()).append("`\n");
+        if (step.getBlock() != null && !step.getBlock().isBlank())
+        {
+            sb.append("- **Block:** `").append(step.getBlock()).append("`\n");
+        }
         if (step.getStepMode() != null)
         {
             sb.append("- **Step Mode:** `").append(step.getStepMode()).append("`\n");
