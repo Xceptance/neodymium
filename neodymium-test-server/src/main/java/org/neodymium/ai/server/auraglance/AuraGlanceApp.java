@@ -24,6 +24,7 @@ import org.neodymium.ai.server.session.SessionManager;
 import org.neodymium.ai.server.session.TestSession;
 
 import io.javalin.Javalin;
+import io.javalin.http.ContentType;
 import io.javalin.http.HttpStatus;
 
 /**
@@ -53,6 +54,44 @@ public final class AuraGlanceApp
         // Root index redirects to Aura Glance Starter Hub Portal
         app.get("/", ctx -> ctx.redirect("/AuraGlanceTest/index.html", HttpStatus.FOUND));
         app.get("/index.html", ctx -> ctx.redirect("/AuraGlanceTest/index.html", HttpStatus.FOUND));
+
+        // Protocol Introspection simulation endpoints
+        app.get("/AuraGlanceTest/api/faulty-backend", ctx ->
+        {
+            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR)
+               .contentType(ContentType.APPLICATION_JSON)
+               .result("{\"error\":\"Internal server fault\"}");
+        });
+        app.post("/AuraGlanceTest/api/faulty-backend", ctx ->
+        {
+            ctx.status(HttpStatus.INTERNAL_SERVER_ERROR)
+               .contentType(ContentType.APPLICATION_JSON)
+               .result("{\"error\":\"Internal server fault\"}");
+        });
+        app.get("/AuraGlanceTest/api/missing-endpoint", ctx ->
+        {
+            ctx.status(HttpStatus.NOT_FOUND)
+               .contentType(ContentType.APPLICATION_JSON)
+               .result("{\"error\":\"Resource missing\"}");
+        });
+        app.post("/AuraGlanceTest/api/missing-endpoint", ctx ->
+        {
+            ctx.status(HttpStatus.NOT_FOUND)
+               .contentType(ContentType.APPLICATION_JSON)
+               .result("{\"error\":\"Resource missing\"}");
+        });
+        app.get("/AuraGlanceTest/api/analytics", ctx ->
+        {
+            ctx.status(HttpStatus.NOT_FOUND)
+               .contentType(ContentType.APPLICATION_JSON)
+               .result("{\"error\":\"Ignored telemetry\"}");
+        });
+        app.post("/AuraGlanceTest/api/analytics", ctx ->
+        {
+            ctx.status(HttpStatus.NOT_FOUND)
+               .contentType(ContentType.APPLICATION_JSON)
+               .result("{\"error\":\"Ignored telemetry\"}");
+        });
 
         // Aura Glance hub and sandbox routes
         app.get("/AuraGlanceTest", controller::handleGet);

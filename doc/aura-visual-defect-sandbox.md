@@ -58,7 +58,8 @@ neodymium-test-server/src/main/resources/
 │       │       ├── floating-labels.html# Text overlay visual collision challenge
 │       │       ├── cross-origin-iframe.html # Context frame switching challenge
 │       │       ├── mock-payment-iframe.html # Iframe page source
-│       │       └── mock-oauth-login.html    # Authentication redirect challenge
+│       │       ├── mock-oauth-login.html    # Authentication redirect challenge
+│       │       └── protocol-introspection.html # Network 4xx/5xx and console error challenge
 │       └── a11y/                   # Sub-App 3: Accessibility Test Grounds
 │           └── index.html          # Low contrast overrides, text clippings
 ```
@@ -260,6 +261,9 @@ This directory contains standalone pages designed to test isolated edge cases in
 11. **Mock OAuth Login (`mock-oauth-login.html`):**
     * *Challenge:* An external auth provider login form that redirects back with token parameters.
     * *Aura AI Verification:* Tests cross-domain redirect flows, browser window redirection handles, and query token extraction.
+12. **Protocol & Console Introspection (`protocol-introspection.html`):**
+    * *Challenge:* Buttons triggering synthetic backend failures (HTTP 500 `/api/faulty-backend`, HTTP 404 `/api/missing-endpoint`, HTTP 400 `/api/analytics`), unhandled runtime JavaScript exceptions, console error spam, and delayed responses.
+    * *Aura AI Verification:* Tests active diagnosis via `browser_get_network_failures` and `browser_get_console_errors`, and validates passive diagnostic alert injection into agent prompts during locator thrashing.
 
 ---
 

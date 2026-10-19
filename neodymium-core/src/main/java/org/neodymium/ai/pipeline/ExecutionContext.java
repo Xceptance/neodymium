@@ -122,6 +122,7 @@ public final class ExecutionContext
     public static final String KEY_POST_FLIGHT_LINTER_CALL_COUNT = "postFlightLinterCallCount";
     public static final String KEY_SCENARIO_DESCRIPTION = "scenarioDescription";
     public static final String KEY_INTERNAL_MILESTONES = "internalMilestones";
+    public static final String KEY_PRE_CLICK_COORD_TILE_MATRIX = "preClickCoordTileMatrix";
     public static final String KEY_TOTAL_INTERACTIVE_PAUSE_MS = "totalInteractivePauseMs";
     public static final String KEY_STEP_INTERACTIVE_PAUSE_MS = "stepInteractivePauseMs";
 

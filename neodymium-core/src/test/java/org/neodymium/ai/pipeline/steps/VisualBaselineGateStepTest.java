@@ -759,6 +759,93 @@ public class VisualBaselineGateStepTest
         assertTrue(ex.getMessage().contains("Layout SSIM score below threshold"));
     }
 
+    @Test
+    public void testMarkerCoordinateStep_preActionGateAbortsOnTileMismatch() throws IOException
+    {
+        final BufferedImage img1 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g1 = img1.createGraphics();
+        g1.setColor(Color.WHITE);
+        g1.fillRect(0, 0, 200, 200);
+        g1.dispose();
+
+        final BufferedImage img2 = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g2 = img2.createGraphics();
+        g2.setColor(Color.BLACK);
+        g2.fillRect(0, 0, 200, 200);
+        g2.dispose();
+
+        final String base64Png1 = encodeToBase64(img1);
+        final String base64Png2 = encodeToBase64(img2);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state2 = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png2)),
+            "content_hash");
+        for (int i = 0; i < 6; i++)
+        {
+            executor.enqueueState(state2);
+        }
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String tileHash1 = ScreenshotHasher.computeTileSsimMatrix(base64Png1, 100, 100, 32);
+        final PlaybookStep step = new PlaybookStep("Click custom canvas icon (marker)");
+        step.setMarker(true);
+        step.setScreenshotHash(tileHash1);
+        step.setScreenshotHashDim(ScreenshotHasher.TILE_SSIM_MATRIX_DIM);
+        step.getActions().add(new Action("CLICK", "coord:100,100", null));
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(step, session);
+        final DivergenceException ex = assertThrows(DivergenceException.class, () -> gateStep.executeGate(context));
+        assertTrue(ex.getMessage().contains("Aborting coordinate click to prevent blind misclick"));
+    }
+
+    @Test
+    public void testMarkerCoordinateStep_preActionGateProceedsOnTileMatch() throws IOException
+    {
+        final BufferedImage img = new BufferedImage(200, 200, BufferedImage.TYPE_INT_RGB);
+        final Graphics2D g = img.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, 200, 200);
+        g.dispose();
+
+        final String base64Png = encodeToBase64(img);
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final MockSutState state = new MockSutState(
+            "<html></html>",
+            List.of(new SutAttachment("image/png", "screenshot.png", base64Png)),
+            "content_hash");
+        for (int i = 0; i < 4; i++)
+        {
+            executor.enqueueState(state);
+        }
+
+        final SessionData sessionData = new SessionData();
+        final AiSession session = AiSession.mock(sessionData, null, new ExecutionEventBus(), executor);
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_STRICT);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final String tileHash = ScreenshotHasher.computeTileSsimMatrix(base64Png, 100, 100, 32);
+        final PlaybookStep step = new PlaybookStep("Click custom canvas icon (marker)");
+        step.setMarker(true);
+        step.setScreenshotHash(tileHash);
+        step.setScreenshotHashDim(ScreenshotHasher.TILE_SSIM_MATRIX_DIM);
+        step.getActions().add(new Action("CLICK", "coord:100,100", null));
+
+        final VisualBaselineGateStep gateStep = new VisualBaselineGateStep(step, session);
+        final boolean bypassed = assertDoesNotThrow(() -> gateStep.executeGate(context));
+        assertFalse(bypassed, "Interactive marker step must still execute its action after pre-click tile check passes");
+        assertNotNull(step.getSsimScore());
+        assertTrue(step.getSsimScore() >= 0.95);
+    }
+
     private static String encodeToBase64(final BufferedImage image) throws IOException
     {
         try (final ByteArrayOutputStream baos = new ByteArrayOutputStream())

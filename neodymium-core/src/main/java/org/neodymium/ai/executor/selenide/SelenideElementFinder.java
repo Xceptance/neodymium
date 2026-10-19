@@ -27,6 +27,7 @@ import com.codeborne.selenide.WebDriverRunner;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -329,6 +330,31 @@ public final class SelenideElementFinder
         }
 
         final String clean = rawCandidate.trim();
+        final String lowerClean = clean.toLowerCase(Locale.ROOT);
+        if (lowerClean.startsWith("marker:") || lowerClean.startsWith("badge:"))
+        {
+            final int colonIdx = clean.indexOf(':');
+            final String markerNum = clean.substring(colonIdx + 1).trim();
+            if (!markerNum.isBlank())
+            {
+                try
+                {
+                    final ElementsCollection markedEls = Selenide.$$(By.cssSelector("[data-m='" + markerNum + "']"));
+                    final SelenideElement visibleMarked = findFirstVisible(markedEls, clean);
+                    if (visibleMarked != null)
+                    {
+                        return visibleMarked;
+                    }
+                    if (!markedEls.isEmpty())
+                    {
+                        return markedEls.first();
+                    }
+                }
+                catch (final AssertionError | Exception ignored)
+                {
+                }
+            }
+        }
 
         if (isAutomationIdSelector(clean))
         {

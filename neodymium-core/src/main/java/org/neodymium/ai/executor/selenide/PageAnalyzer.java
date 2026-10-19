@@ -1510,6 +1510,41 @@ public class PageAnalyzer
 
         final String script = """
             return (function() {
+                function computeGraphicSig(el) {
+                    if (!el) return '';
+                    var tName = el.tagName ? el.tagName.toLowerCase() : '';
+                    var svg = tName === 'svg' ? el : (el.querySelector ? el.querySelector('svg') : null);
+                    if (svg) {
+                        var vb = svg.getAttribute('viewBox') || '';
+                        var parts = [];
+                        var shapes = svg.querySelectorAll ? svg.querySelectorAll('path, circle, rect, line, polygon, polyline, use') : [];
+                        for (var s = 0; s < shapes.length && s < 6; s++) {
+                            var sh = shapes[s];
+                            var st = sh.tagName ? sh.tagName.toLowerCase() : '';
+                            var d = sh.getAttribute('d') || sh.getAttribute('points') || sh.getAttribute('href') || sh.getAttribute('xlink:href')
+                                || ((sh.getAttribute('cx') || '') + ',' + (sh.getAttribute('cy') || '') + ',' + (sh.getAttribute('r') || '')
+                                    + (sh.getAttribute('width') || '') + 'x' + (sh.getAttribute('height') || ''));
+                            if (d) {
+                                d = d.trim().replace(/\\s+/g, ' ');
+                                if (d.length > 48) d = d.substring(0, 48);
+                                parts.push(st + ':' + d);
+                            }
+                        }
+                        return 'svg[' + vb + ']{' + parts.join(';') + '}';
+                    }
+                    var img = tName === 'img' ? el : (el.querySelector ? el.querySelector('img') : null);
+                    if (img) {
+                        var src = img.getAttribute('src') || '';
+                        if (src) {
+                            var qIdx = src.indexOf('?');
+                            if (qIdx > 0) src = src.substring(0, qIdx);
+                            if (src.length > 64) src = src.substring(src.length - 64);
+                            return 'img:' + src;
+                        }
+                    }
+                    return '';
+                }
+
                 var roots = [document];
                 function collectRoots(root) {
                     try {
@@ -1538,10 +1573,14 @@ public class PageAnalyzer
                             if (el.attributes) {
                                 for (var a = 0; a < el.attributes.length; a++) {
                                     var attr = el.attributes[a];
-                                    if (attr.name !== 'class' && attr.name !== 'style' && !attr.name.startsWith('data-ai')) {
+                                    if (attr.name !== 'class' && attr.name !== 'style' && attr.name !== 'data-m' && !attr.name.startsWith('data-ai')) {
                                         attrMap[attr.name] = attr.value;
                                     }
                                 }
+                            }
+                            var gSig = computeGraphicSig(el);
+                            if (gSig) {
+                                attrMap['data-graphic-sig'] = gSig;
                             }
                             var role = el.getAttribute('role') || '';
                             var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
@@ -1621,6 +1660,40 @@ public class PageAnalyzer
         final String script = """
             return (function(el) {
                 if (!el) return null;
+                function computeGraphicSig(node) {
+                    if (!node) return '';
+                    var tName = node.tagName ? node.tagName.toLowerCase() : '';
+                    var svg = tName === 'svg' ? node : (node.querySelector ? node.querySelector('svg') : null);
+                    if (svg) {
+                        var vb = svg.getAttribute('viewBox') || '';
+                        var parts = [];
+                        var shapes = svg.querySelectorAll ? svg.querySelectorAll('path, circle, rect, line, polygon, polyline, use') : [];
+                        for (var s = 0; s < shapes.length && s < 6; s++) {
+                            var sh = shapes[s];
+                            var st = sh.tagName ? sh.tagName.toLowerCase() : '';
+                            var d = sh.getAttribute('d') || sh.getAttribute('points') || sh.getAttribute('href') || sh.getAttribute('xlink:href')
+                                || ((sh.getAttribute('cx') || '') + ',' + (sh.getAttribute('cy') || '') + ',' + (sh.getAttribute('r') || '')
+                                    + (sh.getAttribute('width') || '') + 'x' + (sh.getAttribute('height') || ''));
+                            if (d) {
+                                d = d.trim().replace(/\\s+/g, ' ');
+                                if (d.length > 48) d = d.substring(0, 48);
+                                parts.push(st + ':' + d);
+                            }
+                        }
+                        return 'svg[' + vb + ']{' + parts.join(';') + '}';
+                    }
+                    var img = tName === 'img' ? node : (node.querySelector ? node.querySelector('img') : null);
+                    if (img) {
+                        var src = img.getAttribute('src') || '';
+                        if (src) {
+                            var qIdx = src.indexOf('?');
+                            if (qIdx > 0) src = src.substring(0, qIdx);
+                            if (src.length > 64) src = src.substring(src.length - 64);
+                            return 'img:' + src;
+                        }
+                    }
+                    return '';
+                }
                 var tag = el.tagName ? el.tagName.toLowerCase() : '';
                 var text = (el.innerText || el.value || el.placeholder || '').trim().replace(/\\s*\\n\\s*/g, ' ');
                 var classes = Array.from(el.classList || []);
@@ -1628,10 +1701,14 @@ public class PageAnalyzer
                 if (el.attributes) {
                     for (var a = 0; a < el.attributes.length; a++) {
                         var attr = el.attributes[a];
-                        if (attr.name !== 'class' && attr.name !== 'style' && !attr.name.startsWith('data-ai')) {
+                        if (attr.name !== 'class' && attr.name !== 'style' && attr.name !== 'data-m' && !attr.name.startsWith('data-ai')) {
                             attrMap[attr.name] = attr.value;
                         }
                     }
+                }
+                var gSig = computeGraphicSig(el);
+                if (gSig) {
+                    attrMap['data-graphic-sig'] = gSig;
                 }
                 var role = el.getAttribute('role') || '';
                 var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
@@ -1717,6 +1794,41 @@ public class PageAnalyzer
 
         final String script = """
             return (function() {
+                function computeGraphicSig(el) {
+                    if (!el) return '';
+                    var tName = el.tagName ? el.tagName.toLowerCase() : '';
+                    var svg = tName === 'svg' ? el : (el.querySelector ? el.querySelector('svg') : null);
+                    if (svg) {
+                        var vb = svg.getAttribute('viewBox') || '';
+                        var parts = [];
+                        var shapes = svg.querySelectorAll ? svg.querySelectorAll('path, circle, rect, line, polygon, polyline, use') : [];
+                        for (var s = 0; s < shapes.length && s < 6; s++) {
+                            var sh = shapes[s];
+                            var st = sh.tagName ? sh.tagName.toLowerCase() : '';
+                            var d = sh.getAttribute('d') || sh.getAttribute('points') || sh.getAttribute('href') || sh.getAttribute('xlink:href')
+                                || ((sh.getAttribute('cx') || '') + ',' + (sh.getAttribute('cy') || '') + ',' + (sh.getAttribute('r') || '')
+                                    + (sh.getAttribute('width') || '') + 'x' + (sh.getAttribute('height') || ''));
+                            if (d) {
+                                d = d.trim().replace(/\\s+/g, ' ');
+                                if (d.length > 48) d = d.substring(0, 48);
+                                parts.push(st + ':' + d);
+                            }
+                        }
+                        return 'svg[' + vb + ']{' + parts.join(';') + '}';
+                    }
+                    var img = tName === 'img' ? el : (el.querySelector ? el.querySelector('img') : null);
+                    if (img) {
+                        var src = img.getAttribute('src') || '';
+                        if (src) {
+                            var qIdx = src.indexOf('?');
+                            if (qIdx > 0) src = src.substring(0, qIdx);
+                            if (src.length > 64) src = src.substring(src.length - 64);
+                            return 'img:' + src;
+                        }
+                    }
+                    return '';
+                }
+
                 var roots = [document];
                 function collectRoots(root) {
                     try {
@@ -1746,10 +1858,14 @@ public class PageAnalyzer
                             if (el.attributes) {
                                 for (var a = 0; a < el.attributes.length; a++) {
                                     var attr = el.attributes[a];
-                                    if (attr.name !== 'class' && attr.name !== 'style' && !attr.name.startsWith('data-ai')) {
+                                    if (attr.name !== 'class' && attr.name !== 'style' && attr.name !== 'data-m' && !attr.name.startsWith('data-ai')) {
                                         attrMap[attr.name] = attr.value;
                                     }
                                 }
+                            }
+                            var gSig = computeGraphicSig(el);
+                            if (gSig) {
+                                attrMap['data-graphic-sig'] = gSig;
                             }
                             var role = el.getAttribute('role') || '';
                             var accessibleName = el.getAttribute('aria-label') || el.getAttribute('title') || el.getAttribute('placeholder') || (el.labels && el.labels[0] ? el.labels[0].innerText : '') || text;
@@ -1876,19 +1992,60 @@ public class PageAnalyzer
                 if (!el || el === document.body || el === document.documentElement) {
                     return null;
                 }
-                var id = el.id ? '#' + el.id : null;
-                var dataAi = el.getAttribute('data-ai') ? '[data-ai="' + el.getAttribute('data-ai') + '"]' : null;
-                var selector = id || dataAi;
-                if (!selector && el.className && typeof el.className === 'string' && el.className.trim()) {
-                    var cls = el.className.trim().split(/\\s+/)[0];
-                    if (cls && !cls.includes(':') && !cls.includes('/')) {
-                        selector = '.' + cls;
+                var anchor = null;
+                var selector = null;
+                var curr = el;
+                while (curr && curr !== document.body && curr !== document.documentElement) {
+                    var tag = curr.tagName ? curr.tagName.toLowerCase() : '';
+                    if (curr.id && !/[0-9]{4,}/.test(curr.id)) {
+                        anchor = curr;
+                        selector = '#' + curr.id;
+                        break;
+                    }
+                    var testId = curr.getAttribute && (curr.getAttribute('data-testid') || curr.getAttribute('data-test') || curr.getAttribute('data-qa'));
+                    if (testId) {
+                        var attrName = curr.getAttribute('data-testid') ? 'data-testid' : (curr.getAttribute('data-test') ? 'data-test' : 'data-qa');
+                        anchor = curr;
+                        selector = '[' + attrName + '="' + testId + '"]';
+                        break;
+                    }
+                    if (curr !== el && (['article', 'tr', 'li', 'div', 'section', 'form', 'fieldset'].indexOf(tag) !== -1)) {
+                        var heading = curr.querySelector && curr.querySelector('h1, h2, h3, h4, h5, h6, [role="heading"], legend, th');
+                        if (heading) {
+                            var hText = (heading.innerText || heading.textContent || '').trim().replace(/\\s+/g, ' ');
+                            if (hText && hText.length >= 2 && hText.length <= 60 && /[a-zA-Z]{2,}/.test(hText)) {
+                                var sameContainers = document.querySelectorAll(tag);
+                                var matchCount = 0;
+                                for (var k = 0; k < sameContainers.length; k++) {
+                                    var ct = (sameContainers[k].innerText || sameContainers[k].textContent || '');
+                                    if (ct.indexOf(hText) !== -1) matchCount++;
+                                }
+                                if (matchCount === 1) {
+                                    anchor = curr;
+                                    selector = tag + ':has-text("' + hText.replace(/"/g, '\\\\"') + '")';
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    curr = curr.parentElement;
+                }
+                if (!anchor) {
+                    anchor = el;
+                    var id = el.id ? '#' + el.id : null;
+                    var dataAi = el.getAttribute('data-ai') ? '[data-ai="' + el.getAttribute('data-ai') + '"]' : null;
+                    selector = id || dataAi;
+                    if (!selector && el.className && typeof el.className === 'string' && el.className.trim()) {
+                        var cls = el.className.trim().split(/\\s+/)[0];
+                        if (cls && !cls.includes(':') && !cls.includes('/')) {
+                            selector = '.' + cls;
+                        }
+                    }
+                    if (!selector) {
+                        selector = el.tagName.toLowerCase();
                     }
                 }
-                if (!selector) {
-                    selector = el.tagName.toLowerCase();
-                }
-                var rect = el.getBoundingClientRect();
+                var rect = anchor.getBoundingClientRect();
                 var relX = Math.round(vx - rect.left);
                 var relY = Math.round(vy - rect.top);
                 return JSON.stringify({ selector: selector, relX: relX, relY: relY });

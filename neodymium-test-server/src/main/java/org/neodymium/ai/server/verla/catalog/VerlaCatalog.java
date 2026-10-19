@@ -295,18 +295,45 @@ public final class VerlaCatalog
 
     public static String getCountryFlag(final String countryCode)
     {
-        if (countryCode == null || countryCode.length() != 2)
+        if (countryCode == null || countryCode.isBlank())
         {
             return "🏳️";
         }
-        final String resolvedCode = countryCode.toUpperCase();
-        if ("UK".equals(resolvedCode))
+
+        final String upperCode = countryCode.trim().toUpperCase();
+        final String resolvedCode;
+        if ("UK".equals(upperCode))
         {
-            return "\uD83C\uDDEC\uD83C\uDDE7"; // GB flag
+            resolvedCode = "GB";
+        }
+        else if (upperCode.startsWith("CA"))
+        {
+            resolvedCode = "CA";
+        }
+        else if (upperCode.contains("_") || upperCode.contains("-"))
+        {
+            final int sep = upperCode.indexOf('_') != -1 ? upperCode.indexOf('_') : upperCode.indexOf('-');
+            resolvedCode = upperCode.substring(0, sep);
+        }
+        else
+        {
+            resolvedCode = upperCode;
         }
 
-        final int firstChar = resolvedCode.charAt(0) - 'A' + 0x1F1E6;
-        final int secondChar = resolvedCode.charAt(1) - 'A' + 0x1F1E6;
+        if (resolvedCode.length() != 2)
+        {
+            return "🏳️";
+        }
+
+        final char c1 = resolvedCode.charAt(0);
+        final char c2 = resolvedCode.charAt(1);
+        if (c1 < 'A' || c1 > 'Z' || c2 < 'A' || c2 > 'Z')
+        {
+            return "🏳️";
+        }
+
+        final int firstChar = c1 - 'A' + 0x1F1E6;
+        final int secondChar = c2 - 'A' + 0x1F1E6;
         return new String(Character.toChars(firstChar)) + new String(Character.toChars(secondChar));
     }
 
@@ -416,7 +443,17 @@ public final class VerlaCatalog
         {
             return countriesMap.get("US");
         }
-        return countriesMap.getOrDefault(code.toUpperCase(), countriesMap.get("US"));
+        final String upperCode = code.toUpperCase();
+        final Country direct = countriesMap.get(upperCode);
+        if (direct != null)
+        {
+            return direct;
+        }
+        if ("CA".equals(upperCode))
+        {
+            return countriesMap.getOrDefault("CA_EN", countriesMap.get("US"));
+        }
+        return countriesMap.get("US");
     }
 
     public List<Country> getCountries()

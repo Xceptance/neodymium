@@ -21,6 +21,8 @@ package org.neodymium.ai.testing;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
+import java.util.Random;
+import org.neodymium.ai.server.client.TestServerClient;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.common.browser.BrowserMethodData;
 import org.neodymium.common.browser.BrowserRunner;
@@ -238,5 +240,131 @@ public abstract class BaseAiTest extends BaseLlmTest
             return submodule;
         }
         return direct;
+    }
+
+    /**
+     * Computes a deterministic pseudo-random latency in [minMs, maxMs] seeded by the session ID.
+     * Purely numeric session IDs are parsed as numbers; otherwise the String hash code is used as seed.
+     *
+     * @param sessionId the session identifier or seed
+     * @param minMs minimum latency in milliseconds
+     * @param maxMs maximum latency in milliseconds
+     * @return the calculated latency in milliseconds
+     */
+    protected int deriveSessionLatencyMs(final String sessionId, final int minMs, final int maxMs)
+    {
+        if (sessionId == null || sessionId.isBlank() || minMs <= 0 && maxMs <= 0)
+        {
+            return 0;
+        }
+        final long seed = sessionId.chars().allMatch(Character::isDigit)
+            ? Long.parseLong(sessionId)
+            : (long) sessionId.hashCode();
+        final int safeMax = Math.max(minMs, maxMs);
+        final int bound = safeMax - minMs + 1;
+        return minMs + new Random(seed).nextInt(bound);
+    }
+
+    /**
+     * Returns the full URL for an Aura Glance sandbox page on the running test server.
+     *
+     * @param path relative path under /AuraGlanceTest
+     * @return full HTTP URL
+     */
+    protected String getSandboxUrl(final String path)
+    {
+        return getSandboxUrl(path, null);
+    }
+
+    /**
+     * Returns the full URL for an Aura Glance sandbox page on the running test server,
+     * binding a custom test session on initial load.
+     *
+     * @param path relative path under /AuraGlanceTest
+     * @param customSessionId the test session identifier
+     * @return full HTTP URL
+     */
+    protected String getSandboxUrl(final String path, final String customSessionId)
+    {
+        final String clean = (path == null || path.isBlank()) ? "" : (path.startsWith("/") ? path : "/" + path);
+        if (customSessionId == null || customSessionId.isBlank())
+        {
+            return String.format("http://localhost:%d/AuraGlanceTest%s", server.getPort(), clean);
+        }
+        return String.format("http://localhost:%d/AuraGlanceTest%s?customSession=%s",
+            server.getPort(), clean, customSessionId.trim());
+    }
+
+    /**
+     * Returns the full URL for a VÉRLA storefront or endpoint on the running test server.
+     *
+     * @param path relative path from root
+     * @return full HTTP URL
+     */
+    protected String getVerlaUrl(final String path)
+    {
+        return getVerlaUrl(path, null);
+    }
+
+    /**
+     * Returns the full URL for a VÉRLA storefront or endpoint on the running test server,
+     * binding a custom test session on initial load.
+     *
+     * @param path relative path from root
+     * @param customSessionId the test session identifier
+     * @return full HTTP URL
+     */
+    protected String getVerlaUrl(final String path, final String customSessionId)
+    {
+        final String clean = (path == null || path.isBlank()) ? "" : (path.startsWith("/") ? path : "/" + path);
+        if (customSessionId == null || customSessionId.isBlank())
+        {
+            return String.format("http://localhost:%d%s", server.getPort(), clean);
+        }
+        return String.format("http://localhost:%d%s?customSession=%s",
+            server.getPort(), clean, customSessionId.trim());
+    }
+
+    /**
+     * Returns a {@link TestServerClient} for the given session ID communicating via REST.
+     *
+     * @param customSessionId the test session identifier
+     * @return the test server client
+     */
+    protected TestServerClient getTestClient(final String customSessionId)
+    {
+        if (server == null)
+        {
+            throw new IllegalStateException("Test server has not been started yet");
+        }
+        return server.getClient(customSessionId);
+    }
+
+    /**
+     * Derives a deterministic latency seeded by the session ID and applies it to the test session via REST.
+     *
+     * @param customSessionId the test session identifier
+     * @param minMs minimum latency in milliseconds
+     * @param maxMs maximum latency in milliseconds
+     * @return the applied latency in milliseconds
+     */
+    protected int configureSessionLatency(final String customSessionId, final int minMs, final int maxMs)
+    {
+        final int latency = deriveSessionLatencyMs(customSessionId, minMs, maxMs);
+        getTestClient(customSessionId).setAuraGlanceDelay(latency);
+        return latency;
+    }
+
+    /**
+     * Resets simulated latency and faults for the specified session via REST.
+     *
+     * @param customSessionId the test session identifier
+     */
+    protected void resetSession(final String customSessionId)
+    {
+        if (server != null && customSessionId != null && !customSessionId.isBlank())
+        {
+            getTestClient(customSessionId).resetAuraGlance();
+        }
     }
 }

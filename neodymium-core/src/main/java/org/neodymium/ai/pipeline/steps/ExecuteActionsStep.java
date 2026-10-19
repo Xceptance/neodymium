@@ -948,11 +948,15 @@ public final class ExecuteActionsStep
                 standardFlow.add(visualBaselineGateStep::executePostActionCheck);
             }
 
-            if (AiConfiguration.getInstance().isSemanticVerificationEnabled()
-                || (step != null && step.isVisualOrLayoutStep()))
+            standardFlow.add(c ->
             {
-                standardFlow.add(verifyStep);
-            }
+                if (AiConfiguration.getInstance().isSemanticVerificationEnabled()
+                    || (step != null && (step.isVisualOrLayoutStep() || step.isMarker() || hasCoordinateAction(step)))
+                    || c.getTransientData().containsKey(ExecutionContext.KEY_PRE_CLICK_COORD_TILE_MATRIX))
+                {
+                    verifyStep.execute(c);
+                }
+            });
 
             // Register exception handlers based on execution mode
             final Map<Class<? extends PipelineException>, PipelineStep> handlers = new HashMap<>();
@@ -975,10 +979,15 @@ public final class ExecuteActionsStep
                         {
                         }
                     }
-                    if (AiConfiguration.getInstance().isSemanticVerificationEnabled())
+                    c.pushStep(ctx ->
                     {
-                        c.pushStep(verifyStep);
-                    }
+                        if (AiConfiguration.getInstance().isSemanticVerificationEnabled()
+                            || (step != null && (step.isVisualOrLayoutStep() || step.isMarker() || hasCoordinateAction(step)))
+                            || ctx.getTransientData().containsKey(ExecutionContext.KEY_PRE_CLICK_COORD_TILE_MATRIX))
+                        {
+                            verifyStep.execute(ctx);
+                        }
+                    });
                     c.pushStep(new AgentToolLoopStep());
                 });
             }

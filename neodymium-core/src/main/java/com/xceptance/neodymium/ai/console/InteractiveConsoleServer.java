@@ -1500,19 +1500,17 @@ public final class InteractiveConsoleServer
     }
 
     /**
-     * Applies a REORDER user action to the simulation state and rebuilds allSteps.
+     * Applies a step reorder operation to the simulation state and all-steps list.
      *
      * @param activeState
-     *            the simulation active state
+     *     the active simulation state
      * @param allSteps
-     *            the flattened step list to synchronize
+     *     the flattened step list to synchronize
      * @param response
-     *            the JSON action payload from the client
+     *     the JSON action payload from the client
      * @param currentStepIndex
-     *            the index of the current step prior to reordering
+     *     the index of the current step prior to reordering
      * @return the updated active step index matching the running step, or the preserved index
-     * @author AI-generated: Gemini 3.8 Flash
-     * @author Xceptance GmbH 2026
      */
     static int applyReorder(final JsonObject activeState, final List<JsonObject> allSteps, final JsonObject response,
                             final int currentStepIndex)
@@ -1534,6 +1532,7 @@ public final class InteractiveConsoleServer
             {
                 final JsonElement element = fromArray.remove(fromIndex);
 
+                // Ensure target index is within bounds of the destination array
                 int adjustedToIndex = toIndex;
                 if (adjustedToIndex < 0)
                 {
