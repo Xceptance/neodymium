@@ -989,6 +989,58 @@ public class InteractiveConsoleListenerTest
     }
 
     @Test
+    public void testEditPendingStepInMultiBlockPlaybookPreservesPendingStatusAndPause()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep beforeStep = new PlaybookStep("Before step");
+        beforeStep.setLineNumber(1);
+        beforeStep.setSourceFile("test.yaml");
+
+        final PlaybookStep step1 = new PlaybookStep("Main step 1");
+        step1.setLineNumber(2);
+        step1.setSourceFile("test.yaml");
+
+        final PlaybookStep step2 = new PlaybookStep("Main step 2");
+        step2.setLineNumber(3);
+        step2.setSourceFile("test.yaml");
+
+        final List<PlaybookStep> beforeSteps = new ArrayList<>(List.of(beforeStep));
+        final List<PlaybookStep> mainSteps = new ArrayList<>(List.of(step1, step2));
+        final List<PlaybookStep> flatSteps = new ArrayList<>(List.of(beforeStep, step1, step2));
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put("playbook.beforeSteps", beforeSteps);
+        context.getTransientData().put("playbook.steps", mainSteps);
+        context.getTransientData().put("playbook.flatSteps", flatSteps);
+
+        // Pause on step1 (index 0 of main steps, index 1 in flatSteps)
+        // Edit step2 (blockIndex 1, rawIndex 2, block 'steps', flatIndex 2)
+        final JsonObject editAction = new JsonObject();
+        editAction.addProperty("action", "EDIT");
+        editAction.addProperty("instruction", "Main step 2 edited");
+        editAction.addProperty("blockIndex", 1);
+        editAction.addProperty("index", 1);
+        editAction.addProperty("flatIndex", 2);
+        editAction.addProperty("rawIndex", 2);
+        editAction.addProperty("block", "steps");
+        editAction.addProperty("isCurrentStep", false);
+
+        final JsonObject runAction = new JsonObject();
+        runAction.addProperty("action", "RUN");
+
+        submitActionsSequentiallyAsynchronously(List.of(editAction, runAction));
+
+        final String result = listener.pauseBeforeActionExecution(context, step1);
+        assertEquals("RUN", result);
+
+        assertEquals("Main step 1", step1.getInstruction(), "Active step must not be modified");
+        assertEquals("Main step 2 edited", step2.getInstruction(), "Pending step must be updated");
+        assertEquals(PlaybookStepStatus.PENDING, step2.getStatus(), "Pending step must retain PENDING status");
+    }
+
+    @Test
     public void testInBlockReorderOnUnmodifiableListDoesNotDuplicateOrDesynchronize()
     {
         final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);

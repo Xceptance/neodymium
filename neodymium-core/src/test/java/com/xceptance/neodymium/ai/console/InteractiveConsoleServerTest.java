@@ -692,4 +692,134 @@ public class InteractiveConsoleServerTest
         assertEquals("running", allSteps.get(newStepIndex2).get("status").getAsString());
         assertEquals("Step B", allSteps.get(newStepIndex2).get("instruction").getAsString());
     }
+
+    @Test
+    public void testInteractiveConsoleDirectSseConnectionAndGuardedStaticLoad() throws IOException
+    {
+        final String jsPath = "com/xceptance/neodymium/ai/console/interactive_console.js";
+        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(jsPath))
+        {
+            assertNotNull(in, "interactive_console.js must be present on the classpath");
+            final String jsContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+            // Verify DOMContentLoaded connects SSE directly when not in static mode
+            assertFalse(jsContent.contains("fetch('/api/console/events', { method: 'HEAD' })"),
+                "interactive_console.js must not perform preflight HEAD requests against SSE endpoint");
+            assertTrue(jsContent.contains("if (params.has('dataUrl') || params.has('data')) {\n        tryStaticLoad();\n    } else {\n        connectSSE();\n    }"),
+                "interactive_console.js must connect SSE directly in live mode");
+
+            // Verify tryStaticLoad guards against silent run_example.json fallback
+            assertTrue(jsContent.contains("if (dataUrl === 'run_example.json' || dataUrl === '/run_example.json')"),
+                "tryStaticLoad must not silently fallback to run_example.json unless explicitly requested");
+        }
+    }
+
+    @Test
+    public void testInteractiveConsoleJsApplyStatePreservesPendingStepPosition() throws IOException
+    {
+        final String jsPath = "com/xceptance/neodymium/ai/console/interactive_console.js";
+        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(jsPath))
+        {
+            assertNotNull(in, "interactive_console.js must be present on the classpath");
+            final String jsContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+            // Verify applyState preserves pending steps at their target insertion index, never pushing to end
+            final int applyStart = jsContent.indexOf("function applyState(state)");
+            assertTrue(applyStart >= 0, "applyState function must exist");
+            final int applyEnd = jsContent.indexOf("function checkActionApprovals()", applyStart);
+            assertTrue(applyEnd > applyStart, "checkActionApprovals function must follow applyState");
+            final String applyBody = jsContent.substring(applyStart, applyEnd);
+
+            assertFalse(applyBody.contains("newList.push(pendingStep)"),
+                "applyState must not use newList.push(pendingStep) which displaces steps to the end of the test");
+            assertTrue(applyBody.contains("newList.splice(insertPos, 0, pendingStep)"),
+                "applyState must splice pending steps into their intended relative position");
+            assertTrue(applyBody.contains("pendingStep.targetInsertIndex"),
+                "applyState must consult targetInsertIndex when reconciling pending steps");
+        }
+    }
+
+    @Test
+    public void testInteractiveConsoleJsAddStepAfterPassesBlockName() throws IOException
+    {
+        final String jsPath = "com/xceptance/neodymium/ai/console/interactive_console.js";
+        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(jsPath))
+        {
+            assertNotNull(in, "interactive_console.js must be present on the classpath");
+            final String jsContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+            assertTrue(jsContent.contains("onclick=\"addStepAfter(event, ${step.index}, '${blockName}')\""),
+                "renderStepCard must pass blockName to addStepAfter to avoid multi-block cross-collisions");
+            assertTrue(jsContent.contains("function addStepAfter(event, stepIndex, blockName)"),
+                "addStepAfter function signature must accept blockName");
+        }
+    }
+
+    @Test
+    public void testSimulationAddStepRespectsTargetIndex()
+    {
+        final JsonObject state = new JsonObject();
+        final JsonObject blocks = new JsonObject();
+        final JsonArray steps = new JsonArray();
+
+        final JsonObject step1 = new JsonObject();
+        step1.addProperty("instruction", "Step 1");
+        step1.addProperty("status", "passed");
+        step1.addProperty("source", "playbook");
+        step1.addProperty("includeLevel", 0);
+        step1.add("actions", new JsonArray());
+        steps.add(step1);
+
+        final JsonObject step2 = new JsonObject();
+        step2.addProperty("instruction", "Step 2");
+        step2.addProperty("status", "running");
+        step2.addProperty("source", "playbook");
+        step2.addProperty("includeLevel", 0);
+        step2.add("actions", new JsonArray());
+        steps.add(step2);
+
+        blocks.add("steps", steps);
+        state.add("blocks", blocks);
+
+        final List<JsonObject> allSteps = new ArrayList<>();
+        allSteps.add(step1);
+        allSteps.add(step2);
+
+        final JsonObject addResponse = new JsonObject();
+        addResponse.addProperty("action", "ADD");
+        addResponse.addProperty("block", "steps");
+        addResponse.addProperty("instruction", "Step 1.5 - Inserted");
+        addResponse.addProperty("index", 1);
+
+        final int newStepIndex = InteractiveConsoleServer.applyAddStep(state, allSteps, addResponse, 1);
+
+        final JsonArray updatedSteps = state.getAsJsonObject("blocks").getAsJsonArray("steps");
+        assertEquals(3, updatedSteps.size(), "Steps array must have 3 elements after insertion");
+        assertEquals("Step 1", updatedSteps.get(0).getAsJsonObject().get("instruction").getAsString());
+        assertEquals("Step 1.5 - Inserted", updatedSteps.get(1).getAsJsonObject().get("instruction").getAsString());
+        assertEquals("pending", updatedSteps.get(1).getAsJsonObject().get("status").getAsString());
+        assertEquals("Step 2", updatedSteps.get(2).getAsJsonObject().get("instruction").getAsString());
+
+        assertEquals(3, allSteps.size(), "Flattened allSteps must contain 3 elements");
+        assertEquals(0, allSteps.get(0).get("index").getAsInt());
+        assertEquals(1, allSteps.get(1).get("index").getAsInt());
+        assertEquals(2, allSteps.get(2).get("index").getAsInt());
+        assertEquals(2, newStepIndex, "Active running step index must point to Step 2 at index 2");
+    }
+
+    @Test
+    public void testInteractiveConsoleJsSaveEditPreservesPendingStatusForNonCurrentSteps() throws IOException
+    {
+        final String jsPath = "com/xceptance/neodymium/ai/console/interactive_console.js";
+        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(jsPath))
+        {
+            assertNotNull(in, "interactive_console.js must be present on the classpath");
+            final String jsContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+            assertTrue(jsContent.contains("isCurrentStep: false"),
+                "saveEdit must send isCurrentStep: false for non-current steps");
+            assertTrue(jsContent.contains("if (extra && extra.isCurrentStep !== undefined) {\n            return !extra.isCurrentStep;"),
+                "isStructuralAction must consider isCurrentStep in extra payload to preserve pause");
+        }
+    }
 }

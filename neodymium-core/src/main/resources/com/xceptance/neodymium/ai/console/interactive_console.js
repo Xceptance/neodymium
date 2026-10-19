@@ -219,22 +219,31 @@ function tryStaticLoad() {
             applyState(data);
             setConnectionState('connected');
             setButtonsEnabled(false);
-            document.getElementById('reasoningText').textContent = '(Offline view — no live updates)';
+            const reasoningEl = document.getElementById('reasoningText');
+            if (reasoningEl) reasoningEl.textContent = '(Offline view — no live updates)';
         })
         .catch(() => {
-            // Try direct run_example.json fallback if the server custom path failed
-            fetch('run_example.json')
-                .then(r => r.ok ? r.json() : Promise.reject(r.status))
-                .then(data => {
-                    applyState(data);
-                    setConnectionState('connected');
-                    setButtonsEnabled(false);
-                    document.getElementById('reasoningText').textContent = '(Offline view — no live updates)';
-                })
-                .catch(() => {
-                    setConnectionState('error');
-                    document.getElementById('reasoningText').textContent = 'Could not load run data. Pass ?data=path/to/run.json';
-                });
+            // Only try run_example.json if explicitly requested as fallback demo
+            if (dataUrl === 'run_example.json' || dataUrl === '/run_example.json') {
+                fetch('run_example.json')
+                    .then(r => r.ok ? r.json() : Promise.reject(r.status))
+                    .then(data => {
+                        applyState(data);
+                        setConnectionState('connected');
+                        setButtonsEnabled(false);
+                        const reasoningEl = document.getElementById('reasoningText');
+                        if (reasoningEl) reasoningEl.textContent = '(Offline view — no live updates)';
+                    })
+                    .catch(() => {
+                        setConnectionState('error');
+                        const reasoningEl = document.getElementById('reasoningText');
+                        if (reasoningEl) reasoningEl.textContent = 'Could not load run data. Pass ?data=path/to/run.json';
+                    });
+            } else {
+                setConnectionState('error');
+                const reasoningEl = document.getElementById('reasoningText');
+                if (reasoningEl) reasoningEl.textContent = 'Could not load run data. Pass ?data=path/to/run.json';
+            }
         });
 }
 
@@ -272,9 +281,7 @@ window.addEventListener('DOMContentLoaded', () => {
     if (params.has('dataUrl') || params.has('data')) {
         tryStaticLoad();
     } else {
-        fetch('/api/console/events', { method: 'HEAD' })
-            .then(r => { if (r.ok || r.status === 200) connectSSE(); else tryStaticLoad(); })
-            .catch(() => tryStaticLoad());
+        connectSSE();
     }
 
     // Initialize help tooltip hover
@@ -484,10 +491,20 @@ function applyState(state) {
             for (const pendingStep of pendingSteps) {
                 const alreadyInNewList = newList.some(s =>
                     s.index === pendingStep.index ||
-                    (!s.isTempAdd && !s.isPendingAdd && s.instruction === pendingStep.instruction)
+                    (!s.isTempAdd && !s.isPendingAdd && (
+                        (s.instruction && pendingStep.instruction && s.instruction.trim() === pendingStep.instruction.trim()) ||
+                        (s.rawInstruction && pendingStep.rawInstruction && s.rawInstruction.trim() === pendingStep.rawInstruction.trim()) ||
+                        (s.instruction && pendingStep.rawInstruction && s.instruction.trim() === pendingStep.rawInstruction.trim())
+                    ))
                 );
                 if (!alreadyInNewList) {
-                    newList.push(pendingStep);
+                    const originalIdx = (typeof pendingStep.targetInsertIndex === 'number' && pendingStep.targetInsertIndex >= 0)
+                        ? pendingStep.targetInsertIndex
+                        : oldList.indexOf(pendingStep);
+                    const insertPos = (originalIdx >= 0 && originalIdx <= newList.length)
+                        ? originalIdx
+                        : newList.length;
+                    newList.splice(insertPos, 0, pendingStep);
                 }
             }
             state.blocks[blockName] = newList;
@@ -1584,7 +1601,7 @@ function renderStepCard(step, blockName = 'steps') {
         ? `<button class="step-edit-btn${syncDisabledClass}" onclick="enableEdit(this)" title="Edit Step (Alt+E)" aria-label="Edit step instruction (Alt+E)"${syncDisabledAttr}><span class="material-symbols-outlined" aria-hidden="true">edit</span></button>`
         : '';
     const addBtnHtml = !step.isTempAdd
-        ? `<button class="step-add-after-btn${syncDisabledClass}" onclick="addStepAfter(event, ${step.index})" title="Add step after this" aria-label="Add step after this"${syncDisabledAttr}><span class="material-symbols-outlined" aria-hidden="true">add_circle</span></button>`
+        ? `<button class="step-add-after-btn${syncDisabledClass}" onclick="addStepAfter(event, ${step.index}, '${blockName}')" title="Add step after this" aria-label="Add step after this"${syncDisabledAttr}><span class="material-symbols-outlined" aria-hidden="true">add_circle</span></button>`
         : '';
 
     // Rewind only makes sense for steps that have already been executed (passed/failed/skipped).
@@ -1846,6 +1863,9 @@ function isStructuralAction(action, extra) {
         return true;
     }
     if (action === 'EDIT' || action === 'UPDATE_STEP' || action === 'SAVE_STEP') {
+        if (extra && extra.isCurrentStep !== undefined) {
+            return !extra.isCurrentStep;
+        }
         const activeCard = document.querySelector('.step-card.active');
         const activeIdx = activeCard ? parseInt(activeCard.getAttribute('data-step-idx'), 10) : null;
         if (extra && extra.index !== undefined && activeIdx !== null && extra.index !== activeIdx) {
@@ -2441,10 +2461,12 @@ function enableEdit(btnElement) {
 
     const textarea = card.querySelector('.inline-edit-textarea');
     const idx = parseInt(card.getAttribute('data-step-idx'), 10);
+    const cardBlock = card.getAttribute('data-step-block') || null;
 
     let rawInstruction = '';
     if (currentState && currentState.blocks) {
-        for (const blockName of ['before', 'steps', 'after']) {
+        const blocksToSearch = cardBlock ? [cardBlock] : ['before', 'steps', 'after'];
+        for (const blockName of blocksToSearch) {
             const stepObj = currentState.blocks[blockName]?.find(s => s.index === idx);
             if (stepObj) {
                 rawInstruction = stepObj.rawInstruction || stepObj.instruction;
@@ -2463,9 +2485,11 @@ function enableEdit(btnElement) {
 function cancelEdit(btnElement) {
     const card = btnElement.closest('.step-card');
     const idx = parseInt(card.getAttribute('data-step-idx'), 10);
+    const cardBlock = card.getAttribute('data-step-block') || null;
     let removed = false;
     if (currentState && currentState.blocks) {
-        for (const blockName of ['before', 'steps', 'after']) {
+        const blocksToSearch = cardBlock ? [cardBlock] : ['before', 'steps', 'after'];
+        for (const blockName of blocksToSearch) {
             const list = currentState.blocks[blockName];
             if (list) {
                 const indexInList = list.findIndex(s => s.index === idx && s.isTempAdd);
@@ -2495,13 +2519,15 @@ function saveEdit(btnElement) {
     const newVal = textarea.value.trim();
 
     const idx = parseInt(card.getAttribute('data-step-idx'), 10);
+    const cardBlock = card.getAttribute('data-step-block') || null;
     let isTemp = false;
     let oldVal = '';
-    let blockName = 'steps';
+    let blockName = cardBlock || 'steps';
     let targetStep = null;
 
     if (currentState && currentState.blocks) {
-        for (const bKey of ['before', 'steps', 'after']) {
+        const blocksToSearch = cardBlock ? [cardBlock] : ['before', 'steps', 'after'];
+        for (const bKey of blocksToSearch) {
             const list = currentState.blocks[bKey];
             if (list) {
                 const found = list.find(s => s.index === idx);
@@ -2531,7 +2557,15 @@ function saveEdit(btnElement) {
                 targetStep.errorMessage = null;
             }
             const targetList = (currentState.blocks && currentState.blocks[blockName]) ? currentState.blocks[blockName] : [];
-            const targetRelIdx = targetStep ? targetList.indexOf(targetStep) : -1;
+            let targetRelIdx = (targetStep && typeof targetStep.targetInsertIndex === 'number' && targetStep.targetInsertIndex >= 0)
+                ? targetStep.targetInsertIndex
+                : (targetStep ? targetList.indexOf(targetStep) : -1);
+            if (targetRelIdx < 0 || targetRelIdx > targetList.length) {
+                targetRelIdx = targetList.length;
+            }
+            if (targetStep) {
+                targetStep.targetInsertIndex = targetRelIdx;
+            }
             sendAction('ADD', { instruction: newVal, block: blockName, index: targetRelIdx });
         } else {
             cancelEdit(btnElement);
@@ -2546,38 +2580,75 @@ function saveEdit(btnElement) {
         applyState(currentState);
     } else {
         console.error('Found step in state blocks:', blockName, idx, 'oldVal:', oldVal, 'newVal:', newVal, 'activePauseId:', activePauseId);
-        if (targetStep && newVal) {
-            targetStep.instruction = newVal;
-            targetStep.rawInstruction = newVal;
-            targetStep.status = 'running';
-            targetStep.isLlmProcessing = true;
-            targetStep.actions = [];
-            targetStep.reasoning = null;
-            targetStep.errorMessage = null;
-        }
-        selectedStepIndexForDetails = idx;
-        window.currentlyEditingStepIndex = null;
-        window.currentEditText = null;
+        const activeCard = document.querySelector('.step-card.active');
+        const activeIdx = activeCard ? parseInt(activeCard.getAttribute('data-step-idx'), 10) : null;
+        const activeBlock = activeCard ? activeCard.getAttribute('data-step-block') : null;
+        const isCurrentStep = card.classList.contains('active')
+            || (activeCard !== null && idx === activeIdx && (!activeBlock || activeBlock === blockName))
+            || (targetStep && (targetStep.status === 'running' || targetStep.status === 'failed'));
 
-        if (activePauseId) {
-            console.error('Sending EDIT action');
-            userEditedFailedStep = true;
-            isErrorMode = false;
-            updateToolbarControls(true);
-            const activeCard = document.querySelector('.step-card.active');
-            const activeIdx = activeCard ? parseInt(activeCard.getAttribute('data-step-idx'), 10) : null;
-            const isCurrentStep = (activeIdx !== null && idx === activeIdx)
-                || card.classList.contains('active')
-                || (targetStep && (targetStep.status === 'running' || targetStep.status === 'failed'));
-            const flatIdx = allStepIndices.indexOf(idx);
-            sendAction('EDIT', {
-                index: flatIdx >= 0 ? flatIdx : idx,
-                rawIndex: idx,
-                block: blockName,
-                isCurrentStep: isCurrentStep,
-                instruction: newVal,
-                bindings: currentState?.dataBindings
-            });
+        const blockList = (currentState?.blocks && currentState.blocks[blockName]) ? currentState.blocks[blockName] : [];
+        const blockIndex = targetStep ? blockList.indexOf(targetStep) : -1;
+        const allSteps = [
+            ...(currentState?.blocks?.before || []),
+            ...(currentState?.blocks?.steps || []),
+            ...(currentState?.blocks?.after || [])
+        ];
+        const flatIdx = targetStep ? allSteps.indexOf(targetStep) : allStepIndices.indexOf(idx);
+
+        if (isCurrentStep) {
+            if (targetStep && newVal) {
+                targetStep.instruction = newVal;
+                targetStep.rawInstruction = newVal;
+                targetStep.status = 'running';
+                targetStep.isLlmProcessing = true;
+                targetStep.actions = [];
+                targetStep.reasoning = null;
+                targetStep.errorMessage = null;
+            }
+            selectedStepIndexForDetails = idx;
+            window.currentlyEditingStepIndex = null;
+            window.currentEditText = null;
+
+            if (activePauseId) {
+                console.error('Sending EDIT action for current step');
+                userEditedFailedStep = true;
+                isErrorMode = false;
+                updateToolbarControls(true);
+                sendAction('EDIT', {
+                    index: blockIndex >= 0 ? blockIndex : (flatIdx >= 0 ? flatIdx : idx),
+                    blockIndex: blockIndex,
+                    flatIndex: flatIdx,
+                    rawIndex: idx,
+                    block: blockName,
+                    isCurrentStep: true,
+                    instruction: newVal,
+                    bindings: currentState?.dataBindings
+                });
+            }
+        } else {
+            if (targetStep && newVal) {
+                targetStep.instruction = newVal;
+                targetStep.rawInstruction = newVal;
+                // Preserve pending or existing status - do not mark running or LLM processing
+            }
+            selectedStepIndexForDetails = idx;
+            window.currentlyEditingStepIndex = null;
+            window.currentEditText = null;
+
+            if (activePauseId) {
+                console.error('Sending EDIT action for non-current step');
+                sendAction('EDIT', {
+                    index: blockIndex >= 0 ? blockIndex : (flatIdx >= 0 ? flatIdx : idx),
+                    blockIndex: blockIndex,
+                    flatIndex: flatIdx,
+                    rawIndex: idx,
+                    block: blockName,
+                    isCurrentStep: false,
+                    instruction: newVal,
+                    bindings: currentState?.dataBindings
+                });
+            }
         }
         card.classList.remove('editing');
         const bindingsDiv = card.querySelector('.inline-edit-bindings');
@@ -3161,6 +3232,11 @@ function openAddStepOverlay(blockName, targetIndex) {
     if (!currentState.blocks[finalBlock]) currentState.blocks[finalBlock] = [];
 
     const nextIdx = 1000 + Math.floor(Math.random() * 10000);
+    const targetList = currentState.blocks[finalBlock];
+    const resolvedTargetIndex = (typeof targetIndex === 'number' && targetIndex >= 0 && targetIndex <= targetList.length)
+        ? targetIndex
+        : targetList.length;
+
     const tempStep = {
         index: nextIdx,
         instruction: '',
@@ -3168,15 +3244,12 @@ function openAddStepOverlay(blockName, targetIndex) {
         source: 'llm',
         includeFile: null,
         includeLevel: 0,
-        isTempAdd: true
+        isTempAdd: true,
+        targetBlock: finalBlock,
+        targetInsertIndex: resolvedTargetIndex
     };
 
-    const targetList = currentState.blocks[finalBlock];
-    if (typeof targetIndex === 'number' && targetIndex >= 0 && targetIndex <= targetList.length) {
-        targetList.splice(targetIndex, 0, tempStep);
-    } else {
-        targetList.push(tempStep);
-    }
+    targetList.splice(resolvedTargetIndex, 0, tempStep);
     applyState(currentState);
 
     const card = document.querySelector(`.step-card[data-step-idx='${nextIdx}']`);
@@ -3186,20 +3259,32 @@ function openAddStepOverlay(blockName, targetIndex) {
     }
 }
 
-function addStepAfter(event, stepIndex) {
+function addStepAfter(event, stepIndex, blockName) {
     if (event) event.stopPropagation();
     if (isStructuralActionInFlight || !currentState || !currentState.blocks) return;
+
+    // If blockName is provided, search that block first to prevent cross-block index collisions
+    if (blockName && currentState.blocks[blockName]) {
+        const arr = currentState.blocks[blockName];
+        const idx = arr.findIndex(s => s.index == stepIndex);
+        if (idx !== -1) {
+            openAddStepOverlay(blockName, idx + 1);
+            return;
+        }
+    }
+
+    // Fallback search across all blocks using loose equality
     for (const bKey of ['before', 'steps', 'after']) {
         const arr = currentState.blocks[bKey];
         if (arr) {
-            const idx = arr.findIndex(s => s.index === stepIndex);
+            const idx = arr.findIndex(s => s.index == stepIndex);
             if (idx !== -1) {
                 openAddStepOverlay(bKey, idx + 1);
                 return;
             }
         }
     }
-    openAddStepOverlay('steps');
+    openAddStepOverlay(blockName || 'steps');
 }
 
 let draggedStepIndex = null;

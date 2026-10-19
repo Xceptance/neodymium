@@ -639,7 +639,17 @@ public final class InteractiveConsoleListener implements ExecutionListener
             case "UPDATE_STEP":
             case "SAVE_STEP":
                 int targetStepIdx = -1;
-                if (userAction.has("stepIndex") && !userAction.get("stepIndex").isJsonNull())
+                if (userAction.has("blockIndex") && !userAction.get("blockIndex").isJsonNull())
+                {
+                    try
+                    {
+                        targetStepIdx = userAction.get("blockIndex").getAsInt();
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+                else if (userAction.has("stepIndex") && !userAction.get("stepIndex").isJsonNull())
                 {
                     try
                     {
@@ -759,6 +769,16 @@ public final class InteractiveConsoleListener implements ExecutionListener
                         ? userAction.get("block").getAsString()
                         : null;
                     PlaybookStep targetStep = findStepByIndex(context, targetStepIdx, blockName);
+                    if (targetStep == null && userAction.has("flatIndex") && !userAction.get("flatIndex").isJsonNull())
+                    {
+                        try
+                        {
+                            targetStep = findStepByIndex(context, userAction.get("flatIndex").getAsInt(), null);
+                        }
+                        catch (final Exception ignored)
+                        {
+                        }
+                    }
                     if (targetStep == null && targetStepIdx > 0)
                     {
                         targetStep = findStepByIndex(context, targetStepIdx - 1, blockName);
