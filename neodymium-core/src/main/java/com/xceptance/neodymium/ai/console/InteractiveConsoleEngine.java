@@ -35,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -205,8 +206,16 @@ public final class InteractiveConsoleEngine {
     /**
      * The pending action deposited by a POST handler, picked up by the waiting
      * test-runner thread. {@code null} while paused and awaiting input.
+     * Retained for backward compatibility with reflection-based test fixtures.
      */
     private final AtomicReference<JsonObject> pendingAction = new AtomicReference<>(null);
+
+    /**
+     * Queue of pending actions awaiting execution by the test runner.
+     * Ensures multiple sequential structural operations (such as REORDER) are
+     * preserved and processed in FIFO order.
+     */
+    private final ConcurrentLinkedQueue<JsonObject> pendingActions = new ConcurrentLinkedQueue<>();
 
     /**
      * The current state snapshot that is broadcast to SSE clients.
@@ -700,7 +709,10 @@ public final class InteractiveConsoleEngine {
     public void registerPauseId(final String pauseId)
     {
         this.currentPauseId.set(pauseId);
-        this.pendingAction.set(null);
+        if (this.pendingActions.isEmpty())
+        {
+            this.pendingAction.set(null);
+        }
     }
 
     /**
@@ -774,7 +786,10 @@ public final class InteractiveConsoleEngine {
             if (!pauseId.equals(this.currentPauseId.get()))
             {
                 this.currentPauseId.set(pauseId);
-                this.pendingAction.set(null);
+                if (this.pendingActions.isEmpty())
+                {
+                    this.pendingAction.set(null);
+                }
             }
 
             // Broadcast the updated state including the new pauseId so all tabs know they can act.
@@ -785,7 +800,7 @@ public final class InteractiveConsoleEngine {
             synchronized (this.lock)
             {
                 final long deadline = System.currentTimeMillis() + timeoutMs;
-                while (this.pendingAction.get() == null)
+                while (this.pendingActions.isEmpty() && this.pendingAction.get() == null)
                 {
                     final long remaining = deadline - System.currentTimeMillis();
                     if (remaining <= 0)
@@ -797,7 +812,15 @@ public final class InteractiveConsoleEngine {
                 }
             }
 
-            final JsonObject action = this.pendingAction.getAndSet(null);
+            JsonObject action = this.pendingActions.poll();
+            if (action == null)
+            {
+                action = this.pendingAction.getAndSet(null);
+            }
+            else if (this.pendingAction.get() == action)
+            {
+                this.pendingAction.set(null);
+            }
             LOG.info("[InteractiveConsole] Action received: {}", action);
             return action;
         }
@@ -833,6 +856,8 @@ public final class InteractiveConsoleEngine {
     {
         final JsonObject abortAction = new JsonObject();
         abortAction.addProperty("action", "ABORT");
+        this.pendingActions.clear();
+        this.pendingActions.offer(abortAction);
         this.pendingAction.set(abortAction);
         synchronized (this.lock)
         {
@@ -937,6 +962,40 @@ public final class InteractiveConsoleEngine {
     }
 
     /**
+     * Checks if the given action represents a structural playbook modification
+     * rather than an execution-advancing operation.
+     *
+     * @param action the action string
+     * @param req the action JSON payload
+     * @return {@code true} if structural (REORDER, MOVE_STEP, ADD, EDIT on non-current step, etc.); {@code false} otherwise
+     * @author AI-generated: Gemini 3.8 Flash
+     * @author Xceptance GmbH 2026
+     */
+    public static boolean isStructuralAction(final String action, final JsonObject req)
+    {
+        if (action == null)
+        {
+            return false;
+        }
+        final String upper = action.trim().toUpperCase();
+        if ("REORDER".equals(upper) || "MOVE_STEP".equals(upper) || "ADD".equals(upper)
+                || "ADD_STEP".equals(upper) || "TOGGLE_BREAKPOINT".equals(upper)
+                || "DUMP".equals(upper) || "SUGGEST_FIX".equals(upper))
+        {
+            return true;
+        }
+        if ("EDIT".equals(upper) || "UPDATE_STEP".equals(upper) || "SAVE_STEP".equals(upper))
+        {
+            if (req != null && req.has("isCurrentStep") && !req.get("isCurrentStep").isJsonNull()
+                    && !req.get("isCurrentStep").getAsBoolean())
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Submits an action to the engine and deposits it to wake up any blocked test runner thread.
      *
      * @param req JSON object containing runId, pauseId, action, etc.
@@ -956,19 +1015,26 @@ public final class InteractiveConsoleEngine {
             return new ActionResult(409, hint);
         }
 
+        final String action = req != null && req.has("action") && !req.get("action").isJsonNull()
+                ? req.get("action").getAsString()
+                : "";
+
         final String incomingPauseId = req != null && req.has("pauseId") && !req.get("pauseId").isJsonNull()
                 ? req.get("pauseId").getAsString()
                 : null;
         final String activePauseId = this.currentPauseId.get();
 
-        if (activePauseId == null || !activePauseId.equals(incomingPauseId))
+        final boolean structural = isStructuralAction(action, req);
+
+        if (!structural && (activePauseId == null || !activePauseId.equals(incomingPauseId)))
         {
-            LOG.info("[InteractiveConsole] Action rejected: inactive or mismatched pauseId. activePauseId={}, incomingPauseId={}",
-                    activePauseId, incomingPauseId);
+            LOG.info("[InteractiveConsole] Action rejected: inactive or mismatched pauseId. activePauseId={}, incomingPauseId={}, action={}",
+                    activePauseId, incomingPauseId, action);
             return new ActionResult(200, "{\"status\":\"already-handled\"}");
         }
 
-        LOG.info("[InteractiveConsole] Action accepted: pauseId={}, req={}", incomingPauseId, req);
+        LOG.info("[InteractiveConsole] Action accepted: pauseId={}, action={}, req={}", incomingPauseId, action, req);
+        this.pendingActions.offer(req);
         this.pendingAction.set(req);
         synchronized (this.lock)
         {

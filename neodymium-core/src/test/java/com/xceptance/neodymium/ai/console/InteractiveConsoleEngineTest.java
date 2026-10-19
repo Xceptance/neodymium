@@ -51,6 +51,7 @@ import org.neodymium.ai.report.TestExecutionReport.ReportStepEntry;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.JsonObject;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.ActionResult;
 
 /**
  * Unit test suite validating {@link InteractiveConsoleEngine} console execution logging.
@@ -1053,5 +1054,90 @@ public class InteractiveConsoleEngineTest
         assertEquals("passed", stepsNode.get(0).path("status").asText(), "Step 0 must be reported as passed");
         assertEquals("pending", stepsNode.get(1).path("status").asText(), "Inserted pending step before activeStepIndex must NOT be coerced to passed");
         assertEquals("running", stepsNode.get(2).path("status").asText(), "Step 2 must be reported as running");
+    }
+
+    @Test
+    public void testReorderActionAcceptedEvenWhenPauseIdIsNull()
+    {
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run-reorder-null-pause");
+        assertNull(engine.getCurrentPauseId(), "Engine must initially have null pauseId");
+
+        final JsonObject reorderReq = new JsonObject();
+        reorderReq.addProperty("runId", "run-reorder-null-pause");
+        reorderReq.addProperty("action", "REORDER");
+        reorderReq.addProperty("fromBlock", "steps");
+        reorderReq.addProperty("fromIndex", 1);
+        reorderReq.addProperty("toBlock", "steps");
+        reorderReq.addProperty("toIndex", 2);
+
+        final ActionResult result = engine.submitAction(reorderReq);
+        assertEquals(200, result.statusCode());
+        assertTrue(result.responseBody().contains("\"status\":\"accepted\""),
+            "REORDER action must be accepted even when activePauseId is null. Got: " + result.responseBody());
+
+        // Now set an active pause token, but submit REORDER with mismatched/old pauseId
+        engine.registerPauseId("new-pause-token-456");
+        final JsonObject mismatchedReorderReq = new JsonObject();
+        mismatchedReorderReq.addProperty("runId", "run-reorder-null-pause");
+        mismatchedReorderReq.addProperty("pauseId", "old-stale-pause-token");
+        mismatchedReorderReq.addProperty("action", "REORDER");
+        mismatchedReorderReq.addProperty("fromIndex", 0);
+        mismatchedReorderReq.addProperty("toIndex", 1);
+
+        final ActionResult mismatchedResult = engine.submitAction(mismatchedReorderReq);
+        assertEquals(200, mismatchedResult.statusCode());
+        assertTrue(mismatchedResult.responseBody().contains("\"status\":\"accepted\""),
+            "REORDER action must be accepted even when incoming pauseId is mismatched/stale. Got: " + mismatchedResult.responseBody());
+
+        // Contrast: execution-advancing action without matching pauseId must still return already-handled
+        final JsonObject runReq = new JsonObject();
+        runReq.addProperty("runId", "run-reorder-null-pause");
+        runReq.addProperty("pauseId", "old-stale-pause-token");
+        runReq.addProperty("action", "RUN");
+
+        final ActionResult runResult = engine.submitAction(runReq);
+        assertEquals(200, runResult.statusCode());
+        assertTrue(runResult.responseBody().contains("\"status\":\"already-handled\""),
+            "RUN action with mismatched pauseId must return already-handled. Got: " + runResult.responseBody());
+    }
+
+    @Test
+    public void testMultipleSequentialReordersAcceptedWithoutAlreadyHandledRejection() throws Exception
+    {
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run-multi-reorder");
+        final String pauseId = "pause-multi-123";
+        engine.registerPauseId(pauseId);
+
+        final JsonObject reorder1 = new JsonObject();
+        reorder1.addProperty("runId", "run-multi-reorder");
+        reorder1.addProperty("pauseId", pauseId);
+        reorder1.addProperty("action", "REORDER");
+        reorder1.addProperty("fromIndex", 1);
+        reorder1.addProperty("toIndex", 2);
+
+        final JsonObject reorder2 = new JsonObject();
+        reorder2.addProperty("runId", "run-multi-reorder");
+        reorder2.addProperty("pauseId", pauseId);
+        reorder2.addProperty("action", "REORDER");
+        reorder2.addProperty("fromIndex", 3);
+        reorder2.addProperty("toIndex", 0);
+
+        final ActionResult res1 = engine.submitAction(reorder1);
+        assertEquals(200, res1.statusCode());
+        assertTrue(res1.responseBody().contains("\"status\":\"accepted\""));
+
+        final ActionResult res2 = engine.submitAction(reorder2);
+        assertEquals(200, res2.statusCode());
+        assertTrue(res2.responseBody().contains("\"status\":\"accepted\""),
+            "Second sequential REORDER must not be rejected with already-handled. Got: " + res2.responseBody());
+
+        // Verify FIFO consumption by waitForAction
+        final JsonObject action1 = engine.waitForAction(pauseId, 1000);
+        assertEquals("REORDER", action1.get("action").getAsString());
+        assertEquals(1, action1.get("fromIndex").getAsInt());
+
+        final JsonObject action2 = engine.waitForAction(pauseId, 1000);
+        assertEquals("REORDER", action2.get("action").getAsString());
+        assertEquals(3, action2.get("fromIndex").getAsInt());
     }
 }

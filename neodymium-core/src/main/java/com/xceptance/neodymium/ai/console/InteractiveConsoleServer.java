@@ -33,6 +33,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.Executors;
 
 import org.slf4j.Logger;
@@ -1468,88 +1469,7 @@ public final class InteractiveConsoleServer
                 }
                 else if ("REORDER".equals(action))
                 {
-                    activeState.addProperty("interactivePromptChanged", true);
-                    final String fromBlock = response.has("fromBlock") ? response.get("fromBlock").getAsString()
-                                                                       : response.get("block").getAsString();
-                    final int fromIndex = response.get("fromIndex").getAsInt();
-                    final String toBlock = response.has("toBlock") ? response.get("toBlock").getAsString() : fromBlock;
-                    final int toIndex = response.get("toIndex").getAsInt();
-
-                    final JsonObject blocksObj = activeState.getAsJsonObject("blocks");
-                    if (blocksObj != null && blocksObj.has(fromBlock) && blocksObj.has(toBlock))
-                    {
-                        final JsonArray fromArray = blocksObj.getAsJsonArray(fromBlock);
-                        final JsonArray toArray = blocksObj.getAsJsonArray(toBlock);
-
-                        if (fromIndex >= 0 && fromIndex < fromArray.size())
-                        {
-                            final JsonElement element = fromArray.remove(fromIndex);
-
-                            // Adjust target index if moving within the same block forward
-                            int adjustedToIndex = toIndex;
-                            if (fromBlock.equals(toBlock) && adjustedToIndex > fromIndex)
-                            {
-                                adjustedToIndex--;
-                            }
-
-                            // Ensure toIndex is within bounds for the target array (now potentially empty
-                            // or different)
-                            if (adjustedToIndex < 0)
-                                adjustedToIndex = 0;
-                            if (adjustedToIndex > toArray.size())
-                                adjustedToIndex = toArray.size();
-
-                            final JsonArray newToArray = new JsonArray();
-                            for (int i = 0; i < toArray.size(); i++)
-                            {
-                                if (i == adjustedToIndex)
-                                {
-                                    newToArray.add(element);
-                                }
-                                newToArray.add(toArray.get(i));
-                            }
-                            if (adjustedToIndex >= toArray.size())
-                            {
-                                newToArray.add(element);
-                            }
-                            blocksObj.add(toBlock, newToArray);
-                        }
-                    }
-
-                    allSteps.clear();
-                    final JsonObject blocksObjRef = activeState.getAsJsonObject("blocks");
-                    if (blocksObjRef != null)
-                    {
-                        for (final String bKey : new String[]
-                        {
-                          "before", "steps", "after"
-                        })
-                        {
-                            final JsonArray arr = blocksObjRef.getAsJsonArray(bKey);
-                            if (arr != null)
-                            {
-                                for (final JsonElement el : arr)
-                                {
-                                    allSteps.add(el.getAsJsonObject());
-                                }
-                            }
-                        }
-                    }
-
-                    int idx = 0;
-                    for (final JsonObject s : allSteps)
-                    {
-                        s.addProperty("index", idx++);
-                    }
-
-                    for (int i = 0; i < allSteps.size(); i++)
-                    {
-                        if ("running".equals(allSteps.get(i).get("status").getAsString()))
-                        {
-                            stepIndex = i;
-                            break;
-                        }
-                    }
+                    stepIndex = applyReorder(activeState, allSteps, response, stepIndex);
                 }
                 else if ("SAVE_EXIT".equals(action))
                 {
@@ -1564,7 +1484,7 @@ public final class InteractiveConsoleServer
             {
                 activeState.addProperty("status", "finished");
             }
-            final String finalPauseId = "pause-final-" + java.util.UUID.randomUUID().toString();
+            final String finalPauseId = "pause-final-" + UUID.randomUUID().toString();
             activeState.addProperty("pauseId", finalPauseId);
             engine.pushState(gson.toJson(activeState));
             final JsonObject finalResponse = engine.waitForAction(finalPauseId);
@@ -1577,6 +1497,106 @@ public final class InteractiveConsoleServer
         {
             LOG.error("[Simulation] Error in simulation loop: {}", e.getMessage(), e);
         }
+    }
+
+    /**
+     * Applies a REORDER user action to the simulation state and rebuilds allSteps.
+     *
+     * @param activeState
+     *            the simulation active state
+     * @param allSteps
+     *            the flattened step list to synchronize
+     * @param response
+     *            the JSON action payload from the client
+     * @param currentStepIndex
+     *            the index of the current step prior to reordering
+     * @return the updated active step index matching the running step, or the preserved index
+     * @author AI-generated: Gemini 3.8 Flash
+     * @author Xceptance GmbH 2026
+     */
+    static int applyReorder(final JsonObject activeState, final List<JsonObject> allSteps, final JsonObject response,
+                            final int currentStepIndex)
+    {
+        activeState.addProperty("interactivePromptChanged", true);
+        final String fromBlock = response.has("fromBlock") ? response.get("fromBlock").getAsString()
+                                                           : response.get("block").getAsString();
+        final int fromIndex = response.get("fromIndex").getAsInt();
+        final String toBlock = response.has("toBlock") ? response.get("toBlock").getAsString() : fromBlock;
+        final int toIndex = response.get("toIndex").getAsInt();
+
+        final JsonObject blocksObj = activeState.getAsJsonObject("blocks");
+        if (blocksObj != null && blocksObj.has(fromBlock) && blocksObj.has(toBlock))
+        {
+            final JsonArray fromArray = blocksObj.getAsJsonArray(fromBlock);
+            final JsonArray toArray = blocksObj.getAsJsonArray(toBlock);
+
+            if (fromIndex >= 0 && fromIndex < fromArray.size())
+            {
+                final JsonElement element = fromArray.remove(fromIndex);
+
+                int adjustedToIndex = toIndex;
+                if (adjustedToIndex < 0)
+                {
+                    adjustedToIndex = 0;
+                }
+                if (adjustedToIndex > toArray.size())
+                {
+                    adjustedToIndex = toArray.size();
+                }
+
+                final JsonArray newToArray = new JsonArray();
+                for (int i = 0; i < toArray.size(); i++)
+                {
+                    if (i == adjustedToIndex)
+                    {
+                        newToArray.add(element);
+                    }
+                    newToArray.add(toArray.get(i));
+                }
+                if (adjustedToIndex >= toArray.size())
+                {
+                    newToArray.add(element);
+                }
+                blocksObj.add(toBlock, newToArray);
+            }
+        }
+
+        allSteps.clear();
+        final JsonObject blocksObjRef = activeState.getAsJsonObject("blocks");
+        if (blocksObjRef != null)
+        {
+            for (final String bKey : new String[]
+            {
+              "before", "steps", "after"
+            })
+            {
+                final JsonArray arr = blocksObjRef.getAsJsonArray(bKey);
+                if (arr != null)
+                {
+                    for (final JsonElement el : arr)
+                    {
+                        allSteps.add(el.getAsJsonObject());
+                    }
+                }
+            }
+        }
+
+        int idx = 0;
+        for (final JsonObject s : allSteps)
+        {
+            s.addProperty("index", idx++);
+        }
+
+        int newStepIndex = currentStepIndex;
+        for (int i = 0; i < allSteps.size(); i++)
+        {
+            if ("running".equals(allSteps.get(i).get("status").getAsString()))
+            {
+                newStepIndex = i;
+                break;
+            }
+        }
+        return newStepIndex;
     }
 
     private static void ensureBlocksExist(final JsonObject state)
