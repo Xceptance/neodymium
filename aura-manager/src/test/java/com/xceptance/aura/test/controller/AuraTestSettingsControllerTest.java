@@ -115,4 +115,39 @@ public class AuraTestSettingsControllerTest
         Assertions.assertEquals("DISABLED", body.get("status"));
         Assertions.assertEquals(false, body.get("enabled"));
     }
+
+    @Test
+    public void testRunMcpSelfTestBuildsCorrectStatelessRequest() throws NoSuchFieldException, IllegalAccessException
+    {
+        mcpProperties.setEnabled(true);
+        final java.lang.reflect.Field protocolField = AuraTestSettingsController.class.getDeclaredField("serverProtocol");
+        protocolField.setAccessible(true);
+        protocolField.set(controller, "STATELESS");
+
+        final ResponseEntity<Map<String, Object>> response = controller.runMcpSelfTest();
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        final Map<String, Object> body = response.getBody();
+        Assertions.assertNotNull(body);
+        Assertions.assertEquals(true, body.get("enabled"));
+        Assertions.assertEquals("STATELESS", body.get("protocol"));
+        Assertions.assertTrue(body.get("endpoint").toString().contains("/mcp"));
+    }
+
+    @Test
+    public void testRunMcpSelfTestPropagatesBearerToken() throws NoSuchFieldException, IllegalAccessException
+    {
+        mcpProperties.setEnabled(true);
+        mcpProperties.getAuth().setToken("secret-12345");
+        final java.lang.reflect.Field protocolField = AuraTestSettingsController.class.getDeclaredField("serverProtocol");
+        protocolField.setAccessible(true);
+        protocolField.set(controller, "STATELESS");
+
+        final ResponseEntity<Map<String, Object>> response = controller.runMcpSelfTest();
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        final Map<String, Object> body = response.getBody();
+        Assertions.assertNotNull(body);
+        Assertions.assertEquals(true, body.get("enabled"));
+    }
 }

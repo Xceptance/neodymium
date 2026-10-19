@@ -136,10 +136,10 @@ public class AuraMcpIntegrationTest
         Assertions.assertNotNull(response.getBody());
         final Map<String, Object> body = response.getBody();
         Assertions.assertTrue((Boolean) body.get("enabled"), "MCP server should be reported as enabled");
-        Assertions.assertEquals("STREAMABLE", body.get("protocol"), "Default MCP protocol should match configured STREAMABLE");
+        Assertions.assertEquals("STATELESS", body.get("protocol"), "Default MCP protocol should match configured STATELESS");
         Assertions.assertNotNull(body.get("endpoint"), "Endpoint URL must not be null");
         Assertions.assertTrue(body.get("endpoint").toString().contains("/mcp"), "Endpoint URL should point to /mcp");
-        Assertions.assertNotNull(body.get("status"), "Self-test status must be reported");
+        Assertions.assertEquals("HEALTHY", body.get("status"), "Self-test status should be HEALTHY under STATELESS");
     }
 
     @Test

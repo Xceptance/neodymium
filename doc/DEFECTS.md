@@ -41,6 +41,22 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261019-01] MCP Manager Self-Test Fails Under STATELESS Protocol Due to Fallback to SSE GET
+- **Date:** 2026-10-19
+- **Component:** `aura-manager` (`AuraTestSettingsController` / `mcp-transport`)
+- **Scope:** `Framework`
+- **Symptom:** In the Aura Manager Settings UI (`settings-modal.html`), clicking "Self Test" or querying `/api/settings/mcp/self-test` failed with `UNEXPECTED_STATUS (HTTP 405 Method Not Allowed)` or `ERROR` when configured with `spring.ai.mcp.server.protocol=STATELESS`.
+- **Root Cause:** In `AuraTestSettingsController.runMcpSelfTest()`, the HTTP client branched on `if ("STREAMABLE".equalsIgnoreCase(protocolName))`, issuing an HTTP POST `initialize` request only for `STREAMABLE`. Any other protocol (including `STATELESS`) fell back to an HTTP `GET` with `Accept: text/event-stream`. Under Spring AI's stateless MCP server implementation, the `/mcp` endpoint does not accept GET requests, rejecting them with HTTP 405. Additionally, the test request failed to include Bearer authentication headers when an auth token was configured, and the local endpoint URL was bound to the hardcoded configured port rather than the dynamic runtime port (`WebServerInitializedEvent`).
+- **Detection Gap ("What did we miss?"):** The original implementation assumed only SSE and Streamable HTTP transports existed. When transitioning to the `STATELESS` protocol to avoid client-side event stream dropouts, `runMcpSelfTest()` was not updated to recognize `STATELESS` as requiring JSON-RPC HTTP POST requests.
+- **Resolution:**
+  1. Updated `AuraTestSettingsController.runMcpSelfTest()` to treat both `STREAMABLE` and `STATELESS` as JSON-RPC POST requests (`Accept: application/json, text/event-stream`).
+  2. Added dynamic Bearer token propagation in the self-test HTTP request whenever `neodymium.aura.mcp.auth.token` is configured.
+  3. Implemented `ApplicationListener<WebServerInitializedEvent>` in `AuraTestSettingsController` to resolve the actual runtime port when running behind dynamic or randomized ports.
+  4. Updated `settings-modal.html` to clearly distinguish `STATELESS` mode in the Active Clients badge and heartbeat descriptions.
+- **Safety Net Added:**
+  - `AuraTestSettingsControllerTest.testRunMcpSelfTestBuildsCorrectStatelessRequest` and `testRunMcpSelfTestPropagatesBearerToken`.
+  - `AuraMcpIntegrationTest.testToolDiscoveryViaSettings` asserting `HEALTHY` self-test status under `STATELESS`.
+
 ### [DEF-20260928-07] AiSession Default Mock LLM Provider Returns Empty Tool Calls Breaking LLM-Mode Unit Tests
 - **Date:** 2026-09-28
 - **Component:** `neodymium-core` (`ai-session` / `mock-testing` / `agent-loop`)

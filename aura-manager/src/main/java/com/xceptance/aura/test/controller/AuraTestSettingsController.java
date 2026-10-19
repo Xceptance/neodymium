@@ -43,6 +43,8 @@ import org.springframework.ai.mcp.annotation.McpTool;
 import org.springframework.ai.mcp.annotation.McpToolParam;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.boot.web.server.context.WebServerInitializedEvent;
+import org.springframework.context.ApplicationListener;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.util.MultiValueMap;
@@ -61,7 +63,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  */
 @Controller
 @RequestMapping("/api/settings")
-public class AuraTestSettingsController
+public class AuraTestSettingsController implements ApplicationListener<WebServerInitializedEvent>
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(AuraTestSettingsController.class);
 
@@ -71,7 +73,9 @@ public class AuraTestSettingsController
     private final AuraMcpToolService toolService;
 
     @Value("${server.port:8080}")
-    private int serverPort = 8080;
+    private int configuredServerPort = 8080;
+
+    private volatile int activeServerPort = -1;
 
     @Value("${spring.ai.mcp.server.protocol:SSE}")
     private String serverProtocol = "SSE";
@@ -87,6 +91,17 @@ public class AuraTestSettingsController
         this.toolService = toolService;
     }
 
+    @Override
+    public void onApplicationEvent(final WebServerInitializedEvent event)
+    {
+        this.activeServerPort = event.getWebServer().getPort();
+    }
+
+    private int getServerPort()
+    {
+        return (activeServerPort > 0) ? activeServerPort : configuredServerPort;
+    }
+
     private String resolveEndpointPath()
     {
         return "SSE".equalsIgnoreCase(serverProtocol) ? "/sse" : "/mcp";
@@ -94,7 +109,7 @@ public class AuraTestSettingsController
 
     private String resolveFullEndpointUrl()
     {
-        return "http://localhost:" + serverPort + resolveEndpointPath();
+        return "http://localhost:" + getServerPort() + resolveEndpointPath();
     }
 
     private void populateSettingsModel(final Model model, final String activeTab, final String saveMessage)
@@ -117,11 +132,15 @@ public class AuraTestSettingsController
         model.addAttribute("mcpToken", mcpProperties.getAuth() != null ? mcpProperties.getAuth().getToken() : "");
         model.addAttribute("mcpHeartbeat", mcpProperties.getHeartbeatIntervalSeconds());
         model.addAttribute("mcpEndpointUrl", endpointUrl);
-        model.addAttribute("mcpServerPort", serverPort);
+        model.addAttribute("mcpServerPort", getServerPort());
         model.addAttribute("mcpProtocol", protocolName);
-        model.addAttribute("mcpEndpointDesc", isSse
-                ? "Server-Sent Events (SSE) endpoint URL for Claude Desktop, Cursor, or Antigravity agents."
-                : "Streamable HTTP endpoint URL for Claude Desktop, Cursor, or Antigravity agents.");
+        final String endpointDesc = switch (protocolName)
+        {
+            case "STATELESS" -> "Stateless HTTP POST endpoint URL for Antigravity, Claude Desktop, or Cursor agents.";
+            case "STREAMABLE" -> "Streamable HTTP endpoint URL for Claude Desktop, Cursor, or Antigravity agents.";
+            default -> "Server-Sent Events (SSE) endpoint URL for Claude Desktop, Cursor, or Antigravity agents.";
+        };
+        model.addAttribute("mcpEndpointDesc", endpointDesc);
         model.addAttribute("mcpToolsCount", registeredToolsCount);
         model.addAttribute("mcpToolsList", resolveMcpToolsList());
         model.addAttribute("mcpActiveSessionsCount", subscriptionManager != null ? subscriptionManager.getActiveSessionCount() : 0);
@@ -381,7 +400,7 @@ public class AuraTestSettingsController
         response.put("enabled", enabled);
         response.put("protocol", protocolName);
         response.put("endpoint", endpointUrl);
-        response.put("messageEndpoint", "http://localhost:" + serverPort + "/mcp/message");
+        response.put("messageEndpoint", "http://localhost:" + getServerPort() + "/mcp/message");
 
         if (!enabled)
         {
@@ -397,24 +416,30 @@ public class AuraTestSettingsController
                     .connectTimeout(Duration.ofMillis(1500))
                     .build();
 
+            final HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(uri)
+                    .timeout(Duration.ofMillis(2000));
+
+            if (mcpProperties != null && mcpProperties.getAuth() != null && mcpProperties.getAuth().getToken() != null && !mcpProperties.getAuth().getToken().isBlank())
+            {
+                reqBuilder.header("Authorization", "Bearer " + mcpProperties.getAuth().getToken().trim());
+            }
+
             final HttpRequest request;
-            if ("STREAMABLE".equalsIgnoreCase(protocolName))
+            if ("STREAMABLE".equalsIgnoreCase(protocolName) || "STATELESS".equalsIgnoreCase(protocolName))
             {
                 final String initPayload = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":"
                         + "{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},"
                         + "\"clientInfo\":{\"name\":\"aura-manager-selftest\",\"version\":\"1.0\"}}}";
-                request = HttpRequest.newBuilder(uri)
+                request = reqBuilder
                         .header("Content-Type", "application/json")
-                        .header("Accept", "text/event-stream, application/json")
-                        .timeout(Duration.ofMillis(2000))
+                        .header("Accept", "application/json, text/event-stream")
                         .POST(HttpRequest.BodyPublishers.ofString(initPayload))
                         .build();
             }
             else
             {
-                request = HttpRequest.newBuilder(uri)
+                request = reqBuilder
                         .header("Accept", "text/event-stream")
-                        .timeout(Duration.ofMillis(2000))
                         .GET()
                         .build();
             }
@@ -437,6 +462,7 @@ public class AuraTestSettingsController
         }
         catch (final Exception e)
         {
+            LOGGER.warn("[Aura MCP] Self-test handshake failed: {}", e.getMessage(), e);
             response.put("status", "ERROR");
             response.put("message", "Handshake test failed: " + e.getMessage());
         }
