@@ -226,6 +226,79 @@ public class InteractiveConsoleEngineTest
 
         assertTrue(stateJson.contains("\"error\":\"Element not found exception: #missingElement\""), "Top-level state JSON should contain error message");
         assertTrue(stateJson.contains("\"failureReason\":\"Element not found exception: #missingElement\""), "State JSON step/top-level should contain failureReason");
+        assertTrue(stateJson.contains("\"errorMessage\":\"Element not found exception: #missingElement\""), "State JSON step/top-level should contain errorMessage");
+    }
+
+    @Test
+    public void testBuildStateJsonSerializesFailureReasonWhenPaused()
+    {
+        final org.neodymium.ai.pipeline.ExecutionContext context = new org.neodymium.ai.pipeline.ExecutionContext(null);
+
+        final org.neodymium.ai.model.PlaybookStep step1 = new org.neodymium.ai.model.PlaybookStep();
+        step1.setInstruction("Step 1");
+        step1.setStatus(org.neodymium.ai.model.PlaybookStepStatus.SUCCESS);
+
+        final org.neodymium.ai.model.PlaybookStep step2 = new org.neodymium.ai.model.PlaybookStep();
+        step2.setInstruction("Step 2");
+        step2.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+        step2.setFailureReason("AssertionError: heading does not match");
+
+        final java.util.List<org.neodymium.ai.model.PlaybookStep> flatSteps = java.util.List.of(step1, step2);
+        context.getTransientData().put("playbook.flatSteps", flatSteps);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-paused", 1, "paused");
+
+        assertTrue(stateJson.contains("\"error\":\"AssertionError: heading does not match\""), "Top-level state JSON when paused should contain error message");
+        assertTrue(stateJson.contains("\"failureReason\":\"AssertionError: heading does not match\""), "State JSON step/top-level when paused should contain failureReason");
+        assertTrue(stateJson.contains("\"errorMessage\":\"AssertionError: heading does not match\""), "State JSON step/top-level when paused should contain errorMessage");
+    }
+
+    @Test
+    public void testBuildStateJsonFallsBackToTransientFailureMessageWhenStepFailureReasonNull()
+    {
+        final org.neodymium.ai.pipeline.ExecutionContext context = new org.neodymium.ai.pipeline.ExecutionContext(null);
+        context.getTransientData().put("KEY_LAST_STEP_FAILURE", "Timeout waiting for condition: element visible");
+
+        final org.neodymium.ai.model.PlaybookStep step1 = new org.neodymium.ai.model.PlaybookStep();
+        step1.setInstruction("Step 1");
+        step1.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+        // Step failure reason intentionally left null
+        step1.setFailureReason(null);
+
+        final java.util.List<org.neodymium.ai.model.PlaybookStep> flatSteps = java.util.List.of(step1);
+        context.getTransientData().put("playbook.flatSteps", flatSteps);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-fallback", 0, "paused");
+
+        assertTrue(stateJson.contains("\"error\":\"Timeout waiting for condition: element visible\""), "State JSON should fall back to KEY_LAST_STEP_FAILURE");
+        assertTrue(stateJson.contains("\"failureReason\":\"Timeout waiting for condition: element visible\""), "State JSON step should fall back to KEY_LAST_STEP_FAILURE");
+        assertTrue(stateJson.contains("\"errorMessage\":\"Timeout waiting for condition: element visible\""), "State JSON step should contain errorMessage from fallback");
+    }
+
+    @Test
+    public void testBuildStateJsonSerializesSubStepFailureMessage()
+    {
+        final org.neodymium.ai.pipeline.ExecutionContext context = new org.neodymium.ai.pipeline.ExecutionContext(null);
+
+        final org.neodymium.ai.model.PlaybookStep parentStep = new org.neodymium.ai.model.PlaybookStep();
+        parentStep.setInstruction("Parent Include Step");
+        parentStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+        parentStep.setFailureReason("Sub-step failed: invalid credentials");
+
+        final org.neodymium.ai.model.PlaybookStep subStep = new org.neodymium.ai.model.PlaybookStep();
+        subStep.setInstruction("Click submit button");
+        subStep.setStatus(org.neodymium.ai.model.PlaybookStepStatus.FAILED);
+        subStep.setFailureReason("Sub-step failed: invalid credentials");
+        subStep.setParent(parentStep);
+        parentStep.setSubSteps(java.util.List.of(subStep));
+
+        final java.util.List<org.neodymium.ai.model.PlaybookStep> flatSteps = java.util.List.of(parentStep);
+        context.getTransientData().put("playbook.flatSteps", flatSteps);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-substep", 0, "paused");
+
+        assertTrue(stateJson.contains("\"failureReason\":\"Sub-step failed: invalid credentials\""), "State JSON should contain sub-step failureReason");
+        assertTrue(stateJson.contains("\"errorMessage\":\"Sub-step failed: invalid credentials\""), "State JSON sub-step should contain errorMessage");
     }
 
     @Test
@@ -1139,5 +1212,39 @@ public class InteractiveConsoleEngineTest
         final JsonObject action2 = engine.waitForAction(pauseId, 1000);
         assertEquals("REORDER", action2.get("action").getAsString());
         assertEquals(3, action2.get("fromIndex").getAsInt());
+    }
+
+    @Test
+    public void testSubmitActionAcceptsPrecedingPauseTokenGraceWindow() throws Exception
+    {
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run-grace-window");
+        final String pauseId1 = "pause-1111-aaaa";
+        engine.registerPauseId(pauseId1);
+        assertEquals(pauseId1, engine.getCurrentPauseId());
+        assertNull(engine.getPreviousPauseId());
+
+        // Simulate token rotation (e.g. SUGGEST_FIX causes loop to register new token)
+        final String pauseId2 = "pause-2222-bbbb";
+        engine.registerPauseId(pauseId2);
+        assertEquals(pauseId2, engine.getCurrentPauseId());
+        assertEquals(pauseId1, engine.getPreviousPauseId());
+
+        // Submitting an EDIT action carrying the preceding pauseId1 must be accepted within grace window
+        final JsonObject editAction = new JsonObject();
+        editAction.addProperty("runId", "run-grace-window");
+        editAction.addProperty("pauseId", pauseId1);
+        editAction.addProperty("action", "EDIT");
+        editAction.addProperty("isCurrentStep", true);
+        editAction.addProperty("instruction", "Revised instruction");
+
+        final ActionResult res = engine.submitAction(editAction);
+        assertEquals(200, res.statusCode());
+        assertTrue(res.responseBody().contains("\"status\":\"accepted\""),
+            "Action carrying preceding pauseId must be accepted via grace window. Got: " + res.responseBody());
+
+        // Verify waitForAction picks up the deposited action
+        final JsonObject consumed = engine.waitForAction(pauseId2, 1000);
+        assertEquals("EDIT", consumed.get("action").getAsString());
+        assertEquals("Revised instruction", consumed.get("instruction").getAsString());
     }
 }

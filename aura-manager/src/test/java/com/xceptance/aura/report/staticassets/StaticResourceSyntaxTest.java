@@ -403,4 +403,61 @@ public final class StaticResourceSyntaxTest
         final int exitCode = process.waitFor();
         Assertions.assertEquals(0, exitCode, "Filter state transition test failed:\n" + output);
     }
+
+    @Test
+    public void testCollapsedSidebarPreservesMaterialIcons() throws Exception
+    {
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        Assertions.assertTrue(Files.exists(cssPath), "CSS file must exist: " + cssPath.toAbsolutePath());
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            cssContent.contains("aside.collapsed .nav-item-btn span:not(.material-symbols-outlined)"),
+            "report-manager.css must preserve .material-symbols-outlined inside collapsed .nav-item-btn"
+        );
+        Assertions.assertTrue(
+            cssContent.contains("aside.collapsed .nav-label"),
+            "report-manager.css must hide .nav-label in collapsed sidebar"
+        );
+        Assertions.assertFalse(
+            cssContent.contains("aside.collapsed .nav-item-btn span {"),
+            "report-manager.css must not unconditionally hide all span elements in collapsed nav buttons"
+        );
+    }
+
+    @Test
+    public void testSidebarNavItemsHaveExplicitLabelsAndMaterialIcons() throws Exception
+    {
+        final Path sidebarPath = Paths.get("src/main/resources/templates/fragments/sidebar.html");
+        Assertions.assertTrue(Files.exists(sidebarPath), "sidebar.html must exist: " + sidebarPath.toAbsolutePath());
+        final String sidebarContent = Files.readString(sidebarPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            sidebarContent.contains("class=\"logo-brand\">Neodymium</span>"),
+            "sidebar.html must render brand label 'Neodymium'"
+        );
+        Assertions.assertTrue(
+            sidebarContent.contains("class=\"logo-title\">Aura Manager</span>"),
+            "sidebar.html must render title label 'Aura Manager'"
+        );
+
+        final String[] expectedIcons = {"play_circle", "format_list_bulleted", "database"};
+        for (final String icon : expectedIcons)
+        {
+            Assertions.assertTrue(
+                sidebarContent.contains("<span class=\"material-symbols-outlined\">" + icon + "</span>"),
+                "sidebar.html must contain icon: " + icon
+            );
+        }
+
+        final String[] expectedLabels = {"Playbooks & Queue", "Run History", "Test Base"};
+        for (final String label : expectedLabels)
+        {
+            Assertions.assertTrue(
+                sidebarContent.contains("<span class=\"nav-label\">" + label + "</span>"),
+                "sidebar.html must contain nav-label: " + label
+            );
+        }
+    }
 }
+

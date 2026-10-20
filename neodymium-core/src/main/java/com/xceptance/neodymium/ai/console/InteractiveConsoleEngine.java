@@ -200,6 +200,13 @@ public final class InteractiveConsoleEngine {
      */
     private final AtomicReference<String> currentPauseId = new AtomicReference<>(null);
 
+    /**
+     * The immediately preceding pause token. Retained to provide a graceful
+     * acceptance window when rapid UI actions (e.g. applying a fix suggestion)
+     * reference the token active when the dialog was launched before token rotation.
+     */
+    private final AtomicReference<String> previousPauseId = new AtomicReference<>(null);
+
     /** The actual LAN IP of this machine, detected on startup. */
     private final String lanIp;
 
@@ -307,7 +314,7 @@ public final class InteractiveConsoleEngine {
             if (isRunning)
             {
                 // Never retain or re-inject a pauseId when the state is actively executing
-                this.currentPauseId.set(null);
+                updatePauseId(null);
                 state.remove("pauseId");
             }
             else if (state.has("pauseId") && !state.get("pauseId").isJsonNull())
@@ -315,18 +322,18 @@ public final class InteractiveConsoleEngine {
                 final String pid = state.get("pauseId").getAsString();
                 if (pid != null && !pid.isEmpty())
                 {
-                    this.currentPauseId.set(pid);
+                    updatePauseId(pid);
                 }
                 else
                 {
-                    this.currentPauseId.set(null);
+                    updatePauseId(null);
                     state.remove("pauseId");
                 }
             }
             else
             {
                 // If state does not provide an explicit pauseId, do not retain or re-inject stale tokens
-                this.currentPauseId.set(null);
+                updatePauseId(null);
                 state.remove("pauseId");
             }
 
@@ -706,9 +713,18 @@ public final class InteractiveConsoleEngine {
      * on the state SSE event before waitForAction is fully invoked.
      * @param pauseId the expected pause token
      */
+    private void updatePauseId(final String newPauseId)
+    {
+        final String prev = this.currentPauseId.getAndSet(newPauseId);
+        if (prev != null && !prev.equals(newPauseId))
+        {
+            this.previousPauseId.set(prev);
+        }
+    }
+
     public void registerPauseId(final String pauseId)
     {
-        this.currentPauseId.set(pauseId);
+        updatePauseId(pauseId);
         if (this.pendingActions.isEmpty())
         {
             this.pendingAction.set(null);
@@ -723,6 +739,16 @@ public final class InteractiveConsoleEngine {
     public String getCurrentPauseId()
     {
         return this.currentPauseId.get();
+    }
+
+    /**
+     * Returns the immediately preceding pause token, or null if none.
+     *
+     * @return the previous pause token string, or null
+     */
+    public String getPreviousPauseId()
+    {
+        return this.previousPauseId.get();
     }
 
     /**
@@ -785,7 +811,7 @@ public final class InteractiveConsoleEngine {
             final String pauseId = (customPauseId != null && !customPauseId.isEmpty()) ? customPauseId : UUID.randomUUID().toString();
             if (!pauseId.equals(this.currentPauseId.get()))
             {
-                this.currentPauseId.set(pauseId);
+                updatePauseId(pauseId);
                 if (this.pendingActions.isEmpty())
                 {
                     this.pendingAction.set(null);
@@ -827,7 +853,7 @@ public final class InteractiveConsoleEngine {
         finally
         {
             // Invalidate the pause token so duplicate clicks are ignored and running state does not retain stale tokens.
-            this.currentPauseId.set(null);
+            updatePauseId(null);
         }
     }
 
@@ -1023,17 +1049,29 @@ public final class InteractiveConsoleEngine {
                 ? req.get("pauseId").getAsString()
                 : null;
         final String activePauseId = this.currentPauseId.get();
+        final String prevPauseId = this.previousPauseId.get();
 
         final boolean structural = isStructuralAction(action, req);
 
-        if (!structural && (activePauseId == null || !activePauseId.equals(incomingPauseId)))
+        final boolean matchesActive = activePauseId != null && activePauseId.equals(incomingPauseId);
+        final boolean matchesPrevious = prevPauseId != null && prevPauseId.equals(incomingPauseId);
+
+        if (!structural && !matchesActive && !matchesPrevious)
         {
-            LOG.info("[InteractiveConsole] Action rejected: inactive or mismatched pauseId. activePauseId={}, incomingPauseId={}, action={}",
-                    activePauseId, incomingPauseId, action);
+            LOG.info("[InteractiveConsole] Action rejected: inactive or mismatched pauseId. activePauseId={}, previousPauseId={}, incomingPauseId={}, action={}",
+                    activePauseId, prevPauseId, incomingPauseId, action);
             return new ActionResult(200, "{\"status\":\"already-handled\"}");
         }
 
-        LOG.info("[InteractiveConsole] Action accepted: pauseId={}, action={}, req={}", incomingPauseId, action, req);
+        if (matchesPrevious && !matchesActive)
+        {
+            LOG.info("[InteractiveConsole] Action accepted via preceding pause token grace window: incomingPauseId={}, activePauseId={}, action={}",
+                    incomingPauseId, activePauseId, action);
+        }
+        else
+        {
+            LOG.info("[InteractiveConsole] Action accepted: pauseId={}, action={}, req={}", incomingPauseId, action, req);
+        }
         this.pendingActions.offer(req);
         this.pendingAction.set(req);
         synchronized (this.lock)

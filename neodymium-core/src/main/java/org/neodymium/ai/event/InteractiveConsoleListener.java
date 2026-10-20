@@ -36,6 +36,8 @@ import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.event.structural.StepFinishedEvent;
 import org.neodymium.ai.event.structural.StepStartedEvent;
+import org.neodymium.ai.executor.selenide.PageAnalyzer;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
@@ -49,8 +51,10 @@ import org.neodymium.ai.report.DiskReportFormat;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.neodymium.util.Neodymium;
 import org.openqa.selenium.OutputType;
+import org.openqa.selenium.WebDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -224,6 +228,10 @@ public final class InteractiveConsoleListener implements ExecutionListener
         }
         else if (event instanceof StepFinishedEvent stepFinished)
         {
+            if (context != null)
+            {
+                context.getTransientData().remove("lastFixSuggestion");
+            }
             if (stepFinished.getStep() != null)
             {
                 final PlaybookStep finishedStep = stepFinished.getStep();
@@ -320,6 +328,22 @@ public final class InteractiveConsoleListener implements ExecutionListener
     public String pauseOnStepFailure(final ExecutionContext context, final PlaybookStep step, final Throwable error)
     {
         this.autoRun = false;
+        final String errorMsg = error != null && error.getMessage() != null && !error.getMessage().isBlank()
+            ? error.getMessage()
+            : (error != null ? error.toString() : null);
+        if (context != null && errorMsg != null)
+        {
+            context.getTransientData().put("KEY_LAST_STEP_FAILURE", errorMsg);
+        }
+        if (step != null)
+        {
+            step.setStatus(PlaybookStepStatus.FAILED);
+            step.setFailed(true);
+            if ((step.getFailureReason() == null || step.getFailureReason().isBlank()) && errorMsg != null)
+            {
+                step.setFailureReason(errorMsg);
+            }
+        }
         if (!this.interactive || this.consoleEngine == null)
         {
             return "ABORT";
@@ -381,11 +405,19 @@ public final class InteractiveConsoleListener implements ExecutionListener
                 {
                     return "REWIND";
                 }
-                if ("HEAL".equalsIgnoreCase(action) || "RETRY".equalsIgnoreCase(action) || "RUN".equalsIgnoreCase(action))
+                if ("HEAL".equalsIgnoreCase(action) || "RETRY".equalsIgnoreCase(action) || "RUN".equalsIgnoreCase(action) || "EDIT".equalsIgnoreCase(action))
                 {
+                    if (context != null)
+                    {
+                        context.getTransientData().remove("lastFixSuggestion");
+                        context.getTransientData().remove("KEY_LAST_STEP_FAILURE");
+                        context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                    }
                     if (step != null)
                     {
                         step.setStatus(PlaybookStepStatus.RUNNING);
+                        step.setFailed(false);
+                        step.setFailureReason(null);
                     }
                     pushCurrentState(context, step);
                 }
@@ -403,6 +435,12 @@ public final class InteractiveConsoleListener implements ExecutionListener
      */
     public String pauseBeforeActionExecution(final ExecutionContext context, final PlaybookStep step)
     {
+        if (context != null && Boolean.TRUE.equals(context.getTransientData().remove("KEY_AUTO_CONFIRM_ONCE")))
+        {
+            LOG.info("[InteractiveConsoleListener] Auto-confirming execution of proposed actions per user 'Apply and Confirm' request");
+            return "RUN";
+        }
+
         if (!this.interactive || this.autoRun || this.consoleEngine == null)
         {
             return "RUN";
@@ -653,6 +691,23 @@ public final class InteractiveConsoleListener implements ExecutionListener
             case "EDIT":
             case "UPDATE_STEP":
             case "SAVE_STEP":
+                this.autoRun = false;
+                final boolean autoConfirm = userAction.has("autoConfirm") && !userAction.get("autoConfirm").isJsonNull()
+                    && userAction.get("autoConfirm").getAsBoolean();
+                if (context != null)
+                {
+                    if (autoConfirm)
+                    {
+                        context.getTransientData().put("KEY_AUTO_CONFIRM_ONCE", Boolean.TRUE);
+                        context.getTransientData().remove("KEY_REQUIRE_CONFIRMATION_ONCE");
+                    }
+                    else
+                    {
+                        context.getTransientData().remove("KEY_AUTO_CONFIRM_ONCE");
+                        context.getTransientData().put("KEY_REQUIRE_CONFIRMATION_ONCE", Boolean.TRUE);
+                    }
+                }
+
                 int targetStepIdx = -1;
                 if (userAction.has("blockIndex") && !userAction.get("blockIndex").isJsonNull())
                 {
@@ -742,6 +797,9 @@ public final class InteractiveConsoleListener implements ExecutionListener
                             context.getTransientData().put("KEY_STEP_EDITED", true);
                             context.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", true);
                             context.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
+                            context.getTransientData().remove("KEY_LAST_STEP_FAILURE");
+                            context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                            context.getTransientData().remove("lastFixSuggestion");
                         }
                         pushCurrentState(context, currentStep);
                         LOG.info("[InteractiveConsoleListener] Step instruction updated to: \"{}\"", newInst);
@@ -782,6 +840,9 @@ public final class InteractiveConsoleListener implements ExecutionListener
                             context.getTransientData().put("KEY_STEP_EDITED", true);
                             context.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", true);
                             context.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
+                            context.getTransientData().remove("KEY_LAST_STEP_FAILURE");
+                            context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                            context.getTransientData().remove("lastFixSuggestion");
                         }
                         pushCurrentState(context, currentStep);
                         LOG.info("[InteractiveConsoleListener] Step re-queued with updated parameters/bindings: \"{}\"", currentStep.getInstruction());
@@ -1663,9 +1724,207 @@ public final class InteractiveConsoleListener implements ExecutionListener
         return null;
     }
 
+    static String cleanInstructionSuggestion(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return "";
+        }
+        String cleaned = raw.trim();
+        if (cleaned.startsWith("```"))
+        {
+            cleaned = cleaned.replaceAll("^```[a-zA-Z]*\\R?", "").replaceAll("```$", "").trim();
+        }
+        final int colonIdx = cleaned.indexOf(':');
+        if (colonIdx >= 0 && colonIdx < cleaned.length() - 1)
+        {
+            final String prefix = cleaned.substring(0, colonIdx).toLowerCase(Locale.ROOT);
+            if (prefix.contains("here is") || prefix.contains("suggestion") || prefix.contains("phrasing")
+                || prefix.contains("revised") || prefix.contains("recommended"))
+            {
+                cleaned = cleaned.substring(colonIdx + 1).trim();
+            }
+        }
+        final String[] lines = cleaned.split("\\R");
+        for (final String line : lines)
+        {
+            final String trimmedLine = line.trim();
+            if (!trimmedLine.isBlank())
+            {
+                cleaned = trimmedLine;
+                break;
+            }
+        }
+        cleaned = cleaned.replaceAll("^>+\\s*", "").trim();
+        if (cleaned.startsWith("**") && cleaned.endsWith("**") && cleaned.length() > 4)
+        {
+            cleaned = cleaned.substring(2, cleaned.length() - 2).trim();
+        }
+        else if (cleaned.startsWith("*") && cleaned.endsWith("*") && cleaned.length() > 2)
+        {
+            cleaned = cleaned.substring(1, cleaned.length() - 1).trim();
+        }
+        if ((cleaned.startsWith("\"") && cleaned.endsWith("\"") && cleaned.length() > 1)
+            || (cleaned.startsWith("'") && cleaned.endsWith("'") && cleaned.length() > 1)
+            || (cleaned.startsWith("`") && cleaned.endsWith("`") && cleaned.length() > 1))
+        {
+            cleaned = cleaned.substring(1, cleaned.length() - 1).trim();
+        }
+        return cleaned;
+    }
+
     private void handleSuggestFix(final JsonObject userAction, final PlaybookStep currentStep, final ExecutionContext context)
     {
-        final String instruction = currentStep != null ? currentStep.getInstruction() : "";
+        final String actionInst = (userAction != null && userAction.has("instruction") && !userAction.get("instruction").isJsonNull())
+            ? userAction.get("instruction").getAsString()
+            : null;
+        final String blockName = (userAction != null && userAction.has("block") && !userAction.get("block").isJsonNull())
+            ? userAction.get("block").getAsString()
+            : null;
+
+        int blockIndex = -1;
+        if (userAction != null && userAction.has("blockIndex") && !userAction.get("blockIndex").isJsonNull())
+        {
+            try
+            {
+                blockIndex = userAction.get("blockIndex").getAsInt();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        int flatIndex = -1;
+        if (userAction != null && userAction.has("flatIndex") && !userAction.get("flatIndex").isJsonNull())
+        {
+            try
+            {
+                flatIndex = userAction.get("flatIndex").getAsInt();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        int rawIdx = -1;
+        if (userAction != null && userAction.has("index") && !userAction.get("index").isJsonNull())
+        {
+            try
+            {
+                rawIdx = userAction.get("index").getAsInt();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        else if (userAction != null && userAction.has("stepIndex") && !userAction.get("stepIndex").isJsonNull())
+        {
+            try
+            {
+                rawIdx = userAction.get("stepIndex").getAsInt();
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        PlaybookStep targetStep = null;
+
+        // 1. If currentStep instruction matches actionInst, currentStep is authoritative
+        if (currentStep != null && actionInst != null && actionInst.equals(currentStep.getInstruction()))
+        {
+            targetStep = currentStep;
+        }
+
+        // 2. Lookup by block & blockIndex
+        if (targetStep == null && blockName != null && blockIndex >= 0)
+        {
+            targetStep = findStepByIndex(context, blockIndex, blockName);
+        }
+
+        // 3. Lookup by flatIndex
+        if (targetStep == null && flatIndex >= 0)
+        {
+            targetStep = findStepByIndex(context, flatIndex, null);
+        }
+
+        // 4. Fallback lookup by rawIdx with blockName
+        if (targetStep == null && rawIdx >= 0)
+        {
+            targetStep = findStepByIndex(context, rawIdx, blockName);
+        }
+
+        // 5. Fallback lookup for 1-based rawIdx with blockName
+        if (targetStep == null && rawIdx > 0)
+        {
+            targetStep = findStepByIndex(context, rawIdx - 1, blockName);
+        }
+
+        // 6. Fallback to currentStep
+        if (targetStep == null && currentStep != null)
+        {
+            targetStep = currentStep;
+        }
+
+        // 7. Fallback search by instruction in flatSteps if still null
+        if (targetStep == null && actionInst != null && !actionInst.isBlank() && context != null)
+        {
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+            if (flatSteps != null)
+            {
+                for (final PlaybookStep s : flatSteps)
+                {
+                    if (s != null && actionInst.equals(s.getInstruction()))
+                    {
+                        targetStep = s;
+                        break;
+                    }
+                }
+            }
+        }
+
+        final PlaybookStep stepToFix = targetStep != null ? targetStep : currentStep;
+        final String instruction = stepToFix != null && stepToFix.getInstruction() != null && !stepToFix.getInstruction().isBlank()
+            ? stepToFix.getInstruction()
+            : (actionInst != null ? actionInst : "");
+
+        String failureReason = stepToFix != null ? stepToFix.getFailureReason() : null;
+        if ((failureReason == null || failureReason.isBlank()) && context != null)
+        {
+            final Object lastFail = context.getTransientData().get("KEY_LAST_STEP_FAILURE");
+            if (lastFail instanceof final String s && !s.isBlank())
+            {
+                failureReason = s;
+            }
+        }
+
+        String safeUrl = null;
+        String safeTitle = null;
+        String dom = null;
+
+        if (WebDriverRunner.hasWebDriverStarted())
+        {
+            try
+            {
+                final WebDriver driver = WebDriverRunner.getWebDriver();
+                if (driver != null)
+                {
+                    safeUrl = BrowserToolProvider.getSafeUrl(driver);
+                    safeTitle = BrowserToolProvider.getSafeTitle(driver);
+                    dom = new PageAnalyzer(driver).captureSimplifiedDom(ContextLevel.LEAN);
+                    if (dom != null && dom.length() > 15_000)
+                    {
+                        dom = dom.substring(0, 15_000) + "\n... [truncated]";
+                    }
+                }
+            }
+            catch (final Throwable t)
+            {
+                LOG.debug("[InteractiveConsoleListener] Could not capture SUT page state for fix suggestion: {}", t.getMessage());
+            }
+        }
+
         String suggestion = instruction;
         try
         {
@@ -1678,9 +1937,31 @@ public final class InteractiveConsoleListener implements ExecutionListener
                     final double temp = config.getTemperature("action");
                     final int timeoutSeconds = config.getTimeoutSeconds("action");
 
+                    final StringBuilder userPrompt = new StringBuilder();
+                    userPrompt.append("Revise this failed web test step instruction to be clear, precise, and atomic based on the current page state and failure.\n");
+                    userPrompt.append("Original failed instruction: \"").append(instruction).append("\"\n");
+                    if (failureReason != null && !failureReason.isBlank())
+                    {
+                        userPrompt.append("Failure reason: \"").append(failureReason.trim()).append("\"\n");
+                    }
+                    if (safeUrl != null && !safeUrl.isBlank())
+                    {
+                        userPrompt.append("Current Page URL: ").append(safeUrl).append("\n");
+                    }
+                    if (safeTitle != null && !safeTitle.isBlank())
+                    {
+                        userPrompt.append("Current Page Title: ").append(safeTitle).append("\n");
+                    }
+                    if (dom != null && !dom.isBlank())
+                    {
+                        userPrompt.append("\nCurrent simplified DOM state:\n```html\n").append(dom).append("\n```\n");
+                    }
+                    userPrompt.append("\nOutput ONLY the raw revised instruction text with no quotes, markdown formatting, or introductory commentary.");
+
                     final LlmRequest request = new LlmRequest(
-                        "You are an expert test automation assistant. Suggest a clear, atomic instruction for a web test step.",
-                        "Please suggest a clear, atomic phrasing for this test step: \"" + instruction + "\"",
+                        "You are an expert test automation assistant diagnosing a failed test step. Suggest a revised, corrected step instruction based on the current SUT page state, DOM, and failure reason. "
+                            + "Output ONLY the raw revised step instruction. Do NOT include explanations, bullet points, quotes, markdown formatting, or conversational preambles.",
+                        userPrompt.toString(),
                         Collections.emptyList(),
                         null,
                         temp,
@@ -1690,7 +1971,11 @@ public final class InteractiveConsoleListener implements ExecutionListener
                     final LlmResponse response = provider.chat(request);
                     if (response != null && response.content() != null && !response.content().isBlank())
                     {
-                        suggestion = response.content().trim();
+                        final String cleaned = cleanInstructionSuggestion(response.content());
+                        if (!cleaned.isBlank())
+                        {
+                            suggestion = cleaned;
+                        }
                     }
                 }
             }
@@ -1703,6 +1988,37 @@ public final class InteractiveConsoleListener implements ExecutionListener
         final JsonObject fixEvent = new JsonObject();
         fixEvent.addProperty("originalInstruction", instruction);
         fixEvent.addProperty("suggestedInstruction", suggestion);
+        if (failureReason != null && !failureReason.isBlank())
+        {
+            fixEvent.addProperty("failureReason", failureReason.trim());
+        }
+        if (blockIndex >= 0)
+        {
+            fixEvent.addProperty("blockIndex", blockIndex);
+        }
+        if (blockName != null)
+        {
+            fixEvent.addProperty("block", blockName);
+        }
+        if (flatIndex >= 0)
+        {
+            fixEvent.addProperty("flatIndex", flatIndex);
+        }
+        if (rawIdx >= 0)
+        {
+            fixEvent.addProperty("index", rawIdx);
+        }
+        final String activePauseId = (userAction != null && userAction.has("pauseId") && !userAction.get("pauseId").isJsonNull())
+            ? userAction.get("pauseId").getAsString()
+            : (this.consoleEngine != null ? this.consoleEngine.getCurrentPauseId() : null);
+        if (activePauseId != null && !activePauseId.isBlank())
+        {
+            fixEvent.addProperty("pauseId", activePauseId);
+        }
+        if (context != null)
+        {
+            context.getTransientData().put("lastFixSuggestion", fixEvent);
+        }
         if (this.consoleEngine != null)
         {
             this.consoleEngine.broadcastSseEvent("fixSuggestion", new Gson().toJson(fixEvent));
