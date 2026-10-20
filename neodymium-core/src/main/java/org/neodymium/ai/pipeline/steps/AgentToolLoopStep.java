@@ -229,8 +229,8 @@ public final class AgentToolLoopStep implements PipelineStep
         {
             final Object stepObj = context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP);
         final PlaybookStep step = stepObj instanceof PlaybookStep ps ? ps : null;
-        final String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
-        final String rawInstruction = (String) context.getTransientData().get("KEY_CURRENT_STEP_RAW_INSTRUCTION");
+        String instruction = (String) context.getTransientData().getOrDefault(ExecutionContext.KEY_CURRENT_INSTRUCTION, "");
+        String rawInstruction = (String) context.getTransientData().get("KEY_CURRENT_STEP_RAW_INSTRUCTION");
         final boolean isVisual = (step != null && step.isVisualOrLayoutStep())
                 || (rawInstruction != null && (rawInstruction.toLowerCase().contains("(visual)") || rawInstruction.toLowerCase().contains("(layout)")))
                 || (instruction != null && (instruction.toLowerCase().contains("(visual)") || instruction.toLowerCase().contains("(layout)")));
@@ -774,7 +774,14 @@ public final class AgentToolLoopStep implements PipelineStep
                         }
                     }
                 }
-                if ("RESCHEDULE".equalsIgnoreCase(userAction) || Boolean.TRUE.equals(context.getTransientData().get("KEY_STEP_RESCHEDULED")))
+                if ("REWIND".equalsIgnoreCase(userAction))
+                {
+                    LOGGER.info("   ⏪ Execution rewound to previous step; yielding current step execution");
+                    return;
+                }
+                final boolean isRescheduled = "RESCHEDULE".equalsIgnoreCase(userAction)
+                    || Boolean.TRUE.equals(context.getTransientData().remove("KEY_STEP_RESCHEDULED"));
+                if (isRescheduled)
                 {
                     LOGGER.info("   🔄 Step rescheduled due to newly inserted step; yielding execution to run newly inserted step first");
                     finishLoop(context, executedCalls, "Rescheduled");
@@ -817,6 +824,8 @@ public final class AgentToolLoopStep implements PipelineStep
                     final String preparedInstruction = ExecuteActionsStep.prepareInstruction(updatedInstruction);
                     context.getTransientData().put("KEY_CURRENT_STEP_RAW_INSTRUCTION", updatedInstruction);
                     context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, preparedInstruction);
+                    instruction = preparedInstruction;
+                    rawInstruction = updatedInstruction;
 
                     if (step != null)
                     {
@@ -824,6 +833,9 @@ public final class AgentToolLoopStep implements PipelineStep
                         step.setStatus(PlaybookStepStatus.RUNNING);
                         step.setFailed(false);
                         step.setFailureReason(null);
+                        step.setRecordedStatus(null);
+                        step.setScreenshotHash(null);
+                        step.setNoReplay(true);
                         try
                         {
                             step.getActions().clear();
@@ -841,6 +853,15 @@ public final class AgentToolLoopStep implements PipelineStep
                             step.setToolCalls(new ArrayList<>());
                         }
                     }
+                    context.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
+                    context.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", true);
+
+                    lastProposedToolWasCompleteStep = false;
+                    hasActionToolFailed = false;
+                    lastFailedActionTarget = null;
+                    lastActionFailureMessage = null;
+                    consecutiveIdenticalCalls = 0;
+                    invalidResponseCount = 0;
 
                     // Prune trailing unfulfilled assistant tool calls message to maintain valid LLM provider conversation schema
                     if (!conversation.isEmpty())
@@ -852,7 +873,27 @@ public final class AgentToolLoopStep implements PipelineStep
                         }
                     }
 
-                    conversation.add(ChatMessage.user("Updated Test Instruction:\n" + preparedInstruction));
+                    if (executor != null)
+                    {
+                        try
+                        {
+                            final boolean isFullPage = (step != null && step.isFullPageVisualStep())
+                                || Boolean.TRUE.equals(context.getTransientData().get("KEY_IS_FULL_PAGE_SCREENSHOT"))
+                                || activeContextLevel.isFullPageScreenshot();
+                            final SutState freshState = executor.captureState(activeContextLevel, isFullPage);
+                            context.getTransientData().put(ExecutionContext.KEY_LAST_STATE, freshState);
+                            if (freshState.getAttachments() != null && !freshState.getAttachments().isEmpty())
+                            {
+                                attachments = freshState.getAttachments();
+                            }
+                        }
+                        catch (final Exception e)
+                        {
+                            LOGGER.debug("Could not refresh SUT state upon step edit: {}", e.getMessage());
+                        }
+                    }
+
+                    conversation.add(ChatMessage.user("Updated Test Instruction:\n" + preparedInstruction, attachments));
 
                     if (interactiveListener != null && step != null)
                     {

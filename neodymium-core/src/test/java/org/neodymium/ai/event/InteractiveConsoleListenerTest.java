@@ -259,6 +259,38 @@ public class InteractiveConsoleListenerTest
     }
 
     @Test
+    public void testCurrentStepEditInvalidatesRecordedStatusAndSetsNoReplay()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Original instruction");
+        step.setRecordedStatus(PlaybookStepStatus.SUCCESS);
+        step.setScreenshotHash("abc123hash");
+        step.setNoReplay(false);
+        step.setLineNumber(12);
+        step.setSourceFile("test.yaml");
+        session.getExecutionContext().getTransientData().put("playbook.flatSteps", List.of(step));
+
+        final JsonObject editAction = new JsonObject();
+        editAction.addProperty("action", "EDIT");
+        editAction.addProperty("instruction", "Updated instruction via edit");
+        editAction.addProperty("isCurrentStep", true);
+        submitActionAsynchronously(editAction);
+
+        final String resultAction = listener.pauseBeforeActionExecution(session.getExecutionContext(), step);
+        assertEquals("EDIT", resultAction);
+        assertEquals("Updated instruction via edit", step.getInstruction());
+        assertEquals(PlaybookStepStatus.RUNNING, step.getStatus());
+        assertNull(step.getRecordedStatus());
+        assertNull(step.getScreenshotHash());
+        assertTrue(step.isNoReplay());
+        assertTrue(Boolean.TRUE.equals(session.getExecutionContext().getTransientData().get("KEY_STEP_EDITED")));
+        assertTrue(Boolean.TRUE.equals(session.getExecutionContext().getTransientData().get("KEY_CURRENT_STEP_NO_REPLAY")));
+        assertTrue(Boolean.TRUE.equals(session.getExecutionContext().getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP)));
+    }
+
+    @Test
     public void testMultiEditPreservesValidLlmConversationSchema()
     {
         final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
@@ -1701,5 +1733,272 @@ public class InteractiveConsoleListenerTest
         assertTrue(second instanceof PlaybookPipelineStep);
         assertEquals(before1, ((PlaybookPipelineStep) second).getPlaybookStep());
         assertFalse(context.hasSteps());
+    }
+
+    @Test
+    public void testRewindExecutionToPreviousStepTriggersYieldAndReschedulesTargetStep()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step1 = new PlaybookStep("Step 1 (Open Page)");
+        step1.setLineNumber(1);
+        step1.setSourceFile("test.yaml");
+        step1.setStatus(PlaybookStepStatus.SUCCESS);
+        step1.setReasoning("Navigated to page");
+        step1.setActions(new ArrayList<>(List.of(new Action("open", "https://example.com", null))));
+
+        final PlaybookStep step2 = new PlaybookStep("Step 2 (Click Link)");
+        step2.setLineNumber(2);
+        step2.setSourceFile("test.yaml");
+        step2.setStatus(PlaybookStepStatus.SUCCESS);
+        step2.setReasoning("Clicked link");
+        step2.setActions(new ArrayList<>(List.of(new Action("click", "#link", null))));
+
+        final PlaybookStep step3 = new PlaybookStep("Step 3 (Current Active)");
+        step3.setLineNumber(3);
+        step3.setSourceFile("test.yaml");
+        step3.setStatus(PlaybookStepStatus.RUNNING);
+        step3.setReasoning("Pending action on step 3");
+        step3.setActions(new ArrayList<>(List.of(new Action("type", "#input", "search"))));
+
+        final List<PlaybookStep> playbookSteps = new ArrayList<>(List.of(step1, step2, step3));
+        final Playbook playbook = new Playbook(playbookSteps, Collections.emptyList());
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, playbook);
+        context.getTransientData().put("playbook.steps", playbookSteps);
+        context.getTransientData().put("playbook.flatSteps", new ArrayList<>(playbookSteps));
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step3);
+
+        // Pre-populate report step entries
+        final TestExecutionReport report = listener.getReport();
+        if (report != null)
+        {
+            report.addStep(new TestExecutionReport.ReportStepEntry(0, step1.getInstruction()));
+            report.addStep(new TestExecutionReport.ReportStepEntry(1, step2.getInstruction()));
+        }
+
+        // Submit REWIND targeting Step 1 (index 1 in 1-based HUD indexing)
+        final JsonObject rewindAction = new JsonObject();
+        rewindAction.addProperty("action", "REWIND");
+        rewindAction.addProperty("targetIndex", 1);
+        rewindAction.addProperty("block", "steps");
+        rewindAction.addProperty("blockIndex", 0);
+        submitActionAsynchronously(rewindAction);
+
+        final String result = listener.pauseBeforeActionExecution(context, step3);
+
+        // Assert: listener yields with REWIND
+        assertEquals("REWIND", result);
+        assertNull(context.getTransientData().get("KEY_STEP_RESCHEDULED"));
+        assertEquals(step1, context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP));
+
+        // Step 1, Step 2, and Step 3 must be reset to PENDING
+        assertEquals(PlaybookStepStatus.PENDING, step1.getStatus());
+        assertNull(step1.getReasoning());
+        assertTrue(step1.getActions().isEmpty());
+
+        assertEquals(PlaybookStepStatus.PENDING, step2.getStatus());
+        assertNull(step2.getReasoning());
+        assertTrue(step2.getActions().isEmpty());
+
+        assertEquals(PlaybookStepStatus.PENDING, step3.getStatus());
+        assertNull(step3.getReasoning());
+        assertTrue(step3.getActions().isEmpty());
+
+        // Report entries at and after step 1 index must be purged
+        if (report != null)
+        {
+            assertTrue(report.getSteps().isEmpty());
+        }
+
+        // Execution stack must now contain step1 at top, followed by step2 and step3
+        assertTrue(context.hasSteps());
+        final PipelineStep topStep = context.popStep();
+        assertTrue(topStep instanceof PlaybookPipelineStep);
+        assertEquals(step1, ((PlaybookPipelineStep) topStep).getPlaybookStep());
+
+        final PipelineStep secondStep = context.popStep();
+        assertTrue(secondStep instanceof PlaybookPipelineStep);
+        assertEquals(step2, ((PlaybookPipelineStep) secondStep).getPlaybookStep());
+
+        final PipelineStep thirdStep = context.popStep();
+        assertTrue(thirdStep instanceof PlaybookPipelineStep);
+        assertEquals(step3, ((PlaybookPipelineStep) thirdStep).getPlaybookStep());
+
+        assertFalse(context.hasSteps());
+    }
+
+    @Test
+    public void testRewindExecutionFromCoreStepToBeforeBlockStep()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep beforeStep = new PlaybookStep("Before: Open Wikipedia");
+        beforeStep.setLineNumber(1);
+        beforeStep.setSourceFile("before.yaml");
+        beforeStep.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep coreStep1 = new PlaybookStep("Core: Select Language");
+        coreStep1.setLineNumber(2);
+        coreStep1.setSourceFile("test.yaml");
+        coreStep1.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep coreStep2 = new PlaybookStep("Core: Type Search");
+        coreStep2.setLineNumber(3);
+        coreStep2.setSourceFile("test.yaml");
+        coreStep2.setStatus(PlaybookStepStatus.RUNNING);
+
+        final List<PlaybookStep> beforeList = new ArrayList<>(List.of(beforeStep));
+        final List<PlaybookStep> coreList = new ArrayList<>(List.of(coreStep1, coreStep2));
+        final Playbook playbook = new Playbook(beforeList, coreList, Collections.emptyList(), Collections.emptyList(), Collections.emptyMap(), "Test Scenario");
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, playbook);
+        context.getTransientData().put("playbook.beforeSteps", beforeList);
+        context.getTransientData().put("playbook.steps", coreList);
+
+        final List<PlaybookStep> flat = new ArrayList<>();
+        flat.addAll(beforeList);
+        flat.addAll(coreList);
+        context.getTransientData().put("playbook.flatSteps", flat);
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, coreStep2);
+
+        // Submit REWIND targeting the before block step
+        final JsonObject rewindAction = new JsonObject();
+        rewindAction.addProperty("action", "REWIND");
+        rewindAction.addProperty("block", "before");
+        rewindAction.addProperty("blockIndex", 0);
+        rewindAction.addProperty("targetIndex", 1);
+        submitActionAsynchronously(rewindAction);
+
+        final String result = listener.pauseBeforeActionExecution(context, coreStep2);
+
+        assertEquals("REWIND", result);
+        assertNull(context.getTransientData().get("KEY_STEP_RESCHEDULED"));
+        assertEquals(beforeStep, context.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP));
+
+        assertEquals(PlaybookStepStatus.PENDING, beforeStep.getStatus());
+        assertEquals(PlaybookStepStatus.PENDING, coreStep1.getStatus());
+        assertEquals(PlaybookStepStatus.PENDING, coreStep2.getStatus());
+
+        // Stack must have beforeStep first, then coreStep1, then coreStep2
+        assertTrue(context.hasSteps());
+        final PipelineStep top = context.popStep();
+        assertTrue(top instanceof PlaybookPipelineStep);
+        assertEquals(beforeStep, ((PlaybookPipelineStep) top).getPlaybookStep());
+
+        final PipelineStep s2 = context.popStep();
+        assertTrue(s2 instanceof PlaybookPipelineStep);
+        assertEquals(coreStep1, ((PlaybookPipelineStep) s2).getPlaybookStep());
+
+        final PipelineStep s3 = context.popStep();
+        assertTrue(s3 instanceof PlaybookPipelineStep);
+        assertEquals(coreStep2, ((PlaybookPipelineStep) s3).getPlaybookStep());
+
+        assertFalse(context.hasSteps());
+    }
+
+    @Test
+    public void testRewindExecutionOnStepFailure()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step1 = new PlaybookStep("Step 1 (Open Site)");
+        step1.setLineNumber(1);
+        step1.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep step2 = new PlaybookStep("Step 2 (Failed Element)");
+        step2.setLineNumber(2);
+        step2.setStatus(PlaybookStepStatus.FAILED);
+        step2.setFailed(true);
+        step2.setFailureReason("Element not interactable");
+
+        final List<PlaybookStep> playbookSteps = new ArrayList<>(List.of(step1, step2));
+        final Playbook playbook = new Playbook(playbookSteps, Collections.emptyList());
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, playbook);
+        context.getTransientData().put("playbook.steps", playbookSteps);
+        context.getTransientData().put("playbook.flatSteps", new ArrayList<>(playbookSteps));
+
+        // Submit REWIND to Step 1
+        final JsonObject rewindAction = new JsonObject();
+        rewindAction.addProperty("action", "REWIND");
+        rewindAction.addProperty("targetIndex", 1);
+        rewindAction.addProperty("block", "steps");
+        rewindAction.addProperty("blockIndex", 0);
+        submitActionAsynchronously(rewindAction);
+
+        final String result = listener.pauseOnStepFailure(context, step2, new RuntimeException("Element not interactable"));
+
+        assertEquals("REWIND", result);
+        assertEquals(PlaybookStepStatus.PENDING, step1.getStatus());
+        assertEquals(PlaybookStepStatus.PENDING, step2.getStatus());
+        assertFalse(step2.isFailed());
+        assertNull(step2.getFailureReason());
+
+        assertTrue(context.hasSteps());
+        final PipelineStep top = context.popStep();
+        assertTrue(top instanceof PlaybookPipelineStep);
+        assertEquals(step1, ((PlaybookPipelineStep) top).getPlaybookStep());
+    }
+
+    @Test
+    public void testRewindExecutionFollowedByAgentToolLoopActionExecutionRunsActions()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step1 = new PlaybookStep("Step 1 (Open Site)");
+        step1.setLineNumber(1);
+        step1.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep step2 = new PlaybookStep("Step 2 (Enter Text)");
+        step2.setLineNumber(2);
+        step2.setStatus(PlaybookStepStatus.RUNNING);
+
+        final List<PlaybookStep> playbookSteps = new ArrayList<>(List.of(step1, step2));
+        final Playbook playbook = new Playbook(playbookSteps, Collections.emptyList());
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_PLAYBOOK, playbook);
+        context.getTransientData().put("playbook.steps", playbookSteps);
+        context.getTransientData().put("playbook.flatSteps", new ArrayList<>(playbookSteps));
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step2);
+
+        // Submit REWIND targeting Step 1
+        final JsonObject rewindAction = new JsonObject();
+        rewindAction.addProperty("action", "REWIND");
+        rewindAction.addProperty("targetIndex", 1);
+        rewindAction.addProperty("block", "steps");
+        rewindAction.addProperty("blockIndex", 0);
+        submitActionAsynchronously(rewindAction);
+
+        final String rewindResult = listener.pauseBeforeActionExecution(context, step2);
+        assertEquals("REWIND", rewindResult);
+        assertNull(context.getTransientData().get("KEY_STEP_RESCHEDULED"));
+
+        // Now step1 executes after rewind
+        assertTrue(context.hasSteps());
+        final PipelineStep topStep = context.popStep();
+        assertTrue(topStep instanceof PlaybookPipelineStep);
+        final PlaybookStep rewoundStep = ((PlaybookPipelineStep) topStep).getPlaybookStep();
+        assertEquals(step1, rewoundStep);
+
+        // When LLM generates proposed actions and pauses for confirmation:
+        final Action proposedAction = new Action("type", "#searchInput", "Neodymium");
+        rewoundStep.setActions(new ArrayList<>(List.of(proposedAction)));
+
+        final JsonObject runAction = new JsonObject();
+        runAction.addProperty("action", "RUN");
+        submitActionAsynchronously(runAction);
+
+        final String runResult = listener.pauseBeforeActionExecution(context, rewoundStep);
+
+        // Assert: unpaused with RUN, step is marked RUNNING, and NOT aborted with RESCHEDULE
+        assertEquals("RUN", runResult);
+        assertEquals(PlaybookStepStatus.RUNNING, rewoundStep.getStatus());
+        assertNull(context.getTransientData().get("KEY_STEP_RESCHEDULED"));
     }
 }

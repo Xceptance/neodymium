@@ -1503,6 +1503,10 @@ public final class InteractiveConsoleServer
                         engine.pushState(gson.toJson(activeState));
                         continue;
                     }
+                    else
+                    {
+                        continue;
+                    }
                 }
                 else if ("ADD".equals(action))
                 {

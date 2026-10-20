@@ -300,6 +300,14 @@ public final class TestExecutionReport
         }
     }
 
+    public void removeStepIf(final Predicate<ReportStepEntry> filter)
+    {
+        if (filter != null)
+        {
+            this.steps.removeIf(filter);
+        }
+    }
+
     public List<ReportLlmCallEntry> getLlmCalls()
     {
         return Collections.unmodifiableList(this.llmCalls);
@@ -313,6 +321,14 @@ public final class TestExecutionReport
         }
     }
 
+    public void removeLlmCallIf(final Predicate<ReportLlmCallEntry> filter)
+    {
+        if (filter != null)
+        {
+            this.llmCalls.removeIf(filter);
+        }
+    }
+
     public List<ReportScreenshotEntry> getScreenshots()
     {
         return Collections.unmodifiableList(this.screenshots);
@@ -323,6 +339,14 @@ public final class TestExecutionReport
         if (screenshot != null)
         {
             this.screenshots.add(screenshot);
+        }
+    }
+
+    public void removeScreenshotIf(final Predicate<ReportScreenshotEntry> filter)
+    {
+        if (filter != null)
+        {
+            this.screenshots.removeIf(filter);
         }
     }
 

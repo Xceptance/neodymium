@@ -409,7 +409,9 @@ public final class ExecuteActionsStep
             if (hasRecordedCalls && interactiveListener != null && !interactiveListener.isAutoRun())
             {
                 final String userAction = interactiveListener.pauseBeforeActionExecution(contextState, step);
-                if ("RESCHEDULE".equalsIgnoreCase(userAction) || Boolean.TRUE.equals(contextState.getTransientData().get("KEY_STEP_RESCHEDULED")))
+                final boolean isRescheduled = "RESCHEDULE".equalsIgnoreCase(userAction)
+                    || Boolean.TRUE.equals(contextState.getTransientData().remove("KEY_STEP_RESCHEDULED"));
+                if ("REWIND".equalsIgnoreCase(userAction) || isRescheduled)
                 {
                     return;
                 }
@@ -429,6 +431,18 @@ public final class ExecuteActionsStep
                         session.getEventBus().dispatch(new StepFinishedEvent(step, PlaybookStepStatus.SKIPPED));
                     }
                     return;
+                }
+                final boolean stepEditedDuringPause = "EDIT".equalsIgnoreCase(userAction)
+                    || "UPDATE_STEP".equalsIgnoreCase(userAction)
+                    || "SAVE_STEP".equalsIgnoreCase(userAction)
+                    || Boolean.TRUE.equals(contextState.getTransientData().remove("KEY_STEP_EDITED"));
+                if (stepEditedDuringPause)
+                {
+                    step.setRecordedStatus(null);
+                    step.setScreenshotHash(null);
+                    step.setNoReplay(true);
+                    contextState.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", true);
+                    contextState.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
                 }
                 final String currentRaw = step.hasSubSteps() ? step.getFullInstruction() : step.getInstruction();
                 final String currentResolved = (contextState.getSessionData() != null && currentRaw != null)
@@ -491,11 +505,13 @@ public final class ExecuteActionsStep
             final ExecutionMode mode = (ExecutionMode) contextState.getTransientData()
                 .computeIfAbsent(ExecutionContext.KEY_EXECUTION_MODE, k -> AiConfiguration.getInstance().getExecutionMode());
 
-            final boolean hasRecordedContent = (step.getToolCalls() != null && !step.getToolCalls().isEmpty())
+            final boolean currentStepNoReplay = stepNoReplay || step.isNoReplay()
+                || Boolean.TRUE.equals(contextState.getTransientData().get("KEY_CURRENT_STEP_NO_REPLAY"));
+            final boolean hasRecordedContent = !currentStepNoReplay && ((step.getToolCalls() != null && !step.getToolCalls().isEmpty())
                 || (step.getScreenshotHash() != null && !step.getScreenshotHash().isEmpty())
                 || (initialStepStatus != null && initialStepStatus != PlaybookStepStatus.PENDING)
-                || (step.getRecordedStatus() != null && step.getRecordedStatus() != PlaybookStepStatus.PENDING);
-            final boolean isReplay = mode.isReplay() && !stepNoReplay && (mode == ExecutionMode.REPLAY_STRICT || hasRecordedContent);
+                || (step.getRecordedStatus() != null && step.getRecordedStatus() != PlaybookStepStatus.PENDING));
+            final boolean isReplay = mode.isReplay() && !currentStepNoReplay && (mode == ExecutionMode.REPLAY_STRICT || hasRecordedContent);
 
 
             final ContextLevel effectiveLevel = (ContextLevel) contextState.getTransientData().get(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL);

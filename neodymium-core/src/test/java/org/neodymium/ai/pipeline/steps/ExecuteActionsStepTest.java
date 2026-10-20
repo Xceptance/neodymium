@@ -1544,6 +1544,70 @@ public final class ExecuteActionsStepTest
 
         assertEquals("Edited prompt by user", step.getInstruction());
         assertEquals("Edited prompt by user", context.getTransientData().get(ExecutionContext.KEY_CURRENT_INSTRUCTION));
+        assertTrue(step.isNoReplay());
+        assertNull(step.getRecordedStatus());
+        assertNull(step.getScreenshotHash());
+        assertEquals(Boolean.TRUE, context.getTransientData().get("KEY_CURRENT_STEP_NO_REPLAY"));
+        assertEquals(Boolean.TRUE, context.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP));
+    }
+
+    @Test
+    public void testInteractiveModeCurrentStepEditDispatchesAgentToolLoopAndInvalidatesReplay() throws Exception
+    {
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final SessionData sessionData = new SessionData();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final InteractiveConsoleEngine consoleEngine = new InteractiveConsoleEngine("test-run-interactive-edit-replay");
+        final AiSession session = AiSession.mock(sessionData, new LlmRegistry(), eventBus, executor);
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+        context.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, ExecutionMode.REPLAY_WITH_HEALING);
+
+        final PlaybookStep step = new PlaybookStep("Initial instruction before user edit");
+        step.setStatus(PlaybookStepStatus.SUCCESS);
+        step.setRecordedStatus(PlaybookStepStatus.SUCCESS);
+        step.setScreenshotHash("hash-initial-123");
+        step.setToolCalls(List.of(new ToolCall("call-1", "browser_click", new ObjectMapper().createObjectNode())));
+        context.getTransientData().put("playbook.steps", List.of(step));
+        context.getTransientData().put("playbook.flatSteps", List.of(step));
+
+        final Thread t = new Thread(() -> {
+            try
+            {
+                int attempts = 0;
+                while (consoleEngine.getCurrentPauseId() == null && attempts < 50)
+                {
+                    Thread.sleep(50);
+                    attempts++;
+                }
+                final JsonObject editAction = new JsonObject();
+                editAction.addProperty("runId", consoleEngine.getRunId());
+                editAction.addProperty("pauseId", consoleEngine.getCurrentPauseId());
+                editAction.addProperty("action", "EDIT");
+                editAction.addProperty("instruction", "Newly edited instruction");
+                editAction.addProperty("isCurrentStep", true);
+                consoleEngine.submitAction(editAction);
+            }
+            catch (final Exception ignored)
+            {
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+
+        final PipelineStep pipelineStep = ExecuteActionsStep.mapPlaybookStepToPipelineStep(step, session, context);
+        pipelineStep.execute(context);
+
+        assertEquals("Newly edited instruction", step.getInstruction());
+        assertTrue(step.isNoReplay());
+        assertNull(step.getRecordedStatus());
+        assertNull(step.getScreenshotHash());
+        assertEquals(Boolean.TRUE, context.getTransientData().get("KEY_CURRENT_STEP_NO_REPLAY"));
+        assertEquals(Boolean.TRUE, context.getTransientData().get(ExecutionContext.KEY_IS_HEALED_STEP));
     }
 
     @Test

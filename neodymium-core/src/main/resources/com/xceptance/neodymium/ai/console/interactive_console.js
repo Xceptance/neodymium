@@ -852,8 +852,8 @@ function checkActionApprovals() {
         }
     }
 
-    // Handle toolbar Back button disabled if index is 0 or auto is on
-    const isFirstStep = s && s.index === 0;
+    // Handle toolbar Back button disabled if index is 0/1 or auto is on
+    const isFirstStep = s && (s.index === 0 || s.index === 1 || (s.blockIndex === 0 && (s.block === 'before' || (!currentState?.blocks?.before?.length && s.block === 'steps'))));
     const backBtn = document.getElementById('btnBack');
     if (backBtn) {
         if (isFirstStep || isAutoMode) {
@@ -1607,9 +1607,9 @@ function renderStepCard(step, blockName = 'steps') {
         ? `<button class="step-add-after-btn${syncDisabledClass}" onclick="addStepAfter(event, ${step.index}, '${blockName}')" title="Add step after this" aria-label="Add step after this"${syncDisabledAttr}><span class="material-symbols-outlined" aria-hidden="true">add_circle</span></button>`
         : '';
 
-    // Rewind only makes sense for steps that have already been executed (passed/failed/skipped).
-    // Showing it on future/active steps is confusing and not actionable.
-    const rewindBtnHtml = (isPassed || isFailed || isSkipped) && !showEdit
+    // Rewind button: only available for steps that have already passed
+    const hasPassed = (status === 'passed' || status === 'healed');
+    const rewindBtnHtml = hasPassed && !step.isTempAdd
         ? `<button class="step-rewind-btn${syncDisabledClass}" onclick="triggerRewind(event, ${step.index})" title="Rewind execution back here" aria-label="Rewind execution back here"${syncDisabledAttr}><span class="material-symbols-outlined" aria-hidden="true">undo</span></button>`
         : '';
 
@@ -2424,7 +2424,28 @@ function triggerRewind(event, index) {
     if (event) event.stopPropagation();
     if (!currentPauseId || isStructuralActionInFlight) return;
     selectedStepIndexForDetails = index;
-    sendAction('REWIND', { targetIndex: index });
+
+    let targetBlock = null;
+    let targetBlockIndex = null;
+    if (currentState && currentState.blocks) {
+        for (const bKey of ['before', 'steps', 'after']) {
+            const list = currentState.blocks[bKey];
+            if (list) {
+                const bIdx = list.findIndex(s => s.index === index);
+                if (bIdx !== -1) {
+                    targetBlock = bKey;
+                    targetBlockIndex = bIdx;
+                    break;
+                }
+            }
+        }
+    }
+
+    sendAction('REWIND', {
+        targetIndex: index,
+        block: targetBlock,
+        blockIndex: targetBlockIndex
+    });
 }
 
 function pasteBinding(el, key) {

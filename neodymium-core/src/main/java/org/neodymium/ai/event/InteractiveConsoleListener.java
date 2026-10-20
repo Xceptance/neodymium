@@ -44,6 +44,7 @@ import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.PipelineStep;
 import org.neodymium.ai.pipeline.PlaybookPipelineStep;
+import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.report.DiskReportFormat;
 import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.report.TestExecutionReport;
@@ -376,6 +377,10 @@ public final class InteractiveConsoleListener implements ExecutionListener
             final boolean shouldKeepPausing = handleUserAction(userAction, step, context);
             if (!shouldKeepPausing)
             {
+                if ("REWIND".equalsIgnoreCase(action))
+                {
+                    return "REWIND";
+                }
                 if ("HEAL".equalsIgnoreCase(action) || "RETRY".equalsIgnoreCase(action) || "RUN".equalsIgnoreCase(action))
                 {
                     if (step != null)
@@ -476,6 +481,10 @@ public final class InteractiveConsoleListener implements ExecutionListener
             final boolean shouldKeepPausing = handleUserAction(userAction, step, context);
             if (!shouldKeepPausing)
             {
+                if ("REWIND".equalsIgnoreCase(action))
+                {
+                    return "REWIND";
+                }
                 if (Boolean.TRUE.equals(context != null ? context.getTransientData().get("KEY_STEP_RESCHEDULED") : null))
                 {
                     return "RESCHEDULE";
@@ -597,6 +606,9 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
             case "REORDER":
                 return handleReorderStep(userAction, currentStep, context);
+
+            case "REWIND":
+                return handleRewindStep(userAction, currentStep, context);
 
             case "AUTO":
             case "RUN_ALL":
@@ -722,9 +734,14 @@ public final class InteractiveConsoleListener implements ExecutionListener
                             }
                         }
                         currentStep.setReasoning(null);
+                        currentStep.setRecordedStatus(null);
+                        currentStep.setScreenshotHash(null);
+                        currentStep.setNoReplay(true);
                         if (context != null)
                         {
                             context.getTransientData().put("KEY_STEP_EDITED", true);
+                            context.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", true);
+                            context.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
                         }
                         pushCurrentState(context, currentStep);
                         LOG.info("[InteractiveConsoleListener] Step instruction updated to: \"{}\"", newInst);
@@ -757,9 +774,14 @@ public final class InteractiveConsoleListener implements ExecutionListener
                             }
                         }
                         currentStep.setReasoning(null);
+                        currentStep.setRecordedStatus(null);
+                        currentStep.setScreenshotHash(null);
+                        currentStep.setNoReplay(true);
                         if (context != null)
                         {
                             context.getTransientData().put("KEY_STEP_EDITED", true);
+                            context.getTransientData().put("KEY_CURRENT_STEP_NO_REPLAY", true);
+                            context.getTransientData().put(ExecutionContext.KEY_IS_HEALED_STEP, true);
                         }
                         pushCurrentState(context, currentStep);
                         LOG.info("[InteractiveConsoleListener] Step re-queued with updated parameters/bindings: \"{}\"", currentStep.getInstruction());
@@ -1235,6 +1257,210 @@ public final class InteractiveConsoleListener implements ExecutionListener
         LOG.info("[InteractiveConsoleListener] Reordered step from '{}:{}' to '{}:{}' (rescheduled={})",
             fromBlock, fromIndex, toBlock, adjustedToIndex, isRescheduleNeeded);
         return !isRescheduleNeeded;
+    }
+
+    private boolean handleRewindStep(final JsonObject userAction, final PlaybookStep currentStep, final ExecutionContext context)
+    {
+        if (userAction == null || context == null)
+        {
+            return false;
+        }
+
+        this.autoRun = false;
+        updateFlatSteps(context);
+
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+        if (flatSteps == null || flatSteps.isEmpty())
+        {
+            LOG.warn("[InteractiveConsoleListener] Cannot rewind: no steps available in execution context");
+            return true;
+        }
+
+        PlaybookStep targetStep = null;
+        if (userAction.has("block") && !userAction.get("block").isJsonNull()
+            && userAction.has("blockIndex") && !userAction.get("blockIndex").isJsonNull())
+        {
+            final String blockName = userAction.get("block").getAsString();
+            final int blockIdx = userAction.get("blockIndex").getAsInt();
+            targetStep = findStepByIndex(context, blockIdx, blockName);
+        }
+
+        if (targetStep == null)
+        {
+            int rawIdx = -1;
+            if (userAction.has("targetIndex") && !userAction.get("targetIndex").isJsonNull())
+            {
+                try
+                {
+                    rawIdx = userAction.get("targetIndex").getAsInt();
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+            else if (userAction.has("index") && !userAction.get("index").isJsonNull())
+            {
+                try
+                {
+                    rawIdx = userAction.get("index").getAsInt();
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+
+            if (rawIdx > 0 && rawIdx - 1 < flatSteps.size())
+            {
+                targetStep = flatSteps.get(rawIdx - 1);
+            }
+            else if (rawIdx >= 0 && rawIdx < flatSteps.size())
+            {
+                targetStep = flatSteps.get(rawIdx);
+            }
+            else if (rawIdx == -1)
+            {
+                // Fallback for btnBack without explicit index: rewind to preceding step
+                final PlaybookStep effCurrent = (currentStep != null && currentStep.getRootStep() != null)
+                    ? currentStep.getRootStep()
+                    : currentStep;
+                final int currentFlatIdx = effCurrent != null ? flatSteps.indexOf(effCurrent) : -1;
+                if (currentFlatIdx > 0)
+                {
+                    targetStep = flatSteps.get(currentFlatIdx - 1);
+                }
+            }
+        }
+
+        if (targetStep == null)
+        {
+            LOG.warn("[InteractiveConsoleListener] Could not locate target step for REWIND: {}", userAction);
+            return true;
+        }
+
+        final int targetFlatIdx = flatSteps.indexOf(targetStep);
+        if (targetFlatIdx < 0)
+        {
+            LOG.warn("[InteractiveConsoleListener] Target step not found in flatSteps list: {}", targetStep.getInstruction());
+            return true;
+        }
+
+        // Determine which steps need to be rescheduled
+        final boolean isAfterActive = Boolean.TRUE.equals(context.getTransientData().get("playbook.afterStepsExecuted"))
+            || (resolveStepBlock(context, targetStep).equalsIgnoreCase("after"));
+
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> coreSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        final int endIdx = isAfterActive ? flatSteps.size() : ((beforeSteps != null ? beforeSteps.size() : 0) + (coreSteps != null ? coreSteps.size() : 0));
+
+        final List<PlaybookStep> remaining = new ArrayList<>();
+        for (int i = targetFlatIdx; i < Math.min(endIdx, flatSteps.size()); i++)
+        {
+            remaining.add(flatSteps.get(i));
+        }
+
+        // Reset all steps from targetFlatIdx onwards to PENDING
+        for (int i = targetFlatIdx; i < flatSteps.size(); i++)
+        {
+            final PlaybookStep s = flatSteps.get(i);
+            s.setStatus(PlaybookStepStatus.PENDING);
+            s.setFailed(false);
+            s.setFailureReason(null);
+            s.setDurationMs(null);
+            s.setStartTimeMs(null);
+            s.setReasoning(null);
+            if (s.getActions() != null)
+            {
+                try
+                {
+                    s.getActions().clear();
+                }
+                catch (final UnsupportedOperationException e)
+                {
+                    s.setActions(new ArrayList<>());
+                }
+            }
+            if (s.getToolCalls() != null)
+            {
+                try
+                {
+                    s.getToolCalls().clear();
+                }
+                catch (final UnsupportedOperationException e)
+                {
+                    s.setToolCalls(new ArrayList<>());
+                }
+            }
+            if (s.hasSubSteps())
+            {
+                for (final PlaybookStep child : s.getSubSteps())
+                {
+                    child.setStatus(PlaybookStepStatus.PENDING);
+                    child.setFailed(false);
+                    child.setFailureReason(null);
+                    child.setDurationMs(null);
+                    child.setStartTimeMs(null);
+                    child.setReasoning(null);
+                    if (child.getActions() != null)
+                    {
+                        try
+                        {
+                            child.getActions().clear();
+                        }
+                        catch (final UnsupportedOperationException e)
+                        {
+                            child.setActions(new ArrayList<>());
+                        }
+                    }
+                    if (child.getToolCalls() != null)
+                    {
+                        try
+                        {
+                            child.getToolCalls().clear();
+                        }
+                        catch (final UnsupportedOperationException e)
+                        {
+                            child.setToolCalls(new ArrayList<>());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Clean up reports for steps from targetFlatIdx onwards
+        final TestExecutionReport report = getReport();
+        if (report != null)
+        {
+            report.removeStepIf(entry -> entry != null && entry.getStepIndex() >= targetFlatIdx);
+            report.removeLlmCallIf(call -> call != null && call.getStepIndex() >= targetFlatIdx);
+            report.removeScreenshotIf(sc -> sc != null && sc.getStepIndex() >= targetFlatIdx);
+        }
+
+        // Clean up transient state flags
+        context.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+        context.getTransientData().remove("KEY_STEP_EDITED");
+        context.getTransientData().remove("KEY_TOOL_LOOP_SUMMARY");
+        context.getTransientData().remove("KEY_STEP_EXECUTION_FINALIZED");
+        context.getTransientData().remove("KEY_STEP_RESCHEDULED");
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, targetStep);
+
+        // Clear execution stack and push remaining steps
+        context.clearSteps();
+        for (int i = remaining.size() - 1; i >= 0; i--)
+        {
+            final PlaybookStep s = remaining.get(i);
+            if (s != null)
+            {
+                context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(s, this.session, context));
+            }
+        }
+
+        LOG.info("[InteractiveConsoleListener] Rewound execution back to step #{}: \"{}\" ({} steps rescheduled)",
+            targetFlatIdx + 1, targetStep.getInstruction(), remaining.size());
+
+        return false;
     }
 
     private void updateFlatSteps(final ExecutionContext context)

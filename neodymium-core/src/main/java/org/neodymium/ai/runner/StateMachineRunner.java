@@ -498,6 +498,10 @@ public final class StateMachineRunner
                                 }
                                 continue mainLoop;
                             }
+                            else if ("REWIND".equalsIgnoreCase(userAction) || "RESCHEDULE".equalsIgnoreCase(userAction))
+                            {
+                                continue mainLoop;
+                            }
                             else if ("FINISH".equalsIgnoreCase(userAction) || "ACCEPT_FINISH".equalsIgnoreCase(userAction))
                             {
                                 context.clearSteps();
