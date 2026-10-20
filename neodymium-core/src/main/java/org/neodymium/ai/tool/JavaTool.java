@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
@@ -119,9 +120,43 @@ public class JavaTool implements AiTool
             final String paramName = this.parameterNames.get(i);
             final Class<?> paramType = param.getType();
 
-            if (callArgs != null && callArgs.has(paramName) && !callArgs.get(paramName).isNull())
+            JsonNode valueNode = null;
+            if (callArgs != null)
             {
-                final JsonNode valueNode = callArgs.get(paramName);
+                if (callArgs.has(paramName) && !callArgs.get(paramName).isNull())
+                {
+                    valueNode = callArgs.get(paramName);
+                }
+                else
+                {
+                    final Iterator<String> it = callArgs.fieldNames();
+                    while (it.hasNext())
+                    {
+                        final String field = it.next();
+                        if (field.equalsIgnoreCase(paramName)
+                                || field.replace("_", "").equalsIgnoreCase(paramName.replace("_", "")))
+                        {
+                            final JsonNode candidate = callArgs.get(field);
+                            if (candidate != null && !candidate.isNull())
+                            {
+                                valueNode = candidate;
+                                break;
+                            }
+                        }
+                    }
+                    if (valueNode == null && parameters.length == 1 && callArgs.size() == 1)
+                    {
+                        final JsonNode singleNode = callArgs.elements().next();
+                        if (singleNode != null && !singleNode.isNull())
+                        {
+                            valueNode = singleNode;
+                        }
+                    }
+                }
+            }
+
+            if (valueNode != null)
+            {
                 args[i] = this.mapper.convertValue(valueNode, paramType);
             }
             else

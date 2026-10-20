@@ -240,6 +240,9 @@ public final class BrowserToolProvider
         registry.register(createIncludeTool());
         registry.register(createGetNetworkFailuresTool());
         registry.register(createGetConsoleErrorsTool());
+
+        // Register custom tools configured in neodymium.ai.agent.methods.classes
+        ToolRegistry.registerConfiguredCustomTools(registry);
     }
 
     /**
