@@ -474,6 +474,37 @@ public final class StaticResourceSyntaxTest
             "if (isAiLogLine('   I will search for jeans and submit the query.', false)) {\n" +
             "    throw new Error('Expected unanchored indented line to NOT match when previous was not AI');\n" +
             "}\n" +
+            "const allowsAiContinuation = sandbox.window.allowsAiContinuation;\n" +
+            "if (typeof allowsAiContinuation !== 'function') {\n" +
+            "    throw new Error('Expected window.allowsAiContinuation to be defined');\n" +
+            "}\n" +
+            "if (allowsAiContinuation('16:17:11 🤖 Agent Turn #1 (max: 15) | Step: \"Search jeans\"')) {\n" +
+            "    throw new Error('Agent Turn header should NOT allow continuation lines');\n" +
+            "}\n" +
+            "if (!allowsAiContinuation('16:17:12 💭 Thought:')) {\n" +
+            "    throw new Error('Thought header should allow continuation lines');\n" +
+            "}\n" +
+            "if (!allowsAiContinuation('16:17:13 🔧 Tool Call: fill')) {\n" +
+            "    throw new Error('Tool Call header should allow continuation lines');\n" +
+            "}\n" +
+            "const wireLines = [\n" +
+            "    '      \"text\" : \"You are an autonomous web testing agent. Execute the test instruction...\",',\n" +
+            "    '      \"role\" : \"user\",',\n" +
+            "    '      \"parts\" : [',\n" +
+            "    '  {',\n" +
+            "    '  }',\n" +
+            "    'Request:',\n" +
+            "    'Response:',\n" +
+            "    'Host: generativelanguage.googleapis.com',\n" +
+            "    'Content-Type: application/json',\n" +
+            "    '- method: POST',\n" +
+            "    '16:17:11 [DEBUG] dev.langchain4j.http.client.log.LoggingHttpClient - Request:'\n" +
+            "];\n" +
+            "for (const wireLine of wireLines) {\n" +
+            "    if (isAiLogLine(wireLine, true)) {\n" +
+            "        throw new Error('Expected wire log line to be suppressed even with previousWasAi=true: ' + wireLine);\n" +
+            "    }\n" +
+            "}\n" +
             "const noiseLines = [\n" +
             "    '[INFO] Scanning for projects...',\n" +
             "    '[INFO] Compiling 758 source files with javac [debug target 17] to target/test-classes',\n" +

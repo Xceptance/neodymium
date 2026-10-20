@@ -305,7 +305,7 @@ window.rerunSingleTest = rerunSingleTest;
 var lastLineWasAi = false;
 window.lastLineWasAi = lastLineWasAi;
 
-const AI_LOG_EMOJIS_REGEX = /[🤖🧠💭🔧📥🎯🚀🎬🏁🏆👣🔮⚙✨🔍▶✅❌🛑⚠️⚖🔄📊🐞🐛🚨📸💾📜📂⏱🎟⚡💬📌•]/u;
+const AI_LOG_EMOJIS_REGEX = /[🤖🧠💭🔧📥🎯🚀🎬🏁🏆👣🔮⚙✨🔍▶✅❌🛑⚠️⚖🔄📊🐞🐛🚨📸💾📜📂⏱🎟⚡💬📌💡🧬🚫•]/u;
 
 const MAVEN_EXCLUDE_PREFIXES = [
     '[info] scanning for projects',
@@ -345,10 +345,53 @@ const MAVEN_EXCLUDE_PREFIXES = [
 ];
 
 const AI_SUPPRESS_CONTAINS = [
+    // Wire logs & HTTP client dumps
+    'request:',
+    'response:',
+    'logginghttpclient',
+    'llmcommunicationlogger',
+    'dev.langchain4j',
+    'org.neodymium.ai.client.communication',
+    'okhttp',
+    'http/1.',
+    'http/2',
+    // JSON wire body keys & structures
+    '"text" :',
+    '"contents" :',
+    '"role" :',
+    '"parts" :',
+    '"functiondeclarations"',
+    '"functioncall"',
+    '"toolresponse"',
+    '"systeminstruction"',
+    '"generationconfig"',
+    '"inline_data"',
+    '"inlinedata"',
+    '"mime_type"',
+    '"mimetype"',
+    '"thought_signature"',
+    '"thoughtsignature"',
+    '"candidates"',
+    '"usagemetadata"',
+    '"prompttokencount"',
+    '"candidatestokencount"',
+    '"totaltokencount"',
+    '"finishreason"',
+    '"safetyratings"',
+    // Internal dumps & class warnings
     'available native tools',
     'conversation context for turn',
+    'registered native tools',
     'class path contains multiple slf4j',
     'registered ai action plugin:'
+];
+
+const AI_SUPPRESS_PATTERNS = [
+    /^\s*"[a-zA-Z0-9_-]+"\s*:/,                                              // JSON object properties (e.g. "text" :, "role" :)
+    /^[{}[\],":\s]+$/,                                                      // Pure JSON structural punctuation
+    /^(?:request|response|content-type|content-length|accept|authorization|user-agent|host|date|transfer-encoding):\s*/i, // HTTP headers
+    /^-\s*(?:method|url|headers|body|status code):\s*/i,                     // LangChain4j/OkHttp request/response blocks
+    /^(?:->|<-)\s+(?:GET|POST|PUT|DELETE|\d{3}\b)/i                          // HTTP method & status lines
 ];
 
 const AI_EXPLICIT_KEYWORDS = [
@@ -380,6 +423,29 @@ const AI_EXPLICIT_KEYWORDS = [
     '[replay]'
 ];
 
+function allowsAiContinuation(line) {
+    if (!line) return false;
+    const trimmed = line.trim();
+    const lower = trimmed.toLowerCase();
+    // Headlines that are strictly single-line headers should NEVER open an arbitrary indented continuation block:
+    if (lower.includes('agent turn #') || lower.includes('starting agent tool loop') ||
+        lower.includes('all steps completed') || lower.includes('goal accomplished') ||
+        lower.startsWith('🤖') || lower.startsWith('🚀') || lower.startsWith('🎯') || lower.startsWith('🏁')) {
+        return false;
+    }
+    // Genuine multiline blocks: thoughts, tool calls, tool results, banners, bullet items, findings
+    if (lower.includes('thought:') || lower.includes('tool call:') || lower.includes('result [') ||
+        lower.includes('llm reasoning') || lower.includes('llm proposed actions') ||
+        lower.includes('suggested rewrite') || lower.includes('advisory finding') ||
+        trimmed.startsWith('•') || trimmed.startsWith('║') || trimmed.startsWith('╔') ||
+        trimmed.startsWith('💭') || trimmed.startsWith('🔧') || trimmed.startsWith('📥')) {
+        return true;
+    }
+    // Indented lines that were themselves valid continuations (e.g. subsequent lines of a thought) can continue:
+    return line.startsWith('   ') || line.startsWith('\t');
+}
+window.allowsAiContinuation = allowsAiContinuation;
+
 function isAiLogLine(line, previousWasAi) {
     if (!line) return false;
     const trimmed = line.trim();
@@ -397,8 +463,15 @@ function isAiLogLine(line, previousWasAi) {
         return false;
     }
 
-    // Banner borders and dividers (stripping any leading timestamp/level)
+    // Strip leading timestamp / log level for pattern testing
     const cleanContent = trimmed.replace(/^(?:\d{2}:\d{2}:\d{2}\s+)?(?:\[?[A-Z]{3,5}\]?\s*[-:]?\s*)?/, '');
+
+    // Check suppressed patterns (JSON properties, punctuation, HTTP wire headers)
+    if (AI_SUPPRESS_PATTERNS.some(p => p.test(cleanContent) || p.test(trimmed))) {
+        return false;
+    }
+
+    // Banner borders and dividers (stripping any leading timestamp/level)
     if (/^[╔╚║═─]{5,}$/.test(cleanContent)) {
         return true;
     }
@@ -466,7 +539,7 @@ function refreshLogFiltering() {
         const matchesAiFilter = !logFilterAiOnly || isAiLogLine(text, prevAi);
 
         if (logFilterAiOnly) {
-            prevAi = matchesAiFilter && !text.trim().startsWith('╚');
+            prevAi = matchesAiFilter && !text.trim().startsWith('╚') && allowsAiContinuation(text);
         }
 
         if (matchesErrorFilter && matchesAiFilter) {
@@ -507,7 +580,7 @@ function appendLogsBatch(lines) {
 
         const matchesAiFilter = !logFilterAiOnly || isAiLogLine(line, lastLineWasAi);
         if (logFilterAiOnly) {
-            lastLineWasAi = matchesAiFilter && !line.trim().startsWith('╚');
+            lastLineWasAi = matchesAiFilter && !line.trim().startsWith('╚') && allowsAiContinuation(line);
         }
 
         const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
