@@ -403,4 +403,113 @@ public final class StaticResourceSyntaxTest
         final int exitCode = process.waitFor();
         Assertions.assertEquals(0, exitCode, "Filter state transition test failed:\n" + output);
     }
+
+    /**
+     * Automated regression safety net verifying that dashboard-runner.js correctly filters
+     * terminal log lines: retaining modern AI events (thoughts, tool calls, results, turns) and
+     * continuation lines while suppressing Maven noise, JVM warnings, and tool schema dumps.
+     *
+     * @throws Exception
+     *             if Node execution or verification fails
+     * @author AI-generated: Gemini 3.8 Flash
+     * @author Xceptance GmbH 2026
+     */
+    @Test
+    public void testDashboardRunnerAiLogFilter() throws Exception
+    {
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path runnerPath = Paths.get("src/main/resources/static/dashboard-runner.js");
+        Assertions.assertTrue(Files.exists(runnerPath), "dashboard-runner.js must exist: " + runnerPath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const runnerCode = fs.readFileSync('" + runnerPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: { addEventListener: () => {} },\n" +
+            "    document: {\n" +
+            "        getElementById: () => ({ innerHTML: '', querySelectorAll: () => [], insertAdjacentHTML: () => {} }),\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {}\n" +
+            "    },\n" +
+            "    localStorage: { getItem: () => null, setItem: () => {} },\n" +
+            "    setTimeout: () => {}\n" +
+            "};\n" +
+            "sandbox.window.document = sandbox.document;\n" +
+            "sandbox.window.localStorage = sandbox.localStorage;\n" +
+            "vm.runInNewContext(runnerCode, sandbox);\n" +
+            "const isAiLogLine = sandbox.window.isAiLogLine;\n" +
+            "const aiLines = [\n" +
+            "    '13:30:00 ╔════════════════════════════════════════════════════════════════════════════════════',\n" +
+            "    '13:30:00 ║ 🚀 STARTING TEST CASE: cart/add_item.yaml',\n" +
+            "    '13:30:00 ╚════════════════════════════════════════════════════════════════════════════════════',\n" +
+            "    '13:30:00 ────────────────────────────────────────────────────────────────────────────────',\n" +
+            "    '13:30:01 🤖 Agent Turn #1 (max: 25) | Step: \"Search for jeans\"',\n" +
+            "    '13:30:03 💭 Thought:',\n" +
+            "    '13:30:03 🔧 Tool Call: type',\n" +
+            "    '13:30:04 📥 Result [type]: 🏁 SUCCESS - typed into \\'#search\\'',\n" +
+            "    '13:30:10 🎯 Goal Accomplished: Found jeans (Turns: 1, Executed Calls: 1)',\n" +
+            "    '13:30:10 📊 Tokens: 1,200 in (800 cached) → 45 out (total: 1,245) | Turn 1',\n" +
+            "    '13:30:10 ║ 🏁 TEST CASE COMPLETED: SUCCESS',\n" +
+            "    '13:30:10 🚨 [Visual RCA Diagnosis]: Button was covered by banner',\n" +
+            "    '13:30:10 ⚖️ Quality Judge advised retry'\n" +
+            "];\n" +
+            "for (const line of aiLines) {\n" +
+            "    if (!isAiLogLine(line, false)) {\n" +
+            "        throw new Error('Expected AI line to match: ' + line);\n" +
+            "    }\n" +
+            "}\n" +
+            "if (!isAiLogLine('   I will search for jeans and submit the query.', true)) {\n" +
+            "    throw new Error('Expected thought continuation to match');\n" +
+            "}\n" +
+            "if (!isAiLogLine('   • target: #search-input', true)) {\n" +
+            "    throw new Error('Expected tool call argument continuation to match');\n" +
+            "}\n" +
+            "if (isAiLogLine('   I will search for jeans and submit the query.', false)) {\n" +
+            "    throw new Error('Expected unanchored indented line to NOT match when previous was not AI');\n" +
+            "}\n" +
+            "const noiseLines = [\n" +
+            "    '[INFO] Scanning for projects...',\n" +
+            "    '[INFO] Compiling 758 source files with javac [debug target 17] to target/test-classes',\n" +
+            "    'WARNING: A terminally deprecated method in sun.misc.Unsafe has been called',\n" +
+            "    'WARNING: sun.misc.Unsafe::objectFieldOffset has been called by ...',\n" +
+            "    'SLF4J(W): Class path contains multiple SLF4J providers.',\n" +
+            "    '[INFO] Running YAML Test: cart/add_item.yaml',\n" +
+            "    '[INFO] Tests run: 1, Failures: 0, Errors: 0, Skipped: 0',\n" +
+            "    '[INFO] BUILD SUCCESS',\n" +
+            "    '[INFO] Total time: 12.5 s',\n" +
+            "    '13:30:00 [DEBUG] 🛠️ Available Native Tools (25):',\n" +
+            "    '    ActionTool(name=\"click\", description=\"Click an element\", params=...)',\n" +
+            "    'Conversation context for Turn #1:',\n" +
+            "    'This test uses Neodymium Library (version: ?.?.?)'\n" +
+            "];\n" +
+            "for (const line of noiseLines) {\n" +
+            "    if (isAiLogLine(line, false)) {\n" +
+            "        throw new Error('Expected noise line to be suppressed: ' + line);\n" +
+            "    }\n" +
+            "}\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "AI log filtering test failed:\n" + output);
+    }
 }

@@ -252,6 +252,7 @@ function prepareClientForExecution() {
     updateRunButtons();
     if (terminalConsole) terminalConsole.innerHTML = 'Connecting to run stream...\n';
     hasShownStartMessage = false;
+    lastLineWasAi = false;
 }
 window.prepareClientForExecution = prepareClientForExecution;
 
@@ -301,67 +302,119 @@ async function rerunSingleTest(payloadJson) {
 }
 window.rerunSingleTest = rerunSingleTest;
 
-function isAiLogLine(line) {
+var lastLineWasAi = false;
+window.lastLineWasAi = lastLineWasAi;
+
+const AI_LOG_EMOJIS_REGEX = /[🤖🧠💭🔧📥🎯🚀🎬🏁🏆👣🔮⚙✨🔍▶✅❌🛑⚠️⚖🔄📊🐞🐛🚨📸💾📜📂⏱🎟⚡💬📌•]/u;
+
+const MAVEN_EXCLUDE_PREFIXES = [
+    '[info] scanning for projects',
+    '[info] --<',
+    '[info] building ',
+    '[info] --- ',
+    '[info] nothing to compile',
+    '[info] recompiling the module',
+    '[info] compiling ',
+    '[info] copying ',
+    '[info] using \'utf-8\' encoding',
+    '[info] using auto detected provider',
+    '[info] running yaml test:',
+    '[info] running com.xceptance',
+    '[info] tests run:',
+    '[info] results:',
+    '[info] build success',
+    '[info] build failure',
+    '[info] total time:',
+    '[info] finished at:',
+    '[info] command: mvn',
+    '[info] skip non existing resource',
+    '[info] deleting ',
+    '[info] spawning maven subprocess',
+    '[info] active maven process',
+    '[info] queue execution completed',
+    'warning: a terminally deprecated method',
+    'warning: please consider reporting this',
+    'warning: sun.misc.unsafe',
+    'slf4j(w):',
+    'slf4j(i):',
+    'starting configuration org.apache.logging',
+    'stopping configuration org.apache.logging',
+    'configuration org.apache.logging',
+    'this test uses neodymium library',
+    'custom environment data was added'
+];
+
+const AI_SUPPRESS_CONTAINS = [
+    'available native tools',
+    'conversation context for turn',
+    'class path contains multiple slf4j',
+    'registered ai action plugin:'
+];
+
+const AI_EXPLICIT_KEYWORDS = [
+    'step [',
+    'step 🧠',
+    '👣 step',
+    'step:',
+    'agent turn #',
+    'thought:',
+    'tool call:',
+    'result [',
+    'goal accomplished',
+    'starting agent tool loop',
+    'llm reasoning',
+    'llm proposed actions',
+    'all steps completed successfully',
+    'playbook saved',
+    'playbook loaded',
+    'loaded playbook',
+    'visual rca diagnosis',
+    'semantic verification',
+    'starting test case',
+    'test case completed',
+    'ai execution statistics',
+    'ai step execution statistics',
+    'pre-step pesap',
+    'executing action',
+    '[exec]',
+    '[replay]'
+];
+
+function isAiLogLine(line, previousWasAi) {
     if (!line) return false;
+    const trimmed = line.trim();
+    if (!trimmed) return false;
 
-    const lower = line.toLowerCase();
+    const lower = trimmed.toLowerCase();
 
-    const isMavenLog = lower.includes('[info] command: mvn') ||
-        lower.includes('[info] --<') ||
-        lower.includes('[info] building ') ||
-        lower.includes('[info] --- maven-') ||
-        lower.includes('[info] skip non existing resource') ||
-        lower.includes('[info] deleting ');
-    if (isMavenLog) return false;
+    // Check explicit build / maven noise
+    if (MAVEN_EXCLUDE_PREFIXES.some(p => lower.startsWith(p))) {
+        return false;
+    }
 
-    const emojiPattern = /[🤖🧠👣🔮⚙️✨🔍║│├└─═▶✅❌\?]/u;
-    if (emojiPattern.test(line)) {
+    // Check suppressed debug dumps
+    if (AI_SUPPRESS_CONTAINS.some(term => lower.includes(term))) {
+        return false;
+    }
+
+    // Banner borders and dividers (stripping any leading timestamp/level)
+    const cleanContent = trimmed.replace(/^(?:\d{2}:\d{2}:\d{2}\s+)?(?:\[?[A-Z]{3,5}\]?\s*[-:]?\s*)?/, '');
+    if (/^[╔╚║═─]{5,}$/.test(cleanContent)) {
         return true;
     }
 
-    const aiKeywords = [
-        'aura',
-        'pesap',
-        'playbook',
-        'llmclient',
-        'aiagent',
-        'actionexecutor',
-        'aibrowser',
-        'aiassertion',
-        'reasoning',
-        'token usage',
-        'execution statistics',
-        'llm calls',
-        'input tokens',
-        'output tokens',
-        'total tokens',
-        'context levels',
-        'escalations',
-        'direct parses',
-        'step',
-        'open http',
-        'navigating to',
-        'capturing',
-        'sending prompt',
-        'sending multimodal',
-        'sending chat message',
-        'tokens:',
-        'llm response',
-        'llm reasoning',
-        'parsed',
-        'llm proposed actions',
-        'action{type=',
-        '[exec]',
-        'executing action',
-        'resolved using strategy',
-        'assertion passed',
-        'all steps completed successfully',
-        'playbook saved',
-        'navigating to:',
-        'simplified dom size'
-    ];
+    // Explicit AI emojis
+    if (AI_LOG_EMOJIS_REGEX.test(line)) {
+        return true;
+    }
 
-    if (aiKeywords.some(keyword => lower.includes(keyword))) {
+    // Explicit AI keywords / action patterns
+    if (AI_EXPLICIT_KEYWORDS.some(k => lower.includes(k))) {
+        return true;
+    }
+
+    // Continuation of previous AI block (e.g. multi-line thoughts, tool arguments, bullet items)
+    if (previousWasAi && (line.startsWith('   ') || line.startsWith('\t') || line.startsWith('║') || (line.startsWith(' ') && !line.startsWith(' [INFO]')))) {
         return true;
     }
 
@@ -404,12 +457,17 @@ function refreshLogFiltering() {
     const terminalConsole = document.getElementById('terminalConsole');
     if (!terminalConsole) return;
     const logLines = terminalConsole.querySelectorAll('.log-line');
+    let prevAi = false;
     logLines.forEach(line => {
         const text = line.textContent;
-        const isErrorOrWarn = text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]');
+        const isErrorOrWarn = text.includes('[ERROR]') || text.includes('[WARN]') || text.includes('[FATAL]') || text.includes('❌') || text.includes('🛑');
 
         const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
-        const matchesAiFilter = !logFilterAiOnly || isAiLogLine(text);
+        const matchesAiFilter = !logFilterAiOnly || isAiLogLine(text, prevAi);
+
+        if (logFilterAiOnly) {
+            prevAi = matchesAiFilter && !text.trim().startsWith('╚');
+        }
 
         if (matchesErrorFilter && matchesAiFilter) {
             line.style.display = 'block';
@@ -417,6 +475,7 @@ function refreshLogFiltering() {
             line.style.display = 'none';
         }
     });
+    lastLineWasAi = prevAi;
 }
 window.refreshLogFiltering = refreshLogFiltering;
 
@@ -432,6 +491,7 @@ function appendLogsBatch(lines) {
 
     if (terminalConsole.innerHTML.includes('Console idle.') || terminalConsole.innerHTML.includes('Connecting to run stream...')) {
         terminalConsole.innerHTML = '';
+        lastLineWasAi = false;
         if (logFilterAiOnly && !hasShownStartMessage) {
             hasShownStartMessage = true;
             window.hasShownStartMessage = true;
@@ -443,11 +503,14 @@ function appendLogsBatch(lines) {
     let batchHtml = '';
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        const isErrorOrWarn = line.includes('[ERROR]') || line.includes('[WARN]') || line.includes('[FATAL]');
+        const isErrorOrWarn = line.includes('[ERROR]') || line.includes('[WARN]') || line.includes('[FATAL]') || line.includes('❌') || line.includes('🛑');
+
+        const matchesAiFilter = !logFilterAiOnly || isAiLogLine(line, lastLineWasAi);
+        if (logFilterAiOnly) {
+            lastLineWasAi = matchesAiFilter && !line.trim().startsWith('╚');
+        }
 
         const matchesErrorFilter = !logFilterErrorsOnly || isErrorOrWarn;
-        const matchesAiFilter = !logFilterAiOnly || isAiLogLine(line);
-
         const displayStyle = (matchesErrorFilter && matchesAiFilter) ? 'block' : 'none';
         const escapedLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         const cssClass = isErrorOrWarn ? 'log-error' : 'log-info';
