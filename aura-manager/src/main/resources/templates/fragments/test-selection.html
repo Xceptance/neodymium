@@ -19,17 +19,23 @@
             <button type="button" class="btn-edit neo-u-8" id="toggleFileViewBtn" onclick="toggleFileViewMode()" title="Switch View Mode (Flat / Hierarchical)">
                 <span class="material-symbols-outlined" id="fileViewModeIcon" style="font-size: 16px;">view_list</span>
             </button>
-            <button class="btn-edit neo-u-8" id="refreshFilesBtn" hx-get="/api/files/list" hx-target="#yamlFileList" hx-swap="innerHTML" title="Refresh Files"><span class="material-symbols-outlined">sync</span></button>
+            <button class="btn-edit neo-u-8" id="refreshFilesBtn" hx-get="/api/files/list" hx-include="#testSearchInput" hx-target="#yamlFileList" hx-swap="innerHTML" title="Refresh Files"><span class="material-symbols-outlined">sync</span></button>
         </div>
     </div>
     <div class="search-container">
         <span class="material-symbols-outlined search-icon">search</span>
         <input type="text" id="testSearchInput" name="q" placeholder="Search test cases..."
+               th:value="${q}"
                class="search-input"
                hx-get="/api/files/search" hx-trigger="keyup changed delay:200ms, search"
-               hx-target="#yamlFileList" hx-swap="innerHTML"/>
+               hx-target="#yamlFileList" hx-swap="innerHTML"
+               oninput="if(typeof onTestSearchInput==='function') onTestSearchInput(this.value);"/>
+        <button type="button" id="clearTestSearchBtn" class="clear-search-btn" onclick="clearTestSearch()" title="Clear filter"
+                th:style="${q != null and !q.isEmpty() ? 'display: inline-flex;' : 'display: none;'}">
+            <span class="material-symbols-outlined" style="font-size: 16px;">close</span>
+        </button>
     </div>
-    <div class="content-scroll" id="yamlFileList" th:fragment="yamlFileList" hx-get="/api/files/list" hx-trigger="refreshFiles from:body" hx-swap="innerHTML" data-active-tab="tests">
+    <div class="content-scroll" id="yamlFileList" th:fragment="yamlFileList" hx-get="/api/files/list" hx-include="#testSearchInput" hx-trigger="refreshFiles from:body" hx-swap="innerHTML" data-active-tab="tests">
         <div th:replace="~{fragments/test-selection :: yamlFileListContent}"></div>
     </div>
     <div class="panel-footer" style="padding: 10px 12px; border-top: 1px solid var(--border); display: flex; gap: 8px;">

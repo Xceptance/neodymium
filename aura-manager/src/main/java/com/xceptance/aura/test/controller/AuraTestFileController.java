@@ -71,10 +71,22 @@ public class AuraTestFileController
     }
 
     @GetMapping({"/api/files", "/api/files/list", "/list"})
-    public String getFilesListFragment(final HttpServletResponse response, final Model model)
+    public String getFilesListFragment(@RequestParam(value = "q", required = false, defaultValue = "") final String query,
+                                       final HttpServletResponse response,
+                                       final Model model)
     {
         response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        populateFileModel(model, fileService.getYamlFilesList());
+        if (query != null && !query.isBlank())
+        {
+            final List<YamlFileDto> filteredYaml = fileService.getFilteredYamlFilesList(query);
+            final List<String> filteredSteps = fileService.getFilteredStepsFilesList(query);
+            populateFileModel(model, filteredYaml);
+            model.addAttribute("stepsFiles", filteredSteps);
+        }
+        else
+        {
+            populateFileModel(model, fileService.getYamlFilesList());
+        }
         return "fragments/test-selection :: yamlFileListContent";
     }
 

@@ -396,7 +396,7 @@
 
         .search-input {
             width: 100%;
-            padding: 8px 12px 8px 34px;
+            padding: 8px 30px 8px 34px;
             background: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: var(--border-radius);
@@ -405,6 +405,29 @@
             font-size: 13px;
             outline: none;
             transition: var(--transition);
+        }
+
+        .search-container .clear-search-btn {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 2px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+
+        .search-container .clear-search-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.1);
         }
 
         .search-input:focus {

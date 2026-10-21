@@ -118,7 +118,15 @@ function loadFiles() {
                     }
                 };
                 document.addEventListener('htmx:afterSwap', listener);
-                htmx.ajax('GET', '/api/files/list?t=' + timestamp, { target: '#yamlFileList', swap: 'innerHTML' });
+                const searchInput = document.getElementById('testSearchInput');
+                const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
+                const activeQuery = (searchInput && searchInput.value.trim()) ? searchInput.value.trim() : (storedQuery ? storedQuery.trim() : '');
+                if (searchInput && !searchInput.value && activeQuery) {
+                    searchInput.value = activeQuery;
+                }
+                updateClearTestSearchBtn(activeQuery);
+                const targetUrl = activeQuery ? ('/api/files/search?q=' + encodeURIComponent(activeQuery) + '&t=' + timestamp) : ('/api/files/list?t=' + timestamp);
+                htmx.ajax('GET', targetUrl, { target: '#yamlFileList', swap: 'innerHTML' });
             } else {
                 window.initializedAlready = true;
                 syncCheckboxesFromState();
@@ -132,6 +140,53 @@ function loadFiles() {
     });
 }
 window.loadFiles = loadFiles;
+
+function onTestSearchInput(query) {
+    const trimmed = (query || '').trim();
+    if (typeof sessionStorage !== 'undefined') {
+        if (trimmed) {
+            sessionStorage.setItem('aura_test_search_query', trimmed);
+        } else {
+            sessionStorage.removeItem('aura_test_search_query');
+        }
+    }
+    updateClearTestSearchBtn(trimmed);
+}
+window.onTestSearchInput = onTestSearchInput;
+
+function updateClearTestSearchBtn(query) {
+    const clearBtn = document.getElementById('clearTestSearchBtn');
+    if (!clearBtn) return;
+    const searchInput = document.getElementById('testSearchInput');
+    const val = (query !== undefined && query !== null) ? query : (searchInput ? searchInput.value : '');
+    const hasQuery = (typeof val === 'string' ? val.trim() : String(val).trim()).length > 0;
+    clearBtn.style.display = hasQuery ? 'inline-flex' : 'none';
+}
+window.updateClearTestSearchBtn = updateClearTestSearchBtn;
+
+function clearTestSearch() {
+    const searchInput = document.getElementById('testSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('aura_test_search_query');
+    }
+    updateClearTestSearchBtn('');
+    if (window.history && window.history.replaceState) {
+        try {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('q')) {
+                url.searchParams.delete('q');
+                window.history.replaceState({}, '', url.toString());
+            }
+        } catch (e) {}
+    }
+    if (window.htmx) {
+        htmx.ajax('GET', '/api/files/list', { target: '#yamlFileList', swap: 'innerHTML' });
+    }
+}
+window.clearTestSearch = clearTestSearch;
 
 function syncCheckboxesFromState() {
     const fileContainers = document.querySelectorAll('.file-container');
