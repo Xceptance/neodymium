@@ -3858,7 +3858,7 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector targeting the element to assert attribute on");
         props.putObject("attribute").put("type", "string").put("description", "Name of the HTML attribute (e.g. placeholder, value, href, disabled, readonly, type, data-*)");
         props.putObject("expectedValue").put("type", "string").put("description", "Expected attribute value. If omitted, asserts that the attribute exists.");
-        props.putObject("exact").put("type", "boolean").put("description", "Whether attribute value match must be exact (default: true)");
+        props.putObject("exact").put("type", "boolean").put("description", "Whether attribute value match must be exact (default: false)");
         props.putObject("regex").put("type", "boolean").put("description", "Whether expectedValue is a regular expression pattern (default: false)");
         props.putObject("negated").put("type", "boolean").put("description", "Whether to assert attribute is absent or does not match expected value (default: false)");
 
@@ -3920,7 +3920,7 @@ public final class BrowserToolProvider
                     rawExpectedValue = null;
                 }
 
-                final boolean exact = call.arguments().path("exact").asBoolean(true);
+                final boolean exact = call.arguments().path("exact").asBoolean(false);
                 final boolean regex = call.arguments().path("regex").asBoolean(false);
                 final boolean negated = call.arguments().path("negated").asBoolean(false)
                         || call.arguments().path("not").asBoolean(false)

@@ -2140,5 +2140,110 @@ public class BrowserToolProviderStabilityTest
             WebDriverRunner.closeWebDriver();
         }
     }
+
+    @Test
+    public void testAssertAttributeDefaultsToSubstringMatch() throws Exception
+    {
+        final WebElement photoElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "div";
+                    }
+                    if ("getAttribute".equals(name))
+                    {
+                        final String attr = (String) args[0];
+                        if ("aria-label".equals(attr))
+                        {
+                            return "Hochgeladenes Foto mit dem Namen ifolor-image-1792587957645-7204938647068727335.jpg";
+                        }
+                        if ("role".equals(attr))
+                        {
+                            return "img";
+                        }
+                        return null;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("findElements".equals(name))
+                    {
+                        return List.of(photoElement);
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        return photoElement;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 100;
+        try
+        {
+            final AiTool tool = this.registry.getTool("assert_attribute").orElseThrow();
+
+            // 1. Calling assert_attribute WITHOUT exact parameter should default to substring matching and SUCCEED
+            final ObjectNode defaultSubstringArgs = MAPPER.createObjectNode();
+            defaultSubstringArgs.put("selector", "[role=\"img\"]");
+            defaultSubstringArgs.put("attribute", "aria-label");
+            defaultSubstringArgs.put("expectedValue", "Hochgeladenes Foto");
+            defaultSubstringArgs.put("regex", false);
+
+            final ToolResult defaultResult = tool.execute(new ToolCall("call-default-1", "assert_attribute", defaultSubstringArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, defaultResult.status());
+            final JsonNode defaultJson = MAPPER.readTree(defaultResult.content());
+            Assertions.assertEquals("SUCCESS", defaultJson.path("status").asText());
+            Assertions.assertFalse(defaultJson.path("exact").asBoolean());
+
+            // 2. Explicitly setting exact: true on partial substring should FAIL
+            final ObjectNode explicitExactFailArgs = MAPPER.createObjectNode();
+            explicitExactFailArgs.put("selector", "[role=\"img\"]");
+            explicitExactFailArgs.put("attribute", "aria-label");
+            explicitExactFailArgs.put("expectedValue", "Hochgeladenes Foto");
+            explicitExactFailArgs.put("exact", true);
+
+            Assertions.assertThrows(
+                    AssertionError.class,
+                    () -> tool.execute(new ToolCall("call-exact-fail", "assert_attribute", explicitExactFailArgs), null)
+            );
+
+            // 3. Explicitly setting exact: true with complete string value should SUCCEED
+            final ObjectNode explicitExactSuccessArgs = MAPPER.createObjectNode();
+            explicitExactSuccessArgs.put("selector", "[role=\"img\"]");
+            explicitExactSuccessArgs.put("attribute", "aria-label");
+            explicitExactSuccessArgs.put("expectedValue", "Hochgeladenes Foto mit dem Namen ifolor-image-1792587957645-7204938647068727335.jpg");
+            explicitExactSuccessArgs.put("exact", true);
+
+            final ToolResult exactSuccessResult = tool.execute(new ToolCall("call-exact-success", "assert_attribute", explicitExactSuccessArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, exactSuccessResult.status());
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+            WebDriverRunner.closeWebDriver();
+        }
+    }
 }
 
