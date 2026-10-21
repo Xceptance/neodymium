@@ -546,7 +546,15 @@ window.openYamlEditor = openYamlEditor;
 /* HTMX save request listeners */
 document.addEventListener('htmx:configRequest', function(evt) {
     if (evt.detail && evt.detail.elt && evt.detail.elt.id === 'saveYamlBtn') {
-        const yaml = compilePlaybookToYaml();
+        const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+            || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+        let yaml;
+        if (isRaw) {
+            const rawTextarea = document.getElementById('rawYamlTextarea');
+            yaml = rawTextarea ? rawTextarea.value : '';
+        } else {
+            yaml = compilePlaybookToYaml(true);
+        }
         const hiddenInput = document.getElementById('editorContent');
         if (hiddenInput) {
             hiddenInput.value = yaml;
@@ -577,6 +585,10 @@ async function saveYamlFile() {
             activeEditingFile = fileEl.getAttribute('data-file');
             window.activeEditingFile = activeEditingFile;
         }
+    }
+    if (activeEditingFile && activeEditingFile.includes(',')) {
+        activeEditingFile = activeEditingFile.split(',')[0].trim();
+        window.activeEditingFile = activeEditingFile;
     }
     if (!activeEditingFile) return;
 
@@ -1003,16 +1015,13 @@ window.addEventListener('popstate', function(evt) {
 document.addEventListener('DOMContentLoaded', function() {
     const fileSpan = document.getElementById('editorFileName');
     if (fileSpan) {
-        const dataFile = fileSpan.getAttribute('data-file');
+        let dataFile = fileSpan.getAttribute('data-file');
         if (dataFile && dataFile.trim() !== '') {
+            if (dataFile.includes(',')) {
+                dataFile = dataFile.split(',')[0].trim();
+            }
             activeEditingFile = dataFile.trim();
             window.activeEditingFile = activeEditingFile;
-            if (typeof compilePlaybookToYaml === 'function') {
-                initialEditorContent = compilePlaybookToYaml();
-            }
-            if (typeof checkEditorDirtyStatus === 'function') {
-                checkEditorDirtyStatus();
-            }
             if (typeof updateCenterLayout === 'function') {
                 updateCenterLayout();
             }
@@ -1105,9 +1114,11 @@ function setEditorMode(mode) {
     if (mode === 'raw') {
         if (visualContainer && rawPanel) {
             if (visualContainer.style.display !== 'none') {
-                const compiled = compilePlaybookToYaml();
-                if (rawTextarea) {
-                    rawTextarea.value = compiled;
+                if (typeof isEditorDirty === 'function' && isEditorDirty()) {
+                    const compiled = compilePlaybookToYaml(true);
+                    if (rawTextarea) {
+                        rawTextarea.value = compiled;
+                    }
                 }
             }
             visualContainer.style.display = 'none';
@@ -1135,6 +1146,18 @@ function setEditorMode(mode) {
             showToast("Cannot switch to Visual Editor: file contains YAML syntax errors.", "error");
             return;
         }
+
+        // If raw textarea has been modified while in raw mode, re-sync visual editor via POST /api/editor
+        if (currentEditorMode === 'raw' && rawTextarea && initialEditorContent && rawTextarea.value !== initialEditorContent && activeEditingFile) {
+            const cleanFile = activeEditingFile.split(',')[0].trim();
+            htmx.ajax('POST', '/api/editor', {
+                target: '#editorPanel',
+                swap: 'outerHTML',
+                values: { file: cleanFile, content: rawTextarea.value }
+            });
+            return;
+        }
+
         currentEditorMode = 'visual';
         window.currentEditorMode = 'visual';
         if (visualContainer && rawPanel) {
@@ -1371,7 +1394,8 @@ function initVisualPlaybookEditor() {
     });
 
     updateFragmentVariablesList();
-    compilePlaybookToYaml();
+    compilePlaybookToYaml(false);
+    updateAllLineNumbers();
 
     // Live typing & editing delegation for full Undo/Redo tracking
     const mainEditor = document.getElementById('visualEditorMain');
@@ -1388,17 +1412,21 @@ function initVisualPlaybookEditor() {
                     stepContent.setAttribute('data-raw', getStepRawText(stepContent));
                 }
                 updateFragmentVariablesList();
-                compilePlaybookToYaml();
+                compilePlaybookToYaml(true);
                 debouncedPushSnapshot();
             } else if (evt.target.classList.contains('var-key-input') || evt.target.classList.contains('cell-val')) {
-                compilePlaybookToYaml();
+                compilePlaybookToYaml(true);
                 debouncedPushSnapshot();
             }
         });
     }
 
     // Record initial baseline content and initialize undo/redo snapshot stack
-    const currentYaml = compilePlaybookToYaml();
+    const currentYaml = compilePlaybookToYaml(false);
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    if (rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
+        rawTextarea.value = currentYaml;
+    }
     if (!initialEditorContent || undoStack.length === 0) {
         initialEditorContent = currentYaml;
         if (typeof pushEditorSnapshot === 'function') {
@@ -1585,8 +1613,36 @@ function toggleFragmentVarScope(varName, scope) {
 }
 window.toggleFragmentVarScope = toggleFragmentVarScope;
 
-function compilePlaybookToYaml() {
+function compilePlaybookToYaml(syncToRaw = true) {
     let yaml = "# Neodymium YAML Test Data File\n\n";
+
+    // _properties block (Only for test playbooks, above steps)
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+    
+    if (!isFragmentFile) {
+        const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+        const propertiesTextarea = document.getElementById('playbookPropertiesTextarea');
+        if (propertiesPanel && propertiesPanel.style.display !== 'none' && propertiesTextarea) {
+            const rawProps = propertiesTextarea.value.trim();
+            if (rawProps) {
+                yaml += "_properties:\n";
+                const propLines = rawProps.split(/\r?\n/);
+                propLines.forEach(line => {
+                    const trimmedLine = line.trim();
+                    if (!trimmedLine) return;
+                    if (trimmedLine.startsWith('#')) {
+                        yaml += `  ${trimmedLine}\n`;
+                    } else if (line.startsWith('  ')) {
+                        yaml += `${line}\n`;
+                    } else {
+                        yaml += `  ${trimmedLine}\n`;
+                    }
+                });
+                yaml += "\n";
+            }
+        }
+    }
 
     function serializeStepRows(rows) {
         let block = "";
@@ -1651,9 +1707,6 @@ function compilePlaybookToYaml() {
         }
     }
 
-    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
-        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
-
     if (!isFragmentFile) {
         // data matrix (Only for test playbooks)
         const matrixTable = document.querySelector('#transposedGrid');
@@ -1693,7 +1746,7 @@ function compilePlaybookToYaml() {
         hiddenInput.value = yaml;
     }
     const rawTextarea = document.getElementById('rawYamlTextarea');
-    if (rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
+    if (syncToRaw && rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
         rawTextarea.value = yaml;
     }
     return yaml;
@@ -1802,6 +1855,46 @@ document.addEventListener('htmx:afterSwap', function(evt) {
 });
 
 /* Optional Block Management */
+function addPropertiesBlock() {
+    const panel = document.getElementById('playbookPropertiesPanel');
+    const btnContainer = document.getElementById('addPropertiesBtnContainer');
+    const textarea = document.getElementById('playbookPropertiesTextarea');
+    if (!panel) return;
+
+    panel.style.display = 'flex';
+    if (btnContainer) btnContainer.style.display = 'none';
+
+    if (textarea) {
+        if (!textarea.value.trim()) {
+            textarea.value = "neodymium.ai.tokenBudget.input: 1500000";
+        }
+        textarea.focus();
+    }
+    compilePlaybookToYaml(true);
+    debouncedPushSnapshot();
+}
+window.addPropertiesBlock = addPropertiesBlock;
+
+function removePropertiesBlock() {
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+    const panel = document.getElementById('playbookPropertiesPanel');
+    const btnContainer = document.getElementById('addPropertiesBtnContainer');
+    const textarea = document.getElementById('playbookPropertiesTextarea');
+    if (panel) panel.style.display = 'none';
+    if (btnContainer) btnContainer.style.display = isFragmentFile ? 'none' : 'block';
+    if (textarea) textarea.value = '';
+    compilePlaybookToYaml(true);
+    debouncedPushSnapshot();
+}
+window.removePropertiesBlock = removePropertiesBlock;
+
+function onPropertiesInput(textarea) {
+    compilePlaybookToYaml(true);
+    debouncedPushSnapshot();
+}
+window.onPropertiesInput = onPropertiesInput;
+
 function addBeforeBlock() {
     const panel = document.getElementById('beforeCodePanel');
     const btnContainer = document.getElementById('addBeforeBtnContainer');
@@ -4486,6 +4579,11 @@ function getEditorSnapshot() {
         }
     }
 
+    const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+    const hasProperties = propertiesPanel && propertiesPanel.style.display !== 'none';
+    const propertiesTextarea = document.getElementById('playbookPropertiesTextarea');
+    const propertiesYaml = propertiesTextarea ? propertiesTextarea.value : '';
+
     const beforePanel = document.getElementById('beforeCodePanel');
     const hasBefore = beforePanel && beforePanel.style.display !== 'none';
     const afterPanel = document.getElementById('afterCodePanel');
@@ -4511,6 +4609,8 @@ function getEditorSnapshot() {
     }
 
     return {
+        hasProperties,
+        propertiesYaml,
         hasBefore,
         hasAfter,
         beforeSteps: captureBlock('beforeStepsList'),
@@ -4558,6 +4658,17 @@ function restoreEditorSnapshot(snap) {
 
     const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
         || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+
+    const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+    const addPropertiesBtn = document.getElementById('addPropertiesBtnContainer');
+    const propertiesTextarea = document.getElementById('playbookPropertiesTextarea');
+    if (propertiesPanel && addPropertiesBtn) {
+        propertiesPanel.style.display = (snap.hasProperties && !isFragmentFile) ? 'flex' : 'none';
+        addPropertiesBtn.style.display = (isFragmentFile || snap.hasProperties) ? 'none' : 'block';
+        if (propertiesTextarea && typeof snap.propertiesYaml === 'string') {
+            propertiesTextarea.value = snap.propertiesYaml;
+        }
+    }
 
     const beforePanel = document.getElementById('beforeCodePanel');
     const addBeforeBtn = document.getElementById('addBeforeBtnContainer');

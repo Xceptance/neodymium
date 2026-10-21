@@ -24,6 +24,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
+import com.xceptance.neodymium.aura.AuraFileService.IssueSeverity;
+import com.xceptance.neodymium.aura.AuraFileService.ValidationIssue;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -776,5 +778,118 @@ public class AuraFileServiceTest
         Assertions.assertEquals("  - Verify the cart header is displayed.", mainSteps.get(4));
         Assertions.assertEquals("  - Verify the cart items section is displayed.", mainSteps.get(5));
         Assertions.assertEquals("Click checkout button", mainSteps.get(6));
+    }
+
+    @Test
+    public final void testParsePlaybookSectionsWithPropertiesAndMeta()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            _properties:
+              neodymium.ai.tokenBudget.input: 1500000
+              skipReplay: true
+
+            _meta:
+              author: "QA Team"
+              tags:
+                - smoke
+                - checkout
+
+            description: "Smoke test verifying guest checkout"
+
+            promptAddon:
+              visual: "Do not dismiss the modal before asserting banner"
+
+            steps: |
+              Open https://verla.xceptance.com
+              Click checkout button
+            """;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        Assertions.assertNotNull(sections);
+        Assertions.assertEquals(Boolean.FALSE, sections.get("hasError"));
+
+        final String propertiesYaml = (String) sections.get("propertiesYaml");
+        Assertions.assertNotNull(propertiesYaml, "Must extract propertiesYaml");
+        Assertions.assertTrue(propertiesYaml.contains("neodymium.ai.tokenBudget.input"), "Should contain tokenBudget property");
+        Assertions.assertTrue(propertiesYaml.contains("skipReplay"), "Should contain skipReplay property");
+
+        final String metaYaml = (String) sections.get("metaYaml");
+        Assertions.assertNotNull(metaYaml, "Must extract metaYaml");
+        Assertions.assertTrue(metaYaml.contains("author"), "Should contain author");
+        Assertions.assertTrue(metaYaml.contains("QA Team"), "Should contain QA Team");
+
+        Assertions.assertEquals("Smoke test verifying guest checkout", sections.get("description"));
+
+        final String promptAddonYaml = (String) sections.get("promptAddonYaml");
+        Assertions.assertNotNull(promptAddonYaml, "Must extract promptAddonYaml");
+        Assertions.assertTrue(promptAddonYaml.contains("visual"), "Should contain visual promptAddon");
+    }
+
+    @Test
+    public final void testParsePlaybookSectionsWithRootVariablesAndLifecycleBlocks()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            baseUrl: "https://verla.xceptance.com"
+            browser: "Chrome_1920x1080"
+
+            beforeAll: |
+              Set up test database
+
+            beforeEach: |
+              Clear browser cookies
+
+            steps: |
+              Open ${baseUrl}
+              Click search
+
+            afterEach: |
+              Log out user
+
+            afterAll: |
+              Tear down test database
+            """;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        Assertions.assertNotNull(sections);
+        Assertions.assertEquals(Boolean.FALSE, sections.get("hasError"));
+
+        @SuppressWarnings("unchecked")
+        final List<String> beforeSteps = (List<String>) sections.get("beforeSteps");
+        Assertions.assertNotNull(beforeSteps);
+        Assertions.assertTrue(beforeSteps.contains("Clear browser cookies"), "beforeSteps should contain beforeEach step");
+
+        @SuppressWarnings("unchecked")
+        final List<String> afterSteps = (List<String>) sections.get("afterSteps");
+        Assertions.assertNotNull(afterSteps);
+        Assertions.assertTrue(afterSteps.contains("Log out user"), "afterSteps should contain afterEach step");
+
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> rootVariables = (Map<String, Object>) sections.get("rootVariables");
+        Assertions.assertNotNull(rootVariables, "Must extract rootVariables");
+        Assertions.assertEquals("https://verla.xceptance.com", rootVariables.get("baseUrl"));
+        Assertions.assertEquals("Chrome_1920x1080", rootVariables.get("browser"));
+    }
+
+    @Test
+    public final void testValidateFileContentRecognizesRootVariablesAndProperties()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            baseUrl: "https://verla.xceptance.com"
+            _properties:
+              neodymium.ai.tokenBudget.input: 1000000
+
+            steps: |
+              Open ${baseUrl}
+              Observe consistency (visual)
+            """;
+
+        final List<ValidationIssue> issues = fileService.validateFileContent("test.yaml", content);
+        Assertions.assertNotNull(issues);
+        final boolean hasUndefinedVarError = issues.stream().anyMatch(issue ->
+                issue.severity() == IssueSeverity.ERROR && issue.message().contains("Undefined variable"));
+        Assertions.assertFalse(hasUndefinedVarError, "baseUrl defined at root level should not be flagged as undefined variable");
     }
 }

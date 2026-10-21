@@ -119,6 +119,40 @@
         <!-- Central Visual Editor Area -->
         <main class="editor-main-area" id="visualEditorMain">
 
+            <!-- Subtle Add '_properties:' Button Container (Only for test playbooks, not fragments) -->
+            <div id="addPropertiesBtnContainer" th:style="${(isFragment != null and isFragment) or (propertiesYaml != null and !#strings.isEmpty(propertiesYaml)) ? 'display: none;' : 'display: block;'}">
+                <button class="btn-add-section-block" onclick="addPropertiesBlock()">
+                    <span class="material-symbols-outlined">tune</span>
+                    <span>Add '_properties:' Block</span>
+                </button>
+            </div>
+
+            <!-- _properties: Section Code Panel -->
+            <div class="editor-code-panel" id="playbookPropertiesPanel" th:style="${propertiesYaml != null and !#strings.isEmpty(propertiesYaml) ? 'display: flex;' : 'display: none;'}">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent);">tune</span>
+                        Playbook Properties (_properties:)
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            Override token budgets, timeouts, or browser profiles
+                        </div>
+                        <button type="button" class="btn-remove-section-block" onclick="removePropertiesBlock()">
+                            <span class="material-symbols-outlined">delete</span>
+                            Remove Block
+                        </button>
+                    </div>
+                </div>
+                <div style="padding: 12px 16px;">
+                    <textarea id="playbookPropertiesTextarea" spellcheck="false" class="properties-yaml-textarea"
+                              rows="4"
+                              placeholder="neodymium.ai.tokenBudget.input: 1500000&#10;skipReplay: true"
+                              oninput="onPropertiesInput(this)"
+                              th:text="${propertiesYaml}"></textarea>
+                </div>
+            </div>
+
             <!-- Subtle Add 'before:' Button Container -->
             <div id="addBeforeBtnContainer" th:style="${(isFragment != null and isFragment) or (beforeSteps != null and !#lists.isEmpty(beforeSteps)) ? 'display: none;' : 'display: block;'}">
                 <button class="btn-add-section-block" onclick="addBeforeBlock()">

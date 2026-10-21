@@ -2919,6 +2919,28 @@
     outline: none;
 }
 
+.properties-yaml-textarea {
+    width: 100%;
+    min-height: 80px;
+    box-sizing: border-box;
+    padding: 10px 14px;
+    font-family: var(--font-mono, 'JetBrains Mono', monospace);
+    font-size: 12.5px;
+    line-height: 1.5;
+    background: var(--bg-main);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--border-radius);
+    resize: vertical;
+    outline: none;
+    tab-size: 2;
+    -moz-tab-size: 2;
+}
+
+.properties-yaml-textarea:focus {
+    border-color: var(--accent);
+}
+
 .editor-code-panel {
     background: var(--bg-sidebar);
     border: 1px solid var(--border);
