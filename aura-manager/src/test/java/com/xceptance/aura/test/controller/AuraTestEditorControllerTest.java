@@ -302,4 +302,59 @@ public class AuraTestEditorControllerTest
         Assertions.assertEquals("ERROR", response.getBody().get("status"));
         Assertions.assertEquals("Destination file already exists: exists.yaml", response.getBody().get("error"));
     }
+
+    @Test
+    public final void testGetEditorFragmentPopulatesPropertiesAndMetaYaml() throws Exception
+    {
+        final Model model = new ConcurrentModel();
+        final String sampleYaml = "_properties:\n  timeout: 5000\nsteps:\n  - Open https://example.com";
+        Mockito.when(fileService.readYamlFileContent("props.yaml")).thenReturn(sampleYaml);
+        Mockito.when(fileService.parsePlaybookSections(sampleYaml)).thenReturn(Map.of(
+            "beforeSteps", List.of(),
+            "mainSteps", List.of("Open https://example.com"),
+            "afterSteps", List.of(),
+            "dataMatrix", List.of(),
+            "varKeys", List.of(),
+            "propertiesYaml", "timeout: 5000",
+            "propertiesList", List.of(Map.of("key", "timeout", "value", "5000")),
+            "metaYaml", "author: Antigravity",
+            "description", "My test description"
+        ));
+        Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of());
+
+        final String view = controller.getEditorFragment("props.yaml", null, model);
+
+        Assertions.assertEquals("fragments/editor :: editorPanelContent", view);
+        Assertions.assertEquals("props.yaml", model.getAttribute("activeEditingFile"));
+        Assertions.assertEquals("timeout: 5000", model.getAttribute("propertiesYaml"));
+        Assertions.assertEquals(List.of(Map.of("key", "timeout", "value", "5000")), model.getAttribute("propertiesList"));
+        Assertions.assertEquals("author: Antigravity", model.getAttribute("metaYaml"));
+        Assertions.assertEquals("My test description", model.getAttribute("description"));
+    }
+
+    @Test
+    public final void testPostEditorFragmentWithCustomContent() throws Exception
+    {
+        final Model model = new ConcurrentModel();
+        final String customYaml = "_properties:\n  retries: 3\nsteps:\n  - Click button";
+        Mockito.when(fileService.parsePlaybookSections(customYaml)).thenReturn(Map.of(
+            "beforeSteps", List.of(),
+            "mainSteps", List.of("Click button"),
+            "afterSteps", List.of(),
+            "dataMatrix", List.of(),
+            "varKeys", List.of(),
+            "propertiesYaml", "retries: 3",
+            "propertiesList", List.of(Map.of("key", "retries", "value", "3"))
+        ));
+        Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of());
+
+        final String view = controller.getEditorFragment("custom.yaml", customYaml, model);
+
+        Assertions.assertEquals("fragments/editor :: editorPanelContent", view);
+        Assertions.assertEquals("custom.yaml", model.getAttribute("activeEditingFile"));
+        Assertions.assertEquals(customYaml, model.getAttribute("editingFileContent"));
+        Assertions.assertEquals("retries: 3", model.getAttribute("propertiesYaml"));
+        Assertions.assertEquals(List.of(Map.of("key", "retries", "value", "3")), model.getAttribute("propertiesList"));
+        Mockito.verify(fileService, Mockito.never()).readYamlFileContent(Mockito.anyString());
+    }
 }
