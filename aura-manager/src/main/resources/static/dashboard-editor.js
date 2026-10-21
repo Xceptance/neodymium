@@ -1622,22 +1622,23 @@ function compilePlaybookToYaml(syncToRaw = true) {
     
     if (!isFragmentFile) {
         const propertiesPanel = document.getElementById('playbookPropertiesPanel');
-        const propertiesTextarea = document.getElementById('playbookPropertiesTextarea');
-        if (propertiesPanel && propertiesPanel.style.display !== 'none' && propertiesTextarea) {
-            const rawProps = propertiesTextarea.value.trim();
-            if (rawProps) {
+        if (propertiesPanel && propertiesPanel.style.display !== 'none') {
+            const propRows = document.querySelectorAll('#propertiesTableBody tr.property-row');
+            const validProps = [];
+            propRows.forEach(tr => {
+                const keyInput = tr.querySelector('.property-key-input');
+                const valInput = tr.querySelector('.property-val-input');
+                const k = keyInput ? keyInput.value.trim() : '';
+                const v = valInput ? valInput.value.trim() : '';
+                if (k) {
+                    validProps.push({ key: k, value: v });
+                }
+            });
+
+            if (validProps.length > 0) {
                 yaml += "_properties:\n";
-                const propLines = rawProps.split(/\r?\n/);
-                propLines.forEach(line => {
-                    const trimmedLine = line.trim();
-                    if (!trimmedLine) return;
-                    if (trimmedLine.startsWith('#')) {
-                        yaml += `  ${trimmedLine}\n`;
-                    } else if (line.startsWith('  ')) {
-                        yaml += `${line}\n`;
-                    } else {
-                        yaml += `  ${trimmedLine}\n`;
-                    }
+                validProps.forEach(p => {
+                    yaml += `  ${p.key}: ${p.value}\n`;
                 });
                 yaml += "\n";
             }
@@ -1855,23 +1856,85 @@ document.addEventListener('htmx:afterSwap', function(evt) {
 });
 
 /* Optional Block Management */
+function addPropertyRow(key = '', value = '') {
+    const tbody = document.getElementById('propertiesTableBody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.className = 'property-row';
+
+    const tdKey = document.createElement('td');
+    const inputKey = document.createElement('input');
+    inputKey.type = 'text';
+    inputKey.className = 'property-key-input';
+    inputKey.value = key || '';
+    inputKey.placeholder = 'e.g. skipReplay';
+    inputKey.setAttribute('list', 'propertyKeySuggestions');
+    inputKey.oninput = () => {
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    };
+    tdKey.appendChild(inputKey);
+
+    const tdVal = document.createElement('td');
+    const inputVal = document.createElement('input');
+    inputVal.type = 'text';
+    inputVal.className = 'property-val-input';
+    inputVal.value = value !== undefined && value !== null ? String(value) : '';
+    inputVal.placeholder = 'Value';
+    inputVal.oninput = () => {
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    };
+    tdVal.appendChild(inputVal);
+
+    const tdAction = document.createElement('td');
+    tdAction.className = 'property-action-col';
+    const btnRemove = document.createElement('button');
+    btnRemove.type = 'button';
+    btnRemove.className = 'btn-remove-property';
+    btnRemove.title = 'Remove Property';
+    btnRemove.onclick = function() { removePropertyRow(this); };
+    btnRemove.innerHTML = '<span class="material-symbols-outlined">delete</span>';
+    tdAction.appendChild(btnRemove);
+
+    tr.appendChild(tdKey);
+    tr.appendChild(tdVal);
+    tr.appendChild(tdAction);
+    tbody.appendChild(tr);
+
+    compilePlaybookToYaml(true);
+    debouncedPushSnapshot();
+    if (!key) {
+        inputKey.focus();
+    }
+}
+window.addPropertyRow = addPropertyRow;
+
+function removePropertyRow(btn) {
+    const tr = btn.closest('.property-row');
+    if (tr) {
+        tr.remove();
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    }
+}
+window.removePropertyRow = removePropertyRow;
+
 function addPropertiesBlock() {
     const panel = document.getElementById('playbookPropertiesPanel');
     const btnContainer = document.getElementById('addPropertiesBtnContainer');
-    const textarea = document.getElementById('playbookPropertiesTextarea');
+    const tbody = document.getElementById('propertiesTableBody');
     if (!panel) return;
 
     panel.style.display = 'flex';
     if (btnContainer) btnContainer.style.display = 'none';
 
-    if (textarea) {
-        if (!textarea.value.trim()) {
-            textarea.value = "neodymium.ai.tokenBudget.input: 1500000";
-        }
-        textarea.focus();
+    if (tbody && tbody.querySelectorAll('tr.property-row').length === 0) {
+        addPropertyRow('neodymium.ai.tokenBudget.input', '1500000');
+    } else {
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
     }
-    compilePlaybookToYaml(true);
-    debouncedPushSnapshot();
 }
 window.addPropertiesBlock = addPropertiesBlock;
 
@@ -1880,20 +1943,14 @@ function removePropertiesBlock() {
         || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
     const panel = document.getElementById('playbookPropertiesPanel');
     const btnContainer = document.getElementById('addPropertiesBtnContainer');
-    const textarea = document.getElementById('playbookPropertiesTextarea');
+    const tbody = document.getElementById('propertiesTableBody');
     if (panel) panel.style.display = 'none';
     if (btnContainer) btnContainer.style.display = isFragmentFile ? 'none' : 'block';
-    if (textarea) textarea.value = '';
+    if (tbody) tbody.innerHTML = '';
     compilePlaybookToYaml(true);
     debouncedPushSnapshot();
 }
 window.removePropertiesBlock = removePropertiesBlock;
-
-function onPropertiesInput(textarea) {
-    compilePlaybookToYaml(true);
-    debouncedPushSnapshot();
-}
-window.onPropertiesInput = onPropertiesInput;
 
 function addBeforeBlock() {
     const panel = document.getElementById('beforeCodePanel');
@@ -4581,8 +4638,15 @@ function getEditorSnapshot() {
 
     const propertiesPanel = document.getElementById('playbookPropertiesPanel');
     const hasProperties = propertiesPanel && propertiesPanel.style.display !== 'none';
-    const propertiesTextarea = document.getElementById('playbookPropertiesTextarea');
-    const propertiesYaml = propertiesTextarea ? propertiesTextarea.value : '';
+    const propertyRows = [];
+    const propRows = document.querySelectorAll('#propertiesTableBody tr.property-row');
+    propRows.forEach(tr => {
+        const keyInput = tr.querySelector('.property-key-input');
+        const valInput = tr.querySelector('.property-val-input');
+        if (keyInput && valInput) {
+            propertyRows.push({ key: keyInput.value, value: valInput.value });
+        }
+    });
 
     const beforePanel = document.getElementById('beforeCodePanel');
     const hasBefore = beforePanel && beforePanel.style.display !== 'none';
@@ -4610,7 +4674,7 @@ function getEditorSnapshot() {
 
     return {
         hasProperties,
-        propertiesYaml,
+        propertyRows,
         hasBefore,
         hasAfter,
         beforeSteps: captureBlock('beforeStepsList'),
@@ -4661,12 +4725,15 @@ function restoreEditorSnapshot(snap) {
 
     const propertiesPanel = document.getElementById('playbookPropertiesPanel');
     const addPropertiesBtn = document.getElementById('addPropertiesBtnContainer');
-    const propertiesTextarea = document.getElementById('playbookPropertiesTextarea');
+    const tbody = document.getElementById('propertiesTableBody');
     if (propertiesPanel && addPropertiesBtn) {
         propertiesPanel.style.display = (snap.hasProperties && !isFragmentFile) ? 'flex' : 'none';
         addPropertiesBtn.style.display = (isFragmentFile || snap.hasProperties) ? 'none' : 'block';
-        if (propertiesTextarea && typeof snap.propertiesYaml === 'string') {
-            propertiesTextarea.value = snap.propertiesYaml;
+        if (tbody && Array.isArray(snap.propertyRows)) {
+            tbody.innerHTML = '';
+            snap.propertyRows.forEach(p => {
+                addPropertyRow(p.key, p.value);
+            });
         }
     }
 

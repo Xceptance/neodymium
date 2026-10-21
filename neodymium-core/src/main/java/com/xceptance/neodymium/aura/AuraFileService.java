@@ -46,6 +46,7 @@ import java.util.stream.Stream;
 import org.neodymium.ai.util.AtomicFileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -1379,7 +1380,10 @@ public final class AuraFileService
             try
             {
                 final String normalizedContent = normalizeBlockScalars(content);
-                final Yaml yaml = new Yaml();
+                final DumperOptions dumperOptions = new DumperOptions();
+                dumperOptions.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+                dumperOptions.setPrettyFlow(true);
+                final Yaml yaml = new Yaml(dumperOptions);
                 final Object loaded = yaml.load(normalizedContent);
                 if (loaded instanceof Map)
                 {
@@ -1447,10 +1451,25 @@ public final class AuraFileService
 
                     // Root properties (_properties or properties)
                     final Object rawProperties = root.containsKey("_properties") ? root.get("_properties") : root.get("properties");
+                    final List<Map<String, String>> propertiesList = new ArrayList<>();
                     if (rawProperties != null)
                     {
                         result.put("properties", rawProperties);
-                        if (rawProperties instanceof Map<?, ?> || rawProperties instanceof List<?>)
+                        if (rawProperties instanceof Map<?, ?> map)
+                        {
+                            for (final Map.Entry<?, ?> entry : map.entrySet())
+                            {
+                                if (entry.getKey() != null)
+                                {
+                                    final Map<String, String> propEntry = new LinkedHashMap<>();
+                                    propEntry.put("key", String.valueOf(entry.getKey()));
+                                    propEntry.put("value", entry.getValue() != null ? String.valueOf(entry.getValue()) : "");
+                                    propertiesList.add(propEntry);
+                                }
+                            }
+                            result.put("propertiesYaml", yaml.dump(rawProperties).trim());
+                        }
+                        else if (rawProperties instanceof List<?>)
                         {
                             result.put("propertiesYaml", yaml.dump(rawProperties).trim());
                         }
@@ -1459,6 +1478,7 @@ public final class AuraFileService
                             result.put("propertiesYaml", String.valueOf(rawProperties).trim());
                         }
                     }
+                    result.put("propertiesList", propertiesList);
 
                     // Root metadata (_meta or meta)
                     final Object rawMeta = root.containsKey("_meta") ? root.get("_meta") : root.get("meta");
@@ -1670,6 +1690,8 @@ public final class AuraFileService
             result.put("error", null);
         }
 
+        result.putIfAbsent("propertiesList", List.of());
+        result.putIfAbsent("propertiesYaml", "");
         result.put("beforeSteps", beforeSteps);
         result.put("mainSteps", mainSteps);
         result.put("afterSteps", afterSteps);

@@ -2044,20 +2044,23 @@ public final class AuraManagerEditorUiTest
         open("http://localhost:" + this.port + "/?file=" + playbookFile);
         $("#editorPanel").shouldBe(Condition.visible);
 
-        // Visual properties panel should be visible with the properties content
+        // Visual properties panel should be visible with key-value table rows
         final SelenideElement propsPanel = $("#playbookPropertiesPanel");
-        final SelenideElement propsTextarea = $("#playbookPropertiesTextarea");
         propsPanel.shouldBe(Condition.visible);
-        propsTextarea.shouldBe(Condition.visible);
-        Assertions.assertTrue(propsTextarea.getValue().contains("neodymium.ai.tokenBudget.input: 1500000"),
-            "Properties textarea should display parsed properties, but was: " + propsTextarea.getValue());
-        Assertions.assertTrue(propsTextarea.getValue().contains("skipReplay: true"),
-            "Properties textarea should display skipReplay, but was: " + propsTextarea.getValue());
 
-        // Raw YAML textarea must also contain _properties before any edit
+        final ElementsCollection propRows = $$("#propertiesTableBody tr.property-row");
+        propRows.shouldHave(CollectionCondition.size(2));
+        Assertions.assertEquals("neodymium.ai.tokenBudget.input", propRows.get(0).$(".property-key-input").getValue());
+        Assertions.assertEquals("1500000", propRows.get(0).$(".property-val-input").getValue());
+        Assertions.assertEquals("skipReplay", propRows.get(1).$(".property-key-input").getValue());
+        Assertions.assertEquals("true", propRows.get(1).$(".property-val-input").getValue());
+
+        // Raw YAML textarea must also contain _properties before any edit without JSON braces
         final SelenideElement rawYamlTextarea = $("#rawYamlTextarea");
         Assertions.assertTrue(rawYamlTextarea.getValue().contains("_properties:"),
             "Raw YAML textarea should contain _properties on initial load, but was: " + rawYamlTextarea.getValue());
+        Assertions.assertFalse(rawYamlTextarea.getValue().contains("{neodymium.ai"),
+            "Raw YAML must not contain flow JSON curly braces, but was: " + rawYamlTextarea.getValue());
 
         // Switch to Raw mode without edits -> _properties must be preserved
         $("#btnModeRaw").shouldBe(Condition.visible).click();
@@ -2090,6 +2093,8 @@ public final class AuraManagerEditorUiTest
             "Saved YAML must contain the tokenBudget property, but was: " + savedYaml);
         Assertions.assertTrue(savedYaml.contains("and explore"),
             "Saved YAML must contain edited step text, but was: " + savedYaml);
+        Assertions.assertFalse(savedYaml.contains("{neodymium.ai"),
+            "Saved YAML must not contain flow JSON curly braces, but was: " + savedYaml);
     }
 
     @Test
@@ -2109,7 +2114,6 @@ public final class AuraManagerEditorUiTest
         // Initially, properties panel should not be visible, and the Add Properties button should be visible
         final SelenideElement propsPanel = $("#playbookPropertiesPanel");
         final SelenideElement addPropsContainer = $("#addPropertiesBtnContainer");
-        final SelenideElement propsTextarea = $("#playbookPropertiesTextarea");
 
         propsPanel.shouldNotBe(Condition.visible);
         addPropsContainer.shouldBe(Condition.visible);
@@ -2117,28 +2121,40 @@ public final class AuraManagerEditorUiTest
         // Click Add '_properties:' Block button
         addPropsContainer.$(".btn-add-section-block").shouldBe(Condition.visible).click();
 
-        // Panel should now be visible with default template
+        // Panel should now be visible with default property row
         propsPanel.shouldBe(Condition.visible);
         addPropsContainer.shouldNotBe(Condition.visible);
-        propsTextarea.shouldBe(Condition.visible);
-        Assertions.assertTrue(propsTextarea.getValue().contains("neodymium.ai.tokenBudget.input: 1500000"),
-            "Default property template should be inserted into textarea, but was: " + propsTextarea.getValue());
+        final ElementsCollection initialRows = $$("#propertiesTableBody tr.property-row");
+        initialRows.shouldHave(CollectionCondition.size(1));
+        Assertions.assertEquals("neodymium.ai.tokenBudget.input", initialRows.get(0).$(".property-key-input").getValue());
+        Assertions.assertEquals("1500000", initialRows.get(0).$(".property-val-input").getValue());
 
-        // Update properties textarea content with custom properties
-        propsTextarea.clear();
-        propsTextarea.sendKeys("custom.test.timeout: 45000\nskipReplay: true");
+        // Update default property row
+        initialRows.get(0).$(".property-key-input").setValue("custom.test.timeout");
+        initialRows.get(0).$(".property-val-input").setValue("45000");
+
+        // Add a second property row
+        $(".btn-add-property-row").shouldBe(Condition.visible).click();
+        final ElementsCollection updatedRows = $$("#propertiesTableBody tr.property-row");
+        updatedRows.shouldHave(CollectionCondition.size(2));
+        updatedRows.get(1).$(".property-key-input").setValue("skipReplay");
+        updatedRows.get(1).$(".property-val-input").setValue("true");
 
         // Save playbook in visual mode
         $("#saveYamlBtn").shouldBe(Condition.visible).click();
         $(".toast.success").shouldBe(Condition.visible);
 
-        // Verify saved file on disk contains custom properties
+        // Verify saved file on disk contains custom properties in block style
         final String savedWithProps = this.fileService.readYamlFileContent(playbookFile);
         Assertions.assertNotNull(savedWithProps);
         Assertions.assertTrue(savedWithProps.contains("_properties:"),
             "Saved YAML must contain _properties block: " + savedWithProps);
         Assertions.assertTrue(savedWithProps.contains("custom.test.timeout: 45000"),
             "Saved YAML must contain custom property: " + savedWithProps);
+        Assertions.assertTrue(savedWithProps.contains("skipReplay: true"),
+            "Saved YAML must contain skipReplay: " + savedWithProps);
+        Assertions.assertFalse(savedWithProps.contains("{custom.test.timeout"),
+            "Saved YAML must not contain JSON curly braces: " + savedWithProps);
 
         // Click Remove Block button
         propsPanel.$(".btn-remove-section-block").shouldBe(Condition.visible).click();

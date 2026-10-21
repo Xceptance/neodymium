@@ -813,6 +813,16 @@ public class AuraFileServiceTest
         Assertions.assertNotNull(propertiesYaml, "Must extract propertiesYaml");
         Assertions.assertTrue(propertiesYaml.contains("neodymium.ai.tokenBudget.input"), "Should contain tokenBudget property");
         Assertions.assertTrue(propertiesYaml.contains("skipReplay"), "Should contain skipReplay property");
+        Assertions.assertFalse(propertiesYaml.startsWith("{"), "propertiesYaml must use clean block style, not flow JSON: " + propertiesYaml);
+
+        @SuppressWarnings("unchecked")
+        final List<Map<String, String>> propertiesList = (List<Map<String, String>>) sections.get("propertiesList");
+        Assertions.assertNotNull(propertiesList, "Must extract propertiesList");
+        Assertions.assertEquals(2, propertiesList.size());
+        Assertions.assertEquals("neodymium.ai.tokenBudget.input", propertiesList.get(0).get("key"));
+        Assertions.assertEquals("1500000", propertiesList.get(0).get("value"));
+        Assertions.assertEquals("skipReplay", propertiesList.get(1).get("key"));
+        Assertions.assertEquals("true", propertiesList.get(1).get("value"));
 
         final String metaYaml = (String) sections.get("metaYaml");
         Assertions.assertNotNull(metaYaml, "Must extract metaYaml");

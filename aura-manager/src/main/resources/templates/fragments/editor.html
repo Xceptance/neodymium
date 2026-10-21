@@ -120,7 +120,7 @@
         <main class="editor-main-area" id="visualEditorMain">
 
             <!-- Subtle Add '_properties:' Button Container (Only for test playbooks, not fragments) -->
-            <div id="addPropertiesBtnContainer" th:style="${(isFragment != null and isFragment) or (propertiesYaml != null and !#strings.isEmpty(propertiesYaml)) ? 'display: none;' : 'display: block;'}">
+            <div id="addPropertiesBtnContainer" th:style="${(isFragment != null and isFragment) or ((propertiesList != null and !#lists.isEmpty(propertiesList)) or (propertiesYaml != null and !#strings.isEmpty(propertiesYaml))) ? 'display: none;' : 'display: block;'}">
                 <button class="btn-add-section-block" onclick="addPropertiesBlock()">
                     <span class="material-symbols-outlined">tune</span>
                     <span>Add '_properties:' Block</span>
@@ -128,7 +128,7 @@
             </div>
 
             <!-- _properties: Section Code Panel -->
-            <div class="editor-code-panel" id="playbookPropertiesPanel" th:style="${propertiesYaml != null and !#strings.isEmpty(propertiesYaml) ? 'display: flex;' : 'display: none;'}">
+            <div class="editor-code-panel" id="playbookPropertiesPanel" th:style="${(propertiesList != null and !#lists.isEmpty(propertiesList)) or (propertiesYaml != null and !#strings.isEmpty(propertiesYaml)) ? 'display: flex;' : 'display: none;'}">
                 <div class="panel-header">
                     <div class="panel-title">
                         <span class="material-symbols-outlined" style="font-size: 18px; color: var(--accent);">tune</span>
@@ -145,11 +145,51 @@
                     </div>
                 </div>
                 <div style="padding: 12px 16px;">
-                    <textarea id="playbookPropertiesTextarea" spellcheck="false" class="properties-yaml-textarea"
-                              rows="4"
-                              placeholder="neodymium.ai.tokenBudget.input: 1500000&#10;skipReplay: true"
-                              oninput="onPropertiesInput(this)"
-                              th:text="${propertiesYaml}"></textarea>
+                    <!-- Autocomplete suggestions for common Neodymium properties -->
+                    <datalist id="propertyKeySuggestions">
+                        <option value="neodymium.ai.tokenBudget.input">
+                        <option value="neodymium.ai.tokenBudget.output">
+                        <option value="neodymium.ai.maxStepsPerRun">
+                        <option value="skipReplay">
+                        <option value="browser">
+                        <option value="neodymium.url">
+                        <option value="neodymium.ai.model">
+                        <option value="neodymium.ai.temperature">
+                        <option value="neodymium.ai.timeout">
+                    </datalist>
+
+                    <div class="properties-table-container">
+                        <table class="properties-editor-table" id="playbookPropertiesTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 50%;">Property Name (Key)</th>
+                                    <th style="width: 45%;">Value</th>
+                                    <th style="width: 5%; text-align: center;"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="propertiesTableBody">
+                                <th:block th:if="${propertiesList != null and !#lists.isEmpty(propertiesList)}">
+                                    <tr th:each="prop : ${propertiesList}" class="property-row">
+                                        <td>
+                                            <input type="text" class="property-key-input" th:value="${prop.get('key')}" placeholder="e.g. skipReplay" list="propertyKeySuggestions" oninput="compilePlaybookToYaml()" />
+                                        </td>
+                                        <td>
+                                            <input type="text" class="property-val-input" th:value="${prop.get('value')}" placeholder="Value" oninput="compilePlaybookToYaml()" />
+                                        </td>
+                                        <td class="property-action-col">
+                                            <button type="button" class="btn-remove-property" title="Remove Property" onclick="removePropertyRow(this)">
+                                                <span class="material-symbols-outlined">delete</span>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </th:block>
+                            </tbody>
+                        </table>
+                        <button type="button" class="btn-add-property-row" onclick="addPropertyRow('', '')">
+                            <span class="material-symbols-outlined" style="font-size: 15px;">add</span>
+                            <span>Add Property</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
