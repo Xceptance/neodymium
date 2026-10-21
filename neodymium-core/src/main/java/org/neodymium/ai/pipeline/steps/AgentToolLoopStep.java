@@ -566,13 +566,17 @@ public final class AgentToolLoopStep implements PipelineStep
                         ToolDefinition.formatTools(availableTools));
             }
 
+            final int turnTimeoutSeconds = AiConfiguration.getInstance().getInt(
+                    "neodymium.ai.execution.timeoutSeconds",
+                    AiConfiguration.getInstance().getInt("neodymium.ai.execution.timeout", 30));
+
             final LlmRequest request = new LlmRequest(
                     conversation,
                     availableTools,
                     attachments,
                     ResponseSchema.TEXT,
                     0.0,
-                    30,
+                    turnTimeoutSeconds,
                     reasoningEffort
             );
 

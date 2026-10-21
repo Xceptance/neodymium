@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 import org.neodymium.ai.client.ReasoningEffort;
 import org.neodymium.ai.model.ContextLevel;
 import org.slf4j.Logger;
@@ -178,7 +179,7 @@ public final class AiConfiguration
         return key.toLowerCase().replace(".", "").replace("_", "");
     }
 
-    private final Map<String, String> normalizedFileProps = new java.util.concurrent.ConcurrentHashMap<>();
+    private final Map<String, String> normalizedFileProps = new ConcurrentHashMap<>();
 
     private static final Logger LOG = LoggerFactory.getLogger(AiConfiguration.class);
 
@@ -296,13 +297,25 @@ public final class AiConfiguration
             return resolvePlaceholders(sysProp);
         }
 
+        final String targetNormalized = normalizeKey(key);
+        if (key.startsWith("neodymium"))
+        {
+            for (final Map.Entry<Object, Object> sysEntry : System.getProperties().entrySet())
+            {
+                final String sysKey = String.valueOf(sysEntry.getKey());
+                if (sysKey.startsWith("neodymium.ai") && normalizeKey(sysKey).equals(targetNormalized))
+                {
+                    return resolvePlaceholders(String.valueOf(sysEntry.getValue()));
+                }
+            }
+        }
+
         final String exactValue = this.properties.getProperty(key);
         if (exactValue != null)
         {
             return resolvePlaceholders(exactValue);
         }
 
-        final String targetNormalized = normalizeKey(key);
         final String cachedNormalizedName = this.normalizedFileProps.get(targetNormalized);
         if (cachedNormalizedName != null)
         {
@@ -310,18 +323,6 @@ public final class AiConfiguration
             if (cachedVal != null)
             {
                 return resolvePlaceholders(cachedVal);
-            }
-        }
-
-        if (key.startsWith("neodymium"))
-        {
-            for (final java.util.Map.Entry<Object, Object> sysEntry : System.getProperties().entrySet())
-            {
-                final String sysKey = String.valueOf(sysEntry.getKey());
-                if (sysKey.startsWith("neodymium.ai") && normalizeKey(sysKey).equals(targetNormalized))
-                {
-                    return resolvePlaceholders(String.valueOf(sysEntry.getValue()));
-                }
             }
         }
 
@@ -457,10 +458,15 @@ public final class AiConfiguration
     }
 
     /**
-     * Resolves timeout seconds for a specific role, falling back to global default.
+     * Resolves the per-request HTTP network timeout in seconds for a specific AI role, falling back to global default.
+     * <p>
+     * Note: This timeout governs individual, single-call HTTP network operations to the LLM backend (e.g. for one-shot
+     * batch tasks like verification, linter, or assertion calls). It is distinct from {@link #getStepTimeoutSeconds()},
+     * which defines the total multi-turn wall-clock timeout ceiling across all turns of an agent step.
+     * </p>
      *
-     * @param role the execution role
-     * @return the resolved timeout in seconds
+     * @param role the execution role (e.g., "execution", "judge", "linter", "verification")
+     * @return the resolved per-request timeout in seconds (default: 180s for batch tasks, or role override)
      */
     public int getTimeoutSeconds(final String role)
     {
@@ -1245,15 +1251,16 @@ public final class AiConfiguration
      }
 
     /**
-     * Resolves the wall-clock timeout in seconds for an individual agent step execution loop.
-     * Default fallback is 60 seconds (or global timeout if configured).
+     * Resolves the cumulative wall-clock timeout in seconds for an individual agent step execution loop
+     * across all reasoning turns, LLM calls, and browser tool interactions.
+     * Default fallback is 120 seconds (or global timeout if configured).
      *
      * @return step timeout in seconds
      */
     public int getStepTimeoutSeconds()
     {
-        final int val = getInt("neodymium.ai.step.timeoutSeconds", getInt("neodymium.ai.timeoutSeconds", 60));
-        return val > 0 ? val : 60;
+        final int val = getInt("neodymium.ai.step.timeoutSeconds", getInt("neodymium.ai.timeoutSeconds", 120));
+        return val > 0 ? val : 120;
     }
 
     /**

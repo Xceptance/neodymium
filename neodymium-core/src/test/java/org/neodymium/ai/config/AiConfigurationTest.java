@@ -180,6 +180,32 @@ public class AiConfigurationTest
     }
 
     @Test
+    public void testStepTimeoutSecondsResolution()
+    {
+        System.clearProperty("neodymium.ai.step.timeoutSeconds");
+        System.clearProperty("neodymium.ai.step.timeout.seconds");
+        System.clearProperty("neodymium.ai.timeoutSeconds");
+        AiConfiguration.resetInstance();
+
+        final AiConfiguration defaultConfig = AiConfiguration.getInstance();
+        assertEquals(120, defaultConfig.getStepTimeoutSeconds(), "Step timeout should default to 120 seconds.");
+
+        System.setProperty("neodymium.ai.step.timeoutSeconds", "75");
+        AiConfiguration.resetInstance();
+        final AiConfiguration customConfig = AiConfiguration.getInstance();
+        assertEquals(75, customConfig.getStepTimeoutSeconds(), "Step timeout should resolve custom setting.");
+
+        System.clearProperty("neodymium.ai.step.timeoutSeconds");
+        System.setProperty("neodymium.ai.step.timeout.seconds", "95");
+        AiConfiguration.resetInstance();
+        final AiConfiguration normalizedConfig = AiConfiguration.getInstance();
+        assertEquals(95, normalizedConfig.getStepTimeoutSeconds(), "Normalized step timeout should resolve.");
+
+        System.clearProperty("neodymium.ai.step.timeout.seconds");
+        AiConfiguration.resetInstance();
+    }
+
+    @Test
     public void testConsoleExecutionLogsDirectoryDefaultAndOverride()
     {
         AiConfiguration.resetInstance();
