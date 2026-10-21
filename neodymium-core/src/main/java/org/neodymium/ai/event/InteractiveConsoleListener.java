@@ -2034,15 +2034,24 @@ public final class InteractiveConsoleListener implements ExecutionListener
         final PlaybookStep root = step.getRootStep() != null ? step.getRootStep() : step;
         @SuppressWarnings("unchecked")
         final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.beforeSteps");
-        if (beforeSteps != null && beforeSteps.contains(root))
+        if (beforeSteps != null && (beforeSteps.contains(root) || beforeSteps.contains(step)))
         {
-            return beforeSteps.indexOf(root);
+            final int idx = beforeSteps.indexOf(root);
+            return idx >= 0 ? idx : beforeSteps.indexOf(step);
+        }
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
+        if (afterSteps != null && (afterSteps.contains(root) || afterSteps.contains(step)))
+        {
+            final int idx = afterSteps.indexOf(root);
+            return idx >= 0 ? idx : afterSteps.indexOf(step);
         }
         @SuppressWarnings("unchecked")
         final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
-        if (playbookSteps != null && playbookSteps.contains(root))
+        if (playbookSteps != null && (playbookSteps.contains(root) || playbookSteps.contains(step)))
         {
-            return playbookSteps.indexOf(root);
+            final int idx = playbookSteps.indexOf(root);
+            return idx >= 0 ? idx : playbookSteps.indexOf(step);
         }
         @SuppressWarnings("unchecked")
         final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
@@ -2053,12 +2062,6 @@ public final class InteractiveConsoleListener implements ExecutionListener
         if (flatSteps != null && flatSteps.contains(step))
         {
             return flatSteps.indexOf(step);
-        }
-        @SuppressWarnings("unchecked")
-        final List<PlaybookStep> afterSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.afterSteps");
-        if (afterSteps != null && afterSteps.contains(root))
-        {
-            return afterSteps.indexOf(root);
         }
         return 0;
     }

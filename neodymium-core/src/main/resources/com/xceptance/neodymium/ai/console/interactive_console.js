@@ -1120,7 +1120,14 @@ window.toggleLlmSubsection = toggleLlmSubsection;
 function buildLlmCallsHtml(step) {
     let calls = Array.isArray(step.llmCalls) ? step.llmCalls : [];
     if (calls.length === 0 && currentState && Array.isArray(currentState.llmCalls)) {
-        calls = currentState.llmCalls.filter(c => c && (c.stepIndex === step.index - 1 || c.stepIndex === step.index));
+        const stepBlock = (step.block || 'steps').toLowerCase();
+        calls = currentState.llmCalls.filter(c => {
+            if (!c) return false;
+            const callBlock = (c.block || 'steps').toLowerCase();
+            if (callBlock !== stepBlock) return false;
+            const targetBlockIdx = (step.blockIndex !== undefined && step.blockIndex !== null) ? step.blockIndex : (step.index - 1);
+            return c.stepIndex === targetBlockIdx || c.stepIndex === step.index;
+        });
     }
 
     if (calls.length > 0) {

@@ -784,7 +784,8 @@ public final class InteractiveStateBuilder
         obj.addProperty("id", source + "_" + stepIndex);
         obj.addProperty("index", globalIndex + 1);
         obj.addProperty("blockIndex", stepIndex);
-        obj.addProperty("block", "playbook".equalsIgnoreCase(source) ? "steps" : source);
+        final String expectedBlock = "playbook".equalsIgnoreCase(source) ? "steps" : source;
+        obj.addProperty("block", expectedBlock);
         final String rawInstruction = step.getInstruction() != null ? step.getInstruction() : "";
         final ExecutionContext effContext = context != null ? context : ExecutionContext.getActiveContext();
         final String resolvedInstruction = (effContext != null && effContext.getSessionData() != null)
@@ -1005,7 +1006,6 @@ public final class InteractiveStateBuilder
         ReportStepEntry reportStep = null;
         if (report != null && report.getSteps() != null)
         {
-            final String expectedBlock = "playbook".equalsIgnoreCase(source) ? "steps" : source;
             for (final ReportStepEntry entry : report.getSteps())
             {
                 if (entry != null && (entry.getStepIndex() == stepIndex || entry.getStepIndex() == globalIndex))
@@ -1232,9 +1232,14 @@ public final class InteractiveStateBuilder
             final List<ReportLlmCallEntry> matchingCalls = new ArrayList<>();
             for (final ReportLlmCallEntry call : report.getLlmCalls())
             {
-                if (call != null && (call.getStepIndex() == stepIndex || call.getStepIndex() == globalIndex))
+                if (call != null)
                 {
-                    matchingCalls.add(call);
+                    final String callBlock = call.getBlock() != null ? call.getBlock() : "steps";
+                    final boolean blockMatches = expectedBlock.equalsIgnoreCase(callBlock);
+                    if (blockMatches && (call.getStepIndex() == stepIndex || call.getStepIndex() == globalIndex))
+                    {
+                        matchingCalls.add(call);
+                    }
                 }
             }
             if (!matchingCalls.isEmpty())
@@ -1368,6 +1373,7 @@ public final class InteractiveStateBuilder
                     {
                         callObj.addProperty("subStepIndex", call.getSubStepIndex());
                     }
+                    callObj.addProperty("block", call.getBlock() != null ? call.getBlock() : "steps");
                     callObj.addProperty("capability", call.getCapability());
                     callObj.addProperty("modelName", call.getModelName());
                     callObj.addProperty("durationMs", call.getDurationMs());

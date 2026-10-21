@@ -45,6 +45,7 @@ import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.report.TestExecutionReport;
 import org.neodymium.ai.report.TestExecutionReport.CategoryTokenUsage;
 import org.neodymium.ai.report.TestExecutionReport.ReportActionEntry;
+import org.neodymium.ai.report.TestExecutionReport.ReportLlmCallEntry;
 import org.neodymium.ai.report.TestExecutionReport.ReportMetrics;
 import org.neodymium.ai.report.TestExecutionReport.ReportStepEntry;
 
@@ -1246,5 +1247,79 @@ public class InteractiveConsoleEngineTest
         final JsonObject consumed = engine.waitForAction(pauseId2, 1000);
         assertEquals("EDIT", consumed.get("action").getAsString());
         assertEquals("Revised instruction", consumed.get("instruction").getAsString());
+    }
+
+    @Test
+    public void testTeardownAfterStepDoesNotDisplayPreviousCoreBlockLlmCalls() throws Exception
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final PlaybookStep coreStep = new PlaybookStep("Navigate to homepage");
+        coreStep.setStatus(PlaybookStepStatus.SUCCESS);
+        coreStep.setBlock("steps");
+
+        final PlaybookStep afterStep = new PlaybookStep("Teardown and clean cookies");
+        afterStep.setStatus(PlaybookStepStatus.RUNNING);
+        afterStep.setBlock("after");
+
+        context.getTransientData().put("playbook.steps", List.of(coreStep));
+        context.getTransientData().put("playbook.afterSteps", List.of(afterStep));
+        context.getTransientData().put("playbook.flatSteps", List.of(coreStep, afterStep));
+
+        final TestExecutionReport report = new TestExecutionReport();
+        final ReportStepEntry repCoreStep = new ReportStepEntry(0, "Navigate to homepage");
+        repCoreStep.setBlock("steps");
+        repCoreStep.setStatus("SUCCESS");
+
+        final ReportLlmCallEntry coreLlmCall = new ReportLlmCallEntry();
+        coreLlmCall.setStepIndex(0);
+        coreLlmCall.setBlock("steps");
+        coreLlmCall.setCapability("TEXT");
+        coreLlmCall.setModelName("gemini-2.5-flash");
+        coreLlmCall.setUserPrompt("Open browser and go to url");
+        coreLlmCall.setResponseContent("Navigation succeeded");
+
+        repCoreStep.addLlmCall(coreLlmCall);
+        report.addStep(repCoreStep);
+        report.addLlmCall(coreLlmCall);
+
+        // Build state before afterStep has its own LLM call
+        final String stateJsonInitial = InteractiveStateBuilder.buildStateJson(null, context, "run-after-llm-test", 0, "running", null, report);
+        final JsonNode rootInitial = new ObjectMapper().readTree(stateJsonInitial);
+
+        final JsonNode stepsBlockInitial = rootInitial.path("blocks").path("steps");
+        assertEquals(1, stepsBlockInitial.size());
+        assertEquals(1, stepsBlockInitial.get(0).path("llmCalls").size(), "Core step must retain its LLM call");
+        assertEquals("steps", stepsBlockInitial.get(0).path("llmCalls").get(0).path("block").asText());
+
+        final JsonNode afterBlockInitial = rootInitial.path("blocks").path("after");
+        assertEquals(1, afterBlockInitial.size());
+        assertFalse(afterBlockInitial.get(0).has("llmCalls") && afterBlockInitial.get(0).path("llmCalls").size() > 0,
+            "Teardown after step must NOT inherit core step's LLM calls before having its own call. Got: "
+                + afterBlockInitial.get(0).path("llmCalls"));
+
+        // Now simulate the after step generating its own LLM call
+        final ReportLlmCallEntry afterLlmCall = new ReportLlmCallEntry();
+        afterLlmCall.setStepIndex(0);
+        afterLlmCall.setBlock("after");
+        afterLlmCall.setCapability("TEXT");
+        afterLlmCall.setModelName("gemini-2.5-flash");
+        afterLlmCall.setUserPrompt("Clear cookies and close session");
+        afterLlmCall.setResponseContent("Cleanup completed");
+
+        final ReportStepEntry repAfterStep = new ReportStepEntry(0, "Teardown and clean cookies");
+        repAfterStep.setBlock("after");
+        repAfterStep.setStatus("RUNNING");
+        repAfterStep.addLlmCall(afterLlmCall);
+        report.addStep(repAfterStep);
+        report.addLlmCall(afterLlmCall);
+
+        final String stateJsonUpdated = InteractiveStateBuilder.buildStateJson(null, context, "run-after-llm-test", 0, "running", null, report);
+        final JsonNode rootUpdated = new ObjectMapper().readTree(stateJsonUpdated);
+
+        final JsonNode afterBlockUpdated = rootUpdated.path("blocks").path("after");
+        assertEquals(1, afterBlockUpdated.size());
+        assertEquals(1, afterBlockUpdated.get(0).path("llmCalls").size(), "Teardown after step must display its own LLM call once available");
+        assertEquals("after", afterBlockUpdated.get(0).path("llmCalls").get(0).path("block").asText());
+        assertEquals("Clear cookies and close session", afterBlockUpdated.get(0).path("llmCalls").get(0).path("userPrompt").asText());
     }
 }
