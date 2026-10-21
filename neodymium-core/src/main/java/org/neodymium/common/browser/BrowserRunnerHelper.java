@@ -255,6 +255,50 @@ public class BrowserRunnerHelper
      *
      * @return pause duration in milliseconds
      */
+    static ChromeBuilder createChromeBuilder(final BrowserConfiguration config)
+    {
+        final ChromeBuilder chromeBuilder = new ChromeBuilder(config.getDriverArguments());
+        final String chromeDriverPath = Neodymium.configuration().getChromeDriverPath();
+        if (StringUtils.isNotBlank(chromeDriverPath))
+        {
+            chromeBuilder.usingDriverExecutable(new File(chromeDriverPath));
+        }
+        return chromeBuilder;
+    }
+
+    static Builder createGeckoBuilder(final BrowserConfiguration config)
+    {
+        final Builder geckoBuilder = new GeckoBuilder(config.getDriverArguments()).withAllowHosts("localhost");
+        final String geckoDriverPath = Neodymium.configuration().getFirefoxDriverPath();
+        if (StringUtils.isNotBlank(geckoDriverPath))
+        {
+            geckoBuilder.usingDriverExecutable(new File(geckoDriverPath));
+        }
+        return geckoBuilder;
+    }
+
+    static IEBuilder createIEBuilder(final BrowserConfiguration config)
+    {
+        final IEBuilder ieBuilder = new IEBuilder(config.getDriverArguments());
+        final String ieDriverPath = Neodymium.configuration().getIeDriverPath();
+        if (StringUtils.isNotBlank(ieDriverPath))
+        {
+            ieBuilder.usingDriverExecutable(new File(ieDriverPath));
+        }
+        return ieBuilder;
+    }
+
+    static EdgeBuilder createEdgeBuilder(final BrowserConfiguration config)
+    {
+        final EdgeBuilder edgeBuilder = new EdgeBuilder(config.getDriverArguments());
+        final String edgeDriverPath = Neodymium.configuration().getEdgeDriverPath();
+        if (StringUtils.isNotBlank(edgeDriverPath))
+        {
+            edgeBuilder.usingDriverExecutable(new File(edgeDriverPath));
+        }
+        return edgeBuilder;
+    }
+
     static long calculateRetryPauseMs()
     {
         final long configuredMin = Neodymium.configuration().sessionRetryPauseMin();
@@ -353,7 +397,6 @@ public class BrowserRunnerHelper
             if (chromeBrowsers.contains(browserName))
             {
                 final ChromeOptions options = new ChromeOptions();
-                final String driverInPathPath = new ExecutableFinder().find("chromedriver");
 
                 // do we have a custom path?
                 final String pathToBrowser = Neodymium.configuration().getChromeBrowserPath();
@@ -413,26 +456,13 @@ public class BrowserRunnerHelper
                     options.setExperimentalOption("prefs", prefs);
                 }
 
-                final ChromeBuilder chromeBuilder = new ChromeBuilder(config.getDriverArguments());
-                if (StringUtils.isNotBlank(driverInPathPath))
-                {
-                    chromeBuilder.usingDriverExecutable(new File(driverInPathPath));
-                }
+                final ChromeBuilder chromeBuilder = createChromeBuilder(config);
 
                 wDSC.setWebDriver(new ChromeDriver(chromeBuilder.build(), options.merge(capabilities)));
             }
             else if (firefoxBrowsers.contains(browserName))
             {
                 final FirefoxOptions options = new FirefoxOptions();
-                String driverInPathPath = Neodymium.configuration().getFirefoxDriverPath();
-                if (StringUtils.isBlank(driverInPathPath))
-                {
-                    final String inPath = new ExecutableFinder().find("geckodriver");
-                    if (StringUtils.isNotBlank(inPath) && !inPath.contains("/snap/"))
-                    {
-                        driverInPathPath = inPath;
-                    }
-                }
 
                 if (StringUtils.isNotBlank(Neodymium.configuration().getFirefoxBrowserPath()))
                 {
@@ -498,18 +528,13 @@ public class BrowserRunnerHelper
                     options.setProfile(profile);
                 }
 
-                final Builder geckoBuilder = new GeckoBuilder(config.getDriverArguments()).withAllowHosts("localhost");
-                if (StringUtils.isNotBlank(driverInPathPath))
-                {
-                    geckoBuilder.usingDriverExecutable(new File(driverInPathPath));
-                }
+                final Builder geckoBuilder = createGeckoBuilder(config);
 
                 wDSC.setWebDriver(new FirefoxDriver(geckoBuilder.build(), options.merge(capabilities)));
             }
             else if (internetExplorerBrowsers.contains(browserName))
             {
                 final InternetExplorerOptions options = new InternetExplorerOptions();
-                final String driverInPathPath = new ExecutableFinder().find("IEDriverServer");
                 if (config.getArguments() != null && config.getArguments().size() > 0)
                 {
                     for (final String argument : config.getArguments())
@@ -517,18 +542,12 @@ public class BrowserRunnerHelper
                         options.addCommandSwitches(argument);
                     }
                 }
-                final IEBuilder ieBuilder = new IEBuilder(config.getDriverArguments());
-                if (StringUtils.isNotBlank(driverInPathPath))
-                {
-                    ieBuilder.usingDriverExecutable(new File(driverInPathPath));
-                }
+                final IEBuilder ieBuilder = createIEBuilder(config);
 
                 wDSC.setWebDriver(new InternetExplorerDriver(ieBuilder.build(), options.merge(capabilities)));
             }
             else if (edgeBrowsers.contains(browserName))
             {
-
-                final String driverInPathPath = new ExecutableFinder().find("msedgedriver");
                 final EdgeOptions options = new EdgeOptions().merge(capabilities);
 
                 if (config.getArguments() != null && config.getArguments().size() > 0)
@@ -536,11 +555,7 @@ public class BrowserRunnerHelper
                     options.addArguments(config.getArguments());
                 }
 
-                final EdgeBuilder edgeBuilder = new EdgeBuilder(config.getDriverArguments());
-                if (StringUtils.isNotBlank(driverInPathPath))
-                {
-                    edgeBuilder.usingDriverExecutable(new File(driverInPathPath));
-                }
+                final EdgeBuilder edgeBuilder = createEdgeBuilder(config);
 
                 wDSC.setWebDriver(new EdgeDriver(edgeBuilder.build(), options));
             }
