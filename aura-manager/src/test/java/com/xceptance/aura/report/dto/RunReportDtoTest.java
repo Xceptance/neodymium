@@ -174,7 +174,7 @@ public final class RunReportDtoTest
 
         Assertions.assertEquals(List.of("HEALING", "RECORDING"), report.getFilterModes());
         Assertions.assertEquals(List.of("Chrome", "Firefox"), report.getFilterBrowsers());
-        Assertions.assertEquals(List.of("default", "en_US"), report.getFilterLocales());
-        Assertions.assertEquals(List.of("default", "en_US"), report.getFilterLocations());
+        Assertions.assertEquals(List.of("Default", "en_US"), report.getFilterLocales());
+        Assertions.assertEquals(List.of("Default", "en_US"), report.getFilterLocations());
     }
 }

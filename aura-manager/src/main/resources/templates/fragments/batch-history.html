@@ -82,7 +82,7 @@
             <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">dns</span>
             <div>
                 <div class="env-meta-label">Assigned Environment (Single)</div>
-                <div style="color: var(--status-fixed); font-weight: 700;" th:text="${batchEnvironment ?: 'default'}">default</div>
+                <div style="color: var(--status-fixed); font-weight: 700;" th:text="${batchEnvironment ?: 'Default'}">Default</div>
             </div>
         </div>
         <div class="env-meta-item">
@@ -90,8 +90,8 @@
             <div>
                 <div class="env-meta-label">Locales Contained in Batch</div>
                 <div style="display: flex; gap: 0.35rem; margin-top: 0.15rem; flex-wrap: wrap;">
-                    <span th:each="loc : ${batchLocales}" class="tag-chip" th:text="${loc}">default</span>
-                    <span th:if="${batchLocales == null || batchLocales.isEmpty()}" class="tag-chip">default</span>
+                    <span th:each="loc : ${batchLocales}" class="tag-chip" th:text="${loc}">Default</span>
+                    <span th:if="${batchLocales == null || batchLocales.isEmpty()}" class="tag-chip">Default</span>
                 </div>
             </div>
         </div>
@@ -111,7 +111,7 @@
     <div class="allure-trend-card">
         <div class="trend-chart-header">
             <div>
-                <span class="material-symbols-outlined text-accent">trending_up</span> HISTORY TREND FOR WHOLE BATCH: <span id="batchOverviewTitle" th:text="${batchName ?: 'default'}">default</span>
+                <span class="material-symbols-outlined text-accent">trending_up</span> HISTORY TREND FOR WHOLE BATCH: <span id="batchOverviewTitle" th:text="${batchName ?: 'Default'}">Default</span>
                 <span th:if="${currentLimit != null && currentLimit < totalRunsCount}" class="tag-chip ms-2" style="font-size: 0.75rem; vertical-align: middle;">LAST <span th:text="${showingRunsCount}">10</span> RUNS</span>
                 <div style="font-size: 0.825rem; color: var(--text-muted); font-weight: 400; margin-top: 0.25rem;">
                     Stacked area trend for the whole batch. <strong style="color: var(--status-fixed);"><span class="material-symbols-outlined">touch_app</span> On click on any history trend point below, the corresponding report for the batch will open.</strong>
@@ -396,7 +396,7 @@
                             <strong class="text-mono text-accent" style="font-size: 0.95rem;" th:text="'#' + ${run.id}">#RUN_ID</strong> 
                             <span class="tag-chip" style="background: var(--status-pass-bg); color: var(--status-pass); border: 1px solid var(--status-pass-border);" th:if="${iterStat.first}">LATEST</span>
                         </td>
-                        <td><span class="tag-batch"><span class="material-symbols-outlined">layers</span> <span th:text="${run.batchName}">default</span></span></td>
+                        <td><span class="tag-batch"><span class="material-symbols-outlined">layers</span> <span th:text="${run.batchName}">Default</span></span></td>
                         <td class="js-format-timestamp" th:data-timestamp-ms="${run.startTimeMs}" th:text="${run.timestampLabel}">Recently</td>
                         <td><span class="material-symbols-outlined">smart_toy</span> <span th:text="${run.triggerSource}">Unknown</span></td>
                         <td><strong class="text-mono" th:text="${run.totalTests != null ? run.totalTests + ' Tests' : '0 Tests'}">8 Tests</strong></td>

@@ -259,7 +259,7 @@ public final class TestExecutionDto
         }
         else
         {
-            effectiveLocation = "default";
+            effectiveLocation = "Default";
         }
         this.location = effectiveLocation;
 

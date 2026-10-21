@@ -830,7 +830,7 @@ public class AuraReportDataService
         if (runId != null && "#RUN_ID".equalsIgnoreCase(runId.trim()))
         {
             return new RunReportDto(
-                "#RUN_ID", "default", "N/A", "0s",
+                "#RUN_ID", "Default", "N/A", "0s",
                 0, 0, 0, 0, 0, 0,
                 List.of(), List.of()
             );
@@ -852,7 +852,7 @@ public class AuraReportDataService
         if (effectiveRunId.isEmpty())
         {
             return new RunReportDto(
-                "", "default", "N/A", "0s",
+                "", "Default", "N/A", "0s",
                 0, 0, 0, 0, 0, 0,
                 List.of(), List.of()
             );
@@ -887,11 +887,11 @@ public class AuraReportDataService
 
             final TestRunEntity runEntity = runOpt.orElseGet(() -> new TestRunEntity(
                 effectiveRunId,
-                "default",
+                "Default",
                 "COMPLETED",
                 "Unknown",
-                "default",
-                "default",
+                "Default",
+                "Default",
                 "Chrome",
                 "Recently",
                 System.currentTimeMillis()
@@ -1645,11 +1645,11 @@ public class AuraReportDataService
 
         final TestRunEntity newRun = new TestRunEntity(
             effectiveRunId,
-            batchName != null ? batchName : "default",
+            batchName != null ? batchName : "Default",
             "IN_PROGRESS",
             triggerSource != null ? triggerSource : "Unknown",
-            environment != null ? environment : "default",
-            "default",
+            environment != null ? environment : "Default",
+            "Default",
             "Chrome",
             timestampLabel,
             System.currentTimeMillis()
@@ -1975,9 +1975,9 @@ public class AuraReportDataService
                 if (!Files.exists(batchJsonPath))
                 {
                     final ObjectNode batchNode = objectMapper.createObjectNode();
-                    batchNode.put("name", run.getBatchName() != null ? run.getBatchName() : "default");
+                    batchNode.put("name", run.getBatchName() != null ? run.getBatchName() : "Default");
                     batchNode.put("description", "");
-                    batchNode.put("environment", run.getEnvironment() != null ? run.getEnvironment() : "default");
+                    batchNode.put("environment", run.getEnvironment() != null ? run.getEnvironment() : "Default");
                     Files.createDirectories(batchJsonPath.getParent());
                     objectMapper.writerWithDefaultPrettyPrinter().writeValue(batchJsonPath.toFile(), batchNode);
                 }
@@ -2572,8 +2572,8 @@ public class AuraReportDataService
         try
         {
             final Optional<TestRunEntity> runOpt = runRepository.findById(runId);
-            final String batchName = report.getBatchName() != null ? report.getBatchName() : runOpt.map(TestRunEntity::getBatchName).orElse("default");
-            final String env = runOpt.map(TestRunEntity::getEnvironment).orElse("default");
+            final String batchName = report.getBatchName() != null ? report.getBatchName() : runOpt.map(TestRunEntity::getBatchName).orElse("Default");
+            final String env = runOpt.map(TestRunEntity::getEnvironment).orElse("Default");
             final String duration = report.getDuration() != null ? report.getDuration() : "0s";
             final int total = report.getTotalCount();
             final double passRate = total > 0 ? Math.round((report.getPassCount() + report.getFixedCount()) * 100.0 / total * 10.0) / 10.0 : 0.0;
@@ -3019,7 +3019,7 @@ public class AuraReportDataService
         if (runEntity == null)
         {
             return new RunReportDto(
-                "", "default", "N/A", "0s",
+                "", "Default", "N/A", "0s",
                 0, 0, 0, 0, 0, 0,
                 List.of(), List.of()
             );
@@ -3079,12 +3079,12 @@ public class AuraReportDataService
     {
         if (raw == null || raw.trim().isEmpty())
         {
-            return "default";
+            return "Default";
         }
         final String loc = raw.trim();
         if ("unknown".equalsIgnoreCase(loc) || "default".equalsIgnoreCase(loc))
         {
-            return "default";
+            return "Default";
         }
         if (loc.length() == 2)
         {

@@ -351,7 +351,7 @@ public class LocalRunJsonStorageService
                             }
 
                             final String title = objNode.path("title").asText("Default");
-                            final String location = objNode.path("location").asText("default");
+                            final String location = objNode.path("location").asText("Default");
                             final String browser = objNode.path("browser").asText("Chrome");
                             final String engine = objNode.path("engine").asText("Java");
 
@@ -573,7 +573,7 @@ public class LocalRunJsonStorageService
             }
             else
             {
-                localesArray.add("default");
+                localesArray.add("Default");
             }
             rootNode.set("locales", localesArray);
 
@@ -648,7 +648,7 @@ public class LocalRunJsonStorageService
                     final String tBrowser = objNode.path("browser").asText("Chrome");
                     final String key = buildExecutionKey(tClass, tMethod, tTitle, tBrowser);
 
-                    final String loc = objNode.path("location").asText(objNode.path("locale").asText("default"));
+                    final String loc = objNode.path("location").asText(objNode.path("locale").asText("Default"));
                     final ObjectNode metricObj = objectMapper.createObjectNode();
                     metricObj.put("id", objNode.path("id").asText(""));
                     metricObj.put("testClass", tClass);
@@ -1169,9 +1169,9 @@ public class LocalRunJsonStorageService
             try
             {
                 final JsonNode batchNode = objectMapper.readTree(batchJsonFile);
-                final String name = batchNode.path("name").asText(batchNode.path("batchName").asText("default"));
+                final String name = batchNode.path("name").asText(batchNode.path("batchName").asText("Default"));
                 final String desc = batchNode.path("description").asText("");
-                final String env = batchNode.path("environment").asText(batchNode.path("env").asText("default"));
+                final String env = batchNode.path("environment").asText(batchNode.path("env").asText("Default"));
                 return new BatchInfo(name, desc, env);
             }
             catch (final Exception e)
@@ -1210,8 +1210,8 @@ public class LocalRunJsonStorageService
             }
         }
 
-        final String finalEnv = (detectedEnv != null && !detectedEnv.trim().isEmpty()) ? detectedEnv.trim() : "default";
-        final String defaultName = "default";
+        final String finalEnv = (detectedEnv != null && !detectedEnv.trim().isEmpty()) ? detectedEnv.trim() : "Default";
+        final String defaultName = "Default";
         final String defaultDesc = "";
 
         try
@@ -1221,7 +1221,7 @@ public class LocalRunJsonStorageService
             batchNode.put("description", defaultDesc);
             batchNode.put("environment", finalEnv);
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(batchJsonFile, batchNode);
-            LOG.info("Created batch.json for runDir={} with default name='default', description='', environment='{}'", runDir.getName(), finalEnv);
+            LOG.info("Created batch.json for runDir={} with default name='Default', description='', environment='{}'", runDir.getName(), finalEnv);
         }
         catch (final Exception e)
         {

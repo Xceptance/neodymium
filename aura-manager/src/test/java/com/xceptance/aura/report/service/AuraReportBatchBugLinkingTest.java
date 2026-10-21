@@ -239,7 +239,7 @@ public class AuraReportBatchBugLinkingTest
     {
         final String run1 = "run_20260821_110929";
         final String run2 = "run_20260821_114903";
-        final String batchName = "default";
+        final String batchName = "Default";
         final long now = System.currentTimeMillis();
 
         createRunAndReport(run1, batchName, now - 500000L, "row-u1-1", "passed");

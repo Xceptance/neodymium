@@ -161,7 +161,7 @@ public class AuraReportViewController
                         // Fall back to no limit
                     }
                 }
-                return batchHistory(batchName != null && !batchName.isBlank() ? batchName : "default", limit, hxRequest, model);
+                return batchHistory(batchName != null && !batchName.isBlank() ? batchName : "Default", limit, hxRequest, model);
             }
             else if (targetUrl.contains("/test-base"))
             {
@@ -210,7 +210,7 @@ public class AuraReportViewController
                     {
                     }
                 }
-                return batchHistory(batchName != null && !batchName.isBlank() ? batchName : "default", limit, hxRequest, model);
+                return batchHistory(batchName != null && !batchName.isBlank() ? batchName : "Default", limit, hxRequest, model);
             }
             else if (targetUrl.contains("/test-base"))
             {
@@ -252,7 +252,7 @@ public class AuraReportViewController
 
     @GetMapping({"/batch-history", "/fragments/batch-history"})
     public String batchHistory(
-        @RequestParam(name = "batchName", defaultValue = "default") final String batchName,
+        @RequestParam(name = "batchName", defaultValue = "Default") final String batchName,
         @RequestParam(name = "limit", required = false) final Integer limit,
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         final Model model)
@@ -293,7 +293,7 @@ public class AuraReportViewController
                 .map(TestRunEntity::getEnvironment)
                 .filter(e -> e != null && !e.isBlank())
                 .findFirst()
-                .orElse("default"));
+                .orElse("Default"));
 
         final List<TestRunEntity> chronoRuns = new ArrayList<>(runs);
         java.util.Collections.reverse(chronoRuns);

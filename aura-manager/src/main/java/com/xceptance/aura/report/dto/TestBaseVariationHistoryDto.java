@@ -87,7 +87,7 @@ public final class TestBaseVariationHistoryDto
     {
         this.runId = runId != null ? runId : "";
         this.executionId = executionId != null ? executionId : "";
-        this.batchName = batchName != null ? batchName : "default";
+        this.batchName = batchName != null ? batchName : "Default";
         this.mode = mode != null && !mode.isBlank() ? mode : "JAVA";
         this.engine = engine != null ? engine : "Java";
         this.timestamp = formatTimestamp(timestamp);

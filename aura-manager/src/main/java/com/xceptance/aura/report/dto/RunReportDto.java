@@ -242,7 +242,7 @@ public final class RunReportDto
             return List.of();
         }
         return executions.stream()
-            .map(e -> (e.getLocation() == null || e.getLocation().isBlank()) ? "default" : e.getLocation().trim())
+            .map(e -> (e.getLocation() == null || e.getLocation().isBlank()) ? "Default" : e.getLocation().trim())
             .distinct()
             .sorted()
             .collect(Collectors.toList());

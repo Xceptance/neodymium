@@ -221,11 +221,12 @@ public class TestBaseVariationStatusSyncTest
     @Test
     public void testNormalizeLocationAndDeduplicateVariations()
     {
-        Assertions.assertEquals("default", AuraReportDataService.normalizeLocation("UNKNOWN"));
-        Assertions.assertEquals("default", AuraReportDataService.normalizeLocation("unknown"));
-        Assertions.assertEquals("default", AuraReportDataService.normalizeLocation("Unknown"));
-        Assertions.assertEquals("default", AuraReportDataService.normalizeLocation("default"));
-        Assertions.assertEquals("default", AuraReportDataService.normalizeLocation(null));
+        Assertions.assertEquals("Default", AuraReportDataService.normalizeLocation("UNKNOWN"));
+        Assertions.assertEquals("Default", AuraReportDataService.normalizeLocation("unknown"));
+        Assertions.assertEquals("Default", AuraReportDataService.normalizeLocation("Unknown"));
+        Assertions.assertEquals("Default", AuraReportDataService.normalizeLocation("Default"));
+        Assertions.assertEquals("Default", AuraReportDataService.normalizeLocation("default"));
+        Assertions.assertEquals("Default", AuraReportDataService.normalizeLocation(null));
         Assertions.assertEquals("US", AuraReportDataService.normalizeLocation("us"));
         Assertions.assertEquals("DE", AuraReportDataService.normalizeLocation("de"));
 
@@ -237,7 +238,7 @@ public class TestBaseVariationStatusSyncTest
         varUpper.setHistoryLinks("/run-report?runId=R1");
 
         final TestBaseVariationEntity varMixed = new TestBaseVariationEntity(
-            "v_mixed", class1, "executeYamlTest", "Default", "@General", "default", "Chrome_1920x1080"
+            "v_mixed", class1, "executeYamlTest", "Default", "@General", "Default", "Chrome_1920x1080"
         );
         varMixed.setTotalExecutionsCount(4);
         varMixed.setHistoryLinks("/run-report?runId=R2");
@@ -254,7 +255,7 @@ public class TestBaseVariationStatusSyncTest
 
         final List<TestBaseVariationEntity> vars = testBaseData.getAreas().get(0).getTestClasses().get(0).getVariations();
         Assertions.assertEquals(1, vars.size());
-        Assertions.assertEquals("default", vars.get(0).getLocation());
+        Assertions.assertEquals("Default", vars.get(0).getLocation());
         Assertions.assertEquals(2, vars.get(0).getTotalExecutionsCount());
         Assertions.assertTrue(vars.get(0).getHistoryLinks().contains("R1"));
         Assertions.assertTrue(vars.get(0).getHistoryLinks().contains("R2"));
@@ -271,7 +272,7 @@ public class TestBaseVariationStatusSyncTest
 
         final String class1 = "Aura_tests_examples_wikipedia_search_yml_Test";
         final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(
-            "v_wiki_1", class1, "executeYamlTest", "wikipedia_search_example_1", "@Browsing", "default", "Chrome_1920x1080"
+            "v_wiki_1", class1, "executeYamlTest", "wikipedia_search_example_1", "@Browsing", "Default", "Chrome_1920x1080"
         );
         varEntity.setTotalExecutionsCount(14);
         varEntity.setHistoryLinks(history);
@@ -311,7 +312,7 @@ public class TestBaseVariationStatusSyncTest
 
         // 3. Playbook / YAML Test
         final TestBaseVariationEntity varPlaybook = new TestBaseVariationEntity(
-            "v_pb", "Aura_tests_stokke_order_yaml_Test", "executeYamlTest", "Default", "@Orders", "default", "Chrome_1920x1080"
+            "v_pb", "Aura_tests_stokke_order_yaml_Test", "executeYamlTest", "Default", "@Orders", "Default", "Chrome_1920x1080"
         );
         varPlaybook.setExecutionMode("REPLAY_STRICT");
         varPlaybook.setLastStatus("failed-unknown");

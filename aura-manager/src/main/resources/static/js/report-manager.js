@@ -13,7 +13,7 @@ let currentDataSetRaw = '';
 let currentLocationStr = '';
 let currentBrowserStr = '';
 let currentActiveRunId = '#RUN_ID';
-let activeBatchName = 'default';
+let activeBatchName = 'Default';
 
 const executionCommentsMap = {};
 const executionBugMap = {};
@@ -121,7 +121,7 @@ function showRunsList() {
 }
 
 function openBatchHistoryOverview(batchName, latestRunId) {
-    activeBatchName = batchName || 'default';
+    activeBatchName = batchName || 'Default';
     
     // Show Batch History Overview view state inside batch-overview fragment
     const pageRunsList = document.getElementById('pageRunsList');
@@ -187,7 +187,7 @@ function renderBatchSpecificRunsTable(batchName) {
 function applyCustomBatchLimit() {
     const input = document.getElementById('customBatchLimitInput');
     if (!input) return;
-    const batchName = input.getAttribute('data-batch-name') || activeBatchName || 'default';
+    const batchName = input.getAttribute('data-batch-name') || activeBatchName || 'Default';
     const val = parseInt(input.value.trim(), 10);
     const targetUrl = (!isNaN(val) && val > 0)
         ? `/batch-history?batchName=${encodeURIComponent(batchName)}&limit=${val}`
@@ -374,7 +374,7 @@ function hideTrendChartHover() {
 }
 
 function renderDynamicTrendChart(targetBatchName) {
-    const batchName = targetBatchName || activeBatchName || 'default';
+    const batchName = targetBatchName || activeBatchName || 'Default';
     const svg = document.getElementById('mainTrendSvg');
     if (!svg) return;
 
@@ -1990,7 +1990,7 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
         if (singleRunControls) singleRunControls.style.display = 'none';
         testBaseControls.style.display = 'flex';
 
-        const loc = activeRow?.getAttribute('data-location') || 'default';
+        const loc = activeRow?.getAttribute('data-location') || 'Default';
         const browser = activeRow?.getAttribute('data-browser') || 'Chrome';
         const testClass = activeRow?.getAttribute('data-test-name') || testName || '';
         const testMethod = activeRow?.getAttribute('data-test-method') || '';
@@ -2760,7 +2760,7 @@ function renderStepsForExecution(activeRow) {
             paramsHtml = `
                 <tr>
                     <td class="param-key">location</td>
-                    <td class="param-val">${activeRow.getAttribute('data-location') || 'default'}</td>
+                    <td class="param-val">${activeRow.getAttribute('data-location') || 'Default'}</td>
                 </tr>
                 <tr>
                     <td class="param-key">browser</td>
