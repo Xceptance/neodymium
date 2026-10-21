@@ -81,6 +81,12 @@ public class AiToolContractTest
 
         final String formattedList = ToolDefinition.formatTools(List.of(def));
         Assertions.assertTrue(formattedList.contains("browser_type(selector: String, text: String, [clearFirst: Boolean])"));
+
+        // Compact single-line summary test
+        Assertions.assertEquals("[]", ToolDefinition.formatToolsCompact(null));
+        Assertions.assertEquals("[]", ToolDefinition.formatToolsCompact(List.of()));
+        final ToolDefinition def2 = new ToolDefinition("browser_click", "Clicks an element", schema);
+        Assertions.assertEquals("[browser_type, browser_click]", ToolDefinition.formatToolsCompact(List.of(def, def2)));
     }
 
     @Test

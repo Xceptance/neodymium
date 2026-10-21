@@ -507,7 +507,11 @@ public final class AgentToolLoopStep implements PipelineStep
                 instruction, milestones != null ? milestones.size() : 0);
         if (LOGGER.isDebugEnabled())
         {
-            LOGGER.debug("🛠️ Available Native Tools ({}):\n{}", availableTools.size(), ToolDefinition.formatTools(availableTools));
+            LOGGER.debug("🛠️ Available Native Tools ({}): {}", availableTools.size(), ToolDefinition.formatToolsCompact(availableTools));
+            if (LOGGER.isTraceEnabled())
+            {
+                LOGGER.trace("Detailed Native Tool Schemas:\n{}", ToolDefinition.formatTools(availableTools));
+            }
         }
 
         ReasoningEffort reasoningEffort = AiConfiguration.getInstance().getReasoningEffort();
