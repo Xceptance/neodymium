@@ -656,7 +656,7 @@ public class AuraReportBugUnlinkTest
         node1.put("datasetId", "wikipedia_search_1");
         node1.put("title", "wikipedia_search_1");
         node1.put("browser", "Chrome_1500x1000");
-        node1.put("location", "Unknown");
+        node1.put("location", "default");
         node1.put("status", "failed");
         final ArrayNode bugs1 = new ObjectMapper().createArrayNode();
         bugs1.add("BUG-COMPOSITE-1");
@@ -673,7 +673,7 @@ public class AuraReportBugUnlinkTest
         node2.put("datasetId", "wikipedia_search_2");
         node2.put("title", "wikipedia_search_2");
         node2.put("browser", "Chrome_1500x1000");
-        node2.put("location", "Unknown");
+        node2.put("location", "default");
         node2.put("status", "passed");
         new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(execFile2.toFile(), node2);
 
@@ -865,7 +865,7 @@ public class AuraReportBugUnlinkTest
         execNode.put("testMethod", "executeYamlTest");
         execNode.put("title", "Default");
         execNode.put("status", "failed-unknown");
-        execNode.put("location", "Unknown");
+        execNode.put("location", "default");
         execNode.put("browser", "Chrome_1920x1080");
         execNode.put("testFile", "com.xceptance.neodymium.aura.sandbox.Aura_google_test_yaml_Test#executeYamlTest");
         execNode.put("testId", "Default");

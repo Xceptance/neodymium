@@ -563,7 +563,7 @@ public class RunStorageSyncServiceTest
         Files.writeString(execDir.resolve("exec-1.json"), execJson);
 
         final String varId = AuraReportDataService.generateVariationId("SyncBugTest", "SyncBugTest [US Chrome]", "US", "Chrome");
-        final TestBaseBugEntity bug = new TestBaseBugEntity(varId, "BUG-SYNC-999", "Unknown", "Unknown", System.currentTimeMillis(), runId);
+        final TestBaseBugEntity bug = new TestBaseBugEntity(varId, "BUG-SYNC-999", "default", "default", System.currentTimeMillis(), runId);
         bugRepository.save(bug);
 
         try

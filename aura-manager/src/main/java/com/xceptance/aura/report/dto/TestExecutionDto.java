@@ -249,17 +249,17 @@ public final class TestExecutionDto
         this.engine = engine != null ? engine : "Java";
 
         final String effectiveLocation;
-        if (locale != null && !locale.trim().isEmpty())
+        if (locale != null && !locale.trim().isEmpty() && !"unknown".equalsIgnoreCase(locale.trim()))
         {
             effectiveLocation = locale.trim();
         }
-        else if (location != null && !location.trim().isEmpty())
+        else if (location != null && !location.trim().isEmpty() && !"unknown".equalsIgnoreCase(location.trim()))
         {
             effectiveLocation = location.trim();
         }
         else
         {
-            effectiveLocation = "UNKNOWN";
+            effectiveLocation = "default";
         }
         this.location = effectiveLocation;
 

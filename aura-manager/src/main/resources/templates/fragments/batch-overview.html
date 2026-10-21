@@ -83,7 +83,7 @@
                      th:data-locales="${#strings.arrayJoin(b.locales, ',')}" 
                      th:data-browsers="${#strings.arrayJoin(b.browsers, ',')}">
                     <div class="batch-card-header">
-                        <div class="batch-card-title"><span class="material-symbols-outlined text-accent">layers</span> <span th:text="${b.name}">Unknown</span></div>
+                        <div class="batch-card-title"><span class="material-symbols-outlined text-accent">layers</span> <span th:text="${b.name}">default</span></div>
                         <span class="badge-status badge-pass" style="font-family: var(--font-family);" th:text="${b.passRate}">0% Pass</span>
                     </div>
                     
@@ -93,8 +93,8 @@
                     </div>
 
                     <div style="font-size: 0.78rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.35rem;">
-                        <div><span class="material-symbols-outlined text-accent">dns</span> <strong>Environment:</strong> <span th:text="${b.environment}">Unknown</span></div>
-                        <div><span class="material-symbols-outlined text-accent">public</span> <strong>Locales:</strong> <span th:text="${#strings.arrayJoin(b.locales, ', ')}">Unknown</span></div>
+                        <div><span class="material-symbols-outlined text-accent">dns</span> <strong>Environment:</strong> <span th:text="${b.environment}">default</span></div>
+                        <div><span class="material-symbols-outlined text-accent">public</span> <strong>Locales:</strong> <span th:text="${#strings.arrayJoin(b.locales, ', ')}">default</span></div>
                         <div><span class="material-symbols-outlined text-accent">web</span> <strong>Browsers:</strong> <span th:text="${#strings.arrayJoin(b.browsers, ', ')}">Chrome</span></div>
                     </div>
 
@@ -299,11 +299,11 @@
                                       hx-push-url="true" 
                                       onclick="event.stopPropagation();" 
                                       style="cursor: pointer;" 
-                                      th:text="${r.batchName}">Unknown</span>
+                                      th:text="${r.batchName}">default</span>
                             </td>
                             <td><span class="tag-trigger" th:text="${r.triggerSource}">Unknown</span></td>
-                            <td><span class="tag-env" th:text="${r.environment}">Unknown</span></td>
-                            <td th:text="${r.localesCsv}">Unknown</td>
+                            <td><span class="tag-env" th:text="${r.environment}">default</span></td>
+                            <td th:text="${r.localesCsv}">default</td>
                             <td th:text="${r.browsersCsv}">Chrome</td>
                             <td class="text-mono" th:text="${r.totalTests}">0</td>
                             <td style="min-width: 220px; vertical-align: middle;">
@@ -356,7 +356,7 @@
             <div class="panel-header">
                 <div>
                     <div class="panel-title"><span class="material-symbols-outlined text-accent">trending_up</span> Batch History Overview & Trend Analysis</div>
-                    <div class="panel-subtitle">Comprehensive run execution metrics, pass rates, and history graphs for <strong id="batchOverviewTitle" style="color: var(--accent-color);">Unknown</strong></div>
+                    <div class="panel-subtitle">Comprehensive run execution metrics, pass rates, and history graphs for <strong id="batchOverviewTitle" style="color: var(--accent-color);">default</strong></div>
                 </div>
                 <button class="btn-secondary" style="font-size: 0.825rem;" onclick="showRunsList()">
                     <span class="material-symbols-outlined">arrow_back</span> Back to Directory

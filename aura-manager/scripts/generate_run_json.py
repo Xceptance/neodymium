@@ -270,7 +270,7 @@ def extract_execution_metrics(exec_data, test_class_name):
         "testClass": test_class_name,
         "testMethod": test_method,
         "title": title,
-        "location": exec_data.get("location") or exec_data.get("locale") or "Unknown",
+        "location": exec_data.get("location") or exec_data.get("locale") or "default",
         "browser": browser,
         "status": effective_status,
         "areaName": exec_data.get("areaName") or "Browsing (default)",
@@ -303,12 +303,12 @@ def analyze_and_generate_run_json(run_dir_path):
     # Default metadata if run.json doesn't exist yet
     meta = {
         "runId": run_id,
-        "batchName": "Unknown",
+        "batchName": "default",
         "timestamp": "Recently",
         "duration": "0s",
         "trigger": "Unknown",
-        "environment": "Unknown",
-        "locales": ["Unknown"],
+        "environment": "default",
+        "locales": ["default"],
         "browsers": ["Chrome"],
         "threadsCount": 1
     }

@@ -508,7 +508,8 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 
 /* LOCATION HIGHLIGHT BADGES */
 .location-highlight-badge { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.15rem 0.45rem; border-radius: 4px; background: var(--mode-playbook-bg); color: var(--mode-playbook-color); border: 1px solid var(--mode-playbook-border); font-size: 0.72rem; font-weight: 700; font-family: var(--font-mono); margin-right: 0.4rem; flex-shrink: 0; }
-.location-highlight-badge.location-unknown { background: var(--mode-java-bg); color: var(--mode-java-color); border-color: var(--mode-java-border); }
+.location-highlight-badge.location-unknown,
+.location-highlight-badge.location-default { background: var(--mode-java-bg); color: var(--mode-java-color); border-color: var(--mode-java-border); }
 
 /* Metric Grid */
 .metrics-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; }

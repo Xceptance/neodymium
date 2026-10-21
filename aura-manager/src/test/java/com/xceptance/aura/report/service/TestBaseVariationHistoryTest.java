@@ -573,7 +573,7 @@ public class TestBaseVariationHistoryTest
         final TestBaseVariationEntity oldVar = new TestBaseVariationEntity(oldVarId, testClass, testMethod, dataSet, "@General", location, "Chrome");
         oldVar.setTotalExecutionsCount(77);
         oldVar.setLastStatus("passed-clean");
-        final String runLink = "/run-report?runId=run_20261006_170254&executionId=Aura_my_test_yaml_Test%23executeYamlTest%23en%23Chrome_1920x1080&batch=Unknown&engine=Java&ts=2026-10-06T15%3A04%3A15.263Z&status=passed-clean";
+        final String runLink = "/run-report?runId=run_20261006_170254&executionId=Aura_my_test_yaml_Test%23executeYamlTest%23en%23Chrome_1920x1080&batch=default&engine=Java&ts=2026-10-06T15%3A04%3A15.263Z&status=passed-clean";
         oldVar.setHistoryLinks(runLink);
 
         // Canonical variation created by live ingestion with exact browser "Chrome_1920x1080" and 0 history links

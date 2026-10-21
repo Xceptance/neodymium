@@ -360,14 +360,14 @@ public class RunStorageSyncService
                 for (final JsonNode mNode : execMetricsNode)
                 {
                     final String loc = mNode.path("location").asText(mNode.path("locale").asText("")).trim();
-                    if (!loc.isEmpty() && !"Unknown".equalsIgnoreCase(loc))
+                    if (!loc.isEmpty() && !"Unknown".equalsIgnoreCase(loc) && !"default".equalsIgnoreCase(loc))
                     {
                         locSet.add(loc);
                     }
                 }
                 localesList.addAll(locSet);
             }
-            final String localesCsv = !localesList.isEmpty() ? String.join(",", localesList) : "Unknown";
+            final String localesCsv = !localesList.isEmpty() ? String.join(",", localesList) : "default";
 
             final List<String> browsersList = new ArrayList<>();
             final JsonNode browsersArr = root.path("browsers");
@@ -538,7 +538,7 @@ public class RunStorageSyncService
                         rawTitle = exec.path("testId").asText("").trim();
                     }
                     final String dataSet = !rawTitle.isEmpty() ? rawTitle : "Default";
-                    final String rawLoc = exec.has("locale") && !exec.path("locale").asText().trim().isEmpty() ? exec.path("locale").asText().trim() : exec.path("location").asText("Unknown");
+                    final String rawLoc = exec.has("locale") && !exec.path("locale").asText().trim().isEmpty() ? exec.path("locale").asText().trim() : exec.path("location").asText("default");
                     final String location = AuraReportDataService.normalizeLocation(rawLoc);
                     String rawBrowser = exec.path("browser").asText("").trim();
                     if (rawBrowser.isEmpty() || "Chrome".equalsIgnoreCase(rawBrowser) || "Unknown".equalsIgnoreCase(rawBrowser))
