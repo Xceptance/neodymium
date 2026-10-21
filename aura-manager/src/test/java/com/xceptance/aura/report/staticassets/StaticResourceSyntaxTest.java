@@ -459,5 +459,64 @@ public final class StaticResourceSyntaxTest
             );
         }
     }
+
+    @Test
+    public void testManagerWorkspaceFilterPersistenceContracts() throws Exception
+    {
+        final Path testSelectionPath = Paths.get("src/main/resources/templates/fragments/test-selection.html");
+        Assertions.assertTrue(Files.exists(testSelectionPath), "test-selection.html must exist");
+        final String testSelectionContent = Files.readString(testSelectionPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            testSelectionContent.contains("id=\"clearTestSearchBtn\""),
+            "test-selection.html must render clearTestSearchBtn"
+        );
+        Assertions.assertTrue(
+            testSelectionContent.contains("oninput=\"if(typeof onTestSearchInput==='function') onTestSearchInput(this.value);\""),
+            "test-selection.html must handle oninput for search persistence"
+        );
+        Assertions.assertTrue(
+            testSelectionContent.contains("id=\"refreshFilesBtn\"") && testSelectionContent.contains("hx-include=\"#testSearchInput\""),
+            "refreshFilesBtn must include #testSearchInput to avoid wiping search query on refresh"
+        );
+        Assertions.assertTrue(
+            testSelectionContent.contains("id=\"yamlFileList\"") && testSelectionContent.contains("hx-include=\"#testSearchInput\""),
+            "yamlFileList must include #testSearchInput on background file refreshes"
+        );
+
+        final Path editorJsPath = Paths.get("src/main/resources/static/dashboard-editor.js");
+        Assertions.assertTrue(Files.exists(editorJsPath), "dashboard-editor.js must exist");
+        final String editorJsContent = Files.readString(editorJsPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            editorJsContent.contains("window.onTestSearchInput = onTestSearchInput;"),
+            "dashboard-editor.js must export onTestSearchInput"
+        );
+        Assertions.assertTrue(
+            editorJsContent.contains("window.clearTestSearch = clearTestSearch;"),
+            "dashboard-editor.js must export clearTestSearch"
+        );
+        Assertions.assertTrue(
+            editorJsContent.contains("window.updateClearTestSearchBtn = updateClearTestSearchBtn;"),
+            "dashboard-editor.js must export updateClearTestSearchBtn"
+        );
+        Assertions.assertTrue(
+            editorJsContent.contains("aura_test_search_query"),
+            "dashboard-editor.js must use aura_test_search_query for session persistence"
+        );
+
+        final Path coreJsPath = Paths.get("src/main/resources/static/dashboard-core.js");
+        Assertions.assertTrue(Files.exists(coreJsPath), "dashboard-core.js must exist");
+        final String coreJsContent = Files.readString(coreJsPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            coreJsContent.contains("initTestSearchFilter();"),
+            "dashboard-core.js must initialize search filter on load"
+        );
+        Assertions.assertTrue(
+            coreJsContent.contains("addEventListener('pageshow'"),
+            "dashboard-core.js must re-verify search filter on pageshow (BFcache support)"
+        );
+    }
 }
 

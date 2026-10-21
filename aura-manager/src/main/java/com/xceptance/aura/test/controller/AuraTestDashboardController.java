@@ -66,9 +66,22 @@ public class AuraTestDashboardController
     public String renderDashboard(
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         @RequestParam(value = "file", required = false) final String file,
+        @RequestParam(value = "q", required = false) final String query,
         final Model model)
     {
-        final List<YamlFileDto> testFiles = fileService.getYamlFilesList();
+        final List<YamlFileDto> testFiles;
+        final List<String> stepsFiles;
+        if (query != null && !query.isBlank())
+        {
+            testFiles = fileService.getFilteredYamlFilesList(query);
+            stepsFiles = fileService.getFilteredStepsFilesList(query);
+            model.addAttribute("q", query);
+        }
+        else
+        {
+            testFiles = fileService.getYamlFilesList();
+            stepsFiles = fileService.getStepsFilesList();
+        }
 
         model.addAttribute("pageTitle", "Neodymium Aura Manager Dashboard");
         model.addAttribute("activeTab", "AuraTestManager");
@@ -78,7 +91,7 @@ public class AuraTestDashboardController
         model.addAttribute("theme", interactiveService != null ? interactiveService.getActiveTheme() : "dark");
         model.addAttribute("files", testFiles);
         model.addAttribute("testFiles", testFiles);
-        model.addAttribute("stepsFiles", fileService.getStepsFilesList());
+        model.addAttribute("stepsFiles", stepsFiles);
         model.addAttribute("fragmentRequiredVarsMap", fileService.getFragmentRequiredVariablesMap());
         model.addAttribute("expandedFiles", fileService.getExpandedFiles());
         model.addAttribute("queue", queueController.getSelectedQueue());
@@ -191,6 +204,11 @@ public class AuraTestDashboardController
             return "fragments/aura-test-manager :: auraTestManager";
         }
         return "index";
+    }
+
+    public String renderDashboard(final String hxRequest, final String file, final Model model)
+    {
+        return renderDashboard(hxRequest, file, null, model);
     }
 
     @PostMapping("/api/theme")
