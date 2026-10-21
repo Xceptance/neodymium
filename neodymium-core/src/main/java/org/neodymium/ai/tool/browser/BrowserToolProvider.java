@@ -18,14 +18,17 @@
  */
 package org.neodymium.ai.tool.browser;
 
+import com.codeborne.selenide.CheckResult;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.Driver;
 import com.codeborne.selenide.ElementsCollection;
 import com.codeborne.selenide.ex.ElementNotFound;
 import com.codeborne.selenide.Selectors;
 import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
+import com.codeborne.selenide.WebElementCondition;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.selenide.LocatorResolver;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
@@ -3934,7 +3937,7 @@ public final class BrowserToolProvider
                         {
                             if (regex)
                             {
-                                el.shouldNotHave(Condition.attributeMatching(attrName, expectedValue));
+                                el.shouldNotHave(attributeMatchingPattern(attrName, expectedValue));
                             }
                             else if (exact)
                             {
@@ -3942,14 +3945,14 @@ public final class BrowserToolProvider
                             }
                             else
                             {
-                                el.shouldNotHave(Condition.attributeMatching(attrName, "(?s)(?i).*" + Pattern.quote(expectedValue) + ".*"));
+                                el.shouldNotHave(attributeMatchingPattern(attrName, Pattern.quote(expectedValue)));
                             }
                         }
                         else
                         {
                             if (regex)
                             {
-                                el.shouldHave(Condition.attributeMatching(attrName, expectedValue));
+                                el.shouldHave(attributeMatchingPattern(attrName, expectedValue));
                             }
                             else if (exact)
                             {
@@ -3957,7 +3960,7 @@ public final class BrowserToolProvider
                             }
                             else
                             {
-                                el.shouldHave(Condition.attributeMatching(attrName, "(?s)(?i).*" + Pattern.quote(expectedValue) + ".*"));
+                                el.shouldHave(attributeMatchingPattern(attrName, Pattern.quote(expectedValue)));
                             }
                         }
                     }
@@ -4007,6 +4010,51 @@ public final class BrowserToolProvider
                 return ToolResult.success(call.callId(), res.toString());
             }
         };
+    }
+
+    private static WebElementCondition attributeMatchingPattern(final String attributeName, final String patternStr)
+    {
+        return new AttributePatternCondition(attributeName, patternStr);
+    }
+
+    private static final class AttributePatternCondition extends WebElementCondition
+    {
+        private final String attributeName;
+        private final Pattern pattern;
+
+        AttributePatternCondition(final String attributeName, final String rawPattern)
+        {
+            super("match attribute");
+            this.attributeName = attributeName;
+            Pattern compiled;
+            try
+            {
+                compiled = Pattern.compile(rawPattern, Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+            }
+            catch (final PatternSyntaxException e)
+            {
+                compiled = Pattern.compile(Pattern.quote(rawPattern), Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+            }
+            this.pattern = compiled;
+        }
+
+        @Override
+        public CheckResult check(final Driver driver, final WebElement element)
+        {
+            final String val = element.getAttribute(this.attributeName);
+            if (val == null)
+            {
+                return new CheckResult(false, String.format("%s is null / absent", this.attributeName));
+            }
+            final boolean matches = this.pattern.matcher(val).find();
+            return new CheckResult(matches, String.format("%s~/%s/", this.attributeName, val));
+        }
+
+        @Override
+        public String toString()
+        {
+            return String.format("%s %s~/%s/", getName(), this.attributeName, this.pattern);
+        }
     }
 
     private static AiTool createScrollTool()

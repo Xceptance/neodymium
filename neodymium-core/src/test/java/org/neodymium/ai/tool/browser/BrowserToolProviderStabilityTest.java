@@ -2012,5 +2012,133 @@ public class BrowserToolProviderStabilityTest
             WebDriverRunner.closeWebDriver();
         }
     }
+
+    @Test
+    public void testAssertAttributeRegexSubstringAndAnchoredMatching() throws Exception
+    {
+        final WebElement photoElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "div";
+                    }
+                    if ("getAttribute".equals(name))
+                    {
+                        final String attr = (String) args[0];
+                        if ("aria-label".equals(attr))
+                        {
+                            return "Hochgeladenes Foto mit dem Namen ifolor-image-1792586054022-1846296935174937703.jpg";
+                        }
+                        if ("role".equals(attr))
+                        {
+                            return "img";
+                        }
+                        return null;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("findElements".equals(name))
+                    {
+                        return List.of(photoElement);
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        return photoElement;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 100;
+        try
+        {
+            final AiTool tool = this.registry.getTool("assert_attribute").orElseThrow();
+
+            // 1. Unanchored regex matching substring prefix should SUCCEED
+            final ObjectNode unanchoredArgs = MAPPER.createObjectNode();
+            unanchoredArgs.put("selector", "[role=\"img\"]");
+            unanchoredArgs.put("attribute", "aria-label");
+            unanchoredArgs.put("expectedValue", "Hochgeladenes Foto");
+            unanchoredArgs.put("regex", true);
+
+            final ToolResult unanchoredResult = tool.execute(new ToolCall("call-regex-1", "assert_attribute", unanchoredArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, unanchoredResult.status());
+            final JsonNode resJson = MAPPER.readTree(unanchoredResult.content());
+            Assertions.assertEquals("SUCCESS", resJson.path("status").asText());
+
+            // 2. Anchored full-string regex should FAIL if whole string does not match
+            final ObjectNode anchoredMismatchArgs = MAPPER.createObjectNode();
+            anchoredMismatchArgs.put("selector", "[role=\"img\"]");
+            anchoredMismatchArgs.put("attribute", "aria-label");
+            anchoredMismatchArgs.put("expectedValue", "^Hochgeladenes Foto$");
+            anchoredMismatchArgs.put("regex", true);
+
+            Assertions.assertThrows(
+                    AssertionError.class,
+                    () -> tool.execute(new ToolCall("call-regex-2", "assert_attribute", anchoredMismatchArgs), null)
+            );
+
+            // 3. Anchored full-string regex that matches full string should SUCCEED
+            final ObjectNode anchoredSuccessArgs = MAPPER.createObjectNode();
+            anchoredSuccessArgs.put("selector", "[role=\"img\"]");
+            anchoredSuccessArgs.put("attribute", "aria-label");
+            anchoredSuccessArgs.put("expectedValue", "^Hochgeladenes Foto.*\\.jpg$");
+            anchoredSuccessArgs.put("regex", true);
+
+            final ToolResult anchoredSuccessResult = tool.execute(new ToolCall("call-regex-3", "assert_attribute", anchoredSuccessArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, anchoredSuccessResult.status());
+
+            // 4. Negated unanchored regex that is present should FAIL
+            final ObjectNode negatedFailArgs = MAPPER.createObjectNode();
+            negatedFailArgs.put("selector", "[role=\"img\"]");
+            negatedFailArgs.put("attribute", "aria-label");
+            negatedFailArgs.put("expectedValue", "Hochgeladenes Foto");
+            negatedFailArgs.put("regex", true);
+            negatedFailArgs.put("negated", true);
+
+            Assertions.assertThrows(
+                    AssertionError.class,
+                    () -> tool.execute(new ToolCall("call-regex-4", "assert_attribute", negatedFailArgs), null)
+            );
+
+            // 5. Negated unanchored regex that is absent should SUCCEED
+            final ObjectNode negatedSuccessArgs = MAPPER.createObjectNode();
+            negatedSuccessArgs.put("selector", "[role=\"img\"]");
+            negatedSuccessArgs.put("attribute", "aria-label");
+            negatedSuccessArgs.put("expectedValue", "Unbekanntes Bild");
+            negatedSuccessArgs.put("regex", true);
+            negatedSuccessArgs.put("negated", true);
+
+            final ToolResult negatedSuccessResult = tool.execute(new ToolCall("call-regex-5", "assert_attribute", negatedSuccessArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, negatedSuccessResult.status());
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+            WebDriverRunner.closeWebDriver();
+        }
+    }
 }
 
