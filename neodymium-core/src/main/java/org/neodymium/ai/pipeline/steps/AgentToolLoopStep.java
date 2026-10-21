@@ -546,9 +546,12 @@ public final class AgentToolLoopStep implements PipelineStep
             // Stop Criterion 5: Step Wall-Clock Timeout (compensated for interactive pause durations)
             final long stepPauseMs = Math.max(totalPauseDurationMs, context.getStepInteractivePauseMs());
             final long elapsedSeconds = Math.max(0L, (System.currentTimeMillis() - startTimeMs - stepPauseMs) / 1000);
-            final long effectiveTimeoutSeconds = step != null && step.hasSubSteps() && !step.getSubSteps().isEmpty()
-                    ? Math.max(this.timeoutSeconds, this.timeoutSeconds * step.getSubSteps().size())
+            final long baseTimeoutSeconds = (step != null && step.getTimeoutMs() != null && step.getTimeoutMs() > 0)
+                    ? Math.max(1L, (step.getTimeoutMs() + 999L) / 1000L)
                     : this.timeoutSeconds;
+            final long effectiveTimeoutSeconds = step != null && step.hasSubSteps() && !step.getSubSteps().isEmpty()
+                    ? Math.max(baseTimeoutSeconds, baseTimeoutSeconds * step.getSubSteps().size())
+                    : baseTimeoutSeconds;
             if (elapsedSeconds >= effectiveTimeoutSeconds)
             {
                 throw new StepTimeoutExceededException(instruction, elapsedSeconds, (int) effectiveTimeoutSeconds);
