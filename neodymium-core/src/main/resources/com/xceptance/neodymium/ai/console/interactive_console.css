@@ -2703,3 +2703,37 @@ body.mode-embedded button[aria-label="Toggle Light/Dark Theme"] { display: none 
     color: var(--accent-primary);
 }
 
+/* AI Fix Suggestion Modal text display & editor */
+.suggestion-original-box {
+    padding: 10px 14px;
+    background: var(--bg-surface-hover);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-main);
+    line-height: 1.5;
+    word-break: break-word;
+}
+
+.suggestion-textarea {
+    width: 100%;
+    background: var(--bg-surface-hover);
+    border: 1.5px solid #8b5cf6;
+    color: var(--text-main);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.5;
+    outline: none;
+    resize: vertical;
+    box-sizing: border-box;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.suggestion-textarea:focus {
+    border-color: #a78bfa;
+    box-shadow: 0 0 0 2px rgba(139, 92, 246, 0.25);
+}
+

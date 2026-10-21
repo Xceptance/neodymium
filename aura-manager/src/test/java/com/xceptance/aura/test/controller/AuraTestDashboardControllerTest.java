@@ -76,6 +76,21 @@ public class AuraTestDashboardControllerTest
     }
 
     @Test
+    public void testRenderDashboardWithSearchQuery()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(fileService.getFilteredYamlFilesList("login")).thenReturn(List.of());
+        Mockito.when(fileService.getFilteredStepsFilesList("login")).thenReturn(List.of());
+
+        final String view = controller.renderDashboard("false", null, "login", model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals("login", model.getAttribute("q"));
+        Mockito.verify(fileService).getFilteredYamlFilesList("login");
+        Mockito.verify(fileService).getFilteredStepsFilesList("login");
+    }
+
+    @Test
     public void testRenderDashboardHtmx()
     {
         final Model model = new ConcurrentModel();

@@ -510,19 +510,23 @@
                 <p style="color: var(--text-secondary); font-size: 14px;">Analyzing SUT page state & generating fix suggestion...</p>
             </div>
             <div id="suggestionBody" style="display: none; flex-direction: column; gap: 14px; margin: 16px 0; text-align: left;">
+                <div id="suggestionFailureBox" style="display: none;">
+                    <label style="display: block; font-weight: 600; font-size: 12px; text-transform: uppercase; color: var(--accent-danger); margin-bottom: 4px;">Failure Reason</label>
+                    <div id="suggestionFailureText" class="suggestion-original-box" style="border-left: 3px solid var(--accent-danger); color: var(--accent-danger); font-size: 12px; background: rgba(239, 68, 68, 0.06);"></div>
+                </div>
                 <div>
                     <label style="display: block; font-weight: 600; font-size: 12px; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 4px;">Original Instruction</label>
-                    <div id="suggestionOriginalText" style="padding: 8px 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; font-family: var(--font-mono); font-size: 13px; color: var(--text-muted); word-break: break-all;"></div>
+                    <div id="suggestionOriginalText" class="suggestion-original-box"></div>
                 </div>
                 <div>
                     <label for="suggestionTextarea" style="display: block; font-weight: 600; font-size: 12px; text-transform: uppercase; color: #8b5cf6; margin-bottom: 4px;">Suggested Fix (Editable)</label>
-                    <textarea id="suggestionTextarea" rows="3" style="width: 100%; background: rgba(0,0,0,0.4); border: 1px solid #8b5cf6; color: var(--text-main); padding: 10px; border-radius: 6px; font-family: var(--font-mono); font-size: 13px; outline: none; resize: vertical;"></textarea>
+                    <textarea id="suggestionTextarea" rows="3" class="suggestion-textarea"></textarea>
                 </div>
             </div>
             <div class="inline-edit-actions" id="suggestionActions" style="display: none; gap: 10px; justify-content: flex-end; margin-top: 12px;">
                 <button class="btn" onclick="closeOverlay('suggestionOverlay')">Dismiss</button>
                 <button class="btn btn-primary" onclick="applySuggestionOnly()">Apply Only</button>
-                <button class="btn btn-success" onclick="applySuggestionAndRun()"><span class="material-symbols-outlined">play_arrow</span> Approve & Run</button>
+                <button class="btn btn-success" onclick="applySuggestionAndRun()"><span class="material-symbols-outlined">play_arrow</span> Apply and Confirm</button>
             </div>
         </div>
     </div>

@@ -55,6 +55,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 
 /**
  * Utility serializing active {@link AiSession} and {@link ExecutionContext} state into
@@ -619,6 +620,7 @@ public final class InteractiveStateBuilder
             {
                 state.addProperty("error", execReport.getFailureReason());
                 state.addProperty("failureReason", execReport.getFailureReason());
+                state.addProperty("errorMessage", execReport.getFailureReason());
             }
             if (execReport.getFailureStackTrace() != null && !execReport.getFailureStackTrace().isBlank())
             {
@@ -704,22 +706,50 @@ public final class InteractiveStateBuilder
             state.addProperty("reasoning", topReasoning);
         }
 
+        // Fix suggestion fallback if generated during pause
+        if (context != null)
+        {
+            final Object fixObj = context.getTransientData().get("lastFixSuggestion");
+            if (fixObj instanceof final JsonObject fixJson)
+            {
+                state.add("fixSuggestion", fixJson);
+            }
+            else if (fixObj instanceof final String fixStr && !fixStr.isBlank())
+            {
+                try
+                {
+                    state.add("fixSuggestion", JsonParser.parseString(fixStr).getAsJsonObject());
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
+
         // Top-level failure error message fallback if not set by execReport
-        if ("failed".equalsIgnoreCase(runnerStatus) && !state.has("error"))
+        if (("failed".equalsIgnoreCase(runnerStatus) || "paused".equalsIgnoreCase(runnerStatus)) && !state.has("error"))
         {
             String failureMessage = null;
             if (context != null)
             {
-                @SuppressWarnings("unchecked")
-                final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
-                if (flatSteps != null)
+                final Object lastFail = context.getTransientData().get("KEY_LAST_STEP_FAILURE");
+                if (lastFail instanceof final String s && !s.isBlank())
                 {
-                    for (final PlaybookStep s : flatSteps)
+                    failureMessage = s;
+                }
+                if (failureMessage == null)
+                {
+                    @SuppressWarnings("unchecked")
+                    final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+                    if (flatSteps != null)
                     {
-                        if (s != null && s.getFailureReason() != null && !s.getFailureReason().isBlank())
+                        for (final PlaybookStep s : flatSteps)
                         {
-                            failureMessage = s.getFailureReason();
-                            break;
+                            if (s != null && s.getFailureReason() != null && !s.getFailureReason().isBlank())
+                            {
+                                failureMessage = s.getFailureReason();
+                                break;
+                            }
                         }
                     }
                 }
@@ -728,6 +758,7 @@ public final class InteractiveStateBuilder
             {
                 state.addProperty("error", failureMessage);
                 state.addProperty("failureReason", failureMessage);
+                state.addProperty("errorMessage", failureMessage);
             }
         }
 
@@ -753,7 +784,8 @@ public final class InteractiveStateBuilder
         obj.addProperty("id", source + "_" + stepIndex);
         obj.addProperty("index", globalIndex + 1);
         obj.addProperty("blockIndex", stepIndex);
-        obj.addProperty("block", "playbook".equalsIgnoreCase(source) ? "steps" : source);
+        final String expectedBlock = "playbook".equalsIgnoreCase(source) ? "steps" : source;
+        obj.addProperty("block", expectedBlock);
         final String rawInstruction = step.getInstruction() != null ? step.getInstruction() : "";
         final ExecutionContext effContext = context != null ? context : ExecutionContext.getActiveContext();
         final String resolvedInstruction = (effContext != null && effContext.getSessionData() != null)
@@ -886,10 +918,21 @@ public final class InteractiveStateBuilder
             obj.addProperty("duration", stepDuration);
         }
 
-        if (step.getFailureReason() != null && !step.getFailureReason().isBlank())
+        String stepFailureReason = step.getFailureReason();
+        if ((stepFailureReason == null || stepFailureReason.isBlank()) && (status == PlaybookStepStatus.FAILED || step.isFailed()) && context != null)
         {
-            obj.addProperty("error", step.getFailureReason());
-            obj.addProperty("failureReason", step.getFailureReason());
+            final Object lastFail = context.getTransientData().get("KEY_LAST_STEP_FAILURE");
+            if (lastFail instanceof final String s && !s.isBlank())
+            {
+                stepFailureReason = s;
+            }
+        }
+
+        if (stepFailureReason != null && !stepFailureReason.isBlank())
+        {
+            obj.addProperty("error", stepFailureReason);
+            obj.addProperty("failureReason", stepFailureReason);
+            obj.addProperty("errorMessage", stepFailureReason);
         }
 
         if (isThisStepActive && context != null)
@@ -963,7 +1006,6 @@ public final class InteractiveStateBuilder
         ReportStepEntry reportStep = null;
         if (report != null && report.getSteps() != null)
         {
-            final String expectedBlock = "playbook".equalsIgnoreCase(source) ? "steps" : source;
             for (final ReportStepEntry entry : report.getSteps())
             {
                 if (entry != null && (entry.getStepIndex() == stepIndex || entry.getStepIndex() == globalIndex))
@@ -1131,6 +1173,8 @@ public final class InteractiveStateBuilder
                     if (sub.getFailureReason() != null && !sub.getFailureReason().isBlank())
                     {
                         subObj.addProperty("failureReason", sub.getFailureReason());
+                        subObj.addProperty("error", sub.getFailureReason());
+                        subObj.addProperty("errorMessage", sub.getFailureReason());
                     }
                     if (sub.getActions() != null && !sub.getActions().isEmpty())
                     {
@@ -1188,9 +1232,14 @@ public final class InteractiveStateBuilder
             final List<ReportLlmCallEntry> matchingCalls = new ArrayList<>();
             for (final ReportLlmCallEntry call : report.getLlmCalls())
             {
-                if (call != null && (call.getStepIndex() == stepIndex || call.getStepIndex() == globalIndex))
+                if (call != null)
                 {
-                    matchingCalls.add(call);
+                    final String callBlock = call.getBlock() != null ? call.getBlock() : "steps";
+                    final boolean blockMatches = expectedBlock.equalsIgnoreCase(callBlock);
+                    if (blockMatches && (call.getStepIndex() == stepIndex || call.getStepIndex() == globalIndex))
+                    {
+                        matchingCalls.add(call);
+                    }
                 }
             }
             if (!matchingCalls.isEmpty())
@@ -1324,6 +1373,7 @@ public final class InteractiveStateBuilder
                     {
                         callObj.addProperty("subStepIndex", call.getSubStepIndex());
                     }
+                    callObj.addProperty("block", call.getBlock() != null ? call.getBlock() : "steps");
                     callObj.addProperty("capability", call.getCapability());
                     callObj.addProperty("modelName", call.getModelName());
                     callObj.addProperty("durationMs", call.getDurationMs());
@@ -1627,6 +1677,11 @@ public final class InteractiveStateBuilder
                     subObj.addProperty("durationMs", sub.getDurationMs());
                     subObj.addProperty("reasoning", sub.getReasoning());
                     subObj.addProperty("failureReason", sub.getFailureReason());
+                    if (sub.getFailureReason() != null && !sub.getFailureReason().isBlank())
+                    {
+                        subObj.addProperty("error", sub.getFailureReason());
+                        subObj.addProperty("errorMessage", sub.getFailureReason());
+                    }
                     if (sub.getContextLevels() != null && !sub.getContextLevels().isBlank())
                     {
                         subObj.addProperty("contextLevels", sub.getContextLevels());

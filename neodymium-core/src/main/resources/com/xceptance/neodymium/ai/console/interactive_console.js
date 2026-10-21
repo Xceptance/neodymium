@@ -76,8 +76,24 @@ function connectSSE() {
     });
 
     eventSource.addEventListener('fixSuggestion', (e) => {
-        const data = JSON.parse(e.data);
-        handleFixSuggestionReceived(data);
+        try {
+            const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+            if (data) {
+                isStructuralActionInFlight = false;
+                structuralActionPauseId = null;
+                clearStructuralSyncWatchdog();
+                if (data.pauseId) {
+                    currentPauseId = data.pauseId;
+                    window.currentPauseId = currentPauseId;
+                    if (currentState) {
+                        currentState.pauseId = data.pauseId;
+                    }
+                }
+                handleFixSuggestionReceived(data);
+            }
+        } catch (err) {
+            console.error('Error handling fixSuggestion event:', err);
+        }
     });
 
     eventSource.addEventListener('pause', (e) => {
@@ -477,10 +493,11 @@ function applyState(state) {
         selectedStepIndexForDetails = null;
     }
 
-    // If a structural action is currently in-flight, preserve our optimistic blocks
+    // If a structural action or run/edit action is currently in-flight, preserve our optimistic blocks
     // so stale in-flight state events from the server do not revert the UI before the
     // rotated pause token is received.
-    if (isStructuralActionInFlight && currentState && currentState.blocks && state && state.blocks) {
+    const isStaleRunActionState = isRunActionInFlight && runActionPauseId && (state.pauseId === runActionPauseId || (state.status === 'paused' && state.pauseId === null));
+    if ((isStructuralActionInFlight || isStaleRunActionState) && currentState && currentState.blocks && state && state.blocks) {
         state.blocks = currentState.blocks;
     } else if (currentState && currentState.blocks && state && state.blocks) {
         // Preserve local temporary/pending steps when applying a new state from the server
@@ -515,6 +532,14 @@ function applyState(state) {
     window.currentState = currentState; // Expose to Selenium
     currentRunId = state.runId;
 
+    if (state && state.fixSuggestion) {
+        const overlay = document.getElementById('suggestionOverlay');
+        const loading = document.getElementById('suggestionLoading');
+        if (overlay && overlay.classList.contains('active') && loading && loading.style.display !== 'none') {
+            handleFixSuggestionReceived(state.fixSuggestion);
+        }
+    }
+
     let hasFailedStep = false;
     let failedIdx = null;
     if (state && state.blocks) {
@@ -530,13 +555,19 @@ function applyState(state) {
         }
     }
 
-    if (failedIdx !== lastFailedStepIndex) {
+    if (failedIdx !== null && failedIdx !== lastFailedStepIndex) {
         userEditedFailedStep = false;
         lastFailedStepIndex = failedIdx;
+    } else if (failedIdx === null) {
+        lastFailedStepIndex = null;
     }
 
     if (hasFailedStep && !userEditedFailedStep) {
         isErrorMode = true;
+        isAutoMode = false;
+        autoStartStepIndex = null;
+        pendingRunAfterSync = false;
+        syncAutoButton();
     } else {
         isErrorMode = false;
     }
@@ -840,7 +871,8 @@ function checkActionApprovals() {
     const isTopThinking = currentState && typeof currentState.reasoning === 'string' && currentState.reasoning.toLowerCase().includes('thinking');
     const isStepThinking = s && typeof s.reasoning === 'string' && s.reasoning.toLowerCase().includes('thinking');
     const hasPlannedActions = s && Array.isArray(s.actions) && s.actions.length > 0;
-    const isThinking = (s && !s.reasoning && !hasPlannedActions && !isStructuralActionInFlight) || isTopThinking || isStepThinking;
+    const isFailedStep = isErrorMode || (s && (s.status === 'failed' || s.failed));
+    const isThinking = (!isFailedStep && (s && !s.reasoning && !hasPlannedActions && !isStructuralActionInFlight)) || isTopThinking || isStepThinking;
 
     if (runBtn) {
         if (isThinking || isExecuting || isRunActionInFlight) {
@@ -873,7 +905,7 @@ function renderBlock(blockName, steps) {
 
     // Enhanced signature to include selection, sub-step selection, breakpoints, and other UI state
     const sig = JSON.stringify({
-        steps: steps.map(s => `${s.index}|${s.status}|${s.instruction}|${s.source || ''}|${s.reasoning ? s.reasoning.length : 0}|${s.actions ? s.actions.length : 0}|${s.errorMessage ? s.errorMessage.length : 0}|${s.llmCalls ? s.llmCalls.length : 0}|${Array.isArray(s.subSteps) ? s.subSteps.map(c => `${c.index}:${c.status}:${c.durationMs || 0}`).join(',') : ''}`),
+        steps: steps.map(s => `${s.index}|${s.status}|${s.instruction}|${s.source || ''}|${s.reasoning ? s.reasoning.length : 0}|${s.actions ? s.actions.length : 0}|${(s.failureReason || s.errorMessage || s.error || '').length}|${s.llmCalls ? s.llmCalls.length : 0}|${Array.isArray(s.subSteps) ? s.subSteps.map(c => `${c.index}:${c.status}:${c.durationMs || 0}`).join(',') : ''}`),
         selected: selectedStepIndexForDetails,
         selectedSubStep: selectedSubStepIndex,
         expandedSubSteps: Array.from(expandedSubStepsTrees),
@@ -886,14 +918,14 @@ function renderBlock(blockName, steps) {
     container.dataset.sig = sig;
 
     if (steps.length === 0) {
-        // In results/read-only mode: hide the block entirely \u2014 there are no steps
+        // In results/read-only mode: hide the block entirely — there are no steps
         // to display and no drag target is needed.
         // In interactive mode: show a drop zone so steps can be dragged into it.
         if (document.body.classList.contains('mode-results')) {
             group.style.display = 'none';
             return;
         }
-        // Interactive mode \u2014 show empty drop zone
+        // Interactive mode — show empty drop zone
         container.innerHTML = `<div class="drop-target-area empty-block-zone" data-block="${blockName}" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event, -1, 'after', '${blockName}')">
                     <span style="opacity: 0.5; font-size: 12px;">Drop steps here</span>
                 </div>`;
@@ -951,9 +983,10 @@ function buildStepDetailsHtml(step, isActiveStep) {
 
     const actionListBlock = isSkipped ? '' : `<div class="llm-action-list">${actionsLabel}${actionsHtml}</div>`;
 
-    const errorBox = step.errorMessage ? `
+    const errorText = step.failureReason || step.errorMessage || step.error;
+    const errorBox = errorText ? `
                 <div class="error-message-box" style="margin-bottom:12px;">
-                    <span id="err-text-detail-${step.index}">${escHtml(step.errorMessage)}</span>
+                    <span id="err-text-detail-${step.index}">${escHtml(errorText)}</span>
                     <button class="copy-btn" onclick="copyError('err-text-detail-${step.index}')" title="Copy to clipboard"><span class="material-symbols-outlined" aria-hidden="true">content_copy</span></button>
                 </div>` : '';
 
@@ -1087,7 +1120,14 @@ window.toggleLlmSubsection = toggleLlmSubsection;
 function buildLlmCallsHtml(step) {
     let calls = Array.isArray(step.llmCalls) ? step.llmCalls : [];
     if (calls.length === 0 && currentState && Array.isArray(currentState.llmCalls)) {
-        calls = currentState.llmCalls.filter(c => c && (c.stepIndex === step.index - 1 || c.stepIndex === step.index));
+        const stepBlock = (step.block || 'steps').toLowerCase();
+        calls = currentState.llmCalls.filter(c => {
+            if (!c) return false;
+            const callBlock = (c.block || 'steps').toLowerCase();
+            if (callBlock !== stepBlock) return false;
+            const targetBlockIdx = (step.blockIndex !== undefined && step.blockIndex !== null) ? step.blockIndex : (step.index - 1);
+            return c.stepIndex === targetBlockIdx || c.stepIndex === step.index;
+        });
     }
 
     if (calls.length > 0) {
@@ -1501,7 +1541,7 @@ function renderStepCard(step, blockName = 'steps') {
     const isSkipped = status === 'skipped';
     const isPassed = status === 'passed';
     const isActive = status === 'running' || status === 'failed';
-    const isFailed = status === 'failed';
+    const isFailed = status === 'failed' || step.failed === true;
     const isEditing = window.currentlyEditingStepIndex === step.index;
 
     const includeLevel = typeof step.includeLevel === 'number' ? step.includeLevel : 0;
@@ -1518,6 +1558,8 @@ function renderStepCard(step, blockName = 'steps') {
     const actionsList = Array.isArray(step.actions) ? step.actions : [];
     const hasDetails = (actionsList.length > 0)
         || step.errorMessage
+        || step.failureReason
+        || step.error
         || step.durationMs
         || step.screenshot
         || step.thinkingTimeMs
@@ -1649,6 +1691,33 @@ function renderStepCard(step, blockName = 'steps') {
 
     const resolvedInstruction = resolveVariables(step.instruction, currentState?.dataBindings);
 
+    // Build Failure Reason bubble if step failed
+    let failureReasonHtml = '';
+    const failureReasonText = step.failureReason || step.errorMessage || step.error || (currentState && currentState.error && isFailed ? currentState.error : '');
+    if (isFailed && failureReasonText) {
+        const failId = `failure-${step.index}`;
+        const escaped = escHtml(failureReasonText);
+        const isLong = failureReasonText.length > 220;
+        const preview = isLong ? escHtml(failureReasonText.substring(0, 220)) + '…' : escaped;
+        failureReasonHtml = `<div class="inline-reasoning-bubble failed" style="margin-top:8px;">
+                    <div class="inline-reasoning-label"><span class="material-symbols-outlined" aria-hidden="true">error</span> Failure Reason</div>
+                    <div class="reasoning-body">
+                        <span class="material-symbols-outlined" aria-hidden="true">warning</span>
+                        <span style="flex:1; word-break:break-word;">
+                            <span id="${failId}-preview">${preview}</span>
+                            ${isLong ? `<span id="${failId}-full" style="display:none;">${escaped}</span>
+                            <button onclick="toggleTextExpand(event,'${failId}')" class="step-more-details-btn" style="margin-top:4px;">
+                                <span class="material-symbols-outlined" style="font-size:14px;">chevron_right</span> Show more
+                            </button>` : ''}
+                        </span>
+                        <button class="copy-btn" onclick="copyError('${failId}-copy')" title="Copy failure reason to clipboard" style="margin-left:auto;align-self:flex-start;background:transparent;border:none;color:var(--accent-danger);cursor:pointer;padding:2px 4px;">
+                            <span class="material-symbols-outlined" style="font-size:16px;" aria-hidden="true">content_copy</span>
+                        </button>
+                        <span id="${failId}-copy" style="display:none;">${escaped}</span>
+                    </div>
+                </div>`;
+    }
+
     // Build inline reasoning / playbook note for active step
     let inlineReasoningHtml = '';
     if (isActive) {
@@ -1667,10 +1736,10 @@ function renderStepCard(step, blockName = 'steps') {
             const escaped = escHtml(step.reasoning);
             const isLong = step.reasoning.length > 220;
             const preview = isLong ? escHtml(step.reasoning.substring(0, 220)) + '…' : escaped;
-            inlineReasoningHtml = `<div class="inline-reasoning-bubble${isFailed ? ' failed' : ''}">
-                        <div class="inline-reasoning-label"><span class="material-symbols-outlined" aria-hidden="true">${isFailed ? 'warning' : 'psychology'}</span> ${isFailed ? 'Failure Reason' : 'AI Reasoning'}</div>
+            inlineReasoningHtml = `<div class="inline-reasoning-bubble">
+                        <div class="inline-reasoning-label"><span class="material-symbols-outlined" aria-hidden="true">psychology</span> AI Reasoning</div>
                         <div class="reasoning-body">
-                            <span class="material-symbols-outlined" aria-hidden="true">${isFailed ? 'warning' : 'format_quote'}</span>
+                            <span class="material-symbols-outlined" aria-hidden="true">format_quote</span>
                             <span>
                                 <span id="${reasoningId}-preview">${preview}</span>
                                 ${isLong ? `<span id="${reasoningId}-full" style="display:none;">${escaped}</span>
@@ -1779,6 +1848,12 @@ function renderStepCard(step, blockName = 'steps') {
                     : '';
 
                 const resolvedSubInstruction = resolveVariables(sub.instruction, currentState?.dataBindings);
+                const subErr = (subStatus === 'failed') ? (sub.failureReason || sub.errorMessage || sub.error) : null;
+                const subErrHtml = subErr ? `
+                    <div class="substep-failure-reason" style="margin-left:36px; margin-top:2px; margin-bottom:4px; font-size:11px; color:var(--accent-danger); display:flex; align-items:flex-start; gap:4px; word-break:break-word;">
+                        <span class="material-symbols-outlined" style="font-size:13px; margin-top:1px; flex-shrink:0;">warning</span>
+                        <span>${escHtml(subErr)}</span>
+                    </div>` : '';
 
                 return `
                     <div class="substep-row ${subStatusClass}${selectedSubClass}" data-substep-idx="${subNum}"
@@ -1789,7 +1864,8 @@ function renderStepCard(step, blockName = 'steps') {
                         <span class="substep-num">#${badgeNum}.${subNum}</span>
                         <span class="substep-text">${escHtml(resolvedSubInstruction)}</span>
                         ${subDurationHtml}
-                    </div>`;
+                    </div>
+                    ${subErrHtml}`;
             }).join('');
 
             subStepsTreeHtml = `<div class="substeps-tree-container" id="substeps-tree-${step.index}">${rowsHtml}</div>`;
@@ -1807,6 +1883,7 @@ function renderStepCard(step, blockName = 'steps') {
                     <div class="step-text-container">
                         <div class="tag-row">${sourceTag}${subStepsBadgeHtml}${thinkingBadge}</div>
                         <div class="step-text">${stepTextContent}</div>
+                        ${failureReasonHtml ? `<div style="margin-top:6px;">${failureReasonHtml}</div>` : ''}
                         ${isFailed ? `<div style="margin-top:6px;"><button class="btn-suggest-fix" onclick="requestFixSuggestion(event, ${step.index})" title="Get AI Instruction Fix Suggestion"><span class="material-symbols-outlined" aria-hidden="true">auto_awesome</span> Suggest Fix</button></div>` : ''}
                         <div class="step-edit-form">
                             <textarea class="inline-edit-textarea" aria-label="Edit step instruction text">${isEditing && window.currentEditText != null ? escHtml(window.currentEditText) : escHtml(step.rawInstruction || step.instruction)}</textarea>
@@ -1879,15 +1956,20 @@ function isStructuralAction(action, extra) {
 }
 
 function sendAction(action, extra) {
-    if (action === 'RUN' || action === 'ABORT') {
+    if (action === 'RUN' || action === 'ABORT' || action === 'EDIT') {
         pendingSkipAfterSync = false;
+        pendingRunAfterSync = false;
     }
-    if (!currentPauseId || !currentRunId) {
+    const token = (extra && extra.pauseId) || currentPauseId || window.currentPauseId || currentState?.pauseId;
+    if (!token || !currentRunId) {
         if (action === 'SKIP' && currentRunId) {
             pendingSkipAfterSync = true;
             console.log('[InteractiveConsole] Skip armed; will skip upon next step pause.');
         }
         return;
+    }
+    if (!currentPauseId && token) {
+        currentPauseId = token;
     }
     if (action === 'SKIP') {
         pendingSkipAfterSync = false;
@@ -1910,6 +1992,9 @@ function sendAction(action, extra) {
         startStructuralSyncWatchdog();
     }
     if (action === 'RUN' || action === 'HEAL' || action === 'SKIP') {
+        isRunActionInFlight = true;
+        runActionPauseId = currentPauseId;
+    } else if (action === 'EDIT') {
         isRunActionInFlight = true;
         runActionPauseId = currentPauseId;
     }
@@ -1947,7 +2032,7 @@ function sendAction(action, extra) {
         // Keep currentState in sync so local re-renders see no active pause token.
         if (currentState) {
             currentState.pauseId = null;
-            if (action === 'RUN' || action === 'HEAL' || action === 'AUTO') {
+            if (action === 'RUN' || action === 'HEAL' || action === 'AUTO' || action === 'EDIT') {
                 currentState.status = 'running';
                 const allSteps = [
                     ...(currentState.blocks?.before || []),
@@ -2127,7 +2212,7 @@ function triggerAutoRunCheck() {
         ...(currentState?.blocks?.after || [])
     ];
 
-    const hasFailedStep = allSteps.some(s => s.status === 'failed' || s.errorMessage);
+    const hasFailedStep = allSteps.some(s => s.status === 'failed' || s.failed || s.errorMessage || s.failureReason || s.error);
     const activeRunningStep = allSteps.find(s => s.status === 'running');
 
     const hitBreakpoint = activeRunningStep &&
@@ -2397,7 +2482,8 @@ function updateBigScreenDetails() {
             status: targetSubStep.status ? targetSubStep.status.toLowerCase() : 'pending',
             instruction: targetSubStep.instruction,
             actions: scopedActions,
-            errorMessage: targetSubStep.failureReason || targetSubStep.errorMessage,
+            errorMessage: targetSubStep.failureReason || targetSubStep.errorMessage || targetSubStep.error,
+            failureReason: targetSubStep.failureReason || targetSubStep.errorMessage || targetSubStep.error,
             reasoning: targetSubStep.reasoning || (targetSubStep.status === 'running' ? 'AI is working on this sub-step...' : ''),
             durationMs: targetSubStep.durationMs,
             thinkingTimeMs: targetSubStep.thinkingTimeMs,
@@ -2579,6 +2665,9 @@ function saveEdit(btnElement) {
                 targetStep.actions = [];
                 targetStep.reasoning = null;
                 targetStep.errorMessage = null;
+                delete targetStep.failureReason;
+                delete targetStep.error;
+                targetStep.failed = false;
             }
             const targetList = (currentState.blocks && currentState.blocks[blockName]) ? currentState.blocks[blockName] : [];
             let targetRelIdx = (targetStep && typeof targetStep.targetInsertIndex === 'number' && targetStep.targetInsertIndex >= 0)
@@ -2629,6 +2718,9 @@ function saveEdit(btnElement) {
                 targetStep.actions = [];
                 targetStep.reasoning = null;
                 targetStep.errorMessage = null;
+                delete targetStep.failureReason;
+                delete targetStep.error;
+                targetStep.failed = false;
             }
             selectedStepIndexForDetails = idx;
             window.currentlyEditingStepIndex = null;
@@ -2717,40 +2809,76 @@ function requestFixSuggestion(event, stepIndex) {
 
     if (!overlay) return;
 
-    overlay.classList.add('active');
+    openOverlay('suggestionOverlay');
     if (loading) loading.style.display = 'block';
     if (body) body.style.display = 'none';
     if (actions) actions.style.display = 'none';
 
     let stepInstruction = '';
+    let stepFailureReason = '';
+    let foundBlock = null;
+    let foundBlockIndex = -1;
     if (currentState && currentState.blocks) {
         for (const bKey of ['before', 'steps', 'after']) {
             const list = currentState.blocks[bKey] || [];
             const found = list.find(s => s.index == stepIndex);
             if (found) {
                 stepInstruction = found.instruction || '';
+                stepFailureReason = found.failureReason || found.errorMessage || found.error || '';
+                foundBlock = bKey;
+                foundBlockIndex = found.blockIndex !== undefined ? found.blockIndex : -1;
                 break;
             }
+        }
+    }
+    if (!stepFailureReason && currentState && currentState.error) {
+        stepFailureReason = currentState.error;
+    }
+
+    const failBox = document.getElementById('suggestionFailureBox');
+    const failText = document.getElementById('suggestionFailureText');
+    if (failBox && failText) {
+        if (stepFailureReason && stepFailureReason.trim()) {
+            failText.innerText = stepFailureReason.trim();
+            failBox.style.display = 'block';
+        } else {
+            failBox.style.display = 'none';
         }
     }
 
     if (origText && (!origText.innerText || !origText.innerText.trim())) origText.innerText = stepInstruction;
 
-    sendAction('SUGGEST_FIX', { index: stepIndex });
+    const flatIdx = allStepIndices.indexOf(stepIndex);
+    sendAction('SUGGEST_FIX', {
+        index: foundBlockIndex >= 0 ? foundBlockIndex : (flatIdx >= 0 ? flatIdx : stepIndex),
+        blockIndex: foundBlockIndex,
+        flatIndex: flatIdx >= 0 ? flatIdx : (stepIndex > 0 ? stepIndex - 1 : 0),
+        rawIndex: stepIndex,
+        block: foundBlock,
+        instruction: stepInstruction
+    });
 }
 
 function handleFixSuggestionReceived(data) {
+    if (!data) return;
     const loading = document.getElementById('suggestionLoading');
     const body = document.getElementById('suggestionBody');
     const actions = document.getElementById('suggestionActions');
     const textarea = document.getElementById('suggestionTextarea');
     const origText = document.getElementById('suggestionOriginalText');
+    const failBox = document.getElementById('suggestionFailureBox');
+    const failText = document.getElementById('suggestionFailureText');
 
     if (loading) loading.style.display = 'none';
     if (body) body.style.display = 'flex';
     if (actions) actions.style.display = 'flex';
 
-    if (data.originalInstruction && origText && (!origText.innerText || !origText.innerText.trim())) {
+    if (data.failureReason && failBox && failText) {
+        failText.innerText = data.failureReason.trim();
+        failBox.style.display = 'block';
+    }
+
+    if (data.originalInstruction && origText) {
         origText.innerText = data.originalInstruction;
     }
 
@@ -2761,39 +2889,98 @@ function handleFixSuggestionReceived(data) {
 }
 
 function applySuggestionAndRun() {
-    const textarea = document.getElementById('suggestionTextarea');
-    const newInstruction = textarea ? textarea.value.trim() : '';
-    if (currentSuggestionStepIndex != null && newInstruction && currentPauseId) {
-        userEditedFailedStep = true;
-        isErrorMode = false;
-        updateToolbarControls(true);
-        const flatIdx = allStepIndices.indexOf(currentSuggestionStepIndex);
-        sendAction('EDIT', {
-            index: flatIdx >= 0 ? flatIdx : currentSuggestionStepIndex,
-            rawIndex: currentSuggestionStepIndex,
-            isCurrentStep: true,
-            instruction: newInstruction,
-            bindings: currentState?.dataBindings
-        });
-        setTimeout(() => {
-            sendAction('RUN');
-        }, 150);
-    }
-    closeOverlay('suggestionOverlay');
+    executeApplySuggestion(true);
 }
 
 function applySuggestionOnly() {
+    executeApplySuggestion(false);
+}
+
+function executeApplySuggestion(autoConfirm) {
     const textarea = document.getElementById('suggestionTextarea');
     const newInstruction = textarea ? textarea.value.trim() : '';
-    if (currentSuggestionStepIndex != null && newInstruction && currentPauseId) {
+    const activePauseId = currentPauseId || window.currentPauseId || currentState?.pauseId;
+    if (currentSuggestionStepIndex != null && newInstruction && activePauseId) {
+        let targetStep = null;
+        let blockName = 'steps';
+        let foundBlockIndex = -1;
+
+        if (currentState && currentState.blocks) {
+            for (const bKey of ['before', 'steps', 'after']) {
+                const list = currentState.blocks[bKey] || [];
+                const found = list.find(s => s.index == currentSuggestionStepIndex);
+                if (found) {
+                    targetStep = found;
+                    blockName = bKey;
+                    foundBlockIndex = found.blockIndex !== undefined ? found.blockIndex : list.indexOf(found);
+                    break;
+                }
+                // Check if target is a nested sub-step
+                for (let i = 0; i < list.length; i++) {
+                    const parent = list[i];
+                    if (Array.isArray(parent.subSteps)) {
+                        const subFound = parent.subSteps.find(sub => sub.index == currentSuggestionStepIndex || `${parent.index}.${sub.index}` == currentSuggestionStepIndex);
+                        if (subFound) {
+                            targetStep = subFound;
+                            blockName = bKey;
+                            foundBlockIndex = parent.blockIndex !== undefined ? parent.blockIndex : i;
+                            break;
+                        }
+                    }
+                }
+                if (targetStep) break;
+            }
+        }
+
+        const blockList = (currentState?.blocks && currentState.blocks[blockName]) ? currentState.blocks[blockName] : [];
+        const blockIndex = targetStep ? blockList.indexOf(targetStep) : foundBlockIndex;
+        const allSteps = [
+            ...(currentState?.blocks?.before || []),
+            ...(currentState?.blocks?.steps || []),
+            ...(currentState?.blocks?.after || [])
+        ];
+        const flatIdx = targetStep ? allSteps.indexOf(targetStep) : allStepIndices.indexOf(currentSuggestionStepIndex);
+
+        if (targetStep) {
+            targetStep.instruction = newInstruction;
+            targetStep.rawInstruction = newInstruction;
+            targetStep.status = 'running';
+            targetStep.failed = false;
+            targetStep.isLlmProcessing = true;
+            targetStep.actions = [];
+            targetStep.reasoning = null;
+            targetStep.errorMessage = null;
+            delete targetStep.failureReason;
+        }
+
+        if (currentState) {
+            currentState.status = 'running';
+            currentState.pauseId = null;
+            delete currentState.error;
+            delete currentState.failureReason;
+            delete currentState.errorMessage;
+        }
+
         userEditedFailedStep = true;
         isErrorMode = false;
+        isAutoMode = false;
+        autoStartStepIndex = null;
+        pendingRunAfterSync = false;
+        syncAutoButton();
         updateToolbarControls(true);
-        const flatIdx = allStepIndices.indexOf(currentSuggestionStepIndex);
+
+        // Optimistically apply state to update UI step text and switch card from failed to running
+        applyState(currentState);
+
         sendAction('EDIT', {
-            index: flatIdx >= 0 ? flatIdx : currentSuggestionStepIndex,
+            pauseId: activePauseId,
+            index: blockIndex >= 0 ? blockIndex : (flatIdx >= 0 ? flatIdx : currentSuggestionStepIndex),
+            blockIndex: blockIndex,
+            flatIndex: flatIdx,
             rawIndex: currentSuggestionStepIndex,
+            block: blockName,
             isCurrentStep: true,
+            autoConfirm: autoConfirm,
             instruction: newInstruction,
             bindings: currentState?.dataBindings
         });

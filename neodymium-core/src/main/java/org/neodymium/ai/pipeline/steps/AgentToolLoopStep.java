@@ -740,8 +740,9 @@ public final class AgentToolLoopStep implements PipelineStep
                 }
             }
 
+            final boolean requireConfirmationOnce = Boolean.TRUE.equals(context.getTransientData().remove("KEY_REQUIRE_CONFIRMATION_ONCE"));
             final boolean hasProposedActions = !proposedActions.isEmpty() || !sanitizedCalls.isEmpty();
-            if (hasProposedActions && interactiveListener != null && !interactiveListener.isAutoRun())
+            if ((hasProposedActions || requireConfirmationOnce) && interactiveListener != null && !interactiveListener.isAutoRun())
             {
                 final List<Action> origActions = step != null && step.getActions() != null
                         ? new ArrayList<>(step.getActions())

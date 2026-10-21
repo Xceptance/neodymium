@@ -24,6 +24,8 @@ import com.google.gson.JsonObject;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import java.lang.reflect.Field;
 import java.util.HashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -4191,6 +4193,111 @@ public class AgentToolLoopStepTest
         final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 1);
         Assertions.assertDoesNotThrow(() -> step.execute(this.context));
         Assertions.assertEquals("Done", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
+
+    @Test
+    public void testAgentToolLoopPausesOnTurnOneWhenRequireConfirmationOnceArmedEvenForDiscoveryTools() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_query_dom", "Queries DOM", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"matches\": [\"#header\"]}");
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Verify the main page heading contains 'Welcome to VÉRLA'");
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY, sessionData, new LlmRegistry(), eventBus, (TargetExecutor) null);
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("test-run-456");
+
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(engine, session, true);
+        eventBus.registerListener(listener);
+
+        final AtomicBoolean pauseOccurred = new AtomicBoolean(false);
+        final Thread submitThread = new Thread(() -> {
+            try
+            {
+                final Field pauseField = InteractiveConsoleEngine.class.getDeclaredField("currentPauseId");
+                pauseField.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                final AtomicReference<String> currentPause =
+                    (AtomicReference<String>) pauseField.get(engine);
+
+                int attempts = 0;
+                while (currentPause.get() == null && attempts < 100)
+                {
+                    Thread.sleep(50);
+                    attempts++;
+                }
+
+                if (currentPause.get() != null)
+                {
+                    pauseOccurred.set(true);
+                }
+
+                final JsonObject actionObj = new JsonObject();
+                actionObj.addProperty("action", "RUN");
+
+                final Field pendingField = InteractiveConsoleEngine.class.getDeclaredField("pendingAction");
+                pendingField.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                final AtomicReference<JsonObject> pending =
+                    (AtomicReference<JsonObject>) pendingField.get(engine);
+                pending.set(actionObj);
+
+                final Field lockField = InteractiveConsoleEngine.class.getDeclaredField("lock");
+                lockField.setAccessible(true);
+                final Object lock = lockField.get(engine);
+                synchronized (lock)
+                {
+                    lock.notifyAll();
+                }
+            }
+            catch (final Exception e)
+            {
+                e.printStackTrace();
+            }
+        });
+        submitThread.setDaemon(true);
+        submitThread.start();
+
+        this.context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify the main page heading contains 'Welcome to VÉRLA'");
+        this.context.getTransientData().put("KEY_REQUIRE_CONFIRMATION_ONCE", Boolean.TRUE);
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Discovery tool query_dom — typically hasProposedActions == false
+                return new LlmResponse("Inspecting header in DOM", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-1", "browser_query_dom", MAPPER.createObjectNode().put("selector", "h1"))));
+            }
+            return new LlmResponse("Heading verified", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("call-2", "complete_step", MAPPER.createObjectNode().put("summary", "Header verified"))));
+        };
+
+        final AgentToolLoopStep loopStep = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 10);
+        loopStep.execute(this.context);
+
+        Assertions.assertTrue(pauseOccurred.get(), "Interactive pause must occur on turn 1 when KEY_REQUIRE_CONFIRMATION_ONCE is armed");
+        Assertions.assertNull(this.context.getTransientData().get("KEY_REQUIRE_CONFIRMATION_ONCE"), "KEY_REQUIRE_CONFIRMATION_ONCE must be consumed");
+        Assertions.assertEquals("Header verified", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
     }
 }
 

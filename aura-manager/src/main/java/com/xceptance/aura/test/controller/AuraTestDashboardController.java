@@ -66,9 +66,22 @@ public class AuraTestDashboardController
     public String renderDashboard(
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         @RequestParam(value = "file", required = false) final String file,
+        @RequestParam(value = "q", required = false) final String query,
         final Model model)
     {
-        final List<YamlFileDto> testFiles = fileService.getYamlFilesList();
+        final List<YamlFileDto> testFiles;
+        final List<String> stepsFiles;
+        if (query != null && !query.isBlank())
+        {
+            testFiles = fileService.getFilteredYamlFilesList(query);
+            stepsFiles = fileService.getFilteredStepsFilesList(query);
+            model.addAttribute("q", query);
+        }
+        else
+        {
+            testFiles = fileService.getYamlFilesList();
+            stepsFiles = fileService.getStepsFilesList();
+        }
 
         model.addAttribute("pageTitle", "Neodymium Aura Manager Dashboard");
         model.addAttribute("activeTab", "AuraTestManager");
@@ -78,7 +91,7 @@ public class AuraTestDashboardController
         model.addAttribute("theme", interactiveService != null ? interactiveService.getActiveTheme() : "dark");
         model.addAttribute("files", testFiles);
         model.addAttribute("testFiles", testFiles);
-        model.addAttribute("stepsFiles", fileService.getStepsFilesList());
+        model.addAttribute("stepsFiles", stepsFiles);
         model.addAttribute("fragmentRequiredVarsMap", fileService.getFragmentRequiredVariablesMap());
         model.addAttribute("expandedFiles", fileService.getExpandedFiles());
         model.addAttribute("queue", queueController.getSelectedQueue());
@@ -112,7 +125,8 @@ public class AuraTestDashboardController
         model.addAttribute("failed", queueController.getGlobalFailed());
         model.addAttribute("skipped", queueController.getGlobalSkipped());
 
-        final String activeFileToUse = (file != null && !file.isBlank()) ? file : fileService.getActiveEditingFile();
+        final String rawFile = (file != null && !file.isBlank()) ? file : fileService.getActiveEditingFile();
+        final String activeFileToUse = (rawFile != null && rawFile.contains(",")) ? rawFile.split(",")[0].trim() : rawFile;
         if (activeFileToUse != null && !activeFileToUse.isBlank())
         {
             fileService.setActiveEditingFile(activeFileToUse);
@@ -132,12 +146,23 @@ public class AuraTestDashboardController
             model.addAttribute("isFragment", isFragment);
 
             final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+            final boolean hasParseError = Boolean.TRUE.equals(sections.get("hasError"));
+            final String parseErrorMessage = (String) sections.get("error");
+            model.addAttribute("hasParseError", hasParseError);
+            model.addAttribute("parseErrorMessage", parseErrorMessage != null ? parseErrorMessage : "");
+            model.addAttribute("editorMode", hasParseError ? "raw" : "visual");
             model.addAttribute("beforeSteps", sections.get("beforeSteps"));
             model.addAttribute("mainSteps", sections.get("mainSteps"));
             model.addAttribute("afterSteps", sections.get("afterSteps"));
             model.addAttribute("dataMatrix", sections.get("dataMatrix"));
             model.addAttribute("varKeys", sections.get("varKeys"));
             model.addAttribute("fragmentVarScopes", sections.get("fragmentVarScopes"));
+            model.addAttribute("propertiesYaml", sections.get("propertiesYaml") != null ? sections.get("propertiesYaml") : "");
+            model.addAttribute("propertiesList", sections.get("propertiesList") != null ? sections.get("propertiesList") : List.of());
+            model.addAttribute("metaYaml", sections.get("metaYaml") != null ? sections.get("metaYaml") : "");
+            model.addAttribute("description", sections.get("description") != null ? sections.get("description") : "");
+            model.addAttribute("promptAddonYaml", sections.get("promptAddonYaml") != null ? sections.get("promptAddonYaml") : "");
+            model.addAttribute("rootVariables", sections.get("rootVariables") != null ? sections.get("rootVariables") : Map.of());
             model.addAttribute("yamlFiles", testFiles);
         }
         else
@@ -153,6 +178,12 @@ public class AuraTestDashboardController
             model.addAttribute("dataMatrix", List.of());
             model.addAttribute("varKeys", List.of());
             model.addAttribute("fragmentVarScopes", Map.of());
+            model.addAttribute("propertiesYaml", "");
+            model.addAttribute("propertiesList", List.of());
+            model.addAttribute("metaYaml", "");
+            model.addAttribute("description", "");
+            model.addAttribute("promptAddonYaml", "");
+            model.addAttribute("rootVariables", Map.of());
             model.addAttribute("yamlFiles", testFiles);
         }
 
@@ -173,6 +204,11 @@ public class AuraTestDashboardController
             return "fragments/aura-test-manager :: auraTestManager";
         }
         return "index";
+    }
+
+    public String renderDashboard(final String hxRequest, final String file, final Model model)
+    {
+        return renderDashboard(hxRequest, file, null, model);
     }
 
     @PostMapping("/api/theme")

@@ -100,7 +100,7 @@ public final class AuraManagerEditorUiTest
             "RawYamlPasteTest.yaml", "RawYamlSyncTest.yaml", "FoldedScalarTest.yaml", "CommentTypingTest.yaml", "InlineCommentTypingTest.yaml",
             "SubstepTypingTest.yaml", "EnterSubstepTest.yaml", "UndoSubstepTest.yaml", "FragmentStep.steps", "GrandChild.steps", "MultiChild.steps",
             "New Line Include Cursor Test.yaml", "ParentInclude.steps", "VariablePersistenceTest.yaml", "AuthFragment.steps", "SubstepNameTest.yaml",
-            "CleanStepsSaveTest.yaml"
+            "CleanStepsSaveTest.yaml", "PlaybookPropertiesTest.yaml", "PlaybookAddPropsTest.yaml"
         };
 
         for (final String dirPath : dirPaths)
@@ -2025,6 +2025,155 @@ public final class AuraManagerEditorUiTest
             "Folded scalar substeps group must retain '- >-', but was: " + savedContent);
         Assertions.assertTrue(savedContent.contains("Verify header is displayed."),
             "Substep must be present, but was: " + savedContent);
+    }
+
+    @Test
+    public final void testPlaybookPropertiesBlockPreservedAndEditableInVisualAndRawModes() throws Exception
+    {
+        final String playbookFile = "PlaybookPropertiesTest.yaml";
+        final String initialPlaybook = "# Neodymium YAML Test Data File\n\n"
+                                     + "_properties:\n"
+                                     + "  neodymium.ai.tokenBudget.input: 1500000\n"
+                                     + "  skipReplay: true\n\n"
+                                     + "steps: |\n"
+                                     + "  Open https://example.com/test\n"
+                                     + "  Validate headline is visible\n";
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Visual properties panel should be visible with key-value table rows
+        final SelenideElement propsPanel = $("#playbookPropertiesPanel");
+        propsPanel.shouldBe(Condition.visible);
+
+        final ElementsCollection propRows = $$("#propertiesTableBody tr.property-row");
+        propRows.shouldHave(CollectionCondition.size(2));
+        Assertions.assertEquals("neodymium.ai.tokenBudget.input", propRows.get(0).$(".property-key-input").getValue());
+        Assertions.assertEquals("1500000", propRows.get(0).$(".property-val-input").getValue());
+        Assertions.assertEquals("skipReplay", propRows.get(1).$(".property-key-input").getValue());
+        Assertions.assertEquals("true", propRows.get(1).$(".property-val-input").getValue());
+
+        // Raw YAML textarea must also contain _properties before any edit without JSON braces
+        final SelenideElement rawYamlTextarea = $("#rawYamlTextarea");
+        Assertions.assertTrue(rawYamlTextarea.getValue().contains("_properties:"),
+            "Raw YAML textarea should contain _properties on initial load, but was: " + rawYamlTextarea.getValue());
+        Assertions.assertFalse(rawYamlTextarea.getValue().contains("{neodymium.ai"),
+            "Raw YAML must not contain flow JSON curly braces, but was: " + rawYamlTextarea.getValue());
+
+        // Switch to Raw mode without edits -> _properties must be preserved
+        $("#btnModeRaw").shouldBe(Condition.visible).click();
+        $("#rawEditorPanel").shouldBe(Condition.visible);
+        $("#visualEditorContainer").shouldNotBe(Condition.visible);
+        Assertions.assertTrue(rawYamlTextarea.getValue().contains("_properties:"),
+            "Raw mode should preserve _properties block without erasure");
+
+        // Switch back to Visual mode
+        $("#btnModeVisual").shouldBe(Condition.visible).click();
+        $("#visualEditorContainer").shouldBe(Condition.visible);
+        $("#rawEditorPanel").shouldNotBe(Condition.visible);
+        propsPanel.shouldBe(Condition.visible);
+
+        // Modify a step in visual mode
+        final SelenideElement firstStep = $$("#stepsList .step-row").first().find(".step-content");
+        firstStep.click();
+        firstStep.sendKeys(" and explore");
+
+        // Save playbook in visual mode
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Verify saved file on disk still contains _properties and updated step
+        final String savedYaml = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedYaml);
+        Assertions.assertTrue(savedYaml.contains("_properties:"),
+            "Saved YAML on disk must still contain _properties block, but was: " + savedYaml);
+        Assertions.assertTrue(savedYaml.contains("neodymium.ai.tokenBudget.input: 1500000"),
+            "Saved YAML must contain the tokenBudget property, but was: " + savedYaml);
+        Assertions.assertTrue(savedYaml.contains("and explore"),
+            "Saved YAML must contain edited step text, but was: " + savedYaml);
+        Assertions.assertFalse(savedYaml.contains("{neodymium.ai"),
+            "Saved YAML must not contain flow JSON curly braces, but was: " + savedYaml);
+    }
+
+    @Test
+    public final void testAddAndRemovePlaybookPropertiesBlockInVisualEditor() throws Exception
+    {
+        final String playbookFile = "PlaybookAddPropsTest.yaml";
+        final String initialPlaybook = "# Neodymium YAML Test Data File\n\n"
+                                     + "steps: |\n"
+                                     + "  Open https://example.com/test\n"
+                                     + "  Validate headline is visible\n";
+
+        this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Initially, properties panel should not be visible, and the Add Properties button should be visible
+        final SelenideElement propsPanel = $("#playbookPropertiesPanel");
+        final SelenideElement addPropsContainer = $("#addPropertiesBtnContainer");
+
+        propsPanel.shouldNotBe(Condition.visible);
+        addPropsContainer.shouldBe(Condition.visible);
+
+        // Click Add '_properties:' Block button
+        addPropsContainer.$(".btn-add-section-block").shouldBe(Condition.visible).click();
+
+        // Panel should now be visible with default property row
+        propsPanel.shouldBe(Condition.visible);
+        addPropsContainer.shouldNotBe(Condition.visible);
+        final ElementsCollection initialRows = $$("#propertiesTableBody tr.property-row");
+        initialRows.shouldHave(CollectionCondition.size(1));
+        Assertions.assertEquals("neodymium.ai.tokenBudget.input", initialRows.get(0).$(".property-key-input").getValue());
+        Assertions.assertEquals("1500000", initialRows.get(0).$(".property-val-input").getValue());
+
+        // Update default property row
+        initialRows.get(0).$(".property-key-input").setValue("custom.test.timeout");
+        initialRows.get(0).$(".property-val-input").setValue("45000");
+
+        // Add a second property row
+        $(".btn-add-property-row").shouldBe(Condition.visible).click();
+        final ElementsCollection updatedRows = $$("#propertiesTableBody tr.property-row");
+        updatedRows.shouldHave(CollectionCondition.size(2));
+        updatedRows.get(1).$(".property-key-input").setValue("skipReplay");
+        updatedRows.get(1).$(".property-val-input").setValue("true");
+
+        // Save playbook in visual mode
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Verify saved file on disk contains custom properties in block style
+        final String savedWithProps = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedWithProps);
+        Assertions.assertTrue(savedWithProps.contains("_properties:"),
+            "Saved YAML must contain _properties block: " + savedWithProps);
+        Assertions.assertTrue(savedWithProps.contains("custom.test.timeout: 45000"),
+            "Saved YAML must contain custom property: " + savedWithProps);
+        Assertions.assertTrue(savedWithProps.contains("skipReplay: true"),
+            "Saved YAML must contain skipReplay: " + savedWithProps);
+        Assertions.assertFalse(savedWithProps.contains("{custom.test.timeout"),
+            "Saved YAML must not contain JSON curly braces: " + savedWithProps);
+
+        // Click Remove Block button
+        propsPanel.$(".btn-remove-section-block").shouldBe(Condition.visible).click();
+
+        // Properties panel should be hidden, Add button should be visible again
+        propsPanel.shouldNotBe(Condition.visible);
+        addPropsContainer.shouldBe(Condition.visible);
+
+        // Save playbook again
+        $("#saveYamlBtn").shouldBe(Condition.visible).click();
+        $(".toast.success").shouldBe(Condition.visible);
+
+        // Verify saved file on disk no longer contains _properties block
+        final String savedWithoutProps = this.fileService.readYamlFileContent(playbookFile);
+        Assertions.assertNotNull(savedWithoutProps);
+        Assertions.assertFalse(savedWithoutProps.contains("_properties:"),
+            "Saved YAML must not contain _properties block after removal: " + savedWithoutProps);
+        Assertions.assertFalse(savedWithoutProps.contains("custom.test.timeout"),
+            "Saved YAML must not contain custom property after removal: " + savedWithoutProps);
     }
 }
 

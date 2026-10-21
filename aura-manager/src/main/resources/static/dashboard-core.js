@@ -713,6 +713,7 @@ function init() {
                               document.getElementById('dashboardView') !== null;
 
     if (isTestManagerPage) {
+        if (typeof initTestSearchFilter === 'function') initTestSearchFilter();
         if (typeof scrollToBottom === 'function') scrollToBottom();
         if (typeof loadFiles === 'function') loadFiles();
         if (typeof startPolling === 'function') startPolling();
@@ -749,6 +750,7 @@ function init() {
         if (evt.detail && evt.detail.target) {
             if (evt.detail.target.id === 'yamlFileList' || evt.detail.target.id === 'editorPanel' || evt.detail.target.querySelector('#fragmentCardsContainer')) {
                 if (evt.detail.target.id === 'yamlFileList') {
+                    if (typeof updateClearTestSearchBtn === 'function') updateClearTestSearchBtn();
                     const scrollPos = savedYamlFileListScrollTop;
                     evt.detail.target.scrollTop = scrollPos;
                     requestAnimationFrame(() => {
@@ -906,6 +908,42 @@ document.addEventListener('keydown', function(event) {
         if (typeof submitCreateTest === 'function') {
             submitCreateTest();
         }
+    }
+});
+
+function initTestSearchFilter() {
+    const searchInput = document.getElementById('testSearchInput');
+    if (!searchInput) return;
+
+    let query = '';
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlQuery = urlParams.get('q');
+        const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
+        query = (urlQuery !== null && urlQuery !== '') ? urlQuery : (storedQuery || searchInput.value || '');
+    } catch (e) {}
+
+    if (query) {
+        searchInput.value = query;
+        if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem('aura_test_search_query', query);
+        }
+        if (typeof updateClearTestSearchBtn === 'function') {
+            updateClearTestSearchBtn(query);
+        }
+    } else {
+        if (typeof updateClearTestSearchBtn === 'function') {
+            updateClearTestSearchBtn('');
+        }
+    }
+}
+window.initTestSearchFilter = initTestSearchFilter;
+
+window.addEventListener('pageshow', function() {
+    const isMgr = document.getElementById('auraTestManagerWorkspace') !== null ||
+                  document.getElementById('dashboardView') !== null;
+    if (isMgr && typeof initTestSearchFilter === 'function') {
+        initTestSearchFilter();
     }
 });
 

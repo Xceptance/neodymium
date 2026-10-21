@@ -231,8 +231,10 @@ public class InteractiveConsoleServerTest
 
             assertTrue(checkBody.contains("const isExecuting = !currentPauseId || (currentState && currentState.status === 'running') || isStructuralActionInFlight || isRunActionInFlight || isAutoMode;"),
                 "checkActionApprovals must evaluate isExecuting based on pause token, running status, structural action in flight, run action in flight, and auto mode");
-            assertTrue(checkBody.contains("const isThinking = (s && !s.reasoning && !hasPlannedActions && !isStructuralActionInFlight) || isTopThinking || isStepThinking;"),
-                "checkActionApprovals must evaluate isThinking incorporating step actions, reasoning, and thinking state indicators");
+            assertTrue(checkBody.contains("const isFailedStep = isErrorMode || (s && (s.status === 'failed' || s.failed));"),
+                "checkActionApprovals must identify failed steps");
+            assertTrue(checkBody.contains("const isThinking = (!isFailedStep && (s && !s.reasoning && !hasPlannedActions && !isStructuralActionInFlight)) || isTopThinking || isStepThinking;"),
+                "checkActionApprovals must evaluate isThinking excluding failed steps so Heal button remains enabled");
             assertTrue(checkBody.contains("if (isThinking || isExecuting || isRunActionInFlight)"),
                 "checkActionApprovals must disable runBtn when isThinking, isExecuting, or isRunActionInFlight is true");
             assertTrue(checkBody.contains("runBtn.disabled = false;"),
@@ -820,6 +822,86 @@ public class InteractiveConsoleServerTest
                 "saveEdit must send isCurrentStep: false for non-current steps");
             assertTrue(jsContent.contains("if (extra && extra.isCurrentStep !== undefined) {\n            return !extra.isCurrentStep;"),
                 "isStructuralAction must consider isCurrentStep in extra payload to preserve pause");
+        }
+    }
+
+    @Test
+    public void testSuggestFixModalReopenAndHealButtonState() throws IOException
+    {
+        final String jsPath = "com/xceptance/neodymium/ai/console/interactive_console.js";
+        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(jsPath))
+        {
+            assertNotNull(in, "interactive_console.js must be present on the classpath");
+            final String jsContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+            // 1. Verify requestFixSuggestion calls openOverlay('suggestionOverlay') to reset inline display: none
+            assertTrue(jsContent.contains("openOverlay('suggestionOverlay');"),
+                "requestFixSuggestion must invoke openOverlay('suggestionOverlay') so dismissed dialog can reopen");
+
+            // 2. Verify checkActionApprovals guards failed steps from being classified as thinking
+            assertTrue(jsContent.contains("const isFailedStep = isErrorMode || (s && (s.status === 'failed' || s.failed));"),
+                "checkActionApprovals must define isFailedStep to avoid disabling Heal button during error pauses");
+
+            // 3. Verify state.fixSuggestion fallback in applyState
+            assertTrue(jsContent.contains("if (state && state.fixSuggestion) {"),
+                "applyState must check state.fixSuggestion to resolve active loading overlay as fallback");
+
+            // 4. Verify robust fixSuggestion SSE handling
+            assertTrue(jsContent.contains("eventSource.addEventListener('fixSuggestion'"),
+                "SSE listener for fixSuggestion must be registered");
+        }
+    }
+
+    @Test
+    public void testSuggestFixModalMarkupAndCssStyling() throws IOException
+    {
+        // 1. Verify HTML modal markup uses CSS classes instead of hardcoded dark rgba styles
+        final String htmlPath = "com/xceptance/neodymium/ai/console/interactive_console.html";
+        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(htmlPath))
+        {
+            assertNotNull(in, "interactive_console.html must be present on the classpath");
+            final String htmlContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+            final int modalStart = htmlContent.indexOf("id=\"suggestionOverlay\"");
+            assertTrue(modalStart >= 0, "suggestionOverlay must exist in HTML");
+            final String modalSection = htmlContent.substring(modalStart);
+
+            assertTrue(modalSection.contains("class=\"suggestion-original-box\""),
+                "Original instruction display must use suggestion-original-box CSS class");
+            assertTrue(modalSection.contains("class=\"suggestion-textarea\""),
+                "Suggested fix textarea must use suggestion-textarea CSS class");
+            assertFalse(modalSection.contains("rgba(0,0,0,0.3)"),
+                "Hardcoded dark transparent background rgba(0,0,0,0.3) must not be present in suggestion modal");
+            assertFalse(modalSection.contains("rgba(0,0,0,0.4)"),
+                "Hardcoded dark transparent background rgba(0,0,0,0.4) must not be present in suggestion modal");
+        }
+
+        // 2. Verify CSS defines rules using surface hover and text colors for dark and light mode contrast
+        final String cssPath = "com/xceptance/neodymium/ai/console/interactive_console.css";
+        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(cssPath))
+        {
+            assertNotNull(in, "interactive_console.css must be present on the classpath");
+            final String cssContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+            assertTrue(cssContent.contains(".suggestion-original-box"),
+                ".suggestion-original-box class must be defined in interactive_console.css");
+            assertTrue(cssContent.contains(".suggestion-textarea"),
+                ".suggestion-textarea class must be defined in interactive_console.css");
+        }
+
+        // 3. Verify interactive_console.js passes block, blockIndex, flatIndex, and instruction
+        final String jsPath = "com/xceptance/neodymium/ai/console/interactive_console.js";
+        try (final InputStream in = getClass().getClassLoader().getResourceAsStream(jsPath))
+        {
+            assertNotNull(in, "interactive_console.js must be present on the classpath");
+            final String jsContent = new String(in.readAllBytes(), StandardCharsets.UTF_8);
+
+            assertTrue(jsContent.contains("blockIndex: foundBlockIndex"),
+                "requestFixSuggestion must pass blockIndex in payload");
+            assertTrue(jsContent.contains("flatIndex: flatIdx"),
+                "requestFixSuggestion must pass flatIndex in payload");
+            assertTrue(jsContent.contains("instruction: stepInstruction"),
+                "requestFixSuggestion must pass instruction in payload");
         }
     }
 }

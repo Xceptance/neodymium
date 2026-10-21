@@ -951,9 +951,24 @@ public final class PreliminaryReportListener implements ExecutionListener
                 subStepIdx = -1;
             }
 
+            final String callBlock;
+            if (this.currentParentStep != null && this.currentParentStep.getBlock() != null)
+            {
+                callBlock = this.currentParentStep.getBlock();
+            }
+            else if (this.currentStep != null && this.currentStep.getBlock() != null)
+            {
+                callBlock = this.currentStep.getBlock();
+            }
+            else
+            {
+                callBlock = "steps";
+            }
+
             final TestExecutionReport.ReportLlmCallEntry callEntry = new TestExecutionReport.ReportLlmCallEntry();
             callEntry.setStepIndex(stepIdx);
             callEntry.setSubStepIndex(subStepIdx);
+            callEntry.setBlock(callBlock);
             callEntry.setCapability(llmReceived.getCapability());
             callEntry.setDurationMs(llmReceived.getDurationMs());
 

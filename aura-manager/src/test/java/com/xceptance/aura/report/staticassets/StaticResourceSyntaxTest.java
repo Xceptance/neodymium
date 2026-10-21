@@ -543,4 +543,120 @@ public final class StaticResourceSyntaxTest
         final int exitCode = process.waitFor();
         Assertions.assertEquals(0, exitCode, "AI log filtering test failed:\n" + output);
     }
+
+    @Test
+    public void testCollapsedSidebarPreservesMaterialIcons() throws Exception
+    {
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        Assertions.assertTrue(Files.exists(cssPath), "CSS file must exist: " + cssPath.toAbsolutePath());
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            cssContent.contains("aside.collapsed .nav-item-btn span:not(.material-symbols-outlined)"),
+            "report-manager.css must preserve .material-symbols-outlined inside collapsed .nav-item-btn"
+        );
+        Assertions.assertTrue(
+            cssContent.contains("aside.collapsed .nav-label"),
+            "report-manager.css must hide .nav-label in collapsed sidebar"
+        );
+        Assertions.assertFalse(
+            cssContent.contains("aside.collapsed .nav-item-btn span {"),
+            "report-manager.css must not unconditionally hide all span elements in collapsed nav buttons"
+        );
+    }
+
+    @Test
+    public void testSidebarNavItemsHaveExplicitLabelsAndMaterialIcons() throws Exception
+    {
+        final Path sidebarPath = Paths.get("src/main/resources/templates/fragments/sidebar.html");
+        Assertions.assertTrue(Files.exists(sidebarPath), "sidebar.html must exist: " + sidebarPath.toAbsolutePath());
+        final String sidebarContent = Files.readString(sidebarPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            sidebarContent.contains("class=\"logo-brand\">Neodymium</span>"),
+            "sidebar.html must render brand label 'Neodymium'"
+        );
+        Assertions.assertTrue(
+            sidebarContent.contains("class=\"logo-title\">Aura Manager</span>"),
+            "sidebar.html must render title label 'Aura Manager'"
+        );
+
+        final String[] expectedIcons = {"play_circle", "format_list_bulleted", "database"};
+        for (final String icon : expectedIcons)
+        {
+            Assertions.assertTrue(
+                sidebarContent.contains("<span class=\"material-symbols-outlined\">" + icon + "</span>"),
+                "sidebar.html must contain icon: " + icon
+            );
+        }
+
+        final String[] expectedLabels = {"Playbooks & Queue", "Run History", "Test Base"};
+        for (final String label : expectedLabels)
+        {
+            Assertions.assertTrue(
+                sidebarContent.contains("<span class=\"nav-label\">" + label + "</span>"),
+                "sidebar.html must contain nav-label: " + label
+            );
+        }
+    }
+
+    @Test
+    public void testManagerWorkspaceFilterPersistenceContracts() throws Exception
+    {
+        final Path testSelectionPath = Paths.get("src/main/resources/templates/fragments/test-selection.html");
+        Assertions.assertTrue(Files.exists(testSelectionPath), "test-selection.html must exist");
+        final String testSelectionContent = Files.readString(testSelectionPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            testSelectionContent.contains("id=\"clearTestSearchBtn\""),
+            "test-selection.html must render clearTestSearchBtn"
+        );
+        Assertions.assertTrue(
+            testSelectionContent.contains("oninput=\"if(typeof onTestSearchInput==='function') onTestSearchInput(this.value);\""),
+            "test-selection.html must handle oninput for search persistence"
+        );
+        Assertions.assertTrue(
+            testSelectionContent.contains("id=\"refreshFilesBtn\"") && testSelectionContent.contains("hx-include=\"#testSearchInput\""),
+            "refreshFilesBtn must include #testSearchInput to avoid wiping search query on refresh"
+        );
+        Assertions.assertTrue(
+            testSelectionContent.contains("id=\"yamlFileList\"") && testSelectionContent.contains("hx-include=\"#testSearchInput\""),
+            "yamlFileList must include #testSearchInput on background file refreshes"
+        );
+
+        final Path editorJsPath = Paths.get("src/main/resources/static/dashboard-editor.js");
+        Assertions.assertTrue(Files.exists(editorJsPath), "dashboard-editor.js must exist");
+        final String editorJsContent = Files.readString(editorJsPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            editorJsContent.contains("window.onTestSearchInput = onTestSearchInput;"),
+            "dashboard-editor.js must export onTestSearchInput"
+        );
+        Assertions.assertTrue(
+            editorJsContent.contains("window.clearTestSearch = clearTestSearch;"),
+            "dashboard-editor.js must export clearTestSearch"
+        );
+        Assertions.assertTrue(
+            editorJsContent.contains("window.updateClearTestSearchBtn = updateClearTestSearchBtn;"),
+            "dashboard-editor.js must export updateClearTestSearchBtn"
+        );
+        Assertions.assertTrue(
+            editorJsContent.contains("aura_test_search_query"),
+            "dashboard-editor.js must use aura_test_search_query for session persistence"
+        );
+
+        final Path coreJsPath = Paths.get("src/main/resources/static/dashboard-core.js");
+        Assertions.assertTrue(Files.exists(coreJsPath), "dashboard-core.js must exist");
+        final String coreJsContent = Files.readString(coreJsPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            coreJsContent.contains("initTestSearchFilter();"),
+            "dashboard-core.js must initialize search filter on load"
+        );
+        Assertions.assertTrue(
+            coreJsContent.contains("addEventListener('pageshow'"),
+            "dashboard-core.js must re-verify search filter on pageshow (BFcache support)"
+        );
+    }
 }
+

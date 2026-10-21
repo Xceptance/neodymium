@@ -1268,6 +1268,7 @@ public final class TestExecutionReport
     {
         private int stepIndex;
         private int subStepIndex = -1;
+        private String block;
         private String capability;
         private String modelName;
         private long durationMs;
@@ -1303,6 +1304,16 @@ public final class TestExecutionReport
         public void setSubStepIndex(final int subStepIndex)
         {
             this.subStepIndex = subStepIndex;
+        }
+
+        public String getBlock()
+        {
+            return this.block != null ? this.block : "steps";
+        }
+
+        public void setBlock(final String block)
+        {
+            this.block = block;
         }
 
         public String getCapability()

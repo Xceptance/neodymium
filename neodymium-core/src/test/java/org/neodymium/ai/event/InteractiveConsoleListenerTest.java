@@ -35,9 +35,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.client.LlmCapability;
+import org.neodymium.ai.client.LlmProvider;
 import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.MockLlmProvider;
+import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.llm.LlmResponseReceivedEvent;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
@@ -61,6 +65,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine.ActionResult;
 import com.xceptance.neodymium.ai.console.InteractiveStateBuilder;
 
 /**
@@ -512,11 +517,17 @@ public class InteractiveConsoleListenerTest
                 final AtomicReference<JsonObject> pending =
                     (AtomicReference<JsonObject>) pendingField.get(consoleEngine);
 
+                final Field queueField = InteractiveConsoleEngine.class.getDeclaredField("pendingActions");
+                queueField.setAccessible(true);
+                @SuppressWarnings("unchecked")
+                final java.util.Queue<JsonObject> queue =
+                    (java.util.Queue<JsonObject>) queueField.get(consoleEngine);
+
                 final Field lockField = InteractiveConsoleEngine.class.getDeclaredField("lock");
                 lockField.setAccessible(true);
                 final Object lock = lockField.get(consoleEngine);
 
-                String lastPauseId = null;
+                String lastPauseId = currentPause.get();
                 for (final JsonObject action : actions)
                 {
                     int attempts = 0;
@@ -527,6 +538,11 @@ public class InteractiveConsoleListenerTest
                     }
 
                     lastPauseId = currentPause.get();
+                    if (!action.has("pauseId") && lastPauseId != null)
+                    {
+                        action.addProperty("pauseId", lastPauseId);
+                    }
+                    queue.offer(action);
                     pending.set(action);
                     synchronized (lock)
                     {
@@ -2000,5 +2016,437 @@ public class InteractiveConsoleListenerTest
         assertEquals("RUN", runResult);
         assertEquals(PlaybookStepStatus.RUNNING, rewoundStep.getStatus());
         assertNull(context.getTransientData().get("KEY_STEP_RESCHEDULED"));
+    }
+
+    @Test
+    public void testPauseOnStepFailureSuggestFixResolvesStepByIndexAndStoresState()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step0 = new PlaybookStep("Step 0 to be fixed");
+        step0.setLineNumber(1);
+        step0.setSourceFile("test.yaml");
+        final PlaybookStep step1 = new PlaybookStep("Step 1 target instruction");
+        step1.setLineNumber(2);
+        step1.setSourceFile("test.yaml");
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put("playbook.steps", new ArrayList<>(List.of(step0, step1)));
+        context.getTransientData().put("playbook.flatSteps", new ArrayList<>(List.of(step0, step1)));
+
+        // 1. Submit SUGGEST_FIX specifying index 1, then FINISH
+        final JsonObject suggestFixAction = new JsonObject();
+        suggestFixAction.addProperty("action", "SUGGEST_FIX");
+        suggestFixAction.addProperty("index", 1);
+
+        final JsonObject finishAction = new JsonObject();
+        finishAction.addProperty("action", "FINISH");
+
+        submitActionsSequentiallyAsynchronously(List.of(suggestFixAction, finishAction));
+
+        final String result = listener.pauseOnStepFailure(context, step0, new RuntimeException("Failure"));
+        assertEquals("FINISH", result);
+
+        // Verify lastFixSuggestion was populated with step1's instruction
+        final Object fixObj = context.getTransientData().get("lastFixSuggestion");
+        assertNotNull(fixObj, "lastFixSuggestion must be recorded in context transient data");
+        assertTrue(fixObj instanceof JsonObject, "lastFixSuggestion must be a JsonObject");
+        final JsonObject fixJson = (JsonObject) fixObj;
+        assertEquals("Step 1 target instruction", fixJson.get("originalInstruction").getAsString());
+        assertEquals(1, fixJson.get("index").getAsInt());
+    }
+
+    @Test
+    public void testCleanInstructionSuggestion()
+    {
+        assertEquals("", InteractiveConsoleListener.cleanInstructionSuggestion(null));
+        assertEquals("", InteractiveConsoleListener.cleanInstructionSuggestion("   "));
+
+        // Conversational preambles with markdown bold and blockquotes
+        assertEquals("Navigate to 'https://www.google.com'",
+            InteractiveConsoleListener.cleanInstructionSuggestion("Here is the clearest, most atomic phrasing: > **Navigate to 'https://www.google.com'**"));
+
+        // Markdown code fences
+        assertEquals("Click 'Submit' button",
+            InteractiveConsoleListener.cleanInstructionSuggestion("```suggestion\nClick 'Submit' button\n```"));
+
+        // Blockquotes and quotes
+        assertEquals("Verify heading contains 'Bublik'",
+            InteractiveConsoleListener.cleanInstructionSuggestion("> \"Verify heading contains 'Bublik'\""));
+
+        // Multiline with trailing commentary
+        final String multiLine = "Here is the revised instruction:\nClick on the 'Sign In' button\n\nExplanation: This phrasing is more atomic.";
+        assertEquals("Click on the 'Sign In' button",
+            InteractiveConsoleListener.cleanInstructionSuggestion(multiLine));
+    }
+
+    @Test
+    public void testSuggestFixMultiBlockPlaybookResolvesFailedStepInMainBlock()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep mainStep0 = new PlaybookStep("Verify the main page heading contains 'Bublik'");
+        mainStep0.setLineNumber(1);
+        mainStep0.setSourceFile("test.yaml");
+
+        final PlaybookStep afterStep0 = new PlaybookStep("Navigate to 'https://www.google.com'");
+        afterStep0.setLineNumber(2);
+        afterStep0.setSourceFile("test.yaml");
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put("playbook.beforeSteps", new ArrayList<>());
+        context.getTransientData().put("playbook.steps", new ArrayList<>(List.of(mainStep0)));
+        context.getTransientData().put("playbook.afterSteps", new ArrayList<>(List.of(afterStep0)));
+        context.getTransientData().put("playbook.flatSteps", new ArrayList<>(List.of(mainStep0, afterStep0)));
+
+        // User clicked "Suggest fix" on failed step in 'steps' block:
+        // rawIndex/index is 1 (1-based global index), block is "steps", blockIndex is 0, flatIndex is 0
+        final JsonObject suggestFixAction = new JsonObject();
+        suggestFixAction.addProperty("action", "SUGGEST_FIX");
+        suggestFixAction.addProperty("index", 1);
+        suggestFixAction.addProperty("rawIndex", 1);
+        suggestFixAction.addProperty("block", "steps");
+        suggestFixAction.addProperty("blockIndex", 0);
+        suggestFixAction.addProperty("flatIndex", 0);
+        suggestFixAction.addProperty("instruction", "Verify the main page heading contains 'Bublik'");
+
+        final JsonObject finishAction = new JsonObject();
+        finishAction.addProperty("action", "FINISH");
+
+        submitActionsSequentiallyAsynchronously(List.of(suggestFixAction, finishAction));
+
+        final String result = listener.pauseOnStepFailure(context, mainStep0, new RuntimeException("Heading mismatch"));
+        assertEquals("FINISH", result);
+
+        final Object fixObj = context.getTransientData().get("lastFixSuggestion");
+        assertNotNull(fixObj, "lastFixSuggestion must be recorded in context transient data");
+        final JsonObject fixJson = (JsonObject) fixObj;
+        assertEquals("Verify the main page heading contains 'Bublik'", fixJson.get("originalInstruction").getAsString());
+        assertEquals("steps", fixJson.get("block").getAsString());
+        assertEquals(0, fixJson.get("blockIndex").getAsInt());
+    }
+
+    @Test
+    public void testSuggestFixResolvesStepByExplicitInstruction()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step0 = new PlaybookStep("Initial Setup Step");
+        step0.setLineNumber(1);
+        step0.setSourceFile("test.yaml");
+
+        final PlaybookStep step1 = new PlaybookStep("Failed Main Action");
+        step1.setLineNumber(2);
+        step1.setSourceFile("test.yaml");
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put("playbook.steps", new ArrayList<>(List.of(step0, step1)));
+        context.getTransientData().put("playbook.flatSteps", new ArrayList<>(List.of(step0, step1)));
+
+        // Send action with only the instruction string
+        final JsonObject suggestFixAction = new JsonObject();
+        suggestFixAction.addProperty("action", "SUGGEST_FIX");
+        suggestFixAction.addProperty("instruction", "Failed Main Action");
+
+        final JsonObject finishAction = new JsonObject();
+        finishAction.addProperty("action", "FINISH");
+
+        submitActionsSequentiallyAsynchronously(List.of(suggestFixAction, finishAction));
+
+        final String result = listener.pauseOnStepFailure(context, step1, new RuntimeException("Assertion failed"));
+        assertEquals("FINISH", result);
+
+        final Object fixObj = context.getTransientData().get("lastFixSuggestion");
+        assertNotNull(fixObj);
+        final JsonObject fixJson = (JsonObject) fixObj;
+        assertEquals("Failed Main Action", fixJson.get("originalInstruction").getAsString());
+    }
+
+    @Test
+    public void testApplyOnlyPausesBeforeActionExecutionAwaitingUserConfirmation()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step0 = new PlaybookStep("Original failed step instruction");
+        step0.setLineNumber(1);
+        step0.setSourceFile("test.yaml");
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put("playbook.steps", new ArrayList<>(List.of(step0)));
+        context.getTransientData().put("playbook.flatSteps", new ArrayList<>(List.of(step0)));
+
+        // 1. Step failure occurs, user submits EDIT with autoConfirm: false ("Apply Only")
+        final JsonObject applyOnlyAction = new JsonObject();
+        applyOnlyAction.addProperty("action", "EDIT");
+        applyOnlyAction.addProperty("instruction", "Revised step instruction via Apply Only");
+        applyOnlyAction.addProperty("isCurrentStep", true);
+        applyOnlyAction.addProperty("autoConfirm", false);
+
+        submitActionAsynchronously(applyOnlyAction);
+
+        final String failResult = listener.pauseOnStepFailure(context, step0, new RuntimeException("Initial failure"));
+        assertEquals("EDIT", failResult);
+        assertEquals("Revised step instruction via Apply Only", step0.getInstruction());
+        assertNull(context.getTransientData().get("KEY_AUTO_CONFIRM_ONCE"));
+        assertTrue(Boolean.TRUE.equals(context.getTransientData().get("KEY_REQUIRE_CONFIRMATION_ONCE")),
+            "KEY_REQUIRE_CONFIRMATION_ONCE must be armed on Apply Only");
+
+        // 2. Now LLM plans actions and runner reaches pauseBeforeActionExecution.
+        // It must NOT auto-confirm — it must pause and await user confirmation (e.g. RUN action).
+        final Action plannedAction = new Action("click", "#submitBtn", "");
+        step0.setActions(new ArrayList<>(List.of(plannedAction)));
+
+        final JsonObject confirmRunAction = new JsonObject();
+        confirmRunAction.addProperty("action", "RUN");
+        submitActionAsynchronously(confirmRunAction);
+
+        final String actionResult = listener.pauseBeforeActionExecution(context, step0);
+        assertEquals("RUN", actionResult, "Runner must unpause with explicit RUN user confirmation");
+    }
+
+    @Test
+    public void testApplyAndConfirmAutoConfirmsExecutionOnce()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step0 = new PlaybookStep("Original failed step instruction");
+        step0.setLineNumber(1);
+        step0.setSourceFile("test.yaml");
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put("playbook.steps", new ArrayList<>(List.of(step0)));
+        context.getTransientData().put("playbook.flatSteps", new ArrayList<>(List.of(step0)));
+
+        // 1. Step failure occurs, user submits EDIT with autoConfirm: true ("Apply and Confirm")
+        final JsonObject applyAndConfirmAction = new JsonObject();
+        applyAndConfirmAction.addProperty("action", "EDIT");
+        applyAndConfirmAction.addProperty("instruction", "Revised step instruction via Apply and Confirm");
+        applyAndConfirmAction.addProperty("isCurrentStep", true);
+        applyAndConfirmAction.addProperty("autoConfirm", true);
+
+        submitActionAsynchronously(applyAndConfirmAction);
+
+        final String failResult = listener.pauseOnStepFailure(context, step0, new RuntimeException("Initial failure"));
+        assertEquals("EDIT", failResult);
+        assertEquals("Revised step instruction via Apply and Confirm", step0.getInstruction());
+        assertNull(context.getTransientData().get("KEY_REQUIRE_CONFIRMATION_ONCE"),
+            "KEY_REQUIRE_CONFIRMATION_ONCE must be absent on Apply and Confirm");
+
+        // 2. LLM plans actions and reaches pauseBeforeActionExecution.
+        // With autoConfirm: true, pauseBeforeActionExecution must immediately return "RUN" without blocking!
+        final Action plannedAction = new Action("click", "#submitBtn", "");
+        step0.setActions(new ArrayList<>(List.of(plannedAction)));
+
+        final String actionResult = listener.pauseBeforeActionExecution(context, step0);
+        assertEquals("RUN", actionResult, "pauseBeforeActionExecution must auto-confirm with RUN on first action review");
+        assertNull(context.getTransientData().get("KEY_AUTO_CONFIRM_ONCE"), "KEY_AUTO_CONFIRM_ONCE must be consumed after first review");
+    }
+
+    @Test
+    public void testSuggestFixIncludesFailureReasonAndSutDetailsInLlmPrompt()
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        mockProvider.addResponse(new LlmResponse("Verify heading contains 'Welcome to VÉRLA'", new TokenUsage(0, 0, 0), "mock-model"));
+        session.getLlmRegistry().registerProvider(mockProvider);
+        session.getLlmRegistry().setDefaultProvider(mockProvider);
+
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step0 = new PlaybookStep("Verify the main page heading contains 'Bublik'");
+        step0.setLineNumber(1);
+        step0.setSourceFile("test.yaml");
+        step0.setFailureReason("Heading text mismatch: expected 'Bublik' but was 'Welcome to VÉRLA'");
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put("playbook.steps", new ArrayList<>(List.of(step0)));
+        context.getTransientData().put("playbook.flatSteps", new ArrayList<>(List.of(step0)));
+
+        final JsonObject suggestFixAction = new JsonObject();
+        suggestFixAction.addProperty("action", "SUGGEST_FIX");
+        suggestFixAction.addProperty("index", 0);
+
+        final JsonObject finishAction = new JsonObject();
+        finishAction.addProperty("action", "FINISH");
+
+        submitActionsSequentiallyAsynchronously(List.of(suggestFixAction, finishAction));
+
+        final String result = listener.pauseOnStepFailure(context, step0, new RuntimeException("Heading text mismatch: expected 'Bublik' but was 'Welcome to VÉRLA'"));
+        assertEquals("FINISH", result);
+
+        final LlmRequest captured = mockProvider.getLastRequest();
+        assertNotNull(captured, "LlmRequest must be submitted to LLM provider");
+        final String userPrompt = captured.userMessage();
+        assertTrue(userPrompt.contains("Original failed instruction: \"Verify the main page heading contains 'Bublik'\""),
+            "User prompt must include original failed instruction");
+        assertTrue(userPrompt.contains("Failure reason: \"Heading text mismatch: expected 'Bublik' but was 'Welcome to VÉRLA'\""),
+            "User prompt must include failure reason");
+        assertTrue(captured.systemMessage().contains("SUT page state"),
+            "System prompt must indicate SUT page state diagnostic role");
+
+        final Object fixObj = context.getTransientData().get("lastFixSuggestion");
+        assertNotNull(fixObj);
+        final JsonObject fixJson = (JsonObject) fixObj;
+        assertEquals("Verify heading contains 'Welcome to VÉRLA'", fixJson.get("suggestedInstruction").getAsString());
+    }
+
+    @Test
+    public void testPauseOnStepFailureSuggestFixFollowedByApplyOnlyWithPrecedingToken()
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        mockProvider.addResponse(new LlmResponse("Revised via Suggest Fix Apply Only", new TokenUsage(0, 0, 0), "mock-model"));
+        session.getLlmRegistry().registerProvider(mockProvider);
+        session.getLlmRegistry().setDefaultProvider(mockProvider);
+
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step0 = new PlaybookStep("Original failed instruction");
+        step0.setLineNumber(1);
+        step0.setSourceFile("test.yaml");
+        step0.setFailureReason("Element not found");
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put("playbook.steps", new ArrayList<>(List.of(step0)));
+        context.getTransientData().put("playbook.flatSteps", new ArrayList<>(List.of(step0)));
+
+        final Thread submitter = new Thread(() -> {
+            try
+            {
+                // Wait for runner to pause on failure and obtain the initial pause token
+                int attempts = 0;
+                while (consoleEngine.getCurrentPauseId() == null && attempts < 100)
+                {
+                    Thread.sleep(25);
+                    attempts++;
+                }
+                final String initialPauseId = consoleEngine.getCurrentPauseId();
+                assertNotNull(initialPauseId, "Initial pauseId must be registered");
+
+                // Submit SUGGEST_FIX
+                final JsonObject suggestFixAction = new JsonObject();
+                suggestFixAction.addProperty("runId", consoleEngine.getRunId());
+                suggestFixAction.addProperty("pauseId", initialPauseId);
+                suggestFixAction.addProperty("action", "SUGGEST_FIX");
+                suggestFixAction.addProperty("index", 0);
+                suggestFixAction.addProperty("isCurrentStep", true);
+
+                final ActionResult fixRes = consoleEngine.submitAction(suggestFixAction);
+                assertEquals(200, fixRes.statusCode());
+
+                // Give LLM and loop a short moment to cycle and rotate the token
+                attempts = 0;
+                while (initialPauseId.equals(consoleEngine.getCurrentPauseId()) && attempts < 100)
+                {
+                    Thread.sleep(25);
+                    attempts++;
+                }
+
+                // Client clicks Apply Only carrying the initial pause token
+                final JsonObject applyOnlyAction = new JsonObject();
+                applyOnlyAction.addProperty("runId", consoleEngine.getRunId());
+                applyOnlyAction.addProperty("pauseId", initialPauseId);
+                applyOnlyAction.addProperty("action", "EDIT");
+                applyOnlyAction.addProperty("isCurrentStep", true);
+                applyOnlyAction.addProperty("autoConfirm", false);
+                applyOnlyAction.addProperty("instruction", "Revised via Suggest Fix Apply Only");
+
+                final ActionResult editRes = consoleEngine.submitAction(applyOnlyAction);
+                assertEquals(200, editRes.statusCode());
+                assertTrue(editRes.responseBody().contains("\"status\":\"accepted\""),
+                    "EDIT carrying preceding token must be accepted via grace window. Got: " + editRes.responseBody());
+            }
+            catch (final Exception e)
+            {
+                e.printStackTrace();
+            }
+        });
+        submitter.setDaemon(true);
+        submitter.start();
+
+        final String result = listener.pauseOnStepFailure(context, step0, new RuntimeException("Element not found"));
+        assertEquals("EDIT", result);
+        assertEquals("Revised via Suggest Fix Apply Only", step0.getInstruction());
+        assertFalse(step0.isFailed());
+        assertEquals(PlaybookStepStatus.RUNNING, step0.getStatus());
+        assertTrue(Boolean.TRUE.equals(context.getTransientData().get("KEY_REQUIRE_CONFIRMATION_ONCE")),
+            "KEY_REQUIRE_CONFIRMATION_ONCE must be armed on Apply Only");
+        assertNull(context.getTransientData().get("KEY_AUTO_CONFIRM_ONCE"));
+        assertNull(context.getTransientData().get("KEY_LAST_STEP_FAILURE"),
+            "KEY_LAST_STEP_FAILURE must be cleared upon EDIT");
+        assertNull(context.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR),
+            "KEY_LAST_EXECUTION_ERROR must be cleared upon EDIT");
+        assertNull(context.getTransientData().get("lastFixSuggestion"),
+            "lastFixSuggestion must be cleared upon EDIT");
+    }
+
+    @Test
+    public void testPauseOnStepFailureEditClearsTransientFailureAndPushesRunningState()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep step = new PlaybookStep("Original step");
+        step.setLineNumber(5);
+        step.setSourceFile("playbook.yaml");
+        step.setFailureReason("Button not clickable");
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put("playbook.steps", new ArrayList<>(List.of(step)));
+        context.getTransientData().put("playbook.flatSteps", new ArrayList<>(List.of(step)));
+        context.getTransientData().put("KEY_LAST_STEP_FAILURE", "Button not clickable");
+        context.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, "Button not clickable");
+        context.getTransientData().put("lastFixSuggestion", new JsonObject());
+
+        final Thread submitter = new Thread(() -> {
+            try
+            {
+                int attempts = 0;
+                while (consoleEngine.getCurrentPauseId() == null && attempts < 100)
+                {
+                    Thread.sleep(25);
+                    attempts++;
+                }
+                final String pauseId = consoleEngine.getCurrentPauseId();
+                assertNotNull(pauseId);
+
+                final JsonObject editAction = new JsonObject();
+                editAction.addProperty("runId", consoleEngine.getRunId());
+                editAction.addProperty("pauseId", pauseId);
+                editAction.addProperty("action", "EDIT");
+                editAction.addProperty("isCurrentStep", true);
+                editAction.addProperty("autoConfirm", true);
+                editAction.addProperty("instruction", "Click the visible submit button");
+
+                final ActionResult editRes = consoleEngine.submitAction(editAction);
+                assertEquals(200, editRes.statusCode());
+            }
+            catch (final Exception e)
+            {
+                e.printStackTrace();
+            }
+        });
+        submitter.setDaemon(true);
+        submitter.start();
+
+        final String result = listener.pauseOnStepFailure(context, step, new RuntimeException("Button not clickable"));
+        assertEquals("EDIT", result);
+        assertEquals("Click the visible submit button", step.getInstruction());
+        assertFalse(step.isFailed());
+        assertEquals(PlaybookStepStatus.RUNNING, step.getStatus());
+        assertNull(step.getFailureReason());
+        assertNull(context.getTransientData().get("KEY_LAST_STEP_FAILURE"),
+            "KEY_LAST_STEP_FAILURE must be removed upon EDIT");
+        assertNull(context.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR),
+            "KEY_LAST_EXECUTION_ERROR must be removed upon EDIT");
+        assertNull(context.getTransientData().get("lastFixSuggestion"),
+            "lastFixSuggestion must be removed upon EDIT");
+        assertTrue(Boolean.TRUE.equals(context.getTransientData().get("KEY_AUTO_CONFIRM_ONCE")),
+            "KEY_AUTO_CONFIRM_ONCE must be set when autoConfirm is true");
     }
 }
