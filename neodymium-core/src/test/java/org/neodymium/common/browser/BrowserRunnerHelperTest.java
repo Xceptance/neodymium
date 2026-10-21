@@ -1,5 +1,6 @@
 package org.neodymium.common.browser;
 
+import java.io.File;
 import java.lang.reflect.Proxy;
 import java.net.MalformedURLException;
 import java.util.ArrayList;
@@ -19,6 +20,11 @@ import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebDriverException;
 
 import com.browserup.bup.BrowserUpProxy;
+import org.neodymium.common.browser.configuration.BrowserConfiguration;
+import org.neodymium.common.browser.wrappers.ChromeBuilder;
+import org.neodymium.common.browser.wrappers.EdgeBuilder;
+import org.neodymium.common.browser.wrappers.IEBuilder;
+import org.openqa.selenium.firefox.GeckoDriverService.Builder;
 
 /**
  * Tests for {@link BrowserRunnerHelper} retry mechanism on {@link SessionNotCreatedException} and cleanup.
@@ -34,12 +40,24 @@ public class BrowserRunnerHelperTest
 
     private String originalPauseMax;
 
+    private String originalChromeDriverPath;
+
+    private String originalFirefoxDriverPath;
+
+    private String originalEdgeDriverPath;
+
+    private String originalIeDriverPath;
+
     @BeforeEach
     public void setUp()
     {
         originalMaxRetries = Neodymium.configuration().getProperty("neodymium.webDriver.sessionRetry.maxRetries");
         originalPauseMin = Neodymium.configuration().getProperty("neodymium.webDriver.sessionRetry.pause.min");
         originalPauseMax = Neodymium.configuration().getProperty("neodymium.webDriver.sessionRetry.pause.max");
+        originalChromeDriverPath = Neodymium.configuration().getProperty("neodymium.webDriver.chrome.pathToDriverServer");
+        originalFirefoxDriverPath = Neodymium.configuration().getProperty("neodymium.webDriver.firefox.pathToDriverServer");
+        originalEdgeDriverPath = Neodymium.configuration().getProperty("neodymium.webDriver.edge.pathToDriverServer");
+        originalIeDriverPath = Neodymium.configuration().getProperty("neodymium.webDriver.ie.pathToDriverServer");
     }
 
     @AfterEach
@@ -48,6 +66,10 @@ public class BrowserRunnerHelperTest
         restoreProperty("neodymium.webDriver.sessionRetry.maxRetries", originalMaxRetries);
         restoreProperty("neodymium.webDriver.sessionRetry.pause.min", originalPauseMin);
         restoreProperty("neodymium.webDriver.sessionRetry.pause.max", originalPauseMax);
+        restoreProperty("neodymium.webDriver.chrome.pathToDriverServer", originalChromeDriverPath);
+        restoreProperty("neodymium.webDriver.firefox.pathToDriverServer", originalFirefoxDriverPath);
+        restoreProperty("neodymium.webDriver.edge.pathToDriverServer", originalEdgeDriverPath);
+        restoreProperty("neodymium.webDriver.ie.pathToDriverServer", originalIeDriverPath);
     }
 
     private void restoreProperty(final String key, final String value)
@@ -307,5 +329,97 @@ public class BrowserRunnerHelperTest
         wDSC.setProxy(throwingProxy);
 
         Assertions.assertDoesNotThrow(() -> BrowserRunnerHelper.cleanupWebDriverStateContainer(wDSC));
+    }
+
+    @Test
+    public void testCreateChromeBuilderWithoutConfiguredDriverPathLeavesExecutableNullForSeleniumManager()
+    {
+        Neodymium.configuration().removeProperty("neodymium.webDriver.chrome.pathToDriverServer");
+        final BrowserConfiguration config = new BrowserConfiguration();
+
+        final ChromeBuilder builder = BrowserRunnerHelper.createChromeBuilder(config);
+
+        Assertions.assertNull(builder.exe, "Driver executable should remain null when not explicitly configured");
+    }
+
+    @Test
+    public void testCreateChromeBuilderWithConfiguredDriverPathSetsExecutable()
+    {
+        final String customPath = "/custom/path/to/chromedriver";
+        Neodymium.configuration().setProperty("neodymium.webDriver.chrome.pathToDriverServer", customPath);
+        final BrowserConfiguration config = new BrowserConfiguration();
+
+        final ChromeBuilder builder = BrowserRunnerHelper.createChromeBuilder(config);
+
+        Assertions.assertEquals(new File(customPath), builder.exe);
+    }
+
+    @Test
+    public void testCreateGeckoBuilderWithoutConfiguredDriverPathLeavesExecutableNullForSeleniumManager()
+    {
+        Neodymium.configuration().removeProperty("neodymium.webDriver.firefox.pathToDriverServer");
+        final BrowserConfiguration config = new BrowserConfiguration();
+
+        final Builder builder = BrowserRunnerHelper.createGeckoBuilder(config);
+
+        Assertions.assertNull(builder.exe, "GeckoDriver executable should remain null when not explicitly configured");
+    }
+
+    @Test
+    public void testCreateGeckoBuilderWithConfiguredDriverPathSetsExecutable()
+    {
+        final String customPath = "/custom/path/to/geckodriver";
+        Neodymium.configuration().setProperty("neodymium.webDriver.firefox.pathToDriverServer", customPath);
+        final BrowserConfiguration config = new BrowserConfiguration();
+
+        final Builder builder = BrowserRunnerHelper.createGeckoBuilder(config);
+
+        Assertions.assertEquals(new File(customPath), builder.exe);
+    }
+
+    @Test
+    public void testCreateEdgeBuilderWithoutConfiguredDriverPathLeavesExecutableNullForSeleniumManager()
+    {
+        Neodymium.configuration().removeProperty("neodymium.webDriver.edge.pathToDriverServer");
+        final BrowserConfiguration config = new BrowserConfiguration();
+
+        final EdgeBuilder builder = BrowserRunnerHelper.createEdgeBuilder(config);
+
+        Assertions.assertNull(builder.exe, "EdgeDriver executable should remain null when not explicitly configured");
+    }
+
+    @Test
+    public void testCreateEdgeBuilderWithConfiguredDriverPathSetsExecutable()
+    {
+        final String customPath = "/custom/path/to/msedgedriver";
+        Neodymium.configuration().setProperty("neodymium.webDriver.edge.pathToDriverServer", customPath);
+        final BrowserConfiguration config = new BrowserConfiguration();
+
+        final EdgeBuilder builder = BrowserRunnerHelper.createEdgeBuilder(config);
+
+        Assertions.assertEquals(new File(customPath), builder.exe);
+    }
+
+    @Test
+    public void testCreateIEBuilderWithoutConfiguredDriverPathLeavesExecutableNullForSeleniumManager()
+    {
+        Neodymium.configuration().removeProperty("neodymium.webDriver.ie.pathToDriverServer");
+        final BrowserConfiguration config = new BrowserConfiguration();
+
+        final IEBuilder builder = BrowserRunnerHelper.createIEBuilder(config);
+
+        Assertions.assertNull(builder.exe, "IEDriver executable should remain null when not explicitly configured");
+    }
+
+    @Test
+    public void testCreateIEBuilderWithConfiguredDriverPathSetsExecutable()
+    {
+        final String customPath = "C:\\custom\\path\\to\\IEDriverServer.exe";
+        Neodymium.configuration().setProperty("neodymium.webDriver.ie.pathToDriverServer", customPath);
+        final BrowserConfiguration config = new BrowserConfiguration();
+
+        final IEBuilder builder = BrowserRunnerHelper.createIEBuilder(config);
+
+        Assertions.assertEquals(new File(customPath), builder.exe);
     }
 }
