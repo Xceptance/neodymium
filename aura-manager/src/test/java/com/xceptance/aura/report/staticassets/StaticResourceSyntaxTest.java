@@ -829,8 +829,8 @@ public final class StaticResourceSyntaxTest
             "if (!cardHtml.includes('Tool Result Payload') || !cardHtml.includes('Page State & Continuation Context')) {\n" +
             "    throw new Error('Drawer sections missing from card: ' + cardHtml);\n" +
             "}\n" +
-            "if (!cardHtml.includes('copyTurnConversation') || !cardHtml.includes('step_99')) {\n" +
-            "    throw new Error('Turn copy button missing from card');\n" +
+            "if (cardHtml.includes('copyTurnConversation')) {\n" +
+            "    throw new Error('Single-turn copy button should not be present on card header');\n" +
             "}\n" +
             "\n" +
             "const initialCall = {\n" +
@@ -852,6 +852,109 @@ public final class StaticResourceSyntaxTest
             "const md = generateStepConversationMarkdown('step_99');\n" +
             "if (!md.includes('# LLM Conversation: Step #3 - Image Placement') || !md.includes('You are an automated web agent.') || !md.includes('Tool Execution Payload')) {\n" +
             "    throw new Error('Markdown generation failed: ' + md.substring(0, 100));\n" +
+            "}\n" +
+            "`;\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(testScript, sandbox);\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+    }
+
+    @Test
+    public void testAccumulatedChatMessageHistoryParsingAndDomCollapsing() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const testScript = code + '\\n' + `\n" +
+            "const fullHistorySample = 'ChatMessage[USER]: ### Active Session Variables:\\\\n- BROWSER: chrome\\\\n### Test Instruction:\\\\nGenerate a random image and upload it.\\\\n### Current Page State & Interactive Elements:\\\\nPage URL: https://order.example.com\\\\nChatMessage[ASSISTANT]: Tool Calls: [{\\\\\"name\\\\\":\\\\\"generateAndUploadImage\\\\\",\\\\\"arguments\\\\\":{\\\\\"target\\\\\":\\\\\"gallery\\\\\"}}]\\\\nChatMessage[TOOL (tool=generateAndUploadImage, id=call_4)]: Tool error: Error executing method generateAndUploadImage: Connection refused\\\\nChatMessage[USER]: ### Current Page:\\\\nURL: https://order.example.com/editor/\\\\nTitle: Editor\\\\nNote: Page visual state unchanged.\\\\n=== Structural DOM Tree ===\\\\n<app-root><div class=\"editor\">Canvas</div></app-root>';\n" +
+            "const messages = splitChatMessages(fullHistorySample);\n" +
+            "if (messages.length !== 4) {\n" +
+            "    throw new Error('Expected 4 discrete messages but got: ' + messages.length);\n" +
+            "}\n" +
+            "if (!messages[2].role.includes('TOOL') || !messages[2].content.includes('Connection refused')) {\n" +
+            "    throw new Error('Tool message extraction mismatch: ' + JSON.stringify(messages[2]));\n" +
+            "}\n" +
+            "const parsed = parseLlmPromptContent(fullHistorySample);\n" +
+            "if (!parsed.turnInputSummary.includes('generateAndUploadImage ➔ ERROR: Error executing method generateAndUploadImage: Connection refused')) {\n" +
+            "    throw new Error('Plain text tool error summary mismatch: ' + parsed.turnInputSummary);\n" +
+            "}\n" +
+            "if (!parsed.domSnapshot || !parsed.domSnapshot.includes('<app-root><div class=\"editor\">Canvas</div></app-root>')) {\n" +
+            "    throw new Error('Structural DOM tree not properly isolated into domSnapshot: ' + parsed.domSnapshot);\n" +
+            "}\n" +
+            "if (parsed.continuationContext.rawText.includes('<app-root>')) {\n" +
+            "    throw new Error('Structural DOM tree leaked into continuationContext.rawText');\n" +
+            "}\n" +
+            "if (parsed.continuationContext.pageUrl !== 'https://order.example.com/editor/' || parsed.continuationContext.pageTitle !== 'Editor') {\n" +
+            "    throw new Error('Continuation context URL or Title mismatch');\n" +
+            "}\n" +
+            "\n" +
+            "const call = {\n" +
+            "    userPrompt: fullHistorySample,\n" +
+            "    responseContent: 'Tool Calls: [{\\\"name\\\":\\\"query_dom\\\",\\\"arguments\\\":{\\\"selector\\\":\\\"app-root\\\"}}]'\n" +
+            "};\n" +
+            "const cardHtml = renderStreamlinedLlmCallCard(call, 1, 'step_101', false, false);\n" +
+            "if (!cardHtml.includes('Tool Result: generateAndUploadImage ➔ ERROR:')) {\n" +
+            "    throw new Error('Card missing concise oneliner: ' + cardHtml);\n" +
+            "}\n" +
+            "if (!cardHtml.includes('Page State & DOM Snapshot') || !cardHtml.includes('llm-dom-toggle')) {\n" +
+            "    throw new Error('Card missing collapsible DOM snapshot toggle: ' + cardHtml);\n" +
+            "}\n" +
+            "if (cardHtml.includes('copyTurnConversation')) {\n" +
+            "    throw new Error('Card must not have per-turn copy button');\n" +
+            "}\n" +
+            "\n" +
+            "window._neodymiumStepLlmData = {\n" +
+            "    step_101: {\n" +
+            "        stepId: 'step_101',\n" +
+            "        stepNum: 4,\n" +
+            "        title: 'Generate and upload image',\n" +
+            "        model: 'gemini-3.5-flash-lite',\n" +
+            "        totalTokens: 116730,\n" +
+            "        totalCost: '$0.0406',\n" +
+            "        calls: [\n" +
+            "            {\n" +
+            "                userPrompt: '### Test Instruction: Generate image and upload.',\n" +
+            "                responseContent: 'Tool Calls: [{\\\"name\\\":\\\"generateAndUploadImage\\\",\\\"arguments\\\":{}}]'\n" +
+            "            },\n" +
+            "            call\n" +
+            "        ],\n" +
+            "        systemPrompt: 'Autonomous web agent.'\n" +
+            "    }\n" +
+            "};\n" +
+            "const md = generateStepConversationMarkdown('step_101');\n" +
+            "if (!md.includes('<details>') || !md.includes('<summary>Page DOM Tree Snapshot') || !md.includes('</details>')) {\n" +
+            "    throw new Error('Markdown must collapse DOM tree inside <details> tags: ' + md.substring(0, 300));\n" +
             "}\n" +
             "`;\n" +
             "const sandbox = {\n" +

@@ -2622,46 +2622,89 @@ function formatBytes(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
-function parseToolAndUserTurns(text) {
-    if (!text) return null;
+function splitChatMessages(text) {
+    if (!text || typeof text !== 'string') return [];
 
-    let toolPart = '';
-    let userPart = '';
+    const regex = /(?:^|[\s\n]+)(?:ChatMessage\[([^\]]+)\]:\s*|(TOOL(?:\s*\([^)]*\))?:\s*))/g;
+    const matches = [];
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+        const fullMatch = match[0];
+        const role = (match[1] || match[2] || '').trim().replace(/^TOOL(?:\s*\(([^)]*)\))?:?$/i, (m, p1) => p1 ? `TOOL (${p1})` : 'TOOL');
+        const leadingWhitespaceLength = fullMatch.match(/^[\s\n]+/)?.[0].length || 0;
+        const headerStart = match.index + leadingWhitespaceLength;
+        const contentStart = match.index + fullMatch.length;
 
-    // Check for ChatMessage[USER] separator (newline or space before ChatMessage[USER])
-    const userIdx = text.search(/(?:\n|\s|^)ChatMessage\[USER\]:?/i);
-    if (userIdx !== -1) {
-        toolPart = text.substring(0, userIdx).trim();
-        userPart = text.substring(userIdx).replace(/^[\s\n]*ChatMessage\[USER\]:?\s*/i, '').trim();
-    } else {
-        toolPart = text.trim();
+        matches.push({
+            role: role,
+            headerStart: headerStart,
+            contentStart: contentStart
+        });
     }
 
-    // Parse toolPart: TOOL (tool=..., id=...): <payload> or ChatMessage[TOOL (...)]: <payload>
+    if (matches.length === 0) {
+        return [{ role: 'RAW', content: text.trim() }];
+    }
+
+    const result = [];
+    if (matches[0].headerStart > 0) {
+        const leading = text.substring(0, matches[0].headerStart).trim();
+        if (leading) {
+            result.push({ role: 'RAW', content: leading });
+        }
+    }
+
+    for (let i = 0; i < matches.length; i++) {
+        const current = matches[i];
+        const nextStart = (i + 1 < matches.length) ? matches[i + 1].headerStart : text.length;
+        const content = text.substring(current.contentStart, nextStart).trim();
+        result.push({
+            role: current.role,
+            content: content
+        });
+    }
+
+    return result;
+}
+
+function parseToolMessage(role, content) {
+    if (!role && !content) return null;
     let toolName = '';
     let toolId = '';
-    let toolJsonStr = toolPart;
 
-    const toolHeaderMatch = toolPart.match(/^(?:ChatMessage\[)?TOOL(?:\s*\((?:tool=)?([^,)]+)(?:,\s*id=([^)]+))?\))?\]?:\s*([\s\S]*)$/i);
-    if (toolHeaderMatch) {
-        toolName = (toolHeaderMatch[1] || '').trim();
-        toolId = (toolHeaderMatch[2] || '').trim();
-        toolJsonStr = (toolHeaderMatch[3] || '').trim();
+    if (role) {
+        const toolAttrMatch = role.match(/tool=([^,)]+)/i);
+        if (toolAttrMatch) toolName = toolAttrMatch[1].trim();
+        const idAttrMatch = role.match(/id=([^,)]+)/i);
+        if (idAttrMatch) toolId = idAttrMatch[1].trim();
+
+        if (!toolName) {
+            const simpleToolMatch = role.match(/TOOL\s*\(([^,)]+)\)/i);
+            if (simpleToolMatch) toolName = simpleToolMatch[1].trim();
+        }
+    }
+
+    let payload = (content || '').trim();
+    const contentHeaderMatch = payload.match(/^TOOL(?:\s*\((?:tool=)?([^,)]+)(?:,\s*id=([^)]+))?\))?:\s*([\s\S]*)$/i);
+    if (contentHeaderMatch) {
+        if (!toolName) toolName = (contentHeaderMatch[1] || '').trim();
+        if (!toolId) toolId = (contentHeaderMatch[2] || '').trim();
+        payload = (contentHeaderMatch[3] || '').trim();
     }
 
     let parsedJson = null;
     let formattedJson = '';
     let summary = '';
 
-    if (toolJsonStr.startsWith('{') || toolJsonStr.startsWith('[')) {
+    if (payload.startsWith('{') || payload.startsWith('[')) {
         try {
-            parsedJson = JSON.parse(toolJsonStr);
+            parsedJson = JSON.parse(payload);
             formattedJson = JSON.stringify(parsedJson, null, 2);
         } catch (e) {
-            formattedJson = toolJsonStr;
+            formattedJson = payload;
         }
     } else {
-        formattedJson = toolJsonStr;
+        formattedJson = payload;
     }
 
     if (parsedJson) {
@@ -2685,49 +2728,98 @@ function parseToolAndUserTurns(text) {
         } else {
             summary = `${action} ➔ ${status}`;
         }
-    } else if (toolName) {
-        let shortText = toolJsonStr.split('\n')[0].trim();
-        if (shortText.length > 60) shortText = shortText.substring(0, 57) + '...';
-        summary = `${toolName} ➔ ${shortText}`;
+    } else {
+        const effectiveName = toolName || 'tool';
+        const cleanText = payload.replace(/^Tool\s*(?:error|failure):\s*/i, '').trim();
+        let shortText = cleanText.split('\n')[0].trim();
+        if (shortText.length > 70) shortText = shortText.substring(0, 67) + '...';
+
+        const isError = /error|fail|exception/i.test(payload);
+        if (isError) {
+            summary = `${effectiveName} ➔ ERROR: ${shortText}`;
+        } else {
+            summary = `${effectiveName} ➔ ${shortText}`;
+        }
     }
 
-    // Parse userPart (continuation context)
+    return {
+        toolName: toolName || (parsedJson && parsedJson.action) || 'tool',
+        toolId: toolId,
+        status: (parsedJson && parsedJson.status) || (parsedJson && parsedJson.error ? 'ERROR' : (/error|fail|exception/i.test(payload) ? 'ERROR' : 'SUCCESS')),
+        summary: summary ? `Tool Result: ${summary}` : '',
+        formattedJson: formattedJson,
+        parsedObj: parsedJson
+    };
+}
+
+function parseUserContinuation(content) {
+    if (!content) return { pageUrl: '', pageTitle: '', visualNote: '', guidanceText: '', domSnapshot: '', rawText: '' };
+
+    let text = content.trim();
+    let domSnapshot = '';
+
+    const domHeaderIdx = text.search(/===\s*Structural DOM Tree\s*===/i);
+    if (domHeaderIdx !== -1) {
+        domSnapshot = text.substring(domHeaderIdx).replace(/===\s*Structural DOM Tree\s*===\s*/i, '').trim();
+        text = text.substring(0, domHeaderIdx).trim();
+    } else {
+        const appRootIdx = text.search(/<(?:app-root|html|!DOCTYPE html)\b/i);
+        if (appRootIdx !== -1) {
+            domSnapshot = text.substring(appRootIdx).trim();
+            text = text.substring(0, appRootIdx).trim();
+        }
+    }
+
     let pageUrl = '';
     let pageTitle = '';
     let visualNote = '';
     let guidanceText = '';
 
-    if (userPart) {
-        const urlMatch = userPart.match(/URL:\s*(\S+)/i);
-        if (urlMatch) pageUrl = urlMatch[1];
+    const urlMatch = text.match(/URL:\s*(\S+)/i);
+    if (urlMatch) pageUrl = urlMatch[1];
 
-        const titleMatch = userPart.match(/Title:\s*([^.\n]+?)(?=\s+Note:|\n|$)/i);
-        if (titleMatch) pageTitle = titleMatch[1].trim();
+    const titleMatch = text.match(/Title:\s*([^.\n]+?)(?=\s+Note:|\n|$)/i);
+    if (titleMatch) pageTitle = titleMatch[1].trim();
 
-        const noteMatch = userPart.match(/Note:\s*([\s\S]*?)(?=\s+If\b|\n\n|$)/i);
-        if (noteMatch) visualNote = noteMatch[1].trim();
+    const noteMatch = text.match(/Note:\s*([\s\S]*?)(?=\s+If\b|\n\n|$)/i);
+    if (noteMatch) visualNote = noteMatch[1].trim();
 
-        const guidanceMatch = userPart.match(/If\s+this\s+was\s+an\s+action[\s\S]*/i);
-        if (guidanceMatch) guidanceText = guidanceMatch[0].trim();
-    }
+    const guidanceMatch = text.match(/If\s+this\s+was\s+an\s+action[\s\S]*/i);
+    if (guidanceMatch) guidanceText = guidanceMatch[0].trim();
 
     return {
-        summary: summary ? `Tool Result: ${summary}` : '',
-        toolResult: (toolName || parsedJson || formattedJson) ? {
-            toolName: toolName || (parsedJson && parsedJson.action) || 'tool',
-            toolId,
-            status: (parsedJson && parsedJson.status) || (parsedJson && parsedJson.error ? 'ERROR' : 'SUCCESS'),
-            summary,
-            formattedJson,
-            parsedObj: parsedJson
-        } : null,
-        continuationContext: (pageUrl || pageTitle || visualNote || guidanceText) ? {
-            pageUrl,
-            pageTitle,
-            visualNote,
-            guidanceText,
-            rawText: userPart
-        } : null
+        pageUrl: pageUrl,
+        pageTitle: pageTitle,
+        visualNote: visualNote,
+        guidanceText: guidanceText,
+        domSnapshot: domSnapshot,
+        rawText: text
+    };
+}
+
+function parseToolAndUserTurns(text) {
+    if (!text) return null;
+    const messages = splitChatMessages(text);
+    let toolMsg = null;
+    let userMsg = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role.toUpperCase().includes('TOOL')) {
+            toolMsg = messages[i];
+            for (let j = i + 1; j < messages.length; j++) {
+                if (messages[j].role.toUpperCase().includes('USER')) {
+                    userMsg = messages[j];
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    const toolResult = toolMsg ? parseToolMessage(toolMsg.role, toolMsg.content) : null;
+    const continuationContext = userMsg ? parseUserContinuation(userMsg.content) : null;
+    return {
+        summary: (toolResult && toolResult.summary) || '',
+        toolResult: toolResult,
+        continuationContext: continuationContext
     };
 }
 
@@ -2746,39 +2838,63 @@ function parseLlmPromptContent(userPromptText) {
         };
     }
 
+    const messages = splitChatMessages(userPromptText);
+    const hasToolMsg = messages.some(m => m.role.toUpperCase().includes('TOOL'));
+    const isMultiTurn = messages.length > 1 || hasToolMsg;
+
+    if (isMultiTurn && hasToolMsg) {
+        let lastToolIdx = -1;
+        for (let i = messages.length - 1; i >= 0; i--) {
+            if (messages[i].role.toUpperCase().includes('TOOL')) {
+                lastToolIdx = i;
+                break;
+            }
+        }
+
+        const toolMsg = lastToolIdx !== -1 ? messages[lastToolIdx] : null;
+        let userMsg = null;
+        if (lastToolIdx !== -1) {
+            for (let i = lastToolIdx + 1; i < messages.length; i++) {
+                if (messages[i].role.toUpperCase().includes('USER')) {
+                    userMsg = messages[i];
+                    break;
+                }
+            }
+        }
+
+        const parsedTool = toolMsg ? parseToolMessage(toolMsg.role, toolMsg.content) : null;
+        const parsedUser = userMsg ? parseUserContinuation(userMsg.content) : null;
+
+        const turnInputSummary = (parsedTool && parsedTool.summary) || '';
+        const domSnapshot = (parsedUser && parsedUser.domSnapshot) || '';
+        const domBytes = domSnapshot ? encodeURI(domSnapshot).split(/%..|./).length - 1 : 0;
+
+        return {
+            instruction: '',
+            sessionVariables: [],
+            domSnapshot: domSnapshot,
+            domSnapshotBytes: domBytes,
+            turnInput: turnInputSummary,
+            turnInputSummary: turnInputSummary,
+            toolResult: parsedTool,
+            continuationContext: parsedUser,
+            otherContext: ''
+        };
+    }
+
+    let targetText = userPromptText;
+    if (messages.length === 1 && (messages[0].role === 'USER' || messages[0].role === 'RAW')) {
+        targetText = messages[0].content;
+    } else if (messages.length > 0 && messages[0].role === 'USER') {
+        targetText = messages[0].content;
+    }
+
     let instruction = '';
     const sessionVariables = [];
     let domSnapshot = '';
-    let turnInput = '';
-    let turnInputSummary = '';
-    let toolResult = null;
-    let continuationContext = null;
     let otherContext = '';
 
-    // Check for multi-turn dialogue ChatMessage or TOOL markers
-    const hasToolMarker = userPromptText.includes('TOOL ') || userPromptText.includes('ChatMessage[TOOL') || userPromptText.startsWith('TOOL (');
-    if (hasToolMarker) {
-        const parsedTurns = parseToolAndUserTurns(userPromptText);
-        if (parsedTurns) {
-            turnInputSummary = parsedTurns.summary;
-            toolResult = parsedTurns.toolResult;
-            continuationContext = parsedTurns.continuationContext;
-            turnInput = parsedTurns.summary;
-        }
-    } else if (userPromptText.includes('ChatMessage[')) {
-        const userMsgMatch = userPromptText.match(/ChatMessage\[USER\]:\s*\n([\s\S]*?)(?=\nChatMessage\[|$)/);
-        if (userMsgMatch) {
-            const userContent = userMsgMatch[1];
-            const parsedInner = parseLlmPromptContent(userContent);
-            if (parsedInner.instruction) instruction = parsedInner.instruction;
-            if (parsedInner.sessionVariables.length > 0) sessionVariables.push(...parsedInner.sessionVariables);
-            if (parsedInner.domSnapshot) domSnapshot = parsedInner.domSnapshot;
-            if (parsedInner.otherContext) otherContext = parsedInner.otherContext;
-        }
-    }
-
-    // 1. Session Variables
-    const varsMatch = userPromptText.match(/###\s*Active Session Variables:\s*\n([\s\S]*?)(?=\n###|\n\n\n|$)/i);
+    const varsMatch = targetText.match(/###\s*Active Session Variables:\s*\n([\s\S]*?)(?=\n###|\n\n\n|$)/i);
     if (varsMatch) {
         const varLines = varsMatch[1].split('\n');
         for (const line of varLines) {
@@ -2789,49 +2905,32 @@ function parseLlmPromptContent(userPromptText) {
         }
     }
 
-    // 2. Test Instruction
-    if (!instruction && !hasToolMarker) {
-        const instrMatch = userPromptText.match(/###\s*Test Instruction:\s*\n([\s\S]*?)(?=\n###|$)/i);
-        if (instrMatch) {
-            instruction = instrMatch[1].trim();
+    const instrMatch = targetText.match(/###\s*Test Instruction:\s*\n([\s\S]*?)(?=\n###|$)/i);
+    if (instrMatch) {
+        instruction = instrMatch[1].trim();
+    }
+
+    const domMatch = targetText.match(/###\s*Current Page State & Interactive Elements:\s*\n([\s\S]*?)(?=\n###|$)/i);
+    if (domMatch) {
+        domSnapshot = domMatch[1].trim();
+    } else {
+        const pageUrlIdx = targetText.indexOf('Page URL:');
+        if (pageUrlIdx !== -1 && !instruction) {
+            domSnapshot = targetText.substring(pageUrlIdx).trim();
         }
     }
 
-    // 3. Current Page State & DOM
-    if (!domSnapshot && !hasToolMarker) {
-        const domMatch = userPromptText.match(/###\s*Current Page State & Interactive Elements:\s*\n([\s\S]*?)(?=\n###|$)/i);
-        if (domMatch) {
-            domSnapshot = domMatch[1].trim();
-        } else {
-            const pageUrlIdx = userPromptText.indexOf('Page URL:');
-            if (pageUrlIdx !== -1 && !instruction) {
-                domSnapshot = userPromptText.substring(pageUrlIdx).trim();
-            }
-        }
-    }
-
-    // 4. Target Selector Hint or Visual Directives
-    const hintMatch = userPromptText.match(/###\s*Target Selector Hint:\s*\n([\s\S]*?)(?=\n###|$)/i);
+    const hintMatch = targetText.match(/###\s*Target Selector Hint:\s*\n([\s\S]*?)(?=\n###|$)/i);
     if (hintMatch) {
         otherContext += (otherContext ? '\n' : '') + 'Selector Hint: ' + hintMatch[1].trim();
     }
-    const visualMatch = userPromptText.match(/###\s*Visual Inspection Directive:\s*\n([\s\S]*?)(?=\n###|$)/i);
+    const visualMatch = targetText.match(/###\s*Visual Inspection Directive:\s*\n([\s\S]*?)(?=\n###|$)/i);
     if (visualMatch) {
         otherContext += (otherContext ? '\n' : '') + 'Visual Directive: ' + visualMatch[1].trim();
     }
 
-    // 5. Tool Result / Turn Input fallback
-    if (!turnInput && !turnInputSummary) {
-        const toolResultMatch = userPromptText.match(/(?:Tool Result|Tool Output|ToolResponse|Observation):\s*([\s\S]*?)(?=\n###|$)/i);
-        if (toolResultMatch) {
-            turnInput = toolResultMatch[1].trim();
-            turnInputSummary = turnInput.split('\n')[0].trim();
-        }
-    }
-
-    // Fallback if no sections detected
-    if (!instruction && !domSnapshot && !turnInput && !turnInputSummary) {
-        instruction = userPromptText.trim();
+    if (!instruction && !domSnapshot) {
+        instruction = targetText.trim();
     }
 
     const domBytes = domSnapshot ? encodeURI(domSnapshot).split(/%..|./).length - 1 : 0;
@@ -2841,10 +2940,10 @@ function parseLlmPromptContent(userPromptText) {
         sessionVariables,
         domSnapshot,
         domSnapshotBytes: domBytes,
-        turnInput,
-        turnInputSummary,
-        toolResult,
-        continuationContext,
+        turnInput: '',
+        turnInputSummary: '',
+        toolResult: null,
+        continuationContext: null,
         otherContext
     };
 }
@@ -3148,19 +3247,12 @@ function renderStreamlinedLlmCallCard(call, cIdx, stepId, isStepFailed, isSubSte
         </button>
     ` : '';
 
-    const turnCopyBtnHtml = `
-        <button class="llm-header-details-btn llm-copy-btn" onclick="copyTurnConversation('${stepId}', ${cIdx}, this);" title="Copy this turn to clipboard">
-            <span class="material-symbols-outlined" style="font-size: 0.75rem;">content_copy</span>
-        </button>
-    `;
-
     return `
         <div class="${cardClass}" id="${cardId}">
             <div class="llm-turn-header">
                 <div class="llm-turn-header-left">
                     <span class="llm-turn-badge">Call #${cIdx + 1}</span>
                     ${detailsBtnHtml}
-                    ${turnCopyBtnHtml}
                 </div>
                 <span class="llm-turn-meta">${callMetaStr}</span>
             </div>
@@ -3259,10 +3351,14 @@ function generateTurnConversationMarkdown(stepData, call, cIdx) {
             lines.push('');
         }
         if (parsed.domSnapshot) {
-            lines.push('##### Initial DOM Snapshot / Page Context');
+            const domSize = formatBytes(parsed.domSnapshotBytes || parsed.domSnapshot.length);
+            lines.push('<details>');
+            lines.push(`<summary>Initial DOM Snapshot / Page Context (${domSize})</summary>`);
+            lines.push('');
             lines.push('```html');
             lines.push(parsed.domSnapshot);
             lines.push('```');
+            lines.push('</details>');
             lines.push('');
         }
     } else {
@@ -3285,6 +3381,17 @@ function generateTurnConversationMarkdown(stepData, call, cIdx) {
             if (ctx.pageTitle) lines.push(`- **Title:** ${ctx.pageTitle}`);
             if (ctx.visualNote) lines.push(`- **Visual State:** ${ctx.visualNote}`);
             if (ctx.guidanceText) lines.push(`- **Guidance:** ${ctx.guidanceText}`);
+            lines.push('');
+        }
+        if (parsed.domSnapshot) {
+            const domSize = formatBytes(parsed.domSnapshotBytes || parsed.domSnapshot.length);
+            lines.push('<details>');
+            lines.push(`<summary>Page DOM Tree Snapshot (${domSize})</summary>`);
+            lines.push('');
+            lines.push('```html');
+            lines.push(parsed.domSnapshot);
+            lines.push('```');
+            lines.push('</details>');
             lines.push('');
         }
         if (!parsed.turnInputSummary && !parsed.toolResult && promptText) {
@@ -4739,6 +4846,9 @@ window.generateStepConversationMarkdown = generateStepConversationMarkdown;
 window.parseLlmPromptContent = parseLlmPromptContent;
 window.parseToolCallResponse = parseToolCallResponse;
 window.parseToolAndUserTurns = parseToolAndUserTurns;
+window.splitChatMessages = splitChatMessages;
+window.parseToolMessage = parseToolMessage;
+window.parseUserContinuation = parseUserContinuation;
 
 function setActiveNavBtn(btn) {
     document.querySelectorAll('#mainSidebar .nav-item-btn').forEach(b => b.classList.remove('active'));
