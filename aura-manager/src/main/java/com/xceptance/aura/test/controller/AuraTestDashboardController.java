@@ -23,12 +23,15 @@ import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.dto.ChatSessionDto;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -67,15 +70,30 @@ public class AuraTestDashboardController
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         @RequestParam(value = "file", required = false) final String file,
         @RequestParam(value = "q", required = false) final String query,
+        @CookieValue(value = "aura_test_search_query", required = false) final String cookieQuery,
         final Model model)
     {
-        final List<YamlFileDto> testFiles;
-        final List<String> stepsFiles;
+        final String effectiveQuery;
         if (query != null && !query.isBlank())
         {
-            testFiles = fileService.getFilteredYamlFilesList(query);
-            stepsFiles = fileService.getFilteredStepsFilesList(query);
-            model.addAttribute("q", query);
+            effectiveQuery = query.trim();
+        }
+        else if (query == null && cookieQuery != null && !cookieQuery.isBlank())
+        {
+            effectiveQuery = decodeCookieQuery(cookieQuery);
+        }
+        else
+        {
+            effectiveQuery = null;
+        }
+
+        final List<YamlFileDto> testFiles;
+        final List<String> stepsFiles;
+        if (effectiveQuery != null && !effectiveQuery.isBlank())
+        {
+            testFiles = fileService.getFilteredYamlFilesList(effectiveQuery);
+            stepsFiles = fileService.getFilteredStepsFilesList(effectiveQuery);
+            model.addAttribute("q", effectiveQuery);
         }
         else
         {
@@ -206,9 +224,32 @@ public class AuraTestDashboardController
         return "index";
     }
 
+    public String renderDashboard(final String hxRequest, final String file, final String query, final Model model)
+    {
+        return renderDashboard(hxRequest, file, query, null, model);
+    }
+
     public String renderDashboard(final String hxRequest, final String file, final Model model)
     {
-        return renderDashboard(hxRequest, file, null, model);
+        return renderDashboard(hxRequest, file, null, null, model);
+    }
+
+    static String decodeCookieQuery(final String rawCookie)
+    {
+        if (rawCookie == null || rawCookie.isBlank())
+        {
+            return null;
+        }
+        try
+        {
+            final String decoded = URLDecoder.decode(rawCookie.trim(), StandardCharsets.UTF_8).trim();
+            return decoded.isBlank() ? null : decoded;
+        }
+        catch (final Exception e)
+        {
+            final String trimmed = rawCookie.trim();
+            return trimmed.isBlank() ? null : trimmed;
+        }
     }
 
     @PostMapping("/api/theme")

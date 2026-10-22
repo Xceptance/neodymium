@@ -919,8 +919,10 @@ function initTestSearchFilter() {
     try {
         const urlParams = new URLSearchParams(window.location.search);
         const urlQuery = urlParams.get('q');
+        const serverQuery = searchInput.value || '';
+        const cookieQuery = (typeof getFilterCookie === 'function') ? getFilterCookie() : null;
         const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
-        query = (urlQuery !== null && urlQuery !== '') ? urlQuery : (storedQuery || searchInput.value || '');
+        query = (urlQuery !== null && urlQuery !== '') ? urlQuery : (serverQuery || cookieQuery || storedQuery || '');
     } catch (e) {}
 
     if (query) {
@@ -928,8 +930,14 @@ function initTestSearchFilter() {
         if (typeof sessionStorage !== 'undefined') {
             sessionStorage.setItem('aura_test_search_query', query);
         }
+        if (typeof setFilterCookie === 'function') {
+            setFilterCookie(query);
+        }
         if (typeof updateClearTestSearchBtn === 'function') {
             updateClearTestSearchBtn(query);
+        }
+        if (typeof applyInstantTestFilter === 'function') {
+            applyInstantTestFilter(query);
         }
     } else {
         if (typeof updateClearTestSearchBtn === 'function') {

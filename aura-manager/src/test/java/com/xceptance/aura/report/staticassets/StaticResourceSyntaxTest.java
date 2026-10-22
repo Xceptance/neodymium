@@ -645,10 +645,31 @@ public final class StaticResourceSyntaxTest
             "dashboard-editor.js must use aura_test_search_query for session persistence"
         );
 
+        Assertions.assertTrue(
+            editorJsContent.contains("window.applyInstantTestFilter = applyInstantTestFilter;"),
+            "dashboard-editor.js must export applyInstantTestFilter"
+        );
+        Assertions.assertTrue(
+            editorJsContent.contains("window.setFilterCookie = setFilterCookie;"),
+            "dashboard-editor.js must export setFilterCookie"
+        );
+        Assertions.assertTrue(
+            editorJsContent.contains("window.getFilterCookie = getFilterCookie;"),
+            "dashboard-editor.js must export getFilterCookie"
+        );
+        Assertions.assertTrue(
+            editorJsContent.contains("inMatchingFolder"),
+            "dashboard-editor.js must propagate folder match status to child tests and datasets"
+        );
+
         final Path coreJsPath = Paths.get("src/main/resources/static/dashboard-core.js");
         Assertions.assertTrue(Files.exists(coreJsPath), "dashboard-core.js must exist");
         final String coreJsContent = Files.readString(coreJsPath, StandardCharsets.UTF_8);
 
+        Assertions.assertTrue(
+            coreJsContent.contains("serverQuery"),
+            "dashboard-core.js must prioritize serverQuery over stale sessionStorage"
+        );
         Assertions.assertTrue(
             coreJsContent.contains("initTestSearchFilter();"),
             "dashboard-core.js must initialize search filter on load"
@@ -656,6 +677,10 @@ public final class StaticResourceSyntaxTest
         Assertions.assertTrue(
             coreJsContent.contains("addEventListener('pageshow'"),
             "dashboard-core.js must re-verify search filter on pageshow (BFcache support)"
+        );
+        Assertions.assertTrue(
+            coreJsContent.contains("applyInstantTestFilter(query);"),
+            "dashboard-core.js must apply instant test filter on init"
         );
     }
 }

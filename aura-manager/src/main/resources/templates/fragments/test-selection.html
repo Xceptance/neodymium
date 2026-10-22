@@ -38,6 +38,44 @@
     <div class="content-scroll" id="yamlFileList" th:fragment="yamlFileList" hx-get="/api/files/list" hx-include="#testSearchInput" hx-trigger="refreshFiles from:body" hx-swap="innerHTML" data-active-tab="tests">
         <div th:replace="~{fragments/test-selection :: yamlFileListContent}"></div>
     </div>
+    <script>
+        (function() {
+            try {
+                var inp = document.getElementById('testSearchInput');
+                var s = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
+                var c = document.cookie.match(/(?:^|;\s*)aura_test_search_query=([^;]*)/);
+                var cookieQ = c ? decodeURIComponent(c[1]).trim() : '';
+                var q = (inp && inp.value && inp.value.trim()) ? inp.value.trim() : (cookieQ || (s && s.trim() ? s.trim() : ''));
+                if (q) {
+                    if (inp && !inp.value) inp.value = q;
+                    var btn = document.getElementById('clearTestSearchBtn');
+                    if (btn) btn.style.display = 'inline-flex';
+                    if (typeof applyInstantTestFilter === 'function') {
+                        applyInstantTestFilter(q);
+                    } else {
+                        var term = q.toLowerCase();
+                        var list = document.getElementById('yamlFileList');
+                        if (list) {
+                            var items = list.querySelectorAll('.file-container');
+                            for (var i = 0; i < items.length; i++) {
+                                var f = (items[i].getAttribute('data-file') || '').toLowerCase();
+                                var match = f.indexOf(term) !== -1;
+                                var datasets = items[i].querySelectorAll('.dataset-item');
+                                for (var j = 0; j < datasets.length; j++) {
+                                    var lbl = (datasets[j].textContent || '').toLowerCase();
+                                    var did = (datasets[j].getAttribute('data-id') || '').toLowerCase();
+                                    var dMatch = match || lbl.indexOf(term) !== -1 || did.indexOf(term) !== -1;
+                                    datasets[j].style.display = dMatch ? 'flex' : 'none';
+                                    if (dMatch) match = true;
+                                }
+                                items[i].style.display = match ? 'flex' : 'none';
+                            }
+                        }
+                    }
+                }
+            } catch (e) {}
+        })();
+    </script>
     <div class="panel-footer" style="padding: 10px 12px; border-top: 1px solid var(--border); display: flex; gap: 8px;">
         <button class="btn-edit" id="openModalBtn" onclick="openCreateModal('yaml')" style="flex: 1; justify-content: center; padding: 8px; font-weight: 500;" title="Create new runnable test playbook (.yaml)">
             <span class="material-symbols-outlined">add</span> + Test (.yaml)
