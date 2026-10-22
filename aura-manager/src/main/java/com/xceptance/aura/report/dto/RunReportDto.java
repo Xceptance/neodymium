@@ -49,6 +49,45 @@ public final class RunReportDto
     private final int totalLlmCalls;
     private final long totalLlmTokens;
     private final double totalLlmCost;
+    private final Map<String, String> tags;
+
+    public RunReportDto(
+        final String runId,
+        final String batchName,
+        final String timestamp,
+        final String duration,
+        final int totalCount,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final int runningCount,
+        final List<TestExecutionDto> executions,
+        final List<AreaSummaryDto> areaSummaries,
+        final int totalLlmCalls,
+        final long totalLlmTokens,
+        final double totalLlmCost,
+        final Map<String, String> tags)
+    {
+        this.runId = runId;
+        this.batchName = batchName;
+        this.timestamp = timestamp;
+        this.duration = duration;
+        this.totalCount = totalCount;
+        this.passCount = passCount;
+        this.fixedCount = fixedCount;
+        this.knownCount = knownCount;
+        this.unknownCount = unknownCount;
+        this.ignoredCount = ignoredCount;
+        this.runningCount = runningCount;
+        this.executions = executions != null ? executions : new ArrayList<>();
+        this.areaSummaries = areaSummaries != null ? areaSummaries : new ArrayList<>();
+        this.totalLlmCalls = totalLlmCalls;
+        this.totalLlmTokens = totalLlmTokens;
+        this.totalLlmCost = totalLlmCost;
+        this.tags = tags != null ? new LinkedHashMap<>(tags) : new LinkedHashMap<>();
+    }
 
     public RunReportDto(
         final String runId,
@@ -68,22 +107,7 @@ public final class RunReportDto
         final long totalLlmTokens,
         final double totalLlmCost)
     {
-        this.runId = runId;
-        this.batchName = batchName;
-        this.timestamp = timestamp;
-        this.duration = duration;
-        this.totalCount = totalCount;
-        this.passCount = passCount;
-        this.fixedCount = fixedCount;
-        this.knownCount = knownCount;
-        this.unknownCount = unknownCount;
-        this.ignoredCount = ignoredCount;
-        this.runningCount = runningCount;
-        this.executions = executions != null ? executions : new ArrayList<>();
-        this.areaSummaries = areaSummaries != null ? areaSummaries : new ArrayList<>();
-        this.totalLlmCalls = totalLlmCalls;
-        this.totalLlmTokens = totalLlmTokens;
-        this.totalLlmCost = totalLlmCost;
+        this(runId, batchName, timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, runningCount, executions, areaSummaries, totalLlmCalls, totalLlmTokens, totalLlmCost, Map.of());
     }
 
     public RunReportDto(
@@ -182,6 +206,11 @@ public final class RunReportDto
     public String getBatchName()
     {
         return batchName;
+    }
+
+    public Map<String, String> getTags()
+    {
+        return tags != null ? tags : Map.of();
     }
 
     public String getTimestamp()

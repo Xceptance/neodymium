@@ -169,13 +169,28 @@ public class TestBaseVariationHistoryTest
         final String varId = AuraReportDataService.generateVariationId(testClass, dataSet, location, browser);
 
         final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, dataSet, "@General", location, browser);
-        // Test enriched relative URL with query parameters
-        varEntity.setHistoryLinks("/run-report?runId=RUN_100&executionId=exec-100&batch=Nightly+Regression&engine=Java&ts=Yesterday&status=passed-clean&bugs=BUG-1%3BBUG-2");
-
         final TestRunEntity runEntity = new TestRunEntity("RUN_100", "Nightly Regression", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "Yesterday", 5000L);
 
+        final String run100Json = """
+            {
+              "runId": "RUN_100",
+              "batch": "Nightly Regression",
+              "executions": [
+                {
+                  "id": "exec-100",
+                  "testClass": "CheckoutTest",
+                  "title": "Payment_VISA",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "bugs": ["BUG-1", "BUG-2"]
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_100")).thenReturn(Optional.of(run100Json));
         Mockito.when(variationRepository.findById(varId)).thenReturn(Optional.of(varEntity));
-        Mockito.when(runRepository.findAllById(List.of("RUN_100"))).thenReturn(List.of(runEntity));
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(runEntity));
 
         final List<TestBaseVariationHistoryDto> history = dataService.getVariationHistory(testClass, dataSet, location, browser);
 
@@ -198,13 +213,28 @@ public class TestBaseVariationHistoryTest
         final String varId = AuraReportDataService.generateVariationId(testClass, dataSet, location, browser);
 
         final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, dataSet, "@General", location, browser);
-        // Link stored with status=failed-known but empty bugs parameter
-        varEntity.setHistoryLinks("/run-report?runId=RUN_200&executionId=exec-200&batch=Daily+Build&engine=Java&ts=Today&status=failed-known&bugs=");
-
         final TestRunEntity runEntity = new TestRunEntity("RUN_200", "Daily Build", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "Today", 6000L);
 
+        final String run200Json = """
+            {
+              "runId": "RUN_200",
+              "batch": "Daily Build",
+              "executions": [
+                {
+                  "id": "exec-200",
+                  "testClass": "LoginTest",
+                  "title": "ValidUser",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "failed-known",
+                  "bugs": []
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_200")).thenReturn(Optional.of(run200Json));
         Mockito.when(variationRepository.findById(varId)).thenReturn(Optional.of(varEntity));
-        Mockito.when(runRepository.findAllById(List.of("RUN_200"))).thenReturn(List.of(runEntity));
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(runEntity));
 
         final List<TestBaseVariationHistoryDto> history = dataService.getVariationHistory(testClass, dataSet, location, browser);
 
@@ -346,12 +376,28 @@ public class TestBaseVariationHistoryTest
         final String varId = AuraReportDataService.generateVariationId(testClass, dataSet, location, browser);
 
         final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, dataSet, "@General", location, browser);
-        varEntity.setHistoryLinks("/run-report?runId=RUN_HEALED_LINK&executionId=exec-hl-1&batch=Nightly&engine=Java&ts=Today&status=passed-clean&healed=true");
-
         final TestRunEntity runEntity = new TestRunEntity("RUN_HEALED_LINK", "Nightly", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "Today", 7000L);
 
+        final String runHealedJson = """
+            {
+              "runId": "RUN_HEALED_LINK",
+              "batch": "Nightly",
+              "executions": [
+                {
+                  "id": "exec-hl-1",
+                  "testClass": "HealedLinkTest",
+                  "title": "Payment_VISA",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "healed": true
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_HEALED_LINK")).thenReturn(Optional.of(runHealedJson));
         Mockito.when(variationRepository.findById(varId)).thenReturn(Optional.of(varEntity));
-        Mockito.when(runRepository.findAllById(List.of("RUN_HEALED_LINK"))).thenReturn(List.of(runEntity));
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(runEntity));
 
         final List<TestBaseVariationHistoryDto> history = dataService.getVariationHistory(testClass, dataSet, location, browser);
 
@@ -376,18 +422,27 @@ public class TestBaseVariationHistoryTest
         final String varId = AuraReportDataService.generateVariationId(testClass, dataSet, location, browser);
 
         final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, dataSet, "@General", location, browser);
-        // Links stored out of order (Sep 18, then Oct 7, then Sep 22)
-        final String linkSep18 = "/run-report?runId=run_20260918_145300&executionId=exec-1&batch=Batch1&engine=Java&ts=2026-09-18+14%3A53%3A29&status=failed-unknown";
-        final String linkOct07 = "/run-report?runId=run_20261007_155456&executionId=exec-2&batch=Batch2&engine=Java&ts=2026-10-07+15%3A55%3A37&status=passed-clean";
-        final String linkSep22 = "/run-report?runId=run_20260922_100430&executionId=exec-3&batch=Batch3&engine=Java&ts=2026-09-22+10%3A04%3A50&status=failed-unknown";
-        varEntity.setHistoryLinks(linkSep18 + "," + linkOct07 + "," + linkSep22);
 
         final TestRunEntity runSep18 = new TestRunEntity("run_20260918_145300", "Batch1", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "2026-09-18 14:53:29", 1000L);
         final TestRunEntity runOct07 = new TestRunEntity("run_20261007_155456", "Batch2", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "2026-10-07 15:55:37", 3000L);
         final TestRunEntity runSep22 = new TestRunEntity("run_20260922_100430", "Batch3", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "2026-09-22 10:04:50", 2000L);
 
+        final String jsonSep18 = """
+            { "runId": "run_20260918_145300", "batch": "Batch1", "executions": [{ "id": "exec-1", "testClass": "com.xceptance.neodymium.test.CheckoutTest", "title": "Payment_VISA", "location": "US", "browser": "Chrome", "status": "failed-unknown" }] }
+            """;
+        final String jsonOct07 = """
+            { "runId": "run_20261007_155456", "batch": "Batch2", "executions": [{ "id": "exec-2", "testClass": "com.xceptance.neodymium.test.CheckoutTest", "title": "Payment_VISA", "location": "US", "browser": "Chrome", "status": "passed-clean" }] }
+            """;
+        final String jsonSep22 = """
+            { "runId": "run_20260922_100430", "batch": "Batch3", "executions": [{ "id": "exec-3", "testClass": "com.xceptance.neodymium.test.CheckoutTest", "title": "Payment_VISA", "location": "US", "browser": "Chrome", "status": "failed-unknown" }] }
+            """;
+
+        Mockito.when(storageService.readRunJson("run_20260918_145300")).thenReturn(Optional.of(jsonSep18));
+        Mockito.when(storageService.readRunJson("run_20261007_155456")).thenReturn(Optional.of(jsonOct07));
+        Mockito.when(storageService.readRunJson("run_20260922_100430")).thenReturn(Optional.of(jsonSep22));
+
         Mockito.when(variationRepository.findById(varId)).thenReturn(Optional.of(varEntity));
-        Mockito.when(runRepository.findAllById(Mockito.anyList())).thenReturn(List.of(runSep18, runOct07, runSep22));
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(runSep18, runOct07, runSep22));
 
         final List<TestBaseVariationHistoryDto> history = dataService.getVariationHistory(testClass, dataSet, location, browser);
 
@@ -434,20 +489,6 @@ public class TestBaseVariationHistoryTest
     }
 
     @Test
-    public void testSortHistoryLinksDescending()
-    {
-        final String linkSep18 = "/run-report?runId=run_20260918_145300&ts=2026-09-18+14%3A53%3A29&status=failed-unknown";
-        final String linkOct07 = "/run-report?runId=run_20261007_155456&ts=2026-10-07+15%3A55%3A37&status=passed-clean";
-        final String linkSep22 = "/run-report?runId=run_20260922_100430&ts=2026-09-22+10%3A04%3A50&status=failed-unknown";
-
-        final List<String> sorted = AuraReportDataService.sortHistoryLinksDescending(linkSep18 + "," + linkOct07 + "," + linkSep22);
-        Assertions.assertEquals(3, sorted.size());
-        Assertions.assertTrue(sorted.get(0).contains("run_20261007_155456"), "Oct 07 should be first");
-        Assertions.assertTrue(sorted.get(1).contains("run_20260922_100430"), "Sep 22 should be second");
-        Assertions.assertTrue(sorted.get(2).contains("run_20260918_145300"), "Sep 18 should be third");
-    }
-
-    @Test
     public void testGetTestBaseDataUpdatesStaleStatusToLatestExecution()
     {
         final String testClass = "com.xceptance.neodymium.test.CheckoutTest";
@@ -456,15 +497,19 @@ public class TestBaseVariationHistoryTest
         final String browser = "Chrome";
         final String varId = AuraReportDataService.generateVariationId(testClass, dataSet, location, browser);
 
-        final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, "testCheckout", dataSet, "@General", location, browser);
-        // Entity previously had failed-unknown, but latest run is passed-clean
-        varEntity.setLastStatus("failed-unknown");
+        // Older duplicate had failed-unknown
+        final TestBaseVariationEntity olderVar = new TestBaseVariationEntity(varId + "-old", testClass, "testCheckout", dataSet, "@General", location, browser);
+        olderVar.setLastStatus("failed-unknown");
+        olderVar.setLastExecutedAt(1000L);
+        olderVar.setTotalExecutionsCount(1);
 
-        final String linkOlderFailed = "/run-report?runId=run_20260918_145300&ts=2026-09-18+14%3A53%3A29&status=failed-unknown";
-        final String linkNewerPassed = "/run-report?runId=run_20261007_155456&ts=2026-10-07+15%3A55%3A37&status=passed-clean";
-        varEntity.setHistoryLinks(linkOlderFailed + "," + linkNewerPassed);
+        // Newer duplicate has passed-clean
+        final TestBaseVariationEntity newerVar = new TestBaseVariationEntity(varId, testClass, "testCheckout", dataSet, "@General", location, browser);
+        newerVar.setLastStatus("passed-clean");
+        newerVar.setLastExecutedAt(2000L);
+        newerVar.setTotalExecutionsCount(1);
 
-        Mockito.when(variationRepository.findAllByOrderByLastExecutedAtDesc()).thenReturn(List.of(varEntity));
+        Mockito.when(variationRepository.findAllByOrderByLastExecutedAtDesc()).thenReturn(List.of(olderVar, newerVar));
         Mockito.when(bugRepository.findAll()).thenReturn(List.of());
         Mockito.when(batchRepository.findAll()).thenReturn(List.of());
         Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of());
@@ -477,11 +522,10 @@ public class TestBaseVariationHistoryTest
         final TestBaseClassDto classDto = area.getTestClasses().get(0);
         final TestBaseVariationEntity updatedVar = classDto.getVariations().get(0);
 
-        Assertions.assertEquals("passed-clean", updatedVar.getLastStatus(), "Last status should be updated to passed-clean from newest execution link");
-        Assertions.assertEquals("passed-clean", varEntity.getLastStatus(), "Entity lastStatus should be updated");
-        Assertions.assertFalse(varEntity.isHealed(), "Entity healed should be false for clean pass");
+        Assertions.assertEquals("passed-clean", updatedVar.getLastStatus(), "Last status should be updated to passed-clean from newest execution");
+        Assertions.assertFalse(updatedVar.isHealed(), "Entity healed should be false for clean pass");
 
-        Mockito.verify(variationRepository, Mockito.atLeastOnce()).save(varEntity);
+        Mockito.verify(variationRepository, Mockito.atLeastOnce()).deleteAll(Mockito.anyList());
     }
 
     @Test
@@ -493,14 +537,18 @@ public class TestBaseVariationHistoryTest
         final String browser = "Firefox";
         final String varId = AuraReportDataService.generateVariationId(testClass, dataSet, location, browser);
 
-        final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, "testLogin", dataSet, "@General", location, browser);
-        varEntity.setLastStatus("failed-unknown");
+        final TestBaseVariationEntity olderVar = new TestBaseVariationEntity(varId + "-old", testClass, "testLogin", dataSet, "@General", location, browser);
+        olderVar.setLastStatus("failed-unknown");
+        olderVar.setLastExecutedAt(1000L);
+        olderVar.setHealed(false);
 
-        final String linkOlderPassed = "/run-report?runId=run_20260918_145300&ts=2026-09-18+14%3A53%3A29&status=passed-clean";
-        final String linkNewerHealed = "/run-report?runId=run_20261007_155456&ts=2026-10-07+15%3A55%3A37&status=passed-clean&healed=true";
-        varEntity.setHistoryLinks(linkOlderPassed + "," + linkNewerHealed);
+        final TestBaseVariationEntity newerVar = new TestBaseVariationEntity(varId, testClass, "testLogin", dataSet, "@General", location, browser);
+        newerVar.setLastStatus("passed-clean");
+        newerVar.setLastExecutedAt(2000L);
+        newerVar.setHealed(true);
+        newerVar.setExecutionMode("HEALED");
 
-        Mockito.when(variationRepository.findAllByOrderByLastExecutedAtDesc()).thenReturn(List.of(varEntity));
+        Mockito.when(variationRepository.findAllByOrderByLastExecutedAtDesc()).thenReturn(List.of(olderVar, newerVar));
         Mockito.when(bugRepository.findAll()).thenReturn(List.of());
         Mockito.when(batchRepository.findAll()).thenReturn(List.of());
         Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of());
@@ -526,17 +574,23 @@ public class TestBaseVariationHistoryTest
         final String browser = "Chrome";
         final String varId = AuraReportDataService.generateVariationId(testClass, dataSet, location, browser);
 
-        final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, "testCheckout", dataSet, "@General", location, browser);
+        final TestBaseVariationEntity var1 = new TestBaseVariationEntity(varId + "-1", testClass, "testCheckout", dataSet, "@General", location, browser);
+        var1.setLastExecutedAt(1000L);
+        var1.setLastStatus("passed-clean");
+        var1.setExecutionMode("JAVA");
 
-        // Three historical runs in chronological order (R1 older, R2 middle healed, R3 latest AI)
-        final String link1Java = "/run-report?runId=R1&ts=2026-09-01+10%3A00%3A00&status=passed-clean&mode=JAVA";
-        final String link2Healed = "/run-report?runId=R2&ts=2026-09-15+10%3A00%3A00&status=passed-clean&healed=true&mode=HEALED";
-        final String link3Ai = "/run-report?runId=R3&ts=2026-10-01+10%3A00%3A00&status=failed-unknown&mode=AI";
+        final TestBaseVariationEntity var2 = new TestBaseVariationEntity(varId + "-2", testClass, "testCheckout", dataSet, "@General", location, browser);
+        var2.setLastExecutedAt(2000L);
+        var2.setLastStatus("passed-clean");
+        var2.setHealed(true);
+        var2.setExecutionMode("HEALED");
 
-        // Provide links in unordered fashion; sortHistoryLinksDescending should pick R3 as latest
-        varEntity.setHistoryLinks(link1Java + "," + link3Ai + "," + link2Healed);
+        final TestBaseVariationEntity var3 = new TestBaseVariationEntity(varId, testClass, "testCheckout", dataSet, "@General", location, browser);
+        var3.setLastExecutedAt(3000L);
+        var3.setLastStatus("failed-unknown");
+        var3.setExecutionMode("AI");
 
-        Mockito.when(variationRepository.findAllByOrderByLastExecutedAtDesc()).thenReturn(List.of(varEntity));
+        Mockito.when(variationRepository.findAllByOrderByLastExecutedAtDesc()).thenReturn(List.of(var1, var3, var2));
         Mockito.when(bugRepository.findAll()).thenReturn(List.of());
         Mockito.when(batchRepository.findAll()).thenReturn(List.of());
         Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of());
@@ -561,27 +615,28 @@ public class TestBaseVariationHistoryTest
     }
 
     @Test
-    public void testGetTestBaseDataReconcilesBrowserFromHistoryLinkAndMergesDuplicates()
+    public void testGetTestBaseDataMergesDuplicateVariationsAndSumsExecutions()
     {
         final String testClass = "Aura_my_test_yaml_Test";
         final String testMethod = "executeYamlTest";
         final String dataSet = "en";
         final String location = "EN";
+        final String browser = "Chrome_1920x1080";
 
-        // Obsolete variation created with fallback browser "Chrome"
-        final String oldVarId = AuraReportDataService.generateVariationId(testClass, testMethod, dataSet, location, "Chrome");
-        final TestBaseVariationEntity oldVar = new TestBaseVariationEntity(oldVarId, testClass, testMethod, dataSet, "@General", location, "Chrome");
+        final String canonicalVarId = AuraReportDataService.generateVariationId(testClass, testMethod, dataSet, location, browser);
+        final String oldVarId = canonicalVarId + "-duplicate";
+
+        // Obsolete duplicate variation
+        final TestBaseVariationEntity oldVar = new TestBaseVariationEntity(oldVarId, testClass, testMethod, dataSet, "@General", location, browser);
         oldVar.setTotalExecutionsCount(77);
-        oldVar.setLastStatus("passed-clean");
-        final String runLink = "/run-report?runId=run_20261006_170254&executionId=Aura_my_test_yaml_Test%23executeYamlTest%23en%23Chrome_1920x1080&batch=Default&engine=Java&ts=2026-10-06T15%3A04%3A15.263Z&status=passed-clean";
-        oldVar.setHistoryLinks(runLink);
+        oldVar.setLastStatus("ignored");
+        oldVar.setLastExecutedAt(1000L);
 
-        // Canonical variation created by live ingestion with exact browser "Chrome_1920x1080" and 0 history links
-        final String canonicalVarId = AuraReportDataService.generateVariationId(testClass, testMethod, dataSet, location, "Chrome_1920x1080");
-        final TestBaseVariationEntity canonicalVar = new TestBaseVariationEntity(canonicalVarId, testClass, testMethod, dataSet, "@General", location, "Chrome_1920x1080");
+        // Canonical variation
+        final TestBaseVariationEntity canonicalVar = new TestBaseVariationEntity(canonicalVarId, testClass, testMethod, dataSet, "@General", location, browser);
         canonicalVar.setTotalExecutionsCount(2);
-        canonicalVar.setLastStatus("ignored");
-        canonicalVar.setHistoryLinks(null);
+        canonicalVar.setLastStatus("passed-clean");
+        canonicalVar.setLastExecutedAt(2000L);
 
         Mockito.when(variationRepository.findAllByOrderByLastExecutedAtDesc()).thenReturn(List.of(oldVar, canonicalVar));
         Mockito.when(bugRepository.findAll()).thenReturn(List.of());
@@ -596,10 +651,10 @@ public class TestBaseVariationHistoryTest
         final TestBaseClassDto classDto = area.getTestClasses().get(0);
         final TestBaseVariationEntity mergedVar = classDto.getVariations().get(0);
 
+        Assertions.assertEquals(canonicalVarId, mergedVar.getId(), "Canonical ID must be retained");
         Assertions.assertEquals("Chrome_1920x1080", mergedVar.getBrowser(), "Merged variation must retain exact browser profile");
-        Assertions.assertEquals(1, mergedVar.getTotalExecutionsCount(), "Total executions count should be derived from valid history links");
-        Assertions.assertNotNull(mergedVar.getHistoryLinks(), "History links must be populated from the historical runs");
-        Assertions.assertTrue(mergedVar.getHistoryLinks().contains("run_20261006_170254"));
+        Assertions.assertEquals(79, mergedVar.getTotalExecutionsCount(), "Total executions count should be summed across duplicates");
+        Assertions.assertEquals("passed-clean", mergedVar.getLastStatus(), "Latest status should be retained");
 
         Mockito.verify(variationRepository, Mockito.atLeastOnce()).deleteAll(Mockito.argThat(iterable ->
         {

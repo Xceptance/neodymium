@@ -1019,8 +1019,7 @@ public class RunStorageSyncServiceTest
             Assertions.assertTrue(varOpt.isPresent(), "Variation entity should be created/updated in database");
             final TestBaseVariationEntity varEntity = varOpt.get();
             Assertions.assertTrue(varEntity.isHealed(), "Variation entity should be marked as healed");
-            Assertions.assertNotNull(varEntity.getHistoryLinks(), "History links should not be null");
-            Assertions.assertTrue(varEntity.getHistoryLinks().contains("&healed=true"), "History link should contain &healed=true");
+            Assertions.assertEquals("HEALED", varEntity.getExecutionMode(), "Variation execution mode should be HEALED");
         }
         finally
         {

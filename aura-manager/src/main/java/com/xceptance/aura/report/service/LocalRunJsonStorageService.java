@@ -236,12 +236,19 @@ public class LocalRunJsonStorageService
             String trigger = "Unknown";
             String timestamp = "Recently";
 
+            final Map<String, String> existingTags = new LinkedHashMap<>();
             final File runJsonFile = new File(runDir, "run.json");
             if (runJsonFile.exists())
             {
                 try
                 {
                     final JsonNode existingRoot = objectMapper.readTree(runJsonFile);
+                    if (existingRoot.has("tags") && existingRoot.path("tags").isObject())
+                    {
+                        existingRoot.path("tags").fields().forEachRemaining(entry -> {
+                            existingTags.put(entry.getKey(), entry.getValue().asText(""));
+                        });
+                    }
                     if (existingRoot.has("batchName")) batchName = existingRoot.path("batchName").asText(batchName);
                     if (existingRoot.has("environment")) env = existingRoot.path("environment").asText(env);
                     if (existingRoot.has("trigger")) trigger = existingRoot.path("trigger").asText(trigger);
@@ -777,6 +784,24 @@ public class LocalRunJsonStorageService
             }
             compactRootNode.set("summary", summaryNode);
             compactRootNode.set("executionMetrics", executionMetricsNode);
+
+            final ObjectNode tagsNode = objectMapper.createObjectNode();
+            if (!existingTags.isEmpty())
+            {
+                existingTags.forEach(tagsNode::put);
+            }
+            else
+            {
+                if (batchName != null && !batchName.isBlank() && !"Default".equalsIgnoreCase(batchName) && !"Unknown".equalsIgnoreCase(batchName))
+                {
+                    tagsNode.put("Suite", batchName);
+                }
+                if (env != null && !env.isBlank() && !"Default".equalsIgnoreCase(env) && !"ALL".equalsIgnoreCase(env))
+                {
+                    tagsNode.put("Instance", env);
+                }
+            }
+            compactRootNode.set("tags", tagsNode);
 
             final String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(compactRootNode);
             if (writeToDisk)

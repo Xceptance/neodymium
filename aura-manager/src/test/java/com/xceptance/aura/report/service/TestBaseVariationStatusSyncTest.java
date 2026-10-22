@@ -235,13 +235,11 @@ public class TestBaseVariationStatusSyncTest
             "v_upper", class1, "executeYamlTest", "Default", "@General", "UNKNOWN", "Chrome_1920x1080"
         );
         varUpper.setTotalExecutionsCount(6);
-        varUpper.setHistoryLinks("/run-report?runId=R1");
 
         final TestBaseVariationEntity varMixed = new TestBaseVariationEntity(
             "v_mixed", class1, "executeYamlTest", "Default", "@General", "Default", "Chrome_1920x1080"
         );
         varMixed.setTotalExecutionsCount(4);
-        varMixed.setHistoryLinks("/run-report?runId=R2");
 
         Mockito.when(variationRepository.findAllByOrderByLastExecutedAtDesc())
             .thenReturn(List.of(varUpper, varMixed));
@@ -256,9 +254,7 @@ public class TestBaseVariationStatusSyncTest
         final List<TestBaseVariationEntity> vars = testBaseData.getAreas().get(0).getTestClasses().get(0).getVariations();
         Assertions.assertEquals(1, vars.size());
         Assertions.assertEquals("Default", vars.get(0).getLocation());
-        Assertions.assertEquals(2, vars.get(0).getTotalExecutionsCount());
-        Assertions.assertTrue(vars.get(0).getHistoryLinks().contains("R1"));
-        Assertions.assertTrue(vars.get(0).getHistoryLinks().contains("R2"));
+        Assertions.assertEquals(10, vars.get(0).getTotalExecutionsCount());
 
         Mockito.verify(variationRepository, Mockito.atLeastOnce()).deleteAll(Mockito.anyList());
     }
@@ -274,8 +270,7 @@ public class TestBaseVariationStatusSyncTest
         final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(
             "v_wiki_1", class1, "executeYamlTest", "wikipedia_search_example_1", "@Browsing", "Default", "Chrome_1920x1080"
         );
-        varEntity.setTotalExecutionsCount(14);
-        varEntity.setHistoryLinks(history);
+        varEntity.setTotalExecutionsCount(5);
 
         Mockito.when(variationRepository.findAllByOrderByLastExecutedAtDesc())
             .thenReturn(List.of(varEntity));

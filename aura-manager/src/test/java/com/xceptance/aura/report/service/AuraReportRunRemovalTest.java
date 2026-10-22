@@ -135,6 +135,7 @@ public class AuraReportRunRemovalTest
 
         Mockito.when(runRepository.findById(runId2)).thenReturn(Optional.of(run2));
         Mockito.when(runRepository.findById(runId1)).thenReturn(Optional.of(run1));
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(run1));
 
         final String testClass = "com.xceptance.neodymium.test.PaymentTest";
         final String testMethod = "testCreditCard";
@@ -147,16 +148,33 @@ public class AuraReportRunRemovalTest
             varId, testClass, testMethod, dataSet, "@Payment", location, browser
         );
 
-        final String link2 = "/run-report?runId=" + runId2 + "&executionId=e2&batch=" + batchName + "&ts=11%3A00&status=failed-unknown";
-        final String link1 = "/run-report?runId=" + runId1 + "&executionId=e1&batch=" + batchName + "&ts=10%3A00&status=passed-clean";
-        variation.setHistoryLinks(link2 + "," + link1);
         variation.setTotalExecutionsCount(2);
         variation.setLastStatus("failed-unknown");
         variation.setLastExecutedAt(2000L);
         variation.setHealed(false);
 
+        final String run1Json = """
+            {
+              "runId": "RUN_1",
+              "batch": "PaymentBatch",
+              "executions": [
+                {
+                  "id": "e1",
+                  "testClass": "com.xceptance.neodymium.test.PaymentTest",
+                  "testMethod": "testCreditCard",
+                  "title": "Visa",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson(runId1)).thenReturn(Optional.of(run1Json));
         Mockito.when(variationRepository.findAll()).thenReturn(List.of(variation));
+        Mockito.when(variationRepository.findById(varId)).thenReturn(Optional.of(variation));
         Mockito.when(bugRepository.findByVariationId(varId)).thenReturn(List.of());
+        Mockito.when(bugRepository.findByVariationIdIn(Mockito.anyList())).thenReturn(List.of());
         Mockito.when(bugRepository.findAll()).thenReturn(List.of());
 
         dataService.removeRunFromHistory(runId2);
@@ -166,7 +184,6 @@ public class AuraReportRunRemovalTest
         final TestBaseVariationEntity savedVar = varCaptor.getValue();
 
         Assertions.assertEquals(1, savedVar.getTotalExecutionsCount());
-        Assertions.assertEquals(link1, savedVar.getHistoryLinks());
         Assertions.assertEquals("passed-clean", savedVar.getLastStatus());
         Assertions.assertEquals(1000L, savedVar.getLastExecutedAt());
         Assertions.assertFalse(savedVar.isHealed());
@@ -178,6 +195,7 @@ public class AuraReportRunRemovalTest
         final String runId = "RUN_SOLO";
         final TestRunEntity run = new TestRunEntity(runId, "SoloBatch", "COMPLETED", "CI", "Prod", "en_US", "Chrome", "10:00", 1000L);
         Mockito.when(runRepository.findById(runId)).thenReturn(Optional.of(run));
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of());
 
         final String testClass = "com.xceptance.neodymium.test.SoloTest";
         final String testMethod = "testSolo";
@@ -189,8 +207,6 @@ public class AuraReportRunRemovalTest
         final TestBaseVariationEntity variation = new TestBaseVariationEntity(
             varId, testClass, testMethod, dataSet, "@Solo", location, browser
         );
-        final String link = "/run-report?runId=" + runId + "&executionId=e1&batch=SoloBatch&ts=10%3A00&status=passed-clean";
-        variation.setHistoryLinks(link);
         variation.setTotalExecutionsCount(1);
         variation.setLastStatus("passed-clean");
         variation.setLastExecutedAt(1000L);
@@ -198,7 +214,9 @@ public class AuraReportRunRemovalTest
         final TestBaseBugEntity soloBug = new TestBaseBugEntity(varId, "NEO-999", "SoloBatch", "Prod", 1000L, runId);
 
         Mockito.when(variationRepository.findAll()).thenReturn(List.of(variation));
+        Mockito.when(variationRepository.findById(varId)).thenReturn(Optional.of(variation));
         Mockito.when(bugRepository.findByVariationId(varId)).thenReturn(List.of(soloBug));
+        Mockito.when(bugRepository.findByVariationIdIn(Mockito.anyList())).thenReturn(List.of());
         Mockito.when(bugRepository.findAll()).thenReturn(new ArrayList<>(List.of(soloBug)));
 
         dataService.removeRunFromHistory(runId);

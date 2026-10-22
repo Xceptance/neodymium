@@ -23,13 +23,12 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Index;
-import jakarta.persistence.Lob;
 import jakarta.persistence.Table;
 
 /**
  * JPA entity representing a unique Test Base variation / signature.
  *
- * @author AI-generated: Gemini 3.6 Flash (High)
+ * @author AI-generated: Gemini 3.8 Flash (High)
  * @author Xceptance GmbH 2026
  */
 @Entity
@@ -76,10 +75,6 @@ public class TestBaseVariationEntity
 
     @Column(name = "execution_mode", length = 40)
     private String executionMode;
-
-    @Lob
-    @Column(name = "history_links", columnDefinition = "CLOB")
-    private String historyLinks;
 
     public TestBaseVariationEntity()
     {
@@ -158,7 +153,7 @@ public class TestBaseVariationEntity
 
     public void setLocation(final String location)
     {
-        this.location = com.xceptance.aura.report.service.AuraReportDataService.normalizeLocation(location);
+        this.location = AuraReportDataService.normalizeLocation(location);
     }
 
     public String getBrowser()
@@ -168,7 +163,7 @@ public class TestBaseVariationEntity
 
     public void setBrowser(final String browser)
     {
-        this.browser = com.xceptance.aura.report.service.AuraReportDataService.normalizeBrowser(browser);
+        this.browser = AuraReportDataService.normalizeBrowser(browser);
     }
 
     public Integer getTotalExecutionsCount()
@@ -199,16 +194,6 @@ public class TestBaseVariationEntity
     public void setLastExecutedAt(final Long lastExecutedAt)
     {
         this.lastExecutedAt = lastExecutedAt;
-    }
-
-    public String getHistoryLinks()
-    {
-        return historyLinks;
-    }
-
-    public void setHistoryLinks(final String historyLinks)
-    {
-        this.historyLinks = historyLinks;
     }
 
     public Boolean isHealed()

@@ -24,14 +24,14 @@ import com.xceptance.aura.report.entity.TestBaseBugEntity;
 import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 import com.xceptance.aura.report.entity.TestBatchEntity;
 import com.xceptance.aura.report.entity.TestRunEntity;
+import com.xceptance.aura.report.entity.TestRunTagEntity;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
+import com.xceptance.aura.report.repository.TestRunTagRepository;
 import java.io.File;
 import java.io.IOException;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -65,6 +65,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * Format aligned with console-execution-1.json schema while retaining all features (bugs, comments, failure details).
  *
+ * @author AI-generated: Gemini 3.8 Flash (High)
  * @author Xceptance GmbH 2026
  */
 @Service
@@ -76,6 +77,7 @@ public class RunStorageSyncService
     private final TestBatchRepository batchRepository;
     private final TestBaseVariationRepository variationRepository;
     private final TestBaseBugRepository bugRepository;
+    private final TestRunTagRepository tagRepository;
     private final LocalRunJsonStorageService localRunJsonStorageService;
     private final ObjectMapper objectMapper;
 
@@ -88,12 +90,14 @@ public class RunStorageSyncService
         final TestBatchRepository batchRepository,
         final TestBaseVariationRepository variationRepository,
         final TestBaseBugRepository bugRepository,
+        final TestRunTagRepository tagRepository,
         final LocalRunJsonStorageService localRunJsonStorageService)
     {
         this.runRepository = runRepository;
         this.batchRepository = batchRepository;
         this.variationRepository = variationRepository;
         this.bugRepository = bugRepository;
+        this.tagRepository = tagRepository;
         this.localRunJsonStorageService = localRunJsonStorageService;
         this.objectMapper = new ObjectMapper();
     }
@@ -150,132 +154,7 @@ public class RunStorageSyncService
         {
             LOG.error("Error scanning storage directory {}: {}", baseDir, e.getMessage());
         }
-
-        upgradeLegacyHistoryLinks();
-
         return importedCount;
-    }
-
-    @Transactional
-    public void upgradeLegacyHistoryLinks()
-    {
-        final List<TestBaseVariationEntity> variations = variationRepository.findAll();
-        for (final TestBaseVariationEntity varEntity : variations)
-        {
-            final String history = varEntity.getHistoryLinks();
-            if (history != null && history.contains("/run-report?") && !history.contains("&batch="))
-            {
-                final String[] links = history.split(",");
-                final List<String> upgradedLinks = new ArrayList<>();
-                boolean modified = false;
-
-                for (final String link : links)
-                {
-                    final String trimmed = link.trim();
-                    if (trimmed.isEmpty())
-                    {
-                        continue;
-                    }
-                    final Map<String, String> params = AuraReportDataService.parseQueryParams(trimmed);
-                    if (!params.containsKey("batch"))
-                    {
-                        final String rId = params.get("runId");
-                        final String eId = params.get("executionId");
-                        if (rId != null && !rId.isEmpty())
-                        {
-                            final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(rId);
-                            if (runJsonOpt.isPresent())
-                            {
-                                try
-                                {
-                                    final JsonNode root = objectMapper.readTree(runJsonOpt.get());
-                                    final File runDir = new File(baseDir, rId);
-                                    final LocalRunJsonStorageService.BatchInfo batchInfo = localRunJsonStorageService.resolveOrCreateBatchJson(runDir, null);
-                                    final String bName = root.path("batchName").asText(batchInfo.name);
-                                    final String ts = root.path("timestamp").asText(root.path("startTime").asText("Recently"));
-                                    final JsonNode execArray = root.path("executions");
-
-                                    if (execArray.isArray())
-                                    {
-                                        for (final JsonNode exec : execArray)
-                                        {
-                                            final String curExecId = exec.path("id").asText("");
-                                            if (eId == null || eId.isEmpty() || eId.equals(curExecId))
-                                            {
-                                                final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
-                                                final String rawStatus = exec.path("status").asText("failed-unknown");
-                                                final boolean isHealed = (exec.has("healed") && exec.path("healed").asBoolean(false))
-                                                                      || (exec.has("healedStepsCount") && exec.path("healedStepsCount").asInt(0) > 0)
-                                                                      || "healed".equalsIgnoreCase(rawStatus);
-                                                final List<String> bugList = new ArrayList<>();
-                                                if (exec.has("bugs") && exec.path("bugs").isArray())
-                                                {
-                                                    for (final JsonNode bugNode : exec.path("bugs"))
-                                                    {
-                                                        if (!bugNode.asText().trim().isEmpty())
-                                                        {
-                                                            bugList.add(bugNode.asText().trim());
-                                                        }
-                                                    }
-                                                }
-                                                final String bugsStr = !bugList.isEmpty() ? String.join(";", bugList) : "";
-
-                                                final String enrichedUrl = "/run-report?runId=" + URLEncoder.encode(rId, StandardCharsets.UTF_8)
-                                                    + (curExecId != null && !curExecId.trim().isEmpty() ? "&executionId=" + URLEncoder.encode(curExecId.trim(), StandardCharsets.UTF_8) : "")
-                                                    + "&batch=" + URLEncoder.encode(bName, StandardCharsets.UTF_8)
-                                                    + "&engine=" + URLEncoder.encode(engine, StandardCharsets.UTF_8)
-                                                    + "&ts=" + URLEncoder.encode(ts, StandardCharsets.UTF_8)
-                                                    + "&status=" + URLEncoder.encode(rawStatus, StandardCharsets.UTF_8)
-                                                    + (isHealed ? "&healed=true" : "")
-                                                    + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
-
-                                                upgradedLinks.add(enrichedUrl);
-                                                modified = true;
-                                                break;
-                                            }
-                                        }
-                                    }
-                                }
-                                catch (final Exception e)
-                                {
-                                    upgradedLinks.add(trimmed);
-                                }
-                            }
-                            else
-                            {
-                                upgradedLinks.add(trimmed);
-                            }
-                        }
-                        else
-                        {
-                            upgradedLinks.add(trimmed);
-                        }
-                    }
-                    else
-                    {
-                        upgradedLinks.add(trimmed);
-                    }
-                }
-
-                if (modified && !upgradedLinks.isEmpty())
-                {
-                    varEntity.setHistoryLinks(String.join(",", upgradedLinks));
-                    variationRepository.save(varEntity);
-                }
-            }
-            if ("Chrome".equalsIgnoreCase(varEntity.getBrowser()) && varEntity.getHistoryLinks() != null && !varEntity.getHistoryLinks().isBlank())
-            {
-                final String firstLink = varEntity.getHistoryLinks().split(",")[0].trim();
-                final Map<String, String> params = AuraReportDataService.parseQueryParams(firstLink);
-                final String linkExecId = params.get("executionId");
-                final String extracted = AuraReportDataService.extractBrowserFromIdOrKey(linkExecId);
-                if (extracted != null && !extracted.isBlank() && !"Chrome".equalsIgnoreCase(extracted))
-                {
-                    varEntity.setBrowser(AuraReportDataService.normalizeBrowser(extracted));
-                    variationRepository.save(varEntity);
-                }
-            }
-        }
     }
 
     @Transactional
@@ -711,10 +590,6 @@ public class RunStorageSyncService
                             varEntity = new TestBaseVariationEntity(varId, testClass, testMethod, dataSet, "@General", location, browser);
                         }
 
-                        varEntity.setLastStatus(effectiveStatus);
-                        varEntity.setLastExecutedAt(System.currentTimeMillis());
-                        varEntity.setHealed(isHealed);
-
                         final String calculatedMode;
                         if (isAi)
                         {
@@ -732,134 +607,17 @@ public class RunStorageSyncService
                         {
                             calculatedMode = "JAVA";
                         }
-                        final String engine = exec.has("engine") ? exec.path("engine").asText("Java") : "Java";
 
-                        final String relUrl = "/run-report?runId=" + URLEncoder.encode(runId, StandardCharsets.UTF_8)
-                            + (execId != null && !execId.trim().isEmpty() ? "&executionId=" + URLEncoder.encode(execId.trim(), StandardCharsets.UTF_8) : "")
-                            + "&batch=" + URLEncoder.encode(batchName, StandardCharsets.UTF_8)
-                            + "&engine=" + URLEncoder.encode(engine, StandardCharsets.UTF_8)
-                            + "&ts=" + URLEncoder.encode(timestamp, StandardCharsets.UTF_8)
-                            + "&status=" + URLEncoder.encode(effectiveStatus, StandardCharsets.UTF_8)
-                            + (isHealed ? "&healed=true" : "")
-                            + "&mode=" + URLEncoder.encode(calculatedMode, StandardCharsets.UTF_8)
-                            + (!bugsStr.isEmpty() ? "&bugs=" + URLEncoder.encode(bugsStr, StandardCharsets.UTF_8) : "");
-
-                        final String currentHistory = varEntity.getHistoryLinks();
-                        final List<String> linksList;
-                        if (currentHistory == null || currentHistory.trim().isEmpty())
+                        final Long runTimeMs = (minStartTimeMs != null && minStartTimeMs > 0L) ? minStartTimeMs : System.currentTimeMillis();
+                        final Long currentVarTime = varEntity.getLastExecutedAt();
+                        if (currentVarTime == null || runTimeMs >= currentVarTime)
                         {
-                            linksList = new ArrayList<>();
-                            linksList.add(relUrl);
-                        }
-                        else
-                        {
-                            linksList = new ArrayList<>(List.of(currentHistory.split(",")));
-                            boolean replaced = false;
-                            for (int i = 0; i < linksList.size(); i++)
-                            {
-                                final String existing = linksList.get(i).trim();
-                                final Map<String, String> existingParams = AuraReportDataService.parseQueryParams(existing);
-                                final String existingRunId = existingParams.get("runId");
-                                final String existingExecId = existingParams.get("executionId");
-
-                                if (runId.equals(existingRunId) && Objects.equals(execId, existingExecId))
-                                {
-                                    linksList.set(i, relUrl);
-                                    replaced = true;
-                                    break;
-                                }
-                            }
-                            if (!replaced && !linksList.contains(relUrl))
-                            {
-                                linksList.add(relUrl);
-                            }
-                        }
-
-                        final List<String> sortedLinks = AuraReportDataService.sortHistoryLinksDescending(String.join(",", linksList));
-                        varEntity.setHistoryLinks(String.join(",", sortedLinks));
-                        varEntity.setTotalExecutionsCount(sortedLinks.size());
-
-                        if (!sortedLinks.isEmpty())
-                        {
-                            final Map<String, String> latestParams = AuraReportDataService.parseQueryParams(sortedLinks.get(0));
-                            final String latestStatus = latestParams.get("status");
-                            final String latestHealed = latestParams.get("healed");
-                            String latestMode = latestParams.get("mode");
-                            final boolean latestIsHealed = "true".equalsIgnoreCase(latestHealed) || "healed".equalsIgnoreCase(latestStatus);
-                            varEntity.setHealed(latestIsHealed);
-
-                            if (latestMode == null || latestMode.isBlank())
-                            {
-                                final String latestRunId = latestParams.get("runId");
-                                if (runId.equals(latestRunId))
-                                {
-                                    latestMode = calculatedMode;
-                                }
-                                else if (latestRunId != null)
-                                {
-                                    final Optional<String> rJsonOpt = localRunJsonStorageService.readRunJson(latestRunId);
-                                    if (rJsonOpt.isPresent())
-                                    {
-                                        try
-                                        {
-                                            final JsonNode rRoot = objectMapper.readTree(rJsonOpt.get());
-                                            final JsonNode exMetrics = rRoot.path("executionMetrics");
-                                            final String latestExecId = latestParams.get("executionId");
-                                            if (exMetrics.isObject())
-                                            {
-                                                for (final JsonNode mNode : exMetrics)
-                                                {
-                                                    final String mId = mNode.path("id").asText("");
-                                                    if (latestExecId != null && !latestExecId.isEmpty() && latestExecId.equals(mId))
-                                                    {
-                                                        final String mMode = mNode.path("executionMode").asText(mNode.path("mode").asText("")).trim();
-                                                        final boolean mHealed = mNode.path("healed").asBoolean(false) || mNode.path("healedStepsCount").asInt(0) > 0;
-                                                        final int mLlm = mNode.path("llmCallsCount").asInt(0);
-                                                        final boolean mAi = "AI".equalsIgnoreCase(mMode) || "LLM_RECORDING".equalsIgnoreCase(mMode) || mLlm > 0;
-                                                        if (mAi)
-                                                        {
-                                                            latestMode = "AI";
-                                                        }
-                                                        else if (mHealed)
-                                                        {
-                                                            latestMode = "HEALED";
-                                                        }
-                                                        else if ("PLAYBOOK".equalsIgnoreCase(mMode) || "REPLAY_STRICT".equalsIgnoreCase(mMode) || testClass.contains("_yaml_") || testClass.contains("_yml_"))
-                                                        {
-                                                            latestMode = "PLAYBOOK";
-                                                        }
-                                                        else
-                                                        {
-                                                            latestMode = "JAVA";
-                                                        }
-                                                        break;
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        catch (final Exception ex)
-                                        {
-                                            LOG.debug("Unable to parse execution mode from latest run JSON for runId {}: {}", latestRunId, ex.getMessage());
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (latestMode != null && !latestMode.isBlank())
-                            {
-                                varEntity.setExecutionMode(latestMode);
-                            }
-                            if (latestStatus != null && !latestStatus.isBlank())
-                            {
-                                varEntity.setLastStatus("healed".equalsIgnoreCase(latestStatus) ? "passed-clean" : latestStatus);
-                            }
-                        }
-                        else
-                        {
-                            varEntity.setExecutionMode(calculatedMode);
+                            varEntity.setLastExecutedAt(runTimeMs);
                             varEntity.setLastStatus("healed".equalsIgnoreCase(effectiveStatus) ? "passed-clean" : effectiveStatus);
                             varEntity.setHealed(isHealed);
+                            varEntity.setExecutionMode(calculatedMode);
                         }
+                        varEntity.setTotalExecutionsCount((varEntity.getTotalExecutionsCount() != null ? varEntity.getTotalExecutionsCount() : 0) + 1);
 
                         variationRepository.save(varEntity);
                     }
@@ -986,6 +744,65 @@ public class RunStorageSyncService
                     browsersCsv,
                     runId
                 ));
+            }
+
+            final List<TestRunTagEntity> tagEntities = new ArrayList<>();
+            final JsonNode tagsNode = root.path("tags");
+            if (tagsNode.isObject() && !tagsNode.isEmpty())
+            {
+                tagsNode.fields().forEachRemaining(entry -> {
+                    final String tagKey = entry.getKey().trim();
+                    final JsonNode valNode = entry.getValue();
+                    if (valNode.isArray())
+                    {
+                        for (final JsonNode item : valNode)
+                        {
+                            final String tagVal = item.asText("").trim();
+                            if (!tagKey.isEmpty() && !tagVal.isEmpty())
+                            {
+                                tagEntities.add(new TestRunTagEntity(runId, tagKey, tagVal));
+                            }
+                        }
+                    }
+                    else
+                    {
+                        final String tagVal = valNode.asText("").trim();
+                        if (!tagKey.isEmpty() && !tagVal.isEmpty())
+                        {
+                            tagEntities.add(new TestRunTagEntity(runId, tagKey, tagVal));
+                        }
+                    }
+                });
+            }
+            else
+            {
+                if (batchName != null && !batchName.isBlank() && !"Default".equalsIgnoreCase(batchName) && !"Unknown".equalsIgnoreCase(batchName))
+                {
+                    tagEntities.add(new TestRunTagEntity(runId, "Suite", batchName.trim()));
+                }
+                if (env != null && !env.isBlank() && !"Default".equalsIgnoreCase(env) && !"ALL".equalsIgnoreCase(env))
+                {
+                    tagEntities.add(new TestRunTagEntity(runId, "Instance", env.trim()));
+                }
+                for (final String loc : localesList)
+                {
+                    if (!loc.isBlank() && !"Default".equalsIgnoreCase(loc))
+                    {
+                        tagEntities.add(new TestRunTagEntity(runId, "Locale", loc.trim()));
+                    }
+                }
+                for (final String br : browsersList)
+                {
+                    if (!br.isBlank() && !"Unknown".equalsIgnoreCase(br))
+                    {
+                        tagEntities.add(new TestRunTagEntity(runId, "Browser", br.trim()));
+                    }
+                }
+            }
+            tagRepository.deleteByRunId(runId);
+            if (!tagEntities.isEmpty())
+            {
+                tagRepository.saveAll(tagEntities);
             }
 
             LOG.info("Imported/Updated run JSON report from storage into DB: runId={}, batch={}, totalTests={}, pass={}, fixed={}, known={}, unknown={}",
