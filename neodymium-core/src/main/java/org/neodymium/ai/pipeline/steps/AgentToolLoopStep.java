@@ -547,10 +547,10 @@ public final class AgentToolLoopStep implements PipelineStep
             final long stepPauseMs = Math.max(totalPauseDurationMs, context.getStepInteractivePauseMs());
             final long elapsedSeconds = Math.max(0L, (System.currentTimeMillis() - startTimeMs - stepPauseMs) / 1000);
             final long baseTimeoutSeconds = (step != null && step.getTimeoutMs() != null && step.getTimeoutMs() > 0)
-                    ? Math.max(1L, (step.getTimeoutMs() + 999L) / 1000L)
+                    ? (step.getTimeoutMs() + 999L) / 1000L
                     : this.timeoutSeconds;
-            final long effectiveTimeoutSeconds = step != null && step.hasSubSteps() && !step.getSubSteps().isEmpty()
-                    ? Math.max(baseTimeoutSeconds, baseTimeoutSeconds * step.getSubSteps().size())
+            final long effectiveTimeoutSeconds = (step != null && step.hasSubSteps())
+                    ? baseTimeoutSeconds * step.getSubSteps().size()
                     : baseTimeoutSeconds;
             if (elapsedSeconds >= effectiveTimeoutSeconds)
             {

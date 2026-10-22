@@ -298,7 +298,7 @@ public final class AiConfiguration
         }
 
         final String targetNormalized = normalizeKey(key);
-        if (key.startsWith("neodymium"))
+        if (targetNormalized.startsWith("neodymiumai"))
         {
             for (final Map.Entry<Object, Object> sysEntry : System.getProperties().entrySet())
             {
