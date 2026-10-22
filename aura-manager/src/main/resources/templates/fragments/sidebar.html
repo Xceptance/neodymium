@@ -21,7 +21,7 @@
     <nav>
         <a class="nav-item-btn" id="navAuraManager" 
            th:classappend="${activeTab == 'AuraTestManager'} ? ' active' : ''"
-           href="/" 
+           href="/playbooks" 
            onclick="setActiveNavBtn(this)"
            title="Playbooks & Test Queue">
             <span class="material-symbols-outlined">play_circle</span> <span class="nav-label">Playbooks & Queue</span>
@@ -32,7 +32,7 @@
     <nav>
         <a class="nav-item-btn" id="navRunsList" 
            th:classappend="${activeTab == 'Directory'} ? ' active' : ''"
-           href="/report" 
+           href="/" 
            onclick="setActiveNavBtn(this)"
            title="Overview of Runs">
             <span class="material-symbols-outlined">format_list_bulleted</span> <span class="nav-label">Run History</span>
@@ -49,8 +49,8 @@
 
     <a class="run-context-card" id="sidebarContextCard" 
        th:style="${(activeRunId != null and !activeRunId.isEmpty()) ? 'text-decoration: none; cursor: pointer; display: flex;' : 'text-decoration: none; cursor: pointer; display: none;'}"
-       th:href="${(activeRunReportUrl != null and !activeRunReportUrl.isEmpty()) ? activeRunReportUrl : ((activeRunId != null and !activeRunId.isEmpty()) ? '/run-report?runId=' + activeRunId : '/report')}" 
-       href="/report" 
+       th:href="${(activeRunReportUrl != null and !activeRunReportUrl.isEmpty()) ? activeRunReportUrl : ((activeRunId != null and !activeRunId.isEmpty()) ? '/run-report?runId=' + activeRunId : '/')}" 
+       href="/" 
        style="text-decoration: none; cursor: pointer; display: none;">
         <div class="context-symbolic-icon" title="Active Context">
             <span class="material-symbols-outlined">science</span>

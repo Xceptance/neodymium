@@ -46,9 +46,12 @@ public class AuraGlobalModelAdvice
         {
             final String activeRunId = queueService.getCurrentRunId();
             final boolean running = queueService.isRunningQueue();
+            final String currentBatch = queueService.getCurrentBatchName();
+            final String effectiveBatch = (currentBatch != null && !currentBatch.isBlank()) ? currentBatch : "Default";
             if (activeRunId != null && !activeRunId.isEmpty())
             {
                 model.addAttribute("activeRunId", activeRunId);
+                model.addAttribute("activeBatchName", effectiveBatch);
                 model.addAttribute("activeRunStatus", running ? "running" : "finished");
                 model.addAttribute("activeRunReportUrl", "/run-report?runId=" + activeRunId);
                 model.addAttribute("hasRunContext", true);
@@ -56,6 +59,7 @@ public class AuraGlobalModelAdvice
             else
             {
                 model.addAttribute("activeRunId", "");
+                model.addAttribute("activeBatchName", "Default");
                 model.addAttribute("activeRunStatus", "");
                 model.addAttribute("activeRunReportUrl", "");
                 model.addAttribute("hasRunContext", false);

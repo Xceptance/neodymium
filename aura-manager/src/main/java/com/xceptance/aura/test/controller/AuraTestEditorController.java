@@ -97,7 +97,7 @@ public class AuraTestEditorController
             model.addAttribute("varKeys", sections.get("varKeys"));
             final Object scopesObj = sections.get("fragmentVarScopes");
             model.addAttribute("fragmentVarScopes", scopesObj != null ? scopesObj : Map.of());
-            model.addAttribute("yamlFiles", fileService.getYamlFilesList());
+            model.addAttribute("areaTag", sections.get("areaTag"));
         }
         else
         {
@@ -116,7 +116,7 @@ public class AuraTestEditorController
             model.addAttribute("dataMatrix", List.of());
             model.addAttribute("varKeys", List.of());
             model.addAttribute("fragmentVarScopes", Map.of());
-            model.addAttribute("yamlFiles", fileService.getYamlFilesList());
+            model.addAttribute("areaTag", null);
         }
         return "fragments/editor :: editorPanelContent";
     }

@@ -83,6 +83,57 @@ public class LocalRunJsonStorageService
         return Files.exists(Paths.get(baseDir, runId, "run.json")) || Files.exists(Paths.get(baseDir, "run-" + runId + ".json"));
     }
 
+    /**
+     * Efficiently checks whether the given run currently has active test executions on disk.
+     * Uses file modification timestamps to avoid scanning or parsing older completed tests.
+     *
+     * @param runId the run identifier
+     * @return {@code true} if any test execution JSON was modified recently and reports an active status
+     */
+    public boolean isRunCurrentlyActiveOnDisk(final String runId)
+    {
+        if (runId == null || runId.isBlank())
+        {
+            return false;
+        }
+
+        final Path runDir = getRunDir(runId);
+        if (runDir == null || !Files.exists(runDir) || !Files.isDirectory(runDir))
+        {
+            return false;
+        }
+
+        final long now = System.currentTimeMillis();
+        final long activeThresholdMs = 120_000L; // 2 minutes
+
+        final List<File> candidateFiles = new ArrayList<>();
+        scanForTestExecJsonFiles(runDir.toFile(), candidateFiles);
+
+        for (final File f : candidateFiles)
+        {
+            if (now - f.lastModified() <= activeThresholdMs)
+            {
+                try
+                {
+                    final JsonNode node = objectMapper.readTree(f);
+                    final String status = node.path("status").asText("");
+                    if ("running".equalsIgnoreCase(status)
+                            || "in_progress".equalsIgnoreCase(status)
+                            || "executing".equalsIgnoreCase(status)
+                            || "pending".equalsIgnoreCase(status))
+                    {
+                        return true;
+                    }
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
+
+        return false;
+    }
+
     public Path getRunJsonPath(final String runId)
     {
         final Path dirPath = Paths.get(baseDir, runId, "run.json");
@@ -446,21 +497,6 @@ public class LocalRunJsonStorageService
 
                                 objNode.set("blocks", blocksNode);
                             }
-
-                            // Keep the execution JSON at its current location on disk (class folders
-                            // without a category are only logically associated with the default
-                            // category); persist the enriched JSON content in place.
-                            try
-                            {
-                                final JsonNode existingNode = objectMapper.readTree(f);
-                                if (!existingNode.equals(objNode))
-                                {
-                                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(f, objNode);
-                                }
-                            }
-                            catch (final Exception ignored)
-                            {
-                            }
                             areasMap.computeIfAbsent(areaName, k -> new LinkedHashMap<>()).computeIfAbsent(testClass, k -> new ArrayList<>()).add(f.getName());
                             mergedExecutions.add(objNode);
                         }
@@ -543,7 +579,7 @@ public class LocalRunJsonStorageService
             }
 
             final int total = totalExecsCount;
-            final double passRate = total > 0 ? (double)(pass + fixed) / total * 100.0 : 0.0;
+            final double passRate = total > 0 ? (double) Math.round((double)(pass + fixed) / total * 100.0) : 0.0;
 
             if (earliestTimeStr != null && !earliestTimeStr.isBlank() && !"Recently".equalsIgnoreCase(earliestTimeStr.trim()))
             {
@@ -603,7 +639,7 @@ public class LocalRunJsonStorageService
             summaryNode.put("fixedHealed", fixedHealed);
             summaryNode.put("knownHealed", knownHealed);
             summaryNode.put("unknownHealed", unknownHealed);
-            summaryNode.put("passRate", Math.round(passRate * 10.0) / 10.0);
+            summaryNode.put("passRate", Math.round(passRate));
 
             final ArrayNode areasArray = objectMapper.createArrayNode();
             for (final Map.Entry<String, Map<String, List<String>>> areaEntry : areasMap.entrySet())
@@ -789,7 +825,7 @@ public class LocalRunJsonStorageService
                 final int known = report.getKnownCount();
                 final int unknown = report.getUnknownCount();
                 final int ignored = report.getIgnoredCount();
-                final double passRate = total > 0 ? Math.round((pass + fixed) * 100.0 / total * 10.0) / 10.0 : 0.0;
+                final double passRate = total > 0 ? (double) Math.round((pass + fixed) * 100.0 / total) : 0.0;
 
                 final ObjectNode summaryNode = objectMapper.createObjectNode();
                 summaryNode.put("total", total);
@@ -1211,7 +1247,8 @@ public class LocalRunJsonStorageService
         }
 
         final String finalEnv = (detectedEnv != null && !detectedEnv.trim().isEmpty()) ? detectedEnv.trim() : "Default";
-        final String defaultName = "Default";
+        final String sysBatchName = System.getProperty("batchName", System.getProperty("neodymium.batchName", null));
+        final String defaultName = (sysBatchName != null && !sysBatchName.isBlank()) ? sysBatchName.trim() : "Default";
         final String defaultDesc = "";
 
         try
@@ -1221,7 +1258,7 @@ public class LocalRunJsonStorageService
             batchNode.put("description", defaultDesc);
             batchNode.put("environment", finalEnv);
             objectMapper.writerWithDefaultPrettyPrinter().writeValue(batchJsonFile, batchNode);
-            LOG.info("Created batch.json for runDir={} with default name='Default', description='', environment='{}'", runDir.getName(), finalEnv);
+            LOG.info("Created batch.json for runDir={} with default name='{}', description='', environment='{}'", runDir.getName(), defaultName, finalEnv);
         }
         catch (final Exception e)
         {

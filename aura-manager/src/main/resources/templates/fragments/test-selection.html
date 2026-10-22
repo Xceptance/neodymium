@@ -20,6 +20,7 @@
                 <span class="material-symbols-outlined" id="fileViewModeIcon" style="font-size: 16px;">view_list</span>
             </button>
             <button class="btn-edit neo-u-8" id="refreshFilesBtn" hx-get="/api/files/list" hx-target="#yamlFileList" hx-swap="innerHTML" title="Refresh Files"><span class="material-symbols-outlined">sync</span></button>
+            <button type="button" class="btn-edit neo-u-8" id="saveQueueAsBatchSelectionBtn" onclick="openSaveBatchModal()" title="Save queue as batch list"><span class="material-symbols-outlined" style="font-size: 16px;">playlist_add</span></button>
         </div>
     </div>
     <div class="search-container">

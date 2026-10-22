@@ -21,6 +21,7 @@ package org.neodymium.ai.junit;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xceptance.neodymium.aura.AuraFileService;
 import java.io.ByteArrayInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -1053,6 +1054,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (playbookPath != null)
             {
                 executionContext.getTransientData().put("playbookFile", playbookPath);
+                final String initialAreaTag = AuraFileService.extractAreaTagFromFileSystem(playbookPath);
+                if (initialAreaTag != null && !initialAreaTag.isEmpty())
+                {
+                    executionContext.getTransientData().put("areaName", initialAreaTag);
+                }
             }
             if (this.datasetId != null)
             {
@@ -1456,6 +1462,11 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             if (playbook.getPromptAddons() != null)
             {
                 executionContext.getTransientData().put("playbook.promptAddons", playbook.getPromptAddons());
+            }
+
+            if (playbook.getAreaName() != null)
+            {
+                executionContext.getTransientData().put("areaName", playbook.getAreaName());
             }
 
             executionContext.getTransientData().put("playbook.resolvedPath", resolvedPlaybookPath);

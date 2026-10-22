@@ -620,6 +620,19 @@ async function pollStatus() {
                         sidebarRunIdEl.textContent = `Run #${currentRunId}`;
                     }
 
+                    const sidebarBatchNameEl = document.getElementById('sidebarActiveBatchName');
+                    if (sidebarBatchNameEl && statusData.batchName) {
+                        sidebarBatchNameEl.textContent = statusData.batchName;
+                    }
+
+                    if (statusData.batchName) {
+                        try {
+                            localStorage.setItem('aura_active_batch_name', statusData.batchName);
+                        } catch (e) {
+                            // ignore storage failure
+                        }
+                    }
+
                     const sidebarStatusEl = document.getElementById('sidebarActiveStatus') || document.getElementById('sidebarActiveEnv');
                     if (sidebarStatusEl) {
                         sidebarStatusEl.textContent = runStatus;
@@ -710,7 +723,7 @@ async function pollStatus() {
 
                         if (wasRunning) {
                             if (typeof updateCenterLayout === 'function') updateCenterLayout();
-                            const isDashboardView = window.location.pathname === '/' ||
+                            const isDashboardView = window.location.pathname.includes('/playbooks') ||
                                                     window.location.pathname.includes('/dashboard') ||
                                                     window.location.pathname.includes('/manager') ||
                                                     window.location.pathname.includes('/aura-test-manager') ||
@@ -1106,6 +1119,177 @@ function acceptPlaybookHealing(btnOrFile, datasetId, stepIndex, actionIndex) {
 window.openPlaybookInspector = openPlaybookInspector;
 window.closePlaybookInspector = closePlaybookInspector;
 window.acceptPlaybookHealing = acceptPlaybookHealing;
+
+// ============================================================================
+// Batch Operations: Save Queue as Batch & Run Batch
+// ============================================================================
+
+function openSaveBatchModal() {
+    const queueItems = document.querySelectorAll('#queueListContainer .queue-item');
+    if (!queueItems || queueItems.length === 0) {
+        if (typeof showToast === 'function') {
+            showToast('Cannot save batch: The run queue is currently empty.', 'warning');
+        } else {
+            alert('Cannot save batch: The run queue is currently empty.');
+        }
+        return;
+    }
+
+    const modal = document.getElementById('saveBatchModal');
+    if (modal) {
+        modal.style.display = 'flex';
+        const err = document.getElementById('saveBatchError');
+        if (err) {
+            err.style.display = 'none';
+            err.textContent = '';
+        }
+        const input = document.getElementById('saveBatchNameInput');
+        if (input) {
+            input.value = '';
+            input.focus();
+        }
+    }
+}
+
+function closeSaveBatchModal() {
+    const modal = document.getElementById('saveBatchModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+async function submitSaveBatch() {
+    const nameInput = document.getElementById('saveBatchNameInput');
+    const envInput = document.getElementById('saveBatchEnvInput');
+    const descInput = document.getElementById('saveBatchDescInput');
+    const errBox = document.getElementById('saveBatchError');
+    const submitBtn = document.getElementById('submitSaveBatchBtn');
+
+    const batchName = nameInput ? nameInput.value.trim() : '';
+    const environment = envInput ? envInput.value.trim() : 'Staging';
+    const description = descInput ? descInput.value.trim() : '';
+
+    if (!batchName) {
+        if (errBox) {
+            errBox.textContent = 'Please enter a batch name.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Saving...';
+    }
+
+    try {
+        const response = await fetch('/api/batch/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ batchName, environment, description })
+        });
+        const data = await response.json();
+
+        if (!response.ok || data.status === 'error') {
+            if (errBox) {
+                errBox.textContent = data.message || 'Failed to save batch.';
+                errBox.style.display = 'block';
+            }
+        } else {
+            closeSaveBatchModal();
+            if (typeof showToast === 'function') {
+                showToast(`Batch "${batchName}" saved successfully!`, 'success');
+            }
+        }
+    } catch (e) {
+        if (errBox) {
+            errBox.textContent = 'Network or server error: ' + e.message;
+            errBox.style.display = 'block';
+        }
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Save Batch';
+        }
+    }
+}
+
+async function runBatch(batchName) {
+    if (!batchName) return;
+
+    if (window.isRunning) {
+        if (typeof showToast === 'function') {
+            showToast('Another test execution is currently running.', 'warning');
+        } else {
+            alert('Another test execution is currently running.');
+        }
+        return;
+    }
+
+    const btns = document.querySelectorAll(`[data-batch-name="${batchName}"]`);
+    btns.forEach(b => {
+        b.disabled = true;
+        b.style.opacity = '0.7';
+    });
+
+    if (typeof showToast === 'function') {
+        showToast(`Starting batch "${batchName}"...`, 'info');
+    }
+
+    try {
+        if (typeof prepareClientForExecution === 'function') {
+            prepareClientForExecution();
+        }
+
+        const response = await fetch(`/api/batch/run?batchName=${encodeURIComponent(batchName)}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        const data = await response.json();
+        if (!response.ok || data.status === 'error' || data.error) {
+            const msg = data.error || data.message || 'Failed to start batch execution.';
+            if (typeof showToast === 'function') {
+                showToast(msg, 'error');
+            } else {
+                alert(msg);
+            }
+            window.isRunning = false;
+            if (window.activeRunStats) window.activeRunStats.running = false;
+            window.consoleOpened = false;
+            if (typeof updateCenterLayout === 'function') updateCenterLayout();
+        } else {
+            if (typeof showToast === 'function') {
+                showToast(`Batch "${batchName}" execution started!`, 'success');
+            }
+            const pulse = document.getElementById('sidebarContextPulseDot');
+            if (pulse) pulse.style.display = 'inline-block';
+            const card = document.getElementById('sidebarContextCard');
+            if (card) card.style.display = 'flex';
+        }
+    } catch (e) {
+        if (typeof showToast === 'function') {
+            showToast('Failed to trigger batch run: ' + e.message, 'error');
+        } else {
+            alert('Failed to trigger batch run: ' + e.message);
+        }
+        window.isRunning = false;
+        if (window.activeRunStats) window.activeRunStats.running = false;
+        window.consoleOpened = false;
+        if (typeof updateCenterLayout === 'function') updateCenterLayout();
+    } finally {
+        btns.forEach(b => {
+            b.disabled = false;
+            b.style.opacity = '1';
+        });
+    }
+}
+
+window.openSaveBatchModal = openSaveBatchModal;
+window.closeSaveBatchModal = closeSaveBatchModal;
+window.submitSaveBatch = submitSaveBatch;
+window.runBatch = runBatch;
+
 
 
 

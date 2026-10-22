@@ -24,6 +24,7 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 
@@ -60,8 +61,29 @@ public final class AuraGlobalModelAdviceTest
 
         Assertions.assertEquals(Boolean.FALSE, model.getAttribute("hasRunContext"));
         Assertions.assertEquals("", model.getAttribute("activeRunId"));
+        Assertions.assertEquals("Default", model.getAttribute("activeBatchName"));
         Assertions.assertEquals("", model.getAttribute("activeRunStatus"));
         Assertions.assertEquals("", model.getAttribute("activeRunReportUrl"));
         Assertions.assertEquals(Boolean.FALSE, model.getAttribute("running"));
+    }
+
+    @Test
+    public final void testAddGlobalAttributesWhenRunActiveWithBatchName()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        Mockito.when(mockQueueService.getCurrentRunId()).thenReturn("run_20261021_121942");
+        Mockito.when(mockQueueService.getCurrentBatchName()).thenReturn("Wikipedia");
+        Mockito.when(mockQueueService.isRunningQueue()).thenReturn(true);
+
+        final AuraGlobalModelAdvice activeAdvice = new AuraGlobalModelAdvice(mockQueueService);
+        final Model model = new ConcurrentModel();
+        activeAdvice.addGlobalAttributes(model);
+
+        Assertions.assertEquals(Boolean.TRUE, model.getAttribute("hasRunContext"));
+        Assertions.assertEquals("run_20261021_121942", model.getAttribute("activeRunId"));
+        Assertions.assertEquals("Wikipedia", model.getAttribute("activeBatchName"));
+        Assertions.assertEquals("running", model.getAttribute("activeRunStatus"));
+        Assertions.assertEquals("/run-report?runId=run_20261021_121942", model.getAttribute("activeRunReportUrl"));
+        Assertions.assertEquals(Boolean.TRUE, model.getAttribute("running"));
     }
 }

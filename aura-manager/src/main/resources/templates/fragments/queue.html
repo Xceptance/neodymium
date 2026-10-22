@@ -17,10 +17,17 @@
             <span th:text="${queue.size()}">0</span> test(s) queued 
             <span style="color: var(--accent); font-weight: 600;">(<span th:text="${totalRuns != null ? totalRuns : queue.size()}">0</span> runs)</span>
         </span>
-        <button id="clearQueueBtn" hx-post="/api/queue/clear" hx-target="#queueListContainer" hx-swap="innerHTML" 
-                class="btn-edit" style="padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--danger);">
-            <span class="material-symbols-outlined">delete</span> Clear Queue
-        </button>
+        <div style="display: flex; gap: 6px; align-items: center;">
+            <button id="saveQueueAsBatchBtn" type="button" onclick="openSaveBatchModal()"
+                    class="btn-edit" style="padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--accent); display: inline-flex; align-items: center; gap: 4px;"
+                    title="Save current queue as a named batch list">
+                <span class="material-symbols-outlined" style="font-size: 14px;">playlist_add</span> Save as Batch
+            </button>
+            <button id="clearQueueBtn" hx-post="/api/queue/clear" hx-target="#queueListContainer" hx-swap="innerHTML" 
+                    class="btn-edit" style="padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--danger);">
+                <span class="material-symbols-outlined">delete</span> Clear Queue
+            </button>
+        </div>
     </div>
 
     <!-- Queue Items -->

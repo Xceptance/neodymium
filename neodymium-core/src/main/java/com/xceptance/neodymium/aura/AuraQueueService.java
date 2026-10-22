@@ -85,6 +85,7 @@ public final class AuraQueueService
     private final AtomicBoolean cancelledCurrentTest = new AtomicBoolean(false);
     private final AtomicReference<String> activeFile = new AtomicReference<>("");
     private final AtomicReference<String> currentRunId = new AtomicReference<>("");
+    private final AtomicReference<String> currentBatchName = new AtomicReference<>("");
     private volatile Consumer<String> onRunCompletedListener;
 
     /** Wall-clock start time in ms of the current (or most recent) queue run. */
@@ -212,6 +213,11 @@ public final class AuraQueueService
     public RunRequest getLastRunRequest()
     {
         return lastRunRequest.get();
+    }
+
+    public String getCurrentBatchName()
+    {
+        return currentBatchName.get();
     }
 
     public void stopCurrentTest()
@@ -422,13 +428,16 @@ public final class AuraQueueService
                 currentRunId.set(generatedRunId);
                 lastRunRequest.set(req);
 
-                final String queueRunId = generatedRunId;
+                final String effectiveBatchName = (req.batchName != null && !req.batchName.isBlank())
+                        ? req.batchName
+                        : System.getProperty("batchName", System.getProperty("neodymium.batchName", "Queue"));
+                currentBatchName.set(effectiveBatchName);
 
                 if (queueRunProgressListener != null)
                 {
                     try
                     {
-                        queueRunProgressListener.onRunStarted(queueRunId, "Queue", "Unknown");
+                        queueRunProgressListener.onRunStarted(generatedRunId, effectiveBatchName, "Unknown");
                     }
                     catch (final Exception e)
                     {
@@ -527,11 +536,27 @@ public final class AuraQueueService
                         new File("storage/runs", runId),
                         new File(AiConfiguration.getInstance().getConsoleExecutionLogsDirectory(), runId)
                     );
+                    final ObjectNode preBatchNode = new ObjectMapper().createObjectNode();
+                    preBatchNode.put("name", effectiveBatchName);
+                    preBatchNode.put("description", "");
+                    preBatchNode.put("environment", "Default");
                     for (final File runDir : runStorageDirs)
                     {
                         if (!runDir.exists())
                         {
                             runDir.mkdirs();
+                        }
+                        final File batchJsonFile = new File(runDir, "batch.json");
+                        if (!batchJsonFile.exists())
+                        {
+                            try
+                            {
+                                new ObjectMapper().writerWithDefaultPrettyPrinter().writeValue(batchJsonFile, preBatchNode);
+                            }
+                            catch (final Exception e)
+                            {
+                                LOGGER.warn("[Aura Server] Failed to pre-create batch.json in {}: {}", runDir.getAbsolutePath(), e.getMessage());
+                            }
                         }
                     }
 
@@ -583,6 +608,8 @@ public final class AuraQueueService
                     command.add("-Dneodymium.managerRunId=" + runId);
                     command.add("-Dneodymium.runId=" + runId);
                     command.add("-Dneodymium.managerUrl=http://localhost:" + serverPort);
+                    command.add("-DbatchName=" + effectiveBatchName);
+                    command.add("-Dneodymium.batchName=" + effectiveBatchName);
                     command.add("-Dfile.encoding=UTF-8");
                     command.add("-Dsun.stdout.encoding=UTF-8");
                     command.add("-Dsun.stderr.encoding=UTF-8");
@@ -896,7 +923,7 @@ public final class AuraQueueService
                 {
                     try
                     {
-                        queueRunProgressListener.onRunFinished(queueRunId);
+                        queueRunProgressListener.onRunFinished(completedRunId);
                     }
                     catch (final Exception e)
                     {

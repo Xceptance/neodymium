@@ -2,6 +2,17 @@
 // Neodymium Aura Dashboard - Test & Dataset Editor & Queue Control
 // ============================================================================
 
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+window.escapeHtml = escapeHtml;
+
 function isDatasetSelected(file, id) {
     if (!file || id == null) return false;
     const strFile = String(file);
@@ -511,13 +522,31 @@ function openYamlEditor(filename, force = false) {
     if (typeof updateUndoRedoUI === 'function') updateUndoRedoUI();
     if (typeof checkEditorDirtyStatus === 'function') checkEditorDirtyStatus();
 
-    // Immediately clear stale DOM step rows from previous file to prevent DOM compilation race condition
+    // Immediately update file title in editor header if present
+    const fileSpan = document.getElementById('editorFileName');
+    if (fileSpan) {
+        fileSpan.textContent = filename;
+        fileSpan.setAttribute('data-file', filename);
+    }
+
+    // Immediately display loading indicator in steps container while fetching file content
     const stepsList = document.getElementById('stepsList');
-    if (stepsList) stepsList.innerHTML = '';
+    if (stepsList) {
+        stepsList.innerHTML = `
+            <div class="editor-loading-placeholder" style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 16px; color: var(--text-secondary); gap: 12px;">
+                <span class="material-symbols-outlined spinner" style="font-size: 28px; color: var(--accent);">progress_activity</span>
+                <span style="font-size: 13px; font-weight: 500;">Loading ${escapeHtml(filename)}...</span>
+            </div>
+        `;
+    }
     const beforeList = document.getElementById('beforeStepsList');
     if (beforeList) beforeList.innerHTML = '';
     const afterList = document.getElementById('afterStepsList');
     if (afterList) afterList.innerHTML = '';
+    const rawYamlTextarea = document.getElementById('rawYamlTextarea');
+    if (rawYamlTextarea) {
+        rawYamlTextarea.value = `# Loading ${filename}...`;
+    }
 
     return new Promise((resolve) => {
         let resolved = false;
@@ -878,6 +907,142 @@ async function submitUpdateFragmentRefs() {
 }
 window.submitUpdateFragmentRefs = submitUpdateFragmentRefs;
 
+function updateAreaTagUI(tag) {
+    const btn = document.getElementById('btnAssignArea');
+    const badge = document.getElementById('editorAreaBadge');
+    const tagText = document.getElementById('editorAreaTagText');
+    const cleanTag = tag ? (tag.startsWith('@') ? tag.trim() : '@' + tag.trim()) : '';
+    window.currentAreaTag = cleanTag || null;
+    if (cleanTag) {
+        if (btn) btn.style.display = 'none';
+        if (badge) {
+            badge.style.display = 'inline-flex';
+            badge.setAttribute('data-area', cleanTag);
+        }
+        if (tagText) tagText.textContent = cleanTag;
+    } else {
+        if (btn) btn.style.display = 'inline-flex';
+        if (badge) {
+            badge.style.display = 'none';
+            badge.removeAttribute('data-area');
+        }
+        if (tagText) tagText.textContent = '';
+    }
+    const editorPanel = document.getElementById('editorPanel');
+    if (editorPanel) {
+        editorPanel.setAttribute('data-area', cleanTag || '');
+    }
+}
+window.updateAreaTagUI = updateAreaTagUI;
+
+function openAssignAreaModal() {
+    const modal = document.getElementById('assignAreaModal');
+    if (!modal) return;
+    const input = document.getElementById('assignAreaTagInput');
+    const errBox = document.getElementById('assignAreaError');
+    if (errBox) {
+        errBox.style.display = 'none';
+        errBox.textContent = '';
+    }
+    if (input) {
+        input.value = window.currentAreaTag || '';
+        setTimeout(() => input.focus(), 50);
+    }
+    modal.style.display = 'flex';
+}
+window.openAssignAreaModal = openAssignAreaModal;
+
+function closeAssignAreaModal() {
+    const modal = document.getElementById('assignAreaModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+window.closeAssignAreaModal = closeAssignAreaModal;
+
+function submitAssignArea() {
+    const input = document.getElementById('assignAreaTagInput');
+    const errBox = document.getElementById('assignAreaError');
+    if (!input) return;
+    const raw = input.value.trim();
+    if (!raw) {
+        if (errBox) {
+            errBox.textContent = 'Please enter an area name or tag.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+    const clean = raw.replace(/^[#\s]*@?/, '').trim();
+    if (!clean || !/^[a-zA-Z0-9_-]+$/.test(clean)) {
+        if (errBox) {
+            errBox.textContent = 'Area tag must contain letters, numbers, hyphens, or underscores.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+    const tag = '@' + clean;
+    updateAreaTagUI(tag);
+    closeAssignAreaModal();
+
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea) {
+            let content = rawTextarea.value;
+            const tagRegex = /(?:^|\r?\n)\s*#?\s*@[a-zA-Z0-9_-]+[ \t]*/;
+            const rawTag = '#@' + clean;
+            if (tagRegex.test(content)) {
+                content = content.replace(tagRegex, function(match) {
+                    const startsWithNewline = match.startsWith('\r\n') ? '\r\n' : (match.startsWith('\n') ? '\n' : '');
+                    return startsWithNewline + rawTag;
+                });
+            } else {
+                content = rawTag + '\n\n' + content;
+            }
+            rawTextarea.value = content;
+            handleRawYamlInput(rawTextarea);
+        }
+    } else {
+        compilePlaybookToYaml();
+        if (typeof debouncedPushSnapshot === 'function') {
+            debouncedPushSnapshot();
+        }
+        checkEditorDirtyStatus();
+    }
+}
+window.submitAssignArea = submitAssignArea;
+
+function removeAreaTag(event) {
+    if (event) {
+        event.stopPropagation();
+        event.preventDefault();
+    }
+    updateAreaTagUI(null);
+
+    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
+        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+
+    if (isRaw) {
+        const rawTextarea = document.getElementById('rawYamlTextarea');
+        if (rawTextarea) {
+            let content = rawTextarea.value;
+            content = content.replace(/(?:^|\r?\n)\s*#?\s*@[a-zA-Z0-9_-]+[ \t]*(?:\r?\n|$)/, '\n').replace(/^\n+/, '');
+            rawTextarea.value = content;
+            handleRawYamlInput(rawTextarea);
+        }
+    } else {
+        compilePlaybookToYaml();
+        if (typeof debouncedPushSnapshot === 'function') {
+            debouncedPushSnapshot();
+        }
+        checkEditorDirtyStatus();
+    }
+}
+window.removeAreaTag = removeAreaTag;
+
+
 
 function closeEditor(force = false) {
     if (!force && typeof isEditorDirty === 'function' && isEditorDirty()) {
@@ -906,6 +1071,8 @@ function closeEditor(force = false) {
     }
     activeEditingFile = null;
     window.activeEditingFile = null;
+    window.currentAreaTag = null;
+    updateAreaTagUI(null);
     if (typeof clearAllVariablePrompts === 'function') clearAllVariablePrompts();
     if (typeof initialEditorContent !== 'undefined') initialEditorContent = '';
     if (typeof undoStack !== 'undefined') undoStack = [];
@@ -1153,6 +1320,28 @@ function setEditorMode(mode) {
             btnRaw.style.fontWeight = 'normal';
             btnRaw.style.opacity = '0.8';
         }
+        if (rawTextarea) {
+            const val = rawTextarea.value || '';
+            const areaMatch = val.match(/(?:^|\r?\n)\s*#?\s*@([a-zA-Z0-9_-]+)/);
+            if (areaMatch) {
+                const tagIndex = areaMatch.index;
+                const stepsIdx = val.indexOf('steps:');
+                const beforeIdx = val.indexOf('before:');
+                const dataIdx = val.indexOf('data:');
+                let firstSectionIdx = Infinity;
+                if (stepsIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, stepsIdx);
+                if (beforeIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, beforeIdx);
+                if (dataIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, dataIdx);
+
+                if (tagIndex < firstSectionIdx) {
+                    updateAreaTagUI('@' + areaMatch[1]);
+                } else {
+                    updateAreaTagUI(null);
+                }
+            } else {
+                updateAreaTagUI(null);
+            }
+        }
         updateUndoRedoUI();
         if (reviewBtn && (!editorPanel || editorPanel.getAttribute('data-has-error') !== 'true')) {
             reviewBtn.disabled = false;
@@ -1166,6 +1355,26 @@ function handleRawYamlInput(textarea) {
     const hiddenInput = document.getElementById('editorContent');
     if (hiddenInput) {
         hiddenInput.value = textarea.value;
+    }
+    const val = textarea.value || '';
+    const areaMatch = val.match(/(?:^|\r?\n)\s*#?\s*@([a-zA-Z0-9_-]+)/);
+    if (areaMatch) {
+        const tagIndex = areaMatch.index;
+        const stepsIdx = val.indexOf('steps:');
+        const beforeIdx = val.indexOf('before:');
+        const dataIdx = val.indexOf('data:');
+        let firstSectionIdx = Infinity;
+        if (stepsIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, stepsIdx);
+        if (beforeIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, beforeIdx);
+        if (dataIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, dataIdx);
+
+        if (tagIndex < firstSectionIdx) {
+            updateAreaTagUI('@' + areaMatch[1]);
+        } else {
+            updateAreaTagUI(null);
+        }
+    } else {
+        updateAreaTagUI(null);
     }
     checkEditorDirtyStatus();
     checkNewVariablePrompts();
@@ -1332,6 +1541,29 @@ document.addEventListener('input', function(evt) {
 function initVisualPlaybookEditor() {
     const editorPanel = document.getElementById('editorPanel');
     if (!editorPanel) return;
+
+    // Initialize area tag from data-area or raw textarea
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    let initialTag = editorPanel.getAttribute('data-area') || '';
+    if (!initialTag && rawTextarea && rawTextarea.value) {
+        const val = rawTextarea.value || '';
+        const areaMatch = val.match(/(?:^|\r?\n)\s*#?\s*@([a-zA-Z0-9_-]+)/);
+        if (areaMatch) {
+            const tagIndex = areaMatch.index;
+            const stepsIdx = val.indexOf('steps:');
+            const beforeIdx = val.indexOf('before:');
+            const dataIdx = val.indexOf('data:');
+            let firstSectionIdx = Infinity;
+            if (stepsIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, stepsIdx);
+            if (beforeIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, beforeIdx);
+            if (dataIdx !== -1) firstSectionIdx = Math.min(firstSectionIdx, dataIdx);
+
+            if (tagIndex < firstSectionIdx) {
+                initialTag = '@' + areaMatch[1];
+            }
+        }
+    }
+    updateAreaTagUI(initialTag);
 
     const hasError = editorPanel.getAttribute('data-has-error') === 'true';
     const initialMode = editorPanel.getAttribute('data-mode') || (hasError ? 'raw' : 'visual');
@@ -1586,7 +1818,28 @@ function toggleFragmentVarScope(varName, scope) {
 window.toggleFragmentVarScope = toggleFragmentVarScope;
 
 function compilePlaybookToYaml() {
-    let yaml = "# Neodymium YAML Test Data File\n\n";
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+
+    if (!window.currentAreaTag) {
+        const ep = document.getElementById('editorPanel');
+        if (ep) {
+            const a = ep.getAttribute('data-area');
+            if (a) {
+                window.currentAreaTag = a.startsWith('@') ? a : '@' + a;
+            }
+        }
+    }
+
+    let tag = (!isFragmentFile && window.currentAreaTag) ? window.currentAreaTag.trim() : '';
+    let yaml = "";
+    if (tag) {
+        const cleanTagName = tag.replace(/^[#\s]*@?/, '').trim();
+        if (cleanTagName) {
+            yaml += `#@${cleanTagName}\n`;
+        }
+    }
+    yaml += "# Neodymium YAML Test Data File\n\n";
 
     function serializeStepRows(rows) {
         let block = "";
@@ -1650,9 +1903,6 @@ function compilePlaybookToYaml() {
             yaml += "after: |\n" + serializeStepRows(rows) + "\n";
         }
     }
-
-    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
-        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
 
     if (!isFragmentFile) {
         // data matrix (Only for test playbooks)

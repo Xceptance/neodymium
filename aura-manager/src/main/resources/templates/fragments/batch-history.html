@@ -6,6 +6,246 @@
 <!-- Batch History Fragment -->
 <div th:fragment="batchHistory" class="d-flex flex-column gap-4" id="pageBatchHistoryOverview">
 
+    <!-- BATCH FILTERS TOOLBAR -->
+    <div class="test-filters-toolbar" id="batchFiltersToolbar">
+        <div style="font-weight: 700; font-size: 0.825rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem;">
+            <span class="material-symbols-outlined text-accent">filter_alt</span> Directory Filters:
+        </div>
+
+        <!-- ENVIRONMENT MULTI-SELECT DROPDOWN CHECKBOX -->
+        <div class="multiselect-dropdown" id="batchEnvMultiselect">
+            <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="batchEnvMultiselectMenu">
+                <span><span class="material-symbols-outlined text-accent">dns</span> Environment: <strong class="js-selected-text">All Selected</strong></span>
+                <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+            </button>
+            <div class="multiselect-menu" id="batchEnvMultiselectMenu">
+                <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="batchEnvMultiselectMenu" value="ALL" checked> <strong>Select All Environments</strong></label>
+                <div class="multiselect-divider"></div>
+                <label class="multiselect-option" th:each="env : ${filterEnvs}">
+                    <input type="checkbox" class="js-chk-option" data-menu-id="batchEnvMultiselectMenu" th:value="${env}" checked> <span th:text="${env}">Default</span>
+                </label>
+                <div class="p-2 text-muted text-center" style="font-size: 0.8rem;" th:if="${#lists.isEmpty(filterEnvs)}">No Environments Available</div>
+            </div>
+        </div>
+
+        <!-- LOCALES MULTI-SELECT DROPDOWN CHECKBOX -->
+        <div class="multiselect-dropdown" id="batchLocalesMultiselect">
+            <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="batchLocalesMultiselectMenu">
+                <span><span class="material-symbols-outlined text-accent">public</span> Locales: <strong class="js-selected-text">All Selected</strong></span>
+                <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+            </button>
+            <div class="multiselect-menu" id="batchLocalesMultiselectMenu">
+                <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="batchLocalesMultiselectMenu" value="ALL" checked> <strong>Select All Locales</strong></label>
+                <div class="multiselect-divider"></div>
+                <label class="multiselect-option" th:each="loc : ${filterLocales}">
+                    <input type="checkbox" class="js-chk-option" data-menu-id="batchLocalesMultiselectMenu" th:value="${loc}" checked> <span th:text="${loc}">en</span>
+                </label>
+                <div class="p-2 text-muted text-center" style="font-size: 0.8rem;" th:if="${#lists.isEmpty(filterLocales)}">No Locales Available</div>
+            </div>
+        </div>
+
+        <!-- BROWSERS MULTI-SELECT DROPDOWN CHECKBOX -->
+        <div class="multiselect-dropdown" id="batchBrowsersMultiselect">
+            <button class="multiselect-btn js-multiselect-toggle" type="button" data-menu-id="batchBrowsersMultiselectMenu">
+                <span><span class="material-symbols-outlined text-accent">web</span> Browsers: <strong class="js-selected-text">All Selected</strong></span>
+                <span class="material-symbols-outlined" style="font-size: 1rem; color: var(--text-muted);">expand_more</span>
+            </button>
+            <div class="multiselect-menu" id="batchBrowsersMultiselectMenu">
+                <label class="multiselect-option"><input type="checkbox" class="js-chk-all" data-menu-id="batchBrowsersMultiselectMenu" value="ALL" checked> <strong>Select All Browsers</strong></label>
+                <div class="multiselect-divider"></div>
+                <label class="multiselect-option" th:each="br : ${filterBrowsers}">
+                    <input type="checkbox" class="js-chk-option" data-menu-id="batchBrowsersMultiselectMenu" th:value="${br}" checked> <span th:text="${br}">Chrome</span>
+                </label>
+                <div class="p-2 text-muted text-center" style="font-size: 0.8rem;" th:if="${#lists.isEmpty(filterBrowsers)}">No Browsers Available</div>
+            </div>
+        </div>
+
+        <!-- RESET BATCH FILTERS ICON BUTTON -->
+        <button class="btn-secondary" style="padding: 0.4rem 0.65rem; font-size: 0.825rem;" title="Reset all batch history filters" onclick="resetBatchFilters()">
+            <span class="material-symbols-outlined text-accent">restart_alt</span>
+        </button>
+    </div>
+
+    <!-- TOP SUMMARY & RATIO SECTION (LAST RUN STATUS & RATIOS) -->
+    <div class="batch-top-overview-panel" th:if="${batchSummary != null and batchSummary.hasLatestRun()}">
+        <!-- 1. LAST EXECUTION STATUS CARD -->
+        <div class="batch-last-run-section">
+            <div class="last-run-header">
+                <div class="last-run-header-top">
+                    <span class="last-run-header-title">
+                        <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">pie_chart</span>
+                        <span>Last Run Status</span>
+                    </span>
+                    <div class="last-run-header-time" th:if="${batchSummary.lastExecuted != null and batchSummary.lastExecuted != ''}">
+                        <span class="material-symbols-outlined" style="font-size: 0.85rem;">schedule</span>
+                        <span th:text="${batchSummary.lastExecuted}">Today 14:22</span>
+                    </div>
+                </div>
+            </div>
+            <div class="last-run-body">
+                <div class="pie-chart-wrapper-batch">
+                    <svg width="100%" height="100%" viewBox="0 0 36 36">
+                        <defs>
+                            <pattern th:id="'sparkle-pat-batch-history-' + ${batchSummary.id}" width="4" height="4" patternUnits="userSpaceOnUse">
+                                <path d="M2,0.5 L2.3,1.7 L3.5,2 L2.3,2.3 L2,3.5 L1.7,2.3 L0.5,2 L1.7,1.7 Z" fill="#ffffff" opacity="0.95"/>
+                                <circle cx="0.8" cy="0.8" r="0.25" fill="#fef08a" opacity="0.85"/>
+                            </pattern>
+                            <pattern th:id="'ai-pat-batch-history-' + ${batchSummary.id}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                                <line x1="0" y1="0" x2="0" y2="4" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+                            </pattern>
+                        </defs>
+                        <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--border)" stroke-width="4.5"/>
+                        <!-- Clean sub-arcs (deep solid) -->
+                        <circle th:if="${batchSummary.latestPassCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.passCleanDashArray},stroke-dashoffset=${batchSummary.passCleanDashOffset}"/>
+                        <circle th:if="${batchSummary.latestFixedCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.fixedCleanDashArray},stroke-dashoffset=${batchSummary.fixedCleanDashOffset}"/>
+                        <circle th:if="${batchSummary.latestKnownCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-fail)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.knownCleanDashArray},stroke-dashoffset=${batchSummary.knownCleanDashOffset}"/>
+                        <circle th:if="${batchSummary.latestUnknownCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-fail)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.unknownCleanDashArray},stroke-dashoffset=${batchSummary.unknownCleanDashOffset}"/>
+                        <circle th:if="${batchSummary.latestIgnoredCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-ignored)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.ignoredDashArray},stroke-dashoffset=${batchSummary.ignoredDashOffset}"/>
+
+                        <!-- Healed sub-arcs: Luminous base tint + sparkle pattern overlay -->
+                        <circle th:if="${batchSummary.latestPassHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass-healed, #34d399)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.passHealedDashArray},stroke-dashoffset=${batchSummary.passHealedDashOffset}"/>
+                        <circle th:if="${batchSummary.latestPassHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-batch-history-' + ${batchSummary.id} + ')',stroke-dasharray=${batchSummary.passHealedDashArray},stroke-dashoffset=${batchSummary.passHealedDashOffset}" stroke-width="5"/>
+
+                        <circle th:if="${batchSummary.latestFixedHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed-healed, #60a5fa)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.fixedHealedDashArray},stroke-dashoffset=${batchSummary.fixedHealedDashOffset}"/>
+                        <circle th:if="${batchSummary.latestFixedHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-batch-history-' + ${batchSummary.id} + ')',stroke-dasharray=${batchSummary.fixedHealedDashArray},stroke-dashoffset=${batchSummary.fixedHealedDashOffset}" stroke-width="5"/>
+
+                        <circle th:if="${batchSummary.latestKnownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-healed, #fb923c)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.knownHealedDashArray},stroke-dashoffset=${batchSummary.knownHealedDashOffset}"/>
+                        <circle th:if="${batchSummary.latestKnownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-batch-history-' + ${batchSummary.id} + ')',stroke-dasharray=${batchSummary.knownHealedDashArray},stroke-dashoffset=${batchSummary.knownHealedDashOffset}" stroke-width="5"/>
+
+                        <circle th:if="${batchSummary.latestUnknownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-healed, #f87171)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.unknownHealedDashArray},stroke-dashoffset=${batchSummary.unknownHealedDashOffset}"/>
+                        <circle th:if="${batchSummary.latestUnknownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-batch-history-' + ${batchSummary.id} + ')',stroke-dasharray=${batchSummary.unknownHealedDashArray},stroke-dashoffset=${batchSummary.unknownHealedDashOffset}" stroke-width="5"/>
+
+                        <!-- AI-Driven sub-arcs: Base status color + pinstripe pattern overlay -->
+                        <circle th:if="${batchSummary.latestPassAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.passAiDashArray},stroke-dashoffset=${batchSummary.passAiDashOffset}"/>
+                        <circle th:if="${batchSummary.latestPassAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-batch-history-' + ${batchSummary.id} + ')',stroke-dasharray=${batchSummary.passAiDashArray},stroke-dashoffset=${batchSummary.passAiAiOffset ?: batchSummary.passAiDashOffset}" stroke-width="5"/>
+
+                        <circle th:if="${batchSummary.latestFixedAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.fixedAiDashArray},stroke-dashoffset=${batchSummary.fixedAiDashOffset}"/>
+                        <circle th:if="${batchSummary.latestFixedAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-batch-history-' + ${batchSummary.id} + ')',stroke-dasharray=${batchSummary.fixedAiDashArray},stroke-dashoffset=${batchSummary.fixedAiDashOffset}" stroke-width="5"/>
+
+                        <circle th:if="${batchSummary.latestKnownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-fail)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.knownAiDashArray},stroke-dashoffset=${batchSummary.knownAiDashOffset}"/>
+                        <circle th:if="${batchSummary.latestKnownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-batch-history-' + ${batchSummary.id} + ')',stroke-dasharray=${batchSummary.knownAiDashArray},stroke-dashoffset=${batchSummary.knownAiDashOffset}" stroke-width="5"/>
+
+                        <circle th:if="${batchSummary.latestUnknownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-fail)" stroke-width="5" th:attr="stroke-dasharray=${batchSummary.unknownAiDashArray},stroke-dashoffset=${batchSummary.unknownAiDashOffset}"/>
+                        <circle th:if="${batchSummary.latestUnknownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-batch-history-' + ${batchSummary.id} + ')',stroke-dasharray=${batchSummary.unknownAiDashArray},stroke-dashoffset=${batchSummary.unknownAiDashOffset}" stroke-width="5"/>
+                    </svg>
+                    <!-- Center of Donut KPI Rate -->
+                    <div class="pie-center-label">
+                        <span class="pie-center-rate" th:text="${batchSummary.latestRunPassRateInt}">100%</span>
+                        <span class="pie-center-sub">PASS</span>
+                    </div>
+                </div>
+                <div class="pie-breakdown-list-sm">
+                    <div class="pie-breakdown-item" th:if="${batchSummary.latestPassedCount > 0}">
+                        <div class="label"><div class="dot" style="background: var(--status-pass);"></div> Passed</div>
+                        <div class="val-group">
+                            <span th:if="${batchSummary.latestPassHealedCount > 0}" class="badge-healed-inline badge-pass-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${batchSummary.latestPassHealedCount} + ' healed'">✨ 1 healed</span>
+                            <span th:if="${batchSummary.latestPassAiCount > 0}" class="badge-ai-inline badge-pass-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${batchSummary.latestPassAiCount} + ' AI'">1 AI</span>
+                            <span class="val" style="color: var(--status-pass);" th:text="${batchSummary.latestPassedCount}">0</span>
+                        </div>
+                    </div>
+                    <div class="pie-breakdown-item" th:if="${batchSummary.latestFixedCount > 0}">
+                        <div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Fixed</div>
+                        <div class="val-group">
+                            <span th:if="${batchSummary.latestFixedHealedCount > 0}" class="badge-healed-inline badge-fixed-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${batchSummary.latestFixedHealedCount} + ' healed'">✨ 1 healed</span>
+                            <span th:if="${batchSummary.latestFixedAiCount > 0}" class="badge-ai-inline badge-fixed-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${batchSummary.latestFixedAiCount} + ' AI'">1 AI</span>
+                            <span class="val" style="color: var(--status-fixed);" th:text="${batchSummary.latestFixedCount}">0</span>
+                        </div>
+                    </div>
+                    <div class="pie-breakdown-item" th:if="${batchSummary.latestKnownCount > 0}">
+                        <div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Fail</div>
+                        <div class="val-group">
+                            <span th:if="${batchSummary.latestKnownHealedCount > 0}" class="badge-healed-inline badge-known-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${batchSummary.latestKnownHealedCount} + ' healed'">✨ 1 healed</span>
+                            <span th:if="${batchSummary.latestKnownAiCount > 0}" class="badge-ai-inline badge-known-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${batchSummary.latestKnownAiCount} + ' AI'">1 AI</span>
+                            <span class="val" style="color: var(--status-known-fail);" th:text="${batchSummary.latestKnownCount}">0</span>
+                        </div>
+                    </div>
+                    <div class="pie-breakdown-item" th:if="${batchSummary.latestUnknownCount > 0}">
+                        <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Fail</div>
+                        <div class="val-group">
+                            <span th:if="${batchSummary.latestUnknownHealedCount > 0}" class="badge-healed-inline badge-unknown-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${batchSummary.latestUnknownHealedCount} + ' healed'">✨ 1 healed</span>
+                            <span th:if="${batchSummary.latestUnknownAiCount > 0}" class="badge-ai-inline badge-unknown-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${batchSummary.latestUnknownAiCount} + ' AI'">1 AI</span>
+                            <span class="val" style="color: var(--status-unknown-fail);" th:text="${batchSummary.latestUnknownCount}">0</span>
+                        </div>
+                    </div>
+                    <div class="pie-breakdown-item" th:if="${batchSummary.latestIgnoredCount > 0}">
+                        <div class="label"><div class="dot" style="background: var(--status-ignored);"></div> Ignored</div>
+                        <div class="val-group">
+                            <span class="val" style="color: var(--status-ignored);" th:text="${batchSummary.latestIgnoredCount}">0</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div style="margin-top: auto; padding-top: 0.5rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+                <button class="btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.6rem; display: inline-flex; align-items: center; gap: 0.3rem;"
+                        th:attr="hx-get='/run-report?runId=' + ${batchSummary.latestRunId}"
+                        hx-target="#mainViewContainer"
+                        hx-swap="innerHTML"
+                        hx-push-url="true">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">analytics</span>
+                    <span>Open Last Report</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- 2. BROWSER RATIO CARD -->
+        <div class="ratio-card">
+            <div class="ratio-card-header">
+                <div class="ratio-card-title">
+                    <span class="material-symbols-outlined text-accent" style="font-size: 1rem;">web</span>
+                    <span>Browser Ratio</span>
+                </div>
+            </div>
+            <div class="ratio-stacked-bar" th:if="${not #lists.isEmpty(browserRatios)}">
+                <div th:each="br : ${browserRatios}" 
+                     class="ratio-bar-seg" 
+                     th:style="'width: ' + ${#numbers.formatDecimal(br.percentage, 1, 'POINT', 2, 'POINT')} + '%; background-color: ' + ${br.color} + ';'"
+                     th:title="${br.name + ': ' + br.count + ' executions (' + br.formattedPercentage + ')'}"
+                     th:text="${br.percentage >= 15 ? br.formattedPercentage : ''}">100%</div>
+            </div>
+            <div class="ratio-legend-list" th:if="${not #lists.isEmpty(browserRatios)}">
+                <div th:each="br : ${browserRatios}" class="ratio-legend-chip">
+                    <span class="dot" th:style="'background: ' + ${br.color} + ';'"></span>
+                    <span th:text="${br.name}">Chrome</span>
+                    <span class="val" th:text="${br.count + ' (' + br.formattedPercentage + ')'}">1 (100%)</span>
+                </div>
+            </div>
+            <div class="text-muted" style="font-size: 0.8rem; padding: 0.5rem 0;" th:if="${#lists.isEmpty(browserRatios)}">
+                No browser data available.
+            </div>
+        </div>
+
+        <!-- 3. LOCALE RATIO CARD & ENVIRONMENT -->
+        <div class="ratio-card">
+            <div class="ratio-card-header">
+                <div class="ratio-card-title">
+                    <span class="material-symbols-outlined text-accent" style="font-size: 1rem;">public</span>
+                    <span>Locale Ratio</span>
+                </div>
+                <div style="font-size: 0.72rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.25rem;">
+                    <span class="material-symbols-outlined text-accent" style="font-size: 0.85rem;">dns</span>
+                    <span>Env: <strong style="color: var(--status-fixed);" th:text="${batchEnvironment ?: 'Default'}">Default</strong></span>
+                </div>
+            </div>
+            <div class="ratio-stacked-bar" th:if="${not #lists.isEmpty(localeRatios)}">
+                <div th:each="loc : ${localeRatios}" 
+                     class="ratio-bar-seg" 
+                     th:style="'width: ' + ${#numbers.formatDecimal(loc.percentage, 1, 'POINT', 2, 'POINT')} + '%; background-color: ' + ${loc.color} + ';'"
+                     th:title="${loc.name + ': ' + loc.count + ' executions (' + loc.formattedPercentage + ')'}"
+                     th:text="${loc.percentage >= 15 ? loc.formattedPercentage : ''}">100%</div>
+            </div>
+            <div class="ratio-legend-list" th:if="${not #lists.isEmpty(localeRatios)}">
+                <div th:each="loc : ${localeRatios}" class="ratio-legend-chip">
+                    <span class="dot" th:style="'background: ' + ${loc.color} + ';'"></span>
+                    <span th:text="${loc.name}">en</span>
+                    <span class="val" th:text="${loc.count + ' (' + loc.formattedPercentage + ')'}">1 (100%)</span>
+                </div>
+            </div>
+            <div class="text-muted" style="font-size: 0.8rem; padding: 0.5rem 0;" th:if="${#lists.isEmpty(localeRatios)}">
+                No locale data available.
+            </div>
+        </div>
+    </div>
+
     <!-- BATCH HISTORY LIMIT TOOLBAR -->
     <div class="batch-history-toolbar">
         <div class="d-flex align-items-center gap-3 flex-wrap justify-content-between w-100">
@@ -65,47 +305,28 @@
                 </div>
             </div>
 
-            <!-- Summary counter badge -->
-            <div class="history-count-badge">
-                <span class="material-symbols-outlined text-accent" style="font-size: 1rem; vertical-align: middle;">info</span>
-                <span th:if="${currentLimit != null && currentLimit < totalRunsCount}"
-                      th:text="'Showing last ' + ${showingRunsCount} + ' of ' + ${totalRunsCount} + ' total runs'">Showing last 10 of 48 total runs</span>
-                <span th:unless="${currentLimit != null && currentLimit < totalRunsCount}"
-                      th:text="'Showing all ' + ${totalRunsCount} + ' runs'">Showing all 48 runs</span>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button" class="btn-primary flex-center gap-1 btn-run-batch-main"
+                        style="background: var(--status-pass, #10b981); border-color: var(--status-pass, #10b981); color: #fff; font-size: 0.85rem; padding: 0.45rem 0.9rem; border-radius: 6px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center;"
+                        th:attr="data-batch-name=${batchName}"
+                        onclick="runBatch(this.getAttribute('data-batch-name'))"
+                        title="Execute this batch suite now">
+                    <span class="material-symbols-outlined" style="font-size: 1.1rem;">play_arrow</span>
+                    <span>Run Batch</span>
+                </button>
+
+                <!-- Summary counter badge -->
+                <div class="history-count-badge">
+                    <span class="material-symbols-outlined text-accent" style="font-size: 1rem; vertical-align: middle;">info</span>
+                    <span th:if="${currentLimit != null && currentLimit < totalRunsCount}"
+                          th:text="'Showing last ' + ${showingRunsCount} + ' of ' + ${totalRunsCount} + ' total runs'">Showing last 10 of 48 total runs</span>
+                    <span th:unless="${currentLimit != null && currentLimit < totalRunsCount}"
+                          th:text="'Showing all ' + ${totalRunsCount} + ' runs'">Showing all 48 runs</span>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- BATCH ENVIRONMENT & CONTAINED METADATA BANNER -->
-    <div class="batch-env-card">
-        <div class="env-meta-item">
-            <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">dns</span>
-            <div>
-                <div class="env-meta-label">Assigned Environment (Single)</div>
-                <div style="color: var(--status-fixed); font-weight: 700;" th:text="${batchEnvironment ?: 'Default'}">Default</div>
-            </div>
-        </div>
-        <div class="env-meta-item">
-            <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">public</span>
-            <div>
-                <div class="env-meta-label">Locales Contained in Batch</div>
-                <div style="display: flex; gap: 0.35rem; margin-top: 0.15rem; flex-wrap: wrap;">
-                    <span th:each="loc : ${batchLocales}" class="tag-chip" th:text="${loc}">Default</span>
-                    <span th:if="${batchLocales == null || batchLocales.isEmpty()}" class="tag-chip">Default</span>
-                </div>
-            </div>
-        </div>
-        <div class="env-meta-item">
-            <span class="material-symbols-outlined text-accent" style="font-size: 1.1rem;">web</span>
-            <div>
-                <div class="env-meta-label">Browsers Contained in Batch</div>
-                <div style="display: flex; gap: 0.35rem; margin-top: 0.15rem; flex-wrap: wrap;">
-                    <span th:each="b : ${batchBrowsers}" class="tag-chip"><span class="material-symbols-outlined">language</span> <span th:text="${b}">Chrome</span></span>
-                    <span th:if="${batchBrowsers == null || batchBrowsers.isEmpty()}" class="tag-chip"><span class="material-symbols-outlined">language</span> Chrome</span>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <!-- HISTORY TREND CHART CARD -->
     <div class="allure-trend-card">
@@ -209,7 +430,7 @@
                             <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">insights</span>
                             <strong style="color: var(--text-main); font-size: 0.84rem;">Run Details</strong>
                         </div>
-                        <span class="badge-status badge-pass" id="ttPassRate" style="font-size: 0.7rem; padding: 0.1rem 0.45rem; white-space: nowrap; flex-shrink: 0;" th:text="${runs != null and !runs.empty ? runs[0].passRate + '% PASS' : '0% PASS'}">0% PASS</span>
+                        <span class="badge-status badge-pass" id="ttPassRate" style="font-size: 0.7rem; padding: 0.1rem 0.45rem; white-space: nowrap; flex-shrink: 0;" th:text="${runs != null and !runs.empty ? (runs[0].passRate != null ? #numbers.formatDecimal(runs[0].passRate, 1, 0) : '0') + '% PASS' : '0% PASS'}">0% PASS</span>
                     </div>
                     <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">
                         <span class="text-truncate" id="ttRunId" style="max-width: 175px;" th:text="${runs != null and !runs.empty ? '#' + runs[0].id : '#RUN_ID'}">#RUN_ID</span>
@@ -304,7 +525,7 @@
         <div class="area-trend-grid">
             <div th:each="area : ${areaTrends}" class="area-trend-card">
                 <div class="area-trend-header">
-                    <div class="area-trend-title"><span class="material-symbols-outlined text-accent">folder</span> Area: @<span th:text="${area.areaName}">Area</span></div>
+                    <div class="area-trend-title"><span class="material-symbols-outlined text-accent">folder</span> Area: <span th:text="${area.areaName != null ? (area.areaName.startsWith('@') ? area.areaName : '@' + area.areaName) : ''}">Area</span></div>
                     <span th:class="'badge-status ' + ${area.latestStatusBadgeClass}" th:text="${area.latestStatusLabel}">0 Executions in Last Run</span>
                 </div>
                 <div class="area-stacked-svg-container">
@@ -359,23 +580,28 @@
         </div>
 
         <div class="table-responsive">
-            <table class="aura-table history-table" style="table-layout: fixed; width: 100%;">
+            <table class="aura-table">
                 <thead>
                     <tr>
-                        <th style="width: 14%; min-width: 18ch;">Run ID</th>
-                        <th style="width: 14%;">Batch Name</th>
-                        <th style="width: 13%;">Timestamp</th>
-                        <th style="width: 12%;">Trigger Source</th>
-                        <th style="width: 10%;">Total Tests</th>
-                        <th style="width: 21%;">Status Breakdown</th>
-                        <th style="width: 9%;">Pass Rate</th>
-                        <th style="width: 7%;">Action</th>
+                        <th>Run ID</th>
+                        <th>Trigger</th>
+                        <th>Environment</th>
+                        <th>Locales</th>
+                        <th>Browsers</th>
+                        <th>Total</th>
+                        <th style="min-width: 220px;">Status Breakdown</th>
+                        <th>Pass Rate</th>
+                        <th>Timestamp</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody id="batchRunsHistoryTableBody">
                     <tr th:each="run, iterStat : ${runs}" class="clickable-row run-history-row" 
                         th:attr="hx-get='/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true"
                         th:data-run-id="${run.id}"
+                        th:data-env="${run.environment}"
+                        th:data-locales="${run.localesCsv}"
+                        th:data-browsers="${run.browsersCsv}"
                         th:data-pass="${run.passedCount}"
                         th:data-fixed="${run.succeededFixedCount}"
                         th:data-known="${run.failedKnownCount}"
@@ -389,17 +615,15 @@
                         th:data-fixed-ai="${run.fixedAiCountSafe}"
                         th:data-known-ai="${run.knownAiCountSafe}"
                         th:data-unknown-ai="${run.unknownAiCountSafe}"
-                        th:data-rate="${run.passRate + '% Pass'}"
+                        th:data-rate="${(run.passRate != null ? #numbers.formatDecimal(run.passRate, 1, 0) : '0') + '% Pass'}"
                         th:data-total="${run.totalTests != null ? run.totalTests : 0}"
                         th:data-time="${run.timestampLabel}">
-                        <td>
-                            <strong class="text-mono text-accent" style="font-size: 0.95rem;" th:text="'#' + ${run.id}">#RUN_ID</strong> 
-                            <span class="tag-chip" style="background: var(--status-pass-bg); color: var(--status-pass); border: 1px solid var(--status-pass-border);" th:if="${iterStat.first}">LATEST</span>
-                        </td>
-                        <td><span class="tag-batch"><span class="material-symbols-outlined">layers</span> <span th:text="${run.batchName}">Default</span></span></td>
-                        <td class="js-format-timestamp" th:data-timestamp-ms="${run.startTimeMs}" th:text="${run.timestampLabel}">Recently</td>
-                        <td><span class="material-symbols-outlined">smart_toy</span> <span th:text="${run.triggerSource}">Unknown</span></td>
-                        <td><strong class="text-mono" th:text="${run.totalTests != null ? run.totalTests + ' Tests' : '0 Tests'}">8 Tests</strong></td>
+                        <td><strong class="text-mono" th:text="'#' + ${run.id}">#RUN_ID</strong></td>
+                        <td><span class="tag-trigger" th:text="${run.triggerSource}">Unknown</span></td>
+                        <td><span class="tag-env" th:text="${run.environment}">Default</span></td>
+                        <td th:text="${run.localesCsv}">Default</td>
+                        <td th:text="${run.browsersCsv}">Chrome</td>
+                        <td class="text-mono" th:text="${run.totalTests}">0</td>
                         <td style="min-width: 220px; vertical-align: middle;">
                             <div class="status-stacked-bar">
                                 <div th:if="${run.passedCleanCount > 0}" class="status-bar-seg seg-pass" th:style="'width:' + ${#numbers.formatDecimal(run.passedCleanPct, 1, 'POINT', 2, 'POINT')} + '%;'" th:title="${run.passedCleanTooltip}" th:text="${run.passedCleanLabel}">3</div>
@@ -419,22 +643,22 @@
                         </td>
                         <td>
                             <span th:if="${run.status == 'IN_PROGRESS'}" class="badge-status badge-running"><span class="material-symbols-outlined spin" style="font-size: 0.85rem; vertical-align: middle;">sync</span> RUNNING</span>
-                            <span th:unless="${run.status == 'IN_PROGRESS'}" class="badge-status badge-pass" th:text="${run.passRate + '% Pass'}">37.5% Pass</span>
+                            <span th:unless="${run.status == 'IN_PROGRESS'}" class="badge-status badge-pass" th:text="${(run.passRate != null ? #numbers.formatDecimal(run.passRate, 1, 0) : '0') + '% Pass'}">37.5% Pass</span>
                         </td>
+                        <td class="text-muted js-format-timestamp" th:data-timestamp-ms="${run.startTimeMs}" th:text="${run.timestampLabel}">Recently</td>
                         <td>
                             <div style="display: flex; gap: 0.35rem; align-items: center;">
-                                <button class="btn-primary" style="padding: 0.35rem 0.65rem; font-size: 0.8rem;"
-                                        th:attr="hx-get='/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" onclick="event.stopPropagation();">
-                                    <span class="material-symbols-outlined">trending_up</span> Open
+                                <button class="btn-secondary" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:attr="hx-get='/run-report?runId=' + ${run.id}" hx-target="#mainViewContainer" hx-swap="innerHTML" hx-push-url="true" onclick="event.stopPropagation();">
+                                    <span class="material-symbols-outlined" style="font-size: 0.875rem;">visibility</span> Inspect
                                 </button>
-                                <button class="btn-danger-subtle" style="padding: 0.35rem 0.5rem; font-size: 0.8rem;" th:title="'Remove run #' + ${run.id} + ' from history'" th:attr="onclick='deleteRunFromHistory(\'' + ${run.id} + '\', event)'">
-                                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">delete</span>
+                                <button class="btn-danger-subtle" style="padding: 0.25rem 0.5rem; font-size: 0.75rem;" th:title="'Remove run #' + ${run.id} + ' from history'" th:attr="onclick='deleteRunFromHistory(\'' + ${run.id} + '\', event)'">
+                                    <span class="material-symbols-outlined" style="font-size: 0.875rem;">delete</span>
                                 </button>
                             </div>
                         </td>
                     </tr>
                     <tr th:if="${#lists.isEmpty(runs)}">
-                        <td colspan="8" class="text-center py-4 text-muted">
+                        <td colspan="10" class="text-center py-4 text-muted">
                             No test runs found for this batch.
                         </td>
                     </tr>

@@ -177,4 +177,70 @@ public final class RunReportDtoTest
         Assertions.assertEquals(List.of("Default", "en_US"), report.getFilterLocales());
         Assertions.assertEquals(List.of("Default", "en_US"), report.getFilterLocations());
     }
+
+    @Test
+    public void testPassRateAndCleanCountCalculations()
+    {
+        final RunReportDto emptyReport = new RunReportDto("run0", "batch0", "2026-08-20", "0s", 0, 0, 0, 0, 0, 0, List.of());
+        Assertions.assertEquals("0%", emptyReport.getPassRateInt());
+        Assertions.assertEquals("N/A", emptyReport.getPassRateText());
+
+        // 3 executions: 2 passed (clean), 1 unknown fail
+        final RunReportDto report = new RunReportDto("run1", "batch1", "2026-08-20", "8m 34s", 3, 2, 0, 0, 1, 0, List.of());
+        Assertions.assertEquals("67%", report.getPassRateInt());
+        Assertions.assertEquals("67% Pass", report.getPassRateText());
+        Assertions.assertEquals(2, report.getPassCleanCount());
+        Assertions.assertEquals(1, report.getUnknownCleanCount());
+        Assertions.assertEquals(0, report.getFixedCleanCount());
+        Assertions.assertEquals(0, report.getKnownCleanCount());
+
+        // Dash arrays & offsets
+        Assertions.assertEquals("25", report.getPassCleanDashOffset());
+        Assertions.assertTrue(report.getPassCleanDashArray().startsWith("66.67"));
+        Assertions.assertTrue(report.getUnknownCleanDashArray().startsWith("33.33"));
+    }
+
+    @Test
+    public void testBrowserAndLocaleRatios()
+    {
+        final TestExecutionDto exec1 = new TestExecutionDto(
+            "id1", "run1", "TestClassA", "TitleA", "testA", "playbookA", "testA.json",
+            "passed-clean", "Java", "US", "en_US", "Chrome", "NONE", new ArrayList<>(),
+            "", "Browsing", new ArrayList<>(), null, null, null, null,
+            "t1", "d1", "RECORDING", "RECORDING", "10:00:00", "2026-08-20",
+            "10:00:00", 1000L, 5, 0, 5000L, "5.0s", 0, 0L, 0.0, ""
+        );
+        final TestExecutionDto exec2 = new TestExecutionDto(
+            "id2", "run1", "TestClassB", "TitleB", "testB", "playbookB", "testB.json",
+            "passed-clean", "Java", "US", "en_US", "Chrome", "NONE", new ArrayList<>(),
+            "", "Browsing", new ArrayList<>(), null, null, null, null,
+            "t2", "d2", "RECORDING", "RECORDING", "10:00:01", "2026-08-20",
+            "10:00:01", 2000L, 5, 0, 3000L, "3.0s", 0, 0L, 0.0, ""
+        );
+        final TestExecutionDto exec3 = new TestExecutionDto(
+            "id3", "run1", "TestClassC", "TitleC", "testC", "playbookC", "testC.json",
+            "failed-unknown", "Java", "US", "en_US", "Firefox", "NONE", new ArrayList<>(),
+            "", "Browsing", new ArrayList<>(), null, null, null, null,
+            "t3", "d3", "RECORDING", "RECORDING", "10:00:02", "2026-08-20",
+            "10:00:02", 3000L, 5, 0, 2000L, "2.0s", 0, 0L, 0.0, ""
+        );
+
+        final List<TestExecutionDto> execs = List.of(exec1, exec2, exec3);
+        final RunReportDto report = new RunReportDto("run1", "batch1", "2026-08-20", "8m 34s", 3, 2, 0, 0, 1, 0, execs);
+
+        final List<DistributionRatioDto> browserRatios = report.getBrowserRatios();
+        Assertions.assertEquals(2, browserRatios.size());
+        Assertions.assertEquals("Chrome", browserRatios.get(0).getName());
+        Assertions.assertEquals(2, browserRatios.get(0).getCount());
+        Assertions.assertEquals("67%", browserRatios.get(0).getFormattedPercentage());
+        Assertions.assertEquals("Firefox", browserRatios.get(1).getName());
+        Assertions.assertEquals(1, browserRatios.get(1).getCount());
+        Assertions.assertEquals("33%", browserRatios.get(1).getFormattedPercentage());
+
+        final List<DistributionRatioDto> localeRatios = report.getLocaleRatios();
+        Assertions.assertEquals(1, localeRatios.size());
+        Assertions.assertEquals("en_US", localeRatios.get(0).getName());
+        Assertions.assertEquals(3, localeRatios.get(0).getCount());
+        Assertions.assertEquals("100%", localeRatios.get(0).getFormattedPercentage());
+    }
 }

@@ -131,6 +131,62 @@
     </div>
 </div>
 
+<!-- SAVE QUEUE AS BATCH MODAL FRAGMENT -->
+<div class="modal-overlay" id="saveBatchModal" th:fragment="saveBatchModal" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="material-symbols-outlined" style="color: var(--accent);">playlist_add</span>
+                <span>Save Queue as Batch</span>
+            </div>
+        </div>
+        <form onsubmit="event.preventDefault(); submitSaveBatch();">
+            <div class="modal-body">
+                <label class="neo-u-47">Batch Name</label>
+                <input class="modal-input" id="saveBatchNameInput" name="batchName" placeholder="e.g. SmokeTests or Regression_v2" type="text" required autofocus/>
+                
+                <label class="neo-u-47" style="margin-top: 10px;">Environment</label>
+                <input class="modal-input" id="saveBatchEnvInput" name="environment" placeholder="e.g. Staging, Production, or Local" type="text" value="Staging"/>
+
+                <label class="neo-u-47" style="margin-top: 10px;">Description (Optional)</label>
+                <textarea class="modal-input" id="saveBatchDescInput" name="description" placeholder="Brief description of tests included in this batch..." rows="2" style="resize: vertical;"></textarea>
+
+                <div id="saveBatchError" class="error-message" style="color: var(--color-danger, #ef4444); margin-top: 8px; font-size: 0.875rem; display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-editor" id="closeSaveBatchModalBtn" onclick="closeSaveBatchModal()">Cancel</button>
+                <button type="button" class="btn-primary neo-u-48" id="submitSaveBatchBtn" onclick="submitSaveBatch()">Save Batch</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ASSIGN TO AREA MODAL FRAGMENT -->
+<div class="modal-overlay" id="assignAreaModal" th:fragment="assignAreaModal" style="display: none;">
+    <div class="modal-card">
+        <div class="modal-header">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="material-symbols-outlined" style="color: var(--accent);">label</span>
+                <span>Assign to Area</span>
+            </div>
+        </div>
+        <form onsubmit="event.preventDefault(); submitAssignArea();">
+            <div class="modal-body">
+                <label class="neo-u-47">Area Name / Tag</label>
+                <input class="modal-input" id="assignAreaTagInput" name="areaTag" placeholder="e.g. Checkout, @Checkout, or #@Checkout" type="text" required autofocus/>
+                <div style="font-size: 11.5px; color: var(--text-secondary, #64748b); margin-top: 4px; line-height: 1.4;">
+                    Assigns an area category tag (e.g. <code>#@Checkout</code>) to this test playbook.
+                </div>
+                <div id="assignAreaError" class="error-message" style="color: var(--color-danger, #ef4444); margin-top: 8px; font-size: 0.875rem; display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-editor" id="closeAssignAreaModalBtn" onclick="closeAssignAreaModal()">Cancel</button>
+                <button type="button" class="btn-primary neo-u-48" id="submitAssignAreaBtn" onclick="submitAssignArea()">Assign</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 </body>
 </html>
 

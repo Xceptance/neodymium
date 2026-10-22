@@ -18,8 +18,13 @@
  */
 package com.xceptance.aura.test.controller;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.JsonObject;
+import com.xceptance.aura.report.entity.TestBatchEntity;
+import com.xceptance.aura.report.repository.TestBatchRepository;
+import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import com.google.gson.Gson;
 import com.xceptance.neodymium.aura.AuraFileService;
@@ -32,7 +37,11 @@ import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.File;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -50,6 +59,7 @@ import org.neodymium.common.browser.configuration.BrowserConfiguration;
 import org.neodymium.common.browser.configuration.MultibrowserConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -78,6 +88,10 @@ public class AuraTestQueueController
 
     private final AuraInteractiveService interactiveService;
 
+    private final TestBatchRepository batchRepository;
+
+    private final AuraReportDataService reportDataService;
+
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final List<DatasetSelection> selectedQueue = Collections.synchronizedList(new ArrayList<>());
@@ -95,9 +109,19 @@ public class AuraTestQueueController
     public AuraTestQueueController(final AuraQueueService queueService, final AuraFileService fileService,
         final AuraInteractiveService interactiveService)
     {
+        this(queueService, fileService, interactiveService, null, null);
+    }
+
+    @Autowired
+    public AuraTestQueueController(final AuraQueueService queueService, final AuraFileService fileService,
+        final AuraInteractiveService interactiveService, final TestBatchRepository batchRepository,
+        final AuraReportDataService reportDataService)
+    {
         this.queueService = queueService;
         this.fileService = fileService;
         this.interactiveService = interactiveService;
+        this.batchRepository = batchRepository;
+        this.reportDataService = reportDataService;
 
         final List<BrowserProfileDto> available = getAvailableBrowserProfiles();
         if (!available.isEmpty())
@@ -1062,6 +1086,12 @@ public class AuraTestQueueController
             req.globalBrowserProfiles = new ArrayList<>(globalBrowserProfiles);
         }
 
+        final String paramBatchName = request != null ? request.getParameter("batchName") : null;
+        if (req.batchName == null && paramBatchName != null && !paramBatchName.isBlank())
+        {
+            req.batchName = paramBatchName.trim();
+        }
+
         if (req.datasets == null || req.datasets.isEmpty())
         {
             LOGGER.error("[Aura Server] Run queue request failed: No datasets in queue");
@@ -1112,6 +1142,8 @@ public class AuraTestQueueController
         statusObj.put("skipped", queueService.getGlobalSkipped());
         final String runId = queueService.getCurrentRunId();
         statusObj.put("runId", runId != null ? runId : "");
+        final String currentBatch = queueService.getCurrentBatchName();
+        statusObj.put("batchName", currentBatch != null ? currentBatch : "");
         statusObj.put("runReportUrl", (runId != null && !runId.isEmpty()) ? "/run-report?runId=" + runId : "");
         statusObj.put("running", queueService.isRunningQueue());
         statusObj.put("activeFile", queueService.getActiveFile());
@@ -1266,5 +1298,302 @@ public class AuraTestQueueController
             fileService.acceptPlaybookHealing(file, datasetId, stepIndex, actionIndex);
         }
         return renderPlaybookSidePanel(file, datasetId, model);
+    }
+
+    public ResponseEntity<Map<String, Object>> saveQueueAsBatch(
+        final String batchName,
+        final String environment,
+        final String description)
+    {
+        return saveQueueAsBatch(null, batchName, environment, description);
+    }
+
+    @PostMapping("/api/batch/save")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> saveQueueAsBatch(
+        final HttpServletRequest request,
+        @RequestParam(value = "batchName", required = false) final String batchNameParam,
+        @RequestParam(value = "environment", required = false) final String envParam,
+        @RequestParam(value = "description", required = false) final String descParam)
+    {
+        String name = batchNameParam;
+        String env = envParam;
+        String desc = descParam;
+
+        if ((name == null || name.isBlank()) && request != null)
+        {
+            try
+            {
+                final String body = new String(request.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+                if (body.startsWith("{"))
+                {
+                    final JsonObject obj = GSON.fromJson(body, JsonObject.class);
+                    if (obj.has("batchName") && !obj.get("batchName").isJsonNull())
+                    {
+                        name = obj.get("batchName").getAsString();
+                    }
+                    else if (obj.has("name") && !obj.get("name").isJsonNull())
+                    {
+                        name = obj.get("name").getAsString();
+                    }
+                    if (obj.has("environment") && !obj.get("environment").isJsonNull())
+                    {
+                        env = obj.get("environment").getAsString();
+                    }
+                    if (obj.has("description") && !obj.get("description").isJsonNull())
+                    {
+                        desc = obj.get("description").getAsString();
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (name == null || name.isBlank())
+        {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "status", "error",
+                "message", "Batch name is required."
+            ));
+        }
+
+        final String finalBatchName = name.trim();
+        final String finalEnv = (env != null && !env.isBlank()) ? env.trim() : "Default";
+        final String finalDesc = (desc != null) ? desc.trim() : "";
+
+        final List<DatasetSelection> queueToSave = new ArrayList<>(selectedQueue);
+        if (queueToSave.isEmpty())
+        {
+            final String activeFile = fileService != null ? fileService.getActiveEditingFile() : null;
+            if (activeFile != null && !activeFile.isBlank())
+            {
+                final DatasetSelection sel = new DatasetSelection();
+                sel.file = activeFile;
+                sel.id = null;
+                queueToSave.add(sel);
+            }
+        }
+
+        if (queueToSave.isEmpty())
+        {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "status", "error",
+                "message", "Cannot save an empty queue as a batch."
+            ));
+        }
+
+        final Set<String> containedBrowsers = new LinkedHashSet<>(globalBrowserProfiles);
+        for (final DatasetSelection ds : queueToSave)
+        {
+            if (ds.browserProfiles != null && !ds.browserProfiles.isEmpty())
+            {
+                containedBrowsers.addAll(ds.browserProfiles);
+            }
+        }
+        final String browsersCsv = !containedBrowsers.isEmpty() ? String.join(", ", containedBrowsers) : "Chrome";
+        final String localesCsv = "Default";
+
+        String testsJson = "[]";
+        try
+        {
+            testsJson = objectMapper.writeValueAsString(queueToSave);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to serialize batch test queue: {}", e.getMessage());
+        }
+
+        if (batchRepository != null)
+        {
+            final TestBatchEntity existing = batchRepository.findById(finalBatchName).orElse(null);
+            final String latestRunId = existing != null ? existing.getLatestRunId() : null;
+            final TestBatchEntity batchEntity = new TestBatchEntity(
+                finalBatchName,
+                finalEnv,
+                finalDesc,
+                localesCsv,
+                browsersCsv,
+                latestRunId,
+                testsJson
+            );
+            batchRepository.save(batchEntity);
+            LOGGER.info("Saved batch '{}' to database with {} queued test(s)", finalBatchName, queueToSave.size());
+        }
+
+        try
+        {
+            final Path batchesDir = Paths.get("storage/batches");
+            if (!Files.exists(batchesDir))
+            {
+                Files.createDirectories(batchesDir);
+            }
+            final Path batchFile = batchesDir.resolve(finalBatchName.replaceAll("[^a-zA-Z0-9_.-]", "_") + ".json");
+            final Map<String, Object> diskBatchData = new LinkedHashMap<>();
+            diskBatchData.put("name", finalBatchName);
+            diskBatchData.put("environment", finalEnv);
+            diskBatchData.put("description", finalDesc);
+            diskBatchData.put("locales", localesCsv);
+            diskBatchData.put("browsers", browsersCsv);
+            diskBatchData.put("tests", queueToSave);
+            Files.writeString(batchFile, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(diskBatchData), StandardCharsets.UTF_8);
+            LOGGER.info("Saved batch manifest to disk: {}", batchFile.toAbsolutePath());
+        }
+        catch (final Exception e)
+        {
+            LOGGER.warn("Failed to write batch manifest to disk: {}", e.getMessage());
+        }
+
+        if (reportDataService != null)
+        {
+            reportDataService.clearCache();
+        }
+
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "status", "success",
+            "batchName", finalBatchName,
+            "testCount", queueToSave.size(),
+            "message", "Batch '" + finalBatchName + "' saved successfully."
+        ));
+    }
+
+    public ResponseEntity<Map<String, Object>> runBatch(final String batchName)
+    {
+        return runBatch(null, batchName);
+    }
+
+    @PostMapping({"/api/batch/run", "/api/batch/execute"})
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> runBatch(
+        final HttpServletRequest request,
+        @RequestParam(value = "batchName", required = false) final String batchNameParam)
+    {
+        String name = batchNameParam;
+        if ((name == null || name.isBlank()) && request != null)
+        {
+            try
+            {
+                final String body = new String(request.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+                if (body.startsWith("{"))
+                {
+                    final JsonObject obj = GSON.fromJson(body, JsonObject.class);
+                    if (obj.has("batchName") && !obj.get("batchName").isJsonNull())
+                    {
+                        name = obj.get("batchName").getAsString();
+                    }
+                    else if (obj.has("name") && !obj.get("name").isJsonNull())
+                    {
+                        name = obj.get("name").getAsString();
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+
+        if (name == null || name.isBlank())
+        {
+            return ResponseEntity.badRequest().body(Map.of("success", false, "status", "error", "message", "Batch name cannot be empty."));
+        }
+
+        final String finalBatchName = name.trim();
+
+        if (queueService.isRunningQueue())
+        {
+            return ResponseEntity.status(409).body(Map.of("success", false, "status", "error", "message", "A test queue execution is already in progress."));
+        }
+
+        List<DatasetSelection> datasets = new ArrayList<>();
+        boolean batchFound = false;
+
+        if (batchRepository != null)
+        {
+            final TestBatchEntity entity = batchRepository.findById(finalBatchName).orElse(null);
+            if (entity != null)
+            {
+                batchFound = true;
+                if (entity.getTestsJson() != null && !entity.getTestsJson().isBlank())
+                {
+                    try
+                    {
+                        datasets = objectMapper.readValue(entity.getTestsJson(), new TypeReference<List<DatasetSelection>>() {});
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.warn("Failed to parse testsJson from database entity for batch '{}': {}", finalBatchName, e.getMessage());
+                    }
+                }
+            }
+        }
+
+        final Path batchFile = Paths.get("storage/batches", finalBatchName.replaceAll("[^a-zA-Z0-9_.-]", "_") + ".json");
+        if (Files.exists(batchFile))
+        {
+            batchFound = true;
+            if (datasets.isEmpty())
+            {
+                try
+                {
+                    final String content = Files.readString(batchFile, StandardCharsets.UTF_8);
+                    final JsonNode rootNode = objectMapper.readTree(content);
+                    if (rootNode.has("tests") && rootNode.path("tests").isArray())
+                    {
+                        datasets = objectMapper.convertValue(rootNode.path("tests"), new TypeReference<List<DatasetSelection>>() {});
+                    }
+                }
+                catch (final Exception e)
+                {
+                    LOGGER.warn("Failed to parse disk batch manifest {}: {}", batchFile, e.getMessage());
+                }
+            }
+        }
+
+        if (!batchFound && selectedQueue.isEmpty())
+        {
+            return ResponseEntity.status(404).body(Map.of(
+                "success", false,
+                "status", "error",
+                "message", "Batch '" + finalBatchName + "' not found."
+            ));
+        }
+
+        if (datasets.isEmpty() && !selectedQueue.isEmpty())
+        {
+            datasets = new ArrayList<>(selectedQueue);
+        }
+
+        if (datasets.isEmpty())
+        {
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "status", "error",
+                "message", "No test cases configured for batch '" + finalBatchName + "'. Please populate the queue and save the batch."
+            ));
+        }
+
+        final RunRequest req = new RunRequest();
+        req.datasets = datasets;
+        req.batchName = finalBatchName;
+        req.headless = headless;
+        req.video = video;
+        req.executionMode = executionMode;
+        req.interactive = interactive;
+        req.globalBrowserProfiles = new ArrayList<>(globalBrowserProfiles);
+
+        final int port = request != null && request.getServerPort() > 0 ? request.getServerPort() : 8080;
+        queueService.executeQueue(req, port);
+
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "status", "success",
+            "batchName", finalBatchName,
+            "testCount", datasets.size(),
+            "message", "Started execution for batch '" + finalBatchName + "'."
+        ));
     }
 }

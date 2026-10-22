@@ -35,6 +35,7 @@ import org.openqa.selenium.HasCapabilities;
 import org.openqa.selenium.WebDriver;
 
 import com.codeborne.selenide.WebDriverRunner;
+import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.util.Neodymium;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
@@ -254,13 +255,27 @@ public final class InteractiveStateBuilder
             }
             if (testClass != null)
             {
+                state.addProperty("testClass", simpleClass != null ? simpleClass : testClass);
                 state.addProperty("testFile", testClass + (testMethod != null ? "#" + testMethod : ""));
+            }
+            if (testMethod != null)
+            {
+                state.addProperty("testMethod", testMethod);
             }
 
             if (datasetLabel != null && !datasetLabel.isEmpty())
             {
                 state.addProperty("testId", datasetLabel);
                 state.addProperty("datasetId", datasetLabel);
+                state.addProperty("title", datasetLabel);
+            }
+            else if (testName != null && !testName.isEmpty())
+            {
+                state.addProperty("title", testName);
+            }
+            else
+            {
+                state.addProperty("title", "Default");
             }
 
             String locale = context != null ? (String) context.getTransientData().get("locale") : null;
@@ -271,6 +286,16 @@ public final class InteractiveStateBuilder
             if (locale != null && !locale.isEmpty())
             {
                 state.addProperty("locale", locale);
+            }
+
+            String areaName = context != null ? (String) context.getTransientData().get("areaName") : null;
+            if ((areaName == null || areaName.isEmpty()) && playbookFile != null)
+            {
+                areaName = AuraFileService.extractAreaTagFromFileSystem(playbookFile);
+            }
+            if (areaName != null && !areaName.isEmpty())
+            {
+                state.addProperty("areaName", areaName);
             }
 
             if (testClass != null)

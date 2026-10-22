@@ -434,6 +434,17 @@ public final class BatchSummaryDto
         return String.format(Locale.US, "%.0f%% Pass", rate);
     }
 
+    public String getLatestRunPassRateInt()
+    {
+        if (latestTotalTests <= 0)
+        {
+            return "0%";
+        }
+        final int numPassed = latestPassedCount + latestFixedCount;
+        final double rate = (numPassed * 100.0) / latestTotalTests;
+        return String.format(Locale.US, "%.0f%%", rate);
+    }
+
     public String getPassCleanDashArray()
     {
         final double p = getLatestPassCleanPct();

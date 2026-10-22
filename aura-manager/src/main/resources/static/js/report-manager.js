@@ -176,6 +176,7 @@ function renderBatchSpecificRunsTable(batchName) {
         const rowBatchName = row.querySelector('.tag-batch')?.innerText.trim() || '';
         if (rowBatchName.includes(batchName)) {
             let clonedRow = row.cloneNode(true);
+            clonedRow.querySelector('td:nth-child(2)')?.remove();
             html += `<tr class="clickable-row" hx-get="${row.getAttribute('hx-get')}" hx-target="#mainViewContainer" hx-swap="innerHTML">${clonedRow.innerHTML}</tr>`;
         }
     });
@@ -386,6 +387,7 @@ function renderDynamicTrendChart(targetBatchName) {
     if (rowElements.length === 0) {
         rowElements = Array.from(document.querySelectorAll('#overviewRunsTableBody .run-directory-row'));
     }
+    rowElements = rowElements.filter(r => r.style.display !== 'none');
 
     // In tables, rows are typically displayed newest to oldest. For trend charts, sort oldest to newest (left-to-right).
     const runsData = [];
@@ -680,7 +682,16 @@ function renderDynamicAreaTrendCharts() {
             return;
         }
 
-        if (!points || points.length === 0) return;
+        const historyRows = Array.from(document.querySelectorAll('#batchRunsHistoryTableBody tr.run-history-row'));
+        if (historyRows.length > 0) {
+            const visibleRunIds = new Set(historyRows.filter(r => r.style.display !== 'none').map(r => r.getAttribute('data-run-id')));
+            points = points.filter(p => visibleRunIds.has(p.runId));
+        }
+
+        if (!points || points.length === 0) {
+            svg.querySelectorAll('path').forEach(p => p.setAttribute('d', ''));
+            return;
+        }
 
         const maxTests = Math.max(1, ...points.map(p => p.totalCount || (p.passCount + p.fixedCount + p.knownCount + p.unknownCount + p.ignoredCount)));
         const scale = 60 / maxTests;
@@ -4146,9 +4157,9 @@ function applyBatchDirectoryFilters() {
     const locMenu = document.getElementById('batchLocalesMultiselectMenu');
     const browserMenu = document.getElementById('batchBrowsersMultiselectMenu');
 
-    if (!envMenu) return;
+    if (!envMenu && !locMenu && !browserMenu) return;
 
-    const selectedEnvs = Array.from(envMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value);
+    const selectedEnvs = envMenu ? Array.from(envMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value) : [];
     const selectedLocs = locMenu ? Array.from(locMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value) : [];
     const selectedBrowsers = browserMenu ? Array.from(browserMenu.querySelectorAll('.js-chk-option:checked')).map(o => o.value) : [];
 
@@ -4175,6 +4186,23 @@ function applyBatchDirectoryFilters() {
 
         row.style.display = (matchEnv && matchLoc && matchBrowser) ? '' : 'none';
     });
+
+    document.querySelectorAll('#batchRunsHistoryTableBody .run-history-row').forEach(row => {
+        const rowEnv = row.getAttribute('data-env') || '';
+        const rowLocs = (row.getAttribute('data-locales') || '').split(',').map(s => s.trim());
+        const rowBrowsers = (row.getAttribute('data-browsers') || '').split(',').map(s => s.trim());
+
+        const matchEnv = selectedEnvs.length === 0 || selectedEnvs.some(e => rowEnv.includes(e));
+        const matchLoc = selectedLocs.length === 0 || selectedLocs.some(l => rowLocs.includes(l));
+        const matchBrowser = selectedBrowsers.length === 0 || selectedBrowsers.some(b => rowBrowsers.includes(b));
+
+        row.style.display = (matchEnv && matchLoc && matchBrowser) ? '' : 'none';
+    });
+
+    if (document.getElementById('mainTrendSvg')) {
+        renderDynamicTrendChart(activeBatchName);
+        renderDynamicAreaTrendCharts();
+    }
 }
 
 function resetBatchFilters() {
@@ -4263,16 +4291,24 @@ function bindGlobalListeners() {
     });
 
     // Synchronize sidebar active tab highlighting
+    const isAuraManager = document.getElementById('auraTestManagerWorkspace') !== null || document.getElementById('dashboardView') !== null;
     const isTestBase = document.getElementById('pageTestBase') !== null;
     const navRuns = document.getElementById('navRunsList');
     const navTest = document.getElementById('navTestBase');
+    const navAura = document.getElementById('navAuraManager');
     if (navRuns && navTest) {
-        if (isTestBase) {
+        if (isAuraManager) {
+            navRuns.classList.remove('active');
+            navTest.classList.remove('active');
+            if (navAura) navAura.classList.add('active');
+        } else if (isTestBase) {
             navRuns.classList.remove('active');
             navTest.classList.add('active');
+            if (navAura) navAura.classList.remove('active');
         } else {
             navRuns.classList.add('active');
             navTest.classList.remove('active');
+            if (navAura) navAura.classList.remove('active');
         }
     }
 
@@ -4297,6 +4333,19 @@ function bindGlobalListeners() {
 
     // Automatically update header title & breadcrumb if Single Run Report view is loaded
     if (document.getElementById('runReportSubTabOverview')) {
+        const runReportContainer = document.querySelector('[data-batch-name]');
+        if (runReportContainer && runReportContainer.getAttribute('data-batch-name')) {
+            const domBatchName = runReportContainer.getAttribute('data-batch-name').trim();
+            if (domBatchName) {
+                activeBatchName = domBatchName;
+            }
+        } else {
+            const urlBatch = new URLSearchParams(window.location.search).get('batch');
+            if (urlBatch && urlBatch.trim()) {
+                activeBatchName = urlBatch.trim();
+            }
+        }
+
         const runIdLabel = document.querySelector('.run-id-label')?.innerText || '#RUN_ID';
         const headerTitle = document.getElementById('pageTitle');
         if (headerTitle) headerTitle.innerHTML = `<span class="material-symbols-outlined text-accent">science</span> ${activeBatchName} <span style="font-size: 0.875rem; font-weight: 500; color: var(--text-muted); margin-left: 0.5rem;">(Run #${runIdLabel})</span>`;
@@ -5204,6 +5253,68 @@ function deleteRunFromHistory(runId, event) {
 }
 
 window.deleteRunFromHistory = deleteRunFromHistory;
+
+if (typeof window.runBatch !== 'function') {
+    window.runBatch = async function(batchName) {
+        if (!batchName) return;
+
+        const btns = document.querySelectorAll(`[data-batch-name="${batchName}"]`);
+        btns.forEach(b => {
+            b.disabled = true;
+            b.style.opacity = '0.7';
+        });
+
+        if (typeof showToast === 'function') {
+            showToast(`Starting batch "${batchName}"...`, 'info');
+        }
+
+        try {
+            if (typeof prepareClientForExecution === 'function') {
+                prepareClientForExecution();
+            }
+
+            const response = await fetch(`/api/batch/run?batchName=${encodeURIComponent(batchName)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            const data = await response.json();
+            if (!response.ok || data.status === 'error' || data.error) {
+                const msg = data.error || data.message || 'Failed to start batch execution.';
+                if (typeof showToast === 'function') {
+                    showToast(msg, 'error');
+                } else {
+                    alert(msg);
+                }
+            } else {
+                if (typeof showToast === 'function') {
+                    showToast(`Batch "${batchName}" execution started!`, 'success');
+                }
+                const pulse = document.getElementById('sidebarContextPulseDot');
+                if (pulse) pulse.style.display = 'inline-block';
+                const card = document.getElementById('sidebarContextCard');
+                if (card) card.style.display = 'flex';
+                const sidebarBatchNameEl = document.getElementById('sidebarActiveBatchName');
+                if (sidebarBatchNameEl) sidebarBatchNameEl.textContent = batchName;
+                try {
+                    localStorage.setItem('aura_active_batch_name', batchName);
+                } catch (e) {}
+            }
+        } catch (e) {
+            if (typeof showToast === 'function') {
+                showToast('Failed to trigger batch run: ' + e.message, 'error');
+            } else {
+                alert('Failed to trigger batch run: ' + e.message);
+            }
+        } finally {
+            btns.forEach(b => {
+                b.disabled = false;
+                b.style.opacity = '1';
+            });
+        }
+    };
+}
+
 
 
 

@@ -42,8 +42,14 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 /**
  * Unit tests for AuraReportViewController.
@@ -145,6 +151,9 @@ public class AuraReportViewControllerTest
         Assertions.assertEquals("RUN-100", model.getAttribute("runId"));
         Assertions.assertEquals("EXEC-1", model.getAttribute("targetExecutionId"));
         Assertions.assertEquals("runReportSubTabAllTests", model.getAttribute("activeSubTab"));
+        Assertions.assertEquals("BatchAlpha", model.getAttribute("batchName"));
+        Assertions.assertEquals("BatchAlpha", model.getAttribute("activeBatchName"));
+        Assertions.assertEquals("BatchAlpha (Run #RUN-100)", model.getAttribute("pageTitle"));
         Assertions.assertNotNull(model.getAttribute("filterModes"));
         Assertions.assertNotNull(model.getAttribute("filterBrowsers"));
         Assertions.assertNotNull(model.getAttribute("filterLocales"));
@@ -562,5 +571,52 @@ public class AuraReportViewControllerTest
         Assertions.assertEquals("fragments/test-base :: testBase", view);
         Assertions.assertEquals("CheckoutTest", model.getAttribute("targetTestName"));
         Mockito.verify(dataService).removeRunFromHistory("RUN-300");
+    }
+
+    @Test
+    public void testBatchOverviewFullPageAndHtmx()
+    {
+        final BatchOverviewDataDto overviewData = new BatchOverviewDataDto(
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of()
+        );
+        Mockito.when(dataService.getBatchOverviewData()).thenReturn(overviewData);
+
+        final Model model = new ConcurrentModel();
+        final String viewFull = controller.batchOverview("false", model);
+        Assertions.assertEquals("index", viewFull);
+        Assertions.assertEquals("Directory", model.getAttribute("activeTab"));
+        Assertions.assertEquals("Overview of Runs & Known Batches", model.getAttribute("pageTitle"));
+        Assertions.assertEquals("fragments/batch-overview :: batchOverview", model.getAttribute("viewFragment"));
+
+        final String viewHtmx = controller.batchOverview("true", model);
+        Assertions.assertEquals("fragments/batch-overview :: batchOverview", viewHtmx);
+    }
+
+    @Test
+    public void testRootRouteMappingForBatchOverview() throws Exception
+    {
+        final BatchOverviewDataDto overviewData = new BatchOverviewDataDto(
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of(),
+            List.of()
+        );
+        Mockito.when(dataService.getBatchOverviewData()).thenReturn(overviewData);
+
+        final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mockMvc.perform(get("/"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("index"))
+            .andExpect(model().attribute("activeTab", "Directory"));
+
+        mockMvc.perform(get("/report"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("index"))
+            .andExpect(model().attribute("activeTab", "Directory"));
     }
 }

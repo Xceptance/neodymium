@@ -64,6 +64,11 @@ public final class Playbook
     private final String description;
 
     /**
+     * Optional test area name/tag (e.g. {@code "@Checkout"}).
+     */
+    private final String areaName;
+
+    /**
      * Constructs an immutable Playbook with defensive copies of steps and datasets.
      *
      * @param steps the list of logical playbook steps
@@ -71,7 +76,7 @@ public final class Playbook
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets)
     {
-        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, Collections.emptyMap(), null);
+        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, Collections.emptyMap(), null, null);
     }
 
     /**
@@ -83,7 +88,7 @@ public final class Playbook
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets, final Map<String, String> promptAddons)
     {
-        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, promptAddons, null);
+        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, promptAddons, null, null);
     }
 
     /**
@@ -96,7 +101,7 @@ public final class Playbook
      */
     public Playbook(final List<PlaybookStep> steps, final List<Map<String, SessionData.DataEntry>> dataSets, final Map<String, String> promptAddons, final String description)
     {
-        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, promptAddons, description);
+        this(Collections.emptyList(), steps, Collections.emptyList(), dataSets, promptAddons, description, null);
     }
 
     /**
@@ -118,6 +123,30 @@ public final class Playbook
         final Map<String, String> promptAddons,
         final String description)
     {
+        this(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, null);
+    }
+
+    /**
+     * Constructs an immutable Playbook with defensive copies of before steps, core steps, after steps, datasets,
+     * custom prompt add-ons, scenario description, and area name/tag.
+     *
+     * @param beforeSteps the list of setup/before playbook steps
+     * @param steps the list of core playbook steps
+     * @param afterSteps the list of teardown/after playbook steps
+     * @param dataSets the list of dataset parameters maps
+     * @param promptAddons the map of custom prompt add-ons by type
+     * @param description optional scenario description
+     * @param areaName optional area name or tag (e.g. {@code "@Checkout"})
+     */
+    public Playbook(
+        final List<PlaybookStep> beforeSteps,
+        final List<PlaybookStep> steps,
+        final List<PlaybookStep> afterSteps,
+        final List<Map<String, SessionData.DataEntry>> dataSets,
+        final Map<String, String> promptAddons,
+        final String description,
+        final String areaName)
+    {
         this.beforeSteps = beforeSteps != null ? Collections.unmodifiableList(new ArrayList<>(beforeSteps)) : Collections.emptyList();
         this.steps = steps != null ? Collections.unmodifiableList(new ArrayList<>(steps)) : Collections.emptyList();
         this.afterSteps = afterSteps != null ? Collections.unmodifiableList(new ArrayList<>(afterSteps)) : Collections.emptyList();
@@ -137,6 +166,17 @@ public final class Playbook
         this.dataSets = Collections.unmodifiableList(datasetsCopy);
         this.promptAddons = promptAddons != null ? Collections.unmodifiableMap(new HashMap<>(promptAddons)) : Collections.emptyMap();
         this.description = description != null && !description.isBlank() ? description.trim() : null;
+        this.areaName = areaName != null && !areaName.isBlank() ? areaName.trim() : null;
+    }
+
+    /**
+     * Returns the optional test area name/tag (e.g. {@code "@Checkout"}).
+     *
+     * @return the area name/tag or null
+     */
+    public String getAreaName()
+    {
+        return this.areaName;
     }
 
     /**

@@ -130,7 +130,8 @@ public class RunStorageSyncService
                     if (localRunJsonStorageService.hasRunJsonFile(runId) && existingRunOpt.isPresent())
                     {
                         final TestRunEntity existingRun = existingRunOpt.get();
-                        if (existingRun.getPassedHealedCount() != null && existingRun.getSucceededFixedHealedCount() != null
+                        final boolean isStillActive = "IN_PROGRESS".equalsIgnoreCase(existingRun.getStatus()) || localRunJsonStorageService.isRunCurrentlyActiveOnDisk(runId);
+                        if (!isStillActive && existingRun.getPassedHealedCount() != null && existingRun.getSucceededFixedHealedCount() != null
                             && existingRun.getFailedKnownHealedCount() != null && existingRun.getFailedUnknownHealedCount() != null)
                         {
                             LOG.debug("Skipping already initialized run report: runId={}", runId);
@@ -868,6 +869,9 @@ public class RunStorageSyncService
             final Optional<TestRunEntity> existingRunOpt = runRepository.findById(runId);
             final TestRunEntity runEntity;
             final Long initialStartMs = minStartTimeMs != null ? minStartTimeMs : parseTimestampToMs(timestamp);
+            final boolean isStillActive = localRunJsonStorageService.isRunCurrentlyActiveOnDisk(runId);
+            final String runStatus = isStillActive ? "IN_PROGRESS" : "COMPLETED";
+
             if (existingRunOpt.isPresent())
             {
                 runEntity = existingRunOpt.get();
@@ -875,6 +879,10 @@ public class RunStorageSyncService
                 runEntity.setEnvironment(env);
                 runEntity.setTriggerSource(trigger);
                 runEntity.setTimestampLabel(timestamp);
+                if (!"CANCELLED".equalsIgnoreCase(runEntity.getStatus()))
+                {
+                    runEntity.setStatus(runStatus);
+                }
                 if (minStartTimeMs != null)
                 {
                     runEntity.setStartTimeMs(minStartTimeMs);
@@ -885,7 +893,7 @@ public class RunStorageSyncService
                 runEntity = new TestRunEntity(
                     runId,
                     batchName,
-                    "COMPLETED",
+                    runStatus,
                     trigger,
                     env,
                     localesCsv,
@@ -910,7 +918,7 @@ public class RunStorageSyncService
             final int finalFixedAi = hasExecCounts ? calcFixedAi : fixedAi;
             final int finalKnownAi = hasExecCounts ? calcKnownAi : knownAi;
             final int finalUnknownAi = hasExecCounts ? calcUnknownAi : unknownAi;
-            final double finalPassRate = finalTotal > 0 ? (double)(finalPass + finalFixed) / finalTotal * 100.0 : passRate;
+            final double finalPassRate = finalTotal > 0 ? (double) Math.round((double)(finalPass + finalFixed) / finalTotal * 100.0) : passRate;
 
             final long calculatedRunDurationMs;
             if (minStartTimeMs != null && maxStartTimeMs != null && maxStartTimeMs >= minStartTimeMs)

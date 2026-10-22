@@ -28,13 +28,37 @@
 }
 </style>
 
-<div class="panel editor-container" id="editorPanel" th:fragment="editorPanelContent" th:data-has-error="${hasParseError}" th:data-mode="${editorMode}">
+<div class="panel editor-container" id="editorPanel" th:fragment="editorPanelContent" th:data-has-error="${hasParseError}" th:data-mode="${editorMode}" th:data-area="${areaTag != null ? areaTag : ''}">
     <div class="panel-header">
         <div class="neo-u-11">
             <span class="material-symbols-outlined neo-u-12" th:text="${isFragment != null and isFragment ? 'extension' : 'description'}">description</span>
             <span id="editorFileName" th:data-file="${activeEditingFile}" th:text="${activeEditingFile != null ? activeEditingFile : ''}"></span>
             <span th:if="${isFragment != null and isFragment}" class="file-badge-steps" style="margin-left: 6px;">🧩 Step Fragment</span>
             <span th:if="${activeEditingFile != null and !activeEditingFile.isEmpty() and (isFragment == null or !isFragment)}" class="file-badge-yaml" style="margin-left: 6px;">🧪 Test Playbook</span>
+            <!-- Area Tag Assignment / Display -->
+            <div id="editorAreaContainer" class="editor-area-container" th:if="${activeEditingFile != null and !activeEditingFile.isEmpty() and (isFragment == null or !isFragment)}" style="display: inline-flex; align-items: center; margin-left: 6px;">
+                <button type="button" 
+                        class="btn-editor btn-assign-area" 
+                        id="btnAssignArea" 
+                        onclick="openAssignAreaModal()" 
+                        th:style="${areaTag != null and !#strings.isEmpty(areaTag) ? 'display: none;' : 'display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px;'}"
+                        title="Assign test to an area">
+                    <span class="material-symbols-outlined" style="font-size: 13px;">label</span>
+                    <span>Assign to area</span>
+                </button>
+                <span class="area-tag-badge" 
+                      id="editorAreaBadge" 
+                      onclick="openAssignAreaModal()" 
+                      title="Click to edit or remove area tag"
+                      th:style="${areaTag != null and !#strings.isEmpty(areaTag) ? 'display: inline-flex; align-items: center; gap: 4px; cursor: pointer;' : 'display: none;'}"
+                      th:data-area="${areaTag != null ? areaTag : ''}">
+                    <span class="material-symbols-outlined" style="font-size: 13px; color: var(--accent);">label</span>
+                    <span id="editorAreaTagText" th:text="${areaTag != null ? (areaTag.startsWith('@') ? areaTag : '@' + areaTag) : ''}">@Checkout</span>
+                    <button type="button" class="btn-remove-area-tag" onclick="removeAreaTag(event)" title="Remove area tag" style="background: transparent; border: none; cursor: pointer; color: var(--text-secondary); display: inline-flex; align-items: center; padding: 0 2px; margin-left: 2px;">
+                        <span class="material-symbols-outlined" style="font-size: 13px;">close</span>
+                    </button>
+                </span>
+            </div>
             <span id="editorUnsavedBadge" style="display: none;" class="unsaved-badge">
                 <span class="material-symbols-outlined" style="font-size: 12px;">warning</span> Unsaved
             </span>

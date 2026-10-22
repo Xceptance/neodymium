@@ -2066,6 +2066,65 @@
     color:var(--text-secondary);
 }
 
+.btn-assign-area {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    background: rgba(37, 99, 235, 0.08);
+    border: 1px dashed var(--accent, #2563eb);
+    color: var(--accent, #2563eb);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+
+.btn-assign-area:hover {
+    background: var(--accent, #2563eb);
+    color: #ffffff;
+}
+
+.area-tag-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(14, 165, 233, 0.12);
+    border: 1px solid rgba(14, 165, 233, 0.4);
+    color: #0284c7;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
+}
+
+.area-tag-badge:hover {
+    background: rgba(14, 165, 233, 0.2);
+    border-color: #0284c7;
+}
+
+.btn-remove-area-tag {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary, #64748b);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin-left: 2px;
+    border-radius: 50%;
+    transition: color 0.15s ease;
+}
+
+.btn-remove-area-tag:hover {
+    color: var(--color-danger, #ef4444);
+}
+
 #statsPanel,
 .neo-u-13 {
     display: none;

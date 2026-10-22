@@ -571,11 +571,132 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 .badge-mode-java { background: var(--mode-java-bg); color: var(--mode-java-color); border: 1px solid var(--mode-java-border); font-weight: 600; font-family: var(--font-family); }
 
 /* Batch Directory Cards */
-.batch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; }
-.batch-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.25rem; display: flex; flex-direction: column; gap: 0.85rem; cursor: pointer; transition: all 0.2s; }
-.batch-card:hover { transform: translateY(-3px); border-color: var(--status-fixed); box-shadow: 0 8px 20px rgba(37, 99, 235, 0.12); }
-.batch-card-header { display: flex; align-items: center; justify-content: space-between; }
-.batch-card-title { font-size: 1.05rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 0.5rem; }
+.batch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; }
+.batch-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: 1.15rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    transition: all 0.2s ease;
+}
+.batch-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--accent);
+    box-shadow: 0 8px 24px rgba(37, 99, 235, 0.1);
+}
+.batch-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+.batch-card-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+.batch-card-title.batch-history-link {
+    text-decoration: none;
+    color: var(--text-main);
+    transition: color 0.15s ease;
+}
+.batch-card-title.batch-history-link:hover {
+    color: var(--accent);
+}
+.batch-card-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.batch-history-action-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration: none;
+    padding: 0.2rem 0.45rem;
+    border-radius: var(--radius-sm, 4px);
+    background: var(--accent-subtle, rgba(37, 99, 235, 0.08));
+    transition: background 0.15s, color 0.15s;
+}
+.batch-history-action-link:hover {
+    background: var(--accent);
+    color: #ffffff;
+}
+.batch-meta-compact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    font-size: 0.74rem;
+    color: var(--text-muted);
+    padding: 0.35rem 0.1rem;
+    border-top: 1px solid var(--border);
+}
+.batch-meta-tags {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+}
+.batch-meta-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+.batch-meta-tag .material-symbols-outlined {
+    font-size: 0.85rem;
+}
+.batch-hover-drawer {
+    display: none;
+    font-size: 0.75rem;
+    color: var(--text-main);
+    background: var(--bg-hover, rgba(0, 0, 0, 0.03));
+    border-radius: 6px;
+    padding: 0.45rem 0.65rem;
+    border: 1px solid var(--border);
+    flex-direction: column;
+    gap: 0.2rem;
+    animation: fadeIn 0.15s ease-in;
+}
+.batch-card:hover .batch-hover-drawer {
+    display: flex;
+}
+.batch-hover-item {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+}
+.batch-hover-label {
+    font-weight: 700;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.batch-hover-val {
+    color: var(--text-main);
+    font-weight: 600;
+}
+.btn-compact {
+    font-size: 0.72rem !important;
+    padding: 0.28rem 0.55rem !important;
+    border-radius: 5px !important;
+    font-weight: 600;
+}
+.batch-card-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: auto;
+}
 
 /* ALLURE STACKED AREA TREND CHART */
 .allure-trend-card { background: var(--bg-panel); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.5rem; box-shadow: var(--shadow-panel); }
@@ -788,6 +909,41 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
     width: 60px;
     height: 60px;
     flex-shrink: 0;
+}
+.pie-chart-wrapper-batch {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.pie-center-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    line-height: 1;
+}
+.pie-center-rate {
+    font-size: 1.55rem;
+    font-weight: 800;
+    font-family: var(--font-heading, var(--font-family));
+    color: var(--text-main);
+    letter-spacing: -0.02em;
+}
+.pie-center-sub {
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-top: 2px;
 }
 .pie-breakdown-list-sm {
     flex: 1;
@@ -2180,3 +2336,190 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
     outline-offset: -2px;
     transition: background-color 0.5s ease;
 }
+
+/* BATCH HISTORY TOP OVERVIEW & RATIO CARDS */
+.batch-top-overview-panel {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+@media (max-width: 1024px) {
+    .batch-top-overview-panel {
+        grid-template-columns: 1fr;
+    }
+}
+
+.ratio-card {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md, 8px);
+    padding: 1.1rem;
+    box-shadow: var(--shadow-panel);
+    display: flex;
+    flex-direction: column;
+    gap: 0.85rem;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ratio-card:hover {
+    box-shadow: 0 8px 16px -4px rgba(0, 0, 0, 0.08);
+}
+
+.ratio-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.ratio-card-title {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+    letter-spacing: -0.01em;
+}
+
+.ratio-stacked-bar {
+    width: 100%;
+    height: 18px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    display: flex;
+    overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.ratio-bar-seg {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.68rem;
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: #ffffff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+    white-space: nowrap;
+    transition: width 0.3s ease;
+    border-right: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.ratio-bar-seg:last-child {
+    border-right: none;
+}
+
+.ratio-legend-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    align-items: center;
+}
+
+.ratio-legend-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-weight: 500;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    padding: 0.2rem 0.5rem;
+    border-radius: 5px;
+}
+
+.ratio-legend-chip .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.ratio-legend-chip .val {
+    font-weight: 700;
+    font-family: var(--font-mono);
+    color: var(--text-main);
+}
+
+/* RUN REPORT OVERVIEW STATUS PIE & ENVIRONMENT BREAKDOWN PANEL */
+.run-overview-distribution-panel {
+    margin-bottom: 1.25rem;
+}
+
+.run-overview-split-body {
+    display: flex;
+    align-items: stretch;
+    gap: 1.75rem;
+    padding: 0.5rem 0;
+}
+
+.run-status-pie-section {
+    flex: 0 0 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+}
+
+.run-status-pie-section .last-run-header-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.run-overview-split-divider {
+    width: 1px;
+    background: var(--border);
+    align-self: stretch;
+}
+
+.run-distributions-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1.15rem;
+    min-width: 0;
+}
+
+.run-distribution-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.run-distribution-group-header {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+@media (max-width: 1024px) {
+    .run-overview-split-body {
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+    .run-status-pie-section {
+        flex: 1;
+    }
+    .run-overview-split-divider {
+        width: 100%;
+        height: 1px;
+    }
+}
+
+

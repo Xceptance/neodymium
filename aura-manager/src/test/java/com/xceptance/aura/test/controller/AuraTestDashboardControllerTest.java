@@ -27,8 +27,14 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 /**
  * Unit tests for AuraTestDashboardController.
@@ -139,5 +145,23 @@ public class AuraTestDashboardControllerTest
         Assertions.assertEquals("Freiwohl.yaml", model.getAttribute("currentTestFile"));
         Assertions.assertEquals("steps:\n  - Open url", model.getAttribute("editingFileContent"));
         Mockito.verify(fileService).setActiveEditingFile("Freiwohl.yaml");
+    }
+
+    @Test
+    public void testPlaybooksRouteMapping() throws Exception
+    {
+        final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mockMvc.perform(get("/playbooks"))
+            .andExpect(status().isOk())
+            .andExpect(view().name("index"))
+            .andExpect(model().attribute("activeTab", "AuraTestManager"));
+    }
+
+    @Test
+    public void testRootRouteNotMappedToDashboardController() throws Exception
+    {
+        final MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+        mockMvc.perform(get("/"))
+            .andExpect(status().isNotFound());
     }
 }

@@ -61,6 +61,9 @@ public final class AuraFileService
         "(?m)^([ \\t]*(?:-\\s+|(?:steps|_steps|before|beforeEach|_beforeEach|after|afterEach|_afterEach):\\s*))>(-\\s*(?:#.*)?|[ \\t]*(?:#.*)?)$"
     );
 
+    private static final Pattern AREA_TAG_SECTION_HEADER_PATTERN = Pattern.compile("^(steps|before|after|data|variables|_include|include):", Pattern.CASE_INSENSITIVE);
+    private static final Pattern AREA_TAG_PATTERN = Pattern.compile("^\\s*#?\\s*@([a-zA-Z0-9_-]+)");
+
     /**
      * Normalizes folded block scalars ({@code >} and {@code >-}) to literal block scalars
      * ({@code |} and {@code |-}) for step lists and playbook lifecycle sections.
@@ -80,12 +83,115 @@ public final class AuraFileService
         {
             return content;
         }
-        return FOLDED_BLOCK_SCALAR_PATTERN.matcher(content).replaceAll("$1|$2");
+        final String withCommentedTags = content.replaceAll("(?m)^\\s*@([a-zA-Z0-9_-]+)", "# @$1");
+        return FOLDED_BLOCK_SCALAR_PATTERN.matcher(withCommentedTags).replaceAll("$1|$2");
+    }
+
+    /**
+     * Extracts an area tag (e.g. {@code "@Checkout"}) from the header of a playbook YAML file.
+     *
+     * @param content the raw YAML file content
+     * @return the formatted area tag (e.g. {@code "@Checkout"}), or null if none is present
+     */
+    public static String extractAreaTag(final String content)
+    {
+        if (content == null || content.isBlank())
+        {
+            return null;
+        }
+        final String[] lines = content.split("\\r?\\n");
+        for (final String line : lines)
+        {
+            final String trimmed = line.trim();
+            if (AREA_TAG_SECTION_HEADER_PATTERN.matcher(trimmed).find())
+            {
+                break;
+            }
+            final Matcher matcher = AREA_TAG_PATTERN.matcher(trimmed);
+            if (matcher.find())
+            {
+                return "@" + matcher.group(1);
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Extracts an area tag from a playbook YAML file path.
+     *
+     * @param filePath the relative or absolute path of the playbook YAML file
+     * @return the formatted area tag (e.g. {@code "@Checkout"}), or null if not found
+     */
+    public String extractAreaTagFromFile(final String filePath)
+    {
+        if (filePath == null || filePath.isBlank())
+        {
+            return null;
+        }
+        try
+        {
+            final String content = readYamlFileContent(filePath);
+            return extractAreaTag(content);
+        }
+        catch (final Exception e)
+        {
+            return null;
+        }
+    }
+
+    /**
+     * Extracts an area tag from a playbook file path directly on the filesystem or classpath resources.
+     *
+     * @param filePath the relative or absolute path of the playbook YAML file
+     * @return the formatted area tag (e.g. {@code "@Checkout"}), or null if not found
+     */
+    public static String extractAreaTagFromFileSystem(final String filePath)
+    {
+        if (filePath == null || filePath.isBlank())
+        {
+            return null;
+        }
+        final File f = new File(filePath);
+        if (f.exists() && f.isFile())
+        {
+            try
+            {
+                return extractAreaTag(Files.readString(f.toPath(), StandardCharsets.UTF_8));
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        final File resourceFile = new File("src/test/resources", filePath);
+        if (resourceFile.exists() && resourceFile.isFile())
+        {
+            try
+            {
+                return extractAreaTag(Files.readString(resourceFile.toPath(), StandardCharsets.UTF_8));
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        return null;
     }
 
     private final Set<String> expandedFiles = ConcurrentHashMap.newKeySet();
     private final File customResourcesDir;
     private volatile String activeEditingFile = null;
+    private final Map<String, CachedFragmentVars> fragmentVarsCache = new ConcurrentHashMap<>();
+
+    private static final class CachedFragmentVars
+    {
+        private final long lastModified;
+        private final List<String> requiredVars;
+
+        CachedFragmentVars(final long lastModified, final List<String> requiredVars)
+        {
+            this.lastModified = lastModified;
+            this.requiredVars = requiredVars;
+        }
+    }
 
     public AuraFileService()
     {
@@ -843,6 +949,15 @@ public final class AuraFileService
         {
             return List.of();
         }
+
+        final File file = findSourceTestFile(relativePath);
+        final long lastModified = (file != null && file.exists()) ? file.lastModified() : -1L;
+        final CachedFragmentVars cached = fragmentVarsCache.get(relativePath);
+        if (cached != null && lastModified != -1L && cached.lastModified == lastModified)
+        {
+            return cached.requiredVars;
+        }
+
         try
         {
             final String content = readYamlFileContent(relativePath);
@@ -868,7 +983,12 @@ public final class AuraFileService
                     requiredVars.add(varName);
                 }
             }
-            return requiredVars;
+            final List<String> unmodifiableRequiredVars = List.copyOf(requiredVars);
+            if (lastModified != -1L)
+            {
+                fragmentVarsCache.put(relativePath, new CachedFragmentVars(lastModified, unmodifiableRequiredVars));
+            }
+            return unmodifiableRequiredVars;
         }
         catch (final Exception e)
         {
@@ -1154,6 +1274,7 @@ public final class AuraFileService
 
     public void saveYamlFileContent(final String file, final String content) throws IOException
     {
+        fragmentVarsCache.remove(file);
         final File yamlFile = resolveCanonicalFile(file);
         if (yamlFile.getParentFile() != null && !yamlFile.getParentFile().exists())
         {
@@ -1167,6 +1288,7 @@ public final class AuraFileService
         final String sanitizedName = (name.endsWith(".yaml") || name.endsWith(".yml") || name.endsWith(".steps"))
                 ? name
                 : name + ".yaml";
+        fragmentVarsCache.remove(sanitizedName);
         final File yamlFile = resolveCanonicalFile(sanitizedName);
         if (!yamlFile.exists())
         {
@@ -1180,6 +1302,7 @@ public final class AuraFileService
 
     public boolean deleteYamlFile(final String file) throws IOException
     {
+        fragmentVarsCache.remove(file);
         final File yamlFile = resolveCanonicalFile(file);
         if (yamlFile.exists() && yamlFile.isFile())
         {
@@ -1253,6 +1376,8 @@ public final class AuraFileService
             expandedFiles.remove(oldRelativePath);
             expandedFiles.add(targetPath);
         }
+        fragmentVarsCache.remove(oldRelativePath);
+        fragmentVarsCache.remove(targetPath);
 
         return true;
     }
@@ -1358,6 +1483,10 @@ public final class AuraFileService
             }
         }
 
+        if (!updatedFiles.isEmpty())
+        {
+            fragmentVarsCache.clear();
+        }
         LOGGER.info("[Fragment Refs] Finished. {} file(s) updated.", updatedFiles.size());
         return new UpdateFragmentRefsResult(updatedFiles.size(), List.copyOf(updatedFiles));
     }
@@ -1578,6 +1707,7 @@ public final class AuraFileService
         result.put("dataMatrix", dataMatrix);
         result.put("varKeys", varKeys);
         result.put("fragmentVarScopes", fragmentVarScopes);
+        result.put("areaTag", extractAreaTag(content));
         return result;
     }
 

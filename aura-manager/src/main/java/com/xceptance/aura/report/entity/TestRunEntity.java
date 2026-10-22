@@ -25,6 +25,7 @@ import jakarta.persistence.Index;
 import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * JPA entity representing a single Test Execution Run instance.
@@ -354,9 +355,14 @@ public class TestRunEntity
         return passRate;
     }
 
+    public String getPassRateFormatted()
+    {
+        return String.format(Locale.US, "%.0f%% Pass", passRate != null ? passRate : 0.0);
+    }
+
     public void setPassRate(final Double passRate)
     {
-        this.passRate = passRate;
+        this.passRate = passRate != null ? (double) Math.round(passRate) : 0.0;
     }
 
     public Boolean getIsDeleted()
@@ -453,7 +459,7 @@ public class TestRunEntity
     {
         final int denominator = (totalTests != null && totalTests > 0) ? totalTests : 1;
         final int numPassed = (passedCount != null ? passedCount : 0) + (succeededFixedCount != null ? succeededFixedCount : 0);
-        this.passRate = Math.round((numPassed * 100.0 / denominator) * 10.0) / 10.0;
+        this.passRate = (double) Math.round(numPassed * 100.0 / denominator);
     }
 
     public double getPassedPct()

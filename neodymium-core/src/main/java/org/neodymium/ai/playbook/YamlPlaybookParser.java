@@ -145,7 +145,7 @@ public final class YamlPlaybookParser implements PlaybookParser
         }
 
         final String trimmed = content.trim();
-        if (trimmed.startsWith("---") || YAML_BLOCK_PATTERN.matcher(trimmed).find())
+        if (trimmed.startsWith("---") || trimmed.startsWith("@") || trimmed.startsWith("#@") || YAML_BLOCK_PATTERN.matcher(trimmed).find())
         {
             final InMemoryResourceManager stringManager = (manager != null)
                 ? new InMemoryResourceManager(manager)
@@ -317,6 +317,7 @@ public final class YamlPlaybookParser implements PlaybookParser
 
         Map<String, String> promptAddons = new HashMap<>();
         String description = null;
+        String areaName = null;
         if (!identifier.endsWith(".json"))
         {
             try (final InputStream in = manager.read(identifier))
@@ -325,6 +326,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                 {
                     final byte[] bytes = in.readAllBytes();
                     final String fileContent = new String(bytes, StandardCharsets.UTF_8);
+                    areaName = AuraFileService.extractAreaTag(fileContent);
                     final String normalizedContent = AuraFileService.normalizeBlockScalars(fileContent);
                     final Yaml yaml = new Yaml();
                     final Object loadedObject = yaml.load(normalizedContent);
@@ -387,7 +389,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         resetExecutionState(beforeSteps);
                         resetExecutionState(steps);
                         resetExecutionState(afterSteps);
-                        return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description);
+                        return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, areaName);
                     }
                 }
                 catch (final IllegalArgumentException e)
@@ -446,7 +448,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         }
                     }
                 }
-                return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description);
+                return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, areaName);
             }
         }
 
@@ -461,7 +463,7 @@ public final class YamlPlaybookParser implements PlaybookParser
         validateNoUnresolvedIncludeDirectives(steps, identifier);
         validateNoUnresolvedIncludeDirectives(afterSteps, identifier);
 
-        return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description);
+        return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, areaName);
     }
 
     private Map<String, String> parsePromptAddons(final Map<String, Object> loadedMap)
@@ -1463,7 +1465,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                     resetExecutionState(jBefore);
                     resetExecutionState(jSteps);
                     resetExecutionState(jAfter);
-                    return new Playbook(jBefore, jSteps, jAfter, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons(), yamlPlaybook.getDescription());
+                    return new Playbook(jBefore, jSteps, jAfter, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons(), yamlPlaybook.getDescription(), yamlPlaybook.getAreaName());
                 }
                 catch (final Exception e)
                 {

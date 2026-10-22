@@ -61,7 +61,7 @@ public class AuraTestDashboardController
 
     @GetMapping(
     {
-      "/", "/manager", "/aura-test-manager", "/dashboard"
+      "/playbooks", "/manager", "/aura-test-manager", "/dashboard"
     })
     public String renderDashboard(
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
@@ -159,7 +159,7 @@ public class AuraTestDashboardController
         final String activeRunId = queueController.getCurrentRunId();
         model.addAttribute("activeRunId", activeRunId != null ? activeRunId : "");
         model.addAttribute("activeRunStatus", running ? "running" : "finished");
-        model.addAttribute("activeRunReportUrl", (activeRunId != null && !activeRunId.isEmpty()) ? "/run-report?runId=" + activeRunId : "/report");
+        model.addAttribute("activeRunReportUrl", (activeRunId != null && !activeRunId.isEmpty()) ? "/run-report?runId=" + activeRunId : "/");
 
         if (running)
         {

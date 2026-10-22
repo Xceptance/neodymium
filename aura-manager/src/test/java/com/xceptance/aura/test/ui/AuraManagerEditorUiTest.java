@@ -120,7 +120,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testCreateAndDeleteTestFileUpdatesSelectionList()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Verify test file is not listed initially
         $(".file-container[data-file='New Interactive Aura Test.yaml']").shouldNotBe(Condition.exist);
@@ -155,7 +155,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testDeleteLastStepClearsContentWithoutRemovingRow()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -198,7 +198,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testMoveStepUpAndDownReordersStepsAndMaintainsSequentialNumbering()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -252,7 +252,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testArrowUpReachesStepOneAfterDeletingAndAddingSteps()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -309,7 +309,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testKeyboardNavigationFollowsVisualOrderAfterReorderingSteps()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -366,7 +366,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testRemoveDataSetColumnWithConfirmation()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -409,7 +409,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testRemoveVariableRowFromDataMatrix()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -446,7 +446,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testPressEscapeWithCreateModalOpenDoesNotCloseEditor()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test to open editor
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -470,7 +470,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testFragmentPaletteHasNoEditButton()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test to open editor panel
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -490,7 +490,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testFragmentEditorHidesAddBeforeAndAddAfterButtons()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create new step fragment (.steps file)
         $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
@@ -510,7 +510,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testUnsavedFileRedirectShowsDialogWithThreeChoices()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test file to open editor panel
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -544,14 +544,14 @@ public final class AuraManagerEditorUiTest
         $("#unsavedChangesModal").shouldBe(Condition.visible);
         $("#unsavedChangesSaveBtn").click();
 
-        // Verify redirect to /report completes
-        Selenide.webdriver().shouldHave(WebDriverConditions.urlContaining("/report"));
+        // Verify redirect to root Run History completes
+        Selenide.webdriver().shouldHave(WebDriverConditions.url("http://localhost:" + this.port + "/"));
     }
 
     @Test
     public final void testOpenAndEditTestNamedTestYaml()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Ensure test.yaml is not present initially
         $(".file-container[data-file='test.yaml']").shouldNotBe(Condition.exist);
@@ -592,7 +592,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testDiscardIncludeFileRestoresOriginalSteps()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create step fragment file Child.steps
         $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
@@ -657,7 +657,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testDeleteLineInIncludeFileEditorDoesNotRestoreDeletedText()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create step fragment file MultiChild.steps
         $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
@@ -725,7 +725,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testHighlightVariablesAndIncludesOnIncludeEdit()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create nested step fragment file GrandChild.steps
         $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
@@ -807,7 +807,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testNewLineInIncludeFileEditorDisplaysCursorAndFocus()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create step fragment file FragmentStep.steps
         $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
@@ -868,7 +868,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testBackspaceOnNewLineInIncludeMovesCursorToEndWithoutLineNumberText()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create fragment step file FragmentStep.steps
         $("#openModalFragmentBtn").shouldBe(Condition.visible).click();
@@ -922,7 +922,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testNewVariablePromptDialogsInTestPlaybook()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test playbook
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -1012,7 +1012,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testHierarchicalStepFragmentsDisplayOnlyFileNames()
     {
-        open("http://localhost:" + port);
+        open("http://localhost:" + port + "/playbooks");
 
         $("#btnCreateNewYaml").shouldBe(Condition.visible).click();
         $("#newTestName").shouldBe(Condition.visible).setValue("Hierarchical Test.yaml");
@@ -1048,7 +1048,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testEditNonExistentIncludeFileCreatesStepAndSavesFile()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create main test file
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -1094,7 +1094,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testInsertVariableFromTestDataIntoInlineIncludeFragment()
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create main test file
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -1150,7 +1150,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testPasteIntoRawYamlEditorPreservesFormatting() throws Exception
     {
-        Selenide.open("http://localhost:" + this.port + "/");
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test file
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -1226,7 +1226,7 @@ public final class AuraManagerEditorUiTest
         fileService.saveYamlFileContent("FoldedScalarTest.yaml", foldedYaml);
 
         // Open Aura Manager Dashboard in Visual Editor with this test file
-        open("http://localhost:" + port + "/?file=FoldedScalarTest.yaml");
+        open("http://localhost:" + port + "/playbooks?file=FoldedScalarTest.yaml");
 
         // Verify editor is in Visual mode
         final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
@@ -1296,7 +1296,7 @@ public final class AuraManagerEditorUiTest
         fileService.saveYamlFileContent("CommentTypingTest.yaml", initialYaml);
 
         // Open Aura Manager Dashboard in Visual Editor with this test file
-        open("http://localhost:" + port + "/?file=CommentTypingTest.yaml");
+        open("http://localhost:" + port + "/playbooks?file=CommentTypingTest.yaml");
 
         final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
         Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
@@ -1338,7 +1338,7 @@ public final class AuraManagerEditorUiTest
             "Saved YAML content should retain comment line starting with '#', but was: " + savedYaml);
 
         // Reload the editor to verify comment styling persists after save and reload
-        open("http://localhost:" + port + "/?file=CommentTypingTest.yaml");
+        open("http://localhost:" + port + "/playbooks?file=CommentTypingTest.yaml");
         $("#editorPanel").shouldBe(Condition.visible);
 
         final ElementsCollection reloadedRows = $$("#stepsList .step-row");
@@ -1382,7 +1382,7 @@ public final class AuraManagerEditorUiTest
         fileService.saveYamlFileContent("InlineCommentTypingTest.yaml", initialYaml);
 
         // Open Aura Manager Dashboard in Visual Editor with this test file
-        open("http://localhost:" + port + "/?file=InlineCommentTypingTest.yaml");
+        open("http://localhost:" + port + "/playbooks?file=InlineCommentTypingTest.yaml");
 
         final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
         Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
@@ -1425,7 +1425,7 @@ public final class AuraManagerEditorUiTest
             "Saved YAML content should retain inline comment, but was: " + savedYaml);
 
         // Reload the editor to verify inline comment styling persists across reload
-        open("http://localhost:" + port + "/?file=InlineCommentTypingTest.yaml");
+        open("http://localhost:" + port + "/playbooks?file=InlineCommentTypingTest.yaml");
         $("#editorPanel").shouldBe(Condition.visible);
 
         final ElementsCollection reloadedRows = $$("#stepsList .step-row");
@@ -1470,7 +1470,7 @@ public final class AuraManagerEditorUiTest
         fileService.saveYamlFileContent("SubstepTypingTest.yaml", initialYaml);
 
         // Open Aura Manager Dashboard in Visual Editor with this test file
-        open("http://localhost:" + port + "/?file=SubstepTypingTest.yaml");
+        open("http://localhost:" + port + "/playbooks?file=SubstepTypingTest.yaml");
 
         final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
         Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
@@ -1545,7 +1545,7 @@ public final class AuraManagerEditorUiTest
             "Saved YAML should contain the cleaned sub-step text, but was: " + savedYaml);
 
         // Reload the editor to verify sub-step styling and grouping persist across reload
-        open("http://localhost:" + port + "/?file=SubstepTypingTest.yaml");
+        open("http://localhost:" + port + "/playbooks?file=SubstepTypingTest.yaml");
         $("#editorPanel").shouldBe(Condition.visible);
 
         final ElementsCollection reloadedRows = $$("#stepsList .step-row");
@@ -1576,7 +1576,7 @@ public final class AuraManagerEditorUiTest
         fileService.saveYamlFileContent("EnterSubstepTest.yaml", initialYaml);
 
         // Open Aura Manager Dashboard in Visual Editor with this test file
-        open("http://localhost:" + port + "/?file=EnterSubstepTest.yaml");
+        open("http://localhost:" + port + "/playbooks?file=EnterSubstepTest.yaml");
 
         final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
         Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
@@ -1648,7 +1648,7 @@ public final class AuraManagerEditorUiTest
             "Saved YAML should contain top-level step line, but was: " + savedYaml);
 
         // Reload the editor to verify persistence across reload
-        open("http://localhost:" + port + "/?file=EnterSubstepTest.yaml");
+        open("http://localhost:" + port + "/playbooks?file=EnterSubstepTest.yaml");
         $("#editorPanel").shouldBe(Condition.visible);
 
         final ElementsCollection reloadedRows = $$("#stepsList .step-row");
@@ -1672,7 +1672,7 @@ public final class AuraManagerEditorUiTest
         fileService.saveYamlFileContent("UndoSubstepTest.yaml", initialYaml);
 
         // Open Aura Manager Dashboard in Visual Editor with this test file
-        open("http://localhost:" + port + "/?file=UndoSubstepTest.yaml");
+        open("http://localhost:" + port + "/playbooks?file=UndoSubstepTest.yaml");
 
         final SelenideElement editorPanel = $("#editorPanel").shouldBe(Condition.visible);
         Assertions.assertEquals("visual", editorPanel.getAttribute("data-mode"));
@@ -1757,7 +1757,7 @@ public final class AuraManagerEditorUiTest
             "Saved YAML should contain sub-step line, but was: " + savedYaml);
 
         // Reload the editor to verify persistence across reload
-        open("http://localhost:" + port + "/?file=UndoSubstepTest.yaml");
+        open("http://localhost:" + port + "/playbooks?file=UndoSubstepTest.yaml");
         $("#editorPanel").shouldBe(Condition.visible);
 
         final ElementsCollection reloadedRowsAfterSave = $$("#stepsList .step-row");
@@ -1771,7 +1771,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testVisualEditorChangesDirectlyUpdateRawYamlContent()
     {
-        open("http://localhost:" + this.port + "/");
+        open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test file
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -1819,7 +1819,7 @@ public final class AuraManagerEditorUiTest
     @Test
     public final void testGiveNameToSubstepsBlockRendersCommentInRawYamlBeforeFoldedScalar() throws Exception
     {
-        open("http://localhost:" + this.port + "/");
+        open("http://localhost:" + this.port + "/playbooks");
 
         // Create new test file
         $("#openModalBtn").shouldBe(Condition.visible).click();
@@ -1879,7 +1879,7 @@ public final class AuraManagerEditorUiTest
             "Saved YAML file must contain '# Verify Header and Navigation' before '- >-', but was: " + savedContent);
 
         // Reload the editor and verify persistent rendering
-        open("http://localhost:" + this.port + "/?file=SubstepNameTest.yaml");
+        open("http://localhost:" + this.port + "/playbooks?file=SubstepNameTest.yaml");
         $("#editorPanel").shouldBe(Condition.visible);
 
         final SelenideElement reloadedToggleBar = $(".substeps-toggle-bar").shouldBe(Condition.visible);
@@ -1909,7 +1909,7 @@ public final class AuraManagerEditorUiTest
         this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
         this.fileService.saveYamlFileContent(fragmentFile, initialFragment);
 
-        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        open("http://localhost:" + this.port + "/playbooks?file=" + playbookFile);
         $("#editorPanel").shouldBe(Condition.visible);
 
         final ElementsCollection rows = $$("#stepsList .step-row");
@@ -1958,7 +1958,7 @@ public final class AuraManagerEditorUiTest
             "Saved YAML must NEVER leak Material Icon text 'expand_more', but was: " + savedContent);
 
         // Reload the editor and verify clean rendering
-        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        open("http://localhost:" + this.port + "/playbooks?file=" + playbookFile);
         $("#editorPanel").shouldBe(Condition.visible);
 
         final ElementsCollection reloadedRows = $$("#stepsList .step-row");
@@ -1986,7 +1986,7 @@ public final class AuraManagerEditorUiTest
 
         this.fileService.saveYamlFileContent(playbookFile, initialPlaybook);
 
-        open("http://localhost:" + this.port + "/?file=" + playbookFile);
+        open("http://localhost:" + this.port + "/playbooks?file=" + playbookFile);
         $("#editorPanel").shouldBe(Condition.visible);
 
         final ElementsCollection rows = $$("#stepsList .step-row");
@@ -2025,6 +2025,50 @@ public final class AuraManagerEditorUiTest
             "Folded scalar substeps group must retain '- >-', but was: " + savedContent);
         Assertions.assertTrue(savedContent.contains("Verify header is displayed."),
             "Substep must be present, but was: " + savedContent);
+    }
+
+    /**
+     * Verifies that the test editor toolbar does not contain the queue-level "Save as Batch" button.
+     */
+    @Test
+    public final void testEditorToolbarDoesNotContainSaveAsBatchButton()
+    {
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
+
+        // Create and open new test in editor
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Verify standard editor action buttons exist
+        $("#saveYamlBtn").shouldBe(Condition.visible);
+        $("#renameTestBtn").shouldBe(Condition.visible);
+        $("#deleteTestBtn").shouldBe(Condition.visible);
+
+        // Verify Save as Batch button does NOT exist in the editor panel DOM
+        $("#saveQueueAsBatchEditorBtn").shouldNotBe(Condition.exist);
+        $("#editorPanel").$$("button").filter(Condition.text("Save as Batch")).shouldHave(CollectionCondition.size(0));
+    }
+
+    /**
+     * Verifies that accessing the root URL (/) renders the Run History view by default,
+     * and clicking the Playbooks navigation link switches to the /playbooks dashboard.
+     */
+    @Test
+    public final void testRootUrlLoadsRunHistoryByDefaultAndNavigatesToPlaybooks()
+    {
+        Selenide.open("http://localhost:" + this.port + "/");
+        $("#navRunsList").shouldHave(Condition.cssClass("active"));
+        $("#navAuraManager").shouldNotHave(Condition.cssClass("active"));
+        $("#pageRunsList").shouldBe(Condition.visible);
+
+        $("#navAuraManager").shouldBe(Condition.visible).click();
+        Selenide.webdriver().shouldHave(WebDriverConditions.urlContaining("/playbooks"));
+        $("#navAuraManager").shouldHave(Condition.cssClass("active"));
+        $("#navRunsList").shouldNotHave(Condition.cssClass("active"));
+        $("#auraTestManagerWorkspace").shouldBe(Condition.visible);
     }
 }
 

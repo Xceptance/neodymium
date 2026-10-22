@@ -19,12 +19,16 @@
 package com.xceptance.aura.report.dto;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
  * Data transfer object representing a single run report.
  *
+ * @author AI-generated: Gemini 3.8 Flash
  * @author Xceptance GmbH 2026
  */
 public final class RunReportDto
@@ -509,5 +513,347 @@ public final class RunReportDto
             .distinct()
             .sorted()
             .collect(Collectors.toList());
+    }
+
+    public int getPassCleanCount()
+    {
+        return Math.max(0, passCount - getPassHealedCount() - getPassAiCount());
+    }
+
+    public int getFixedCleanCount()
+    {
+        return Math.max(0, fixedCount - getFixedHealedCount() - getFixedAiCount());
+    }
+
+    public int getKnownCleanCount()
+    {
+        return Math.max(0, knownCount - getKnownHealedCount() - getKnownAiCount());
+    }
+
+    public int getUnknownCleanCount()
+    {
+        return Math.max(0, unknownCount - getUnknownHealedCount() - getUnknownAiCount());
+    }
+
+    public double getPassedPct()
+    {
+        return totalCount > 0 ? (passCount * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getPassCleanPct()
+    {
+        return totalCount > 0 ? (getPassCleanCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getPassHealedPct()
+    {
+        return totalCount > 0 ? (getPassHealedCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getPassAiPct()
+    {
+        return totalCount > 0 ? (getPassAiCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getFixedPct()
+    {
+        return totalCount > 0 ? (fixedCount * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getFixedCleanPct()
+    {
+        return totalCount > 0 ? (getFixedCleanCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getFixedHealedPct()
+    {
+        return totalCount > 0 ? (getFixedHealedCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getFixedAiPct()
+    {
+        return totalCount > 0 ? (getFixedAiCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getKnownPct()
+    {
+        return totalCount > 0 ? (knownCount * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getKnownCleanPct()
+    {
+        return totalCount > 0 ? (getKnownCleanCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getKnownHealedPct()
+    {
+        return totalCount > 0 ? (getKnownHealedCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getKnownAiPct()
+    {
+        return totalCount > 0 ? (getKnownAiCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getUnknownPct()
+    {
+        return totalCount > 0 ? (unknownCount * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getUnknownCleanPct()
+    {
+        return totalCount > 0 ? (getUnknownCleanCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getUnknownHealedPct()
+    {
+        return totalCount > 0 ? (getUnknownHealedCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getUnknownAiPct()
+    {
+        return totalCount > 0 ? (getUnknownAiCount() * 100.0 / totalCount) : 0.0;
+    }
+
+    public double getIgnoredPct()
+    {
+        return totalCount > 0 ? (ignoredCount * 100.0 / totalCount) : 0.0;
+    }
+
+    public String getPassRateInt()
+    {
+        if (totalCount <= 0)
+        {
+            return "0%";
+        }
+        final int numPassed = passCount + fixedCount;
+        final double rate = (numPassed * 100.0) / totalCount;
+        return String.format(Locale.US, "%.0f%%", rate);
+    }
+
+    public String getPassRateText()
+    {
+        if (totalCount <= 0)
+        {
+            return "N/A";
+        }
+        final int numPassed = passCount + fixedCount;
+        final double rate = (numPassed * 100.0) / totalCount;
+        return String.format(Locale.US, "%.0f%% Pass", rate);
+    }
+
+    public String getPassCleanDashArray()
+    {
+        final double p = getPassCleanPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getPassCleanDashOffset()
+    {
+        return "25";
+    }
+
+    public String getPassHealedDashArray()
+    {
+        final double p = getPassHealedPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getPassHealedDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassCleanPct());
+    }
+
+    public String getPassAiDashArray()
+    {
+        final double p = getPassAiPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getPassAiDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassCleanPct() - getPassHealedPct());
+    }
+
+    public String getFixedCleanDashArray()
+    {
+        final double p = getFixedCleanPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getFixedCleanDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct());
+    }
+
+    public String getFixedHealedDashArray()
+    {
+        final double p = getFixedHealedPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getFixedHealedDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedCleanPct());
+    }
+
+    public String getFixedAiDashArray()
+    {
+        final double p = getFixedAiPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getFixedAiDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedCleanPct() - getFixedHealedPct());
+    }
+
+    public String getKnownCleanDashArray()
+    {
+        final double p = getKnownCleanPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getKnownCleanDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedPct());
+    }
+
+    public String getKnownHealedDashArray()
+    {
+        final double p = getKnownHealedPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getKnownHealedDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedPct() - getKnownCleanPct());
+    }
+
+    public String getKnownAiDashArray()
+    {
+        final double p = getKnownAiPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getKnownAiDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedPct() - getKnownCleanPct() - getKnownHealedPct());
+    }
+
+    public String getUnknownCleanDashArray()
+    {
+        final double p = getUnknownCleanPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getUnknownCleanDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedPct() - getKnownPct());
+    }
+
+    public String getUnknownHealedDashArray()
+    {
+        final double p = getUnknownHealedPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getUnknownHealedDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedPct() - getKnownPct() - getUnknownCleanPct());
+    }
+
+    public String getUnknownAiDashArray()
+    {
+        final double p = getUnknownAiPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getUnknownAiDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedPct() - getKnownPct() - getUnknownCleanPct() - getUnknownHealedPct());
+    }
+
+    public String getIgnoredDashArray()
+    {
+        final double p = getIgnoredPct();
+        return String.format(Locale.US, "%.2f %.2f", p, 100.0 - p);
+    }
+
+    public String getIgnoredDashOffset()
+    {
+        return String.format(Locale.US, "%.2f", 25.0 - getPassedPct() - getFixedPct() - getKnownPct() - getUnknownPct());
+    }
+
+    public List<DistributionRatioDto> getBrowserRatios()
+    {
+        final List<DistributionRatioDto> browserRatios = new ArrayList<>();
+        if (executions == null || executions.isEmpty())
+        {
+            return browserRatios;
+        }
+
+        final Map<String, Integer> bMap = new LinkedHashMap<>();
+        for (final TestExecutionDto exec : executions)
+        {
+            final String b = (exec.getBrowser() != null && !exec.getBrowser().isBlank()) ? exec.getBrowser().trim() : "Default";
+            bMap.put(b, bMap.getOrDefault(b, 0) + 1);
+        }
+
+        final String[] palette = new String[] {
+            "#10b981", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#6366f1", "#14b8a6"
+        };
+
+        final int bTotal = bMap.values().stream().mapToInt(Integer::intValue).sum();
+        int colorIdx = 0;
+        for (final Map.Entry<String, Integer> entry : bMap.entrySet())
+        {
+            final double pct = bTotal > 0 ? ((double) entry.getValue() / bTotal * 100.0) : 0.0;
+            browserRatios.add(new DistributionRatioDto(
+                entry.getKey(),
+                entry.getValue(),
+                pct,
+                palette[colorIdx % palette.length]
+            ));
+            colorIdx++;
+        }
+        return browserRatios;
+    }
+
+    public List<DistributionRatioDto> getLocaleRatios()
+    {
+        final List<DistributionRatioDto> localeRatios = new ArrayList<>();
+        if (executions == null || executions.isEmpty())
+        {
+            return localeRatios;
+        }
+
+        final Map<String, Integer> lMap = new LinkedHashMap<>();
+        for (final TestExecutionDto exec : executions)
+        {
+            final String loc = (exec.getLocation() != null && !exec.getLocation().isBlank() && !exec.getLocation().equalsIgnoreCase("UNKNOWN"))
+                ? exec.getLocation().trim()
+                : "Default";
+            lMap.put(loc, lMap.getOrDefault(loc, 0) + 1);
+        }
+
+        final String[] palette = new String[] {
+            "#10b981", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#6366f1", "#14b8a6"
+        };
+
+        final int lTotal = lMap.values().stream().mapToInt(Integer::intValue).sum();
+        int colorIdx = 0;
+        for (final Map.Entry<String, Integer> entry : lMap.entrySet())
+        {
+            final double pct = lTotal > 0 ? ((double) entry.getValue() / lTotal * 100.0) : 0.0;
+            localeRatios.add(new DistributionRatioDto(
+                entry.getKey(),
+                entry.getValue(),
+                pct,
+                palette[colorIdx % palette.length]
+            ));
+            colorIdx++;
+        }
+        return localeRatios;
     }
 }

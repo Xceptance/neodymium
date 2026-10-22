@@ -1546,5 +1546,107 @@ public class YamlPlaybookParserTest
         assertEquals("Teardown test database", playbook.getAfterSteps().get(0).getInstruction());
         assertEquals("after", playbook.getAfterSteps().get(0).getBlock());
     }
+
+    @Test
+    public void testParseYamlPlaybookWithAreaTag() throws IOException
+    {
+        final String yamlContent = """
+            @Checkout
+            # Neodymium YAML Test Data File
+            steps:
+              - instruction: "Open cart"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("checkout-test.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("checkout-test.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals("@Checkout", playbook.getAreaName(), "Playbook should extract area tag from YAML file content");
+        assertEquals(1, playbook.getSteps().size());
+        assertEquals("Open cart", playbook.getSteps().get(0).getInstruction());
+    }
+
+    @Test
+    public void testParseYamlPlaybookWithCommentedAreaTag() throws IOException
+    {
+        final String yamlContent = """
+            # @Checkout
+            # Neodymium YAML Test Data File
+            steps:
+              - instruction: "Open cart"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("checkout-commented-test.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("checkout-commented-test.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals("@Checkout", playbook.getAreaName(), "Playbook should extract commented area tag from YAML file content");
+        assertEquals(1, playbook.getSteps().size());
+    }
+
+    @Test
+    public void testParseYamlPlaybookWithHashAtAreaTag() throws IOException
+    {
+        final String yamlContent = """
+            #@Checkout
+            # Neodymium YAML Test Data File
+            steps:
+              - instruction: "Open cart"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("checkout-hashat-test.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("checkout-hashat-test.yaml", manager);
+
+        assertNotNull(playbook);
+        assertEquals("@Checkout", playbook.getAreaName(), "Playbook should extract #@ tag from YAML file content");
+        assertEquals(1, playbook.getSteps().size());
+        assertEquals("Open cart", playbook.getSteps().get(0).getInstruction());
+    }
+
+    @Test
+    public void testParseStringWithHashAtAreaTag() throws IOException
+    {
+        final String yamlContent = """
+            #@Checkout
+            steps:
+              - instruction: "Open cart"
+            """;
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parseString(yamlContent, null);
+
+        assertNotNull(playbook);
+        assertEquals("@Checkout", playbook.getAreaName());
+        assertEquals(1, playbook.getSteps().size());
+    }
+
+    @Test
+    public void testParseYamlPlaybookWithoutAreaTag() throws IOException
+    {
+        final String yamlContent = """
+            # Neodymium YAML Test Data File
+            steps:
+              - instruction: "Open cart"
+            """;
+
+        final InMemoryResourceManager manager = new InMemoryResourceManager();
+        manager.write("no-area-test.yaml", yamlContent);
+
+        final YamlPlaybookParser parser = new YamlPlaybookParser();
+        final Playbook playbook = parser.parse("no-area-test.yaml", manager);
+
+        assertNotNull(playbook);
+        assertNull(playbook.getAreaName(), "Playbook without area tag should have null areaName");
+        assertEquals(1, playbook.getSteps().size());
+    }
 }
 

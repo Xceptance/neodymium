@@ -62,7 +62,6 @@ public class AuraTestEditorControllerTest
             "dataMatrix", List.of(),
             "varKeys", List.of()
         ));
-        Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of());
 
         final String view = controller.getEditorFragment("test.yaml", model);
 
@@ -72,6 +71,28 @@ public class AuraTestEditorControllerTest
         Assertions.assertEquals(false, model.getAttribute("hasParseError"));
         Assertions.assertEquals("visual", model.getAttribute("editorMode"));
         Assertions.assertEquals(false, model.getAttribute("isFragment"));
+        Mockito.verify(fileService, Mockito.never()).getYamlFilesList();
+    }
+
+    @Test
+    public void testGetEditorFragmentWithAreaTag() throws Exception
+    {
+        final Model model = new ConcurrentModel();
+        final String sampleYaml = "@Checkout\nsteps:\n  - Open ${neodymium.url}";
+        Mockito.when(fileService.readYamlFileContent("checkout-test.yaml")).thenReturn(sampleYaml);
+        Mockito.when(fileService.parsePlaybookSections(sampleYaml)).thenReturn(Map.of(
+            "beforeSteps", List.of(),
+            "mainSteps", List.of("Open ${neodymium.url}"),
+            "afterSteps", List.of(),
+            "dataMatrix", List.of(),
+            "varKeys", List.of(),
+            "areaTag", "@Checkout"
+        ));
+
+        final String view = controller.getEditorFragment("checkout-test.yaml", model);
+
+        Assertions.assertEquals("fragments/editor :: editorPanelContent", view);
+        Assertions.assertEquals("@Checkout", model.getAttribute("areaTag"));
     }
 
     @Test
@@ -115,7 +136,6 @@ public class AuraTestEditorControllerTest
             "dataMatrix", List.of(),
             "varKeys", List.of()
         ));
-        Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of());
 
         final String view = controller.getEditorFragment("broken.yaml", model);
 
@@ -131,7 +151,6 @@ public class AuraTestEditorControllerTest
     public void testGetEditorFragmentWithoutFile()
     {
         final Model model = new ConcurrentModel();
-        Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of());
 
         final String view = controller.getEditorFragment("", model);
 

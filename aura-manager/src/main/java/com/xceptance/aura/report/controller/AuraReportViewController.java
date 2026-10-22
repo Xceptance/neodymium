@@ -22,6 +22,8 @@ import com.xceptance.aura.report.dto.AreaRunPointDto;
 import com.xceptance.aura.report.dto.AreaSummaryDto;
 import com.xceptance.aura.report.dto.BatchAreaTrendDto;
 import com.xceptance.aura.report.dto.BatchOverviewDataDto;
+import com.xceptance.aura.report.dto.BatchSummaryDto;
+import com.xceptance.aura.report.dto.DistributionRatioDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestBaseDataDto;
 import com.xceptance.aura.report.dto.TestBaseVariationHistoryDto;
@@ -41,6 +43,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -102,7 +105,7 @@ public class AuraReportViewController
         this.objectMapper = new ObjectMapper();
     }
 
-    @GetMapping({"/report", "/batch-overview", "/fragments/batch-overview"})
+    @GetMapping({"/", "/report", "/batch-overview", "/fragments/batch-overview"})
     public String batchOverview(
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         final Model model)
@@ -296,7 +299,7 @@ public class AuraReportViewController
                 .orElse("Default"));
 
         final List<TestRunEntity> chronoRuns = new ArrayList<>(runs);
-        java.util.Collections.reverse(chronoRuns);
+        Collections.reverse(chronoRuns);
 
         final Map<String, List<AreaRunPointDto>> areaPointsMap = new LinkedHashMap<>();
         for (final TestRunEntity r : chronoRuns)
@@ -450,9 +453,139 @@ public class AuraReportViewController
             ));
         }
 
+        final TestBatchEntity batchEntity = batchOpt.orElseGet(() -> new TestBatchEntity(
+            batchName,
+            batchEnvironment,
+            "",
+            String.join(",", batchLocales),
+            String.join(",", batchBrowsers),
+            !allRuns.isEmpty() ? allRuns.get(0).getId() : null
+        ));
+        final List<BatchSummaryDto> summaryList = dataService.getAllBatches(List.of(batchEntity), allRuns);
+        final BatchSummaryDto batchSummary = !summaryList.isEmpty() ? summaryList.get(0) : null;
+
+        final List<DistributionRatioDto> browserRatios = new ArrayList<>();
+        final List<DistributionRatioDto> localeRatios = new ArrayList<>();
+
+        final String[] palette = new String[] {
+            "#10b981", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#6366f1", "#14b8a6"
+        };
+
+        final TestRunEntity latestRunEntity = !allRuns.isEmpty() ? allRuns.get(0) : null;
+        if (latestRunEntity != null)
+        {
+            final RunReportDto latestReport = dataService.getRunReport(latestRunEntity.getId());
+            final Map<String, Integer> bMap = new LinkedHashMap<>();
+            final Map<String, Integer> lMap = new LinkedHashMap<>();
+
+            if (latestReport != null && latestReport.getExecutions() != null && !latestReport.getExecutions().isEmpty())
+            {
+                for (final TestExecutionDto exec : latestReport.getExecutions())
+                {
+                    final String b = (exec.getBrowser() != null && !exec.getBrowser().isBlank()) ? exec.getBrowser() : "Default";
+                    bMap.put(b, bMap.getOrDefault(b, 0) + 1);
+
+                    final String loc = (exec.getLocation() != null && !exec.getLocation().isBlank() && !exec.getLocation().equalsIgnoreCase("UNKNOWN")) ? exec.getLocation() : "Default";
+                    lMap.put(loc, lMap.getOrDefault(loc, 0) + 1);
+                }
+            }
+            else
+            {
+                if (latestRunEntity.getBrowsersCsv() != null)
+                {
+                    for (final String b : latestRunEntity.getBrowsersCsv().split(","))
+                    {
+                        if (!b.isBlank())
+                        {
+                            bMap.put(b.trim(), 1);
+                        }
+                    }
+                }
+                if (latestRunEntity.getLocalesCsv() != null)
+                {
+                    for (final String l : latestRunEntity.getLocalesCsv().split(","))
+                    {
+                        if (!l.isBlank())
+                        {
+                            lMap.put(l.trim(), 1);
+                        }
+                    }
+                }
+            }
+
+            final int bTotal = bMap.values().stream().mapToInt(Integer::intValue).sum();
+            int colorIdx = 0;
+            for (final Map.Entry<String, Integer> entry : bMap.entrySet())
+            {
+                final double pct = bTotal > 0 ? ((double) entry.getValue() / bTotal * 100.0) : 0.0;
+                browserRatios.add(new DistributionRatioDto(
+                    entry.getKey(),
+                    entry.getValue(),
+                    pct,
+                    palette[colorIdx % palette.length]
+                ));
+                colorIdx++;
+            }
+
+            final int lTotal = lMap.values().stream().mapToInt(Integer::intValue).sum();
+            colorIdx = 0;
+            for (final Map.Entry<String, Integer> entry : lMap.entrySet())
+            {
+                final double pct = lTotal > 0 ? ((double) entry.getValue() / lTotal * 100.0) : 0.0;
+                localeRatios.add(new DistributionRatioDto(
+                    entry.getKey(),
+                    entry.getValue(),
+                    pct,
+                    palette[colorIdx % palette.length]
+                ));
+                colorIdx++;
+            }
+        }
+
+        final List<String> filterEnvs = allRuns.stream()
+            .map(TestRunEntity::getEnvironment)
+            .filter(e -> e != null && !e.isBlank())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+        if (filterEnvs.isEmpty())
+        {
+            filterEnvs.add(batchEnvironment);
+        }
+
+        final List<String> filterLocales = allRuns.stream()
+            .flatMap(r -> r.getLocalesCsv() != null ? Arrays.stream(r.getLocalesCsv().split(",")) : Stream.empty())
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+        if (filterLocales.isEmpty())
+        {
+            filterLocales.addAll(batchLocales);
+        }
+
+        final List<String> filterBrowsers = allRuns.stream()
+            .flatMap(r -> r.getBrowsersCsv() != null ? Arrays.stream(r.getBrowsersCsv().split(",")) : Stream.empty())
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+        if (filterBrowsers.isEmpty())
+        {
+            filterBrowsers.addAll(batchBrowsers);
+        }
+
         model.addAttribute("batchName", batchName);
         model.addAttribute("batch", batchOpt.orElse(null));
+        model.addAttribute("batchSummary", batchSummary);
         model.addAttribute("batchEnvironment", batchEnvironment);
+        model.addAttribute("browserRatios", browserRatios);
+        model.addAttribute("localeRatios", localeRatios);
+        model.addAttribute("filterEnvs", filterEnvs);
+        model.addAttribute("filterLocales", filterLocales);
+        model.addAttribute("filterBrowsers", filterBrowsers);
         model.addAttribute("runs", runs);
         model.addAttribute("totalRunsCount", totalRunsCount);
         model.addAttribute("currentLimit", effectiveLimit);
@@ -482,14 +615,21 @@ public class AuraReportViewController
         final String targetExecutionId = executionId != null && !executionId.isEmpty() ? executionId : testExecutionId;
         final RunReportDto report = dataService.getRunReport(runId);
         final String activeSubTab = subTab != null && !subTab.isBlank() ? subTab : "runReportSubTabOverview";
+        final String effectiveBatchName = report.getBatchName() != null && !report.getBatchName().isBlank()
+            ? report.getBatchName()
+            : "Default";
         model.addAttribute("runId", report.getRunId());
         model.addAttribute("targetExecutionId", targetExecutionId);
         model.addAttribute("activeSubTab", activeSubTab);
         model.addAttribute("report", report);
+        model.addAttribute("batchName", effectiveBatchName);
+        model.addAttribute("activeBatchName", effectiveBatchName);
         model.addAttribute("filterModes", report.getFilterModes());
         model.addAttribute("filterBrowsers", report.getFilterBrowsers());
         model.addAttribute("filterLocales", report.getFilterLocales());
-        model.addAttribute("pageTitle", "Run Report #" + report.getRunId());
+        model.addAttribute("browserRatios", report.getBrowserRatios());
+        model.addAttribute("localeRatios", report.getLocaleRatios());
+        model.addAttribute("pageTitle", effectiveBatchName + " (Run #" + report.getRunId() + ")");
         model.addAttribute("activeTab", "RunReport");
         model.addAttribute("viewFragment", "fragments/run-report :: runReport");
 

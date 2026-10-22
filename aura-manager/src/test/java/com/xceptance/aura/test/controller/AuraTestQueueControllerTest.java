@@ -18,15 +18,20 @@
  */
 package com.xceptance.aura.test.controller;
 
+import com.xceptance.aura.report.entity.TestBatchEntity;
+import com.xceptance.aura.report.repository.TestBatchRepository;
+import com.xceptance.aura.report.service.AuraReportDataService;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
+import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.Assertions;
 import org.neodymium.ai.config.ExecutionMode;
@@ -34,6 +39,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.springframework.http.ResponseEntity;
 import org.springframework.ui.ConcurrentModel;
 import org.springframework.ui.Model;
 import org.thymeleaf.context.Context;
@@ -52,6 +58,8 @@ public final class AuraTestQueueControllerTest
     private AuraQueueService queueService;
     private AuraFileService fileService;
     private AuraInteractiveService interactiveService;
+    private TestBatchRepository batchRepository;
+    private AuraReportDataService reportDataService;
     private AuraTestQueueController controller;
 
     @BeforeAll
@@ -66,7 +74,9 @@ public final class AuraTestQueueControllerTest
         this.interactiveService = new AuraInteractiveService();
         this.fileService = Mockito.mock(AuraFileService.class);
         this.queueService = new AuraQueueService(null, this.interactiveService);
-        this.controller = new AuraTestQueueController(this.queueService, this.fileService, this.interactiveService);
+        this.batchRepository = Mockito.mock(TestBatchRepository.class);
+        this.reportDataService = Mockito.mock(AuraReportDataService.class);
+        this.controller = new AuraTestQueueController(this.queueService, this.fileService, this.interactiveService, this.batchRepository, this.reportDataService);
     }
 
     @Test
@@ -352,5 +362,84 @@ public final class AuraTestQueueControllerTest
         Assertions.assertNotNull(html);
         Assertions.assertTrue(html.contains("Click button"));
         Assertions.assertTrue(html.contains("#myBtn"));
+    }
+
+    @Test
+    public final void testSaveQueueAsBatchEmptyQueue()
+    {
+        final ResponseEntity<Map<String, Object>> response = controller.saveQueueAsBatch("SmokeBatch", "Staging", "desc");
+        Assertions.assertEquals(400, response.getStatusCode().value());
+        Assertions.assertEquals("error", response.getBody().get("status"));
+        Assertions.assertTrue(response.getBody().get("message").toString().contains("empty queue"));
+    }
+
+    @Test
+    public final void testSaveQueueAsBatchBlankName()
+    {
+        controller.getRunQueue().add(new DatasetSelection("test.yaml", "d1"));
+        final ResponseEntity<Map<String, Object>> response = controller.saveQueueAsBatch("   ", "Staging", "desc");
+        Assertions.assertEquals(400, response.getStatusCode().value());
+        Assertions.assertEquals("error", response.getBody().get("status"));
+        Assertions.assertTrue(response.getBody().get("message").toString().contains("Batch name is required"));
+    }
+
+    @Test
+    public final void testSaveQueueAsBatchSuccess()
+    {
+        controller.getRunQueue().add(new DatasetSelection("test.yaml", "d1"));
+        Mockito.when(batchRepository.findById("SmokeBatch")).thenReturn(Optional.empty());
+
+        final ResponseEntity<Map<String, Object>> response = controller.saveQueueAsBatch("SmokeBatch", "Staging", "Smoke test suite");
+
+        Assertions.assertEquals(200, response.getStatusCode().value());
+        Assertions.assertEquals("success", response.getBody().get("status"));
+        Assertions.assertEquals("SmokeBatch", response.getBody().get("batchName"));
+        Mockito.verify(batchRepository).save(Mockito.any(TestBatchEntity.class));
+    }
+
+    @Test
+    public final void testRunBatchNotFound()
+    {
+        Mockito.when(batchRepository.findById("NonExistent")).thenReturn(Optional.empty());
+        final ResponseEntity<Map<String, Object>> response = controller.runBatch("NonExistent");
+        Assertions.assertEquals(404, response.getStatusCode().value());
+        Assertions.assertEquals("error", response.getBody().get("status"));
+    }
+
+    @Test
+    public final void testRunBatchSuccess()
+    {
+        final TestBatchEntity entity = new TestBatchEntity("SmokeBatch", "Staging", "Smoke description", "Default", "Chrome", null,
+                "[{\"file\":\"test.yaml\",\"id\":\"d1\",\"browserProfiles\":[\"chrome\"]}]");
+        Mockito.when(batchRepository.findById("SmokeBatch")).thenReturn(Optional.of(entity));
+
+        final ResponseEntity<Map<String, Object>> response = controller.runBatch("SmokeBatch");
+        Assertions.assertEquals(200, response.getStatusCode().value());
+        Assertions.assertEquals("success", response.getBody().get("status"));
+        Assertions.assertEquals("SmokeBatch", response.getBody().get("batchName"));
+    }
+
+    @Test
+    public final void testGetStatusStreamIncludesBatchName()
+    {
+        final AuraQueueService mockQueueService = Mockito.mock(AuraQueueService.class);
+        Mockito.when(mockQueueService.getCurrentRunId()).thenReturn("run_123456");
+        Mockito.when(mockQueueService.getCurrentBatchName()).thenReturn("Wikipedia");
+        Mockito.when(mockQueueService.isRunningQueue()).thenReturn(true);
+
+        final AuraTestQueueController testController = new AuraTestQueueController(
+            mockQueueService, this.fileService, this.interactiveService, this.batchRepository, this.reportDataService
+        );
+
+        final ResponseEntity<Map<String, Object>> response = testController.getStatusStream(null, 0, 0);
+
+        Assertions.assertEquals(200, response.getStatusCode().value());
+        final Map<String, Object> body = response.getBody();
+        Assertions.assertNotNull(body);
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> statusObj = (Map<String, Object>) body.get("status");
+        Assertions.assertNotNull(statusObj);
+        Assertions.assertEquals("Wikipedia", statusObj.get("batchName"));
+        Assertions.assertEquals("run_123456", statusObj.get("runId"));
     }
 }

@@ -1322,4 +1322,70 @@ public class InteractiveConsoleEngineTest
         assertEquals("after", afterBlockUpdated.get(0).path("llmCalls").get(0).path("block").asText());
         assertEquals("Clear cookies and close session", afterBlockUpdated.get(0).path("llmCalls").get(0).path("userPrompt").asText());
     }
+
+    @Test
+    public void testInteractiveConsoleEngineDoesNotCreatePhantomAuraManagerStorageDirectory() throws IOException
+    {
+        final String testRunId = "run_no_phantom_aura_manager_dir";
+        System.setProperty("batchName", "Wikipedia");
+        try
+        {
+            final InteractiveConsoleEngine engine = new InteractiveConsoleEngine(testRunId);
+            final String rawStateJson = "{\"testName\":\"WikipediaTest\",\"status\":\"passed\"}";
+            engine.pushState(rawStateJson);
+
+            final File phantomDir = new File("aura-manager/storage/runs/" + testRunId);
+            assertFalse(phantomDir.exists(), "InteractiveConsoleEngine must never create phantom aura-manager/storage/runs directory");
+        }
+        finally
+        {
+            System.clearProperty("batchName");
+        }
+    }
+
+    @Test
+    public void testPushStateLogsAreaNameFromTransientData() throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        AiConfiguration.resetInstance();
+
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        context.getTransientData().put("areaName", "@Checkout");
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run_area_test", 0, "passed");
+        final JsonNode stateRoot = new ObjectMapper().readTree(stateJson);
+        assertEquals("@Checkout", stateRoot.path("areaName").asText());
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run_area_test");
+        engine.pushState(stateJson);
+
+        final File logFile = new File(tempResultsDir, "console-execution-1.json");
+        assertTrue(logFile.exists(), "console-execution-1.json should exist on disk");
+
+        final String loggedContent = Files.readString(logFile.toPath());
+        final JsonNode loggedRoot = new ObjectMapper().readTree(loggedContent);
+        assertEquals("@Checkout", loggedRoot.path("areaName").asText(), "console-execution.json must contain areaName property");
+    }
+
+    @Test
+    public void testPushStateExtractsAreaNameFromPlaybookFileWhenMissingInPayload() throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        AiConfiguration.resetInstance();
+
+        final File tempPlaybook = new File(tempResultsDir, "playbook-checkout.yaml");
+        Files.writeString(tempPlaybook.toPath(), "@Payment\nsteps:\n  - Pay\n");
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run_playbook_file_area_test");
+        final String rawStateJson = String.format("{\"testName\":\"PaymentTest\",\"status\":\"passed\",\"playbookFile\":\"%s\"}",
+            tempPlaybook.getAbsolutePath().replace("\\", "\\\\"));
+        engine.pushState(rawStateJson);
+
+        final File logFile = new File(tempResultsDir, "console-execution-1.json");
+        assertTrue(logFile.exists(), "console-execution-1.json should exist on disk");
+
+        final String loggedContent = Files.readString(logFile.toPath());
+        final JsonNode loggedRoot = new ObjectMapper().readTree(loggedContent);
+        assertEquals("@Payment", loggedRoot.path("areaName").asText(), "console-execution.json must extract areaName from playbookFile");
+    }
 }

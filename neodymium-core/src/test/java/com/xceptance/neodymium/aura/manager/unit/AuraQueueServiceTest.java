@@ -217,5 +217,12 @@ public final class AuraQueueServiceTest
             AuraQueueService.deleteDirRecursively(tempDir.toFile());
         }
     }
+
+    @Test
+    public final void testGetCurrentBatchNameDefaultAndSet()
+    {
+        Assertions.assertNotNull(queueService.getCurrentBatchName());
+        Assertions.assertEquals("", queueService.getCurrentBatchName());
+    }
 }
 

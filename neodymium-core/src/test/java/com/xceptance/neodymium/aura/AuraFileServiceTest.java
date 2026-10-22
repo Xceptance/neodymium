@@ -777,4 +777,70 @@ public class AuraFileServiceTest
         Assertions.assertEquals("  - Verify the cart items section is displayed.", mainSteps.get(5));
         Assertions.assertEquals("Click checkout button", mainSteps.get(6));
     }
+
+    @Test
+    public void testExtractAreaTagFromContent()
+    {
+        Assertions.assertEquals("@Checkout", AuraFileService.extractAreaTag("#@Checkout\nsteps:\n  - step 1"));
+        Assertions.assertEquals("@Checkout", AuraFileService.extractAreaTag("  #@Checkout\nsteps:\n  - step 1"));
+        Assertions.assertEquals("@Checkout", AuraFileService.extractAreaTag("# @Checkout\nsteps:\n  - step 1"));
+        Assertions.assertEquals("@Checkout", AuraFileService.extractAreaTag("@Checkout\nsteps:\n  - step 1"));
+        Assertions.assertEquals("@Checkout", AuraFileService.extractAreaTag("  @Checkout\nsteps:\n  - step 1"));
+        Assertions.assertEquals("@Area_123", AuraFileService.extractAreaTag("#@Area_123\nsteps:\n  - step 1"));
+        Assertions.assertEquals("@Area-tag", AuraFileService.extractAreaTag("#@Area-tag\nsteps:\n  - step 1"));
+
+        // Null and blank content
+        Assertions.assertNull(AuraFileService.extractAreaTag(null));
+        Assertions.assertNull(AuraFileService.extractAreaTag(""));
+        Assertions.assertNull(AuraFileService.extractAreaTag("   \n\n  "));
+
+        // Content without area tag
+        Assertions.assertNull(AuraFileService.extractAreaTag("steps:\n  - step 1"));
+
+        // Tag occurring inside or after section body should be ignored
+        final String tagAfterSteps = "steps:\n  - step 1\n#@Checkout\n  - step 2";
+        Assertions.assertNull(AuraFileService.extractAreaTag(tagAfterSteps));
+    }
+
+    @Test
+    public void testExtractAreaTagFromFileSystem() throws IOException
+    {
+        final File tempFile = File.createTempFile("playbook-area-", ".yaml");
+        try
+        {
+            Files.writeString(tempFile.toPath(), "#@Search\n# Test file\nsteps:\n  - Open url\n", StandardCharsets.UTF_8);
+            final String tag = AuraFileService.extractAreaTagFromFileSystem(tempFile.getAbsolutePath());
+            Assertions.assertEquals("@Search", tag);
+
+            // Non-existent file
+            Assertions.assertNull(AuraFileService.extractAreaTagFromFileSystem("/invalid/path/nonexistent.yaml"));
+        }
+        finally
+        {
+            tempFile.delete();
+        }
+    }
+
+    @Test
+    public void testParsePlaybookSectionsWithAreaTag()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            #@Checkout
+            # Neodymium YAML Test Data File
+            steps: |
+              Open https://verla.xceptance.com
+            """;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        Assertions.assertNotNull(sections);
+        Assertions.assertEquals("@Checkout", sections.get("areaTag"));
+        Assertions.assertEquals(Boolean.FALSE, sections.get("hasError"));
+
+        @SuppressWarnings("unchecked")
+        final List<String> mainSteps = (List<String>) sections.get("mainSteps");
+        Assertions.assertNotNull(mainSteps);
+        Assertions.assertEquals(1, mainSteps.size());
+        Assertions.assertEquals("Open https://verla.xceptance.com", mainSteps.get(0));
+    }
 }

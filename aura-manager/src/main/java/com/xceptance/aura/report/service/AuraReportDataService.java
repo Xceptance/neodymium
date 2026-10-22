@@ -859,8 +859,10 @@ public class AuraReportDataService
         }
 
         final Optional<TestRunEntity> runOpt = runRepository.findById(effectiveRunId);
+        final boolean isActiveOnDisk = localRunJsonStorageService.isRunCurrentlyActiveOnDisk(effectiveRunId);
         final boolean isInProgress = (runOpt.isPresent() && "IN_PROGRESS".equalsIgnoreCase(runOpt.get().getStatus()))
-                || liveRunBuffer.containsKey(effectiveRunId);
+                || liveRunBuffer.containsKey(effectiveRunId)
+                || isActiveOnDisk;
 
         if (!isInProgress && runReportCache.containsKey(effectiveRunId))
         {
@@ -885,17 +887,22 @@ public class AuraReportDataService
                 localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true);
             }
 
-            final TestRunEntity runEntity = runOpt.orElseGet(() -> new TestRunEntity(
-                effectiveRunId,
-                "Default",
-                "COMPLETED",
-                "Unknown",
-                "Default",
-                "Default",
-                "Chrome",
-                "Recently",
-                System.currentTimeMillis()
-            ));
+            final TestRunEntity runEntity = runOpt.orElseGet(() -> {
+                final LocalRunJsonStorageService.BatchInfo batchInfo = (runDir != null && Files.exists(runDir))
+                        ? localRunJsonStorageService.resolveOrCreateBatchJson(runDir.toFile(), null)
+                        : new LocalRunJsonStorageService.BatchInfo("Default", "", "Default");
+                return new TestRunEntity(
+                    effectiveRunId,
+                    batchInfo.name,
+                    isInProgress ? "IN_PROGRESS" : "COMPLETED",
+                    "Unknown",
+                    batchInfo.environment,
+                    "Default",
+                    "Chrome",
+                    "Recently",
+                    System.currentTimeMillis()
+                );
+            });
 
             List<TestExecutionDto> rawExecutions = new ArrayList<>();
             final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(effectiveRunId);
@@ -1065,9 +1072,10 @@ public class AuraReportDataService
             {
                 runReportCache.put(effectiveRunId, report);
             }
-            else if (runOpt.isPresent())
+            else
             {
-                final TestRunEntity liveRun = runOpt.get();
+                final TestRunEntity liveRun = runOpt.orElse(runEntity);
+                liveRun.setStatus("IN_PROGRESS");
                 liveRun.setTotalTests(report.getTotalCount());
                 liveRun.setPassedCount(report.getPassCount());
                 liveRun.setSucceededFixedCount(report.getFixedCount());
@@ -1124,7 +1132,21 @@ public class AuraReportDataService
         if (Files.exists(runDir) && Files.isDirectory(runDir))
         {
             final List<File> files = new ArrayList<>();
-            localRunJsonStorageService.scanForTestExecJsonFiles(runDir.toFile(), files);
+            // Fast candidate lookup: if executionId starts with "ClassName#...", inspect that folder first
+            if (executionId.contains("#"))
+            {
+                final String classCandidate = executionId.substring(0, executionId.indexOf('#'));
+                final File candidateDir = runDir.resolve(classCandidate).toFile();
+                if (candidateDir.exists() && candidateDir.isDirectory())
+                {
+                    localRunJsonStorageService.scanForTestExecJsonFiles(candidateDir, files);
+                }
+            }
+            if (files.isEmpty())
+            {
+                localRunJsonStorageService.scanForTestExecJsonFiles(runDir.toFile(), files);
+            }
+
             for (final File f : files)
             {
                 JsonNode node = null;
@@ -1160,13 +1182,65 @@ public class AuraReportDataService
                     try
                     {
                         final String id = node.path("id").asText(f.getName().replaceAll("\\.json$", ""));
-                        final String testClass = node.path("testClass").asText("DefaultClass");
+                        String testClass = node.path("testClass").asText("");
+                        if (testClass.isEmpty() || "DefaultClass".equalsIgnoreCase(testClass) || "GeneralClass".equalsIgnoreCase(testClass))
+                        {
+                            if (f.getParentFile() != null && !f.getParentFile().getName().equalsIgnoreCase(f.getName())
+                                    && !f.getParentFile().getName().startsWith("run_") && !f.getParentFile().getName().startsWith("run-"))
+                            {
+                                testClass = f.getParentFile().getName();
+                            }
+                            else if (node.has("testFile") && !node.path("testFile").asText().isEmpty())
+                            {
+                                String tf = node.path("testFile").asText();
+                                if (tf.contains("#"))
+                                {
+                                    tf = tf.substring(0, tf.indexOf('#'));
+                                }
+                                if (tf.contains("."))
+                                {
+                                    tf = tf.substring(tf.lastIndexOf('.') + 1);
+                                }
+                                testClass = tf;
+                            }
+                            else
+                            {
+                                testClass = "DefaultClass";
+                            }
+                        }
+
                         final String testMethod = LocalRunJsonStorageService.extractTestMethod(node);
-                        final String title = node.path("title").asText("Default");
+
+                        String title = node.path("title").asText("");
+                        if (title.isEmpty() || "Default".equalsIgnoreCase(title))
+                        {
+                            if (node.has("datasetId") && !node.path("datasetId").asText().isBlank())
+                            {
+                                title = node.path("datasetId").asText();
+                            }
+                            else if (node.has("testId") && !node.path("testId").asText().isBlank())
+                            {
+                                title = node.path("testId").asText();
+                            }
+                            else if (node.has("testName") && !node.path("testName").asText().isBlank())
+                            {
+                                title = node.path("testName").asText();
+                            }
+                            else
+                            {
+                                title = "Default";
+                            }
+                        }
+
                         final String browser = node.path("browser").asText("Chrome");
+                        final String nodeDatasetId = node.path("datasetId").asText("");
+                        final String nodeTestId = node.path("testId").asText("");
 
                         final String execKey = LocalRunJsonStorageService.buildExecutionKey(testClass, testMethod, title, browser);
+                        final String execKeyNoMethod = LocalRunJsonStorageService.buildExecutionKey(testClass, null, title, browser);
                         final String fullKey = testClass + "#" + id + "#" + browser;
+                        final String fullKeyDatasetId = !nodeDatasetId.isBlank() ? testClass + "#" + nodeDatasetId + "#" + browser : "";
+                        final String fullKeyTestId = !nodeTestId.isBlank() ? testClass + "#" + nodeTestId + "#" + browser : "";
                         final String execKeyWithId = execKey + "#" + id;
                         final String classMethodBrowser = testClass + "#" + testMethod + "#" + browser;
                         final String fileName = f.getName();
@@ -1174,7 +1248,10 @@ public class AuraReportDataService
 
                         if (executionId.equalsIgnoreCase(id)
                                 || executionId.equalsIgnoreCase(fullKey)
+                                || (!fullKeyDatasetId.isEmpty() && executionId.equalsIgnoreCase(fullKeyDatasetId))
+                                || (!fullKeyTestId.isEmpty() && executionId.equalsIgnoreCase(fullKeyTestId))
                                 || executionId.equalsIgnoreCase(execKey)
+                                || executionId.equalsIgnoreCase(execKeyNoMethod)
                                 || executionId.equalsIgnoreCase(execKeyWithId)
                                 || executionId.equalsIgnoreCase(classMethodBrowser)
                                 || executionId.equalsIgnoreCase(fileNameNoExt)
@@ -1656,7 +1733,7 @@ public class AuraReportDataService
         );
 
         runRepository.save(newRun);
-        liveRunBuffer.put(effectiveRunId, new ArrayList<>());
+        liveRunBuffer.put(effectiveRunId, new java.util.concurrent.CopyOnWriteArrayList<>());
         runReportCache.remove(effectiveRunId);
 
         LOG.info("Started new test run: runId={}, batch={}", effectiveRunId, batchName);
@@ -1675,7 +1752,7 @@ public class AuraReportDataService
         try
         {
             final TestExecutionDto dto = objectMapper.convertValue(payload, TestExecutionDto.class);
-            final List<TestExecutionDto> list = liveRunBuffer.computeIfAbsent(runId, k -> new ArrayList<>());
+            final List<TestExecutionDto> list = liveRunBuffer.computeIfAbsent(runId, k -> new java.util.concurrent.CopyOnWriteArrayList<>());
 
             boolean replaced = false;
             final String execId = dto.getId();
