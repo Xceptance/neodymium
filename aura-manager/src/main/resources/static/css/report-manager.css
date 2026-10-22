@@ -2388,9 +2388,87 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 }
 .llm-tool-result-text {
     font-family: var(--font-mono);
-    font-size: 0.76rem;
-    color: var(--text-muted);
+    font-size: 0.78rem;
+    color: var(--text-main);
     word-break: break-word;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+}
+.llm-tool-status-badge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+    letter-spacing: 0.03em;
+}
+.llm-tool-status-badge.badge-ok {
+    background: #dcfce7;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+.llm-tool-status-badge.badge-err {
+    background: #fee2e2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+.llm-copy-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--accent, #6366f1);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+.llm-copy-btn:hover {
+    border-color: var(--accent, #6366f1);
+    background: rgba(99, 102, 241, 0.08);
+}
+.llm-copy-btn.copied {
+    background: #dcfce7 !important;
+    border-color: #86efac !important;
+    color: #15803d !important;
+}
+
+.llm-drawer-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+.llm-drawer-subtitle {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.llm-code-block {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.45rem 0.65rem;
+    font-family: var(--font-mono);
+    font-size: 0.74rem;
+    color: var(--text-main);
+    max-height: 250px;
+    overflow-y: auto;
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+.llm-context-box {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.45rem 0.65rem;
+    font-size: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
 }
 
 .llm-details-drawer {

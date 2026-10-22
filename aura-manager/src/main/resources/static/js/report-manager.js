@@ -2622,6 +2622,115 @@ function formatBytes(bytes) {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+function parseToolAndUserTurns(text) {
+    if (!text) return null;
+
+    let toolPart = '';
+    let userPart = '';
+
+    // Check for ChatMessage[USER] separator (newline or space before ChatMessage[USER])
+    const userIdx = text.search(/(?:\n|\s|^)ChatMessage\[USER\]:?/i);
+    if (userIdx !== -1) {
+        toolPart = text.substring(0, userIdx).trim();
+        userPart = text.substring(userIdx).replace(/^[\s\n]*ChatMessage\[USER\]:?\s*/i, '').trim();
+    } else {
+        toolPart = text.trim();
+    }
+
+    // Parse toolPart: TOOL (tool=..., id=...): <payload> or ChatMessage[TOOL (...)]: <payload>
+    let toolName = '';
+    let toolId = '';
+    let toolJsonStr = toolPart;
+
+    const toolHeaderMatch = toolPart.match(/^(?:ChatMessage\[)?TOOL(?:\s*\((?:tool=)?([^,)]+)(?:,\s*id=([^)]+))?\))?\]?:\s*([\s\S]*)$/i);
+    if (toolHeaderMatch) {
+        toolName = (toolHeaderMatch[1] || '').trim();
+        toolId = (toolHeaderMatch[2] || '').trim();
+        toolJsonStr = (toolHeaderMatch[3] || '').trim();
+    }
+
+    let parsedJson = null;
+    let formattedJson = '';
+    let summary = '';
+
+    if (toolJsonStr.startsWith('{') || toolJsonStr.startsWith('[')) {
+        try {
+            parsedJson = JSON.parse(toolJsonStr);
+            formattedJson = JSON.stringify(parsedJson, null, 2);
+        } catch (e) {
+            formattedJson = toolJsonStr;
+        }
+    } else {
+        formattedJson = toolJsonStr;
+    }
+
+    if (parsedJson) {
+        const action = parsedJson.action || toolName || 'tool';
+        const status = parsedJson.status || (parsedJson.error ? 'ERROR' : 'SUCCESS');
+        if (action === 'query_dom' || parsedJson.matches !== undefined || parsedJson.matchCount !== undefined) {
+            const count = parsedJson.matchCount !== undefined ? parsedJson.matchCount : (Array.isArray(parsedJson.matches) ? parsedJson.matches.length : 0);
+            if (count > 0 && Array.isArray(parsedJson.matches) && parsedJson.matches[0]) {
+                const first = parsedJson.matches[0];
+                const sel = first.selector || first.tag || '';
+                summary = `query_dom ➔ ${status} (${count} match${count > 1 ? 'es' : ''}: ${sel})`;
+            } else {
+                summary = `query_dom ➔ ${status} (${count} matches)`;
+            }
+        } else if (parsedJson.error) {
+            summary = `${action} ➔ ERROR: ${parsedJson.error}`;
+        } else if (parsedJson.message) {
+            summary = `${action} ➔ ${status} (${parsedJson.message})`;
+        } else if (parsedJson.target) {
+            summary = `${action} ➔ ${status} ("${parsedJson.target}")`;
+        } else {
+            summary = `${action} ➔ ${status}`;
+        }
+    } else if (toolName) {
+        let shortText = toolJsonStr.split('\n')[0].trim();
+        if (shortText.length > 60) shortText = shortText.substring(0, 57) + '...';
+        summary = `${toolName} ➔ ${shortText}`;
+    }
+
+    // Parse userPart (continuation context)
+    let pageUrl = '';
+    let pageTitle = '';
+    let visualNote = '';
+    let guidanceText = '';
+
+    if (userPart) {
+        const urlMatch = userPart.match(/URL:\s*(\S+)/i);
+        if (urlMatch) pageUrl = urlMatch[1];
+
+        const titleMatch = userPart.match(/Title:\s*([^.\n]+?)(?=\s+Note:|\n|$)/i);
+        if (titleMatch) pageTitle = titleMatch[1].trim();
+
+        const noteMatch = userPart.match(/Note:\s*([\s\S]*?)(?=\s+If\b|\n\n|$)/i);
+        if (noteMatch) visualNote = noteMatch[1].trim();
+
+        const guidanceMatch = userPart.match(/If\s+this\s+was\s+an\s+action[\s\S]*/i);
+        if (guidanceMatch) guidanceText = guidanceMatch[0].trim();
+    }
+
+    return {
+        summary: summary ? `Tool Result: ${summary}` : '',
+        toolResult: (toolName || parsedJson || formattedJson) ? {
+            toolName: toolName || (parsedJson && parsedJson.action) || 'tool',
+            toolId,
+            status: (parsedJson && parsedJson.status) || (parsedJson && parsedJson.error ? 'ERROR' : 'SUCCESS'),
+            summary,
+            formattedJson,
+            parsedObj: parsedJson
+        } : null,
+        continuationContext: (pageUrl || pageTitle || visualNote || guidanceText) ? {
+            pageUrl,
+            pageTitle,
+            visualNote,
+            guidanceText,
+            rawText: userPart
+        } : null
+    };
+}
+
 function parseLlmPromptContent(userPromptText) {
     if (!userPromptText) {
         return {
@@ -2630,6 +2739,9 @@ function parseLlmPromptContent(userPromptText) {
             domSnapshot: '',
             domSnapshotBytes: 0,
             turnInput: '',
+            turnInputSummary: '',
+            toolResult: null,
+            continuationContext: null,
             otherContext: ''
         };
     }
@@ -2638,20 +2750,22 @@ function parseLlmPromptContent(userPromptText) {
     const sessionVariables = [];
     let domSnapshot = '';
     let turnInput = '';
+    let turnInputSummary = '';
+    let toolResult = null;
+    let continuationContext = null;
     let otherContext = '';
 
-    // Check for multi-turn dialogue ChatMessage markers
-    if (userPromptText.includes('ChatMessage[')) {
-        const lastToolIdx = userPromptText.lastIndexOf('ChatMessage[TOOL');
-        if (lastToolIdx !== -1) {
-            const afterTool = userPromptText.substring(lastToolIdx);
-            const nlIdx = afterTool.indexOf('\n');
-            if (nlIdx !== -1) {
-                const headerLine = afterTool.substring(0, nlIdx);
-                const body = afterTool.substring(nlIdx + 1).trim();
-                turnInput = `${headerLine.replace('ChatMessage[', '').replace(']:', '')}: ${body}`;
-            }
+    // Check for multi-turn dialogue ChatMessage or TOOL markers
+    const hasToolMarker = userPromptText.includes('TOOL ') || userPromptText.includes('ChatMessage[TOOL') || userPromptText.startsWith('TOOL (');
+    if (hasToolMarker) {
+        const parsedTurns = parseToolAndUserTurns(userPromptText);
+        if (parsedTurns) {
+            turnInputSummary = parsedTurns.summary;
+            toolResult = parsedTurns.toolResult;
+            continuationContext = parsedTurns.continuationContext;
+            turnInput = parsedTurns.summary;
         }
+    } else if (userPromptText.includes('ChatMessage[')) {
         const userMsgMatch = userPromptText.match(/ChatMessage\[USER\]:\s*\n([\s\S]*?)(?=\nChatMessage\[|$)/);
         if (userMsgMatch) {
             const userContent = userMsgMatch[1];
@@ -2676,7 +2790,7 @@ function parseLlmPromptContent(userPromptText) {
     }
 
     // 2. Test Instruction
-    if (!instruction) {
+    if (!instruction && !hasToolMarker) {
         const instrMatch = userPromptText.match(/###\s*Test Instruction:\s*\n([\s\S]*?)(?=\n###|$)/i);
         if (instrMatch) {
             instruction = instrMatch[1].trim();
@@ -2684,7 +2798,7 @@ function parseLlmPromptContent(userPromptText) {
     }
 
     // 3. Current Page State & DOM
-    if (!domSnapshot) {
+    if (!domSnapshot && !hasToolMarker) {
         const domMatch = userPromptText.match(/###\s*Current Page State & Interactive Elements:\s*\n([\s\S]*?)(?=\n###|$)/i);
         if (domMatch) {
             domSnapshot = domMatch[1].trim();
@@ -2706,16 +2820,17 @@ function parseLlmPromptContent(userPromptText) {
         otherContext += (otherContext ? '\n' : '') + 'Visual Directive: ' + visualMatch[1].trim();
     }
 
-    // 5. Tool Result / Turn Input
-    if (!turnInput) {
+    // 5. Tool Result / Turn Input fallback
+    if (!turnInput && !turnInputSummary) {
         const toolResultMatch = userPromptText.match(/(?:Tool Result|Tool Output|ToolResponse|Observation):\s*([\s\S]*?)(?=\n###|$)/i);
         if (toolResultMatch) {
             turnInput = toolResultMatch[1].trim();
+            turnInputSummary = turnInput.split('\n')[0].trim();
         }
     }
 
     // Fallback if no sections detected
-    if (!instruction && !domSnapshot && !turnInput) {
+    if (!instruction && !domSnapshot && !turnInput && !turnInputSummary) {
         instruction = userPromptText.trim();
     }
 
@@ -2727,6 +2842,9 @@ function parseLlmPromptContent(userPromptText) {
         domSnapshot,
         domSnapshotBytes: domBytes,
         turnInput,
+        turnInputSummary,
+        toolResult,
+        continuationContext,
         otherContext
     };
 }
@@ -2882,6 +3000,15 @@ function renderStreamlinedLlmCallCard(call, cIdx, stepId, isStepFailed, isSubSte
                 <div class="llm-instruction-text">${escapeHtml(promptParsed.instruction)}</div>
             </div>
         `;
+    } else if (promptParsed.turnInputSummary) {
+        requestRowHtml = `
+            <div class="llm-exchange-row">
+                <span class="llm-exchange-tag llm-tag-result">Turn Input</span>
+                <div class="llm-tool-result-text">
+                    <span>${escapeHtml(promptParsed.turnInputSummary)}</span>
+                </div>
+            </div>
+        `;
     } else if (promptParsed.turnInput) {
         requestRowHtml = `
             <div class="llm-exchange-row">
@@ -2911,9 +3038,55 @@ function renderStreamlinedLlmCallCard(call, cIdx, stepId, isStepFailed, isSubSte
         </div>
     `;
 
-    // Drawer Details (Session Variables, DOM, System Prompt)
+    // Drawer Details (Session Variables, Tool Results, Page State & DOM, System Prompt)
     let hasDetails = false;
     let detailsInnerHtml = '';
+
+    // 1. Tool Result Payload (Pretty JSON)
+    if (promptParsed.toolResult && promptParsed.toolResult.formattedJson) {
+        hasDetails = true;
+        detailsInnerHtml += `
+            <div class="llm-drawer-section">
+                <div class="llm-drawer-subtitle">
+                    <span>Tool Result Payload: <code>${escapeHtml(promptParsed.toolResult.toolName || 'tool')}</code></span>
+                    ${promptParsed.toolResult.toolId ? `<span style="font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-muted);">${escapeHtml(promptParsed.toolResult.toolId)}</span>` : ''}
+                </div>
+                <pre class="llm-code-block"><code>${escapeHtml(promptParsed.toolResult.formattedJson)}</code></pre>
+            </div>
+        `;
+    }
+
+    // 2. Continuation Context & Page State
+    if (promptParsed.continuationContext && (promptParsed.continuationContext.pageUrl || promptParsed.continuationContext.visualNote || promptParsed.continuationContext.guidanceText)) {
+        hasDetails = true;
+        const ctx = promptParsed.continuationContext;
+        let ctxBody = '';
+        if (ctx.pageUrl) {
+            ctxBody += `<div><strong style="color: var(--text-muted);">Page URL:</strong> <a href="${escapeHtml(ctx.pageUrl)}" target="_blank" rel="noopener" style="color: var(--accent); word-break: break-all;">${escapeHtml(ctx.pageUrl)}</a></div>`;
+        }
+        if (ctx.pageTitle) {
+            ctxBody += `<div><strong style="color: var(--text-muted);">Title:</strong> <span>${escapeHtml(ctx.pageTitle)}</span></div>`;
+        }
+        if (ctx.visualNote) {
+            ctxBody += `<div style="margin-top: 0.25rem;"><strong style="color: var(--text-muted);">Visual State:</strong> <span>${escapeHtml(ctx.visualNote)}</span></div>`;
+        }
+        if (ctx.guidanceText) {
+            ctxBody += `
+                <details class="llm-guidance-details" style="margin-top: 0.4rem;">
+                    <summary style="cursor: pointer; font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">Framework Continuation Guidance</summary>
+                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem; line-height: 1.4; padding: 0.4rem 0.6rem; background: var(--bg-card); border-radius: 4px; border: 1px solid var(--border);">
+                        ${escapeHtml(ctx.guidanceText)}
+                    </div>
+                </details>
+            `;
+        }
+        detailsInnerHtml += `
+            <div class="llm-drawer-section">
+                <div class="llm-drawer-subtitle">Page State & Continuation Context</div>
+                <div class="llm-context-box">${ctxBody}</div>
+            </div>
+        `;
+    }
 
     if (promptParsed.sessionVariables && promptParsed.sessionVariables.length > 0) {
         hasDetails = true;
@@ -2975,12 +3148,19 @@ function renderStreamlinedLlmCallCard(call, cIdx, stepId, isStepFailed, isSubSte
         </button>
     ` : '';
 
+    const turnCopyBtnHtml = `
+        <button class="llm-header-details-btn llm-copy-btn" onclick="copyTurnConversation('${stepId}', ${cIdx}, this);" title="Copy this turn to clipboard">
+            <span class="material-symbols-outlined" style="font-size: 0.75rem;">content_copy</span>
+        </button>
+    `;
+
     return `
         <div class="${cardClass}" id="${cardId}">
             <div class="llm-turn-header">
                 <div class="llm-turn-header-left">
                     <span class="llm-turn-badge">Call #${cIdx + 1}</span>
                     ${detailsBtnHtml}
+                    ${turnCopyBtnHtml}
                 </div>
                 <span class="llm-turn-meta">${callMetaStr}</span>
             </div>
@@ -3012,7 +3192,7 @@ function toggleAllCallDetails(stepId, expand) {
     if (!container) return;
     const cards = container.querySelectorAll('.llm-turn-card');
     cards.forEach(card => {
-        const btn = card.querySelector('.llm-header-details-btn');
+        const btn = card.querySelector('.llm-header-details-btn:not(.llm-copy-btn)');
         const drawer = card.querySelector('.llm-details-drawer');
         if (btn && drawer) {
             if (expand) {
@@ -3052,6 +3232,171 @@ function toggleSystemPrompt(toggleEl, event) {
     if (chevron) {
         chevron.textContent = isHidden ? 'expand_more' : 'chevron_right';
     }
+}
+
+function generateTurnConversationMarkdown(stepData, call, cIdx) {
+    const lines = [];
+    lines.push(`### Turn #${cIdx + 1}`);
+    if (call.durationMs || call.totalTokens || call.cost) {
+        const meta = [];
+        if (call.durationMs) meta.push(`Duration: ${call.durationMs}ms`);
+        if (call.totalTokens) meta.push(`Tokens: ${call.totalTokens}`);
+        if (call.cost) meta.push(`Cost: $${call.cost}`);
+        lines.push(`*(${meta.join(' | ')})*`);
+        lines.push('');
+    }
+
+    const promptText = call.userPrompt || call.user_prompt || call.prompt || '';
+    const parsed = parseLlmPromptContent(promptText);
+
+    if (cIdx === 0) {
+        lines.push('#### Request');
+        lines.push(parsed.instruction || promptText);
+        lines.push('');
+        if (parsed.sessionVariables && parsed.sessionVariables.length > 0) {
+            lines.push('##### Active Session Variables');
+            parsed.sessionVariables.forEach(v => lines.push(`- **${v.key}:** \`${v.value}\``));
+            lines.push('');
+        }
+        if (parsed.domSnapshot) {
+            lines.push('##### Initial DOM Snapshot / Page Context');
+            lines.push('```html');
+            lines.push(parsed.domSnapshot);
+            lines.push('```');
+            lines.push('');
+        }
+    } else {
+        lines.push('#### Turn Input');
+        if (parsed.turnInputSummary) {
+            lines.push(`**Summary:** ${parsed.turnInputSummary}`);
+            lines.push('');
+        }
+        if (parsed.toolResult && parsed.toolResult.formattedJson) {
+            lines.push('##### Tool Execution Payload');
+            lines.push('```json');
+            lines.push(parsed.toolResult.formattedJson);
+            lines.push('```');
+            lines.push('');
+        }
+        if (parsed.continuationContext) {
+            const ctx = parsed.continuationContext;
+            lines.push('##### Page State & Continuation');
+            if (ctx.pageUrl) lines.push(`- **URL:** ${ctx.pageUrl}`);
+            if (ctx.pageTitle) lines.push(`- **Title:** ${ctx.pageTitle}`);
+            if (ctx.visualNote) lines.push(`- **Visual State:** ${ctx.visualNote}`);
+            if (ctx.guidanceText) lines.push(`- **Guidance:** ${ctx.guidanceText}`);
+            lines.push('');
+        }
+        if (!parsed.turnInputSummary && !parsed.toolResult && promptText) {
+            lines.push('```');
+            lines.push(promptText);
+            lines.push('```');
+            lines.push('');
+        }
+    }
+
+    const respText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || '';
+    const respParsed = parseToolCallResponse(respText);
+    lines.push('#### Model Response');
+    if (respParsed.formattedToolCall) {
+        lines.push('```json');
+        lines.push(respParsed.formattedToolCall);
+        lines.push('```');
+    } else if (respText) {
+        lines.push('```');
+        lines.push(respText);
+        lines.push('```');
+    } else {
+        lines.push('*(No response payload recorded)*');
+    }
+    return lines.join('\n');
+}
+
+function generateStepConversationMarkdown(stepId) {
+    const data = (window._neodymiumStepLlmData && window._neodymiumStepLlmData[stepId]) || null;
+    if (!data) return '';
+
+    const lines = [];
+    lines.push(`# LLM Conversation: Step #${data.stepNum || ''} - ${data.title || ''}`);
+    lines.push('');
+    lines.push(`- **Model:** ${data.model || 'Unknown'}`);
+    lines.push(`- **Total Tokens:** ${data.totalTokens || 0}`);
+    lines.push(`- **Estimated Cost:** ${data.totalCost || '$0.00'}`);
+    lines.push(`- **Recorded Turns:** ${(data.calls && data.calls.length) || 0}`);
+    lines.push('');
+
+    if (data.systemPrompt && data.systemPrompt.trim().length > 0) {
+        lines.push('---');
+        lines.push('## System Prompt');
+        lines.push('```');
+        lines.push(data.systemPrompt.trim());
+        lines.push('```');
+        lines.push('');
+    }
+
+    if (Array.isArray(data.calls)) {
+        data.calls.forEach((call, idx) => {
+            lines.push('---');
+            lines.push(generateTurnConversationMarkdown(data, call, idx));
+            lines.push('');
+        });
+    }
+
+    return lines.join('\n');
+}
+
+function copyTextToClipboardWithFeedback(text, btn, successMessage) {
+    if (!text) return;
+    const originalHtml = btn ? btn.innerHTML : '';
+    const originalClass = btn ? btn.className : '';
+
+    function setSuccess() {
+        if (!btn) return;
+        btn.classList.add('copied');
+        btn.innerHTML = `<span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check</span> <span>${successMessage || 'Copied!'}</span>`;
+        setTimeout(() => {
+            btn.className = originalClass;
+            btn.innerHTML = originalHtml;
+        }, 2200);
+    }
+
+    function fallbackCopy(str) {
+        const ta = document.createElement('textarea');
+        ta.value = str;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+            document.execCommand('copy');
+        } catch (e) {}
+        document.body.removeChild(ta);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(setSuccess).catch(() => {
+            fallbackCopy(text);
+            setSuccess();
+        });
+    } else {
+        fallbackCopy(text);
+        setSuccess();
+    }
+}
+
+function copyStepConversation(stepId, btn) {
+    const md = generateStepConversationMarkdown(stepId);
+    if (!md) return;
+    copyTextToClipboardWithFeedback(md, btn, 'Copied Conversation!');
+}
+
+function copyTurnConversation(stepId, cIdx, btn) {
+    const data = (window._neodymiumStepLlmData && window._neodymiumStepLlmData[stepId]) || null;
+    if (!data || !data.calls || !data.calls[cIdx]) return;
+    const call = data.calls[cIdx];
+    const md = generateTurnConversationMarkdown(data, call, cIdx);
+    copyTextToClipboardWithFeedback(md, btn, 'Copied Turn!');
 }
 
 function renderStepsForExecution(activeRow) {
@@ -3758,26 +4103,42 @@ function renderStepsForExecution(activeRow) {
                     let subLlmCallsHtml = '';
                     const subLlmList = Array.isArray(sub.llmCalls) ? sub.llmCalls : [];
                     if (subLlmList.length > 0) {
+                        const subStepKey = `${stepId}_sub_${sIdx}`;
+                        window._neodymiumStepLlmData = window._neodymiumStepLlmData || {};
+                        window._neodymiumStepLlmData[subStepKey] = {
+                            stepId: subStepKey,
+                            stepNum: `${stepNum}.${sIdx + 1}`,
+                            title: sub.instruction || sub.name || `Sub-step ${sIdx + 1}`,
+                            model: (subLlmList[0] && (subLlmList[0].model || subLlmList[0].modelName)) || '',
+                            totalTokens: 0,
+                            totalCost: '$0.0000',
+                            calls: subLlmList,
+                            systemPrompt: (subLlmList[0] && (subLlmList[0].systemPrompt || subLlmList[0].system_prompt)) || ''
+                        };
                         subLlmCallsHtml = `
                             <div style="margin-top: 0.4rem;">
-                                <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.2rem; display: flex; align-items: center; justify-content: space-between;">
+                                <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem;">
                                     <div style="display: flex; align-items: center; gap: 0.25rem;">
                                         <span class="material-symbols-outlined" style="font-size: 0.85rem;">smart_toy</span>
                                         <span>LLM Invocations (${subLlmList.length})</span>
                                     </div>
                                     <div class="llm-view-controls" style="margin-bottom: 0;">
-                                        <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${stepId}_sub_${sIdx}', true);">Expand All</button>
-                                        <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${stepId}_sub_${sIdx}', false);">Collapse All</button>
+                                        <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${subStepKey}', true);">Expand All</button>
+                                        <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${subStepKey}', false);">Collapse All</button>
+                                        <button class="llm-ctrl-btn llm-copy-btn" onclick="event.stopPropagation(); copyStepConversation('${subStepKey}', this);" title="Copy sub-step conversation to clipboard">
+                                            <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">content_copy</span>
+                                            <span>Copy</span>
+                                        </button>
                                     </div>
                                 </div>
-                                <div id="${stepId}_sub_${sIdx}">
+                                <div id="${subStepKey}">
                         `;
                         if (subLlmList.length > 1) {
-                            subLlmCallsHtml += renderExecutionTimelineBar(subLlmList, `${stepId}_sub_${sIdx}`, subStatus === 'FAILED');
+                            subLlmCallsHtml += renderExecutionTimelineBar(subLlmList, subStepKey, subStatus === 'FAILED');
                         }
                         subLlmList.forEach((call, cIdx) => {
                             call._isLastCall = (cIdx === subLlmList.length - 1);
-                            subLlmCallsHtml += renderStreamlinedLlmCallCard(call, cIdx, `${stepId}_sub_${sIdx}`, subStatus === 'FAILED', true);
+                            subLlmCallsHtml += renderStreamlinedLlmCallCard(call, cIdx, subStepKey, subStatus === 'FAILED', true);
                         });
                         subLlmCallsHtml += `</div></div>`;
                     }
@@ -3863,10 +4224,27 @@ function renderStepsForExecution(activeRow) {
 
             let llmCallsHtml = '';
             if (calls.length > 0) {
+                window._neodymiumStepLlmData = window._neodymiumStepLlmData || {};
+                window._neodymiumStepLlmData[stepId] = {
+                    stepId: stepId,
+                    stepNum: stepNum,
+                    title: title,
+                    model: firstModel,
+                    totalTokens: calcTotalTokens,
+                    totalCost: calcTotalCostFormatted,
+                    calls: calls,
+                    systemPrompt: (calls.length > 0 && (calls[0].systemPrompt || calls[0].system_prompt)) || ''
+                };
                 const controlsHtml = `
                     <div class="llm-view-controls">
-                        <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${stepId}', true);">Expand All Details</button>
-                        <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${stepId}', false);">Collapse All</button>
+                        <div style="display: flex; gap: 0.4rem; align-items: center;">
+                            <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${stepId}', true);">Expand All Details</button>
+                            <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${stepId}', false);">Collapse All</button>
+                        </div>
+                        <button class="llm-ctrl-btn llm-copy-btn" onclick="event.stopPropagation(); copyStepConversation('${stepId}', this);" title="Copy complete multi-turn conversation with formatted details to clipboard for AI diagnosis">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">content_copy</span>
+                            <span>Copy Conversation</span>
+                        </button>
                     </div>
                 `;
                 llmCallsHtml += controlsHtml;
@@ -4355,8 +4733,12 @@ window.toggleCallDetails = toggleCallDetails;
 window.toggleAllCallDetails = toggleAllCallDetails;
 window.toggleDomSnapshot = toggleDomSnapshot;
 window.toggleSystemPrompt = toggleSystemPrompt;
+window.copyStepConversation = copyStepConversation;
+window.copyTurnConversation = copyTurnConversation;
+window.generateStepConversationMarkdown = generateStepConversationMarkdown;
 window.parseLlmPromptContent = parseLlmPromptContent;
 window.parseToolCallResponse = parseToolCallResponse;
+window.parseToolAndUserTurns = parseToolAndUserTurns;
 
 function setActiveNavBtn(btn) {
     document.querySelectorAll('#mainSidebar .nav-item-btn').forEach(b => b.classList.remove('active'));
