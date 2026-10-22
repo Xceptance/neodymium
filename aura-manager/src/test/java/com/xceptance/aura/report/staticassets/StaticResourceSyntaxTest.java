@@ -683,5 +683,95 @@ public final class StaticResourceSyntaxTest
             "dashboard-core.js must apply instant test filter on init"
         );
     }
+
+    @Test
+    public void testStreamlinedLlmDetailsRenderingAndPromptParsing() throws Exception
+    {
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        Assertions.assertTrue(Files.exists(cssPath), "report-manager.css must exist: " + cssPath.toAbsolutePath());
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            cssContent.contains(".llm-timeline-bar") && cssContent.contains(".llm-flow-chip"),
+            "report-manager.css must define .llm-timeline-bar and .llm-flow-chip for sequence overview"
+        );
+        Assertions.assertTrue(
+            cssContent.contains(".llm-turn-card") && cssContent.contains(".llm-header-details-btn"),
+            "report-manager.css must define .llm-turn-card and .llm-header-details-btn"
+        );
+        Assertions.assertTrue(
+            cssContent.contains(".llm-exchange-row") && cssContent.contains(".llm-details-drawer"),
+            "report-manager.css must define .llm-exchange-row and .llm-details-drawer"
+        );
+
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist: " + jsFilePath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const testScript = code + '\\n' + `\n" +
+            "const promptSample = '### Active Session Variables:\\\\n- editorUrl: \\\"https://example.com/mug\\\"\\\\n- name: \\\"Fototasse\\\"\\\\n\\\\n### Test Instruction:\\\\nVerify photo is displayed in placeholder.\\\\n\\\\n### Current Page State & Interactive Elements:\\\\nPage URL: https://example.com\\\\n<div>Placeholder</div>';\n" +
+            "const parsed = parseLlmPromptContent(promptSample);\n" +
+            "if (!parsed.instruction || !parsed.instruction.includes('Verify photo is displayed')) throw new Error('Instruction parse failed: ' + parsed.instruction);\n" +
+            "if (parsed.sessionVariables.length !== 2) throw new Error('Session variables parse failed: ' + parsed.sessionVariables.length);\n" +
+            "if (parsed.sessionVariables[0].key !== 'editorUrl' || parsed.sessionVariables[1].key !== 'name') throw new Error('Variable keys mismatch');\n" +
+            "if (!parsed.domSnapshot || !parsed.domSnapshot.includes('Placeholder')) throw new Error('DOM snapshot parse failed');\n" +
+            "\n" +
+            "const respSample = 'Tool Calls: [{\\\"name\\\":\\\"query_dom\\\",\\\"arguments\\\":{\\\"selector\\\":\\\"app-image-placeholder\\\"}}]';\n" +
+            "const parsedResp = parseToolCallResponse(respSample);\n" +
+            "if (parsedResp.primaryTool !== 'query_dom') throw new Error('Tool call parse failed: ' + parsedResp.primaryTool);\n" +
+            "if (!parsedResp.formattedToolCall.includes('app-image-placeholder')) throw new Error('Tool call args mismatch');\n" +
+            "\n" +
+            "const calls = [\n" +
+            "    { model: 'gemini-3.5-flash-lite', inputTokens: 500, outputTokens: 50, durationMs: 1200, userPrompt: promptSample, responseContent: respSample },\n" +
+            "    { model: 'gemini-3.5-flash-lite', inputTokens: 600, outputTokens: 60, durationMs: 900, userPrompt: 'Tool Result: 0 elements', responseContent: 'Tool Calls: [{\\\"name\\\":\\\"wait\\\",\\\"arguments\\\":{\\\"milliseconds\\\":2000}}]' }\n" +
+            "];\n" +
+            "const timelineHtml = renderExecutionTimelineBar(calls, 'step_1', true);\n" +
+            "if (!timelineHtml.includes('Execution Sequence Overview') || !timelineHtml.includes('query_dom') || !timelineHtml.includes('wait')) throw new Error('Timeline generation failed');\n" +
+            "if (!timelineHtml.includes('failed') || !timelineHtml.includes('❌')) throw new Error('Failed step indicator missing from last turn in timeline');\n" +
+            "\n" +
+            "const cardHtml = renderStreamlinedLlmCallCard(calls[0], 0, 'step_1', false, false);\n" +
+            "if (!cardHtml.includes('llm-turn-card') || !cardHtml.includes('llm-header-details-btn')) throw new Error('Turn card structure failed');\n" +
+            "if (!cardHtml.includes('Session Variables (2)') || !cardHtml.includes('editorUrl')) throw new Error('Variables table missing from drawer');\n" +
+            "if (!cardHtml.includes('query_dom')) throw new Error('Response tool call missing from card');\n" +
+            "`;\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(testScript, sandbox);\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+    }
 }
 
