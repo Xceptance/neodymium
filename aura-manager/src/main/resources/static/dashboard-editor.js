@@ -91,7 +91,79 @@ function toggleExpandFile(file, targetEl) {
 }
 window.toggleExpandFile = toggleExpandFile;
 
-function loadFiles() {
+function setFilterCookie(query) {
+    try {
+        const trimmed = (query || '').trim();
+        if (trimmed) {
+            document.cookie = 'aura_test_search_query=' + encodeURIComponent(trimmed) + '; path=/; max-age=31536000; SameSite=Lax';
+        } else {
+            document.cookie = 'aura_test_search_query=; path=/; max-age=0; SameSite=Lax';
+        }
+    } catch (e) {}
+}
+window.setFilterCookie = setFilterCookie;
+
+function getFilterCookie() {
+    try {
+        const match = document.cookie.match(/(?:^|;\s*)aura_test_search_query=([^;]*)/);
+        return match ? decodeURIComponent(match[1]) : null;
+    } catch (e) {
+        return null;
+    }
+}
+window.getFilterCookie = getFilterCookie;
+
+function applyInstantTestFilter(query) {
+    const term = (query || '').trim().toLowerCase();
+    const yamlContainer = document.getElementById('yamlFileList');
+    if (!yamlContainer) return;
+
+    const fileContainers = yamlContainer.querySelectorAll('.file-container');
+    if (fileContainers.length === 0) return;
+
+    fileContainers.forEach(container => {
+        if (!term) {
+            container.style.display = 'flex';
+            const datasetItems = container.querySelectorAll('.dataset-item');
+            datasetItems.forEach(d => { d.style.display = 'flex'; });
+            return;
+        }
+
+        const fileName = (container.getAttribute('data-file') || '').toLowerCase();
+        const matchesFile = fileName.includes(term);
+
+        const datasetItems = container.querySelectorAll('.dataset-item');
+        let anyDatasetMatched = false;
+        if (datasetItems.length > 0) {
+            datasetItems.forEach(d => {
+                const label = (d.textContent || '').toLowerCase();
+                const dId = (d.getAttribute('data-id') || '').toLowerCase();
+                const matched = matchesFile || label.includes(term) || dId.includes(term);
+                d.style.display = matched ? 'flex' : 'none';
+                if (matched) anyDatasetMatched = true;
+            });
+        }
+
+        if (matchesFile || anyDatasetMatched) {
+            container.style.display = 'flex';
+        } else {
+            container.style.display = 'none';
+        }
+    });
+
+    const folderGroups = yamlContainer.querySelectorAll('.tree-folder-group');
+    folderGroups.forEach(folder => {
+        if (!term) {
+            folder.style.display = '';
+        } else {
+            const visibleChild = folder.querySelector('.file-container:not([style*="display: none"])');
+            folder.style.display = visibleChild ? '' : 'none';
+        }
+    });
+}
+window.applyInstantTestFilter = applyInstantTestFilter;
+
+function loadFiles(forceSwap = false) {
     return new Promise(async (resolve, reject) => {
         let resolved = false;
         const done = () => {
@@ -107,7 +179,16 @@ function loadFiles() {
             currentFilesListCached = await res.json();
             window.currentFilesListCached = currentFilesListCached;
             const fileListEl = document.getElementById('yamlFileList');
-            if (fileListEl) {
+            const searchInput = document.getElementById('testSearchInput');
+            const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
+            const cookieQuery = (typeof getFilterCookie === 'function') ? getFilterCookie() : null;
+            const activeQuery = (searchInput && searchInput.value.trim()) ? searchInput.value.trim() : (storedQuery ? storedQuery.trim() : (cookieQuery ? cookieQuery.trim() : ''));
+            if (searchInput && !searchInput.value && activeQuery) {
+                searchInput.value = activeQuery;
+            }
+            updateClearTestSearchBtn(activeQuery);
+
+            if (fileListEl && (forceSwap || window.initializedAlready)) {
                 const listener = function(evt) {
                     if (evt.detail.target && evt.detail.target.id === 'yamlFileList') {
                         document.removeEventListener('htmx:afterSwap', listener);
@@ -118,13 +199,6 @@ function loadFiles() {
                     }
                 };
                 document.addEventListener('htmx:afterSwap', listener);
-                const searchInput = document.getElementById('testSearchInput');
-                const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
-                const activeQuery = (searchInput && searchInput.value.trim()) ? searchInput.value.trim() : (storedQuery ? storedQuery.trim() : '');
-                if (searchInput && !searchInput.value && activeQuery) {
-                    searchInput.value = activeQuery;
-                }
-                updateClearTestSearchBtn(activeQuery);
                 const targetUrl = activeQuery ? ('/api/files/search?q=' + encodeURIComponent(activeQuery) + '&t=' + timestamp) : ('/api/files/list?t=' + timestamp);
                 htmx.ajax('GET', targetUrl, { target: '#yamlFileList', swap: 'innerHTML' });
             } else {
@@ -150,7 +224,9 @@ function onTestSearchInput(query) {
             sessionStorage.removeItem('aura_test_search_query');
         }
     }
+    setFilterCookie(trimmed);
     updateClearTestSearchBtn(trimmed);
+    applyInstantTestFilter(trimmed);
 }
 window.onTestSearchInput = onTestSearchInput;
 
@@ -172,7 +248,9 @@ function clearTestSearch() {
     if (typeof sessionStorage !== 'undefined') {
         sessionStorage.removeItem('aura_test_search_query');
     }
+    setFilterCookie('');
     updateClearTestSearchBtn('');
+    applyInstantTestFilter('');
     if (window.history && window.history.replaceState) {
         try {
             const url = new URL(window.location.href);

@@ -91,6 +91,21 @@ public class AuraTestDashboardControllerTest
     }
 
     @Test
+    public void testRenderDashboardWithCookieFallback()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(fileService.getFilteredYamlFilesList("checkout")).thenReturn(List.of());
+        Mockito.when(fileService.getFilteredStepsFilesList("checkout")).thenReturn(List.of());
+
+        final String view = controller.renderDashboard("false", null, null, "checkout", model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals("checkout", model.getAttribute("q"));
+        Mockito.verify(fileService).getFilteredYamlFilesList("checkout");
+        Mockito.verify(fileService).getFilteredStepsFilesList("checkout");
+    }
+
+    @Test
     public void testRenderDashboardHtmx()
     {
         final Model model = new ConcurrentModel();

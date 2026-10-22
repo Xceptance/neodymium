@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
+import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -67,15 +68,30 @@ public class AuraTestDashboardController
         @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
         @RequestParam(value = "file", required = false) final String file,
         @RequestParam(value = "q", required = false) final String query,
+        @CookieValue(value = "aura_test_search_query", required = false) final String cookieQuery,
         final Model model)
     {
-        final List<YamlFileDto> testFiles;
-        final List<String> stepsFiles;
+        final String effectiveQuery;
         if (query != null && !query.isBlank())
         {
-            testFiles = fileService.getFilteredYamlFilesList(query);
-            stepsFiles = fileService.getFilteredStepsFilesList(query);
-            model.addAttribute("q", query);
+            effectiveQuery = query.trim();
+        }
+        else if (query == null && cookieQuery != null && !cookieQuery.isBlank())
+        {
+            effectiveQuery = cookieQuery.trim();
+        }
+        else
+        {
+            effectiveQuery = null;
+        }
+
+        final List<YamlFileDto> testFiles;
+        final List<String> stepsFiles;
+        if (effectiveQuery != null && !effectiveQuery.isBlank())
+        {
+            testFiles = fileService.getFilteredYamlFilesList(effectiveQuery);
+            stepsFiles = fileService.getFilteredStepsFilesList(effectiveQuery);
+            model.addAttribute("q", effectiveQuery);
         }
         else
         {
@@ -206,9 +222,14 @@ public class AuraTestDashboardController
         return "index";
     }
 
+    public String renderDashboard(final String hxRequest, final String file, final String query, final Model model)
+    {
+        return renderDashboard(hxRequest, file, query, null, model);
+    }
+
     public String renderDashboard(final String hxRequest, final String file, final Model model)
     {
-        return renderDashboard(hxRequest, file, null, model);
+        return renderDashboard(hxRequest, file, null, null, model);
     }
 
     @PostMapping("/api/theme")
