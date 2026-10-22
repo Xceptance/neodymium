@@ -119,12 +119,49 @@ function applyInstantTestFilter(query) {
     if (!yamlContainer) return;
 
     const fileContainers = yamlContainer.querySelectorAll('.file-container');
-    if (fileContainers.length === 0) return;
+    const folderGroups = yamlContainer.querySelectorAll('.tree-folder-group');
+    if (fileContainers.length === 0 && folderGroups.length === 0) return;
 
-    fileContainers.forEach(container => {
-        if (!term) {
+    if (!term) {
+        fileContainers.forEach(container => {
             container.style.display = 'flex';
             const datasetItems = container.querySelectorAll('.dataset-item');
+            datasetItems.forEach(d => { d.style.display = 'flex'; });
+        });
+        folderGroups.forEach(folder => {
+            folder.style.display = '';
+        });
+        return;
+    }
+
+    // 1. Identify which folder groups directly match the filter
+    const matchingFolders = new Set();
+    folderGroups.forEach(folder => {
+        const folderPath = (folder.getAttribute('data-folder-path') || '').toLowerCase();
+        const folderNameEl = folder.querySelector('.tree-folder-name');
+        const folderName = (folderNameEl ? folderNameEl.textContent : '').toLowerCase();
+        if ((folderPath && folderPath.includes(term)) || (folderName && folderName.includes(term))) {
+            matchingFolders.add(folder);
+        }
+    });
+
+    // 2. Filter file containers
+    fileContainers.forEach(container => {
+        // Check if any ancestor folder matches the filter
+        let inMatchingFolder = false;
+        let parent = container.parentElement;
+        while (parent && parent !== yamlContainer) {
+            if (parent.classList && parent.classList.contains('tree-folder-group') && matchingFolders.has(parent)) {
+                inMatchingFolder = true;
+                break;
+            }
+            parent = parent.parentElement;
+        }
+
+        const datasetItems = container.querySelectorAll('.dataset-item');
+
+        if (inMatchingFolder) {
+            container.style.display = 'flex';
             datasetItems.forEach(d => { d.style.display = 'flex'; });
             return;
         }
@@ -132,7 +169,6 @@ function applyInstantTestFilter(query) {
         const fileName = (container.getAttribute('data-file') || '').toLowerCase();
         const matchesFile = fileName.includes(term);
 
-        const datasetItems = container.querySelectorAll('.dataset-item');
         let anyDatasetMatched = false;
         if (datasetItems.length > 0) {
             datasetItems.forEach(d => {
@@ -151,14 +187,20 @@ function applyInstantTestFilter(query) {
         }
     });
 
-    const folderGroups = yamlContainer.querySelectorAll('.tree-folder-group');
-    folderGroups.forEach(folder => {
-        if (!term) {
+    // 3. Update folder visibility bottom-up (reverse DOM order)
+    const reversedFolders = Array.from(folderGroups).reverse();
+    reversedFolders.forEach(folder => {
+        if (matchingFolders.has(folder)) {
             folder.style.display = '';
-        } else {
-            const visibleChild = folder.querySelector('.file-container:not([style*="display: none"])');
-            folder.style.display = visibleChild ? '' : 'none';
+            // Ensure all subfolders inside a matching folder are also displayed
+            const subFolders = folder.querySelectorAll('.tree-folder-group');
+            subFolders.forEach(sub => { sub.style.display = ''; });
+            return;
         }
+
+        const visibleFile = folder.querySelector('.file-container:not([style*="display: none"])');
+        const visibleSubFolder = folder.querySelector('.tree-folder-group:not([style*="display: none"])');
+        folder.style.display = (visibleFile || visibleSubFolder) ? '' : 'none';
     });
 }
 window.applyInstantTestFilter = applyInstantTestFilter;
@@ -182,7 +224,7 @@ function loadFiles(forceSwap = false) {
             const searchInput = document.getElementById('testSearchInput');
             const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
             const cookieQuery = (typeof getFilterCookie === 'function') ? getFilterCookie() : null;
-            const activeQuery = (searchInput && searchInput.value.trim()) ? searchInput.value.trim() : (storedQuery ? storedQuery.trim() : (cookieQuery ? cookieQuery.trim() : ''));
+            const activeQuery = (searchInput && searchInput.value.trim()) ? searchInput.value.trim() : (cookieQuery ? cookieQuery.trim() : (storedQuery ? storedQuery.trim() : ''));
             if (searchInput && !searchInput.value && activeQuery) {
                 searchInput.value = activeQuery;
             }

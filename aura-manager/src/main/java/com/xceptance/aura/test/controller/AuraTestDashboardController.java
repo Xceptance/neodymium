@@ -23,6 +23,8 @@ import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.dto.ChatSessionDto;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -78,7 +80,7 @@ public class AuraTestDashboardController
         }
         else if (query == null && cookieQuery != null && !cookieQuery.isBlank())
         {
-            effectiveQuery = cookieQuery.trim();
+            effectiveQuery = decodeCookieQuery(cookieQuery);
         }
         else
         {
@@ -230,6 +232,24 @@ public class AuraTestDashboardController
     public String renderDashboard(final String hxRequest, final String file, final Model model)
     {
         return renderDashboard(hxRequest, file, null, null, model);
+    }
+
+    static String decodeCookieQuery(final String rawCookie)
+    {
+        if (rawCookie == null || rawCookie.isBlank())
+        {
+            return null;
+        }
+        try
+        {
+            final String decoded = URLDecoder.decode(rawCookie.trim(), StandardCharsets.UTF_8).trim();
+            return decoded.isBlank() ? null : decoded;
+        }
+        catch (final Exception e)
+        {
+            final String trimmed = rawCookie.trim();
+            return trimmed.isBlank() ? null : trimmed;
+        }
     }
 
     @PostMapping("/api/theme")

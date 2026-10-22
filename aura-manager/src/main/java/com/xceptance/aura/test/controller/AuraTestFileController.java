@@ -85,7 +85,7 @@ public class AuraTestFileController
         }
         else if (query == null && cookieQuery != null && !cookieQuery.isBlank())
         {
-            effectiveQuery = cookieQuery.trim();
+            effectiveQuery = AuraTestDashboardController.decodeCookieQuery(cookieQuery);
         }
         else
         {

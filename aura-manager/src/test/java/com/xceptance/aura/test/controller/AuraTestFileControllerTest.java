@@ -103,6 +103,23 @@ public class AuraTestFileControllerTest
     }
 
     @Test
+    public void testFilesListFragmentWithEncodedCookieFallback()
+    {
+        final Model model = new ConcurrentModel();
+        final YamlFileDto fileDto = new YamlFileDto("CheckoutTest.yaml", List.of());
+        Mockito.when(fileService.getFilteredYamlFilesList("checkout flow")).thenReturn(List.of(fileDto));
+        Mockito.when(fileService.getFilteredStepsFilesList("checkout flow")).thenReturn(List.of("checkout.steps"));
+
+        final String view = fileController.getFilesListFragment(null, "checkout%20flow", response, model);
+
+        Assertions.assertEquals("fragments/test-selection :: yamlFileListContent", view);
+        Mockito.verify(fileService).getFilteredYamlFilesList("checkout flow");
+        Mockito.verify(fileService).getFilteredStepsFilesList("checkout flow");
+        Assertions.assertEquals(List.of(fileDto), model.getAttribute("files"));
+        Assertions.assertEquals(List.of("checkout.steps"), model.getAttribute("stepsFiles"));
+    }
+
+    @Test
     public void testSearchFilesReturnsFilteredList()
     {
         final Model model = new ConcurrentModel();

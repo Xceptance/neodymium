@@ -657,11 +657,19 @@ public final class StaticResourceSyntaxTest
             editorJsContent.contains("window.getFilterCookie = getFilterCookie;"),
             "dashboard-editor.js must export getFilterCookie"
         );
+        Assertions.assertTrue(
+            editorJsContent.contains("inMatchingFolder"),
+            "dashboard-editor.js must propagate folder match status to child tests and datasets"
+        );
 
         final Path coreJsPath = Paths.get("src/main/resources/static/dashboard-core.js");
         Assertions.assertTrue(Files.exists(coreJsPath), "dashboard-core.js must exist");
         final String coreJsContent = Files.readString(coreJsPath, StandardCharsets.UTF_8);
 
+        Assertions.assertTrue(
+            coreJsContent.contains("serverQuery"),
+            "dashboard-core.js must prioritize serverQuery over stale sessionStorage"
+        );
         Assertions.assertTrue(
             coreJsContent.contains("initTestSearchFilter();"),
             "dashboard-core.js must initialize search filter on load"

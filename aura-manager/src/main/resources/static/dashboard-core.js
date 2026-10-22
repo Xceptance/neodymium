@@ -919,9 +919,10 @@ function initTestSearchFilter() {
     try {
         const urlParams = new URLSearchParams(window.location.search);
         const urlQuery = urlParams.get('q');
-        const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
+        const serverQuery = searchInput.value || '';
         const cookieQuery = (typeof getFilterCookie === 'function') ? getFilterCookie() : null;
-        query = (urlQuery !== null && urlQuery !== '') ? urlQuery : (storedQuery || cookieQuery || searchInput.value || '');
+        const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
+        query = (urlQuery !== null && urlQuery !== '') ? urlQuery : (serverQuery || cookieQuery || storedQuery || '');
     } catch (e) {}
 
     if (query) {

@@ -41,30 +41,35 @@
     <script>
         (function() {
             try {
+                var inp = document.getElementById('testSearchInput');
                 var s = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
                 var c = document.cookie.match(/(?:^|;\s*)aura_test_search_query=([^;]*)/);
-                var q = (s && s.trim()) ? s.trim() : (c ? decodeURIComponent(c[1]).trim() : '');
+                var cookieQ = c ? decodeURIComponent(c[1]).trim() : '';
+                var q = (inp && inp.value && inp.value.trim()) ? inp.value.trim() : (cookieQ || (s && s.trim() ? s.trim() : ''));
                 if (q) {
-                    var inp = document.getElementById('testSearchInput');
                     if (inp && !inp.value) inp.value = q;
                     var btn = document.getElementById('clearTestSearchBtn');
                     if (btn) btn.style.display = 'inline-flex';
-                    var term = q.toLowerCase();
-                    var list = document.getElementById('yamlFileList');
-                    if (list) {
-                        var items = list.querySelectorAll('.file-container');
-                        for (var i = 0; i < items.length; i++) {
-                            var f = (items[i].getAttribute('data-file') || '').toLowerCase();
-                            var match = f.indexOf(term) !== -1;
-                            var datasets = items[i].querySelectorAll('.dataset-item');
-                            for (var j = 0; j < datasets.length; j++) {
-                                var lbl = (datasets[j].textContent || '').toLowerCase();
-                                var did = (datasets[j].getAttribute('data-id') || '').toLowerCase();
-                                var dMatch = match || lbl.indexOf(term) !== -1 || did.indexOf(term) !== -1;
-                                datasets[j].style.display = dMatch ? 'flex' : 'none';
-                                if (dMatch) match = true;
+                    if (typeof applyInstantTestFilter === 'function') {
+                        applyInstantTestFilter(q);
+                    } else {
+                        var term = q.toLowerCase();
+                        var list = document.getElementById('yamlFileList');
+                        if (list) {
+                            var items = list.querySelectorAll('.file-container');
+                            for (var i = 0; i < items.length; i++) {
+                                var f = (items[i].getAttribute('data-file') || '').toLowerCase();
+                                var match = f.indexOf(term) !== -1;
+                                var datasets = items[i].querySelectorAll('.dataset-item');
+                                for (var j = 0; j < datasets.length; j++) {
+                                    var lbl = (datasets[j].textContent || '').toLowerCase();
+                                    var did = (datasets[j].getAttribute('data-id') || '').toLowerCase();
+                                    var dMatch = match || lbl.indexOf(term) !== -1 || did.indexOf(term) !== -1;
+                                    datasets[j].style.display = dMatch ? 'flex' : 'none';
+                                    if (dMatch) match = true;
+                                }
+                                items[i].style.display = match ? 'flex' : 'none';
                             }
-                            items[i].style.display = match ? 'flex' : 'none';
                         }
                     }
                 }
