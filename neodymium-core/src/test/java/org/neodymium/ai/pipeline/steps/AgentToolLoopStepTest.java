@@ -330,6 +330,106 @@ public class AgentToolLoopStepTest
     }
 
     @Test
+    public void testStopCriterion5PlaybookStepCustomTimeoutOverridesDefaultTimeout()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("slow_action", "Takes long time", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx) throws Exception
+            {
+                Thread.sleep(1200);
+                return ToolResult.success(call.callId(), "Slow action done");
+            }
+        });
+
+        // First turn calls slow_action, second turn completes
+        final AtomicInteger turnCounter = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+        {
+            final int t = turnCounter.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("{\"thought\":\"calling slow action\",\"tool_call\":{\"name\":\"slow_action\",\"arguments\":{}}}", new TokenUsage(10, 10, 20), "mock");
+            }
+            return new LlmResponse("{\"thought\":\"finished\",\"tool_call\":{\"name\":\"complete_step\",\"arguments\":{\"status\":\"SUCCESS\"}}}", new TokenUsage(10, 10, 20), "mock");
+        };
+
+        // Construct loop step with default timeout of 1 second
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 1);
+
+        // Without PlaybookStep override, this would fail in 1s.
+        // With PlaybookStep custom timeout: 5s, it must succeed!
+        final PlaybookStep pbStep = new PlaybookStep("Click rotate button (timeout: 5s)");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, pbStep);
+
+        Assertions.assertDoesNotThrow(() -> step.execute(this.context));
+    }
+
+    @Test
+    public void testStopCriterion5PlaybookStepCustomTimeoutExceededScalesSubStepsAndCeilDiv()
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("slow_action", "Takes long time", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx) throws Exception
+            {
+                Thread.sleep(1200);
+                return ToolResult.success(call.callId(), "Slow action done");
+            }
+        });
+
+        final AtomicInteger counter = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+                new LlmResponse(String.format("{\"thought\":\"calling slow action\",\"tool_call\":{\"name\":\"slow_action\",\"arguments\":{\"step\":%d}}}",
+                        counter.incrementAndGet()), new TokenUsage(10, 10, 20), "mock");
+
+        // Construct loop step with default timeout of 60 seconds
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 60);
+
+        // Step has 1000ms custom timeout (1 second). Tool takes 1200ms -> should exceed 1s timeout
+        final PlaybookStep pbStep = new PlaybookStep("Perform action (timeout: 1000ms)");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, pbStep);
+
+        final StepTimeoutExceededException thrown = Assertions.assertThrows(StepTimeoutExceededException.class, () -> step.execute(this.context));
+        Assertions.assertEquals(1, thrown.getTimeoutSeconds());
+
+        // Test ceiling division & sub-step scaling: 1200ms (ceils to 2s) with 3 sub-steps -> effective timeout is 6s
+        final PlaybookStep compoundStep = new PlaybookStep("Compound action (timeout: 1200ms)");
+        compoundStep.getSubSteps().add(new PlaybookStep("Sub 1"));
+        compoundStep.getSubSteps().add(new PlaybookStep("Sub 2"));
+        compoundStep.getSubSteps().add(new PlaybookStep("Sub 3"));
+        Assertions.assertEquals(1200L, compoundStep.getTimeoutMs());
+
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, compoundStep);
+        final StepTimeoutExceededException compoundThrown = Assertions.assertThrows(StepTimeoutExceededException.class, () ->
+        {
+            // Execute enough slow turns (6 turns * 1.2s = 7.2s > 6s) to exceed compound timeout
+            step.execute(this.context);
+        });
+        Assertions.assertEquals(6, compoundThrown.getTimeoutSeconds());
+    }
+
+    @Test
     public void testStopCriterion6FatalEnvironmentFailureThrowsPipelineException()
     {
         final ObjectNode schema = MAPPER.createObjectNode();
