@@ -683,5 +683,36 @@ public final class StaticResourceSyntaxTest
             "dashboard-core.js must apply instant test filter on init"
         );
     }
+
+    @Test
+    public void testAuraManagerLoggingConfigurationContracts() throws Exception
+    {
+        final Path appPropertiesPath = Paths.get("src/main/resources/application.properties");
+        Assertions.assertTrue(Files.exists(appPropertiesPath), "application.properties must exist");
+        final String appPropsContent = Files.readString(appPropertiesPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            appPropsContent.contains("logging.level.root=INFO"),
+            "application.properties must set logging.level.root=INFO to prevent verbose framework tracing"
+        );
+        Assertions.assertTrue(
+            appPropsContent.contains("logging.level.com.xceptance.aura=INFO"),
+            "application.properties must set logging.level.com.xceptance.aura=INFO"
+        );
+
+        final Path log4jPath = Paths.get("../neodymium-core/src/main/resources/log4j2.properties");
+        if (Files.exists(log4jPath))
+        {
+            final String log4jContent = Files.readString(log4jPath, StandardCharsets.UTF_8);
+            Assertions.assertFalse(
+                log4jContent.contains("appender.console.filter.threshold.level = trace"),
+                "log4j2.properties console filter threshold must not be set to trace"
+            );
+            Assertions.assertFalse(
+                log4jContent.contains("status = ALL"),
+                "log4j2.properties status logger must not be set to ALL"
+            );
+        }
+    }
 }
 
