@@ -714,5 +714,310 @@ public final class StaticResourceSyntaxTest
             );
         }
     }
+
+    @Test
+    public void testStreamlinedLlmDetailsRenderingAndPromptParsing() throws Exception
+    {
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        Assertions.assertTrue(Files.exists(cssPath), "report-manager.css must exist: " + cssPath.toAbsolutePath());
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            cssContent.contains(".llm-timeline-bar") && cssContent.contains(".llm-flow-chip"),
+            "report-manager.css must define .llm-timeline-bar and .llm-flow-chip for sequence overview"
+        );
+        Assertions.assertTrue(
+            cssContent.contains(".llm-turn-card") && cssContent.contains(".llm-header-details-btn"),
+            "report-manager.css must define .llm-turn-card and .llm-header-details-btn"
+        );
+        Assertions.assertTrue(
+            cssContent.contains(".llm-exchange-row") && cssContent.contains(".llm-details-drawer"),
+            "report-manager.css must define .llm-exchange-row and .llm-details-drawer"
+        );
+
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist: " + jsFilePath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const testScript = code + '\\n' + `\n" +
+            "const promptSample = '### Active Session Variables:\\\\n- editorUrl: \\\"https://example.com/mug\\\"\\\\n- name: \\\"Fototasse\\\"\\\\n\\\\n### Test Instruction:\\\\nVerify photo is displayed in placeholder.\\\\n\\\\n### Current Page State & Interactive Elements:\\\\nPage URL: https://example.com\\\\n<div>Placeholder</div>';\n" +
+            "const parsed = parseLlmPromptContent(promptSample);\n" +
+            "if (!parsed.instruction || !parsed.instruction.includes('Verify photo is displayed')) throw new Error('Instruction parse failed: ' + parsed.instruction);\n" +
+            "if (parsed.sessionVariables.length !== 2) throw new Error('Session variables parse failed: ' + parsed.sessionVariables.length);\n" +
+            "if (parsed.sessionVariables[0].key !== 'editorUrl' || parsed.sessionVariables[1].key !== 'name') throw new Error('Variable keys mismatch');\n" +
+            "if (!parsed.domSnapshot || !parsed.domSnapshot.includes('Placeholder')) throw new Error('DOM snapshot parse failed');\n" +
+            "\n" +
+            "const respSample = 'Tool Calls: [{\\\"name\\\":\\\"query_dom\\\",\\\"arguments\\\":{\\\"selector\\\":\\\"app-image-placeholder\\\"}}]';\n" +
+            "const parsedResp = parseToolCallResponse(respSample);\n" +
+            "if (parsedResp.primaryTool !== 'query_dom') throw new Error('Tool call parse failed: ' + parsedResp.primaryTool);\n" +
+            "if (!parsedResp.formattedToolCall.includes('app-image-placeholder')) throw new Error('Tool call args mismatch');\n" +
+            "\n" +
+            "const calls = [\n" +
+            "    { model: 'gemini-3.5-flash-lite', inputTokens: 500, outputTokens: 50, durationMs: 1200, userPrompt: promptSample, responseContent: respSample },\n" +
+            "    { model: 'gemini-3.5-flash-lite', inputTokens: 600, outputTokens: 60, durationMs: 900, userPrompt: 'Tool Result: 0 elements', responseContent: 'Tool Calls: [{\\\"name\\\":\\\"wait\\\",\\\"arguments\\\":{\\\"milliseconds\\\":2000}}]' }\n" +
+            "];\n" +
+            "const timelineHtml = renderExecutionTimelineBar(calls, 'step_1', true);\n" +
+            "if (!timelineHtml.includes('Execution Sequence Overview') || !timelineHtml.includes('query_dom') || !timelineHtml.includes('wait')) throw new Error('Timeline generation failed');\n" +
+            "if (!timelineHtml.includes('failed') || !timelineHtml.includes('❌')) throw new Error('Failed step indicator missing from last turn in timeline');\n" +
+            "\n" +
+            "const cardHtml = renderStreamlinedLlmCallCard(calls[0], 0, 'step_1', false, false);\n" +
+            "if (!cardHtml.includes('llm-turn-card') || !cardHtml.includes('llm-header-details-btn')) throw new Error('Turn card structure failed');\n" +
+            "if (!cardHtml.includes('Session Variables (2)') || !cardHtml.includes('editorUrl')) throw new Error('Variables table missing from drawer');\n" +
+            "if (!cardHtml.includes('query_dom')) throw new Error('Response tool call missing from card');\n" +
+            "`;\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(testScript, sandbox);\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+    }
+
+    @Test
+    public void testMultiTurnToolOutputParsingAndClipboardExport() throws Exception
+    {
+        final Path cssPath = Paths.get("src/main/resources/static/css/report-manager.css");
+        Assertions.assertTrue(Files.exists(cssPath), "report-manager.css must exist: " + cssPath.toAbsolutePath());
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(
+            cssContent.contains(".llm-copy-btn") && cssContent.contains(".llm-drawer-section"),
+            "report-manager.css must define .llm-copy-btn and .llm-drawer-section"
+        );
+        Assertions.assertTrue(
+            cssContent.contains(".llm-code-block") && cssContent.contains(".llm-context-box"),
+            "report-manager.css must define .llm-code-block and .llm-context-box"
+        );
+
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist: " + jsFilePath.toAbsolutePath());
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const testScript = code + '\\n' + `\n" +
+            "const multiTurnSample = 'TOOL (tool=query_dom, id=query_dom_40a28575): {\"status\":\"SUCCESS\",\"action\":\"query_dom\",\"matches\":[{\"tag\":\"app-image-placeholder\",\"selector\":\"app-image-placeholder.hoveredPlaceholder\",\"text\":\"\",\"visible\":false,\"inViewport\":false,\"dataAi\":null,\"y\":297,\"outerHtml\":\"<app-image-placeholder class=hoveredPlaceholder>\"}],\"matchCount\":1} ChatMessage[USER]: ### Current Page: URL: https://order.example.com/editor/ Title: Editor Note: Page visual state is unchanged. If this was an action instruction and all actions have been executed, complete_step now.';\n" +
+            "const parsed = parseLlmPromptContent(multiTurnSample);\n" +
+            "if (!parsed.turnInputSummary || !parsed.turnInputSummary.includes('query_dom ➔ SUCCESS (1 match: app-image-placeholder.hoveredPlaceholder)')) {\n" +
+            "    throw new Error('turnInputSummary failed: ' + parsed.turnInputSummary);\n" +
+            "}\n" +
+            "if (!parsed.toolResult || parsed.toolResult.toolName !== 'query_dom' || !parsed.toolResult.formattedJson.includes('\"action\": \"query_dom\"')) {\n" +
+            "    throw new Error('toolResult structure failed');\n" +
+            "}\n" +
+            "if (!parsed.continuationContext || !parsed.continuationContext.pageUrl.includes('order.example.com') || parsed.continuationContext.pageTitle !== 'Editor') {\n" +
+            "    throw new Error('continuationContext failed');\n" +
+            "}\n" +
+            "if (!parsed.continuationContext.guidanceText.includes('complete_step')) {\n" +
+            "    throw new Error('guidanceText extraction failed');\n" +
+            "}\n" +
+            "\n" +
+            "const call = {\n" +
+            "    userPrompt: multiTurnSample,\n" +
+            "    responseContent: 'Tool Calls: [{\\\"name\\\":\\\"complete_step\\\",\\\"arguments\\\":{}}]'\n" +
+            "};\n" +
+            "const cardHtml = renderStreamlinedLlmCallCard(call, 1, 'step_99', false, false);\n" +
+            "if (!cardHtml.includes('Tool Result: query_dom ➔ SUCCESS (1 match: app-image-placeholder.hoveredPlaceholder)')) {\n" +
+            "    throw new Error('Oneliner summary missing from card: ' + cardHtml);\n" +
+            "}\n" +
+            "if (!cardHtml.includes('Tool Result Payload') || !cardHtml.includes('Page State & Continuation Context')) {\n" +
+            "    throw new Error('Drawer sections missing from card: ' + cardHtml);\n" +
+            "}\n" +
+            "if (cardHtml.includes('copyTurnConversation')) {\n" +
+            "    throw new Error('Single-turn copy button should not be present on card header');\n" +
+            "}\n" +
+            "\n" +
+            "const initialCall = {\n" +
+            "    userPrompt: '### Test Instruction: Place image.',\n" +
+            "    responseContent: 'Tool Calls: [{\\\"name\\\":\\\"query_dom\\\",\\\"arguments\\\":{\\\"selector\\\":\\\"app-image-placeholder\\\"}}]'\n" +
+            "};\n" +
+            "window._neodymiumStepLlmData = {\n" +
+            "    step_99: {\n" +
+            "        stepId: 'step_99',\n" +
+            "        stepNum: 3,\n" +
+            "        title: 'Image Placement',\n" +
+            "        model: 'gemini-3.6-flash',\n" +
+            "        totalTokens: 12000,\n" +
+            "        totalCost: '$0.0042',\n" +
+            "        calls: [initialCall, call],\n" +
+            "        systemPrompt: 'You are an automated web agent.'\n" +
+            "    }\n" +
+            "};\n" +
+            "const md = generateStepConversationMarkdown('step_99');\n" +
+            "if (!md.includes('# LLM Conversation: Step #3 - Image Placement') || !md.includes('You are an automated web agent.') || !md.includes('Tool Execution Payload')) {\n" +
+            "    throw new Error('Markdown generation failed: ' + md.substring(0, 100));\n" +
+            "}\n" +
+            "`;\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(testScript, sandbox);\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+    }
+
+    @Test
+    public void testAccumulatedChatMessageHistoryParsingAndDomCollapsing() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const testScript = code + '\\n' + `\n" +
+            "const fullHistorySample = 'ChatMessage[USER]: ### Active Session Variables:\\\\n- BROWSER: chrome\\\\n### Test Instruction:\\\\nGenerate a random image and upload it.\\\\n### Current Page State & Interactive Elements:\\\\nPage URL: https://order.example.com\\\\nChatMessage[ASSISTANT]: Tool Calls: [{\\\\\"name\\\\\":\\\\\"generateAndUploadImage\\\\\",\\\\\"arguments\\\\\":{\\\\\"target\\\\\":\\\\\"gallery\\\\\"}}]\\\\nChatMessage[TOOL (tool=generateAndUploadImage, id=call_4)]: Tool error: Error executing method generateAndUploadImage: Connection refused\\\\nChatMessage[USER]: ### Current Page:\\\\nURL: https://order.example.com/editor/\\\\nTitle: Editor\\\\nNote: Page visual state unchanged.\\\\n=== Structural DOM Tree ===\\\\n<app-root><div class=\"editor\">Canvas</div></app-root>';\n" +
+            "const messages = splitChatMessages(fullHistorySample);\n" +
+            "if (messages.length !== 4) {\n" +
+            "    throw new Error('Expected 4 discrete messages but got: ' + messages.length);\n" +
+            "}\n" +
+            "if (!messages[2].role.includes('TOOL') || !messages[2].content.includes('Connection refused')) {\n" +
+            "    throw new Error('Tool message extraction mismatch: ' + JSON.stringify(messages[2]));\n" +
+            "}\n" +
+            "const parsed = parseLlmPromptContent(fullHistorySample);\n" +
+            "if (!parsed.turnInputSummary.includes('generateAndUploadImage ➔ ERROR: Error executing method generateAndUploadImage: Connection refused')) {\n" +
+            "    throw new Error('Plain text tool error summary mismatch: ' + parsed.turnInputSummary);\n" +
+            "}\n" +
+            "if (!parsed.domSnapshot || !parsed.domSnapshot.includes('<app-root><div class=\"editor\">Canvas</div></app-root>')) {\n" +
+            "    throw new Error('Structural DOM tree not properly isolated into domSnapshot: ' + parsed.domSnapshot);\n" +
+            "}\n" +
+            "if (parsed.continuationContext.rawText.includes('<app-root>')) {\n" +
+            "    throw new Error('Structural DOM tree leaked into continuationContext.rawText');\n" +
+            "}\n" +
+            "if (parsed.continuationContext.pageUrl !== 'https://order.example.com/editor/' || parsed.continuationContext.pageTitle !== 'Editor') {\n" +
+            "    throw new Error('Continuation context URL or Title mismatch');\n" +
+            "}\n" +
+            "\n" +
+            "const call = {\n" +
+            "    userPrompt: fullHistorySample,\n" +
+            "    responseContent: 'Tool Calls: [{\\\"name\\\":\\\"query_dom\\\",\\\"arguments\\\":{\\\"selector\\\":\\\"app-root\\\"}}]'\n" +
+            "};\n" +
+            "const cardHtml = renderStreamlinedLlmCallCard(call, 1, 'step_101', false, false);\n" +
+            "if (!cardHtml.includes('Tool Result: generateAndUploadImage ➔ ERROR:')) {\n" +
+            "    throw new Error('Card missing concise oneliner: ' + cardHtml);\n" +
+            "}\n" +
+            "if (!cardHtml.includes('Page State & DOM Snapshot') || !cardHtml.includes('llm-dom-toggle')) {\n" +
+            "    throw new Error('Card missing collapsible DOM snapshot toggle: ' + cardHtml);\n" +
+            "}\n" +
+            "if (cardHtml.includes('copyTurnConversation')) {\n" +
+            "    throw new Error('Card must not have per-turn copy button');\n" +
+            "}\n" +
+            "\n" +
+            "window._neodymiumStepLlmData = {\n" +
+            "    step_101: {\n" +
+            "        stepId: 'step_101',\n" +
+            "        stepNum: 4,\n" +
+            "        title: 'Generate and upload image',\n" +
+            "        model: 'gemini-3.5-flash-lite',\n" +
+            "        totalTokens: 116730,\n" +
+            "        totalCost: '$0.0406',\n" +
+            "        calls: [\n" +
+            "            {\n" +
+            "                userPrompt: '### Test Instruction: Generate image and upload.',\n" +
+            "                responseContent: 'Tool Calls: [{\\\"name\\\":\\\"generateAndUploadImage\\\",\\\"arguments\\\":{}}]'\n" +
+            "            },\n" +
+            "            call\n" +
+            "        ],\n" +
+            "        systemPrompt: 'Autonomous web agent.'\n" +
+            "    }\n" +
+            "};\n" +
+            "const md = generateStepConversationMarkdown('step_101');\n" +
+            "if (!md.includes('<details>') || !md.includes('<summary>Page DOM Tree Snapshot') || !md.includes('</details>')) {\n" +
+            "    throw new Error('Markdown must collapse DOM tree inside <details> tags: ' + md.substring(0, 300));\n" +
+            "}\n" +
+            "`;\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {} }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(testScript, sandbox);\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+    }
 }
 

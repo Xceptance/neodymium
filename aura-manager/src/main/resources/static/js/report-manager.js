@@ -2615,6 +2615,897 @@ function renderLinterFindingsCard(findings, isPostFlight) {
     `;
 }
 
+function formatBytes(bytes) {
+    if (!bytes || bytes <= 0) return '0 B';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function splitChatMessages(text) {
+    if (!text || typeof text !== 'string') return [];
+
+    const regex = /(?:^|[\s\n]+)(?:ChatMessage\[([^\]]+)\]:\s*|(TOOL(?:\s*\([^)]*\))?:\s*))/g;
+    const matches = [];
+    let match;
+    while ((match = regex.exec(text)) !== null) {
+        const fullMatch = match[0];
+        const role = (match[1] || match[2] || '').trim().replace(/^TOOL(?:\s*\(([^)]*)\))?:?$/i, (m, p1) => p1 ? `TOOL (${p1})` : 'TOOL');
+        const leadingWhitespaceLength = fullMatch.match(/^[\s\n]+/)?.[0].length || 0;
+        const headerStart = match.index + leadingWhitespaceLength;
+        const contentStart = match.index + fullMatch.length;
+
+        matches.push({
+            role: role,
+            headerStart: headerStart,
+            contentStart: contentStart
+        });
+    }
+
+    if (matches.length === 0) {
+        return [{ role: 'RAW', content: text.trim() }];
+    }
+
+    const result = [];
+    if (matches[0].headerStart > 0) {
+        const leading = text.substring(0, matches[0].headerStart).trim();
+        if (leading) {
+            result.push({ role: 'RAW', content: leading });
+        }
+    }
+
+    for (let i = 0; i < matches.length; i++) {
+        const current = matches[i];
+        const nextStart = (i + 1 < matches.length) ? matches[i + 1].headerStart : text.length;
+        const content = text.substring(current.contentStart, nextStart).trim();
+        result.push({
+            role: current.role,
+            content: content
+        });
+    }
+
+    return result;
+}
+
+function parseToolMessage(role, content) {
+    if (!role && !content) return null;
+    let toolName = '';
+    let toolId = '';
+
+    if (role) {
+        const toolAttrMatch = role.match(/tool=([^,)]+)/i);
+        if (toolAttrMatch) toolName = toolAttrMatch[1].trim();
+        const idAttrMatch = role.match(/id=([^,)]+)/i);
+        if (idAttrMatch) toolId = idAttrMatch[1].trim();
+
+        if (!toolName) {
+            const simpleToolMatch = role.match(/TOOL\s*\(([^,)]+)\)/i);
+            if (simpleToolMatch) toolName = simpleToolMatch[1].trim();
+        }
+    }
+
+    let payload = (content || '').trim();
+    const contentHeaderMatch = payload.match(/^TOOL(?:\s*\((?:tool=)?([^,)]+)(?:,\s*id=([^)]+))?\))?:\s*([\s\S]*)$/i);
+    if (contentHeaderMatch) {
+        if (!toolName) toolName = (contentHeaderMatch[1] || '').trim();
+        if (!toolId) toolId = (contentHeaderMatch[2] || '').trim();
+        payload = (contentHeaderMatch[3] || '').trim();
+    }
+
+    let parsedJson = null;
+    let formattedJson = '';
+    let summary = '';
+
+    if (payload.startsWith('{') || payload.startsWith('[')) {
+        try {
+            parsedJson = JSON.parse(payload);
+            formattedJson = JSON.stringify(parsedJson, null, 2);
+        } catch (e) {
+            formattedJson = payload;
+        }
+    } else {
+        formattedJson = payload;
+    }
+
+    if (parsedJson) {
+        const action = parsedJson.action || toolName || 'tool';
+        const status = parsedJson.status || (parsedJson.error ? 'ERROR' : 'SUCCESS');
+        if (action === 'query_dom' || parsedJson.matches !== undefined || parsedJson.matchCount !== undefined) {
+            const count = parsedJson.matchCount !== undefined ? parsedJson.matchCount : (Array.isArray(parsedJson.matches) ? parsedJson.matches.length : 0);
+            if (count > 0 && Array.isArray(parsedJson.matches) && parsedJson.matches[0]) {
+                const first = parsedJson.matches[0];
+                const sel = first.selector || first.tag || '';
+                summary = `query_dom ➔ ${status} (${count} match${count > 1 ? 'es' : ''}: ${sel})`;
+            } else {
+                summary = `query_dom ➔ ${status} (${count} matches)`;
+            }
+        } else if (parsedJson.error) {
+            summary = `${action} ➔ ERROR: ${parsedJson.error}`;
+        } else if (parsedJson.message) {
+            summary = `${action} ➔ ${status} (${parsedJson.message})`;
+        } else if (parsedJson.target) {
+            summary = `${action} ➔ ${status} ("${parsedJson.target}")`;
+        } else {
+            summary = `${action} ➔ ${status}`;
+        }
+    } else {
+        const effectiveName = toolName || 'tool';
+        const cleanText = payload.replace(/^Tool\s*(?:error|failure):\s*/i, '').trim();
+        let shortText = cleanText.split('\n')[0].trim();
+        if (shortText.length > 70) shortText = shortText.substring(0, 67) + '...';
+
+        const isError = /error|fail|exception/i.test(payload);
+        if (isError) {
+            summary = `${effectiveName} ➔ ERROR: ${shortText}`;
+        } else {
+            summary = `${effectiveName} ➔ ${shortText}`;
+        }
+    }
+
+    return {
+        toolName: toolName || (parsedJson && parsedJson.action) || 'tool',
+        toolId: toolId,
+        status: (parsedJson && parsedJson.status) || (parsedJson && parsedJson.error ? 'ERROR' : (/error|fail|exception/i.test(payload) ? 'ERROR' : 'SUCCESS')),
+        summary: summary ? `Tool Result: ${summary}` : '',
+        formattedJson: formattedJson,
+        parsedObj: parsedJson
+    };
+}
+
+function parseUserContinuation(content) {
+    if (!content) return { pageUrl: '', pageTitle: '', visualNote: '', guidanceText: '', domSnapshot: '', rawText: '' };
+
+    let text = content.trim();
+    let domSnapshot = '';
+
+    const domHeaderIdx = text.search(/===\s*Structural DOM Tree\s*===/i);
+    if (domHeaderIdx !== -1) {
+        domSnapshot = text.substring(domHeaderIdx).replace(/===\s*Structural DOM Tree\s*===\s*/i, '').trim();
+        text = text.substring(0, domHeaderIdx).trim();
+    } else {
+        const appRootIdx = text.search(/<(?:app-root|html|!DOCTYPE html)\b/i);
+        if (appRootIdx !== -1) {
+            domSnapshot = text.substring(appRootIdx).trim();
+            text = text.substring(0, appRootIdx).trim();
+        }
+    }
+
+    let pageUrl = '';
+    let pageTitle = '';
+    let visualNote = '';
+    let guidanceText = '';
+
+    const urlMatch = text.match(/URL:\s*(\S+)/i);
+    if (urlMatch) pageUrl = urlMatch[1];
+
+    const titleMatch = text.match(/Title:\s*([^.\n]+?)(?=\s+Note:|\n|$)/i);
+    if (titleMatch) pageTitle = titleMatch[1].trim();
+
+    const noteMatch = text.match(/Note:\s*([\s\S]*?)(?=\s+If\b|\n\n|$)/i);
+    if (noteMatch) visualNote = noteMatch[1].trim();
+
+    const guidanceMatch = text.match(/If\s+this\s+was\s+an\s+action[\s\S]*/i);
+    if (guidanceMatch) guidanceText = guidanceMatch[0].trim();
+
+    return {
+        pageUrl: pageUrl,
+        pageTitle: pageTitle,
+        visualNote: visualNote,
+        guidanceText: guidanceText,
+        domSnapshot: domSnapshot,
+        rawText: text
+    };
+}
+
+function parseToolAndUserTurns(text) {
+    if (!text) return null;
+    const messages = splitChatMessages(text);
+    let toolMsg = null;
+    let userMsg = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role.toUpperCase().includes('TOOL')) {
+            toolMsg = messages[i];
+            for (let j = i + 1; j < messages.length; j++) {
+                if (messages[j].role.toUpperCase().includes('USER')) {
+                    userMsg = messages[j];
+                    break;
+                }
+            }
+            break;
+        }
+    }
+    const toolResult = toolMsg ? parseToolMessage(toolMsg.role, toolMsg.content) : null;
+    const continuationContext = userMsg ? parseUserContinuation(userMsg.content) : null;
+    return {
+        summary: (toolResult && toolResult.summary) || '',
+        toolResult: toolResult,
+        continuationContext: continuationContext
+    };
+}
+
+function parseLlmPromptContent(userPromptText) {
+    if (!userPromptText) {
+        return {
+            instruction: '',
+            sessionVariables: [],
+            domSnapshot: '',
+            domSnapshotBytes: 0,
+            turnInput: '',
+            turnInputSummary: '',
+            toolResult: null,
+            continuationContext: null,
+            otherContext: ''
+        };
+    }
+
+    const messages = splitChatMessages(userPromptText);
+    const hasToolMsg = messages.some(m => m.role.toUpperCase().includes('TOOL'));
+    const isMultiTurn = messages.length > 1 || hasToolMsg;
+
+    if (isMultiTurn && hasToolMsg) {
+        let lastToolIdx = -1;
+        for (let i = messages.length - 1; i >= 0; i--) {
+            if (messages[i].role.toUpperCase().includes('TOOL')) {
+                lastToolIdx = i;
+                break;
+            }
+        }
+
+        const toolMsg = lastToolIdx !== -1 ? messages[lastToolIdx] : null;
+        let userMsg = null;
+        if (lastToolIdx !== -1) {
+            for (let i = lastToolIdx + 1; i < messages.length; i++) {
+                if (messages[i].role.toUpperCase().includes('USER')) {
+                    userMsg = messages[i];
+                    break;
+                }
+            }
+        }
+
+        const parsedTool = toolMsg ? parseToolMessage(toolMsg.role, toolMsg.content) : null;
+        const parsedUser = userMsg ? parseUserContinuation(userMsg.content) : null;
+
+        const turnInputSummary = (parsedTool && parsedTool.summary) || '';
+        const domSnapshot = (parsedUser && parsedUser.domSnapshot) || '';
+        const domBytes = domSnapshot ? encodeURI(domSnapshot).split(/%..|./).length - 1 : 0;
+
+        return {
+            instruction: '',
+            sessionVariables: [],
+            domSnapshot: domSnapshot,
+            domSnapshotBytes: domBytes,
+            turnInput: turnInputSummary,
+            turnInputSummary: turnInputSummary,
+            toolResult: parsedTool,
+            continuationContext: parsedUser,
+            otherContext: ''
+        };
+    }
+
+    let targetText = userPromptText;
+    if (messages.length === 1 && (messages[0].role === 'USER' || messages[0].role === 'RAW')) {
+        targetText = messages[0].content;
+    } else if (messages.length > 0 && messages[0].role === 'USER') {
+        targetText = messages[0].content;
+    }
+
+    let instruction = '';
+    const sessionVariables = [];
+    let domSnapshot = '';
+    let otherContext = '';
+
+    const varsMatch = targetText.match(/###\s*Active Session Variables:\s*\n([\s\S]*?)(?=\n###|\n\n\n|$)/i);
+    if (varsMatch) {
+        const varLines = varsMatch[1].split('\n');
+        for (const line of varLines) {
+            const m = line.match(/^\s*-\s*([^:]+)\s*:\s*(.*)$/);
+            if (m) {
+                sessionVariables.push({ key: m[1].trim(), value: m[2].trim() });
+            }
+        }
+    }
+
+    const instrMatch = targetText.match(/###\s*Test Instruction:\s*\n([\s\S]*?)(?=\n###|$)/i);
+    if (instrMatch) {
+        instruction = instrMatch[1].trim();
+    }
+
+    const domMatch = targetText.match(/###\s*Current Page State & Interactive Elements:\s*\n([\s\S]*?)(?=\n###|$)/i);
+    if (domMatch) {
+        domSnapshot = domMatch[1].trim();
+    } else {
+        const pageUrlIdx = targetText.indexOf('Page URL:');
+        if (pageUrlIdx !== -1 && !instruction) {
+            domSnapshot = targetText.substring(pageUrlIdx).trim();
+        }
+    }
+
+    const hintMatch = targetText.match(/###\s*Target Selector Hint:\s*\n([\s\S]*?)(?=\n###|$)/i);
+    if (hintMatch) {
+        otherContext += (otherContext ? '\n' : '') + 'Selector Hint: ' + hintMatch[1].trim();
+    }
+    const visualMatch = targetText.match(/###\s*Visual Inspection Directive:\s*\n([\s\S]*?)(?=\n###|$)/i);
+    if (visualMatch) {
+        otherContext += (otherContext ? '\n' : '') + 'Visual Directive: ' + visualMatch[1].trim();
+    }
+
+    if (!instruction && !domSnapshot) {
+        instruction = targetText.trim();
+    }
+
+    const domBytes = domSnapshot ? encodeURI(domSnapshot).split(/%..|./).length - 1 : 0;
+
+    return {
+        instruction,
+        sessionVariables,
+        domSnapshot,
+        domSnapshotBytes: domBytes,
+        turnInput: '',
+        turnInputSummary: '',
+        toolResult: null,
+        continuationContext: null,
+        otherContext
+    };
+}
+
+function parseToolCallResponse(responseText) {
+    if (!responseText) return { primaryTool: '', paramPreview: '', formattedToolCall: '', rawText: '' };
+    
+    // Check for Tool Calls: [...]
+    const toolCallMatch = responseText.match(/Tool Calls:\s*(\[[\s\S]*\])/i);
+    if (toolCallMatch) {
+        try {
+            const parsed = JSON.parse(toolCallMatch[1]);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                const firstCall = parsed[0];
+                const toolName = firstCall.name || firstCall.tool || firstCall.type || 'tool_call';
+                const args = firstCall.arguments || firstCall.args || firstCall.parameters || {};
+                let paramPreview = '';
+                if (args.selector) paramPreview = `"${args.selector}"`;
+                else if (args.milliseconds !== undefined) paramPreview = `${args.milliseconds}`;
+                else if (args.target) paramPreview = `"${args.target}"`;
+                else if (args.text) paramPreview = `"${args.text}"`;
+                return {
+                    primaryTool: toolName,
+                    paramPreview: paramPreview,
+                    argsObj: args,
+                    formattedToolCall: `${toolName}(${JSON.stringify(args)})`,
+                    rawText: responseText
+                };
+            }
+        } catch (e) {}
+    }
+    
+    // Check for JSON array directly: [{"type":"..."},...]
+    if (responseText.trim().startsWith('[') || responseText.trim().startsWith('{')) {
+        try {
+            const parsed = JSON.parse(responseText.trim());
+            const first = Array.isArray(parsed) ? parsed[0] : parsed;
+            if (first && (first.type || first.action || first.name)) {
+                const toolName = first.type || first.action || first.name;
+                const args = first.arguments || first.args || first;
+                let paramPreview = '';
+                if (first.target) paramPreview = `"${first.target}"`;
+                else if (first.selector) paramPreview = `"${first.selector}"`;
+                else if (first.value) paramPreview = `"${first.value}"`;
+                return {
+                    primaryTool: toolName,
+                    paramPreview: paramPreview,
+                    argsObj: args,
+                    formattedToolCall: `${toolName}(${JSON.stringify(args)})`,
+                    rawText: responseText
+                };
+            }
+        } catch (e) {}
+    }
+
+    // Check for tool call regex like: query_dom(...)
+    const callMatch = responseText.match(/([a-zA-Z0-9_]+)\s*\(([\s\S]*?)\)/);
+    if (callMatch) {
+        let paramPreview = callMatch[2].trim();
+        if (paramPreview.length > 25) paramPreview = paramPreview.substring(0, 22) + '...';
+        return {
+            primaryTool: callMatch[1],
+            paramPreview: paramPreview,
+            argsObj: null,
+            formattedToolCall: callMatch[0].trim(),
+            rawText: responseText
+        };
+    }
+
+    return {
+        primaryTool: '',
+        paramPreview: '',
+        argsObj: null,
+        formattedToolCall: '',
+        rawText: responseText
+    };
+}
+
+function renderExecutionTimelineBar(calls, stepId, isStepFailed) {
+    if (!calls || calls.length <= 1) return '';
+
+    let chipsHtml = '';
+    calls.forEach((call, idx) => {
+        const rawResponse = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || call.output || call.completion || '';
+        const parsed = parseToolCallResponse(rawResponse);
+        const toolName = parsed.primaryTool || `Call #${idx + 1}`;
+        const param = parsed.paramPreview ? `(${parsed.paramPreview})` : '';
+        const isLastCall = idx === calls.length - 1;
+        const isFailed = isLastCall && isStepFailed;
+        const chipClass = isFailed ? 'llm-flow-chip failed' : 'llm-flow-chip';
+        const failIcon = isFailed ? ' ❌' : '';
+        const targetId = `${stepId}_llm_call_${idx}`;
+
+        chipsHtml += `
+            <a href="#${targetId}" class="${chipClass}" onclick="event.stopPropagation(); document.getElementById('${targetId}')?.scrollIntoView({ behavior: 'smooth', block: 'center' });">
+                <span>#${idx + 1} ${escapeHtml(toolName)}${escapeHtml(param)}${failIcon}</span>
+            </a>
+        `;
+        if (idx < calls.length - 1) {
+            chipsHtml += `<span class="llm-flow-arrow">➔</span>`;
+        }
+    });
+
+    return `
+        <div class="llm-timeline-bar">
+            <div class="llm-timeline-header">
+                <span>Execution Sequence Overview</span>
+                <span>${calls.length} Turns</span>
+            </div>
+            <div class="llm-timeline-steps">
+                ${chipsHtml}
+            </div>
+        </div>
+    `;
+}
+
+function renderStreamlinedLlmCallCard(call, cIdx, stepId, isStepFailed, isSubStep) {
+    const tokens = extractCallTokens(call);
+    const rawCost = extractCallCost(call);
+    let formattedCost = '$0.0000';
+    if (rawCost > 0) {
+        const roundedUp = Math.ceil(rawCost * 10000) / 10000;
+        formattedCost = '$' + roundedUp.toFixed(4);
+    }
+    const dur = (call.durationMs !== undefined && call.durationMs !== null) 
+        ? (isSubStep ? call.durationMs + ' ms' : formatDurationInMinutes(call.durationMs)) 
+        : (call.duration ? formatDurationInMinutes(call.duration) : '');
+    
+    const systemPromptText = call.systemPrompt || call.system_prompt || call.system || '';
+    const userPromptText = call.userPrompt || call.user_prompt || call.domContext || call.dom_context || call.prompt || '';
+    const rawResponseText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || call.output || call.completion || '';
+
+    const metaParts = [];
+    if (tokens) metaParts.push(`Tokens: ${tokens}`);
+    metaParts.push(`Cost: ${formattedCost}`);
+    if (dur) metaParts.push(`Duration: ${dur}`);
+    const callMetaStr = metaParts.join(' | ');
+
+    const promptParsed = parseLlmPromptContent(userPromptText);
+    const respParsed = parseToolCallResponse(rawResponseText);
+    
+    const isLast = (call._isLastCall === true);
+    const isTurnFailed = isLast && isStepFailed;
+    const cardClass = isTurnFailed ? 'llm-turn-card failed-turn' : 'llm-turn-card';
+    const cardId = `${stepId}_llm_call_${cIdx}`;
+
+    // Request or Turn Input row
+    let requestRowHtml = '';
+    if (cIdx === 0 && promptParsed.instruction) {
+        requestRowHtml = `
+            <div class="llm-exchange-row">
+                <span class="llm-exchange-tag llm-tag-request">Request</span>
+                <div class="llm-instruction-text">${escapeHtml(promptParsed.instruction)}</div>
+            </div>
+        `;
+    } else if (promptParsed.turnInputSummary) {
+        requestRowHtml = `
+            <div class="llm-exchange-row">
+                <span class="llm-exchange-tag llm-tag-result">Turn Input</span>
+                <div class="llm-tool-result-text">
+                    <span>${escapeHtml(promptParsed.turnInputSummary)}</span>
+                </div>
+            </div>
+        `;
+    } else if (promptParsed.turnInput) {
+        requestRowHtml = `
+            <div class="llm-exchange-row">
+                <span class="llm-exchange-tag llm-tag-result">Turn Input</span>
+                <div class="llm-tool-result-text">${escapeHtml(promptParsed.turnInput)}</div>
+            </div>
+        `;
+    } else if (promptParsed.instruction) {
+        requestRowHtml = `
+            <div class="llm-exchange-row">
+                <span class="llm-exchange-tag llm-tag-request">Request</span>
+                <div class="llm-instruction-text">${escapeHtml(promptParsed.instruction)}</div>
+            </div>
+        `;
+    }
+
+    // Response row
+    let responseDisplay = respParsed.formattedToolCall || respParsed.rawText || 'No response payload recorded';
+    const failureMsg = isTurnFailed ? '<div style="margin-top: 0.35rem; font-size: 0.76rem; color: #dc2626; font-weight: 600;">❌ FAILED / TIMEOUT</div>' : '';
+    const responseRowHtml = `
+        <div class="llm-exchange-row">
+            <span class="llm-exchange-tag llm-tag-response">Response</span>
+            <div>
+                <code class="llm-tool-call-code">${escapeHtml(responseDisplay)}</code>
+                ${failureMsg}
+            </div>
+        </div>
+    `;
+
+    // Drawer Details (Session Variables, Tool Results, Page State & DOM, System Prompt)
+    let hasDetails = false;
+    let detailsInnerHtml = '';
+
+    // 1. Tool Result Payload (Pretty JSON)
+    if (promptParsed.toolResult && promptParsed.toolResult.formattedJson) {
+        hasDetails = true;
+        detailsInnerHtml += `
+            <div class="llm-drawer-section">
+                <div class="llm-drawer-subtitle">
+                    <span>Tool Result Payload: <code>${escapeHtml(promptParsed.toolResult.toolName || 'tool')}</code></span>
+                    ${promptParsed.toolResult.toolId ? `<span style="font-family: var(--font-mono); font-size: 0.68rem; color: var(--text-muted);">${escapeHtml(promptParsed.toolResult.toolId)}</span>` : ''}
+                </div>
+                <pre class="llm-code-block"><code>${escapeHtml(promptParsed.toolResult.formattedJson)}</code></pre>
+            </div>
+        `;
+    }
+
+    // 2. Continuation Context & Page State
+    if (promptParsed.continuationContext && (promptParsed.continuationContext.pageUrl || promptParsed.continuationContext.visualNote || promptParsed.continuationContext.guidanceText)) {
+        hasDetails = true;
+        const ctx = promptParsed.continuationContext;
+        let ctxBody = '';
+        if (ctx.pageUrl) {
+            ctxBody += `<div><strong style="color: var(--text-muted);">Page URL:</strong> <a href="${escapeHtml(ctx.pageUrl)}" target="_blank" rel="noopener" style="color: var(--accent); word-break: break-all;">${escapeHtml(ctx.pageUrl)}</a></div>`;
+        }
+        if (ctx.pageTitle) {
+            ctxBody += `<div><strong style="color: var(--text-muted);">Title:</strong> <span>${escapeHtml(ctx.pageTitle)}</span></div>`;
+        }
+        if (ctx.visualNote) {
+            ctxBody += `<div style="margin-top: 0.25rem;"><strong style="color: var(--text-muted);">Visual State:</strong> <span>${escapeHtml(ctx.visualNote)}</span></div>`;
+        }
+        if (ctx.guidanceText) {
+            ctxBody += `
+                <details class="llm-guidance-details" style="margin-top: 0.4rem;">
+                    <summary style="cursor: pointer; font-size: 0.72rem; color: var(--text-muted); font-weight: 600;">Framework Continuation Guidance</summary>
+                    <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.25rem; line-height: 1.4; padding: 0.4rem 0.6rem; background: var(--bg-card); border-radius: 4px; border: 1px solid var(--border);">
+                        ${escapeHtml(ctx.guidanceText)}
+                    </div>
+                </details>
+            `;
+        }
+        detailsInnerHtml += `
+            <div class="llm-drawer-section">
+                <div class="llm-drawer-subtitle">Page State & Continuation Context</div>
+                <div class="llm-context-box">${ctxBody}</div>
+            </div>
+        `;
+    }
+
+    if (promptParsed.sessionVariables && promptParsed.sessionVariables.length > 0) {
+        hasDetails = true;
+        let varRows = '';
+        promptParsed.sessionVariables.forEach(v => {
+            varRows += `<tr><td class="llm-var-key">${escapeHtml(v.key)}</td><td class="llm-var-val">${escapeHtml(v.value)}</td></tr>`;
+        });
+        detailsInnerHtml += `
+            <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">
+                Session Variables (${promptParsed.sessionVariables.length})
+            </div>
+            <table class="llm-var-table">
+                <thead><tr><th>Variable</th><th>Value</th></tr></thead>
+                <tbody>${varRows}</tbody>
+            </table>
+        `;
+    }
+
+    if (promptParsed.domSnapshot) {
+        hasDetails = true;
+        const domSize = formatBytes(promptParsed.domSnapshotBytes || promptParsed.domSnapshot.length);
+        detailsInnerHtml += `
+            <div>
+                <div class="llm-dom-toggle" onclick="toggleDomSnapshot(this, event)">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">code</span>
+                    <span>Page State & DOM Snapshot (${domSize})</span>
+                    <span class="material-symbols-outlined llm-dom-chevron" style="font-size: 0.8rem;">chevron_right</span>
+                </div>
+                <pre class="llm-dom-body">${escapeHtml(promptParsed.domSnapshot)}</pre>
+            </div>
+        `;
+    }
+
+    if (systemPromptText) {
+        hasDetails = true;
+        detailsInnerHtml += `
+            <div>
+                <div class="llm-dom-toggle" onclick="toggleSystemPrompt(this, event)">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">tune</span>
+                    <span>System Prompt</span>
+                    <span class="material-symbols-outlined llm-sys-chevron" style="font-size: 0.8rem;">chevron_right</span>
+                </div>
+                <pre class="llm-dom-body">${escapeHtml(systemPromptText)}</pre>
+            </div>
+        `;
+    }
+
+    if (promptParsed.otherContext) {
+        hasDetails = true;
+        detailsInnerHtml += `
+            <div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono); white-space: pre-wrap;">${escapeHtml(promptParsed.otherContext)}</div>
+        `;
+    }
+
+    const detailsBtnHtml = hasDetails ? `
+        <button class="llm-header-details-btn" onclick="toggleCallDetails(this, event)">
+            <span>Details</span>
+            <span class="material-symbols-outlined" style="font-size: 0.75rem;">expand_more</span>
+        </button>
+    ` : '';
+
+    return `
+        <div class="${cardClass}" id="${cardId}">
+            <div class="llm-turn-header">
+                <div class="llm-turn-header-left">
+                    <span class="llm-turn-badge">Call #${cIdx + 1}</span>
+                    ${detailsBtnHtml}
+                </div>
+                <span class="llm-turn-meta">${callMetaStr}</span>
+            </div>
+            <div class="llm-turn-body">
+                ${requestRowHtml}
+                ${responseRowHtml}
+            </div>
+            ${hasDetails ? `<div class="llm-details-drawer" style="display: none;">${detailsInnerHtml}</div>` : ''}
+        </div>
+    `;
+}
+
+function toggleCallDetails(btn, event) {
+    if (event) event.stopPropagation();
+    const card = btn.closest('.llm-turn-card');
+    if (!card) return;
+    const drawer = card.querySelector('.llm-details-drawer');
+    if (!drawer) return;
+    const isExpanded = btn.classList.toggle('expanded');
+    drawer.style.display = isExpanded ? 'flex' : 'none';
+    const icon = btn.querySelector('.material-symbols-outlined');
+    if (icon) {
+        icon.textContent = isExpanded ? 'expand_less' : 'expand_more';
+    }
+}
+
+function toggleAllCallDetails(stepId, expand) {
+    const container = document.getElementById(`${stepId}_tabLlm`) || document.getElementById(stepId);
+    if (!container) return;
+    const cards = container.querySelectorAll('.llm-turn-card');
+    cards.forEach(card => {
+        const btn = card.querySelector('.llm-header-details-btn:not(.llm-copy-btn)');
+        const drawer = card.querySelector('.llm-details-drawer');
+        if (btn && drawer) {
+            if (expand) {
+                btn.classList.add('expanded');
+                drawer.style.display = 'flex';
+                const icon = btn.querySelector('.material-symbols-outlined');
+                if (icon) icon.textContent = 'expand_less';
+            } else {
+                btn.classList.remove('expanded');
+                drawer.style.display = 'none';
+                const icon = btn.querySelector('.material-symbols-outlined');
+                if (icon) icon.textContent = 'expand_more';
+            }
+        }
+    });
+}
+
+function toggleDomSnapshot(toggleEl, event) {
+    if (event) event.stopPropagation();
+    const body = toggleEl.nextElementSibling;
+    if (!body) return;
+    const isHidden = body.style.display === 'none' || !body.style.display;
+    body.style.display = isHidden ? 'block' : 'none';
+    const chevron = toggleEl.querySelector('.llm-dom-chevron');
+    if (chevron) {
+        chevron.textContent = isHidden ? 'expand_more' : 'chevron_right';
+    }
+}
+
+function toggleSystemPrompt(toggleEl, event) {
+    if (event) event.stopPropagation();
+    const body = toggleEl.nextElementSibling;
+    if (!body) return;
+    const isHidden = body.style.display === 'none' || !body.style.display;
+    body.style.display = isHidden ? 'block' : 'none';
+    const chevron = toggleEl.querySelector('.llm-sys-chevron');
+    if (chevron) {
+        chevron.textContent = isHidden ? 'expand_more' : 'chevron_right';
+    }
+}
+
+function generateTurnConversationMarkdown(stepData, call, cIdx) {
+    const lines = [];
+    lines.push(`### Turn #${cIdx + 1}`);
+    if (call.durationMs || call.totalTokens || call.cost) {
+        const meta = [];
+        if (call.durationMs) meta.push(`Duration: ${call.durationMs}ms`);
+        if (call.totalTokens) meta.push(`Tokens: ${call.totalTokens}`);
+        if (call.cost) meta.push(`Cost: $${call.cost}`);
+        lines.push(`*(${meta.join(' | ')})*`);
+        lines.push('');
+    }
+
+    const promptText = call.userPrompt || call.user_prompt || call.prompt || '';
+    const parsed = parseLlmPromptContent(promptText);
+
+    if (cIdx === 0) {
+        lines.push('#### Request');
+        lines.push(parsed.instruction || promptText);
+        lines.push('');
+        if (parsed.sessionVariables && parsed.sessionVariables.length > 0) {
+            lines.push('##### Active Session Variables');
+            parsed.sessionVariables.forEach(v => lines.push(`- **${v.key}:** \`${v.value}\``));
+            lines.push('');
+        }
+        if (parsed.domSnapshot) {
+            const domSize = formatBytes(parsed.domSnapshotBytes || parsed.domSnapshot.length);
+            lines.push('<details>');
+            lines.push(`<summary>Initial DOM Snapshot / Page Context (${domSize})</summary>`);
+            lines.push('');
+            lines.push('```html');
+            lines.push(parsed.domSnapshot);
+            lines.push('```');
+            lines.push('</details>');
+            lines.push('');
+        }
+    } else {
+        lines.push('#### Turn Input');
+        if (parsed.turnInputSummary) {
+            lines.push(`**Summary:** ${parsed.turnInputSummary}`);
+            lines.push('');
+        }
+        if (parsed.toolResult && parsed.toolResult.formattedJson) {
+            lines.push('##### Tool Execution Payload');
+            lines.push('```json');
+            lines.push(parsed.toolResult.formattedJson);
+            lines.push('```');
+            lines.push('');
+        }
+        if (parsed.continuationContext) {
+            const ctx = parsed.continuationContext;
+            lines.push('##### Page State & Continuation');
+            if (ctx.pageUrl) lines.push(`- **URL:** ${ctx.pageUrl}`);
+            if (ctx.pageTitle) lines.push(`- **Title:** ${ctx.pageTitle}`);
+            if (ctx.visualNote) lines.push(`- **Visual State:** ${ctx.visualNote}`);
+            if (ctx.guidanceText) lines.push(`- **Guidance:** ${ctx.guidanceText}`);
+            lines.push('');
+        }
+        if (parsed.domSnapshot) {
+            const domSize = formatBytes(parsed.domSnapshotBytes || parsed.domSnapshot.length);
+            lines.push('<details>');
+            lines.push(`<summary>Page DOM Tree Snapshot (${domSize})</summary>`);
+            lines.push('');
+            lines.push('```html');
+            lines.push(parsed.domSnapshot);
+            lines.push('```');
+            lines.push('</details>');
+            lines.push('');
+        }
+        if (!parsed.turnInputSummary && !parsed.toolResult && promptText) {
+            lines.push('```');
+            lines.push(promptText);
+            lines.push('```');
+            lines.push('');
+        }
+    }
+
+    const respText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || '';
+    const respParsed = parseToolCallResponse(respText);
+    lines.push('#### Model Response');
+    if (respParsed.formattedToolCall) {
+        lines.push('```json');
+        lines.push(respParsed.formattedToolCall);
+        lines.push('```');
+    } else if (respText) {
+        lines.push('```');
+        lines.push(respText);
+        lines.push('```');
+    } else {
+        lines.push('*(No response payload recorded)*');
+    }
+    return lines.join('\n');
+}
+
+function generateStepConversationMarkdown(stepId) {
+    const data = (window._neodymiumStepLlmData && window._neodymiumStepLlmData[stepId]) || null;
+    if (!data) return '';
+
+    const lines = [];
+    lines.push(`# LLM Conversation: Step #${data.stepNum || ''} - ${data.title || ''}`);
+    lines.push('');
+    lines.push(`- **Model:** ${data.model || 'Unknown'}`);
+    lines.push(`- **Total Tokens:** ${data.totalTokens || 0}`);
+    lines.push(`- **Estimated Cost:** ${data.totalCost || '$0.00'}`);
+    lines.push(`- **Recorded Turns:** ${(data.calls && data.calls.length) || 0}`);
+    lines.push('');
+
+    if (data.systemPrompt && data.systemPrompt.trim().length > 0) {
+        lines.push('---');
+        lines.push('## System Prompt');
+        lines.push('```');
+        lines.push(data.systemPrompt.trim());
+        lines.push('```');
+        lines.push('');
+    }
+
+    if (Array.isArray(data.calls)) {
+        data.calls.forEach((call, idx) => {
+            lines.push('---');
+            lines.push(generateTurnConversationMarkdown(data, call, idx));
+            lines.push('');
+        });
+    }
+
+    return lines.join('\n');
+}
+
+function copyTextToClipboardWithFeedback(text, btn, successMessage) {
+    if (!text) return;
+    const originalHtml = btn ? btn.innerHTML : '';
+    const originalClass = btn ? btn.className : '';
+
+    function setSuccess() {
+        if (!btn) return;
+        btn.classList.add('copied');
+        btn.innerHTML = `<span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">check</span> <span>${successMessage || 'Copied!'}</span>`;
+        setTimeout(() => {
+            btn.className = originalClass;
+            btn.innerHTML = originalHtml;
+        }, 2200);
+    }
+
+    function fallbackCopy(str) {
+        const ta = document.createElement('textarea');
+        ta.value = str;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+            document.execCommand('copy');
+        } catch (e) {}
+        document.body.removeChild(ta);
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(setSuccess).catch(() => {
+            fallbackCopy(text);
+            setSuccess();
+        });
+    } else {
+        fallbackCopy(text);
+        setSuccess();
+    }
+}
+
+function copyStepConversation(stepId, btn) {
+    const md = generateStepConversationMarkdown(stepId);
+    if (!md) return;
+    copyTextToClipboardWithFeedback(md, btn, 'Copied Conversation!');
+}
+
+function copyTurnConversation(stepId, cIdx, btn) {
+    const data = (window._neodymiumStepLlmData && window._neodymiumStepLlmData[stepId]) || null;
+    if (!data || !data.calls || !data.calls[cIdx]) return;
+    const call = data.calls[cIdx];
+    const md = generateTurnConversationMarkdown(data, call, cIdx);
+    copyTextToClipboardWithFeedback(md, btn, 'Copied Turn!');
+}
+
 function renderStepsForExecution(activeRow) {
     const stepListEl = document.getElementById('sidePageStepList');
     if (!stepListEl) return;
@@ -3319,89 +4210,42 @@ function renderStepsForExecution(activeRow) {
                     let subLlmCallsHtml = '';
                     const subLlmList = Array.isArray(sub.llmCalls) ? sub.llmCalls : [];
                     if (subLlmList.length > 0) {
+                        const subStepKey = `${stepId}_sub_${sIdx}`;
+                        window._neodymiumStepLlmData = window._neodymiumStepLlmData || {};
+                        window._neodymiumStepLlmData[subStepKey] = {
+                            stepId: subStepKey,
+                            stepNum: `${stepNum}.${sIdx + 1}`,
+                            title: sub.instruction || sub.name || `Sub-step ${sIdx + 1}`,
+                            model: (subLlmList[0] && (subLlmList[0].model || subLlmList[0].modelName)) || '',
+                            totalTokens: 0,
+                            totalCost: '$0.0000',
+                            calls: subLlmList,
+                            systemPrompt: (subLlmList[0] && (subLlmList[0].systemPrompt || subLlmList[0].system_prompt)) || ''
+                        };
                         subLlmCallsHtml = `
                             <div style="margin-top: 0.4rem;">
-                                <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.2rem; display: flex; align-items: center; gap: 0.25rem;">
-                                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">smart_toy</span>
-                                    <span>LLM Invocations (${subLlmList.length})</span>
+                                <div style="font-size: 0.72rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.2rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem;">
+                                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                        <span class="material-symbols-outlined" style="font-size: 0.85rem;">smart_toy</span>
+                                        <span>LLM Invocations (${subLlmList.length})</span>
+                                    </div>
+                                    <div class="llm-view-controls" style="margin-bottom: 0;">
+                                        <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${subStepKey}', true);">Expand All</button>
+                                        <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${subStepKey}', false);">Collapse All</button>
+                                        <button class="llm-ctrl-btn llm-copy-btn" onclick="event.stopPropagation(); copyStepConversation('${subStepKey}', this);" title="Copy sub-step conversation to clipboard">
+                                            <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">content_copy</span>
+                                            <span>Copy</span>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div style="display: flex; flex-direction: column; gap: 0.3rem;">
+                                <div id="${subStepKey}">
                         `;
+                        if (subLlmList.length > 1) {
+                            subLlmCallsHtml += renderExecutionTimelineBar(subLlmList, subStepKey, subStatus === 'FAILED');
+                        }
                         subLlmList.forEach((call, cIdx) => {
-                            const cap = call.capability || 'LLM Call';
-                            const model = call.modelName || call.model || call.llmModel || 'default';
-                            const tokens = extractCallTokens(call);
-                            const rawCost = extractCallCost(call);
-                            let formattedCost = '$0.0000';
-                            if (rawCost > 0) {
-                                const roundedUp = Math.ceil(rawCost * 10000) / 10000;
-                                formattedCost = '$' + roundedUp.toFixed(4);
-                            }
-                            const dur = (call.durationMs !== undefined && call.durationMs !== null) 
-                                ? (call.durationMs + ' ms') 
-                                : (call.duration ? formatDurationInMinutes(call.duration) : '');
-                            
-                            const systemPromptText = call.systemPrompt || call.system_prompt || call.system || '';
-                            const userPromptText = call.userPrompt || call.user_prompt || call.domContext || call.dom_context || call.prompt || '';
-                            const rawResponseText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || call.output || call.completion || '';
-
-                            const metaParts = [];
-                            if (tokens) metaParts.push(`Tokens: ${tokens}`);
-                            if (rawCost > 0) metaParts.push(`Cost: ${formattedCost}`);
-                            if (dur) metaParts.push(dur);
-                            const callMetaStr = metaParts.join(' | ');
-
-                            subLlmCallsHtml += `
-                                <div class="llm-call-card" style="border: 1px solid var(--border); border-radius: 6px; margin-top: 0.3rem; overflow: hidden; background: var(--bg-card);">
-                                    <div class="llm-call-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');" style="background: var(--bg-panel); padding: 0.35rem 0.6rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.75rem; cursor: pointer; user-select: none;">
-                                        <div style="display: flex; align-items: center; gap: 0.35rem; font-weight: 700; color: #1e293b;">
-                                            <span class="material-symbols-outlined llm-subsection-chevron" style="font-size: 0.8rem;">chevron_right</span>
-                                            <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #a855f7;">smart_toy</span>
-                                            <span><strong>${escapeHtml(cap)}</strong> <span style="color:var(--text-muted); font-weight: 400;">(${escapeHtml(model)})</span></span>
-                                        </div>
-                                        <span style="font-family: var(--font-mono); font-size: 0.7rem; color: #64748b;">${callMetaStr}</span>
-                                    </div>
-                                    <div class="llm-call-body" style="padding: 0.5rem; display: flex; flex-direction: column; gap: 0.4rem;">
-                                        
-                                        <div class="llm-subsection-card">
-                                            <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                                <div class="llm-subsection-title">
-                                                    <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                                    <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #0284c7;">tune</span>
-                                                    <span>System Prompt</span>
-                                                </div>
-                                                <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">Instruction & Persona</span>
-                                            </div>
-                                            <div class="llm-subsection-body">${systemPromptText ? escapeHtml(systemPromptText) : '<em style="color: var(--text-muted);">No explicit system prompt recorded</em>'}</div>
-                                        </div>
-
-                                        <div class="llm-subsection-card">
-                                            <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                                <div class="llm-subsection-title">
-                                                    <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                                    <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #d97706;">code</span>
-                                                    <span>User Prompt & DOM Context (Plain Text)</span>
-                                                </div>
-                                                <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">User Query & Page Snapshot</span>
-                                            </div>
-                                            <div class="llm-subsection-body">${userPromptText ? escapeHtml(userPromptText) : '<em style="color: var(--text-muted);">No user prompt/DOM context recorded</em>'}</div>
-                                        </div>
-
-                                        <div class="llm-subsection-card">
-                                            <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                                <div class="llm-subsection-title">
-                                                    <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                                    <span class="material-symbols-outlined" style="font-size: 0.85rem; color: #16a34a;">terminal</span>
-                                                    <span>Raw Model Response</span>
-                                                </div>
-                                                <span style="font-size: 0.68rem; color: #94a3b8; font-weight: 500;">AI Completion Payload</span>
-                                            </div>
-                                            <div class="llm-subsection-body">${rawResponseText ? escapeHtml(rawResponseText) : '<em style="color: var(--text-muted);">No raw response recorded</em>'}</div>
-                                        </div>
-
-                                    </div>
-                                </div>
-                            `;
+                            call._isLastCall = (cIdx === subLlmList.length - 1);
+                            subLlmCallsHtml += renderStreamlinedLlmCallCard(call, cIdx, subStepKey, subStatus === 'FAILED', true);
                         });
                         subLlmCallsHtml += `</div></div>`;
                     }
@@ -3454,14 +4298,28 @@ function renderStepsForExecution(activeRow) {
                 ? '$' + (Math.ceil(calcTotalCostNum * 10000) / 10000).toFixed(4)
                 : '$0.0000';
 
+            const firstModel = (calls.length > 0 && (calls[0].modelName || calls[0].model || calls[0].llmModel))
+                ? (calls[0].modelName || calls[0].model || calls[0].llmModel)
+                : (s.model || s.llmModel || stats.model || '');
+
             let statsHtml = '';
             if (s.stats || s.llmCalls) {
-                statsHtml = `
-                    <div class="stats-summary-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; background: var(--bg-card); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
-                        <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Total Tokens Usage</span><br><strong style="font-size: 1.1rem; color: var(--text-main); font-family: var(--font-mono);">${calcTotalTokens}</strong></div>
-                        <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Estimated Cost</span><br><strong style="font-size: 1.1rem; color: #0284c7; font-family: var(--font-mono);">${calcTotalCostFormatted}</strong></div>
-                    </div>
-                `;
+                if (firstModel) {
+                    statsHtml = `
+                        <div class="stats-summary-grid" style="display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem; background: var(--bg-card); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                            <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Model</span><br><strong style="font-size: 0.95rem; color: var(--accent, #6366f1); font-family: var(--font-mono);">${escapeHtml(firstModel)}</strong></div>
+                            <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Total Tokens Usage</span><br><strong style="font-size: 1.1rem; color: var(--text-main); font-family: var(--font-mono);">${calcTotalTokens}</strong></div>
+                            <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Estimated Cost</span><br><strong style="font-size: 1.1rem; color: #0284c7; font-family: var(--font-mono);">${calcTotalCostFormatted}</strong></div>
+                        </div>
+                    `;
+                } else {
+                    statsHtml = `
+                        <div class="stats-summary-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin-bottom: 0.75rem; background: var(--bg-card); padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid var(--border);">
+                            <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Total Tokens Usage</span><br><strong style="font-size: 1.1rem; color: var(--text-main); font-family: var(--font-mono);">${calcTotalTokens}</strong></div>
+                            <div><span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Estimated Cost</span><br><strong style="font-size: 1.1rem; color: #0284c7; font-family: var(--font-mono);">${calcTotalCostFormatted}</strong></div>
+                        </div>
+                    `;
+                }
             }
 
             function escapeHtml(str) {
@@ -3469,117 +4327,44 @@ function renderStepsForExecution(activeRow) {
                 return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             }
 
+            const timelineHtml = renderExecutionTimelineBar(calls, stepId, isFailed);
+
             let llmCallsHtml = '';
             if (calls.length > 0) {
-                calls.forEach((call, cIdx) => {
-                    const model = call.modelName || call.model || call.llmModel || 'LLM Model';
-                    const tokens = extractCallTokens(call);
-                    const rawCost = extractCallCost(call);
-                    let formattedCost = '$0.0000';
-                    if (rawCost > 0) {
-                        const roundedUp = Math.ceil(rawCost * 10000) / 10000;
-                        formattedCost = '$' + roundedUp.toFixed(4);
-                    }
-                    const dur = (call.durationMs !== undefined && call.durationMs !== null) ? formatDurationInMinutes(call.durationMs) : (call.duration ? formatDurationInMinutes(call.duration) : '');
-                    
-                    const systemPromptText = call.systemPrompt || call.system_prompt || call.system || '';
-                    const userPromptText = call.userPrompt || call.user_prompt || call.domContext || call.dom_context || call.prompt || '';
-                    const rawResponseText = call.responseContent || call.response_content || call.rawResponse || call.raw_response || call.response || call.output || call.completion || '';
-
-                    const metaParts = [];
-                    if (tokens) metaParts.push(`Tokens: ${tokens}`);
-                    metaParts.push(`Cost: ${formattedCost}`);
-                    if (dur) metaParts.push(`Duration: ${dur}`);
-                    const callMetaStr = metaParts.join(' | ');
-
-                    llmCallsHtml += `
-                        <div class="llm-call-card expanded" style="border: 1px solid var(--border); border-radius: 8px; margin-top: 0.6rem; overflow: hidden; background: var(--bg-card);">
-                            <div class="llm-call-header" onclick="this.parentElement.classList.toggle('expanded')" style="background: #f1f5f9; padding: 0.5rem 0.75rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; cursor: pointer; user-select: none;">
-                                <div style="display: flex; align-items: center; gap: 0.4rem; font-weight: 700; color: #1e293b;">
-                                    <span class="material-symbols-outlined llm-subsection-chevron" style="font-size: 0.85rem;">chevron_right</span>
-                                    <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #a855f7;">smart_toy</span>
-                                    <span>Call #${cIdx + 1}: ${model}</span>
-                                </div>
-                                <span style="font-family: var(--font-mono); font-size: 0.72rem; color: #64748b;">${callMetaStr}</span>
-                            </div>
-                            <div class="llm-call-body" style="padding: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem;">
-                                
-                                <div class="llm-subsection-card">
-                                    <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                        <div class="llm-subsection-title">
-                                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                            <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #0284c7;">tune</span>
-                                            <span>System Prompt</span>
-                                        </div>
-                                        <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">Instruction & Persona</span>
-                                    </div>
-                                    <div class="llm-subsection-body">${systemPromptText ? escapeHtml(systemPromptText) : '<em style="color: var(--text-muted);">No explicit system prompt recorded</em>'}</div>
-                                </div>
-
-                                <div class="llm-subsection-card">
-                                    <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                        <div class="llm-subsection-title">
-                                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                            <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #d97706;">code</span>
-                                            <span>User Prompt & DOM Context (Plain Text)</span>
-                                        </div>
-                                        <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">User Query & Page Snapshot</span>
-                                    </div>
-                                    <div class="llm-subsection-body">${userPromptText ? escapeHtml(userPromptText) : '<em style="color: var(--text-muted);">No user prompt/DOM context recorded</em>'}</div>
-                                </div>
-
-                                <div class="llm-subsection-card">
-                                    <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                        <div class="llm-subsection-title">
-                                            <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                            <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #16a34a;">terminal</span>
-                                            <span>Raw Model Response</span>
-                                        </div>
-                                        <span style="font-size: 0.7rem; color: #94a3b8; font-weight: 500;">AI Completion Payload</span>
-                                    </div>
-                                    <div class="llm-subsection-body">${rawResponseText ? escapeHtml(rawResponseText) : '<em style="color: var(--text-muted);">No raw response recorded</em>'}</div>
-                                </div>
-
-                            </div>
+                window._neodymiumStepLlmData = window._neodymiumStepLlmData || {};
+                window._neodymiumStepLlmData[stepId] = {
+                    stepId: stepId,
+                    stepNum: stepNum,
+                    title: title,
+                    model: firstModel,
+                    totalTokens: calcTotalTokens,
+                    totalCost: calcTotalCostFormatted,
+                    calls: calls,
+                    systemPrompt: (calls.length > 0 && (calls[0].systemPrompt || calls[0].system_prompt)) || ''
+                };
+                const controlsHtml = `
+                    <div class="llm-view-controls">
+                        <div style="display: flex; gap: 0.4rem; align-items: center;">
+                            <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${stepId}', true);">Expand All Details</button>
+                            <button class="llm-ctrl-btn" onclick="event.stopPropagation(); toggleAllCallDetails('${stepId}', false);">Collapse All</button>
                         </div>
-                    `;
-                });
-            } else if (s.prompt || s.llmPrompt || s.llmResponse) {
-                const promptSnippet = s.prompt || s.llmPrompt || `[System Instruction for Step #${stepNum}]\nExecute: ${title}`;
-                const responseSnippet = s.llmResponse || s.response || JSON.stringify(actions, null, 2);
-                llmCallsHtml = `
-                    <div class="llm-call-card expanded" style="border: 1px solid var(--border); border-radius: 8px; margin-top: 0.6rem; overflow: hidden; background: var(--bg-card);">
-                        <div class="llm-call-header" onclick="this.parentElement.classList.toggle('expanded')" style="background: #f1f5f9; padding: 0.5rem 0.75rem; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; cursor: pointer; user-select: none;">
-                            <div style="display: flex; align-items: center; gap: 0.4rem; font-weight: 700; color: #1e293b;">
-                                <span class="material-symbols-outlined llm-subsection-chevron" style="font-size: 0.85rem;">chevron_right</span>
-                                <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #a855f7;">smart_toy</span>
-                                <span>LLM Prompt & Response</span>
-                            </div>
-                        </div>
-                        <div class="llm-call-body" style="padding: 0.6rem; display: flex; flex-direction: column; gap: 0.5rem;">
-                            <div class="llm-subsection-card">
-                                <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                    <div class="llm-subsection-title">
-                                        <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                        <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #d97706;">code</span>
-                                        <span>User Prompt & DOM Context (Plain Text)</span>
-                                    </div>
-                                </div>
-                                <div class="llm-subsection-body">${escapeHtml(promptSnippet)}</div>
-                            </div>
-                            <div class="llm-subsection-card">
-                                <div class="llm-subsection-header" onclick="event.stopPropagation(); this.parentElement.classList.toggle('expanded');">
-                                    <div class="llm-subsection-title">
-                                        <span class="material-symbols-outlined llm-subsection-chevron">chevron_right</span>
-                                        <span class="material-symbols-outlined" style="font-size: 0.9rem; color: #16a34a;">terminal</span>
-                                        <span>Raw Model Response</span>
-                                    </div>
-                                </div>
-                                <div class="llm-subsection-body">${escapeHtml(responseSnippet)}</div>
-                            </div>
-                        </div>
+                        <button class="llm-ctrl-btn llm-copy-btn" onclick="event.stopPropagation(); copyStepConversation('${stepId}', this);" title="Copy complete multi-turn conversation with formatted details to clipboard for AI diagnosis">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">content_copy</span>
+                            <span>Copy Conversation</span>
+                        </button>
                     </div>
                 `;
+                llmCallsHtml += controlsHtml;
+                calls.forEach((call, cIdx) => {
+                    call._isLastCall = (cIdx === calls.length - 1);
+                    llmCallsHtml += renderStreamlinedLlmCallCard(call, cIdx, stepId, isFailed, false);
+                });
+            } else if (s.prompt || s.llmPrompt || s.llmResponse) {
+                const syntheticCall = {
+                    userPrompt: s.prompt || s.llmPrompt || `[System Instruction for Step #${stepNum}]\nExecute: ${title}`,
+                    responseContent: s.llmResponse || s.response || JSON.stringify(actions, null, 2)
+                };
+                llmCallsHtml = renderStreamlinedLlmCallCard(syntheticCall, 0, stepId, isFailed, false);
             } else {
                 llmCallsHtml = `<div style="font-size: 0.8rem; color: var(--text-muted); padding: 0.5rem;">No LLM call details recorded for this step.</div>`;
             }
@@ -3647,7 +4432,7 @@ function renderStepsForExecution(activeRow) {
                             </div>
                             <div class="inspector-tabs">
                                 <button class="tab-btn active" onclick="switchInspectorTab(this, '${stepId}_tabOverview')">📋 Overview</button>
-                                <button class="tab-btn" onclick="switchInspectorTab(this, '${stepId}_tabLlm')">🤖 LLM Details</button>
+                                <button class="tab-btn" onclick="switchInspectorTab(this, '${stepId}_tabLlm')">🤖 LLM Details${calls.length > 0 ? ` (${calls.length} Call${calls.length > 1 ? 's' : ''})` : ''}</button>
                             </div>
                             <div class="inspector-content">
                                 <!-- TAB 1: OVERVIEW -->
@@ -3668,6 +4453,7 @@ function renderStepsForExecution(activeRow) {
                                 <!-- TAB 2: LLM DETAILS -->
                                 <div class="tab-panel" id="${stepId}_tabLlm">
                                     ${statsHtml}
+                                    ${timelineHtml}
                                     ${llmCallsHtml}
                                 </div>
                             </div>
@@ -4050,6 +4836,19 @@ function closeTestSidePagePanel() {
 
 window.toggleSidePanelLlmTable = toggleSidePanelLlmTable;
 window.switchInspectorTab = switchInspectorTab;
+window.toggleCallDetails = toggleCallDetails;
+window.toggleAllCallDetails = toggleAllCallDetails;
+window.toggleDomSnapshot = toggleDomSnapshot;
+window.toggleSystemPrompt = toggleSystemPrompt;
+window.copyStepConversation = copyStepConversation;
+window.copyTurnConversation = copyTurnConversation;
+window.generateStepConversationMarkdown = generateStepConversationMarkdown;
+window.parseLlmPromptContent = parseLlmPromptContent;
+window.parseToolCallResponse = parseToolCallResponse;
+window.parseToolAndUserTurns = parseToolAndUserTurns;
+window.splitChatMessages = splitChatMessages;
+window.parseToolMessage = parseToolMessage;
+window.parseUserContinuation = parseUserContinuation;
 
 function setActiveNavBtn(btn) {
     document.querySelectorAll('#mainSidebar .nav-item-btn').forEach(b => b.classList.remove('active'));
