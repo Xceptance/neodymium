@@ -3684,41 +3684,11 @@ public final class BrowserToolProvider
                 final boolean negated = call.arguments().path("negated").asBoolean(false)
                         || call.arguments().path("not").asBoolean(false);
 
-                SelenideElement el = resolveLazyElement(selector);
-                if (el.exists())
-                {
-                    SelenideElementFinder.scrollIntoViewIfNeeded(el);
-                }
-                if (!el.is(Condition.visible))
-                {
-                    final ElementsCollection visibleCandidates = findElements(selector).filter(Condition.visible);
-                    if (!visibleCandidates.isEmpty())
-                    {
-                        el = visibleCandidates.first();
-                    }
-                    else
-                    {
-                        final ElementsCollection candidates = findElements(selector);
-                        for (final SelenideElement cand : candidates)
-                        {
-                            if (cand.exists())
-                            {
-                                SelenideElementFinder.scrollIntoViewIfNeeded(cand);
-                                if (cand.is(Condition.visible))
-                                {
-                                    el = cand;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                final List<String> evaluatedStates = new ArrayList<>();
+                final List<String> resolvedStates = new ArrayList<>(states.size());
                 for (final String rawState : states)
                 {
                     final String normalized = normalizeElementState(rawState);
-                    final String state = negated ? switch (normalized)
+                    final String targetState = negated ? switch (normalized)
                     {
                         case "visible" -> "hidden";
                         case "hidden" -> "visible";
@@ -3734,7 +3704,48 @@ public final class BrowserToolProvider
                         case "absent" -> "exists";
                         default -> normalized;
                     } : normalized;
+                    resolvedStates.add(targetState);
+                }
 
+                final boolean shouldAutoScroll = resolvedStates.stream().anyMatch(s ->
+                        "visible".equals(s) || "enabled".equals(s) || "editable".equals(s) || "focused".equals(s) || "selected".equals(s));
+
+                SelenideElement el = resolveLazyElement(selector);
+                if (shouldAutoScroll && el.exists() && !el.is(Condition.visible))
+                {
+                    SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                }
+                if (!el.is(Condition.visible))
+                {
+                    final ElementsCollection visibleCandidates = findElements(selector).filter(Condition.visible);
+                    if (!visibleCandidates.isEmpty())
+                    {
+                        el = visibleCandidates.first();
+                    }
+                    else if (shouldAutoScroll)
+                    {
+                        final ElementsCollection candidates = findElements(selector);
+                        for (final SelenideElement cand : candidates)
+                        {
+                            if (cand.exists())
+                            {
+                                if (!cand.is(Condition.visible))
+                                {
+                                    SelenideElementFinder.scrollIntoViewIfNeeded(cand);
+                                }
+                                if (cand.is(Condition.visible))
+                                {
+                                    el = cand;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                final List<String> evaluatedStates = new ArrayList<>();
+                for (final String state : resolvedStates)
+                {
                     switch (state)
                     {
                         case "visible" ->
@@ -3745,19 +3756,8 @@ public final class BrowserToolProvider
                             }
                             else
                             {
-                                if (el.exists())
-                                {
-                                    SelenideElementFinder.scrollIntoViewIfNeeded(el);
-                                }
-                                if (el.is(Condition.visible))
-                                {
-                                    el.shouldBe(Condition.visible);
-                                }
-                                else
-                                {
-                                    el = findElements(selector).findBy(Condition.visible);
-                                    el.shouldBe(Condition.visible);
-                                }
+                                el = findElements(selector).findBy(Condition.visible);
+                                el.shouldBe(Condition.visible);
                             }
                         }
                         case "hidden" ->
@@ -3819,7 +3819,7 @@ public final class BrowserToolProvider
                         }
                         case "exists" -> el.should(Condition.exist);
                         case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
-                        default -> throw new AssertionError("Unsupported element state assertion: '" + rawState + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
+                        default -> throw new AssertionError("Unsupported element state assertion: '" + state + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
                     }
                     evaluatedStates.add(state);
                 }

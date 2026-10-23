@@ -9,7 +9,11 @@
 - **Root Cause:** In `BrowserToolProvider.createAssertElementStateTool()`, elements were resolved via `resolveLazyElement(selector)` and asserted directly against Selenide's `Condition.visible`. While action tools (`click`, `fill`) automatically invoke `SelenideElementFinder.scrollIntoViewIfNeeded`, assertion tools did not scroll candidate elements into view. When an element was positioned outside the viewport fold or clipped by scrollable parent containers, Selenium's `WebElement.isDisplayed()` evaluated to `false`, causing Selenide's 3,000ms polling condition to time out.
 - **Detection Gap ("What did we miss?"):** `BrowserToolProviderStabilityTest` tested `assert_element_state` against compact fixture pages where all target elements fit inside the initial 1500x1000 viewport, never testing elements positioned below the viewport fold or inside scrollable containers.
 - **Resolution:**
-  1. Updated `BrowserToolProvider.createAssertElementStateTool()` to invoke `SelenideElementFinder.scrollIntoViewIfNeeded(el)` before evaluating visibility/interactability.
-  2. For selectors matching multiple candidates, iterated and scrolled candidates into view if the primary candidate was not currently visible.
-  3. In `case "visible"`, added fallback candidate scrolling before Selenide's `findBy(Condition.visible)` polling.
-- **Safety Net Added:** Added `@Test` `BrowserToolProviderStabilityTest.testAssertElementStateAutoScrollsOffscreenElement` verifying that initially off-screen elements below the viewport fold are automatically scrolled and asserted visible and enabled without timing out.
+  1. Updated `BrowserToolProvider.createAssertElementStateTool()` to normalize assertion states upfront and determine auto-scroll eligibility only when positive visibility or interactability is asserted (`visible`, `enabled`, `editable`, `focused`, `selected` with `negated == false`).
+  2. Guarded primary element auto-scrolling to invoke `SelenideElementFinder.scrollIntoViewIfNeeded(el)` only if `shouldAutoScroll && el.exists() && !el.is(Condition.visible)`, avoiding redundant remote JavaScript calls when already displayed and preventing unintended viewport changes on `hidden` or `absent` assertions.
+  3. For multi-candidate selectors where no candidates are currently visible, restricted candidate iteration and scrolling strictly to `shouldAutoScroll == true`, scrolling only candidates where `!cand.is(Condition.visible)`.
+  4. Streamlined `case "visible"` to avoid duplicate scrolling and cleanly fall back to Selenide's polling `findBy(Condition.visible)`.
+- **Safety Net Added:** Added `@Test` methods to `BrowserToolProviderStabilityTest`:
+  - `testAssertElementStateAutoScrollsOffscreenElement`: Verifies that an initially off-screen element below the fold is scrolled into view and asserted visible.
+  - `testAssertElementStateDoesNotScrollWhenAlreadyVisible`: Verifies that already-visible elements do not trigger scrolling scripts.
+  - `testAssertElementStateDoesNotScrollForHiddenState`: Verifies that asserting `hidden` on an off-screen element does not trigger auto-scrolling.
