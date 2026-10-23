@@ -1034,6 +1034,92 @@ public class BrowserToolProviderStabilityTest
     }
 
     @Test
+    public void testAssertElementStateAutoScrollsOffscreenElement() throws Exception
+    {
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 200;
+        try
+        {
+            final AtomicBoolean scrolled = new AtomicBoolean(false);
+
+            final WebElement offscreenButton = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("isDisplayed".equals(name))
+                        {
+                            return scrolled.get();
+                        }
+                        if ("isEnabled".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "button";
+                        }
+                        if ("getAttribute".equals(name) && "id".equals(args[0]))
+                        {
+                            return "checkout-btn";
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("executeScript".equals(name))
+                        {
+                            final String script = args != null && args.length > 0 ? String.valueOf(args[0]) : "";
+                            if (script.contains("scrollIntoView"))
+                            {
+                                scrolled.set(true);
+                            }
+                            return Collections.emptyMap();
+                        }
+                        if ("findElement".equals(name))
+                        {
+                            return offscreenButton;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(offscreenButton);
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool tool = this.registry.getTool("browser_assert_element_state").orElseThrow();
+
+            final ObjectNode assertArgs = MAPPER.createObjectNode();
+            assertArgs.put("selector", "#checkout-btn");
+            assertArgs.put("state", "visible, enabled");
+
+            final ToolResult result = tool.execute(new ToolCall("call-offscreen-checkout", "browser_assert_element_state", assertArgs), null);
+
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertTrue(scrolled.get(), "Element must have been scrolled into view when initially off-screen");
+
+            final JsonNode json = MAPPER.readTree(result.content());
+            Assertions.assertEquals("SUCCESS", json.path("status").asText());
+            Assertions.assertEquals("visible, enabled", json.path("state").asText());
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
     public void testAssertAttributeSuccessAndFailure() throws Exception
     {
         final long originalTimeout = Configuration.timeout;

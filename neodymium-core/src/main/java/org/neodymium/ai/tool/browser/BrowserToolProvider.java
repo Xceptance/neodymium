@@ -3685,12 +3685,32 @@ public final class BrowserToolProvider
                         || call.arguments().path("not").asBoolean(false);
 
                 SelenideElement el = resolveLazyElement(selector);
+                if (el.exists())
+                {
+                    SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                }
                 if (!el.is(Condition.visible))
                 {
                     final ElementsCollection visibleCandidates = findElements(selector).filter(Condition.visible);
                     if (!visibleCandidates.isEmpty())
                     {
                         el = visibleCandidates.first();
+                    }
+                    else
+                    {
+                        final ElementsCollection candidates = findElements(selector);
+                        for (final SelenideElement cand : candidates)
+                        {
+                            if (cand.exists())
+                            {
+                                SelenideElementFinder.scrollIntoViewIfNeeded(cand);
+                                if (cand.is(Condition.visible))
+                                {
+                                    el = cand;
+                                    break;
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -3725,8 +3745,19 @@ public final class BrowserToolProvider
                             }
                             else
                             {
-                                el = findElements(selector).findBy(Condition.visible);
-                                el.shouldBe(Condition.visible);
+                                if (el.exists())
+                                {
+                                    SelenideElementFinder.scrollIntoViewIfNeeded(el);
+                                }
+                                if (el.is(Condition.visible))
+                                {
+                                    el.shouldBe(Condition.visible);
+                                }
+                                else
+                                {
+                                    el = findElements(selector).findBy(Condition.visible);
+                                    el.shouldBe(Condition.visible);
+                                }
                             }
                         }
                         case "hidden" ->
