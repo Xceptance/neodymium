@@ -39,6 +39,7 @@ import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.InteractiveConsoleListener;
+import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.TargetExecutor;
@@ -4398,6 +4399,182 @@ public class AgentToolLoopStepTest
         Assertions.assertTrue(pauseOccurred.get(), "Interactive pause must occur on turn 1 when KEY_REQUIRE_CONFIRMATION_ONCE is armed");
         Assertions.assertNull(this.context.getTransientData().get("KEY_REQUIRE_CONFIRMATION_ONCE"), "KEY_REQUIRE_CONFIRMATION_ONCE must be consumed");
         Assertions.assertEquals("Header verified", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+    }
+
+    @Test
+    public void testToolExecutionPropagatesVirtualMachineError() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("oom_tool", "Throws OOM", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new OutOfMemoryError("Simulated heap exhaustion");
+            }
+        });
+
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+                new LlmResponse("Calling OOM tool", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-oom", "oom_tool", MAPPER.createObjectNode())));
+
+        final AgentToolLoopStep loopStep = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 10);
+        Assertions.assertThrows(OutOfMemoryError.class, () -> loopStep.execute(this.context),
+                "VirtualMachineError must never be caught and swallowed by AgentToolLoopStep");
+    }
+
+    @Test
+    public void testToolExecutionPropagatesConclusiveFailureException() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("abort_tool", "Aborts pipeline", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx) throws Exception
+            {
+                throw new ConclusiveFailureException("Hard abort from tool");
+            }
+        });
+
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+                new LlmResponse("Calling abort tool", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-abort", "abort_tool", MAPPER.createObjectNode())));
+
+        final AgentToolLoopStep loopStep = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 10);
+        Assertions.assertThrows(ConclusiveFailureException.class, () -> loopStep.execute(this.context),
+                "ConclusiveFailureException must propagate directly through AgentToolLoopStep");
+    }
+
+    @Test
+    public void testToolExecutionSurfacesLinkageErrorToLlm() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("linkage_tool", "Fails with LinkageError", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new NoClassDefFoundError("com/example/MissingComponent");
+            }
+        });
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Finished");
+            }
+        });
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AtomicReference<String> errorReceivedByLlm = new AtomicReference<>();
+
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Executing linkage tool", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-linkage", "linkage_tool", MAPPER.createObjectNode())));
+            }
+            for (final ChatMessage msg : req.messages())
+            {
+                if (msg.content() != null && msg.content().contains("NoClassDefFoundError"))
+                {
+                    errorReceivedByLlm.set(msg.content());
+                }
+            }
+            return new LlmResponse("Recovered", new TokenUsage(10, 10, 20), "mock",
+                    List.of(new ToolCall("call-complete", "complete_step", MAPPER.createObjectNode().put("summary", "Recovered from linkage error"))));
+        };
+
+        final AgentToolLoopStep loopStep = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 10);
+        loopStep.execute(this.context);
+
+        Assertions.assertNotNull(errorReceivedByLlm.get(), "LLM must receive surfaced NoClassDefFoundError in turn 2");
+        Assertions.assertTrue(errorReceivedByLlm.get().contains("MissingComponent"));
+    }
+
+    @Test
+    public void testAssertionToolUnwrapsNestedAssertionErrorAndDispatchesEvent() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("assert_something", "Assertion tool", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new RuntimeException("Outer validation wrapper", new AssertionError("Expected value 42 but found 0"));
+            }
+        });
+
+        final PlaybookStep step = new PlaybookStep("Verify value is 42");
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        final List<Object> dispatchedEvents = new ArrayList<>();
+        eventBus.registerListener(dispatchedEvents::add);
+        final SessionData sessionData = new SessionData(new HashMap<>());
+        final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY, sessionData, new LlmRegistry(), eventBus, (TargetExecutor) null);
+
+        this.context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, step);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify value is 42");
+
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+                new LlmResponse("Verifying value", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-assert", "assert_something", MAPPER.createObjectNode())));
+
+        final AgentToolLoopStep loopStep = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 10);
+
+        final AssertionError ae = Assertions.assertThrows(AssertionError.class, () -> loopStep.execute(this.context));
+        Assertions.assertTrue(ae.getMessage().contains("Expected value 42 but found 0"));
+
+        final boolean hasActionExecutedEvent = dispatchedEvents.stream()
+                .anyMatch(ev -> ev instanceof ActionExecutedEvent);
+        Assertions.assertTrue(hasActionExecutedEvent, "ActionExecutedEvent must be dispatched when nested assertion fails");
+        Assertions.assertFalse(step.getToolCalls().isEmpty(), "PlaybookStep toolCalls must be recorded on nested assertion failure");
     }
 }
 

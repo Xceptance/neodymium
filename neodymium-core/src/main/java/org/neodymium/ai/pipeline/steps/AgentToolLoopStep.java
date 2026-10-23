@@ -22,6 +22,7 @@ import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.ChatMessage;
 import org.neodymium.ai.client.ChatMessage.Role;
@@ -1240,34 +1241,11 @@ public final class AgentToolLoopStep implements PipelineStep
                     }
                     catch (final AssertionError e)
                     {
-                        if (effectiveCall.toolName().startsWith("assert") || effectiveCall.toolName().startsWith("browser_assert"))
+                        if (isAssertionTool(effectiveCall.toolName()))
                         {
                             // Stop Criterion 2: Immediate fail on real defects!
                             LOGGER.error("❌ Stop Criterion 2 triggered: Assertion failure: {}", e.getMessage());
-                            executedCalls.add(effectiveCall);
-                            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
-                            if (session != null && session.getEventBus() != null)
-                            {
-                                Action mappedAction = mapToolCallToAction(effectiveCall);
-                                if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
-                                {
-                                    mappedAction = mappedAction.withReasoning(thought.trim());
-                                }
-                                final SessionData sessionData = context.getSessionData();
-                                final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
-                                final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
-                                executedActions.add(canonicalAction);
-                                if (step != null)
-                                {
-                                    step.setToolCalls(new ArrayList<>(executedCalls));
-                                    step.setActions(new ArrayList<>(executedActions));
-                                    if (step.hasSubSteps())
-                                    {
-                                        partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
-                                    }
-                                }
-                                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, false));
-                            }
+                            recordAssertionFailureAndDispatch(effectiveCall, thought, step, context, executedCalls, executedActions);
                             throw e;
                         }
                         LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), e.getMessage());
@@ -1296,10 +1274,51 @@ public final class AgentToolLoopStep implements PipelineStep
                         LOGGER.error("💀 Stop Criterion 6 triggered: Fatal environment failure: {}", e.getMessage());
                         throw new ConclusiveFailureException("Fatal environment failure: " + e.getMessage(), e);
                     }
-                    catch (final Exception e)
+                    catch (final Throwable e)
                     {
-                        LOGGER.warn("Unexpected exception executing tool '{}': {}", effectiveCall.toolName(), e.getMessage(), e);
-                        toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool error: " + e.getMessage());
+                        if (e instanceof VirtualMachineError vme)
+                        {
+                            throw vme;
+                        }
+                        if (e instanceof ConclusiveFailureException cfe)
+                        {
+                            throw cfe;
+                        }
+                        if (e instanceof TokenBudgetExceededException tbe)
+                        {
+                            throw tbe;
+                        }
+
+                        final Throwable root = ExceptionUtils.getRootCause(e);
+                        final Throwable effectiveRoot = root != null ? root : e;
+                        if (effectiveRoot instanceof VirtualMachineError vme)
+                        {
+                            throw vme;
+                        }
+
+                        if (effectiveRoot instanceof AssertionError ae)
+                        {
+                            if (isAssertionTool(effectiveCall.toolName()))
+                            {
+                                LOGGER.error("❌ Stop Criterion 2 triggered: Root assertion failure: {}", ae.getMessage());
+                                recordAssertionFailureAndDispatch(effectiveCall, thought, step, context, executedCalls, executedActions);
+                                throw ae;
+                            }
+                            LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), ae.getMessage());
+                            toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool failed with error: " + ae.getMessage());
+                            if (activeContextLevel.escalate() != null)
+                            {
+                                activeContextLevel = activeContextLevel.escalate();
+                                context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                                LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
+                            }
+                        }
+                        else
+                        {
+                            final String errorMsg = formatThrowableError(e, effectiveRoot);
+                            LOGGER.warn("Unexpected exception executing tool '{}': {}", effectiveCall.toolName(), errorMsg, e);
+                            toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool error: " + errorMsg);
+                        }
                     }
                     result = toolExecResult;
                 }
@@ -3522,6 +3541,40 @@ public final class AgentToolLoopStep implements PipelineStep
         };
     }
 
+    private static void recordAssertionFailureAndDispatch(
+            final ToolCall effectiveCall,
+            final String thought,
+            final PlaybookStep step,
+            final ExecutionContext context,
+            final List<ToolCall> executedCalls,
+            final List<Action> executedActions)
+    {
+        executedCalls.add(effectiveCall);
+        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+        if (session != null && session.getEventBus() != null)
+        {
+            Action mappedAction = mapToolCallToAction(effectiveCall);
+            if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+            {
+                mappedAction = mappedAction.withReasoning(thought.trim());
+            }
+            final SessionData sessionData = context.getSessionData();
+            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+            executedActions.add(canonicalAction);
+            if (step != null)
+            {
+                step.setToolCalls(new ArrayList<>(executedCalls));
+                step.setActions(new ArrayList<>(executedActions));
+                if (step.hasSubSteps())
+                {
+                    partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
+                }
+            }
+            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, false));
+        }
+    }
+
     private static boolean isAssertionTool(final String toolName)
     {
         if (toolName == null)
@@ -3530,6 +3583,28 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         final String name = stripNamespacePrefix(toolName.trim()).toLowerCase();
         return name.startsWith("assert") || name.startsWith("browser_assert");
+    }
+
+    private static String formatThrowableError(final Throwable cause, final Throwable root)
+    {
+        final String causeName = !cause.getClass().getSimpleName().isBlank()
+                ? cause.getClass().getSimpleName()
+                : cause.getClass().getName();
+        final String causeMsg = cause.getMessage();
+        final String causeDesc = causeName + (causeMsg != null && !causeMsg.isBlank() ? ": " + causeMsg : "");
+
+        if (root == null || root == cause)
+        {
+            return causeDesc;
+        }
+
+        final String rootName = !root.getClass().getSimpleName().isBlank()
+                ? root.getClass().getSimpleName()
+                : root.getClass().getName();
+        final String rootMsg = root.getMessage();
+        final String rootDesc = rootName + (rootMsg != null && !rootMsg.isBlank() ? ": " + rootMsg : "");
+
+        return causeDesc + " (Root cause: " + rootDesc + ")";
     }
 
     private static ToolRegistry createDefaultRegistry()

@@ -86,6 +86,48 @@ public class JavaToolFactoryTest
         }
     }
 
+    public static class SampleFailingTools
+    {
+        @Tool(name = "fail_with_linkage_error", description = "Simulates missing class at runtime")
+        public static void failWithLinkageError()
+        {
+            throw new NoClassDefFoundError("com/example/MissingService (wrong name: com/example/MissingService)");
+        }
+
+        @Tool(name = "fail_with_nested_exception", description = "Simulates nested exception failure")
+        public static void failWithNestedException()
+        {
+            throw new RuntimeException("Outer wrapper failed", new IllegalStateException("Deepest database connection failed"));
+        }
+
+        @Tool(name = "fail_with_oom", description = "Simulates OutOfMemoryError")
+        public static void failWithOom()
+        {
+            throw new OutOfMemoryError("Java heap space simulation");
+        }
+
+        @Tool(name = "fail_with_nested_assertion", description = "Simulates nested assertion error")
+        public static void failWithNestedAssertion()
+        {
+            throw new RuntimeException("Validation layer failed", new AssertionError("Expected count 5 but was 0"));
+        }
+
+        @Tool(name = "fail_with_cyclic_causes", description = "Simulates circular causal chain")
+        public static void failWithCyclicCauses()
+        {
+            final RuntimeException first = new RuntimeException("First error");
+            final IllegalStateException second = new IllegalStateException("Second error", first);
+            first.initCause(second);
+            throw first;
+        }
+
+        @Tool(name = "fail_with_anonymous_exception", description = "Simulates anonymous exception subclass")
+        public static void failWithAnonymousException()
+        {
+            throw new RuntimeException("Anonymous failure message") {};
+        }
+    }
+
     @Test
     public void testSchemaGenerationForStaticMethods()
     {
@@ -214,5 +256,127 @@ public class JavaToolFactoryTest
 
         Assertions.assertTrue(priceTool.isPresent());
         Assertions.assertTrue(priceTool.get().getDefinition().description().contains("greater than zero"));
+    }
+
+    @Test
+    public void testToolExecutionSurfacesLinkageAndNoClassDefFoundError() throws Exception
+    {
+        final List<AiTool> tools = JavaToolFactory.createToolsFromClass(SampleFailingTools.class);
+        final AiTool failingTool = tools.stream()
+                .filter(t -> "fail_with_linkage_error".equals(t.getDefinition().name()))
+                .findFirst()
+                .orElseThrow();
+
+        final ToolRegistry registry = new ToolRegistry();
+        final SimpleToolContext context = new SimpleToolContext(registry);
+        final ToolCall call = new ToolCall("call_err_1", "fail_with_linkage_error", MAPPER.createObjectNode());
+
+        final ToolResult result = failingTool.execute(call, context);
+
+        Assertions.assertFalse(result.isSuccess(), "Tool execution should report error on LinkageError");
+        Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
+        Assertions.assertTrue(result.content().contains("NoClassDefFoundError"),
+                "Error content should name NoClassDefFoundError but was: " + result.content());
+        Assertions.assertTrue(result.content().contains("MissingService"),
+                "Error content should name the missing class but was: " + result.content());
+    }
+
+    @Test
+    public void testToolExecutionUnwrapsNestedRootCauseChain() throws Exception
+    {
+        final List<AiTool> tools = JavaToolFactory.createToolsFromClass(SampleFailingTools.class);
+        final AiTool failingTool = tools.stream()
+                .filter(t -> "fail_with_nested_exception".equals(t.getDefinition().name()))
+                .findFirst()
+                .orElseThrow();
+
+        final ToolRegistry registry = new ToolRegistry();
+        final SimpleToolContext context = new SimpleToolContext(registry);
+        final ToolCall call = new ToolCall("call_err_2", "fail_with_nested_exception", MAPPER.createObjectNode());
+
+        final ToolResult result = failingTool.execute(call, context);
+
+        Assertions.assertFalse(result.isSuccess(), "Tool execution should report error on nested exceptions");
+        Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
+        Assertions.assertTrue(result.content().contains("Deepest database connection failed"),
+                "Error content should include root cause message but was: " + result.content());
+        Assertions.assertTrue(result.content().contains("IllegalStateException"),
+                "Error content should include root cause class but was: " + result.content());
+    }
+
+    @Test
+    public void testToolExecutionPropagatesVirtualMachineError()
+    {
+        final List<AiTool> tools = JavaToolFactory.createToolsFromClass(SampleFailingTools.class);
+        final AiTool failingTool = tools.stream()
+                .filter(t -> "fail_with_oom".equals(t.getDefinition().name()))
+                .findFirst()
+                .orElseThrow();
+
+        final ToolRegistry registry = new ToolRegistry();
+        final SimpleToolContext context = new SimpleToolContext(registry);
+        final ToolCall call = new ToolCall("call_err_oom", "fail_with_oom", MAPPER.createObjectNode());
+
+        Assertions.assertThrows(OutOfMemoryError.class, () -> failingTool.execute(call, context),
+                "VirtualMachineError (OutOfMemoryError) must be rethrown immediately and never swallowed");
+    }
+
+    @Test
+    public void testToolExecutionPropagatesDirectAndNestedAssertionError()
+    {
+        final List<AiTool> tools = JavaToolFactory.createToolsFromClass(SampleFailingTools.class);
+        final AiTool failingTool = tools.stream()
+                .filter(t -> "fail_with_nested_assertion".equals(t.getDefinition().name()))
+                .findFirst()
+                .orElseThrow();
+
+        final ToolRegistry registry = new ToolRegistry();
+        final SimpleToolContext context = new SimpleToolContext(registry);
+        final ToolCall call = new ToolCall("call_err_assert", "fail_with_nested_assertion", MAPPER.createObjectNode());
+
+        final AssertionError ae = Assertions.assertThrows(AssertionError.class, () -> failingTool.execute(call, context),
+                "AssertionError inside nested exception chain must be unrolled and rethrown directly");
+        Assertions.assertTrue(ae.getMessage().contains("Expected count 5 but was 0"));
+    }
+
+    @Test
+    public void testToolExecutionHandlesCyclicCausesWithoutHanging() throws Exception
+    {
+        final List<AiTool> tools = JavaToolFactory.createToolsFromClass(SampleFailingTools.class);
+        final AiTool failingTool = tools.stream()
+                .filter(t -> "fail_with_cyclic_causes".equals(t.getDefinition().name()))
+                .findFirst()
+                .orElseThrow();
+
+        final ToolRegistry registry = new ToolRegistry();
+        final SimpleToolContext context = new SimpleToolContext(registry);
+        final ToolCall call = new ToolCall("call_err_cyclic", "fail_with_cyclic_causes", MAPPER.createObjectNode());
+
+        final ToolResult result = failingTool.execute(call, context);
+
+        Assertions.assertFalse(result.isSuccess());
+        Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
+        Assertions.assertTrue(result.content().contains("First error"));
+    }
+
+    @Test
+    public void testToolExecutionHandlesAnonymousExceptionWithoutEmptyClassName() throws Exception
+    {
+        final List<AiTool> tools = JavaToolFactory.createToolsFromClass(SampleFailingTools.class);
+        final AiTool failingTool = tools.stream()
+                .filter(t -> "fail_with_anonymous_exception".equals(t.getDefinition().name()))
+                .findFirst()
+                .orElseThrow();
+
+        final ToolRegistry registry = new ToolRegistry();
+        final SimpleToolContext context = new SimpleToolContext(registry);
+        final ToolCall call = new ToolCall("call_err_anon", "fail_with_anonymous_exception", MAPPER.createObjectNode());
+
+        final ToolResult result = failingTool.execute(call, context);
+
+        Assertions.assertFalse(result.isSuccess());
+        Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
+        Assertions.assertFalse(result.content().startsWith(": "), "Error description should not start with empty simple name");
+        Assertions.assertTrue(result.content().contains("Anonymous failure message"));
     }
 }
