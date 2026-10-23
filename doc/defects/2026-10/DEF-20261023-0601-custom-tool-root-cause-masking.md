@@ -12,7 +12,19 @@
   3. In `AgentToolLoopStep.java`, the fallback catch block caught only `Exception e` (leaving unhandled `Error`s to crash) and formatted errors using only top-level `e.getMessage()`.
 - **Detection Gap ("What did we miss?"):** Existing `JavaToolFactoryTest` tests only exercised successful reflective invocations (e.g. `SampleMathTools`), never exercising reflective failure modes involving `Error`, `LinkageError`, or multi-tiered wrapped root-cause exception chains.
 - **Resolution:**
-  1. In `JavaTool.java`, unwrapped `InvocationTargetException` and added recursive root-cause resolution via `getRootCause()` and `formatErrorMessage()`. Any `LinkageError` or `Error` (except `AssertionError` which must preserve test failure behavior) is safely converted to an informative `ToolResult.error` detailing the error class, message, and deepest root cause.
-  2. In `AgentToolLoopStep.java`, broadened the fallback handler from `catch (final Exception e)` to `catch (final Throwable e)` and enriched error messaging using `formatThrowableError()`, while ensuring assertion failures on assertion tools propagate immediately.
-  3. In client project `neodymium-ai-testcase-hub/pom.xml`, updated the stale compiler plugin to `maven-compiler-plugin:3.14.1` with Java 21 release targeting so outdated file timestamps do not prevent compilation of new test classes.
-- **Safety Net Added:** Added `@Test` `JavaToolFactoryTest.testToolExecutionSurfacesLinkageAndNoClassDefFoundError` and `@Test` `JavaToolFactoryTest.testToolExecutionUnwrapsNestedRootCauseChain` in `neodymium-core`.
+  1. In `JavaTool.java`, unwrapped `InvocationTargetException` and added cycle-safe root-cause resolution via `ExceptionUtils.getRootCause()`. Ensured `VirtualMachineError` (e.g. `OutOfMemoryError`) and `AssertionError` propagate immediately, while converting `LinkageError` and nested operational exceptions into informative `ToolResult.error` detailing the error class, message, and deepest root cause.
+  2. In `AgentToolLoopStep.java`, broadened the fallback handler from `catch (final Exception e)` to `catch (final Throwable e)` with immediate rethrow of fatal `VirtualMachineError` and pipeline control exceptions (`ConclusiveFailureException`, `TokenBudgetExceededException`). Enriched error messaging using `formatThrowableError()`, while ensuring assertion failures on assertion tools (both direct and nested) dispatch `ActionExecutedEvent`, record step calls/actions, and trigger Stop Criterion 2.
+  3. In companion client project `neodymium-ai-testcase-hub/pom.xml`, updated the stale compiler plugin to `maven-compiler-plugin:3.14.1` with Java 21 release targeting so outdated file timestamps do not prevent compilation of new test classes.
+- **Safety Net Added:**
+  - Added in `JavaToolFactoryTest`:
+    - `@Test testToolExecutionSurfacesLinkageAndNoClassDefFoundError`
+    - `@Test testToolExecutionUnwrapsNestedRootCauseChain`
+    - `@Test testToolExecutionPropagatesVirtualMachineError`
+    - `@Test testToolExecutionPropagatesDirectAndNestedAssertionError`
+    - `@Test testToolExecutionHandlesCyclicCausesWithoutHanging`
+    - `@Test testToolExecutionHandlesAnonymousExceptionWithoutEmptyClassName`
+  - Added in `AgentToolLoopStepTest`:
+    - `@Test testToolExecutionPropagatesVirtualMachineError`
+    - `@Test testToolExecutionPropagatesConclusiveFailureException`
+    - `@Test testToolExecutionSurfacesLinkageErrorToLlm`
+    - `@Test testAssertionToolUnwrapsNestedAssertionErrorAndDispatchesEvent`
