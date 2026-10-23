@@ -1296,10 +1296,17 @@ public final class AgentToolLoopStep implements PipelineStep
                         LOGGER.error("💀 Stop Criterion 6 triggered: Fatal environment failure: {}", e.getMessage());
                         throw new ConclusiveFailureException("Fatal environment failure: " + e.getMessage(), e);
                     }
-                    catch (final Exception e)
+                    catch (final Throwable e)
                     {
-                        LOGGER.warn("Unexpected exception executing tool '{}': {}", effectiveCall.toolName(), e.getMessage(), e);
-                        toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool error: " + e.getMessage());
+                        final Throwable root = getDeepestRootCause(e);
+                        if (root instanceof AssertionError ae && isAssertionTool(effectiveCall.toolName()))
+                        {
+                            LOGGER.error("❌ Stop Criterion 2 triggered: Root assertion failure: {}", ae.getMessage());
+                            throw ae;
+                        }
+                        final String errorMsg = formatThrowableError(e, root);
+                        LOGGER.warn("Unexpected exception executing tool '{}': {}", effectiveCall.toolName(), errorMsg, e);
+                        toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool error: " + errorMsg);
                     }
                     result = toolExecResult;
                 }
@@ -3530,6 +3537,30 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         final String name = stripNamespacePrefix(toolName.trim()).toLowerCase();
         return name.startsWith("assert") || name.startsWith("browser_assert");
+    }
+
+    private static Throwable getDeepestRootCause(final Throwable throwable)
+    {
+        Throwable root = throwable;
+        while (root.getCause() != null && root.getCause() != root)
+        {
+            root = root.getCause();
+        }
+        return root;
+    }
+
+    private static String formatThrowableError(final Throwable cause, final Throwable root)
+    {
+        if (root == cause || root == null)
+        {
+            final String msg = cause.getMessage();
+            return cause.getClass().getSimpleName() + (msg != null && !msg.isBlank() ? ": " + msg : "");
+        }
+        final String causeMsg = cause.getMessage();
+        final String rootMsg = root.getMessage();
+        final String causeDesc = cause.getClass().getSimpleName() + (causeMsg != null && !causeMsg.isBlank() ? ": " + causeMsg : "");
+        final String rootDesc = root.getClass().getSimpleName() + (rootMsg != null && !rootMsg.isBlank() ? ": " + rootMsg : "");
+        return causeDesc + " (Root cause: " + rootDesc + ")";
     }
 
     private static ToolRegistry createDefaultRegistry()

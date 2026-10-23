@@ -86,6 +86,21 @@ public class JavaToolFactoryTest
         }
     }
 
+    public static class SampleFailingTools
+    {
+        @Tool(name = "fail_with_linkage_error", description = "Simulates missing class at runtime")
+        public static void failWithLinkageError()
+        {
+            throw new NoClassDefFoundError("com/example/MissingService (wrong name: com/example/MissingService)");
+        }
+
+        @Tool(name = "fail_with_nested_exception", description = "Simulates nested exception failure")
+        public static void failWithNestedException()
+        {
+            throw new RuntimeException("Outer wrapper failed", new IllegalStateException("Deepest database connection failed"));
+        }
+    }
+
     @Test
     public void testSchemaGenerationForStaticMethods()
     {
@@ -214,5 +229,51 @@ public class JavaToolFactoryTest
 
         Assertions.assertTrue(priceTool.isPresent());
         Assertions.assertTrue(priceTool.get().getDefinition().description().contains("greater than zero"));
+    }
+
+    @Test
+    public void testToolExecutionSurfacesLinkageAndNoClassDefFoundError() throws Exception
+    {
+        final List<AiTool> tools = JavaToolFactory.createToolsFromClass(SampleFailingTools.class);
+        final AiTool failingTool = tools.stream()
+                .filter(t -> "fail_with_linkage_error".equals(t.getDefinition().name()))
+                .findFirst()
+                .orElseThrow();
+
+        final ToolRegistry registry = new ToolRegistry();
+        final SimpleToolContext context = new SimpleToolContext(registry);
+        final ToolCall call = new ToolCall("call_err_1", "fail_with_linkage_error", MAPPER.createObjectNode());
+
+        final ToolResult result = failingTool.execute(call, context);
+
+        Assertions.assertFalse(result.isSuccess(), "Tool execution should report error on LinkageError");
+        Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
+        Assertions.assertTrue(result.content().contains("NoClassDefFoundError"),
+                "Error content should name NoClassDefFoundError but was: " + result.content());
+        Assertions.assertTrue(result.content().contains("MissingService"),
+                "Error content should name the missing class but was: " + result.content());
+    }
+
+    @Test
+    public void testToolExecutionUnwrapsNestedRootCauseChain() throws Exception
+    {
+        final List<AiTool> tools = JavaToolFactory.createToolsFromClass(SampleFailingTools.class);
+        final AiTool failingTool = tools.stream()
+                .filter(t -> "fail_with_nested_exception".equals(t.getDefinition().name()))
+                .findFirst()
+                .orElseThrow();
+
+        final ToolRegistry registry = new ToolRegistry();
+        final SimpleToolContext context = new SimpleToolContext(registry);
+        final ToolCall call = new ToolCall("call_err_2", "fail_with_nested_exception", MAPPER.createObjectNode());
+
+        final ToolResult result = failingTool.execute(call, context);
+
+        Assertions.assertFalse(result.isSuccess(), "Tool execution should report error on nested exceptions");
+        Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
+        Assertions.assertTrue(result.content().contains("Deepest database connection failed"),
+                "Error content should include root cause message but was: " + result.content());
+        Assertions.assertTrue(result.content().contains("IllegalStateException"),
+                "Error content should include root cause class but was: " + result.content());
     }
 }

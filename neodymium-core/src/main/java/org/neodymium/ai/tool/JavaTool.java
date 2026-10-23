@@ -184,16 +184,22 @@ public class JavaTool implements AiTool
         }
         catch (final InvocationTargetException ite)
         {
-            final Throwable cause = ite.getCause();
+            final Throwable cause = ite.getCause() != null ? ite.getCause() : ite;
             if (cause instanceof AssertionError ae)
             {
                 throw ae;
             }
-            if (cause instanceof Exception e)
+            final Throwable root = getRootCause(cause);
+            if (root instanceof AssertionError ae)
             {
-                return ToolResult.error(call.callId(), e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
+                throw ae;
             }
-            throw new RuntimeException("Error executing method " + this.method.getName(), cause);
+            return ToolResult.error(call.callId(), formatErrorMessage(cause, root));
+        }
+        catch (final IllegalAccessException | IllegalArgumentException e)
+        {
+            final Throwable root = getRootCause(e);
+            return ToolResult.error(call.callId(), formatErrorMessage(e, root));
         }
 
         final ToolResult.Builder builder = ToolResult.builder(call.callId(), ToolResult.Status.SUCCESS);
@@ -257,5 +263,29 @@ public class JavaTool implements AiTool
             return '\0';
         }
         return null;
+    }
+
+    private static Throwable getRootCause(final Throwable throwable)
+    {
+        Throwable root = throwable;
+        while (root.getCause() != null && root.getCause() != root)
+        {
+            root = root.getCause();
+        }
+        return root;
+    }
+
+    private static String formatErrorMessage(final Throwable cause, final Throwable root)
+    {
+        if (root == cause || root == null)
+        {
+            final String msg = cause.getMessage();
+            return cause.getClass().getSimpleName() + (msg != null && !msg.isBlank() ? ": " + msg : "");
+        }
+        final String causeMsg = cause.getMessage();
+        final String rootMsg = root.getMessage();
+        final String causeDesc = cause.getClass().getSimpleName() + (causeMsg != null && !causeMsg.isBlank() ? ": " + causeMsg : "");
+        final String rootDesc = root.getClass().getSimpleName() + (rootMsg != null && !rootMsg.isBlank() ? ": " + rootMsg : "");
+        return causeDesc + " (Root cause: " + rootDesc + ")";
     }
 }
