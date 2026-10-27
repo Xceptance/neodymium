@@ -82,7 +82,10 @@ public final class LocatorImproverTest
     public void testScoreLocator_testId()
     {
         assertEquals(10, LocatorImprover.scoreLocator("[data-testid='submit-btn']"));
+        assertEquals(10, LocatorImprover.scoreLocator("[data-test-id='submit-btn']"));
         assertEquals(10, LocatorImprover.scoreLocator("[data-test='checkout-link']"));
+        assertEquals(10, LocatorImprover.scoreLocator("[data-qa='order-summary']"));
+        assertEquals(10, LocatorImprover.scoreLocator("[data-cy='submit']"));
     }
 
     @Test
@@ -176,7 +179,10 @@ public final class LocatorImproverTest
         final Map<String, String> attrs = new HashMap<>();
         attrs.put("id", "email-field");
         attrs.put("data-testid", "email-input");
+        attrs.put("data-test-id", "email-alt");
         attrs.put("data-test", "email-test");
+        attrs.put("data-qa", "email-qa");
+        attrs.put("data-cy", "email-cy");
         attrs.put("name", "email");
         attrs.put("aria-label", "Email Address");
         attrs.put("placeholder", "Enter your email");
@@ -184,13 +190,16 @@ public final class LocatorImproverTest
         final WebElement element = createMockElement("input", attrs);
         final List<String> candidates = LocatorImprover.generateCandidates(element);
 
-        assertEquals(6, candidates.size());
+        assertEquals(9, candidates.size());
         assertEquals("#email-field", candidates.get(0));
         assertEquals("[data-testid='email-input']", candidates.get(1));
-        assertEquals("[data-test='email-test']", candidates.get(2));
-        assertEquals("input[name='email']", candidates.get(3));
-        assertEquals("[aria-label='Email Address']", candidates.get(4));
-        assertEquals("[placeholder='Enter your email']", candidates.get(5));
+        assertEquals("[data-test-id='email-alt']", candidates.get(2));
+        assertEquals("[data-test='email-test']", candidates.get(3));
+        assertEquals("[data-qa='email-qa']", candidates.get(4));
+        assertEquals("[data-cy='email-cy']", candidates.get(5));
+        assertEquals("input[name='email']", candidates.get(6));
+        assertEquals("[aria-label='Email Address']", candidates.get(7));
+        assertEquals("[placeholder='Enter your email']", candidates.get(8));
     }
 
     @Test

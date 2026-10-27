@@ -955,9 +955,13 @@ public final class PlaybookToolReplayer
             final String tag = candidate.getTag() != null && !candidate.getTag().isBlank() ? candidate.getTag() : "";
             return tag + "[id=\"" + escapeAttributeValue(idVal) + "\"]";
         }
-        if (candidate.getAttributes().containsKey("data-testid") && !candidate.getAttributes().get("data-testid").isBlank())
+        for (final String testAttr : new String[] {"data-testid", "data-test-id", "data-test", "data-qa", "data-cy"})
         {
-            return candidate.getTag() + "[data-testid=\"" + escapeAttributeValue(candidate.getAttributes().get("data-testid")) + "\"]";
+            if (candidate.getAttributes().containsKey(testAttr) && !candidate.getAttributes().get(testAttr).isBlank())
+            {
+                final String tag = candidate.getTag() != null ? candidate.getTag() : "";
+                return tag + "[" + testAttr + "=\"" + escapeAttributeValue(candidate.getAttributes().get(testAttr)) + "\"]";
+            }
         }
         if (candidate.getAttributes().containsKey("name") && !candidate.getAttributes().get("name").isBlank())
         {
@@ -1170,6 +1174,10 @@ public final class PlaybookToolReplayer
             "title",
             "data-action",
             "data-testid",
+            "data-test-id",
+            "data-test",
+            "data-qa",
+            "data-cy",
             "data-canvas-item",
             "href");
 
