@@ -871,10 +871,10 @@ public final class BrowserToolProvider
                                             }
                                         } catch (e) {}
                                     }
-                                    var testId = curr.getAttribute && (curr.getAttribute('data-testid') || curr.getAttribute('data-test') || curr.getAttribute('data-qa'));
+                                    var testId = curr.getAttribute && (curr.getAttribute('data-testid') || curr.getAttribute('data-test-id') || curr.getAttribute('data-test') || curr.getAttribute('data-qa') || curr.getAttribute('data-cy'));
                                     if (testId) {
                                         try {
-                                            var attrName = curr.getAttribute('data-testid') ? 'data-testid' : (curr.getAttribute('data-test') ? 'data-test' : 'data-qa');
+                                            var attrName = curr.getAttribute('data-testid') ? 'data-testid' : (curr.getAttribute('data-test-id') ? 'data-test-id' : (curr.getAttribute('data-test') ? 'data-test' : (curr.getAttribute('data-qa') ? 'data-qa' : 'data-cy')));
                                             var tSel = '[' + attrName + '="' + testId.replace(/"/g, '\\\\"') + '"]';
                                             if (document.querySelectorAll(tSel).length === 1) {
                                                 anchor = curr;

@@ -804,7 +804,7 @@ public final class QualityJudgeToolInterceptor implements ToolInterceptor
         {
             return "ID";
         }
-        if (trimmed.contains("data-testid") || trimmed.contains("data-test"))
+        if (trimmed.contains("data-testid") || trimmed.contains("data-test") || trimmed.contains("data-qa") || trimmed.contains("data-cy"))
         {
             return "TEST_ID";
         }

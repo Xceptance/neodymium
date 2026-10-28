@@ -519,6 +519,21 @@ public class PageAnalyzer
                     return false;
                 }
 
+                // Helper to extract authentic test attributes without synthetic bucketing
+                function getTestAttributes(el) {
+                    if (!el || !el.getAttribute) return {};
+                    var known = ['data-testid', 'data-test-id', 'data-test', 'data-qa', 'data-cy'];
+                    var found = {};
+                    for (var i = 0; i < known.length; i++) {
+                        var a = known[i];
+                        var val = el.getAttribute(a);
+                        if (val !== null && val !== undefined && val !== '') {
+                            found[a] = val;
+                        }
+                    }
+                    return found;
+                }
+
                 // Recursive Structural DOM Tree Traversal
                 function buildNodeTree(el) {
                     if (!el) return null;
@@ -551,6 +566,8 @@ public class PageAnalyzer
                     // 1. Leaf interactive or heading element (Atomic)
                     if (isStandardLeaf || isCustomLeaf) {
                         var autoId = assignId(el);
+                        var testAttrs = getTestAttributes(el);
+                        var primaryTestVal = testAttrs['data-testid'] || testAttrs['data-test-id'] || testAttrs['data-test'] || testAttrs['data-qa'] || testAttrs['data-cy'] || null;
                         var text = (el.innerText || '').trim().replace(new RegExp('\\s*\\n\\s*', 'g'), ' ');
                         if (!text && el.querySelector) {
                             var img = el.querySelector('img, svg');
@@ -582,7 +599,8 @@ public class PageAnalyzer
                             focused: isFocused ? 'true' : null,
                             placeholder: el.getAttribute('placeholder'),
                             ariaLabel: el.getAttribute('aria-label'),
-                            dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa'),
+                            testAttrs: testAttrs,
+                            dataTestId: primaryTestVal,
                             value: getElementValue(el, tag),
                             options: options,
                             automationId: autoId,
@@ -592,7 +610,8 @@ public class PageAnalyzer
 
                     var isCustomElement = tag.indexOf('-') !== -1 || !!el.shadowRoot;
                     var isContainerTag = ['header','nav','main','section','article','aside','form','footer','fieldset','details','ul','ol','select','optgroup','p','table','tbody','thead','tfoot','tr','td','th','dl','dt','dd','figure','figcaption'].indexOf(tag) !== -1 || isCustomElement;
-                    var hasClassOrId = (el.id || (typeof el.className === 'string' && el.className.trim().length > 0) || el.getAttribute('role') || el.getAttribute('aria-label') || el.getAttribute('data-testid') || el.getAttribute('data-test'));
+                    var hasTestAttr = (el.getAttribute && (el.hasAttribute('data-testid') || el.hasAttribute('data-test-id') || el.hasAttribute('data-test') || el.hasAttribute('data-qa') || el.hasAttribute('data-cy')));
+                    var hasClassOrId = (el.id || (typeof el.className === 'string' && el.className.trim().length > 0) || el.getAttribute('role') || el.getAttribute('aria-label') || hasTestAttr);
                     var isDivContainer = (tag === 'div' || tag === 'li') && hasClassOrId;
 
                     var children = [];
@@ -619,6 +638,8 @@ public class PageAnalyzer
                             return children[0];
                         }
                         var autoIdContainer = assignId(el);
+                        var testAttrsContainer = getTestAttributes(el);
+                        var primaryTestValContainer = testAttrsContainer['data-testid'] || testAttrsContainer['data-test-id'] || testAttrsContainer['data-test'] || testAttrsContainer['data-qa'] || testAttrsContainer['data-cy'] || null;
                         return {
                             nodeType: 'container',
                             tagName: tag,
@@ -628,7 +649,8 @@ public class PageAnalyzer
                             role: el.getAttribute('role'),
                             contenteditable: isContentEditable ? 'true' : null,
                             ariaLabel: el.getAttribute('aria-label'),
-                            dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa'),
+                            testAttrs: testAttrsContainer,
+                            dataTestId: primaryTestValContainer,
                             parentText: el.getAttribute('data-parent-text') || null,
                             automationId: autoIdContainer,
                             children: children
@@ -648,6 +670,8 @@ public class PageAnalyzer
                             }
                         }
                         var autoId = assignId(el);
+                        var testAttrsLeaf = getTestAttributes(el);
+                        var primaryTestValLeaf = testAttrsLeaf['data-testid'] || testAttrsLeaf['data-test-id'] || testAttrsLeaf['data-test'] || testAttrsLeaf['data-qa'] || testAttrsLeaf['data-cy'] || null;
                         var leafNode = {
                             nodeType: 'leaf',
                             tagName: tag,
@@ -661,7 +685,8 @@ public class PageAnalyzer
                             checked: isChecked(el) ? 'true' : null,
                             disabled: (el.disabled || el.hasAttribute('disabled')) ? 'true' : null,
                             ariaLabel: el.getAttribute('aria-label'),
-                            dataTestId: el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa'),
+                            testAttrs: testAttrsLeaf,
+                            dataTestId: primaryTestValLeaf,
                             automationId: autoId,
                             parentText: el.getAttribute('data-parent-text') || null
                         };
@@ -1249,11 +1274,14 @@ public class PageAnalyzer
             final Object name = node.get("name");
             final Object role = node.get("role");
             final Object dataTestId = node.get("dataTestId");
+            @SuppressWarnings("unchecked")
+            final Map<String, Object> testAttrs = (Map<String, Object>) node.get("testAttrs");
+            final boolean hasTestAttr = (testAttrs != null && !testAttrs.isEmpty()) || dataTestId != null;
             final Object autoId = node.get("automationId");
             final Object ariaLabel = node.get("ariaLabel");
 
             // Omit class on containers if semantic locators exist (unless in RICH mode)
-            final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || ariaLabel != null || role != null;
+            final boolean hasSemanticLocator = hasId || name != null || hasTestAttr || ariaLabel != null || role != null;
             if (level != null && level.includesRichMetadata() || !hasSemanticLocator)
             {
                 appendSanitizedClassAttribute(dom, node.get("className"));
@@ -1262,7 +1290,17 @@ public class PageAnalyzer
             appendAttribute(dom, "role", role);
             appendAttribute(dom, "contenteditable", node.get("contenteditable"));
             appendAttribute(dom, "aria-label", ariaLabel);
-            appendAttribute(dom, "data-testid", dataTestId);
+            if (testAttrs != null && !testAttrs.isEmpty())
+            {
+                for (final Map.Entry<String, Object> entry : testAttrs.entrySet())
+                {
+                    appendAttribute(dom, entry.getKey(), entry.getValue());
+                }
+            }
+            else
+            {
+                appendAttribute(dom, "data-testid", dataTestId);
+            }
             if (AiConfiguration.getInstance().isDataAiEnabled())
             {
                 appendAttribute(dom, "data-ai", autoId);
@@ -1311,6 +1349,9 @@ public class PageAnalyzer
         }
         final Object name = el.get("name");
         final Object dataTestId = el.get("dataTestId");
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> testAttrs = (Map<String, Object>) el.get("testAttrs");
+        final boolean hasTestAttr = (testAttrs != null && !testAttrs.isEmpty()) || dataTestId != null;
         final Object autoId = el.get("automationId");
         final Object ariaLabel = el.get("ariaLabel");
         final Object placeholder = el.get("placeholder");
@@ -1319,7 +1360,7 @@ public class PageAnalyzer
         final boolean hasDistinctText = text != null && !text.isBlank() && text.length() <= 80;
 
         // Omit presentation class in MINIMAL/LEAN if element already has strong semantic identification
-        final boolean hasSemanticLocator = hasId || name != null || dataTestId != null || ariaLabel != null || placeholder != null || hasDistinctText;
+        final boolean hasSemanticLocator = hasId || name != null || hasTestAttr || ariaLabel != null || placeholder != null || hasDistinctText;
         if (level != null && level.includesRichMetadata() || !hasSemanticLocator)
         {
             appendSanitizedClassAttribute(dom, el.get("className"));
@@ -1334,7 +1375,17 @@ public class PageAnalyzer
         appendAttribute(dom, "href", el.get("href"));
         appendAttribute(dom, "placeholder", el.get("placeholder"));
         appendAttribute(dom, "aria-label", el.get("ariaLabel"));
-        appendAttribute(dom, "data-testid", el.get("dataTestId"));
+        if (testAttrs != null && !testAttrs.isEmpty())
+        {
+            for (final Map.Entry<String, Object> entry : testAttrs.entrySet())
+            {
+                appendAttribute(dom, entry.getKey(), entry.getValue());
+            }
+        }
+        else
+        {
+            appendAttribute(dom, "data-testid", dataTestId);
+        }
         appendAttribute(dom, "pattern", el.get("pattern"));
         appendAttribute(dom, "title", el.get("title"));
         appendAttribute(dom, "min", el.get("min"));
@@ -1562,7 +1613,7 @@ public class PageAnalyzer
                 var results = [];
                 for (var r = 0; r < roots.length; r++) {
                     try {
-                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [contenteditable], [data-testid], [data-test], [data-qa]');
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [contenteditable], [data-testid], [data-test-id], [data-test], [data-qa], [data-cy]');
                         for (var i = 0; i < els.length; i++) {
                             var el = els[i];
                             if (el.closest && el.closest('.neodymium-ai-hud')) continue;
@@ -1847,7 +1898,7 @@ public class PageAnalyzer
                 var vectorData = [];
                 for (var r = 0; r < roots.length; r++) {
                     try {
-                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [contenteditable], [data-testid], [data-test], [data-qa]');
+                        var els = roots[r].querySelectorAll('a, button, input, select, textarea, li, [role], [onclick], [hx-get], [hx-post], [hx-target], [tabindex], [contenteditable], [data-testid], [data-test-id], [data-test], [data-qa], [data-cy]');
                         for (var i = 0; i < els.length; i++) {
                             var el = els[i];
                             if (el.closest && el.closest('.neodymium-ai-hud')) continue;
@@ -2002,9 +2053,9 @@ public class PageAnalyzer
                         selector = '#' + curr.id;
                         break;
                     }
-                    var testId = curr.getAttribute && (curr.getAttribute('data-testid') || curr.getAttribute('data-test') || curr.getAttribute('data-qa'));
+                    var testId = curr.getAttribute && (curr.getAttribute('data-testid') || curr.getAttribute('data-test-id') || curr.getAttribute('data-test') || curr.getAttribute('data-qa') || curr.getAttribute('data-cy'));
                     if (testId) {
-                        var attrName = curr.getAttribute('data-testid') ? 'data-testid' : (curr.getAttribute('data-test') ? 'data-test' : 'data-qa');
+                        var attrName = curr.getAttribute('data-testid') ? 'data-testid' : (curr.getAttribute('data-test-id') ? 'data-test-id' : (curr.getAttribute('data-test') ? 'data-test' : (curr.getAttribute('data-qa') ? 'data-qa' : 'data-cy')));
                         anchor = curr;
                         selector = '[' + attrName + '="' + testId + '"]';
                         break;
