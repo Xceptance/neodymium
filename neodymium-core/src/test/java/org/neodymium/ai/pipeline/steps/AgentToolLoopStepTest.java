@@ -18,6 +18,9 @@
  */
 package org.neodymium.ai.pipeline.steps;
 
+import com.codeborne.selenide.Condition;
+import com.codeborne.selenide.ex.ElementNotFound;
+import com.codeborne.selenide.impl.Alias;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.google.gson.JsonObject;
@@ -25,7 +28,6 @@ import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import java.lang.reflect.Field;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -3108,6 +3110,149 @@ public class AgentToolLoopStepTest
         // Stop Criterion 2 must ensure the failed assertion ToolCall is preserved on the playbook step!
         Assertions.assertFalse(playbookStep.getToolCalls().isEmpty(), "Failed assertion tool call must be preserved!");
         Assertions.assertEquals("browser_assert_text", playbookStep.getToolCalls().get(0).toolName());
+    }
+
+    @Test
+    public void testAssertionElementNotFoundOnOmittedDomTurnTriggersJitDomRecovery() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_assert_text", "Asserts text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\"}");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_assert_element_state", "Asserts state", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                final String selector = call.arguments().path("selector").asText();
+                if ("app-cart-item app-quantity-selector".equals(selector))
+                {
+                    throw new ElementNotFound(Alias.NONE, selector, Condition.visible);
+                }
+                return ToolResult.success(call.callId(), "{\"status\":\"SUCCESS\"}");
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<div class='cart'><span class='title'>Fotopuzzle</span><app-amount></app-amount></div>", Collections.emptyList(), "DOM_LIGHT"));
+        executor.enqueueState(new BrowserSutState("<div class='cart'><span class='title'>Fotopuzzle</span><app-amount></app-amount></div>", Collections.emptyList(), "DOM_LIGHT"));
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final PlaybookStep playbookStep = new PlaybookStep("Verify cart contains product Fotopuzzle and quantity selector");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify cart contains product Fotopuzzle and quantity selector");
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                return new LlmResponse("Asserting Fotopuzzle text", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-txt", "browser_assert_text", MAPPER.createObjectNode().put("text", "Fotopuzzle"))));
+            }
+            if (t == 2)
+            {
+                // Turn 2 had DOM omitted because Turn 1 succeeded without remaining sub-step milestones
+                final String userPrompt = req.messages().get(req.messages().size() - 1).content();
+                Assertions.assertTrue(userPrompt.contains("viewport screenshot omitted"));
+                Assertions.assertFalse(userPrompt.contains("<app-amount>"));
+
+                return new LlmResponse("Asserting quantity selector with guess", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-state-fail", "browser_assert_element_state",
+                                MAPPER.createObjectNode()
+                                        .put("selector", "app-cart-item app-quantity-selector")
+                                        .put("state", "visible"))));
+            }
+            if (t == 3)
+            {
+                // Turn 3 received fresh DOM via JIT recovery turn!
+                final String userPrompt = req.messages().get(req.messages().size() - 1).content();
+                Assertions.assertTrue(userPrompt.contains("<app-amount></app-amount>"));
+
+                return new LlmResponse("Asserting correct quantity selector and completing", new TokenUsage(10, 10, 20), "mock",
+                        List.of(
+                                new ToolCall("call-state-ok", "browser_assert_element_state",
+                                        MAPPER.createObjectNode()
+                                                .put("selector", "app-cart-item app-amount")
+                                                .put("state", "visible")),
+                                new ToolCall("call-complete", "complete_step",
+                                        MAPPER.createObjectNode().put("summary", "Cart verified successfully"))
+                        ));
+            }
+            throw new IllegalStateException("Unexpected turn: " + t);
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+        step.execute(this.context);
+
+        Assertions.assertEquals("Cart verified successfully", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+        Assertions.assertEquals(3, turn.get());
+    }
+
+    @Test
+    public void testAssertionElementNotFoundWhenDomPresentTriggersStopCriterion2() throws Exception
+    {
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("browser_assert_element_state", "Asserts state", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                throw new ElementNotFound(Alias.NONE, "app-missing", Condition.visible);
+            }
+        });
+
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        executor.enqueueState(new BrowserSutState("<div class='page'></div>", Collections.emptyList(), "DOM_LIGHT"));
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final PlaybookStep playbookStep = new PlaybookStep("Verify missing element is present");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Verify missing element is present");
+
+        final AgentLoopLlmCaller caller = (req, ctx) ->
+                new LlmResponse("Asserting missing element", new TokenUsage(10, 10, 20), "mock",
+                        List.of(new ToolCall("call-fail", "browser_assert_element_state",
+                                MAPPER.createObjectNode().put("selector", "app-missing").put("state", "visible"))));
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 5);
+
+        final AssertionError thrown = Assertions.assertThrows(AssertionError.class, () -> step.execute(this.context));
+        Assertions.assertTrue(thrown instanceof ElementNotFound);
     }
 
     @Test
