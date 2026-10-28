@@ -2263,6 +2263,116 @@ public class BrowserToolProviderStabilityTest
     }
 
     @Test
+    public void testAssertElementStateReturnsErrorWhenElementNotFoundInDom() throws Exception
+    {
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        throw new NoSuchElementException("Element not found");
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 50;
+        try
+        {
+            final AiTool tool = this.registry.getTool("assert_element_state").orElseThrow();
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "#missing-quantity-selector");
+            args.put("state", "visible");
+
+            final ToolResult result = tool.execute(new ToolCall("call-assert-state-not-found", "assert_element_state", args), null);
+            Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
+            Assertions.assertTrue(result.content().contains("Target element not found in DOM for selector '#missing-quantity-selector'"),
+                    "Error result must specify that target element was not found in DOM");
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+            WebDriverRunner.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testAssertElementStateThrowsAssertionErrorWhenStateMismatchesOnExistingElement() throws Exception
+    {
+        final WebElement existingElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getTagName".equals(name))
+                    {
+                        return "button";
+                    }
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("isEnabled".equals(name))
+                    {
+                        return false;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("findElements".equals(name))
+                    {
+                        return List.of(existingElement);
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        return existingElement;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 50;
+        try
+        {
+            final AiTool tool = this.registry.getTool("assert_element_state").orElseThrow();
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "#existing-btn");
+            args.put("state", "enabled");
+
+            final AssertionError error = Assertions.assertThrows(
+                    AssertionError.class,
+                    () -> tool.execute(new ToolCall("call-assert-state-mismatch", "assert_element_state", args), null)
+            );
+            Assertions.assertNotNull(error);
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+            WebDriverRunner.closeWebDriver();
+        }
+    }
+
+    @Test
     public void testAssertAttributeRegexSubstringAndAnchoredMatching() throws Exception
     {
         final WebElement photoElement = (WebElement) Proxy.newProxyInstance(
