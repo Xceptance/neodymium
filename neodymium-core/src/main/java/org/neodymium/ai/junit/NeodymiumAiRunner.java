@@ -131,6 +131,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
     @Override
     public Stream<TestTemplateInvocationContext> provideTestTemplateInvocationContexts(final ExtensionContext context)
     {
+        Neodymium.clearThreadContext();
+
         final Method method = context.getRequiredTestMethod();
         final Class<?> testClass = context.getRequiredTestClass();
 
@@ -684,6 +686,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                                         @Override
                                         public List<Extension> getAdditionalExtensions()
                                         {
+                                            Neodymium.clearThreadContext();
                                             final List<Extension> extensions = new ArrayList<>();
                                             if (browser != null)
                                             {
@@ -858,8 +861,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
         private void executeBeforeEach(final ExtensionContext context) throws Exception
         {
-            Neodymium.clearThreadContext();
-
             // Set test name dynamically in the Neodymium context
             if (context.getRequiredTestMethod() != null && context.getRequiredTestClass() != null)
             {
@@ -1870,8 +1871,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     Neodymium.getData().remove("neodymium.ai.ssim.minScore");
                     com.xceptance.neodymium.util.Neodymium.getData().remove("neodymium.ai.ssim.minScore");
                 }
-
-                Neodymium.clearThreadContext();
             }
         }
 

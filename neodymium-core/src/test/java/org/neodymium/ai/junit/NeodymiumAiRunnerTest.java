@@ -20,11 +20,13 @@ package org.neodymium.ai.junit;
 
 import java.io.FileNotFoundException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -36,7 +38,10 @@ import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.resources.InMemoryResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.WebDriverStateContainer;
 import org.neodymium.util.Neodymium;
+import org.openqa.selenium.WebDriver;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -145,8 +150,8 @@ public class NeodymiumAiRunnerTest
     /**
      * Sample test class decorated with multiple @Browser annotations to verify multiplication.
      */
-    @com.xceptance.neodymium.common.browser.Browser("Chrome_1024x768")
-    @com.xceptance.neodymium.common.browser.Browser("Firefox_1024x768")
+    @Browser("Chrome_1024x768")
+    @Browser("Firefox_1024x768")
     public static class MultiBrowserTestClass
     {
         @Test
@@ -751,6 +756,126 @@ public class NeodymiumAiRunnerTest
         {
             System.clearProperty("neodymium.ai.playbook.recordingDirectory");
             AiConfiguration.resetInstance();
+        }
+    }
+
+    /**
+     * Sample test class decorated with @Browser to verify WebDriver lifecycle preservation.
+     */
+    @Browser("Chrome_1024x768")
+    public static class SampleBrowserAiTestClass
+    {
+        @Test
+        @AiInlinePlaybook("name: sample-browser\nsteps:\n  - step: Click search button\n")
+        public void sampleMethod()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that getAdditionalExtensions clears Neodymium thread context before test extensions execute.
+     */
+    @Test
+    public void testGetAdditionalExtensionsClearsThreadContext() throws Exception
+    {
+        try
+        {
+            Neodymium.getData().put("dirtyKey", "dirtyValue");
+
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleBrowserAiTestClass.class.getMethod("sampleMethod");
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleBrowserAiTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            invocations.get(0).getAdditionalExtensions();
+
+            Assertions.assertNull(Neodymium.getData().get("dirtyKey"), "Thread-local data must be cleared when building additional extensions");
+        }
+        finally
+        {
+            Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Goal: Verifies that AiInvocationExtension does not wipe the WebDriverStateContainer registered by BrowserExecutionCallback.
+     * Prevents regression of issue #485 where Neodymium.getDriver() returned null in AI tests.
+     */
+    @Test
+    public void testAiInvocationExtensionPreservesWebDriver() throws Exception
+    {
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleBrowserAiTestClass.class.getMethod("sampleMethod");
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleBrowserAiTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final List<Extension> extensions = invocations.get(0).getAdditionalExtensions();
+            final List<BeforeEachCallback> beforeCallbacks = extensions.stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .map(e -> (BeforeEachCallback) e)
+                .toList();
+            Assertions.assertEquals(2, beforeCallbacks.size());
+
+            // Simulate driver registration by BrowserExecutionCallback (first extension)
+            final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+                WebDriver.class.getClassLoader(),
+                new Class<?>[]{WebDriver.class},
+                (proxy, m, args) -> null
+            );
+            final WebDriverStateContainer container = new WebDriverStateContainer();
+            container.setWebDriver(mockDriver);
+            Neodymium.setWebDriverStateContainer(container);
+
+            // Execute AiInvocationExtension.beforeEach (second extension)
+            beforeCallbacks.get(1).beforeEach(extensionContext);
+
+            Assertions.assertTrue(Neodymium.hasDriver(), "Neodymium.hasDriver() must be true after AiInvocationExtension.beforeEach");
+            Assertions.assertSame(mockDriver, Neodymium.getDriver(), "Neodymium.getDriver() must return the registered WebDriver instance");
+        }
+        finally
+        {
+            Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Goal: Verifies that AiInvocationExtension.afterEach does not wipe the browser profile name before BrowserRunner teardown.
+     */
+    @Test
+    public void testAiInvocationExtensionAfterEachPreservesBrowserProfileName() throws Exception
+    {
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleBrowserAiTestClass.class.getMethod("sampleMethod");
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleBrowserAiTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final List<Extension> extensions = invocations.get(0).getAdditionalExtensions();
+            final AfterEachCallback afterEach = (AfterEachCallback) extensions.stream()
+                .filter(e -> e instanceof AfterEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            Neodymium.setBrowserProfileName("Chrome_1024x768");
+            afterEach.afterEach(extensionContext);
+
+            Assertions.assertEquals("Chrome_1024x768", Neodymium.getBrowserProfileName(), "Browser profile name must remain intact for BrowserRunner teardown");
+        }
+        finally
+        {
+            Neodymium.clearThreadContext();
         }
     }
 }
