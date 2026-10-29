@@ -32,6 +32,7 @@ import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -354,6 +355,106 @@ public class AuraTestQueueController
         return partialFiles;
     }
 
+    public Map<String, String> getFolderSelectionStates()
+    {
+        final Map<String, String> states = new HashMap<>();
+        final List<YamlFileDto> allFiles = fileService.getYamlFilesList();
+        if (allFiles == null || allFiles.isEmpty())
+        {
+            return states;
+        }
+
+        final Map<String, Integer> folderTotalDatasets = new HashMap<>();
+        final Map<String, Integer> folderSelectedDatasets = new HashMap<>();
+        final Set<String> queueKeys = getSelectedQueueKeys();
+
+        for (final YamlFileDto f : allFiles)
+        {
+            if (f == null || f.hasError || f.file == null)
+            {
+                continue;
+            }
+
+            final String[] parts = f.file.split("/");
+            if (parts.length <= 1)
+            {
+                continue;
+            }
+
+            final int fileDatasets = (f.datasets != null && !f.datasets.isEmpty()) ? f.datasets.size() : 1;
+            int fileSelected = 0;
+            if (f.datasets != null && !f.datasets.isEmpty())
+            {
+                for (final DatasetDto d : f.datasets)
+                {
+                    if (queueKeys.contains(f.file + "::" + d.id))
+                    {
+                        fileSelected++;
+                    }
+                }
+            }
+            else
+            {
+                synchronized (selectedQueue)
+                {
+                    for (final DatasetSelection item : selectedQueue)
+                    {
+                        if (f.file.equals(item.file))
+                        {
+                            fileSelected++;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            String currentPath = "";
+            for (int i = 0; i < parts.length - 1; i++)
+            {
+                currentPath = currentPath.isEmpty() ? parts[i] : (currentPath + "/" + parts[i]);
+                folderTotalDatasets.put(currentPath, folderTotalDatasets.getOrDefault(currentPath, 0) + fileDatasets);
+                folderSelectedDatasets.put(currentPath, folderSelectedDatasets.getOrDefault(currentPath, 0) + fileSelected);
+            }
+        }
+
+        for (final Map.Entry<String, Integer> entry : folderTotalDatasets.entrySet())
+        {
+            final String folder = entry.getKey();
+            final int total = entry.getValue();
+            final int selected = folderSelectedDatasets.getOrDefault(folder, 0);
+
+            if (selected == 0)
+            {
+                states.put(folder, "unchecked");
+            }
+            else if (selected >= total)
+            {
+                states.put(folder, "checked");
+            }
+            else
+            {
+                states.put(folder, "indeterminate");
+            }
+        }
+
+        return states;
+    }
+
+    public String getFolderSelectionStatesJson()
+    {
+        return GSON.toJson(getFolderSelectionStates());
+    }
+
+    private void setFolderStatesTrigger(final HttpServletResponse response)
+    {
+        if (response != null)
+        {
+            final Map<String, Object> triggerMap = new HashMap<>();
+            triggerMap.put("folderStatesUpdated", getFolderSelectionStates());
+            response.setHeader("HX-Trigger", GSON.toJson(triggerMap));
+        }
+    }
+
     public final Set<String> getGlobalBrowserProfiles()
     {
         return this.globalBrowserProfiles;
@@ -511,7 +612,7 @@ public class AuraTestQueueController
     }
 
     @PostMapping("/api/queue/toggle")
-    public String toggleQueue(final HttpServletRequest request, final Model model)
+    public String toggleQueue(final HttpServletRequest request, final HttpServletResponse response, final Model model)
     {
         final Map<String, String> params = extractParams(request);
         final String file = params.get("file");
@@ -534,13 +635,14 @@ public class AuraTestQueueController
                 }
                 if (targetDto != null && targetDto.hasError)
                 {
+                    setFolderStatesTrigger(response);
                     populateQueueModel(model);
                     return "fragments/queue :: queueListContainerContent";
                 }
                 final List<DatasetDto> datasets = targetDto != null ? targetDto.datasets : null;
                 if (datasets != null && !datasets.isEmpty())
                 {
-                    return toggleAllQueue(request, model);
+                    return toggleAllQueue(request, response, model);
                 }
             }
 
@@ -568,12 +670,18 @@ public class AuraTestQueueController
             }
         }
 
+        setFolderStatesTrigger(response);
         populateQueueModel(model);
         return "fragments/queue :: queueListContainerContent";
     }
 
+    public String toggleQueue(final HttpServletRequest request, final Model model)
+    {
+        return toggleQueue(request, null, model);
+    }
+
     @PostMapping("/api/queue/toggleAll")
-    public String toggleAllQueue(final HttpServletRequest request, final Model model)
+    public String toggleAllQueue(final HttpServletRequest request, final HttpServletResponse response, final Model model)
     {
         final Map<String, String> params = extractParams(request);
         final String file = params.get("file");
@@ -589,6 +697,7 @@ public class AuraTestQueueController
                 {
                     if (f.hasError)
                     {
+                        setFolderStatesTrigger(response);
                         populateQueueModel(model);
                         return "fragments/queue :: queueListContainerContent";
                     }
@@ -685,25 +794,34 @@ public class AuraTestQueueController
             }
         }
 
+        setFolderStatesTrigger(response);
         populateQueueModel(model);
         return "fragments/queue :: queueListContainerContent";
     }
 
+    public String toggleAllQueue(final HttpServletRequest request, final Model model)
+    {
+        return toggleAllQueue(request, null, model);
+    }
+
     @PostMapping("/api/queue/toggleFolder")
-    public String toggleFolderQueue(final HttpServletRequest request, final Model model)
+    public String toggleFolderQueue(final HttpServletRequest request, final HttpServletResponse response, final Model model)
     {
         final Map<String, String> params = extractParams(request);
         final String folder = params.get("folder");
         final String checkedParam = params.get("checked");
+        final String query = params.get("q");
 
         if (folder != null && !folder.isBlank())
         {
             final String folderPrefix = folder.endsWith("/") ? folder : (folder + "/");
-            final List<YamlFileDto> allFiles = fileService.getYamlFilesList();
+            final List<YamlFileDto> sourceFiles = (query != null && !query.isBlank())
+                    ? fileService.getFilteredYamlFilesList(query)
+                    : fileService.getYamlFilesList();
             final List<YamlFileDto> matchingFiles = new ArrayList<>();
-            if (allFiles != null)
+            if (sourceFiles != null)
             {
-                for (final YamlFileDto f : allFiles)
+                for (final YamlFileDto f : sourceFiles)
                 {
                     if (f != null && !f.hasError && f.file != null && f.file.startsWith(folderPrefix))
                     {
@@ -807,14 +925,32 @@ public class AuraTestQueueController
                     }
                     else
                     {
-                        selectedQueue.removeIf(item -> item.file != null && item.file.startsWith(folderPrefix));
+                        if (query != null && !query.isBlank())
+                        {
+                            final Set<String> matchingFileNames = new HashSet<>();
+                            for (final YamlFileDto mf : matchingFiles)
+                            {
+                                matchingFileNames.add(mf.file);
+                            }
+                            selectedQueue.removeIf(item -> item.file != null && matchingFileNames.contains(item.file));
+                        }
+                        else
+                        {
+                            selectedQueue.removeIf(item -> item.file != null && item.file.startsWith(folderPrefix));
+                        }
                     }
                 }
             }
         }
 
+        setFolderStatesTrigger(response);
         populateQueueModel(model);
         return "fragments/queue :: queueListContainerContent";
+    }
+
+    public String toggleFolderQueue(final HttpServletRequest request, final Model model)
+    {
+        return toggleFolderQueue(request, null, model);
     }
 
     @PostMapping("/api/queue/move")
@@ -867,7 +1003,7 @@ public class AuraTestQueueController
     }
 
     @PostMapping("/api/queue/remove")
-    public String removeFromQueue(final HttpServletRequest request, final Model model)
+    public String removeFromQueue(final HttpServletRequest request, final HttpServletResponse response, final Model model)
     {
         final Map<String, String> params = extractParams(request);
         final String file = params.get("file");
@@ -897,16 +1033,28 @@ public class AuraTestQueueController
             }
         }
 
+        setFolderStatesTrigger(response);
         populateQueueModel(model);
         return "fragments/queue :: queueListContainerContent";
     }
 
+    public String removeFromQueue(final HttpServletRequest request, final Model model)
+    {
+        return removeFromQueue(request, null, model);
+    }
+
     @PostMapping("/api/queue/clear")
-    public String clearQueue(final Model model)
+    public String clearQueue(final HttpServletResponse response, final Model model)
     {
         selectedQueue.clear();
+        setFolderStatesTrigger(response);
         populateQueueModel(model);
         return "fragments/queue :: queueListContainerContent";
+    }
+
+    public String clearQueue(final Model model)
+    {
+        return clearQueue(null, model);
     }
 
     @PostMapping("/api/config/toggle")

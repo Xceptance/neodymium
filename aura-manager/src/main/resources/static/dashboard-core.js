@@ -443,6 +443,13 @@ function organizeContainerView(container, itemSelector, mode) {
 
     const collapsedList = getCollapsedFolders();
     const hasCheckboxes = container.id === 'sidebarTestsContainer' || items.some(it => it.querySelector('.file-select-cb') !== null);
+    let folderStates = null;
+    try {
+        const rawStates = container.getAttribute('data-folder-states');
+        if (rawStates) {
+            folderStates = JSON.parse(rawStates);
+        }
+    } catch (e) {}
 
     function buildFolderElement(folderPath) {
         const node = nodes[folderPath];
@@ -474,6 +481,21 @@ function organizeContainerView(container, itemSelector, mode) {
             checkboxInput.className = 'folder-select-cb';
             checkboxInput.setAttribute('data-folder', folderPath);
             checkboxInput.setAttribute('onchange', "if(typeof toggleFolderCheckboxesInstant==='function') toggleFolderCheckboxesInstant(this);");
+
+            if (folderStates && folderStates[folderPath]) {
+                const st = folderStates[folderPath];
+                if (st === 'checked') {
+                    checkboxInput.checked = true;
+                    checkboxInput.indeterminate = false;
+                } else if (st === 'indeterminate') {
+                    checkboxInput.checked = false;
+                    checkboxInput.indeterminate = true;
+                } else if (st === 'unchecked') {
+                    checkboxInput.checked = false;
+                    checkboxInput.indeterminate = false;
+                }
+            }
+
             checkboxLabel.appendChild(checkboxInput);
 
             headerDiv.appendChild(checkboxLabel);

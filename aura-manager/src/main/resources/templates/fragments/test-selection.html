@@ -88,7 +88,7 @@
 
 <th:block th:fragment="yamlFileListContent">
     <!-- TAB 1: TESTS (.yaml) CONTAINER -->
-    <div id="sidebarTestsContainer" class="sidebar-tab-content">
+    <div id="sidebarTestsContainer" class="sidebar-tab-content" th:data-folder-states="${folderSelectionStatesJson}">
         <!-- If files is null or empty, display a message -->
         <div th:if="${files == null or files.isEmpty()}" class="empty-state-card">
             <span class="material-symbols-outlined">folder_open</span>

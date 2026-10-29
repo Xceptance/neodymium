@@ -25,6 +25,7 @@ import com.xceptance.neodymium.aura.dto.DatasetDto;
 import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -459,5 +460,108 @@ public final class AuraTestQueueControllerTest
         final List<DatasetSelection> queue = this.controller.getSelectedQueue();
         Assertions.assertEquals(1, queue.size());
         Assertions.assertEquals("smoke/ValidTest.yaml", queue.get(0).file);
+    }
+
+    @Test
+    public final void testToggleFolderWithSearchQueryOnlySelectsMatchingFiles()
+    {
+        final DatasetDto d1 = new DatasetDto("login1", "Login 1", false);
+        final YamlFileDto loginFile = new YamlFileDto("tests/smoke/LoginTest.yaml", List.of(d1));
+        final DatasetDto d2 = new DatasetDto("logout1", "Logout 1", false);
+        final YamlFileDto logoutFile = new YamlFileDto("tests/smoke/LogoutTest.yaml", List.of(d2));
+
+        Mockito.when(this.fileService.getYamlFilesList()).thenReturn(List.of(loginFile, logoutFile));
+        Mockito.when(this.fileService.getFilteredYamlFilesList("login")).thenReturn(List.of(loginFile));
+
+        final HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(req.getParameter("folder")).thenReturn("tests/smoke");
+        Mockito.when(req.getParameter("q")).thenReturn("login");
+        Mockito.when(req.getParameterNames()).thenReturn(Collections.enumeration(List.of("folder", "q")));
+
+        final Model model = new ConcurrentModel();
+        this.controller.toggleFolderQueue(req, model);
+
+        final List<DatasetSelection> queue = this.controller.getSelectedQueue();
+        Assertions.assertEquals(1, queue.size(), "Only matching files for query 'login' should be queued");
+        Assertions.assertEquals("tests/smoke/LoginTest.yaml", queue.get(0).file);
+    }
+
+    @Test
+    public final void testFolderSelectionStatesCalculatesCorrectTriState()
+    {
+        final DatasetDto d1 = new DatasetDto("d1", "Dataset 1", false);
+        final DatasetDto d2 = new DatasetDto("d2", "Dataset 2", false);
+        final YamlFileDto file1 = new YamlFileDto("tests/smoke/LoginTest.yaml", List.of(d1, d2));
+
+        final DatasetDto d3 = new DatasetDto("d3", "Dataset 3", false);
+        final YamlFileDto file2 = new YamlFileDto("tests/smoke/LogoutTest.yaml", List.of(d3));
+
+        final DatasetDto d4 = new DatasetDto("d4", "Dataset 4", false);
+        final YamlFileDto file3 = new YamlFileDto("tests/checkout/CartTest.yaml", List.of(d4));
+
+        Mockito.when(this.fileService.getYamlFilesList()).thenReturn(List.of(file1, file2, file3));
+
+        // Initial state: nothing queued -> all unchecked
+        Map<String, String> states = this.controller.getFolderSelectionStates();
+        Assertions.assertEquals("unchecked", states.get("tests"));
+        Assertions.assertEquals("unchecked", states.get("tests/smoke"));
+        Assertions.assertEquals("unchecked", states.get("tests/checkout"));
+
+        // Queue d1 of LoginTest.yaml
+        final DatasetSelection sel1 = new DatasetSelection();
+        sel1.file = "tests/smoke/LoginTest.yaml";
+        sel1.id = "d1";
+        this.controller.getSelectedQueue().add(sel1);
+
+        states = this.controller.getFolderSelectionStates();
+        Assertions.assertEquals("indeterminate", states.get("tests"));
+        Assertions.assertEquals("indeterminate", states.get("tests/smoke"));
+        Assertions.assertEquals("unchecked", states.get("tests/checkout"));
+
+        // Queue d2 of LoginTest and d3 of LogoutTest -> smoke is fully selected
+        final DatasetSelection sel2 = new DatasetSelection();
+        sel2.file = "tests/smoke/LoginTest.yaml";
+        sel2.id = "d2";
+        this.controller.getSelectedQueue().add(sel2);
+
+        final DatasetSelection sel3 = new DatasetSelection();
+        sel3.file = "tests/smoke/LogoutTest.yaml";
+        sel3.id = "d3";
+        this.controller.getSelectedQueue().add(sel3);
+
+        states = this.controller.getFolderSelectionStates();
+        Assertions.assertEquals("checked", states.get("tests/smoke"));
+        Assertions.assertEquals("indeterminate", states.get("tests"));
+        Assertions.assertEquals("unchecked", states.get("tests/checkout"));
+
+        // Queue d4 of CartTest -> everything is selected
+        final DatasetSelection sel4 = new DatasetSelection();
+        sel4.file = "tests/checkout/CartTest.yaml";
+        sel4.id = "d4";
+        this.controller.getSelectedQueue().add(sel4);
+
+        states = this.controller.getFolderSelectionStates();
+        Assertions.assertEquals("checked", states.get("tests/smoke"));
+        Assertions.assertEquals("checked", states.get("tests/checkout"));
+        Assertions.assertEquals("checked", states.get("tests"));
+    }
+
+    @Test
+    public final void testSetFolderStatesTriggerSetsHxTriggerHeader()
+    {
+        final DatasetDto d1 = new DatasetDto("d1", "Dataset 1", false);
+        final YamlFileDto file1 = new YamlFileDto("tests/smoke/LoginTest.yaml", List.of(d1));
+        Mockito.when(this.fileService.getYamlFilesList()).thenReturn(List.of(file1));
+
+        final HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(req.getParameter("folder")).thenReturn("tests/smoke");
+        Mockito.when(req.getParameterNames()).thenReturn(Collections.enumeration(List.of("folder")));
+
+        final HttpServletResponse resp = Mockito.mock(HttpServletResponse.class);
+        final Model model = new ConcurrentModel();
+
+        this.controller.toggleFolderQueue(req, resp, model);
+
+        Mockito.verify(resp).setHeader(Mockito.eq("HX-Trigger"), Mockito.contains("folderStatesUpdated"));
     }
 }
