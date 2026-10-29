@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import com.xceptance.neodymium.aura.AuraFileService.IssueSeverity;
 import com.xceptance.neodymium.aura.AuraFileService.ValidationIssue;
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -901,5 +902,106 @@ public class AuraFileServiceTest
         final boolean hasUndefinedVarError = issues.stream().anyMatch(issue ->
                 issue.severity() == IssueSeverity.ERROR && issue.message().contains("Undefined variable"));
         Assertions.assertFalse(hasUndefinedVarError, "baseUrl defined at root level should not be flagged as undefined variable");
+    }
+
+    @Test
+    public final void testFilteredYamlFilesListWithListArg()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final YamlFileDto file1 = new YamlFileDto("tests/alpha/Login.yaml", List.of());
+        final YamlFileDto file2 = new YamlFileDto("tests/beta/Checkout.yaml", List.of());
+
+        final List<YamlFileDto> list = List.of(file1, file2);
+
+        final List<YamlFileDto> filtered = fileService.getFilteredYamlFilesList(list, "login");
+        Assertions.assertEquals(1, filtered.size());
+        Assertions.assertEquals("tests/alpha/Login.yaml", filtered.get(0).file);
+
+        final List<YamlFileDto> allWhenEmpty = fileService.getFilteredYamlFilesList(list, "");
+        Assertions.assertEquals(2, allWhenEmpty.size());
+    }
+
+    @Test
+    public final void testYamlFilesListCachingAndInvalidation() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String fileName = "test_caching_unit.yaml";
+
+        try
+        {
+            fileService.createYamlFile(fileName);
+            fileService.saveYamlFileContent(fileName, "steps:\n  - Step One");
+
+            final List<YamlFileDto> firstScan = fileService.getYamlFilesList();
+            final YamlFileDto firstEntry = firstScan.stream()
+                    .filter(f -> fileName.equals(f.file))
+                    .findFirst()
+                    .orElse(null);
+            Assertions.assertNotNull(firstEntry, "First scan should contain created file");
+
+            final List<YamlFileDto> secondScan = fileService.getYamlFilesList();
+            final YamlFileDto secondEntry = secondScan.stream()
+                    .filter(f -> fileName.equals(f.file))
+                    .findFirst()
+                    .orElse(null);
+            Assertions.assertNotNull(secondEntry, "Second scan should contain created file");
+            Assertions.assertSame(firstEntry, secondEntry, "Second scan should return the cached YamlFileDto instance");
+
+            fileService.saveYamlFileContent(fileName, "steps:\n  - Step Two");
+            final List<YamlFileDto> thirdScan = fileService.getYamlFilesList();
+            final YamlFileDto thirdEntry = thirdScan.stream()
+                    .filter(f -> fileName.equals(f.file))
+                    .findFirst()
+                    .orElse(null);
+            Assertions.assertNotNull(thirdEntry);
+            Assertions.assertNotSame(firstEntry, thirdEntry, "Third scan should return a freshly parsed instance after save");
+        }
+        finally
+        {
+            fileService.deleteYamlFile(fileName);
+        }
+    }
+
+    @Test
+    public final void testUpdateFragmentReferencesInvalidatesCache() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String testFile = "test_fragment_cache_invalidation.yaml";
+        final String fragmentOld = "fragments/old.steps";
+        final String fragmentNew = "fragments/new.steps";
+
+        try
+        {
+            fileService.createYamlFile(testFile);
+            fileService.saveYamlFileContent(testFile, "steps:\n  - _include: " + fragmentOld);
+
+            final List<YamlFileDto> firstScan = fileService.getYamlFilesList();
+            final YamlFileDto firstEntry = firstScan.stream()
+                    .filter(f -> testFile.equals(f.file))
+                    .findFirst()
+                    .orElse(null);
+            Assertions.assertNotNull(firstEntry);
+
+            final List<YamlFileDto> secondScan = fileService.getYamlFilesList();
+            final YamlFileDto secondEntry = secondScan.stream()
+                    .filter(f -> testFile.equals(f.file))
+                    .findFirst()
+                    .orElse(null);
+            Assertions.assertSame(firstEntry, secondEntry);
+
+            fileService.updateFragmentReferences(fragmentOld, fragmentNew);
+
+            final List<YamlFileDto> thirdScan = fileService.getYamlFilesList();
+            final YamlFileDto thirdEntry = thirdScan.stream()
+                    .filter(f -> testFile.equals(f.file))
+                    .findFirst()
+                    .orElse(null);
+            Assertions.assertNotNull(thirdEntry);
+            Assertions.assertNotSame(firstEntry, thirdEntry, "Cache should be invalidated after updating fragment references");
+        }
+        finally
+        {
+            fileService.deleteYamlFile(testFile);
+        }
     }
 }

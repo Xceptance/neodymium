@@ -443,13 +443,30 @@ function organizeContainerView(container, itemSelector, mode) {
 
     const collapsedList = getCollapsedFolders();
     const hasCheckboxes = container.id === 'sidebarTestsContainer' || items.some(it => it.querySelector('.file-select-cb') !== null);
-    let folderStates = null;
-    try {
-        const rawStates = container.getAttribute('data-folder-states');
-        if (rawStates) {
-            folderStates = JSON.parse(rawStates);
-        }
-    } catch (e) {}
+    let folderStates = (typeof window !== 'undefined' && window.currentFolderSelectionStates) ? window.currentFolderSelectionStates : null;
+    if (!folderStates) {
+        try {
+            const rawStates = container.getAttribute('data-folder-states');
+            if (rawStates) {
+                folderStates = JSON.parse(rawStates);
+                if (typeof window !== 'undefined') {
+                    window.currentFolderSelectionStates = folderStates;
+                }
+            }
+        } catch (e) {}
+    }
+    let folderTotals = (typeof window !== 'undefined' && window.currentFolderTotals) ? window.currentFolderTotals : null;
+    if (!folderTotals) {
+        try {
+            const rawTotals = container.getAttribute('data-folder-totals');
+            if (rawTotals) {
+                folderTotals = JSON.parse(rawTotals);
+                if (typeof window !== 'undefined') {
+                    window.currentFolderTotals = folderTotals;
+                }
+            }
+        } catch (e) {}
+    }
 
     function buildFolderElement(folderPath) {
         const node = nodes[folderPath];

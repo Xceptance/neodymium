@@ -67,12 +67,17 @@ public class AuraTestDashboardControllerTest
     public void testRenderDashboardFullPage()
     {
         final Model model = new ConcurrentModel();
+        Mockito.when(queueController.getFolderSelectionStatesJson()).thenReturn("{\"tests\":\"indeterminate\"}");
+        Mockito.when(queueController.getFolderTotalDatasetsJson()).thenReturn("{\"tests\":10}");
+
         final String view = controller.renderDashboard("false", null, model);
 
         Assertions.assertEquals("index", view);
         Assertions.assertEquals("AuraTestManager", model.getAttribute("activeTab"));
         Assertions.assertEquals("Neodymium Aura Manager Dashboard", model.getAttribute("pageTitle"));
         Assertions.assertEquals("fragments/aura-test-manager :: auraTestManager", model.getAttribute("viewFragment"));
+        Assertions.assertEquals("{\"tests\":\"indeterminate\"}", model.getAttribute("folderSelectionStatesJson"));
+        Assertions.assertEquals("{\"tests\":10}", model.getAttribute("folderTotalDatasetsJson"));
     }
 
     @Test

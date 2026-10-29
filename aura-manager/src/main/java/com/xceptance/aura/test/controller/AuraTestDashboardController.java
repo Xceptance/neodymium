@@ -118,6 +118,7 @@ public class AuraTestDashboardController
         model.addAttribute("selectedFileKeys", queueController.getFullySelectedFileKeys(testFiles));
         model.addAttribute("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(testFiles));
         model.addAttribute("folderSelectionStatesJson", queueController.getFolderSelectionStatesJson());
+        model.addAttribute("folderTotalDatasetsJson", queueController.getFolderTotalDatasetsJson());
         model.addAttribute("selectedBrowser", queueController.getSelectedBrowser());
         model.addAttribute("headless", queueController.isHeadless());
         model.addAttribute("video", queueController.isVideo());
