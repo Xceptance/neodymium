@@ -61,6 +61,8 @@ public class AuraTestFileController
         model.addAttribute("selectedKeys", queueController.getSelectedQueueKeys());
         model.addAttribute("selectedFileKeys", queueController.getFullySelectedFileKeys(files));
         model.addAttribute("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(files));
+        model.addAttribute("folderSelectionStatesJson", queueController.getFolderSelectionStatesJson());
+        model.addAttribute("folderTotalDatasetsJson", queueController.getFolderTotalDatasetsJson());
     }
 
     @GetMapping("/api/files/panel")

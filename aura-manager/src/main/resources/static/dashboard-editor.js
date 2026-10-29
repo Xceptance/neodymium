@@ -39,6 +39,9 @@ function toggleFileCheckboxesInstant(fileCb) {
     datasetCbs.forEach(cb => {
         cb.checked = fileCb.checked;
     });
+    if (typeof updateParentFolderCheckboxes === 'function') {
+        updateParentFolderCheckboxes(fileCb);
+    }
 }
 window.toggleFileCheckboxesInstant = toggleFileCheckboxesInstant;
 
@@ -57,8 +60,352 @@ function toggleDatasetCheckboxInstant(datasetCb) {
     });
     fileCb.checked = allChecked;
     fileCb.indeterminate = (!allChecked && anyChecked);
+    if (typeof updateParentFolderCheckboxes === 'function') {
+        updateParentFolderCheckboxes(fileCb);
+    }
 }
 window.toggleDatasetCheckboxInstant = toggleDatasetCheckboxInstant;
+
+function getFolderTotalDatasets(folderPath) {
+    if (!folderPath) return 0;
+    if (!window.currentFolderTotals) {
+        try {
+            const targetEl = document.querySelector('[data-folder-totals]') || document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+            const raw = targetEl ? targetEl.getAttribute('data-folder-totals') : null;
+            if (raw) {
+                window.currentFolderTotals = JSON.parse(raw);
+            }
+        } catch (e) {}
+    }
+    if (window.currentFolderTotals && typeof window.currentFolderTotals[folderPath] === 'number') {
+        return window.currentFolderTotals[folderPath];
+    }
+    return 0;
+}
+window.getFolderTotalDatasets = getFolderTotalDatasets;
+
+function countFolderTotalDatasets(groupEl, folderPath) {
+    const knownTotal = getFolderTotalDatasets(folderPath);
+    if (knownTotal > 0) {
+        return knownTotal;
+    }
+    if (!groupEl) return 0;
+    let domTotal = 0;
+    const fileContainers = groupEl.querySelectorAll('.file-container');
+    fileContainers.forEach(container => {
+        const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+        if (datasetCbs.length > 0) {
+            domTotal += datasetCbs.length;
+        } else {
+            domTotal += 1;
+        }
+    });
+    return domTotal;
+}
+window.countFolderTotalDatasets = countFolderTotalDatasets;
+
+function countFolderSelectedDatasets(groupEl, folderPath) {
+    if (!groupEl) return 0;
+    let selectedCount = 0;
+
+    // 1. Count selected datasets/files currently present in DOM under groupEl
+    const fileContainers = groupEl.querySelectorAll('.file-container');
+    const domFilePaths = new Set();
+
+    fileContainers.forEach(container => {
+        const filePath = container.getAttribute('data-file');
+        if (filePath) {
+            domFilePaths.add(filePath);
+        }
+        const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+        if (datasetCbs.length > 0) {
+            datasetCbs.forEach(dcb => {
+                if (dcb.checked) {
+                    selectedCount++;
+                }
+            });
+        } else {
+            const fileCb = container.querySelector('.file-select-cb');
+            if (fileCb && fileCb.checked) {
+                selectedCount++;
+            }
+        }
+    });
+
+    // 2. Count selected items from queue that belong to this folder but are filtered out of the DOM
+    if (folderPath) {
+        const queueContainer = document.getElementById('queueListContainer');
+        if (queueContainer) {
+            const queueItems = queueContainer.querySelectorAll('.queue-item');
+            queueItems.forEach(qItem => {
+                const qFile = qItem.getAttribute('data-file');
+                if (qFile && !domFilePaths.has(qFile)) {
+                    const prefix = folderPath.endsWith('/') ? folderPath : (folderPath + '/');
+                    if (qFile.startsWith(prefix) || qFile === folderPath) {
+                        selectedCount++;
+                    }
+                }
+            });
+        }
+    }
+
+    return selectedCount;
+}
+window.countFolderSelectedDatasets = countFolderSelectedDatasets;
+
+function applyFolderCheckboxState(folderCb, selectedCount, totalCount) {
+    if (!folderCb) return;
+    if (selectedCount === 0 || totalCount === 0) {
+        folderCb.checked = false;
+        folderCb.indeterminate = false;
+    } else if (selectedCount >= totalCount) {
+        folderCb.checked = true;
+        folderCb.indeterminate = false;
+    } else {
+        folderCb.checked = false;
+        folderCb.indeterminate = true;
+    }
+}
+window.applyFolderCheckboxState = applyFolderCheckboxState;
+
+function updateFolderCheckboxState(groupEl) {
+    if (!groupEl) return;
+    const folderHeader = groupEl.querySelector(':scope > .tree-folder-header');
+    const folderCb = folderHeader ? folderHeader.querySelector('.folder-select-cb') : null;
+    if (!folderCb) return;
+
+    const folderPath = groupEl.getAttribute('data-folder-path');
+    const knownTotal = getFolderTotalDatasets(folderPath);
+    const totalCount = countFolderTotalDatasets(groupEl, folderPath);
+    const selectedCount = countFolderSelectedDatasets(groupEl, folderPath);
+
+    const searchInput = document.getElementById('testSearchInput');
+    const activeQuery = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
+    const isFiltered = Boolean(activeQuery);
+
+    if (selectedCount === 0 || totalCount === 0) {
+        folderCb.checked = false;
+        folderCb.indeterminate = false;
+    } else if (isFiltered && knownTotal === 0 && selectedCount > 0) {
+        // When filtered and project total is unknown, ancestor folders cannot be safely assumed 100% selected
+        folderCb.checked = false;
+        folderCb.indeterminate = true;
+    } else if (selectedCount >= totalCount) {
+        folderCb.checked = true;
+        folderCb.indeterminate = false;
+    } else {
+        folderCb.checked = false;
+        folderCb.indeterminate = true;
+    }
+
+    if (folderPath) {
+        if (!window.currentFolderSelectionStates) {
+            window.currentFolderSelectionStates = {};
+        }
+        window.currentFolderSelectionStates[folderPath] = folderCb.checked ? 'checked' : (folderCb.indeterminate ? 'indeterminate' : 'unchecked');
+    }
+}
+window.updateFolderCheckboxState = updateFolderCheckboxState;
+
+function toggleFolderCheckboxesInstant(folderCb) {
+    if (!folderCb) return;
+    const folderGroup = folderCb.closest('.tree-folder-group');
+    if (!folderGroup) return;
+
+    const folderPath = folderGroup.getAttribute('data-folder-path');
+    const searchInput = document.getElementById('testSearchInput');
+    const activeQuery = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
+    const isFiltered = Boolean(activeQuery);
+
+    const content = folderGroup.querySelector(':scope > .tree-folder-content');
+    let isChecked = folderCb.checked;
+
+    if (content) {
+        if (isFiltered) {
+            // Determine desired target state based on visible files
+            const fileContainers = content.querySelectorAll('.file-container');
+            const visibleContainers = Array.from(fileContainers).filter(fc => fc.style.display !== 'none');
+            const visibleFileCbs = visibleContainers.map(fc => fc.querySelector('.file-select-cb')).filter(Boolean);
+
+            if (visibleFileCbs.length > 0) {
+                const allVisibleChecked = visibleFileCbs.every(cb => cb.checked);
+                // If all visible files are already checked, user is deselecting them; otherwise selecting.
+                isChecked = !allVisibleChecked;
+            }
+
+            // Scoped selection: only toggle visible matching file containers and their datasets
+            fileContainers.forEach(container => {
+                if (container.style.display !== 'none') {
+                    const fileCb = container.querySelector('.file-select-cb');
+                    if (fileCb) {
+                        fileCb.checked = isChecked;
+                        fileCb.indeterminate = false;
+                    }
+                    const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+                    datasetCbs.forEach(dcb => {
+                        const dItem = dcb.closest('.dataset-item');
+                        if (!dItem || dItem.style.display !== 'none') {
+                            dcb.checked = isChecked;
+                        }
+                    });
+                }
+            });
+
+            // Update subfolder checkboxes within this folder (deepest first)
+            const subFolderGroups = Array.from(content.querySelectorAll('.tree-folder-group'));
+            subFolderGroups.sort((a, b) => {
+                const depthA = (a.getAttribute('data-folder-path') || '').split('/').length;
+                const depthB = (b.getAttribute('data-folder-path') || '').split('/').length;
+                return depthB - depthA;
+            });
+            subFolderGroups.forEach(subGroup => {
+                updateFolderCheckboxState(subGroup);
+            });
+
+            // Update clicked folder checkbox state accurately using total datasets
+            updateFolderCheckboxState(folderGroup);
+        } else {
+            // Not filtered: full cascade
+            folderCb.checked = isChecked;
+            folderCb.indeterminate = false;
+
+            // Cascade to all descendant folder checkboxes
+            const subFolderCbs = content.querySelectorAll('.folder-select-cb');
+            subFolderCbs.forEach(cb => {
+                cb.checked = isChecked;
+                cb.indeterminate = false;
+            });
+
+            // Cascade to all descendant file checkboxes
+            const fileCbs = content.querySelectorAll('.file-select-cb');
+            fileCbs.forEach(cb => {
+                cb.checked = isChecked;
+                cb.indeterminate = false;
+            });
+
+            // Cascade to all descendant dataset checkboxes
+            const datasetCbs = content.querySelectorAll('.dataset-select-cb');
+            datasetCbs.forEach(cb => {
+                cb.checked = isChecked;
+            });
+
+            // Update subfolder selection states cache
+            const subFolderGroups = content.querySelectorAll('.tree-folder-group');
+            subFolderGroups.forEach(subGroup => {
+                const subPath = subGroup.getAttribute('data-folder-path');
+                if (subPath && window.currentFolderSelectionStates) {
+                    window.currentFolderSelectionStates[subPath] = isChecked ? 'checked' : 'unchecked';
+                }
+            });
+
+            if (folderPath && window.currentFolderSelectionStates) {
+                window.currentFolderSelectionStates[folderPath] = isChecked ? 'checked' : 'unchecked';
+            }
+        }
+    }
+
+    if (folderPath && window.currentFolderSelectionStates) {
+        window.currentFolderSelectionStates[folderPath] = folderCb.checked ? 'checked' : (folderCb.indeterminate ? 'indeterminate' : 'unchecked');
+    }
+
+    if (typeof updateParentFolderCheckboxes === 'function') {
+        updateParentFolderCheckboxes(folderGroup);
+    }
+
+    // Call backend endpoint to synchronize queue
+    if (folderPath && typeof htmx !== 'undefined' && htmx.ajax) {
+        let url = '/api/queue/toggleFolder?folder=' + encodeURIComponent(folderPath) + '&checked=' + isChecked;
+        if (activeQuery) {
+            url += '&q=' + encodeURIComponent(activeQuery);
+        }
+        htmx.ajax('POST', url, {
+            target: '#queueListContainer',
+            swap: 'innerHTML'
+        });
+    }
+}
+window.toggleFolderCheckboxesInstant = toggleFolderCheckboxesInstant;
+
+function updateParentFolderCheckboxes(startEl) {
+    if (!startEl) return;
+    let parentGroup = startEl.parentElement ? startEl.parentElement.closest('.tree-folder-group') : null;
+    while (parentGroup) {
+        updateFolderCheckboxState(parentGroup);
+        parentGroup = parentGroup.parentElement ? parentGroup.parentElement.closest('.tree-folder-group') : null;
+    }
+}
+window.updateParentFolderCheckboxes = updateParentFolderCheckboxes;
+
+function updateAllFolderCheckboxes(rootContainer) {
+    const root = rootContainer || document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+    if (!root) return;
+    const folderGroups = Array.from(root.querySelectorAll('.tree-folder-group'));
+    if (folderGroups.length === 0) return;
+
+    folderGroups.sort((a, b) => {
+        const depthA = (a.getAttribute('data-folder-path') || '').split('/').length;
+        const depthB = (b.getAttribute('data-folder-path') || '').split('/').length;
+        return depthB - depthA;
+    });
+
+    folderGroups.forEach(group => {
+        updateFolderCheckboxState(group);
+    });
+}
+window.updateAllFolderCheckboxes = updateAllFolderCheckboxes;
+
+function applyFolderSelectionStates(states) {
+    if (!states || typeof states !== 'object') return;
+    window.currentFolderSelectionStates = Object.assign(window.currentFolderSelectionStates || {}, states);
+    const root = document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+    if (!root) return;
+
+    try {
+        const targetContainer = document.getElementById('sidebarTestsContainer') || root;
+        targetContainer.setAttribute('data-folder-states', JSON.stringify(window.currentFolderSelectionStates));
+    } catch (e) {}
+
+    const folderGroups = root.querySelectorAll('.tree-folder-group');
+    folderGroups.forEach(group => {
+        const folderPath = group.getAttribute('data-folder-path');
+        if (!folderPath) return;
+        const header = group.querySelector(':scope > .tree-folder-header');
+        const folderCb = header ? header.querySelector('.folder-select-cb') : null;
+        if (!folderCb) return;
+
+        const state = window.currentFolderSelectionStates[folderPath];
+        if (state === 'checked') {
+            folderCb.checked = true;
+            folderCb.indeterminate = false;
+        } else if (state === 'indeterminate') {
+            folderCb.checked = false;
+            folderCb.indeterminate = true;
+        } else if (state === 'unchecked') {
+            folderCb.checked = false;
+            folderCb.indeterminate = false;
+        }
+    });
+}
+window.applyFolderSelectionStates = applyFolderSelectionStates;
+
+if (typeof document !== 'undefined') {
+    document.body.addEventListener('folderStatesUpdated', function(evt) {
+        if (evt && evt.detail) {
+            applyFolderSelectionStates(evt.detail);
+        }
+    });
+    document.body.addEventListener('folderTotalsUpdated', function(evt) {
+        if (evt && evt.detail) {
+            window.currentFolderTotals = Object.assign(window.currentFolderTotals || {}, evt.detail);
+            try {
+                const target = document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+                if (target) {
+                    target.setAttribute('data-folder-totals', JSON.stringify(window.currentFolderTotals));
+                }
+            } catch (e) {}
+        }
+    });
+}
 
 function toggleExpandFile(file, targetEl) {
     if (!file) return;
@@ -202,6 +549,10 @@ function applyInstantTestFilter(query) {
         const visibleSubFolder = folder.querySelector('.tree-folder-group:not([style*="display: none"])');
         folder.style.display = (visibleFile || visibleSubFolder) ? '' : 'none';
     });
+
+    if (typeof updateAllFolderCheckboxes === 'function') {
+        updateAllFolderCheckboxes();
+    }
 }
 window.applyInstantTestFilter = applyInstantTestFilter;
 

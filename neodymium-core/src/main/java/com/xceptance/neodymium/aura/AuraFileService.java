@@ -165,6 +165,17 @@ public final class AuraFileService
         }
     }
 
+    private record CachedYamlEntry(long lastModified, long length, YamlFileDto dto)
+    {
+    }
+
+    private final Map<String, CachedYamlEntry> yamlFilesCache = new ConcurrentHashMap<>();
+
+    public void clearYamlFilesCache()
+    {
+        yamlFilesCache.clear();
+    }
+
     public List<YamlFileDto> getYamlFilesList()
     {
         final List<String> yamlFiles = new ArrayList<>();
@@ -178,6 +189,15 @@ public final class AuraFileService
         for (final String file : yamlFiles)
         {
             final File yamlFile = new File(resourcesDir, file);
+            final long lastModified = yamlFile.lastModified();
+            final long length = yamlFile.length();
+            final CachedYamlEntry cached = yamlFilesCache.get(file);
+            if (cached != null && cached.lastModified() == lastModified && cached.length() == length)
+            {
+                responseList.add(cached.dto());
+                continue;
+            }
+
             final Map<String, Object> details = getFileDetails(yamlFile);
             @SuppressWarnings("unchecked")
             final List<DatasetDto> datasets = (List<DatasetDto>) details.get("datasets");
@@ -203,8 +223,11 @@ public final class AuraFileService
             {
                 fileHasPlaybook = hasPlaybook(file, null);
             }
-            responseList.add(new YamlFileDto(file, enrichedDatasets, hasError, error, fileHasPlaybook));
+            final YamlFileDto dto = new YamlFileDto(file, enrichedDatasets, hasError, error, fileHasPlaybook);
+            yamlFilesCache.put(file, new CachedYamlEntry(lastModified, length, dto));
+            responseList.add(dto);
         }
+        yamlFilesCache.keySet().retainAll(yamlFiles);
         return responseList;
     }
 
@@ -732,16 +755,15 @@ public final class AuraFileService
         }
     }
 
-    public List<YamlFileDto> getFilteredYamlFilesList(final String query)
+    public List<YamlFileDto> getFilteredYamlFilesList(final List<YamlFileDto> files, final String query)
     {
-        final List<YamlFileDto> fullList = getYamlFilesList();
-        if (query == null || query.trim().isEmpty())
+        if (files == null || files.isEmpty() || query == null || query.trim().isEmpty())
         {
-            return fullList;
+            return files != null ? files : new ArrayList<>();
         }
         final String lowerQuery = query.toLowerCase().trim();
         final List<YamlFileDto> filtered = new ArrayList<>();
-        for (final YamlFileDto file : fullList)
+        for (final YamlFileDto file : files)
         {
             boolean match = file.file != null && file.file.toLowerCase().contains(lowerQuery);
             if (!match && file.datasets != null)
@@ -762,6 +784,11 @@ public final class AuraFileService
             }
         }
         return filtered;
+    }
+
+    public List<YamlFileDto> getFilteredYamlFilesList(final String query)
+    {
+        return getFilteredYamlFilesList(getYamlFilesList(), query);
     }
 
     public List<String> getStepsFilesList()
@@ -1162,6 +1189,7 @@ public final class AuraFileService
             yamlFile.getParentFile().mkdirs();
         }
         Files.writeString(yamlFile.toPath(), content, StandardCharsets.UTF_8);
+        clearYamlFilesCache();
     }
 
     public void createYamlFile(final String name) throws IOException
@@ -1177,6 +1205,7 @@ public final class AuraFileService
                 yamlFile.getParentFile().mkdirs();
             }
             Files.writeString(yamlFile.toPath(), "", StandardCharsets.UTF_8);
+            clearYamlFilesCache();
         }
     }
 
@@ -1186,6 +1215,7 @@ public final class AuraFileService
         if (yamlFile.exists() && yamlFile.isFile())
         {
             Files.delete(yamlFile.toPath());
+            clearYamlFilesCache();
             return true;
         }
         return false;
@@ -1256,6 +1286,7 @@ public final class AuraFileService
             expandedFiles.add(targetPath);
         }
 
+        clearYamlFilesCache();
         return true;
     }
 
@@ -1361,6 +1392,10 @@ public final class AuraFileService
         }
 
         LOGGER.info("[Fragment Refs] Finished. {} file(s) updated.", updatedFiles.size());
+        if (!updatedFiles.isEmpty())
+        {
+            clearYamlFilesCache();
+        }
         return new UpdateFragmentRefsResult(updatedFiles.size(), List.copyOf(updatedFiles));
     }
 

@@ -32,6 +32,7 @@ import com.xceptance.neodymium.aura.dto.DatasetSelection;
 import com.xceptance.neodymium.aura.dto.RunRequest;
 import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -334,6 +335,23 @@ public class AuraTestQueueController
         {
             for (final YamlFileDto f : files)
             {
+                boolean hasWholeFileSelection = false;
+                synchronized (selectedQueue)
+                {
+                    for (final DatasetSelection sel : selectedQueue)
+                    {
+                        if (f.file.equals(sel.file) && (sel.id == null || sel.id.isBlank()))
+                        {
+                            hasWholeFileSelection = true;
+                            break;
+                        }
+                    }
+                }
+                if (hasWholeFileSelection)
+                {
+                    continue;
+                }
+
                 if (f.datasets != null && !f.datasets.isEmpty())
                 {
                     int selectedCount = 0;
@@ -352,6 +370,175 @@ public class AuraTestQueueController
             }
         }
         return partialFiles;
+    }
+
+    public Map<String, String> getFolderSelectionStates()
+    {
+        return getFolderSelectionStates(fileService.getYamlFilesList());
+    }
+
+    public Map<String, String> getFolderSelectionStates(final List<YamlFileDto> allFiles)
+    {
+        final Map<String, String> states = new HashMap<>();
+        if (allFiles == null || allFiles.isEmpty())
+        {
+            return states;
+        }
+
+        final Map<String, Integer> folderTotalDatasets = new HashMap<>();
+        final Map<String, Integer> folderSelectedDatasets = new HashMap<>();
+        final Set<String> queueKeys = getSelectedQueueKeys();
+
+        for (final YamlFileDto f : allFiles)
+        {
+            if (f == null || f.hasError || f.file == null)
+            {
+                continue;
+            }
+
+            final String[] parts = f.file.split("/");
+            if (parts.length <= 1)
+            {
+                continue;
+            }
+
+            boolean hasWholeFileSelection = false;
+            synchronized (selectedQueue)
+            {
+                for (final DatasetSelection sel : selectedQueue)
+                {
+                    if (f.file.equals(sel.file) && (sel.id == null || sel.id.isBlank()))
+                    {
+                        hasWholeFileSelection = true;
+                        break;
+                    }
+                }
+            }
+
+            final int fileDatasets = (f.datasets != null && !f.datasets.isEmpty()) ? f.datasets.size() : 1;
+            int fileSelected = 0;
+            if (hasWholeFileSelection)
+            {
+                fileSelected = fileDatasets;
+            }
+            else if (f.datasets != null && !f.datasets.isEmpty())
+            {
+                for (final DatasetDto d : f.datasets)
+                {
+                    if (queueKeys.contains(f.file + "::" + d.id))
+                    {
+                        fileSelected++;
+                    }
+                }
+            }
+            else
+            {
+                synchronized (selectedQueue)
+                {
+                    for (final DatasetSelection item : selectedQueue)
+                    {
+                        if (f.file.equals(item.file))
+                        {
+                            fileSelected++;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            String currentPath = "";
+            for (int i = 0; i < parts.length - 1; i++)
+            {
+                currentPath = currentPath.isEmpty() ? parts[i] : (currentPath + "/" + parts[i]);
+                folderTotalDatasets.put(currentPath, folderTotalDatasets.getOrDefault(currentPath, 0) + fileDatasets);
+                folderSelectedDatasets.put(currentPath, folderSelectedDatasets.getOrDefault(currentPath, 0) + fileSelected);
+            }
+        }
+
+        for (final Map.Entry<String, Integer> entry : folderTotalDatasets.entrySet())
+        {
+            final String folder = entry.getKey();
+            final int total = entry.getValue();
+            final int selected = folderSelectedDatasets.getOrDefault(folder, 0);
+
+            if (selected == 0)
+            {
+                states.put(folder, "unchecked");
+            }
+            else if (selected >= total)
+            {
+                states.put(folder, "checked");
+            }
+            else
+            {
+                states.put(folder, "indeterminate");
+            }
+        }
+
+        return states;
+    }
+
+    public String getFolderSelectionStatesJson()
+    {
+        return GSON.toJson(getFolderSelectionStates());
+    }
+
+    public Map<String, Integer> getFolderTotalDatasets()
+    {
+        return getFolderTotalDatasets(fileService.getYamlFilesList());
+    }
+
+    public Map<String, Integer> getFolderTotalDatasets(final List<YamlFileDto> allFiles)
+    {
+        final Map<String, Integer> folderTotalDatasets = new HashMap<>();
+        if (allFiles == null || allFiles.isEmpty())
+        {
+            return folderTotalDatasets;
+        }
+
+        for (final YamlFileDto f : allFiles)
+        {
+            if (f == null || f.hasError || f.file == null)
+            {
+                continue;
+            }
+
+            final String[] parts = f.file.split("/");
+            if (parts.length <= 1)
+            {
+                continue;
+            }
+
+            final int fileDatasets = (f.datasets != null && !f.datasets.isEmpty()) ? f.datasets.size() : 1;
+            String currentPath = "";
+            for (int i = 0; i < parts.length - 1; i++)
+            {
+                currentPath = currentPath.isEmpty() ? parts[i] : (currentPath + "/" + parts[i]);
+                folderTotalDatasets.put(currentPath, folderTotalDatasets.getOrDefault(currentPath, 0) + fileDatasets);
+            }
+        }
+        return folderTotalDatasets;
+    }
+
+    public String getFolderTotalDatasetsJson()
+    {
+        return GSON.toJson(getFolderTotalDatasets());
+    }
+
+    private void setFolderStatesTrigger(final HttpServletResponse response)
+    {
+        setFolderStatesTrigger(response, fileService.getYamlFilesList());
+    }
+
+    private void setFolderStatesTrigger(final HttpServletResponse response, final List<YamlFileDto> allFiles)
+    {
+        if (response != null)
+        {
+            final Map<String, Object> triggerMap = new HashMap<>();
+            triggerMap.put("folderStatesUpdated", getFolderSelectionStates(allFiles));
+            triggerMap.put("folderTotalsUpdated", getFolderTotalDatasets(allFiles));
+            response.setHeader("HX-Trigger", GSON.toJson(triggerMap));
+        }
     }
 
     public final Set<String> getGlobalBrowserProfiles()
@@ -511,7 +698,7 @@ public class AuraTestQueueController
     }
 
     @PostMapping("/api/queue/toggle")
-    public String toggleQueue(final HttpServletRequest request, final Model model)
+    public String toggleQueue(final HttpServletRequest request, final HttpServletResponse response, final Model model)
     {
         final Map<String, String> params = extractParams(request);
         final String file = params.get("file");
@@ -534,13 +721,14 @@ public class AuraTestQueueController
                 }
                 if (targetDto != null && targetDto.hasError)
                 {
+                    setFolderStatesTrigger(response);
                     populateQueueModel(model);
                     return "fragments/queue :: queueListContainerContent";
                 }
                 final List<DatasetDto> datasets = targetDto != null ? targetDto.datasets : null;
                 if (datasets != null && !datasets.isEmpty())
                 {
-                    return toggleAllQueue(request, model);
+                    return toggleAllQueue(request, response, model);
                 }
             }
 
@@ -568,12 +756,18 @@ public class AuraTestQueueController
             }
         }
 
+        setFolderStatesTrigger(response);
         populateQueueModel(model);
         return "fragments/queue :: queueListContainerContent";
     }
 
+    public String toggleQueue(final HttpServletRequest request, final Model model)
+    {
+        return toggleQueue(request, null, model);
+    }
+
     @PostMapping("/api/queue/toggleAll")
-    public String toggleAllQueue(final HttpServletRequest request, final Model model)
+    public String toggleAllQueue(final HttpServletRequest request, final HttpServletResponse response, final Model model)
     {
         final Map<String, String> params = extractParams(request);
         final String file = params.get("file");
@@ -589,6 +783,7 @@ public class AuraTestQueueController
                 {
                     if (f.hasError)
                     {
+                        setFolderStatesTrigger(response);
                         populateQueueModel(model);
                         return "fragments/queue :: queueListContainerContent";
                     }
@@ -685,8 +880,249 @@ public class AuraTestQueueController
             }
         }
 
+        setFolderStatesTrigger(response);
         populateQueueModel(model);
         return "fragments/queue :: queueListContainerContent";
+    }
+
+    public String toggleAllQueue(final HttpServletRequest request, final Model model)
+    {
+        return toggleAllQueue(request, null, model);
+    }
+
+    @PostMapping("/api/queue/toggleFolder")
+    public String toggleFolderQueue(final HttpServletRequest request, final HttpServletResponse response, final Model model)
+    {
+        final Map<String, String> params = extractParams(request);
+        final String folder = params.get("folder");
+        final String checkedParam = params.get("checked");
+        final String query = params.get("q");
+
+        final List<YamlFileDto> allFiles = fileService.getYamlFilesList();
+
+        if (folder != null && !folder.isBlank())
+        {
+            final String folderPrefix = folder.endsWith("/") ? folder : (folder + "/");
+            final List<YamlFileDto> sourceFiles = (query != null && !query.isBlank())
+                    ? fileService.getFilteredYamlFilesList(allFiles, query)
+                    : allFiles;
+            final List<YamlFileDto> matchingFiles = new ArrayList<>();
+            if (sourceFiles != null)
+            {
+                for (final YamlFileDto f : sourceFiles)
+                {
+                    if (f != null && !f.hasError && f.file != null && f.file.startsWith(folderPrefix))
+                    {
+                        matchingFiles.add(f);
+                    }
+                }
+            }
+
+            if (!matchingFiles.isEmpty())
+            {
+                synchronized (selectedQueue)
+                {
+                    final boolean shouldAdd;
+                    if (checkedParam != null && !checkedParam.isBlank())
+                    {
+                        shouldAdd = Boolean.parseBoolean(checkedParam);
+                    }
+                    else
+                    {
+                        final String lowerQuery = (query != null && !query.isBlank()) ? query.toLowerCase().trim() : null;
+                        int totalDatasets = 0;
+                        int selectedCount = 0;
+                        for (final YamlFileDto f : matchingFiles)
+                        {
+                            boolean hasWholeFileSelection = false;
+                            for (final DatasetSelection item : selectedQueue)
+                            {
+                                if (f.file.equals(item.file) && (item.id == null || item.id.isBlank()))
+                                {
+                                    hasWholeFileSelection = true;
+                                    break;
+                                }
+                            }
+
+                            final boolean fileMatchesQuery = (lowerQuery == null)
+                                    || (f.file != null && f.file.toLowerCase().contains(lowerQuery));
+
+                            if (f.datasets != null && !f.datasets.isEmpty())
+                            {
+                                for (final DatasetDto d : f.datasets)
+                                {
+                                    if (!fileMatchesQuery)
+                                    {
+                                        final boolean datasetMatches = (d.label != null && d.label.toLowerCase().contains(lowerQuery))
+                                                || (d.id != null && d.id.toLowerCase().contains(lowerQuery));
+                                        if (!datasetMatches)
+                                        {
+                                            continue;
+                                        }
+                                    }
+                                    totalDatasets++;
+                                    if (hasWholeFileSelection)
+                                    {
+                                        selectedCount++;
+                                    }
+                                    else
+                                    {
+                                        for (final DatasetSelection item : selectedQueue)
+                                        {
+                                            if (f.file.equals(item.file) && d.id.equals(item.id))
+                                            {
+                                                selectedCount++;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                totalDatasets += 1;
+                                if (hasWholeFileSelection)
+                                {
+                                    selectedCount++;
+                                }
+                                else
+                                {
+                                    for (final DatasetSelection item : selectedQueue)
+                                    {
+                                        if (f.file.equals(item.file))
+                                        {
+                                            selectedCount++;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        shouldAdd = (selectedCount < totalDatasets);
+                    }
+
+                    if (shouldAdd)
+                    {
+                        final String lowerQuery = (query != null && !query.isBlank()) ? query.toLowerCase().trim() : null;
+                        for (final YamlFileDto f : matchingFiles)
+                        {
+                            boolean hasWholeFileSelection = false;
+                            for (final DatasetSelection item : selectedQueue)
+                            {
+                                if (f.file.equals(item.file) && (item.id == null || item.id.isBlank()))
+                                {
+                                    hasWholeFileSelection = true;
+                                    break;
+                                }
+                            }
+
+                            final boolean fileMatchesQuery = (lowerQuery == null)
+                                    || (f.file != null && f.file.toLowerCase().contains(lowerQuery));
+
+                            if (f.datasets != null && !f.datasets.isEmpty())
+                            {
+                                for (final DatasetDto d : f.datasets)
+                                {
+                                    if (!fileMatchesQuery)
+                                    {
+                                        final boolean datasetMatches = (d.label != null && d.label.toLowerCase().contains(lowerQuery))
+                                                || (d.id != null && d.id.toLowerCase().contains(lowerQuery));
+                                        if (!datasetMatches)
+                                        {
+                                            continue;
+                                        }
+                                    }
+                                    if (hasWholeFileSelection)
+                                    {
+                                        continue;
+                                    }
+                                    boolean found = false;
+                                    for (final DatasetSelection item : selectedQueue)
+                                    {
+                                        if (f.file.equals(item.file) && d.id.equals(item.id))
+                                        {
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!found)
+                                    {
+                                        final DatasetSelection sel = new DatasetSelection();
+                                        sel.file = f.file;
+                                        sel.id = d.id;
+                                        selectedQueue.add(sel);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                if (hasWholeFileSelection)
+                                {
+                                    continue;
+                                }
+                                boolean found = false;
+                                for (final DatasetSelection item : selectedQueue)
+                                {
+                                    if (f.file.equals(item.file))
+                                    {
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (!found)
+                                {
+                                    final DatasetSelection sel = new DatasetSelection();
+                                    sel.file = f.file;
+                                    sel.id = "";
+                                    selectedQueue.add(sel);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        if (query != null && !query.isBlank())
+                        {
+                            final String lowerQuery = query.toLowerCase().trim();
+                            for (final YamlFileDto mf : matchingFiles)
+                            {
+                                final boolean fileMatchesQuery = (mf.file != null && mf.file.toLowerCase().contains(lowerQuery));
+                                if (fileMatchesQuery || mf.datasets == null || mf.datasets.isEmpty())
+                                {
+                                    selectedQueue.removeIf(item -> mf.file.equals(item.file));
+                                }
+                                else
+                                {
+                                    final Set<String> matchedDatasetIds = new HashSet<>();
+                                    for (final DatasetDto d : mf.datasets)
+                                    {
+                                        if ((d.label != null && d.label.toLowerCase().contains(lowerQuery))
+                                                || (d.id != null && d.id.toLowerCase().contains(lowerQuery)))
+                                        {
+                                            matchedDatasetIds.add(d.id);
+                                        }
+                                    }
+                                    selectedQueue.removeIf(item -> mf.file.equals(item.file) && matchedDatasetIds.contains(item.id));
+                                }
+                            }
+                        }
+                        else
+                        {
+                            selectedQueue.removeIf(item -> item.file != null && item.file.startsWith(folderPrefix));
+                        }
+                    }
+                }
+            }
+        }
+
+        setFolderStatesTrigger(response, allFiles);
+        populateQueueModel(model);
+        return "fragments/queue :: queueListContainerContent";
+    }
+
+    public String toggleFolderQueue(final HttpServletRequest request, final Model model)
+    {
+        return toggleFolderQueue(request, null, model);
     }
 
     @PostMapping("/api/queue/move")
@@ -739,7 +1175,7 @@ public class AuraTestQueueController
     }
 
     @PostMapping("/api/queue/remove")
-    public String removeFromQueue(final HttpServletRequest request, final Model model)
+    public String removeFromQueue(final HttpServletRequest request, final HttpServletResponse response, final Model model)
     {
         final Map<String, String> params = extractParams(request);
         final String file = params.get("file");
@@ -769,16 +1205,28 @@ public class AuraTestQueueController
             }
         }
 
+        setFolderStatesTrigger(response);
         populateQueueModel(model);
         return "fragments/queue :: queueListContainerContent";
     }
 
+    public String removeFromQueue(final HttpServletRequest request, final Model model)
+    {
+        return removeFromQueue(request, null, model);
+    }
+
     @PostMapping("/api/queue/clear")
-    public String clearQueue(final Model model)
+    public String clearQueue(final HttpServletResponse response, final Model model)
     {
         selectedQueue.clear();
+        setFolderStatesTrigger(response);
         populateQueueModel(model);
         return "fragments/queue :: queueListContainerContent";
+    }
+
+    public String clearQueue(final Model model)
+    {
+        return clearQueue(null, model);
     }
 
     @PostMapping("/api/config/toggle")

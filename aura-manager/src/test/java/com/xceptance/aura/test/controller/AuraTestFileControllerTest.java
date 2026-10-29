@@ -142,4 +142,14 @@ public class AuraTestFileControllerTest
         Assertions.assertEquals("fragments/test-selection :: testSelectionContent", view);
         Mockito.verify(fileService).getYamlFilesList();
     }
+
+    @Test
+    public void testPopulateFileModelIncludesFolderTotals()
+    {
+        Mockito.when(queueController.getFolderTotalDatasetsJson()).thenReturn("{\"tests\":10}");
+        final Model model = new ConcurrentModel();
+        fileController.getFilesPanel(response, model);
+
+        Assertions.assertEquals("{\"tests\":10}", model.getAttribute("folderTotalDatasetsJson"));
+    }
 }
