@@ -21,6 +21,9 @@ package com.xceptance.aura.test.controller;
 import com.xceptance.neodymium.aura.AuraFileService;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.neodymium.aura.AuraQueueService;
+import com.xceptance.neodymium.aura.dto.DatasetDto;
+import com.xceptance.neodymium.aura.dto.DatasetSelection;
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Collections;
 import java.util.HashMap;
@@ -352,5 +355,109 @@ public final class AuraTestQueueControllerTest
         Assertions.assertNotNull(html);
         Assertions.assertTrue(html.contains("Click button"));
         Assertions.assertTrue(html.contains("#myBtn"));
+    }
+
+    @Test
+    public final void testToggleFolderSelectsAllDescendants()
+    {
+        final DatasetDto d1 = new DatasetDto("admin", "Admin", false);
+        final DatasetDto d2 = new DatasetDto("user", "User", false);
+        final YamlFileDto file1 = new YamlFileDto("smoke/LoginTest.yaml", List.of(d1, d2));
+
+        final DatasetDto d3 = new DatasetDto("default", "Default", false);
+        final YamlFileDto file2 = new YamlFileDto("smoke/sub/CheckTest.yaml", List.of(d3));
+
+        final DatasetDto d4 = new DatasetDto("item1", "Item 1", false);
+        final YamlFileDto otherFile = new YamlFileDto("checkout/CartTest.yaml", List.of(d4));
+
+        Mockito.when(this.fileService.getYamlFilesList()).thenReturn(List.of(file1, file2, otherFile));
+
+        final HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(req.getParameter("folder")).thenReturn("smoke");
+        Mockito.when(req.getParameterNames()).thenReturn(Collections.enumeration(List.of("folder")));
+
+        final Model model = new ConcurrentModel();
+        final String viewName = this.controller.toggleFolderQueue(req, model);
+
+        Assertions.assertEquals("fragments/queue :: queueListContainerContent", viewName);
+        final List<DatasetSelection> queue = this.controller.getSelectedQueue();
+        Assertions.assertEquals(3, queue.size(), "All datasets in smoke folder and subfolders must be selected");
+        Assertions.assertTrue(queue.stream().anyMatch(s -> "smoke/LoginTest.yaml".equals(s.file) && "admin".equals(s.id)));
+        Assertions.assertTrue(queue.stream().anyMatch(s -> "smoke/LoginTest.yaml".equals(s.file) && "user".equals(s.id)));
+        Assertions.assertTrue(queue.stream().anyMatch(s -> "smoke/sub/CheckTest.yaml".equals(s.file) && "default".equals(s.id)));
+        Assertions.assertFalse(queue.stream().anyMatch(s -> "checkout/CartTest.yaml".equals(s.file)));
+    }
+
+    @Test
+    public final void testToggleFolderDeselectsAllWhenAlreadySelected()
+    {
+        final DatasetDto d1 = new DatasetDto("admin", "Admin", false);
+        final YamlFileDto file1 = new YamlFileDto("smoke/LoginTest.yaml", List.of(d1));
+
+        Mockito.when(this.fileService.getYamlFilesList()).thenReturn(List.of(file1));
+
+        final HttpServletRequest req1 = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(req1.getParameter("folder")).thenReturn("smoke");
+        Mockito.when(req1.getParameterNames()).thenReturn(Collections.enumeration(List.of("folder")));
+
+        final Model model1 = new ConcurrentModel();
+        this.controller.toggleFolderQueue(req1, model1);
+        Assertions.assertEquals(1, this.controller.getSelectedQueue().size());
+
+        final HttpServletRequest req2 = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(req2.getParameter("folder")).thenReturn("smoke");
+        Mockito.when(req2.getParameterNames()).thenReturn(Collections.enumeration(List.of("folder")));
+
+        final Model model2 = new ConcurrentModel();
+        this.controller.toggleFolderQueue(req2, model2);
+        Assertions.assertTrue(this.controller.getSelectedQueue().isEmpty(), "Queue should be empty after toggling off");
+    }
+
+    @Test
+    public final void testToggleFolderExplicitCheckedParam()
+    {
+        final DatasetDto d1 = new DatasetDto("admin", "Admin", false);
+        final YamlFileDto file1 = new YamlFileDto("smoke/LoginTest.yaml", List.of(d1));
+
+        Mockito.when(this.fileService.getYamlFilesList()).thenReturn(List.of(file1));
+
+        final HttpServletRequest deselectReq = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(deselectReq.getParameter("folder")).thenReturn("smoke");
+        Mockito.when(deselectReq.getParameter("checked")).thenReturn("false");
+        Mockito.when(deselectReq.getParameterNames()).thenReturn(Collections.enumeration(List.of("folder", "checked")));
+
+        final Model model1 = new ConcurrentModel();
+        this.controller.toggleFolderQueue(deselectReq, model1);
+        Assertions.assertTrue(this.controller.getSelectedQueue().isEmpty());
+
+        final HttpServletRequest selectReq = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(selectReq.getParameter("folder")).thenReturn("smoke");
+        Mockito.when(selectReq.getParameter("checked")).thenReturn("true");
+        Mockito.when(selectReq.getParameterNames()).thenReturn(Collections.enumeration(List.of("folder", "checked")));
+
+        final Model model2 = new ConcurrentModel();
+        this.controller.toggleFolderQueue(selectReq, model2);
+        Assertions.assertEquals(1, this.controller.getSelectedQueue().size());
+    }
+
+    @Test
+    public final void testToggleFolderIgnoresErrorFiles()
+    {
+        final DatasetDto d1 = new DatasetDto("d1", "Dataset 1", false);
+        final YamlFileDto validFile = new YamlFileDto("smoke/ValidTest.yaml", List.of(d1));
+        final YamlFileDto errorFile = new YamlFileDto("smoke/BrokenTest.yaml", List.of(), true, "Syntax error");
+
+        Mockito.when(this.fileService.getYamlFilesList()).thenReturn(List.of(validFile, errorFile));
+
+        final HttpServletRequest req = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(req.getParameter("folder")).thenReturn("smoke");
+        Mockito.when(req.getParameterNames()).thenReturn(Collections.enumeration(List.of("folder")));
+
+        final Model model = new ConcurrentModel();
+        this.controller.toggleFolderQueue(req, model);
+
+        final List<DatasetSelection> queue = this.controller.getSelectedQueue();
+        Assertions.assertEquals(1, queue.size());
+        Assertions.assertEquals("smoke/ValidTest.yaml", queue.get(0).file);
     }
 }

@@ -661,6 +661,18 @@ public final class StaticResourceSyntaxTest
             editorJsContent.contains("inMatchingFolder"),
             "dashboard-editor.js must propagate folder match status to child tests and datasets"
         );
+        Assertions.assertTrue(
+            editorJsContent.contains("window.toggleFolderCheckboxesInstant = toggleFolderCheckboxesInstant;"),
+            "dashboard-editor.js must export toggleFolderCheckboxesInstant"
+        );
+        Assertions.assertTrue(
+            editorJsContent.contains("window.updateParentFolderCheckboxes = updateParentFolderCheckboxes;"),
+            "dashboard-editor.js must export updateParentFolderCheckboxes"
+        );
+        Assertions.assertTrue(
+            editorJsContent.contains("window.updateAllFolderCheckboxes = updateAllFolderCheckboxes;"),
+            "dashboard-editor.js must export updateAllFolderCheckboxes"
+        );
 
         final Path coreJsPath = Paths.get("src/main/resources/static/dashboard-core.js");
         Assertions.assertTrue(Files.exists(coreJsPath), "dashboard-core.js must exist");
@@ -681,6 +693,14 @@ public final class StaticResourceSyntaxTest
         Assertions.assertTrue(
             coreJsContent.contains("applyInstantTestFilter(query);"),
             "dashboard-core.js must apply instant test filter on init"
+        );
+        Assertions.assertTrue(
+            coreJsContent.contains("folder-select-cb"),
+            "dashboard-core.js must construct folder-select-cb for hierarchical tree folders"
+        );
+        Assertions.assertTrue(
+            coreJsContent.contains("updateAllFolderCheckboxes(container);"),
+            "dashboard-core.js must initialize folder checkboxes when building tree view"
         );
     }
 

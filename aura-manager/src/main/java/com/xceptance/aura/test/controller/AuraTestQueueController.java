@@ -689,6 +689,134 @@ public class AuraTestQueueController
         return "fragments/queue :: queueListContainerContent";
     }
 
+    @PostMapping("/api/queue/toggleFolder")
+    public String toggleFolderQueue(final HttpServletRequest request, final Model model)
+    {
+        final Map<String, String> params = extractParams(request);
+        final String folder = params.get("folder");
+        final String checkedParam = params.get("checked");
+
+        if (folder != null && !folder.isBlank())
+        {
+            final String folderPrefix = folder.endsWith("/") ? folder : (folder + "/");
+            final List<YamlFileDto> allFiles = fileService.getYamlFilesList();
+            final List<YamlFileDto> matchingFiles = new ArrayList<>();
+            if (allFiles != null)
+            {
+                for (final YamlFileDto f : allFiles)
+                {
+                    if (f != null && !f.hasError && f.file != null && f.file.startsWith(folderPrefix))
+                    {
+                        matchingFiles.add(f);
+                    }
+                }
+            }
+
+            if (!matchingFiles.isEmpty())
+            {
+                synchronized (selectedQueue)
+                {
+                    final boolean shouldAdd;
+                    if (checkedParam != null && !checkedParam.isBlank())
+                    {
+                        shouldAdd = Boolean.parseBoolean(checkedParam);
+                    }
+                    else
+                    {
+                        int totalDatasets = 0;
+                        int selectedCount = 0;
+                        for (final YamlFileDto f : matchingFiles)
+                        {
+                            if (f.datasets != null && !f.datasets.isEmpty())
+                            {
+                                totalDatasets += f.datasets.size();
+                                for (final DatasetDto d : f.datasets)
+                                {
+                                    for (final DatasetSelection item : selectedQueue)
+                                    {
+                                        if (f.file.equals(item.file) && d.id.equals(item.id))
+                                        {
+                                            selectedCount++;
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                totalDatasets += 1;
+                                for (final DatasetSelection item : selectedQueue)
+                                {
+                                    if (f.file.equals(item.file))
+                                    {
+                                        selectedCount++;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        shouldAdd = (selectedCount < totalDatasets);
+                    }
+
+                    if (shouldAdd)
+                    {
+                        for (final YamlFileDto f : matchingFiles)
+                        {
+                            if (f.datasets != null && !f.datasets.isEmpty())
+                            {
+                                for (final DatasetDto d : f.datasets)
+                                {
+                                    boolean found = false;
+                                    for (final DatasetSelection item : selectedQueue)
+                                    {
+                                        if (f.file.equals(item.file) && d.id.equals(item.id))
+                                        {
+                                            found = true;
+                                            break;
+                                        }
+                                    }
+                                    if (!found)
+                                    {
+                                        final DatasetSelection sel = new DatasetSelection();
+                                        sel.file = f.file;
+                                        sel.id = d.id;
+                                        selectedQueue.add(sel);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                boolean found = false;
+                                for (final DatasetSelection item : selectedQueue)
+                                {
+                                    if (f.file.equals(item.file))
+                                    {
+                                        found = true;
+                                        break;
+                                    }
+                                }
+                                if (!found)
+                                {
+                                    final DatasetSelection sel = new DatasetSelection();
+                                    sel.file = f.file;
+                                    sel.id = "";
+                                    selectedQueue.add(sel);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        selectedQueue.removeIf(item -> item.file != null && item.file.startsWith(folderPrefix));
+                    }
+                }
+            }
+        }
+
+        populateQueueModel(model);
+        return "fragments/queue :: queueListContainerContent";
+    }
+
     @PostMapping("/api/queue/move")
     public String moveQueue(final HttpServletRequest request, final Model model)
     {

@@ -442,6 +442,7 @@ function organizeContainerView(container, itemSelector, mode) {
     });
 
     const collapsedList = getCollapsedFolders();
+    const hasCheckboxes = container.id === 'sidebarTestsContainer' || items.some(it => it.querySelector('.file-select-cb') !== null);
 
     function buildFolderElement(folderPath) {
         const node = nodes[folderPath];
@@ -461,6 +462,23 @@ function organizeContainerView(container, itemSelector, mode) {
         arrowSpan.className = 'material-symbols-outlined tree-folder-arrow';
         arrowSpan.textContent = isCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
 
+        headerDiv.appendChild(arrowSpan);
+
+        if (hasCheckboxes) {
+            const checkboxLabel = document.createElement('label');
+            checkboxLabel.className = 'custom-checkbox';
+            checkboxLabel.setAttribute('onclick', 'event.stopPropagation();');
+
+            const checkboxInput = document.createElement('input');
+            checkboxInput.type = 'checkbox';
+            checkboxInput.className = 'folder-select-cb';
+            checkboxInput.setAttribute('data-folder', folderPath);
+            checkboxInput.setAttribute('onchange', "if(typeof toggleFolderCheckboxesInstant==='function') toggleFolderCheckboxesInstant(this);");
+            checkboxLabel.appendChild(checkboxInput);
+
+            headerDiv.appendChild(checkboxLabel);
+        }
+
         const iconSpan = document.createElement('span');
         iconSpan.className = 'material-symbols-outlined tree-folder-icon';
         iconSpan.textContent = isCollapsed ? 'folder' : 'folder_open';
@@ -469,7 +487,6 @@ function organizeContainerView(container, itemSelector, mode) {
         nameSpan.className = 'tree-folder-name';
         nameSpan.textContent = node.name;
 
-        headerDiv.appendChild(arrowSpan);
         headerDiv.appendChild(iconSpan);
         headerDiv.appendChild(nameSpan);
 
@@ -504,6 +521,10 @@ function organizeContainerView(container, itemSelector, mode) {
         }
         container.appendChild(item);
     });
+
+    if (hasCheckboxes && typeof updateAllFolderCheckboxes === 'function') {
+        updateAllFolderCheckboxes(container);
+    }
 }
 
 // Layout Resizers (Sidebar & Console)
