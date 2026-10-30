@@ -14,7 +14,7 @@
   3. Removed `Neodymium.clearThreadContext()` from `AiInvocationExtension.executeBeforeEach()`, preserving the driver registered by `BrowserExecutionCallback.beforeEach()`.
   4. Removed `Neodymium.clearThreadContext()` from `AiInvocationExtension.afterEach()`, preserving `Neodymium.getBrowserProfileName()` for `BrowserRunner.teardown()`.
 - **Safety Net Added:**
-  - Added unit test `NeodymiumAiRunnerTest.testAiInvocationExtensionPreservesWebDriver` asserting `Neodymium.hasDriver() == true` and `Neodymium.getDriver() != null` after `AiInvocationExtension.beforeEach` executes.
-  - Added unit test `NeodymiumAiRunnerTest.testGetAdditionalExtensionsClearsThreadContext` verifying thread context is wiped cleanly before invocation extensions run.
+  - Added unit test `NeodymiumAiRunnerTest.testAiInvocationExtensionPreservesWebDriver` asserting `Neodymium.hasDriver() == true` and `Neodymium.getDriver() != null` after `AiInvocationExtension.beforeEach` executes, with clean Selenide and Neodymium thread-local driver disposal.
+  - Added unit test `NeodymiumAiRunnerTest.testGetAdditionalExtensionsClearsThreadContext` verifying both `provideTestTemplateInvocationContexts` and `getAdditionalExtensions` independently wipe thread context cleanly.
   - Added unit test `NeodymiumAiRunnerTest.testAiInvocationExtensionAfterEachPreservesBrowserProfileName` verifying browser profile name is preserved across `afterEach`.
   - Added driver assertions in live `@Browser("Chrome_headless")` E2E test `ProgrammaticTestDataYamlTest.test`.

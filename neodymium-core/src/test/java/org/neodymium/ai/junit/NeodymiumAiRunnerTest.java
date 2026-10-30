@@ -42,6 +42,7 @@ import org.neodymium.common.browser.Browser;
 import org.neodymium.common.browser.WebDriverStateContainer;
 import org.neodymium.util.Neodymium;
 import org.openqa.selenium.WebDriver;
+import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -773,26 +774,29 @@ public class NeodymiumAiRunnerTest
     }
 
     /**
-     * Goal: Verifies that getAdditionalExtensions clears Neodymium thread context before test extensions execute.
+     * Goal: Verifies that provideTestTemplateInvocationContexts and getAdditionalExtensions clear Neodymium thread context.
      */
     @Test
     public void testGetAdditionalExtensionsClearsThreadContext() throws Exception
     {
         try
         {
-            Neodymium.getData().put("dirtyKey", "dirtyValue");
+            Neodymium.getData().put("dirtyKey1", "dirtyValue1");
 
             final NeodymiumAiRunner runner = new NeodymiumAiRunner();
             final Method method = SampleBrowserAiTestClass.class.getMethod("sampleMethod");
             final ExtensionContext extensionContext = createMockExtensionContext(SampleBrowserAiTestClass.class, method);
 
+            // Phase 1: Verify provideTestTemplateInvocationContexts clears thread context
             final List<TestTemplateInvocationContext> invocations =
                 runner.provideTestTemplateInvocationContexts(extensionContext).toList();
             Assertions.assertFalse(invocations.isEmpty());
+            Assertions.assertNull(Neodymium.getData().get("dirtyKey1"), "provideTestTemplateInvocationContexts must clear pre-existing thread context");
 
+            // Phase 2: Re-populate dirty data to verify getAdditionalExtensions clears independently
+            Neodymium.getData().put("dirtyKey2", "dirtyValue2");
             invocations.get(0).getAdditionalExtensions();
-
-            Assertions.assertNull(Neodymium.getData().get("dirtyKey"), "Thread-local data must be cleared when building additional extensions");
+            Assertions.assertNull(Neodymium.getData().get("dirtyKey2"), "getAdditionalExtensions must clear thread-local context before building extensions");
         }
         finally
         {
@@ -842,6 +846,7 @@ public class NeodymiumAiRunnerTest
         }
         finally
         {
+            WebDriverRunner.closeWebDriver();
             Neodymium.clearThreadContext();
         }
     }
