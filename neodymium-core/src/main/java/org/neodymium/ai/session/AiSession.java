@@ -666,14 +666,101 @@ public abstract class AiSession implements AutoCloseable
             }
         }
 
-        this.executionContext.getTransientData().put("playbook.beforeSteps", new ArrayList<>(beforeSteps));
-        this.executionContext.getTransientData().put("playbook.steps", new ArrayList<>(playbookSteps));
-        this.executionContext.getTransientData().put("playbook.afterSteps", new ArrayList<>(afterSteps));
+        if (beforeSteps != null && !beforeSteps.isEmpty())
+        {
+            @SuppressWarnings("unchecked")
+            List<PlaybookStep> sessionBeforeSteps = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.beforeSteps");
+            if (sessionBeforeSteps == null)
+            {
+                sessionBeforeSteps = new ArrayList<>(beforeSteps);
+                this.executionContext.getTransientData().put("playbook.beforeSteps", sessionBeforeSteps);
+            }
+            else
+            {
+                try
+                {
+                    sessionBeforeSteps.addAll(beforeSteps);
+                }
+                catch (final UnsupportedOperationException uoe)
+                {
+                    final List<PlaybookStep> mutableBeforeSteps = new ArrayList<>(sessionBeforeSteps);
+                    mutableBeforeSteps.addAll(beforeSteps);
+                    sessionBeforeSteps = mutableBeforeSteps;
+                    this.executionContext.getTransientData().put("playbook.beforeSteps", sessionBeforeSteps);
+                }
+            }
+        }
+        else if (!this.executionContext.getTransientData().containsKey("playbook.beforeSteps"))
+        {
+            this.executionContext.getTransientData().put("playbook.beforeSteps", new ArrayList<>());
+        }
+
+        if (afterSteps != null && !afterSteps.isEmpty())
+        {
+            @SuppressWarnings("unchecked")
+            List<PlaybookStep> sessionAfterSteps = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.afterSteps");
+            if (sessionAfterSteps == null)
+            {
+                sessionAfterSteps = new ArrayList<>(afterSteps);
+                this.executionContext.getTransientData().put("playbook.afterSteps", sessionAfterSteps);
+            }
+            else
+            {
+                try
+                {
+                    sessionAfterSteps.addAll(afterSteps);
+                }
+                catch (final UnsupportedOperationException uoe)
+                {
+                    final List<PlaybookStep> mutableAfterSteps = new ArrayList<>(sessionAfterSteps);
+                    mutableAfterSteps.addAll(afterSteps);
+                    sessionAfterSteps = mutableAfterSteps;
+                    this.executionContext.getTransientData().put("playbook.afterSteps", sessionAfterSteps);
+                }
+            }
+        }
+        else if (!this.executionContext.getTransientData().containsKey("playbook.afterSteps"))
+        {
+            this.executionContext.getTransientData().put("playbook.afterSteps", new ArrayList<>());
+        }
+
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> runnerAllSteps = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.allSteps");
+        if (runnerAllSteps != null && runnerAllSteps != allSteps)
+        {
+            if (this.executionMode != null && this.executionMode.isReplay())
+            {
+                final int cursor = (Integer) this.executionContext.getTransientData().getOrDefault("playbook.replayCursor", 0);
+                for (int i = 0; i < allSteps.size(); i++)
+                {
+                    final int targetIndex = cursor - allSteps.size() + i;
+                    if (targetIndex >= 0 && targetIndex < runnerAllSteps.size())
+                    {
+                        runnerAllSteps.set(targetIndex, allSteps.get(i));
+                    }
+                    else if (!runnerAllSteps.contains(allSteps.get(i)))
+                    {
+                        runnerAllSteps.add(allSteps.get(i));
+                    }
+                }
+            }
+            else
+            {
+                for (final PlaybookStep step : allSteps)
+                {
+                    if (!runnerAllSteps.contains(step))
+                    {
+                        runnerAllSteps.add(step);
+                    }
+                }
+            }
+        }
 
         final List<PlaybookStep> flatSteps = new ArrayList<>();
         flattenSteps(allSteps, flatSteps);
         this.executionContext.getTransientData().put("playbook.flatSteps", flatSteps);
 
+        final boolean deferralAlreadyActive = Boolean.TRUE.equals(this.executionContext.getTransientData().get("playbook.deferSessionFinished"));
         final long sessionStartTime = System.currentTimeMillis();
         this.executionContext.getTransientData().put("playbook.deferSessionFinished", Boolean.TRUE);
 
@@ -739,25 +826,28 @@ public abstract class AiSession implements AutoCloseable
             }
             finally
             {
-                this.executionContext.getTransientData().remove("playbook.deferSessionFinished");
-                if (!Boolean.TRUE.equals(this.executionContext.getTransientData().get("sessionFinishedHandled")))
+                if (!deferralAlreadyActive)
                 {
-                    this.executionContext.getTransientData().put("sessionFinishedHandled", true);
-                    final boolean overallSuccess = (primaryFailure == null);
-                    final long totalDurationMs = Math.max(1, System.currentTimeMillis() - sessionStartTime);
-                    @SuppressWarnings("unchecked")
-                    final List<String> warningsList = (List<String>) this.executionContext.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
-                    final ExecutionContext prev = ExecutionContext.getActiveContext();
-                    try
+                    this.executionContext.getTransientData().remove("playbook.deferSessionFinished");
+                    if (!Boolean.TRUE.equals(this.executionContext.getTransientData().get("sessionFinishedHandled")))
                     {
-                        ExecutionContext.setActiveContext(this.executionContext);
-                        this.eventBus.dispatch(new SessionFinishedEvent(totalDurationMs, overallSuccess, warningsList != null ? warningsList : Collections.emptyList()));
-                        StateMachineRunner.logFinalStatsSummary(this.executionContext, totalDurationMs, overallSuccess, primaryFailure);
-                        this.runPostHooks(overallSuccess);
-                    }
-                    finally
-                    {
-                        ExecutionContext.setActiveContext(prev);
+                        this.executionContext.getTransientData().put("sessionFinishedHandled", true);
+                        final boolean overallSuccess = (primaryFailure == null);
+                        final long totalDurationMs = Math.max(1, System.currentTimeMillis() - sessionStartTime);
+                        @SuppressWarnings("unchecked")
+                        final List<String> warningsList = (List<String>) this.executionContext.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+                        final ExecutionContext prev = ExecutionContext.getActiveContext();
+                        try
+                        {
+                            ExecutionContext.setActiveContext(this.executionContext);
+                            this.eventBus.dispatch(new SessionFinishedEvent(totalDurationMs, overallSuccess, warningsList != null ? warningsList : Collections.emptyList()));
+                            StateMachineRunner.logFinalStatsSummary(this.executionContext, totalDurationMs, overallSuccess, primaryFailure);
+                            this.runPostHooks(overallSuccess);
+                        }
+                        finally
+                        {
+                            ExecutionContext.setActiveContext(prev);
+                        }
                     }
                 }
             }

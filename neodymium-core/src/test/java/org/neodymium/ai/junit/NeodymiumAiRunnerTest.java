@@ -24,27 +24,40 @@ import java.lang.reflect.Proxy;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.InvocationInterceptor;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
 import org.junit.jupiter.api.io.TempDir;
+import org.neodymium.ai.client.LlmCapability;
+import org.neodymium.ai.client.LlmProvider;
+import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.AiConfiguration;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.recorder.PlaybookRecorder;
 import org.neodymium.ai.resources.InMemoryResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.session.AiSession;
+import org.neodymium.ai.telemetry.TokenBudgetGuard;
+import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.common.browser.Browser;
 import org.neodymium.common.browser.WebDriverStateContainer;
 import org.neodymium.util.Neodymium;
 import org.openqa.selenium.WebDriver;
 import com.codeborne.selenide.WebDriverRunner;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 
 /**
  * Unit test suite for {@link NeodymiumAiRunner} and associated JUnit 5 annotations.
@@ -883,4 +896,466 @@ public class NeodymiumAiRunnerTest
             Neodymium.clearThreadContext();
         }
     }
+
+    /**
+     * Sample test class decorated with programmatic playbook mode.
+     */
+    public static class SampleProgrammaticSetupTestClass
+    {
+        @Test
+        @AiMode(ExecutionMode.LLM_RECORDING)
+        @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+        public void testProgrammatic(final AiSession session)
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that NeodymiumAiRunner registers 'playbook.allSteps' in transient data for programmatic tests.
+     */
+    @Test
+    public void testProgrammaticSetupInitializesPlaybookAllSteps() throws Exception
+    {
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+        final Method method = SampleProgrammaticSetupTestClass.class.getMethod("testProgrammatic", AiSession.class);
+        final ExtensionContext extensionContext = createMockExtensionContext(SampleProgrammaticSetupTestClass.class, method);
+
+        final List<TestTemplateInvocationContext> invocations =
+            runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+        Assertions.assertFalse(invocations.isEmpty());
+
+        final BeforeEachCallback beforeEach = (BeforeEachCallback) invocations.get(0).getAdditionalExtensions().stream()
+            .filter(e -> e instanceof BeforeEachCallback)
+            .findFirst()
+            .orElseThrow();
+
+        beforeEach.beforeEach(extensionContext);
+
+        final ExecutionContext execCtx = (ExecutionContext) extensionContext.getStore(ExtensionContext.Namespace.GLOBAL).get(ExecutionContext.class);
+        Assertions.assertNotNull(execCtx, "ExecutionContext must be stored in ExtensionContext store");
+
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> allSteps = (List<PlaybookStep>) execCtx.getTransientData().get("playbook.allSteps");
+        Assertions.assertNotNull(allSteps, "playbook.allSteps must be registered in transient data for programmatic tests");
+        Assertions.assertTrue(allSteps.isEmpty(), "playbook.allSteps should initially be empty in programmatic mode");
+    }
+
+    private static LlmProvider createDefaultMockLlmProvider()
+    {
+        return new LlmProvider()
+        {
+            @Override
+            public LlmResponse chat(final LlmRequest request)
+            {
+                return new LlmResponse("[]", new TokenUsage(10, 0, 10), "mock-model", List.of(new ToolCall("mock_call", "complete_step", JsonNodeFactory.instance.objectNode())), null);
+            }
+
+            @Override
+            public Set<LlmCapability> getCapabilities()
+            {
+                return Set.of(LlmCapability.values());
+            }
+        };
+    }
+
+    /**
+     * Sample test class decorated with programmatic mode and recording-enabled execution mode.
+     */
+    public static class SampleProgrammaticRecordingListenerTestClass
+    {
+        @Test
+        @AiMode(ExecutionMode.LLM_RECORDING)
+        @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+        public void testRecordingMode(final AiSession session)
+        {
+        }
+    }
+
+    /**
+     * Sample test class decorated with programmatic mode and non-recording execution mode.
+     */
+    public static class SampleProgrammaticNonRecordingListenerTestClass
+    {
+        @Test
+        @AiMode(ExecutionMode.LLM_ONLY)
+        @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+        public void testNonRecordingMode(final AiSession session)
+        {
+        }
+    }
+
+    /**
+     * Sample test class executing a programmatic step sequence.
+     */
+    public static class SampleProgrammaticExecutionTestClass
+    {
+        @Test
+        @AiMode(ExecutionMode.LLM_RECORDING)
+        @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+        public void testProgrammaticExecution(final AiSession session) throws Exception
+        {
+            session.execute("Open https://example.org\nClick login");
+        }
+    }
+
+    /**
+     * Sample test class executing multiple programmatic step blocks.
+     */
+    public static class SampleProgrammaticMultiExecuteTestClass
+    {
+        @Test
+        @AiMode(ExecutionMode.LLM_RECORDING)
+        @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+        public void testMultiExecute(final AiSession session) throws Exception
+        {
+            session.execute("Step 1: Open website");
+            session.execute("Step 2: Log in to account");
+        }
+    }
+
+    /**
+     * Sample test class failing during programmatic step execution.
+     */
+    public static class SampleProgrammaticFailureTestClass
+    {
+        @Test
+        @AiMode(ExecutionMode.LLM_RECORDING)
+        @AiPlaybook(AiPlaybook.PROGRAMMATIC)
+        public void testFailure(final AiSession session) throws Exception
+        {
+            session.execute("Step 1");
+            throw new IllegalStateException("Intentional test step failure");
+        }
+    }
+
+    /**
+     * Goal: Verifies that NeodymiumAiRunner registers PlaybookRecorder on eventBus in recording mode for programmatic tests.
+     */
+    @Test
+    public void testProgrammaticListenerRegistrationInRecordingMode() throws Exception
+    {
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+        final Method method = SampleProgrammaticRecordingListenerTestClass.class.getMethod("testRecordingMode", AiSession.class);
+        final ExtensionContext extensionContext = createMockExtensionContext(SampleProgrammaticRecordingListenerTestClass.class, method);
+
+        final List<TestTemplateInvocationContext> invocations =
+            runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+        Assertions.assertFalse(invocations.isEmpty());
+
+        final BeforeEachCallback beforeEach = (BeforeEachCallback) invocations.get(0).getAdditionalExtensions().stream()
+            .filter(e -> e instanceof BeforeEachCallback)
+            .findFirst()
+            .orElseThrow();
+
+        beforeEach.beforeEach(extensionContext);
+
+        final AiSession session = (AiSession) extensionContext.getStore(null).get(AiSession.class);
+        Assertions.assertNotNull(session, "AiSession must be created and stored");
+        Assertions.assertTrue(
+            session.getEventBus().getListeners().stream().anyMatch(l -> l instanceof PlaybookRecorder),
+            "PlaybookRecorder must be registered on eventBus when mode persists recordings"
+        );
+        Assertions.assertTrue(
+            session.getEventBus().getListeners().stream().anyMatch(l -> l instanceof TokenBudgetGuard),
+            "TokenBudgetGuard must be registered on eventBus"
+        );
+    }
+
+    /**
+     * Goal: Verifies that NeodymiumAiRunner does NOT register PlaybookRecorder in non-recording mode (LLM_ONLY).
+     */
+    @Test
+    public void testProgrammaticListenerOmittedInNonRecordingMode() throws Exception
+    {
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+        final Method method = SampleProgrammaticNonRecordingListenerTestClass.class.getMethod("testNonRecordingMode", AiSession.class);
+        final ExtensionContext extensionContext = createMockExtensionContext(SampleProgrammaticNonRecordingListenerTestClass.class, method);
+
+        final List<TestTemplateInvocationContext> invocations =
+            runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+        Assertions.assertFalse(invocations.isEmpty());
+
+        final BeforeEachCallback beforeEach = (BeforeEachCallback) invocations.get(0).getAdditionalExtensions().stream()
+            .filter(e -> e instanceof BeforeEachCallback)
+            .findFirst()
+            .orElseThrow();
+
+        beforeEach.beforeEach(extensionContext);
+
+        final AiSession session = (AiSession) extensionContext.getStore(null).get(AiSession.class);
+        Assertions.assertNotNull(session, "AiSession must be created and stored");
+        Assertions.assertFalse(
+            session.getEventBus().getListeners().stream().anyMatch(l -> l instanceof PlaybookRecorder),
+            "PlaybookRecorder must not be registered on eventBus when mode does not persist recordings"
+        );
+    }
+
+    /**
+     * Goal: Verifies that executing a programmatic test writes a companion recording JSON file containing actual step content.
+     */
+    @Test
+    public void testProgrammaticExecutionWritesNonEmptyCompanionRecording(@TempDir final Path tempDir) throws Throwable
+    {
+        System.setProperty("neodymium.ai.playbook.recordingDirectory", tempDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleProgrammaticExecutionTestClass.class.getMethod("testProgrammaticExecution", AiSession.class);
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleProgrammaticExecutionTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final List<Extension> extensions = invocations.get(0).getAdditionalExtensions();
+            final BeforeEachCallback beforeEach = (BeforeEachCallback) extensions.stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .findFirst()
+                .orElseThrow();
+            final InvocationInterceptor interceptor = (InvocationInterceptor) extensions.stream()
+                .filter(e -> e instanceof InvocationInterceptor)
+                .findFirst()
+                .orElseThrow();
+            final AfterEachCallback afterEach = (AfterEachCallback) extensions.stream()
+                .filter(e -> e instanceof AfterEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            beforeEach.beforeEach(extensionContext);
+
+            final AiSession session = (AiSession) extensionContext.getStore(null).get(AiSession.class);
+            Assertions.assertNotNull(session, "AiSession must be present in extensionContext store");
+            session.getLlmRegistry().setDefaultProvider(createDefaultMockLlmProvider());
+
+            interceptor.interceptTestMethod(
+                () -> {
+                    session.execute("Open https://example.org\nClick login");
+                    return null;
+                },
+                null,
+                extensionContext
+            );
+
+            afterEach.afterEach(extensionContext);
+
+            final Path recordingFile = tempDir.resolve("SampleProgrammaticExecutionTestClass_testProgrammaticExecution.json");
+            Assertions.assertTrue(Files.exists(recordingFile), "Companion recording file must be created: " + recordingFile);
+
+            final String json = Files.readString(recordingFile);
+            Assertions.assertFalse(json.trim().equals("[]") || json.trim().equals("[ ]"), "Recording must not be an empty array");
+
+            final ObjectMapper mapper = new ObjectMapper();
+            final List<PlaybookStep> recordedSteps = mapper.readValue(json, new TypeReference<List<PlaybookStep>>() {});
+            Assertions.assertFalse(recordedSteps.isEmpty(), "Recorded steps must not be empty");
+            Assertions.assertTrue(recordedSteps.get(0).getInstruction().contains("Open https://example.org"), "Recorded step instruction must match executed instruction");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.playbook.recordingDirectory");
+            AiConfiguration.resetInstance();
+            Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Goal: Verifies that multiple programmatic session.execute() calls accumulate steps sequentially into the single recording JSON file.
+     */
+    @Test
+    public void testProgrammaticMultiExecuteAccumulatesAllStepsInRecordingFile(@TempDir final Path tempDir) throws Throwable
+    {
+        System.setProperty("neodymium.ai.playbook.recordingDirectory", tempDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleProgrammaticMultiExecuteTestClass.class.getMethod("testMultiExecute", AiSession.class);
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleProgrammaticMultiExecuteTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final List<Extension> extensions = invocations.get(0).getAdditionalExtensions();
+            final BeforeEachCallback beforeEach = (BeforeEachCallback) extensions.stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .findFirst()
+                .orElseThrow();
+            final InvocationInterceptor interceptor = (InvocationInterceptor) extensions.stream()
+                .filter(e -> e instanceof InvocationInterceptor)
+                .findFirst()
+                .orElseThrow();
+            final AfterEachCallback afterEach = (AfterEachCallback) extensions.stream()
+                .filter(e -> e instanceof AfterEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            beforeEach.beforeEach(extensionContext);
+
+            final AiSession session = (AiSession) extensionContext.getStore(null).get(AiSession.class);
+            Assertions.assertNotNull(session, "AiSession must be present in extensionContext store");
+            session.getLlmRegistry().setDefaultProvider(createDefaultMockLlmProvider());
+
+            interceptor.interceptTestMethod(
+                () -> {
+                    session.execute("Step 1: Open website");
+                    session.execute("Step 2: Log in to account");
+                    return null;
+                },
+                null,
+                extensionContext
+            );
+
+            afterEach.afterEach(extensionContext);
+
+            final Path recordingFile = tempDir.resolve("SampleProgrammaticMultiExecuteTestClass_testMultiExecute.json");
+            Assertions.assertTrue(Files.exists(recordingFile), "Companion recording file must be created: " + recordingFile);
+
+            final String json = Files.readString(recordingFile);
+            final ObjectMapper mapper = new ObjectMapper();
+            final List<PlaybookStep> recordedSteps = mapper.readValue(json, new TypeReference<List<PlaybookStep>>() {});
+            Assertions.assertEquals(2, recordedSteps.size(), "Both programmatic execution steps must be captured in the recording");
+            Assertions.assertEquals("Step 1: Open website", recordedSteps.get(0).getInstruction());
+            Assertions.assertEquals("Step 2: Log in to account", recordedSteps.get(1).getInstruction());
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.playbook.recordingDirectory");
+            AiConfiguration.resetInstance();
+            Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Goal: Verifies that if a programmatic test fails, PlaybookRecorder does not persist a corrupt recording.
+     */
+    @Test
+    public void testProgrammaticExecutionOnFailureDoesNotPersistCorruptRecording(@TempDir final Path tempDir) throws Throwable
+    {
+        System.setProperty("neodymium.ai.playbook.recordingDirectory", tempDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleProgrammaticFailureTestClass.class.getMethod("testFailure", AiSession.class);
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleProgrammaticFailureTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final List<Extension> extensions = invocations.get(0).getAdditionalExtensions();
+            final BeforeEachCallback beforeEach = (BeforeEachCallback) extensions.stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .findFirst()
+                .orElseThrow();
+            final InvocationInterceptor interceptor = (InvocationInterceptor) extensions.stream()
+                .filter(e -> e instanceof InvocationInterceptor)
+                .findFirst()
+                .orElseThrow();
+            final AfterEachCallback afterEach = (AfterEachCallback) extensions.stream()
+                .filter(e -> e instanceof AfterEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            beforeEach.beforeEach(extensionContext);
+
+            final AiSession session = (AiSession) extensionContext.getStore(null).get(AiSession.class);
+            Assertions.assertNotNull(session, "AiSession must be present in extensionContext store");
+            session.getLlmRegistry().setDefaultProvider(createDefaultMockLlmProvider());
+
+            Assertions.assertThrows(IllegalStateException.class, () -> {
+                interceptor.interceptTestMethod(
+                    () -> {
+                        session.execute("Step 1");
+                        throw new IllegalStateException("Intentional test step failure");
+                    },
+                    null,
+                    extensionContext
+                );
+            });
+
+            afterEach.afterEach(extensionContext);
+
+            final Path recordingFile = tempDir.resolve("SampleProgrammaticFailureTestClass_testFailure.json");
+            Assertions.assertFalse(Files.exists(recordingFile), "Recording file must not be written when test execution fails");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.playbook.recordingDirectory");
+            AiConfiguration.resetInstance();
+            Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Goal: Verifies that if an execution error occurs in transient data (e.g. step failure)
+     * but the test method catches the exception, NeodymiumAiRunner still marks overallSuccess as false
+     * and suppresses recording persistence.
+     */
+    @Test
+    public void testProgrammaticExecutionErrorSuppressesRecordingEvenWhenExceptionSwallowed(@TempDir final Path tempDir) throws Throwable
+    {
+        System.setProperty("neodymium.ai.playbook.recordingDirectory", tempDir.toAbsolutePath().toString());
+        AiConfiguration.resetInstance();
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleProgrammaticFailureTestClass.class.getMethod("testFailure", AiSession.class);
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleProgrammaticFailureTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final List<Extension> extensions = invocations.get(0).getAdditionalExtensions();
+            final BeforeEachCallback beforeEach = (BeforeEachCallback) extensions.stream()
+                .filter(e -> e instanceof BeforeEachCallback)
+                .findFirst()
+                .orElseThrow();
+            final InvocationInterceptor interceptor = (InvocationInterceptor) extensions.stream()
+                .filter(e -> e instanceof InvocationInterceptor)
+                .findFirst()
+                .orElseThrow();
+            final AfterEachCallback afterEach = (AfterEachCallback) extensions.stream()
+                .filter(e -> e instanceof AfterEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            beforeEach.beforeEach(extensionContext);
+
+            final AiSession session = (AiSession) extensionContext.getStore(null).get(AiSession.class);
+            Assertions.assertNotNull(session, "AiSession must be present in extensionContext store");
+            session.getLlmRegistry().setDefaultProvider(createDefaultMockLlmProvider());
+
+            interceptor.interceptTestMethod(
+                () -> {
+                    // Simulate a step execution failure recorded into transient data, swallowed by test
+                    session.getExecutionContext().getTransientData().put(
+                        ExecutionContext.KEY_LAST_EXECUTION_ERROR,
+                        new RuntimeException("Simulated internal step error")
+                    );
+                    return null;
+                },
+                null,
+                extensionContext
+            );
+
+            afterEach.afterEach(extensionContext);
+
+            final Path recordingFile = tempDir.resolve("SampleProgrammaticFailureTestClass_testFailure.json");
+            Assertions.assertFalse(Files.exists(recordingFile), "Recording file must not be written when execution error is present in transient data");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.playbook.recordingDirectory");
+            AiConfiguration.resetInstance();
+            Neodymium.clearThreadContext();
+        }
+    }
 }
+
