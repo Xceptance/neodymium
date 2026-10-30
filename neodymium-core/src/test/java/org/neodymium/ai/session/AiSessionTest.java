@@ -29,6 +29,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.rest.RestTargetExecutor;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
@@ -439,5 +440,97 @@ public class AiSessionTest
         Assertions.assertEquals(1, counts.get("LEAN"));
         Assertions.assertEquals(1, counts.get("STANDARD"));
     }
+
+    @Test
+    @DisplayName("execute(String) synchronizes steps into runnerAllSteps registered in transient data")
+    public void testProgrammaticExecuteSynchronizesIntoRunnerAllSteps() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            final List<PlaybookStep> runnerAllSteps = new ArrayList<>();
+            session.getExecutionContext().getTransientData().put("playbook.allSteps", runnerAllSteps);
+
+            session.execute("Step 1");
+            session.execute("Step 2");
+
+            Assertions.assertEquals(2, runnerAllSteps.size(), "runnerAllSteps must contain steps from both execute() calls");
+            Assertions.assertEquals("Step 1", runnerAllSteps.get(0).getInstruction());
+            Assertions.assertEquals("Step 2", runnerAllSteps.get(1).getInstruction());
+        }
+    }
+
+    @Test
+    @DisplayName("execute(String) respects existing runner deferral and does not fire SessionFinishedEvent prematurely")
+    public void testProgrammaticDeferralHonoredWhenRunnerDeferralActive() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            final AtomicBoolean finishedCalled = new AtomicBoolean(false);
+            session.getEventBus().registerListener(event -> {
+                if (event instanceof SessionFinishedEvent)
+                {
+                    finishedCalled.set(true);
+                }
+            });
+
+            session.getExecutionContext().getTransientData().put("playbook.deferSessionFinished", Boolean.TRUE);
+
+            session.execute("Step 1");
+
+            Assertions.assertFalse(finishedCalled.get(), "SessionFinishedEvent must not be fired while runner deferral is active");
+            Assertions.assertEquals(
+                Boolean.TRUE,
+                session.getExecutionContext().getTransientData().get("playbook.deferSessionFinished"),
+                "playbook.deferSessionFinished must remain true while runner deferral is active"
+            );
+        }
+    }
+
+    @Test
+    @DisplayName("execute(Playbook) accumulates beforeSteps and afterSteps across multiple calls")
+    public void testProgrammaticBeforeAndAfterStepsAccumulateAcrossCalls() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            final PlaybookStep before1 = new PlaybookStep("Before 1");
+            final PlaybookStep step1 = new PlaybookStep("Step 1");
+            final PlaybookStep after1 = new PlaybookStep("After 1");
+
+            final Playbook playbook1 = new Playbook(
+                List.of(before1),
+                List.of(step1),
+                List.of(after1),
+                Collections.emptyList(),
+                Collections.emptyMap(),
+                null
+            );
+
+            session.execute(playbook1);
+
+            final PlaybookStep step2 = new PlaybookStep("Step 2");
+            final Playbook playbook2 = new Playbook(
+                Collections.emptyList(),
+                List.of(step2),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyMap(),
+                null
+            );
+
+            // Call with empty before/after steps should not overwrite existing before/after steps
+            session.execute(playbook2);
+
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) session.getExecutionContext().getTransientData().get("playbook.beforeSteps");
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> afterSteps = (List<PlaybookStep>) session.getExecutionContext().getTransientData().get("playbook.afterSteps");
+
+            Assertions.assertEquals(1, beforeSteps.size(), "beforeSteps must retain Before 1");
+            Assertions.assertEquals("Before 1", beforeSteps.get(0).getInstruction());
+            Assertions.assertEquals(1, afterSteps.size(), "afterSteps must retain After 1");
+            Assertions.assertEquals("After 1", afterSteps.get(0).getInstruction());
+        }
+    }
 }
+
 

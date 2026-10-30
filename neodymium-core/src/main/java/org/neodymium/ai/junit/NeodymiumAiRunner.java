@@ -56,6 +56,7 @@ import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
+import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
@@ -1447,6 +1448,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             executionContext.getTransientData().put("playbook.beforeSteps", beforeFlat);
             executionContext.getTransientData().put("playbook.steps", playbookSteps);
             executionContext.getTransientData().put("playbook.afterSteps", afterFlat);
+            executionContext.getTransientData().put("playbook.allSteps", allSteps);
 
             final List<PlaybookStep> flatSteps = new ArrayList<>();
             flattenSteps(allSteps, flatSteps);
@@ -1466,7 +1468,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             executionContext.getTransientData().put(ExecutionContext.KEY_EXECUTION_MODE, this.effectiveMode);
             executionContext.getTransientData().put(ExecutionContext.KEY_CONFIGURED_EXECUTION_MODE, this.mode);
             executionContext.getTransientData().put(ExecutionContext.KEY_ACTIVE_DATASET_LABEL, this.datasetId != null ? this.datasetId : "default");
-            executionContext.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, org.neodymium.ai.model.ContextLevel.MINIMAL);
+            executionContext.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, ContextLevel.MINIMAL);
             executionContext.getTransientData().put(ExecutionContext.KEY_TOTAL_LLM_CALLS, 0);
             executionContext.getTransientData().put(ExecutionContext.KEY_TOTAL_REPLAYS, 0);
             executionContext.getTransientData().put("junit.testInstance", context.getRequiredTestInstance());
@@ -1666,7 +1668,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                         if (!Boolean.TRUE.equals(execCtx.getTransientData().get("sessionFinishedHandled")))
                         {
                             execCtx.getTransientData().put("sessionFinishedHandled", true);
-                            final boolean overallSuccess = (primaryFailure == null);
+                            final Object executionError = execCtx.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                            final boolean overallSuccess = (primaryFailure == null && executionError == null);
                             final long totalDurationMs = Math.max(1, System.currentTimeMillis() - sessionStartTime);
                             @SuppressWarnings("unchecked")
                             final List<String> warnings = (List<String>) execCtx.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
