@@ -72,6 +72,7 @@ import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
+import org.neodymium.ai.tool.ToolCallVariableResolver;
 import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
@@ -948,7 +949,8 @@ public final class AgentToolLoopStep implements PipelineStep
                         final ToolResult result;
                         try
                         {
-                            result = toolOpt.get().execute(effectiveCall, toolContext);
+                            final ToolCall executableCall = ToolCallVariableResolver.resolveVariables(effectiveCall, context.getSessionData());
+                            result = toolOpt.get().execute(executableCall, toolContext);
                         }
                         catch (final AssertionError e)
                         {
@@ -1243,7 +1245,8 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         final AiTool tool = this.toolRegistry.getTool(effectiveCall.toolName())
                                 .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + effectiveCall.toolName()));
-                        toolExecResult = tool.execute(effectiveCall, toolContext);
+                        final ToolCall executableCall = ToolCallVariableResolver.resolveVariables(effectiveCall, context.getSessionData());
+                        toolExecResult = tool.execute(executableCall, toolContext);
                     }
                     catch (final AssertionError e)
                     {
@@ -1649,6 +1652,21 @@ public final class AgentToolLoopStep implements PipelineStep
 
                 // Task 3.3: Append structured ToolResult JSON directly to role: "TOOL"
                 String toolContent = result != null ? result.content() : "{\"status\":\"SUCCESS\"}";
+                if (context.getSessionData() != null)
+                {
+                    final Map<String, String> sensitiveMap = context.getSessionData().getRawSensitiveData();
+                    if (sensitiveMap != null && !sensitiveMap.isEmpty())
+                    {
+                        for (final Map.Entry<String, String> entry : sensitiveMap.entrySet())
+                        {
+                            final String secretVal = entry.getValue();
+                            if (secretVal != null && !secretVal.isEmpty())
+                            {
+                                toolContent = toolContent.replace(secretVal, "[MASKED_VAR_" + entry.getKey() + "]");
+                            }
+                        }
+                    }
+                }
                 if (result == null || result.status() != ToolResult.Status.SUCCESS)
                 {
                     final String alert = generatePassiveDiagnosticAlert(

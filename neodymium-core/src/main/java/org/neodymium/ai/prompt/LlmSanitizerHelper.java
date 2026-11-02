@@ -93,14 +93,14 @@ public final class LlmSanitizerHelper
             return original;
         }
 
+        final ExecutionContext ctx = ExecutionContext.getActiveContext();
+        final Map<String, String> sensitiveMap = (ctx != null && ctx.getSessionData() != null)
+            ? ctx.getSessionData().getRawSensitiveData()
+            : Map.of();
+
         List<SutAttachment> sanitizedAttachments = original.attachments();
         if (sanitizedAttachments != null && !sanitizedAttachments.isEmpty() && payload.maskToVariableMap() != null && !payload.maskToVariableMap().isEmpty())
         {
-            final ExecutionContext ctx = ExecutionContext.getActiveContext();
-            final Map<String, String> sensitiveMap = (ctx != null && ctx.getSessionData() != null)
-                ? ctx.getSessionData().getRawSensitiveData()
-                : Map.of();
-
             final List<SutAttachment> updated = new ArrayList<>();
             for (final SutAttachment att : sanitizedAttachments)
             {
@@ -157,22 +157,28 @@ public final class LlmSanitizerHelper
                     ? WireImageOptimizer.optimize(msg.attachments())
                     : msg.attachments();
 
-                if (msg.role() == Role.USER && msg.content() != null && msg.content().equals(original.userMessage()))
+                String sanitizedContent = msg.content();
+                if (msg.role() == Role.USER && sanitizedContent != null && sanitizedContent.equals(original.userMessage()))
                 {
-                    updatedMessages.add(new ChatMessage(
-                        msg.role(),
-                        payload.sanitizedPrompt(),
-                        msg.toolCalls(),
-                        msg.toolCallId(),
-                        msg.toolName(),
-                        optimizedMsgAtts
-                    ));
+                    sanitizedContent = payload.sanitizedPrompt();
                 }
-                else if (optimizedMsgAtts != msg.attachments())
+                else if (sanitizedContent != null && !sensitiveMap.isEmpty())
+                {
+                    for (final Map.Entry<String, String> entry : sensitiveMap.entrySet())
+                    {
+                        final String secretVal = entry.getValue();
+                        if (secretVal != null && !secretVal.isEmpty())
+                        {
+                            sanitizedContent = sanitizedContent.replace(secretVal, "[MASKED_VAR_" + entry.getKey() + "]");
+                        }
+                    }
+                }
+
+                if ((sanitizedContent != null && !sanitizedContent.equals(msg.content())) || optimizedMsgAtts != msg.attachments())
                 {
                     updatedMessages.add(new ChatMessage(
                         msg.role(),
-                        msg.content(),
+                        sanitizedContent,
                         msg.toolCalls(),
                         msg.toolCallId(),
                         msg.toolName(),
