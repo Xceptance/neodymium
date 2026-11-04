@@ -1218,6 +1218,79 @@ public class RunStorageSyncServiceTest
             deleteRecursively(runDir);
         }
     }
+
+    @Test
+    public void testMultiDatasetExecutionResolutionInSharedFolderDoesNotCrossTalk() throws IOException
+    {
+        final String runId = "run-multi-dataset-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final String parentFolderName = "Aura_tests_stokke_stokkeOrderPayPalTest_yml_Test";
+        final Path testFolder = runDir.resolve(parentFolderName);
+
+        try
+        {
+            Files.createDirectories(testFolder);
+
+            // Dataset A (File 1)
+            final String exec1Json = """
+                {
+                    "id": "order-us-dataset",
+                    "testClass": "com.xceptance.neodymium.aura.sandbox.Aura_tests_stokke_stokkeOrderPayPalTest_yml_Test",
+                    "testMethod": "executeYamlTest",
+                    "title": "Order US Product",
+                    "browser": "Chrome_1500x1000",
+                    "status": "passed-clean",
+                    "blocks": { "steps": [{ "name": "Step US" }] }
+                }
+                """;
+            Files.writeString(testFolder.resolve("console-execution-1.json"), exec1Json);
+
+            // Dataset B (File 2)
+            final String exec2Json = """
+                {
+                    "id": "order-de-dataset",
+                    "testClass": "com.xceptance.neodymium.aura.sandbox.Aura_tests_stokke_stokkeOrderPayPalTest_yml_Test",
+                    "testMethod": "executeYamlTest",
+                    "title": "Order DE Product",
+                    "browser": "Chrome_1500x1000",
+                    "status": "failed",
+                    "blocks": { "steps": [{ "name": "Step DE 1" }, { "name": "Step DE 2" }] }
+                }
+                """;
+            Files.writeString(testFolder.resolve("console-execution-2.json"), exec2Json);
+
+            // 1. Resolve Dataset B by simple class name key (must NOT be hijacked by File 1)
+            final TestExecutionDto dtoB = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#executeYamlTest#Order DE Product#Chrome_1500x1000"
+            );
+            Assertions.assertNotNull(dtoB, "Dataset B must be resolved");
+            Assertions.assertEquals("Order DE Product", dtoB.getTitle(), "Dataset B must not return Dataset A");
+            Assertions.assertEquals("failed", dtoB.getStatus());
+            Assertions.assertEquals(2, dtoB.getBlocks().path("steps").size());
+
+            // 2. Resolve Dataset A by simple class name key
+            final TestExecutionDto dtoA = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#executeYamlTest#Order US Product#Chrome_1500x1000"
+            );
+            Assertions.assertNotNull(dtoA, "Dataset A must be resolved");
+            Assertions.assertEquals("Order US Product", dtoA.getTitle(), "Dataset A must return Dataset A");
+            Assertions.assertEquals("passed-clean", dtoA.getStatus());
+            Assertions.assertEquals(1, dtoA.getBlocks().path("steps").size());
+
+            // 3. In multi-file folder, an arbitrary unknown postfix must NOT greedily match File 1
+            final TestExecutionDto dtoAmbiguous = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#arbitrary-unknown-id"
+            );
+            Assertions.assertNull(dtoAmbiguous, "Ambiguous prefix on multi-dataset folder must not hijack first file");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
 }
 
 

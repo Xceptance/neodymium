@@ -1113,6 +1113,37 @@ public class AuraReportDataService
         }
     }
 
+    private JsonNode readJsonNodeWithRetry(final File f)
+    {
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                final JsonNode node = objectMapper.readTree(f);
+                if (node != null && !node.isEmpty())
+                {
+                    return node;
+                }
+            }
+            catch (final Exception e)
+            {
+                if (attempt < 2)
+                {
+                    try
+                    {
+                        Thread.sleep(20L * (attempt + 1));
+                    }
+                    catch (final InterruptedException ignored)
+                    {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     public TestExecutionDto getExecutionDetails(final String runId, final String executionId)
     {
         if (runId == null || executionId == null || executionId.isBlank())
@@ -1144,36 +1175,11 @@ public class AuraReportDataService
         {
             final List<File> files = new ArrayList<>();
             localRunJsonStorageService.scanForTestExecJsonFiles(runDir.toFile(), files);
+
+            // Pass 1: Scan for exact matches (FQCN keys, simple class keys, execution IDs, and specific file names).
             for (final File f : files)
             {
-                JsonNode node = null;
-                for (int attempt = 0; attempt < 3; attempt++)
-                {
-                    try
-                    {
-                        node = objectMapper.readTree(f);
-                        if (node != null && !node.isEmpty())
-                        {
-                            break;
-                        }
-                    }
-                    catch (final Exception e)
-                    {
-                        if (attempt < 2)
-                        {
-                            try
-                            {
-                                Thread.sleep(20L * (attempt + 1));
-                            }
-                            catch (final InterruptedException ignored)
-                            {
-                                Thread.currentThread().interrupt();
-                                break;
-                            }
-                        }
-                    }
-                }
-
+                final JsonNode node = readJsonNodeWithRetry(f);
                 if (node != null)
                 {
                     try
@@ -1231,10 +1237,16 @@ public class AuraReportDataService
                         final String id = node.path("id").asText(f.getName().replaceAll("\\.json$", ""));
                         final String browser = node.path("browser").asText("Chrome");
 
+                        final String simpleClass = testClass.contains(".") ? testClass.substring(testClass.lastIndexOf('.') + 1) : testClass;
+
                         final String execKey = LocalRunJsonStorageService.buildExecutionKey(testClass, testMethod, title, browser);
+                        final String simpleExecKey = LocalRunJsonStorageService.buildExecutionKey(simpleClass, testMethod, title, browser);
                         final String fullKey = testClass + "#" + id + "#" + browser;
+                        final String simpleFullKey = simpleClass + "#" + id + "#" + browser;
                         final String execKeyWithId = execKey + "#" + id;
+                        final String simpleExecKeyWithId = simpleExecKey + "#" + id;
                         final String classMethodBrowser = testClass + "#" + testMethod + "#" + browser;
+                        final String simpleClassMethodBrowser = simpleClass + "#" + testMethod + "#" + browser;
                         final String fileName = f.getName();
                         final String fileNameNoExt = fileName.replaceAll("\\.json$", "");
                         final String parentWithFileName = !parentFolder.isEmpty() ? parentFolder + "/" + fileName : "";
@@ -1242,14 +1254,17 @@ public class AuraReportDataService
 
                         if (executionId.equalsIgnoreCase(id)
                                 || executionId.equalsIgnoreCase(fullKey)
+                                || executionId.equalsIgnoreCase(simpleFullKey)
                                 || executionId.equalsIgnoreCase(execKey)
+                                || executionId.equalsIgnoreCase(simpleExecKey)
                                 || executionId.equalsIgnoreCase(execKeyWithId)
+                                || executionId.equalsIgnoreCase(simpleExecKeyWithId)
                                 || executionId.equalsIgnoreCase(classMethodBrowser)
+                                || executionId.equalsIgnoreCase(simpleClassMethodBrowser)
                                 || executionId.equalsIgnoreCase(fileNameNoExt)
                                 || executionId.equalsIgnoreCase(fileName)
                                 || (!parentWithFileName.isEmpty() && executionId.equalsIgnoreCase(parentWithFileName))
-                                || (!parentWithId.isEmpty() && executionId.equalsIgnoreCase(parentWithId))
-                                || (!parentFolder.isEmpty() && executionId.startsWith(parentFolder + "#")))
+                                || (!parentWithId.isEmpty() && executionId.equalsIgnoreCase(parentWithId)))
                         {
                             final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
                             if (dto.getId() == null || dto.getId().isBlank()
@@ -1265,6 +1280,43 @@ public class AuraReportDataService
                     }
                     catch (final Exception ignored)
                     {
+                    }
+                }
+            }
+
+            // Pass 2: Fuzzy fallback matching. Only executed if no file in the run had an exact match in Pass 1.
+            // Safely matches single-execution class folders where executionId shares the parent folder prefix.
+            for (final File f : files)
+            {
+                final String parentFolder = (f.getParentFile() != null && !f.getParentFile().getName().equals(effectiveRunId))
+                        ? f.getParentFile().getName() : "";
+                if (!parentFolder.isEmpty() && (executionId.startsWith(parentFolder + "#") || executionId.equalsIgnoreCase(parentFolder)))
+                {
+                    final long classFileCount = files.stream()
+                            .filter(file -> parentFolder.equals(file.getParentFile() != null ? file.getParentFile().getName() : ""))
+                            .count();
+                    if (classFileCount == 1)
+                    {
+                        final JsonNode node = readJsonNodeWithRetry(f);
+                        if (node != null)
+                        {
+                            try
+                            {
+                                final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
+                                if (dto.getId() == null || dto.getId().isBlank()
+                                        || "bad".equalsIgnoreCase(dto.getId())
+                                        || "perfect".equalsIgnoreCase(dto.getId())
+                                        || "default".equalsIgnoreCase(dto.getId()))
+                                {
+                                    dto.setId(executionId);
+                                }
+                                resolveBugsForExecution(effectiveRunId, dto);
+                                return dto;
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
+                        }
                     }
                 }
             }
