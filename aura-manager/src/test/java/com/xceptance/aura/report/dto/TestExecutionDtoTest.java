@@ -265,4 +265,46 @@ public final class TestExecutionDtoTest
         Assertions.assertFalse(execPlaybook.isKnownAi());
         Assertions.assertFalse(execPlaybook.isUnknownAi());
     }
+
+    @Test
+    public void testBlocksAndStepsJsonAreIgnoredDuringSerialization() throws Exception
+    {
+        final TestExecutionDto dto = new TestExecutionDto();
+        dto.setId("test-exec-1");
+        dto.setBlocks(objectMapper.readTree("{\"steps\":[{\"title\":\"Step 1\"}]}"));
+        dto.setSteps(objectMapper.readTree("[{\"title\":\"Step 1\"}]"));
+
+        // Direct getters must still work programmatically
+        Assertions.assertTrue(dto.getBlocksJson().contains("Step 1"));
+        Assertions.assertTrue(dto.getStepsJson().contains("Step 1"));
+
+        // Serialization must output clean, unescaped JSON structures without POJO metadata or duplicate *Json fields
+        final String json = objectMapper.writeValueAsString(dto);
+        final JsonNode tree = objectMapper.readTree(json);
+
+        Assertions.assertTrue(tree.has("blocks"), "Serialized output must contain 'blocks'");
+        final JsonNode blocksNode = tree.path("blocks");
+        Assertions.assertTrue(blocksNode.isObject(), "'blocks' must serialize as a JSON object, got: " + blocksNode);
+        Assertions.assertTrue(blocksNode.has("steps"), "'blocks' must contain 'steps' array, got: " + blocksNode);
+        Assertions.assertEquals("Step 1", blocksNode.path("steps").get(0).path("title").asText());
+        Assertions.assertFalse(blocksNode.has("array"), "'blocks' must NOT serialize JsonNode POJO metadata (array/containerNode)");
+        Assertions.assertFalse(blocksNode.has("containerNode"), "'blocks' must NOT serialize JsonNode POJO metadata (containerNode)");
+        Assertions.assertFalse(blocksNode.has("nodeType"), "'blocks' must NOT serialize JsonNode POJO metadata (nodeType)");
+
+        Assertions.assertTrue(tree.has("steps"), "Serialized output must contain 'steps'");
+        final JsonNode stepsNode = tree.path("steps");
+        Assertions.assertTrue(stepsNode.isArray(), "'steps' must serialize as a JSON array, got: " + stepsNode);
+        Assertions.assertEquals("Step 1", stepsNode.get(0).path("title").asText());
+        Assertions.assertFalse(stepsNode.has("array"), "'steps' must NOT serialize JsonNode POJO metadata");
+
+        Assertions.assertFalse(tree.has("blocksJson"), "Serialized output must NOT contain redundant 'blocksJson'");
+        Assertions.assertFalse(tree.has("stepsJson"), "Serialized output must NOT contain redundant 'stepsJson'");
+
+        // Verify round-trip deserialization preserves the structured blocks and steps
+        final TestExecutionDto deserialized = objectMapper.readValue(json, TestExecutionDto.class);
+        Assertions.assertNotNull(deserialized.getBlocks());
+        Assertions.assertEquals("Step 1", deserialized.getBlocks().path("steps").get(0).path("title").asText());
+        Assertions.assertNotNull(deserialized.getSteps());
+        Assertions.assertEquals("Step 1", deserialized.getSteps().get(0).path("title").asText());
+    }
 }

@@ -256,11 +256,17 @@ public final class InteractiveStateBuilder
             }
             if (testClass != null)
             {
+                state.addProperty("testClass", testClass);
                 state.addProperty("testFile", testClass + (testMethod != null ? "#" + testMethod : ""));
+            }
+            if (testMethod != null && !testMethod.isEmpty())
+            {
+                state.addProperty("testMethod", testMethod);
             }
 
             if (datasetLabel != null && !datasetLabel.isEmpty())
             {
+                state.addProperty("title", datasetLabel);
                 state.addProperty("testId", datasetLabel);
                 state.addProperty("datasetId", datasetLabel);
             }
