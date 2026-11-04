@@ -2186,6 +2186,10 @@ function extractBlocksJson(execDto) {
     }
     if (execDto.blocks) {
         try {
+            // Guard against Jackson ObjectNode POJO metadata leak (where nodeType/containerNode are serialized instead of step data)
+            if (typeof execDto.blocks === 'object' && execDto.blocks.nodeType && !execDto.blocks.steps && !execDto.blocks.before) {
+                return null;
+            }
             const str = typeof execDto.blocks === 'string' ? execDto.blocks : JSON.stringify(execDto.blocks);
             if (str && str !== '{}' && str !== 'null' && str.trim().length > 0) return str;
         } catch (e) {}
@@ -2200,6 +2204,10 @@ function extractStepsJson(execDto) {
     }
     if (execDto.steps) {
         try {
+            // Guard against Jackson ArrayNode POJO metadata leak
+            if (typeof execDto.steps === 'object' && !Array.isArray(execDto.steps) && execDto.steps.nodeType) {
+                return null;
+            }
             const str = typeof execDto.steps === 'string' ? execDto.steps : JSON.stringify(execDto.steps);
             if (str && str !== '{}' && str !== 'null' && str.trim().length > 0) return str;
         } catch (e) {}

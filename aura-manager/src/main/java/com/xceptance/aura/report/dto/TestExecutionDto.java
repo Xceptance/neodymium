@@ -606,23 +606,21 @@ public final class TestExecutionDto
         return localDataBindings;
     }
 
+    @JsonIgnore
     public JsonNode getBlocks()
     {
         return blocks;
     }
 
+    @JsonIgnore
     public JsonNode getSteps()
     {
         return steps;
     }
 
-    public String getPrimaryBug()
-    {
-        return (bugs != null && !bugs.isEmpty()) ? bugs.get(0) : "";
-    }
-
-    @JsonIgnore
-    public String getBlocksJson()
+    @JsonProperty("blocks")
+    @JsonRawValue
+    public String getBlocksRaw()
     {
         if (blocks != null && !blocks.isMissingNode() && !blocks.isNull())
         {
@@ -634,11 +632,12 @@ public final class TestExecutionDto
             {
             }
         }
-        return "{}";
+        return null;
     }
 
-    @JsonIgnore
-    public String getStepsJson()
+    @JsonProperty("steps")
+    @JsonRawValue
+    public String getStepsRaw()
     {
         if (steps != null && !steps.isMissingNode() && !steps.isNull())
         {
@@ -650,7 +649,26 @@ public final class TestExecutionDto
             {
             }
         }
-        return "{}";
+        return null;
+    }
+
+    public String getPrimaryBug()
+    {
+        return (bugs != null && !bugs.isEmpty()) ? bugs.get(0) : "";
+    }
+
+    @JsonIgnore
+    public String getBlocksJson()
+    {
+        final String raw = getBlocksRaw();
+        return raw != null ? raw : "{}";
+    }
+
+    @JsonIgnore
+    public String getStepsJson()
+    {
+        final String raw = getStepsRaw();
+        return raw != null ? raw : "{}";
     }
 
     public void setBlocks(final JsonNode blocks)
