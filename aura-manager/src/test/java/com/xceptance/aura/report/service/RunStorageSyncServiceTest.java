@@ -30,11 +30,14 @@ import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.aura.report.dto.AreaSummaryDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestClassSummaryDto;
@@ -1294,7 +1297,78 @@ public class RunStorageSyncServiceTest
     }
 
     @Test
+    public void testFuzzyFolderFallbackDoesNotHijackOtherDatasetOfSameClass() throws IOException
+    {
+        final String runId = "run-fuzzy-no-hijack-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path testFolder = runDir.resolve("OrderTest");
+
+        try
+        {
+            Files.createDirectories(testFolder);
+            // Only dataset A has been written so far (live run); dataset B is still pending.
+            Files.writeString(testFolder.resolve("console-execution-1.json"), """
+                {
+                    "id": "order-us-dataset",
+                    "testClass": "com.example.OrderTest",
+                    "testMethod": "order",
+                    "title": "Order US",
+                    "browser": "Chrome",
+                    "status": "running"
+                }
+                """);
+
+            Assertions.assertNull(dataService.getExecutionDetails(runId, "OrderTest#order#Order DE#Chrome#order-de-dataset"),
+                                  "A pending dataset must not be answered with the data of another dataset");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testSimpleClassKeyCollisionAcrossPackagesIsNotGuessed() throws IOException
+    {
+        final String runId = "run-simple-key-collision-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+
+        try
+        {
+            for (final String pkg : new String[]
+            {
+                "a", "b"
+            })
+            {
+                final Path folder = runDir.resolve("com_" + pkg + "_LoginTest");
+                Files.createDirectories(folder);
+                Files.writeString(folder.resolve("console-execution-1.json"), """
+                    {
+                        "id": "exec-%s",
+                        "testClass": "com.%s.LoginTest",
+                        "testMethod": "login",
+                        "title": "Default",
+                        "browser": "Chrome",
+                        "status": "passed-clean"
+                    }
+                    """.formatted(pkg, pkg));
+            }
+
+            Assertions.assertNull(dataService.getExecutionDetails(runId, "LoginTest#login#Default#Chrome"),
+                                  "Ambiguous simple-class key must not resolve to an arbitrary class");
+            final TestExecutionDto exact = dataService.getExecutionDetails(runId, "com.b.LoginTest#login#Default#Chrome");
+            Assertions.assertNotNull(exact, "Fully qualified key stays unambiguous");
+            Assertions.assertEquals("exec-b", exact.getId());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
     public void testExecutionDetailsResolvesViaRunJsonFallbackWithSimpleKey() throws IOException
+
     {
         final String runId = "run-fallback-simple-key-test";
         final Path runDir = Paths.get("storage", "runs", runId);
@@ -1396,6 +1470,49 @@ public class RunStorageSyncServiceTest
         Assertions.assertEquals("Live Submit Order", dto.getTitle());
         Assertions.assertEquals("running", dto.getStatus());
         Assertions.assertEquals(1, dto.getBlocks().path("steps").size());
+    }
+
+    @Test
+    public void testExecutionDetailsWithInteractiveSessionDoesNotHijackUnrelatedExecutions()
+    {
+        final AuraInteractiveService mockInteractiveService = new AuraInteractiveService();
+        final InteractiveConsoleEngine mockEngine = Mockito.mock(InteractiveConsoleEngine.class);
+        final String activeStateJson = """
+            {
+                "runId": "run-interactive-test",
+                "id": "interactive-active-exec",
+                "testClass": "com.xceptance.neodymium.aura.sandbox.LiveLoginTest",
+                "testMethod": "testLogin",
+                "title": "Default",
+                "browser": "Chrome",
+                "status": "running"
+            }
+            """;
+        Mockito.when(mockEngine.getCurrentStateJson()).thenReturn(activeStateJson);
+        mockInteractiveService.setCurrentConsoleEngine(mockEngine);
+
+        final AuraReportDataService service = new AuraReportDataService(
+            runRepository,
+            null,
+            variationRepository,
+            bugRepository,
+            storageService,
+            null,
+            mockInteractiveService
+        );
+
+        // 1. Matches when querying the interactive test directly via simple execution key
+        final TestExecutionDto matchedDto = service.getExecutionDetails("run-interactive-test", "LiveLoginTest#testLogin#Default#Chrome");
+        Assertions.assertNotNull(matchedDto, "Interactive execution must match its own composite key");
+        Assertions.assertEquals("interactive-active-exec", matchedDto.getId());
+
+        // 2. Matches when querying a generic console execution id
+        final TestExecutionDto genericDto = service.getExecutionDetails("run-interactive-test", "console-execution");
+        Assertions.assertNotNull(genericDto, "Generic execution ID must resolve to active interactive session");
+
+        // 3. Does NOT hijack an unrelated execution ID when the session belongs to a different test
+        final TestExecutionDto unrelatedDto = service.getExecutionDetails("run-interactive-test", "UnrelatedOrderTest#testOrder#Default#Chrome");
+        Assertions.assertNull(unrelatedDto, "Interactive session must NOT match an unrelated execution key");
     }
 }
 

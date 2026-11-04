@@ -1898,6 +1898,7 @@ function resolveTestMethod(activeRow, blocksObj) {
 }
 
 function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, runId) {
+    stopLiveStepRefreshTimer();
     currentActiveRowId = rowId || null;
     currentTestNameStr = testName || '';
     currentDataSetRaw = dataSet || '';
@@ -2264,6 +2265,11 @@ function startLiveStepRefreshTimer(activeRow) {
     function poll() {
         if (currentActiveRowId !== rowId) {
             stopLiveStepRefreshTimer();
+            return;
+        }
+
+        if (isLiveStepFetchInFlight) {
+            liveStepRefreshTimer = setTimeout(poll, 1000);
             return;
         }
 
@@ -3608,6 +3614,11 @@ function renderStepsForExecution(activeRow) {
     if (!stepsFetched && (!blocksAttr || blocksAttr === 'null' || blocksAttr === '{}') && (!stepsAttr || stepsAttr === 'null' || stepsAttr === '{}')) {
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '#RUN_ID');
         const rowId = activeRow.getAttribute('data-row-id') || activeRow.id;
+
+        // Another fetch for this row is already running; avoid duplicate requests (rowId must be declared first).
+        if (isLiveStepFetchInFlight && currentActiveRowId === rowId) {
+            return;
+        }
 
         if (rowId) {
             stepListEl.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--text-muted);"><span class="material-symbols-outlined" style="font-size: 1.5rem; vertical-align: middle; animation: spin 1s linear infinite;">sync</span> Loading steps and screenshots...</div>';

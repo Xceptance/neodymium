@@ -1049,6 +1049,11 @@ public final class StaticResourceSyntaxTest
         final String content = Files.readString(jsFilePath, StandardCharsets.UTF_8);
         Assertions.assertFalse(content.contains("sIdx"), "report-manager.js must not reference undeclared sIdx variable");
 
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
         final String nodeTestScript =
             "const fs = require('fs');\n" +
             "const vm = require('vm');\n" +
@@ -1119,6 +1124,11 @@ public final class StaticResourceSyntaxTest
         final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
         Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
 
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
         final String nodeTestScript =
             "const fs = require('fs');\n" +
             "const vm = require('vm');\n" +
@@ -1167,6 +1177,40 @@ public final class StaticResourceSyntaxTest
 
         final int exitCode = process.waitFor();
         Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+    }
+
+    @Test
+    public void testOpenTestSidePagePanelInvokesStopLiveStepRefreshTimer() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        final String content = Files.readString(jsFilePath, StandardCharsets.UTF_8);
+        final int fnIndex = content.indexOf("function openTestSidePagePanel(");
+        Assertions.assertTrue(fnIndex >= 0, "openTestSidePagePanel must exist in report-manager.js");
+
+        final String fnBody = content.substring(fnIndex, Math.min(content.length(), fnIndex + 400));
+        Assertions.assertTrue(
+            fnBody.contains("stopLiveStepRefreshTimer();"),
+            "openTestSidePagePanel must invoke stopLiveStepRefreshTimer() on entry to clean up active timers"
+        );
+    }
+
+    @Test
+    public void testLiveStepFetchInFlightGuardsArePresent() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        final String content = Files.readString(jsFilePath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            content.contains("if (isLiveStepFetchInFlight && currentActiveRowId === rowId)"),
+            "renderStepsForExecution must guard against duplicate in-flight fetches for the active row"
+        );
+        Assertions.assertTrue(
+            content.contains("if (isLiveStepFetchInFlight)") && content.contains("liveStepRefreshTimer = setTimeout(poll, 1000)"),
+            "poll must reschedule when fetch is in-flight"
+        );
     }
 }
 
