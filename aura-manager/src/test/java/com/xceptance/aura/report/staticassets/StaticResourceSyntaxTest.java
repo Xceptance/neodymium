@@ -1039,5 +1039,78 @@ public final class StaticResourceSyntaxTest
         final int exitCode = process.waitFor();
         Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
     }
+
+    @Test
+    public void testSubStepLlmInvocationRenderingDoesNotReferenceUndeclaredSidx() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        final String content = Files.readString(jsFilePath, StandardCharsets.UTF_8);
+        Assertions.assertFalse(content.contains("sIdx"), "report-manager.js must not reference undeclared sIdx variable");
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sampleRow = {\n" +
+            "    id: 'row_1',\n" +
+            "    querySelector: () => null,\n" +
+            "    getAttribute: (name) => {\n" +
+            "        if (name === 'data-blocks') {\n" +
+            "            return JSON.stringify({\n" +
+            "                steps: [{\n" +
+            "                    instruction: 'Parent step',\n" +
+            "                    subSteps: [{\n" +
+            "                        instruction: 'Child sub-step',\n" +
+            "                        llmCalls: [{ model: 'gemini-2.5', userPrompt: 'prompt', responseContent: 'response' }]\n" +
+            "                    }]\n" +
+            "                }]\n" +
+            "            });\n" +
+            "        }\n" +
+            "        if (name === 'data-status') return 'FAILED';\n" +
+            "        return '';\n" +
+            "    },\n" +
+            "    hasAttribute: (name) => name === 'data-steps-fetched',\n" +
+            "    setAttribute: () => {},\n" +
+            "    removeAttribute: () => {}\n" +
+            "};\n" +
+            "const sideList = { innerHTML: '', querySelector: () => null };\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        readyState: 'complete',\n" +
+            "        getElementById: (id) => (id === 'sidePageStepList' ? sideList : null),\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {}, contains: () => true }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "sandbox.renderStepsForExecution(sampleRow);\n" +
+            "if (!sideList.innerHTML.includes('Child sub-step') || !sideList.innerHTML.includes('LLM Invocations')) {\n" +
+            "    throw new Error('Expected rendered step HTML with sub-step LLM invocations but got: ' + sideList.innerHTML);\n" +
+            "}\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+    }
 }
 

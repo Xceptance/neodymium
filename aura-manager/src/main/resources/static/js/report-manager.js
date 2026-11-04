@@ -3639,10 +3639,9 @@ function renderStepsForExecution(activeRow) {
                 })
                 .catch(err => {
                     console.error('Error fetching execution details:', err);
-                    const hasExistingSteps = (activeRow.getAttribute('data-blocks') && activeRow.getAttribute('data-blocks') !== '{}' && activeRow.getAttribute('data-blocks') !== 'null') ||
-                                             (activeRow.getAttribute('data-steps') && activeRow.getAttribute('data-steps') !== '{}' && activeRow.getAttribute('data-steps') !== 'null') ||
-                                             (stepListEl.querySelector('.step-card') !== null);
-                    if (!hasExistingSteps) {
+                    const isStillLoading = stepListEl.innerHTML.includes('Loading steps');
+                    const hasRenderedSteps = stepListEl.querySelector('.step-card') !== null || stepListEl.querySelector('.step-section') !== null;
+                    if (isStillLoading || !hasRenderedSteps) {
                         stepListEl.innerHTML = '<div style="padding: 1rem; color: #ef4444; font-size: 0.85rem;">Failed to load step details for this test execution.</div>';
                     }
                 });
@@ -4252,12 +4251,12 @@ function renderStepsForExecution(activeRow) {
                     let subLlmCallsHtml = '';
                     const subLlmList = Array.isArray(sub.llmCalls) ? sub.llmCalls : [];
                     if (subLlmList.length > 0) {
-                        const subStepKey = `${stepId}_sub_${sIdx}`;
+                        const subStepKey = `${stepId}_sub_${subIdx}`;
                         window._neodymiumStepLlmData = window._neodymiumStepLlmData || {};
                         window._neodymiumStepLlmData[subStepKey] = {
                             stepId: subStepKey,
-                            stepNum: `${stepNum}.${sIdx + 1}`,
-                            title: sub.instruction || sub.name || `Sub-step ${sIdx + 1}`,
+                            stepNum: `${stepNum}.${subIdx + 1}`,
+                            title: sub.instruction || sub.name || `Sub-step ${subIdx + 1}`,
                             model: (subLlmList[0] && (subLlmList[0].model || subLlmList[0].modelName)) || '',
                             totalTokens: 0,
                             totalCost: '$0.0000',
