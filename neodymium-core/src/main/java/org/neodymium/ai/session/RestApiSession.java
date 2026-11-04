@@ -81,7 +81,7 @@ class RestApiSession extends AiSession
     }
 
     @Override
-    public void close() throws Exception
+    protected void doClose() throws Exception
     {
         if (getTargetExecutor() instanceof AutoCloseable closeable)
         {

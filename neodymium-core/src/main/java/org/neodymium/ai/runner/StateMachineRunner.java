@@ -23,7 +23,9 @@ import com.codeborne.selenide.Selenide;
 import com.codeborne.selenide.WebDriverRunner;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.LlmCapability;
@@ -664,7 +666,9 @@ public final class StateMachineRunner
                 LOGGER.warn("⚠️ Post-flight empirical linter encountered an unexpected error: {}", t.getMessage(), t);
             }
 
-            if (Boolean.TRUE.equals(context.getTransientData().get("playbook.deferSessionFinished")))
+            final boolean isManagedLifecycle = Boolean.TRUE.equals(context.getTransientData().get(ExecutionContext.KEY_MANAGED_LIFECYCLE));
+            final boolean isDeferred = Boolean.TRUE.equals(context.getTransientData().get("playbook.deferSessionFinished"));
+            if (isManagedLifecycle || isDeferred)
             {
                 LOGGER.debug("Playbook intermediate block finished; SessionFinishedEvent deferred until remaining blocks execute.");
                 ExecutionContext.setActiveContext(previousContext);
@@ -676,7 +680,7 @@ public final class StateMachineRunner
 
                 try
                 {
-                    context.getTransientData().put("sessionFinishedHandled", true);
+                    context.getTransientData().put(ExecutionContext.KEY_SESSION_FINISHED_HANDLED, true);
                     this.session.getEventBus().dispatch(new SessionFinishedEvent(durationMs, success, warningsList != null ? warningsList : Collections.emptyList()));
                     logFinalStatsSummary(context, durationMs, success, failureCause);
                     this.session.runPostHooks(success);
@@ -1239,11 +1243,13 @@ public final class StateMachineRunner
                     }
                 }
             }
+            final Set<PlaybookStep> targetSet = new HashSet<>(targetSteps);
+            final Set<PlaybookStep> afterSet = afterSteps != null ? new HashSet<>(afterSteps) : Collections.emptySet();
             if (beforeSteps != null && !beforeSteps.isEmpty())
             {
                 for (final PlaybookStep s : beforeSteps)
                 {
-                    if (!targetSteps.contains(s))
+                    if (targetSet.add(s))
                     {
                         targetSteps.add(s);
                     }
@@ -1253,7 +1259,19 @@ public final class StateMachineRunner
             {
                 for (final PlaybookStep s : sessionSteps)
                 {
-                    if (!targetSteps.contains(s) && !"after".equalsIgnoreCase(s.getBlock()) && (afterSteps == null || !afterSteps.contains(s)))
+                    if (!"after".equalsIgnoreCase(s.getBlock()) && !afterSet.contains(s) && targetSet.add(s))
+                    {
+                        targetSteps.add(s);
+                    }
+                }
+            }
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> mainSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.mainSteps");
+            if (mainSteps != null && !mainSteps.isEmpty())
+            {
+                for (final PlaybookStep s : mainSteps)
+                {
+                    if (!"after".equalsIgnoreCase(s.getBlock()) && !afterSet.contains(s) && targetSet.add(s))
                     {
                         targetSteps.add(s);
                     }

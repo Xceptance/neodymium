@@ -20,7 +20,9 @@ package com.xceptance.neodymium.ai.console;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -396,13 +398,52 @@ public final class InteractiveStateBuilder
                 }
             }
             @SuppressWarnings("unchecked")
-            List<PlaybookStep> playbookSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
-            if (playbookSteps == null)
+            final List<PlaybookStep> mainSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.mainSteps");
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> sessionSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+
+            List<PlaybookStep> playbookSteps;
+            if (mainSteps != null && !mainSteps.isEmpty())
+            {
+                if (sessionSteps != null && !sessionSteps.isEmpty())
+                {
+                    final Set<PlaybookStep> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+                    final List<PlaybookStep> merged = new ArrayList<>();
+                    for (final PlaybookStep s : sessionSteps)
+                    {
+                        if (s != null && seen.add(s))
+                        {
+                            merged.add(s);
+                        }
+                    }
+                    for (final PlaybookStep s : mainSteps)
+                    {
+                        if (s != null && seen.add(s))
+                        {
+                            merged.add(s);
+                        }
+                    }
+                    playbookSteps = merged;
+                }
+                else
+                {
+                    playbookSteps = mainSteps;
+                }
+            }
+            else if (sessionSteps != null && !sessionSteps.isEmpty())
+            {
+                playbookSteps = sessionSteps;
+            }
+            else
             {
                 final Object pbObj = context.getTransientData().get(ExecutionContext.KEY_PLAYBOOK);
                 if (pbObj instanceof Playbook pb)
                 {
                     playbookSteps = pb.getSteps();
+                }
+                else
+                {
+                    playbookSteps = null;
                 }
             }
             @SuppressWarnings("unchecked")
@@ -510,16 +551,35 @@ public final class InteractiveStateBuilder
 
             if (stepsToSerialize != null)
             {
+                final Set<PlaybookStep> beforeSet = beforeSteps != null ? new HashSet<>(beforeSteps) : Collections.emptySet();
+                final Set<PlaybookStep> afterSet = afterSteps != null ? new HashSet<>(afterSteps) : Collections.emptySet();
+                int blockStepIndex = 0;
                 for (int i = 0; i < stepsToSerialize.size(); i++)
                 {
                     final PlaybookStep step = stepsToSerialize.get(i);
-                    final JsonObject stepObj = serializeStep(step, i, globalIndex, activeStepIndex, context, "playbook", stepsActive, stepsPassed, execReport, runnerStatus, sectionFailed, currentStep);
+                    if (step == null)
+                    {
+                        continue;
+                    }
+                    final String block = step.getBlock();
+                    final PlaybookStep root = step.getRootStep() != null ? step.getRootStep() : step;
+                    if ("before".equalsIgnoreCase(block)
+                        || "after".equalsIgnoreCase(block)
+                        || beforeSet.contains(step)
+                        || beforeSet.contains(root)
+                        || afterSet.contains(step)
+                        || afterSet.contains(root))
+                    {
+                        continue;
+                    }
+                    final JsonObject stepObj = serializeStep(step, blockStepIndex, globalIndex, activeStepIndex, context, "playbook", stepsActive, stepsPassed, execReport, runnerStatus, sectionFailed, currentStep);
                     if (stepObj.has("status") && "failed".equalsIgnoreCase(stepObj.get("status").getAsString()))
                     {
                         sectionFailed = true;
                     }
                     stepsArray.add(stepObj);
                     globalIndex++;
+                    blockStepIndex++;
                 }
             }
 

@@ -104,6 +104,10 @@ public final class ExecutionContext
     public static final String KEY_EXECUTION_MODE = "executionMode";
     public static final String KEY_CONFIGURED_EXECUTION_MODE = "configuredExecutionMode";
     public static final String KEY_LAST_EXECUTION_ERROR = "lastExecutionError";
+    public static final String KEY_MANAGED_LIFECYCLE = "playbook.managedLifecycle";
+    public static final String KEY_MANAGED_START_TIME = "playbook.managedStartTime";
+    public static final String KEY_SESSION_FINISHED_HANDLED = "sessionFinishedHandled";
+    public static final String KEY_ACTIVE_PHASE = "playbook.activePhase";
     public static final String KEY_ACTIVE_DATASET_LABEL = "activeDatasetLabel";
     public static final String KEY_PLAYBOOK = "playbook";
     public static final String KEY_ACTIVE_MODEL = "activeModel";

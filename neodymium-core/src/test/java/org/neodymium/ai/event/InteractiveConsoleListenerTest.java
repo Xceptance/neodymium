@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -2448,5 +2449,207 @@ public class InteractiveConsoleListenerTest
             "lastFixSuggestion must be removed upon EDIT");
         assertTrue(Boolean.TRUE.equals(context.getTransientData().get("KEY_AUTO_CONFIRM_ONCE")),
             "KEY_AUTO_CONFIRM_ONCE must be set when autoConfirm is true");
+    }
+
+    /**
+     * Goal: Verifies that adding a step to the "steps" block during setup pause targets
+     * "playbook.mainSteps" when present, preserving all original pending test steps.
+     */
+    @Test
+    public void testInteractiveAddStepPreservesPendingMainSteps()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep beforeStep = new PlaybookStep("Setup step in beforeEach");
+        beforeStep.setStatus(PlaybookStepStatus.RUNNING);
+        beforeStep.setBlock("before");
+
+        final PlaybookStep mainStep1 = new PlaybookStep("Main test step 1");
+        mainStep1.setStatus(PlaybookStepStatus.PENDING);
+        mainStep1.setBlock("steps");
+
+        final PlaybookStep mainStep2 = new PlaybookStep("Main test step 2");
+        mainStep2.setStatus(PlaybookStepStatus.PENDING);
+        mainStep2.setBlock("steps");
+
+        final ExecutionContext context = session.getExecutionContext();
+        final List<PlaybookStep> beforeSteps = new ArrayList<>(List.of(beforeStep));
+        final List<PlaybookStep> mainSteps = new ArrayList<>(List.of(mainStep1, mainStep2));
+        final List<PlaybookStep> executedSteps = new ArrayList<>(List.of(beforeStep));
+
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, beforeStep);
+        context.getTransientData().put("playbook.beforeSteps", beforeSteps);
+        context.getTransientData().put("playbook.mainSteps", mainSteps);
+        context.getTransientData().put("playbook.steps", executedSteps);
+
+        context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(beforeStep, session, context));
+
+        final JsonObject addAction = new JsonObject();
+        addAction.addProperty("action", "ADD");
+        addAction.addProperty("block", "steps");
+        addAction.addProperty("instruction", "Newly added test step");
+
+        final JsonObject runAction = new JsonObject();
+        runAction.addProperty("action", "RUN");
+
+        submitActionsSequentiallyAsynchronously(List.of(addAction, runAction));
+
+        final String result = listener.pauseBeforeActionExecution(context, beforeStep);
+        assertEquals("RUN", result);
+
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> updatedMainSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.mainSteps");
+        assertNotNull(updatedMainSteps);
+        assertEquals(3, updatedMainSteps.size(), "Pending mainSteps must retain original steps and include the newly added step");
+        assertEquals("Main test step 1", updatedMainSteps.get(0).getInstruction());
+        assertEquals("Main test step 2", updatedMainSteps.get(1).getInstruction());
+        assertEquals("Newly added test step", updatedMainSteps.get(2).getInstruction());
+    }
+
+    /**
+     * Goal: Verifies that adding a step during active test step execution targets
+     * "playbook.mainSteps" at the exact relative UI index even when setup steps are present in playbook.steps.
+     */
+    @Test
+    public void testInteractiveActionsDuringTestExecutionTargetMainSteps()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep beforeStep = new PlaybookStep("Setup step in beforeEach");
+        beforeStep.setStatus(PlaybookStepStatus.SUCCESS);
+        beforeStep.setBlock("before");
+
+        final PlaybookStep mainStep1 = new PlaybookStep("Main test step 1");
+        mainStep1.setStatus(PlaybookStepStatus.RUNNING);
+        mainStep1.setBlock("steps");
+
+        final PlaybookStep mainStep2 = new PlaybookStep("Main test step 2");
+        mainStep2.setStatus(PlaybookStepStatus.PENDING);
+        mainStep2.setBlock("steps");
+
+        final ExecutionContext context = session.getExecutionContext();
+        final List<PlaybookStep> beforeSteps = new ArrayList<>(List.of(beforeStep));
+        final List<PlaybookStep> mainSteps = new ArrayList<>(List.of(mainStep1, mainStep2));
+        final List<PlaybookStep> executedSteps = new ArrayList<>(List.of(beforeStep, mainStep1));
+
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, mainStep1);
+        context.getTransientData().put("playbook.beforeSteps", beforeSteps);
+        context.getTransientData().put("playbook.mainSteps", mainSteps);
+        context.getTransientData().put("playbook.steps", executedSteps);
+
+        context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(mainStep1, session, context));
+
+        final JsonObject addAction = new JsonObject();
+        addAction.addProperty("action", "ADD");
+        addAction.addProperty("block", "steps");
+        addAction.addProperty("index", 1);
+        addAction.addProperty("instruction", "Inserted step between mainStep1 and mainStep2");
+
+        final JsonObject runAction = new JsonObject();
+        runAction.addProperty("action", "RUN");
+
+        submitActionsSequentiallyAsynchronously(List.of(addAction, runAction));
+
+        final String result = listener.pauseBeforeActionExecution(context, mainStep1);
+        assertEquals("RUN", result);
+
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> updatedMainSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.mainSteps");
+        assertNotNull(updatedMainSteps);
+        assertEquals(3, updatedMainSteps.size());
+        assertEquals("Main test step 1", updatedMainSteps.get(0).getInstruction());
+        assertEquals("Inserted step between mainStep1 and mainStep2", updatedMainSteps.get(1).getInstruction());
+        assertEquals("Main test step 2", updatedMainSteps.get(2).getInstruction());
+    }
+
+    /**
+     * Goal: Verifies that in programmatic tests (where playbook.mainSteps is absent or empty),
+     * interactive step additions correctly manipulate playbook.steps directly.
+     */
+    @Test
+    public void testInteractiveActionsInProgrammaticTestTargetPlaybookSteps()
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+        eventBus.registerListener(listener);
+
+        final PlaybookStep progStep1 = new PlaybookStep("Programmatic step 1");
+        progStep1.setStatus(PlaybookStepStatus.RUNNING);
+
+        final ExecutionContext context = session.getExecutionContext();
+        final List<PlaybookStep> stepsList = new ArrayList<>(List.of(progStep1));
+
+        context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, progStep1);
+        context.getTransientData().put("playbook.steps", stepsList);
+        context.getTransientData().remove("playbook.mainSteps");
+
+        context.pushStep(ExecuteActionsStep.mapPlaybookStepToPipelineStep(progStep1, session, context));
+
+        final JsonObject addAction = new JsonObject();
+        addAction.addProperty("action", "ADD");
+        addAction.addProperty("block", "steps");
+        addAction.addProperty("instruction", "Programmatic dynamic step 2");
+
+        final JsonObject runAction = new JsonObject();
+        runAction.addProperty("action", "RUN");
+
+        submitActionsSequentiallyAsynchronously(List.of(addAction, runAction));
+
+        final String result = listener.pauseBeforeActionExecution(context, progStep1);
+        assertEquals("RUN", result);
+
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> updatedSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
+        assertNotNull(updatedSteps);
+        assertEquals(2, updatedSteps.size());
+        assertEquals("Programmatic step 1", updatedSteps.get(0).getInstruction());
+        assertEquals("Programmatic dynamic step 2", updatedSteps.get(1).getInstruction());
+    }
+
+    /**
+     * Goal: Verifies that updateFlatSteps uses identity deduplication to eliminate
+     * duplicate steps from overlapping before/main/session collections while retaining dynamic inline steps.
+     */
+    @Test
+    public void testUpdateFlatStepsEliminatesDuplicatesWhileRetainingInlineSteps() throws Exception
+    {
+        final InteractiveConsoleListener listener = new InteractiveConsoleListener(consoleEngine, session, true);
+
+        final PlaybookStep beforeStep = new PlaybookStep("Setup step");
+        beforeStep.setBlock("before");
+
+        final PlaybookStep mainStep1 = new PlaybookStep("Core step 1");
+        mainStep1.setBlock("steps");
+
+        final PlaybookStep mainStep2 = new PlaybookStep("Core step 2");
+        mainStep2.setBlock("steps");
+
+        final PlaybookStep inlineStep = new PlaybookStep("Dynamic inline step");
+        inlineStep.setBlock("steps");
+
+        final PlaybookStep afterStep = new PlaybookStep("Teardown step");
+        afterStep.setBlock("after");
+
+        final ExecutionContext context = session.getExecutionContext();
+        context.getTransientData().put("playbook.beforeSteps", new ArrayList<>(List.of(beforeStep)));
+        context.getTransientData().put("playbook.mainSteps", new ArrayList<>(List.of(mainStep1, mainStep2)));
+        // sessionSteps (playbook.steps) contains executed before, executed main1, and dynamic inline
+        context.getTransientData().put("playbook.steps", new ArrayList<>(List.of(beforeStep, mainStep1, inlineStep)));
+        context.getTransientData().put("playbook.afterSteps", new ArrayList<>(List.of(afterStep)));
+
+        final Method updateMethod = InteractiveConsoleListener.class.getDeclaredMethod("updateFlatSteps", ExecutionContext.class);
+        updateMethod.setAccessible(true);
+        updateMethod.invoke(listener, context);
+
+        @SuppressWarnings("unchecked")
+        final List<PlaybookStep> flatSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.flatSteps");
+        assertNotNull(flatSteps);
+        assertEquals(5, flatSteps.size(), "flatSteps must contain exactly 5 unique steps without duplicates");
+        assertEquals("Setup step", flatSteps.get(0).getInstruction());
+        assertEquals("Core step 1", flatSteps.get(1).getInstruction());
+        assertEquals("Core step 2", flatSteps.get(2).getInstruction());
+        assertEquals("Dynamic inline step", flatSteps.get(3).getInstruction());
+        assertEquals("Teardown step", flatSteps.get(4).getInstruction());
     }
 }

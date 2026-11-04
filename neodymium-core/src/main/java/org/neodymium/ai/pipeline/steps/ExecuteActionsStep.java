@@ -1117,29 +1117,39 @@ public final class ExecuteActionsStep
         final List<PlaybookStep> playbookSteps
     )
     {
-        // 1. Check playbook.steps for top-level step match
-        if (playbookSteps != null && !playbookSteps.isEmpty())
+        // 1. Exact identity match for targetForIndex in flatSteps (global canonical index)
+        if (flatSteps != null && !flatSteps.isEmpty())
         {
-            for (int i = 0; i < playbookSteps.size(); i++)
+            for (int i = 0; i < flatSteps.size(); i++)
             {
-                if (playbookSteps.get(i) == targetForIndex)
+                if (flatSteps.get(i) == targetForIndex)
                 {
                     return i;
                 }
             }
         }
 
-        if (flatSteps == null || flatSteps.isEmpty())
+        // 2. If targetForIndex was step's parent and not in flatSteps, try step itself in flatSteps
+        if (flatSteps != null && !flatSteps.isEmpty() && targetForIndex != step)
         {
-            return -1;
+            for (int i = 0; i < flatSteps.size(); i++)
+            {
+                if (flatSteps.get(i) == step)
+                {
+                    return i;
+                }
+            }
         }
 
-        // 2. Exact identity match for targetForIndex in flatSteps
-        for (int i = 0; i < flatSteps.size(); i++)
+        // 3. Fallback to playbook.steps if flatSteps is not yet populated
+        if (playbookSteps != null && !playbookSteps.isEmpty())
         {
-            if (flatSteps.get(i) == targetForIndex)
+            for (int i = 0; i < playbookSteps.size(); i++)
             {
-                return i;
+                if (playbookSteps.get(i) == targetForIndex || playbookSteps.get(i) == step)
+                {
+                    return i;
+                }
             }
         }
 
