@@ -2008,7 +2008,13 @@ function openTestSidePagePanel(testName, dataSet, statusKey, issueTag, rowId, ru
 
         currentExecutionIsFailed = statusKey ? statusKey.includes('fail') : true;
         renderSidePanelStatusBugs();
+        const hasCachedSteps = activeRow && (activeRow.hasAttribute('data-steps-fetched') ||
+            (activeRow.getAttribute('data-blocks') && activeRow.getAttribute('data-blocks') !== '{}' && activeRow.getAttribute('data-blocks') !== 'null') ||
+            (activeRow.getAttribute('data-steps') && activeRow.getAttribute('data-steps') !== '{}' && activeRow.getAttribute('data-steps') !== 'null'));
         renderStepsForExecution(activeRow);
+        if (hasCachedSteps) {
+            startLiveStepRefreshTimer(activeRow);
+        }
     }
 
     const panel = document.getElementById('testSidePagePanel');
@@ -2156,6 +2162,8 @@ function syncAllRowsAiUsage() {
 }
 
 let liveStepRefreshTimer = null;
+let activeStepFetchId = 0;
+let activeStepAbortController = null;
 let isLiveStepFetchInFlight = false;
 
 function isTerminalStatus(status) {
@@ -2164,8 +2172,11 @@ function isTerminalStatus(status) {
     return s.startsWith('pass') ||
            s.startsWith('fail') ||
            s.startsWith('succeed') ||
+           s.startsWith('success') ||
            s.startsWith('error') ||
            s.startsWith('abort') ||
+           s.startsWith('cancel') ||
+           s.startsWith('stop') ||
            s.startsWith('ignore') ||
            s.startsWith('skip') ||
            s === 'completed';
@@ -2173,9 +2184,17 @@ function isTerminalStatus(status) {
 
 function stopLiveStepRefreshTimer() {
     if (liveStepRefreshTimer) {
+        clearTimeout(liveStepRefreshTimer);
         clearInterval(liveStepRefreshTimer);
         liveStepRefreshTimer = null;
     }
+    if (activeStepAbortController) {
+        try {
+            activeStepAbortController.abort();
+        } catch (e) {}
+        activeStepAbortController = null;
+    }
+    activeStepFetchId++;
     isLiveStepFetchInFlight = false;
 }
 
@@ -2242,8 +2261,9 @@ function startLiveStepRefreshTimer(activeRow) {
 
     if (!runId || !rowId) return;
 
-    liveStepRefreshTimer = setInterval(() => {
-        if (isLiveStepFetchInFlight) {
+    function poll() {
+        if (currentActiveRowId !== rowId) {
+            stopLiveStepRefreshTimer();
             return;
         }
 
@@ -2260,13 +2280,16 @@ function startLiveStepRefreshTimer(activeRow) {
             return;
         }
 
+        const fetchId = ++activeStepFetchId;
         isLiveStepFetchInFlight = true;
-        fetch(`/fragments/test-side-panel/steps?runId=${encodeURIComponent(runId)}&rowId=${encodeURIComponent(rowId)}`)
-            .then(res => {
-                if (!res.ok) return null;
-                return res.json();
-            })
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        activeStepAbortController = controller;
+        const opts = controller ? { signal: controller.signal } : {};
+
+        fetch(`/fragments/test-side-panel/steps?runId=${encodeURIComponent(runId)}&rowId=${encodeURIComponent(rowId)}`, opts)
+            .then(res => res.ok ? res.json() : null)
             .then(execDto => {
+                if (fetchId !== activeStepFetchId || currentActiveRowId !== rowId) return;
                 if (execDto) {
                     let changed = false;
                     const prevBlocks = currentActiveEl.getAttribute('data-blocks');
@@ -2349,9 +2372,25 @@ function startLiveStepRefreshTimer(activeRow) {
             })
             .catch(() => {})
             .finally(() => {
-                isLiveStepFetchInFlight = false;
+                if (activeStepAbortController === controller) {
+                    activeStepAbortController = null;
+                }
+                if (fetchId === activeStepFetchId) {
+                    isLiveStepFetchInFlight = false;
+                }
+                if (currentActiveRowId === rowId && liveStepRefreshTimer !== null) {
+                    const currentSt = currentActiveEl.getAttribute('data-status') || '';
+                    const currentStRaw = currentActiveEl.getAttribute('data-status-raw') || '';
+                    if (!isTerminalStatus(currentSt) && !isTerminalStatus(currentStRaw)) {
+                        liveStepRefreshTimer = setTimeout(poll, 2500);
+                    } else {
+                        stopLiveStepRefreshTimer();
+                    }
+                }
             });
-    }, 2500);
+    }
+
+    liveStepRefreshTimer = setTimeout(poll, 2500);
 }
 
 function escapeHtml(str) {
@@ -3562,26 +3601,31 @@ function renderStepsForExecution(activeRow) {
         return;
     }
 
-    startLiveStepRefreshTimer(activeRow);
-
     const blocksAttr = activeRow.getAttribute('data-blocks');
     const stepsAttr = activeRow.getAttribute('data-steps');
     const stepsFetched = activeRow.hasAttribute('data-steps-fetched');
 
     if (!stepsFetched && (!blocksAttr || blocksAttr === 'null' || blocksAttr === '{}') && (!stepsAttr || stepsAttr === 'null' || stepsAttr === '{}')) {
-        activeRow.setAttribute('data-steps-fetched', 'true');
         const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '#RUN_ID');
         const rowId = activeRow.getAttribute('data-row-id') || activeRow.id;
 
         if (rowId) {
             stepListEl.innerHTML = '<div style="padding: 1.5rem; text-align: center; color: var(--text-muted);"><span class="material-symbols-outlined" style="font-size: 1.5rem; vertical-align: middle; animation: spin 1s linear infinite;">sync</span> Loading steps and screenshots...</div>';
 
-            fetch(`/fragments/test-side-panel/steps?runId=${encodeURIComponent(runId)}&rowId=${encodeURIComponent(rowId)}`)
+            const fetchId = ++activeStepFetchId;
+            isLiveStepFetchInFlight = true;
+            const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+            activeStepAbortController = controller;
+            const opts = controller ? { signal: controller.signal } : {};
+
+            fetch(`/fragments/test-side-panel/steps?runId=${encodeURIComponent(runId)}&rowId=${encodeURIComponent(rowId)}`, opts)
                 .then(res => {
                     if (!res.ok) throw new Error('Network response was not ok');
                     return res.json();
                 })
                 .then(execDto => {
+                    if (fetchId !== activeStepFetchId || currentActiveRowId !== rowId) return;
+                    activeRow.setAttribute('data-steps-fetched', 'true');
                     if (execDto) {
                         const newBlocks = extractBlocksJson(execDto);
                         const newSteps = extractStepsJson(execDto);
@@ -3633,16 +3677,29 @@ function renderStepsForExecution(activeRow) {
                         }
 
                         renderStepsForExecution(activeRow);
+                        startLiveStepRefreshTimer(activeRow);
                     } else {
                         renderStepsForExecution(activeRow);
+                        startLiveStepRefreshTimer(activeRow);
                     }
                 })
                 .catch(err => {
+                    if (err.name === 'AbortError' || fetchId !== activeStepFetchId || currentActiveRowId !== rowId) {
+                        return;
+                    }
                     console.error('Error fetching execution details:', err);
                     const isStillLoading = stepListEl.innerHTML.includes('Loading steps');
                     const hasRenderedSteps = stepListEl.querySelector('.step-card') !== null || stepListEl.querySelector('.step-section') !== null;
                     if (isStillLoading || !hasRenderedSteps) {
                         stepListEl.innerHTML = '<div style="padding: 1rem; color: #ef4444; font-size: 0.85rem;">Failed to load step details for this test execution.</div>';
+                    }
+                })
+                .finally(() => {
+                    if (activeStepAbortController === controller) {
+                        activeStepAbortController = null;
+                    }
+                    if (fetchId === activeStepFetchId) {
+                        isLiveStepFetchInFlight = false;
                     }
                 });
             return;

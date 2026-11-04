@@ -1112,5 +1112,61 @@ public final class StaticResourceSyntaxTest
         final int exitCode = process.waitFor();
         Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
     }
+
+    @Test
+    public void testIsTerminalStatusRecognizesNormalizedStatusesAndHandlesAbort() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        readyState: 'complete',\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {}, contains: () => true }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "const terminalChecks = ['PASSED', 'passed-clean', 'failed-assertion', 'succeeded-fixed', 'SUCCESS', 'successful', 'cancelled', 'canceled', 'stopped', 'aborted', 'skipped', 'ignored', 'completed'];\n" +
+            "for (const st of terminalChecks) {\n" +
+            "    if (!sandbox.isTerminalStatus(st)) {\n" +
+            "        throw new Error('Status should be recognized as terminal: ' + st);\n" +
+            "    }\n" +
+            "}\n" +
+            "const nonTerminalChecks = ['running', 'in_progress', 'pending', 'queued', 'paused', 'waiting', '', null, undefined];\n" +
+            "for (const st of nonTerminalChecks) {\n" +
+            "    if (sandbox.isTerminalStatus(st)) {\n" +
+            "        throw new Error('Status should NOT be recognized as terminal: ' + st);\n" +
+            "    }\n" +
+            "}\n" +
+            "sandbox.stopLiveStepRefreshTimer();\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+    }
 }
 

@@ -56,6 +56,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -1322,7 +1323,7 @@ public class AuraReportDataService
             }
         }
 
-        final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(runId);
+        final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(effectiveRunId);
         if (runJsonOpt.isPresent())
         {
             try
@@ -1331,14 +1332,19 @@ public class AuraReportDataService
                 final JsonNode execMetrics = root.path("executionMetrics");
                 if (execMetrics.isObject() && !execMetrics.isEmpty())
                 {
-                    for (final java.util.Map.Entry<String, JsonNode> entry : (Iterable<java.util.Map.Entry<String, JsonNode>>) () -> execMetrics.fields())
+                    for (final Entry<String, JsonNode> entry : (Iterable<Entry<String, JsonNode>>) () -> execMetrics.fields())
                     {
                         final JsonNode node = entry.getValue();
-                        final String id = node.path("id").asText(entry.getKey());
-                        if (executionId.equalsIgnoreCase(id) || executionId.equalsIgnoreCase(entry.getKey()))
+                        final String key = entry.getKey();
+                        final String id = node.path("id").asText(key);
+                        final String simpleKey = extractSimpleExecutionKey(key);
+
+                        if (executionId.equalsIgnoreCase(id)
+                                || executionId.equalsIgnoreCase(key)
+                                || (!simpleKey.isEmpty() && executionId.equalsIgnoreCase(simpleKey)))
                         {
                             final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
-                            resolveBugsForExecution(runId, dto);
+                            resolveBugsForExecution(effectiveRunId, dto);
                             return dto;
                         }
                     }
@@ -1348,10 +1354,10 @@ public class AuraReportDataService
                 {
                     for (final JsonNode execNode : execArray)
                     {
-                        if (executionId.equalsIgnoreCase(execNode.path("id").asText("")))
+                        final TestExecutionDto dto = objectMapper.treeToValue(execNode, TestExecutionDto.class);
+                        if (executionId.equalsIgnoreCase(execNode.path("id").asText("")) || matchesExecution(dto, executionId))
                         {
-                            final TestExecutionDto dto = objectMapper.treeToValue(execNode, TestExecutionDto.class);
-                            resolveBugsForExecution(runId, dto);
+                            resolveBugsForExecution(effectiveRunId, dto);
                             return dto;
                         }
                     }
@@ -1359,7 +1365,7 @@ public class AuraReportDataService
             }
             catch (final Exception e)
             {
-                LOG.error("Failed reading execution details from run.json for runId={}, execId={}: {}", runId, executionId, e.getMessage());
+                LOG.error("Failed reading execution details from run.json for runId={}, execId={}: {}", effectiveRunId, executionId, e.getMessage());
             }
         }
 
@@ -1372,10 +1378,10 @@ public class AuraReportDataService
                 {
                     final JsonNode node = objectMapper.readTree(liveJson);
                     final String liveRunId = node.path("runId").asText("");
-                    if (runId.equalsIgnoreCase(liveRunId) || liveRunId.isEmpty())
+                    if (effectiveRunId.equalsIgnoreCase(liveRunId) || runId.equalsIgnoreCase(liveRunId) || liveRunId.isEmpty())
                     {
                         final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
-                        if (dto != null)
+                        if (dto != null && (executionId.equalsIgnoreCase(dto.getId()) || matchesExecution(dto, executionId) || liveRunId.equalsIgnoreCase(effectiveRunId)))
                         {
                             if (dto.getId() == null || dto.getId().isBlank()
                                     || "bad".equalsIgnoreCase(dto.getId())
@@ -1384,7 +1390,7 @@ public class AuraReportDataService
                             {
                                 dto.setId(executionId);
                             }
-                            resolveBugsForExecution(runId, dto);
+                            resolveBugsForExecution(effectiveRunId, dto);
                             return dto;
                         }
                     }
@@ -1395,33 +1401,49 @@ public class AuraReportDataService
             }
         }
 
-        final RunReportDto cachedReport = runReportCache.get(runId);
+        final RunReportDto cachedReport = runReportCache.get(effectiveRunId) != null ? runReportCache.get(effectiveRunId) : runReportCache.get(runId);
         if (cachedReport != null && cachedReport.getExecutions() != null)
         {
             for (final TestExecutionDto dto : cachedReport.getExecutions())
             {
                 if (matchesExecution(dto, executionId))
                 {
-                    resolveBugsForExecution(runId, dto);
+                    resolveBugsForExecution(effectiveRunId, dto);
                     return dto;
                 }
             }
         }
 
-        final List<TestExecutionDto> liveList = liveRunBuffer.get(runId);
+        final List<TestExecutionDto> liveList = liveRunBuffer.get(effectiveRunId) != null ? liveRunBuffer.get(effectiveRunId) : liveRunBuffer.get(runId);
         if (liveList != null)
         {
             for (final TestExecutionDto dto : liveList)
             {
                 if (matchesExecution(dto, executionId))
                 {
-                    resolveBugsForExecution(runId, dto);
+                    resolveBugsForExecution(effectiveRunId, dto);
                     return dto;
                 }
             }
         }
 
         return null;
+    }
+
+    private static String extractSimpleExecutionKey(final String key)
+    {
+        if (key == null || key.isBlank())
+        {
+            return "";
+        }
+        final int hashIdx = key.indexOf('#');
+        final String classPart = hashIdx >= 0 ? key.substring(0, hashIdx) : key;
+        final int dotIdx = classPart.lastIndexOf('.');
+        if (dotIdx >= 0)
+        {
+            return classPart.substring(dotIdx + 1) + (hashIdx >= 0 ? key.substring(hashIdx) : "");
+        }
+        return key;
     }
 
     private boolean matchesExecution(final TestExecutionDto dto, final String targetId)
@@ -1447,10 +1469,20 @@ public class AuraReportDataService
         final String execKeyWithId = execKey + "#" + id;
         final String classMethodBrowser = testClass + "#" + testMethod + "#" + browser;
 
+        final String simpleClass = testClass.contains(".") ? testClass.substring(testClass.lastIndexOf('.') + 1) : testClass;
+        final String simpleFullKey = simpleClass + "#" + id + "#" + browser;
+        final String simpleExecKey = LocalRunJsonStorageService.buildExecutionKey(simpleClass, testMethod, title, browser);
+        final String simpleExecKeyWithId = simpleExecKey + "#" + id;
+        final String simpleClassMethodBrowser = simpleClass + "#" + testMethod + "#" + browser;
+
         return targetId.equalsIgnoreCase(fullKey)
+            || targetId.equalsIgnoreCase(simpleFullKey)
             || targetId.equalsIgnoreCase(execKey)
+            || targetId.equalsIgnoreCase(simpleExecKey)
             || targetId.equalsIgnoreCase(execKeyWithId)
-            || targetId.equalsIgnoreCase(classMethodBrowser);
+            || targetId.equalsIgnoreCase(simpleExecKeyWithId)
+            || targetId.equalsIgnoreCase(classMethodBrowser)
+            || targetId.equalsIgnoreCase(simpleClassMethodBrowser);
     }
 
     private void resolveBugsForExecution(final String runId, final TestExecutionDto dto)

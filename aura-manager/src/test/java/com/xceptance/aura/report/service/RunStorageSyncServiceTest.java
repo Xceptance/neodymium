@@ -24,6 +24,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
@@ -1290,6 +1291,111 @@ public class RunStorageSyncServiceTest
         {
             deleteRecursively(runDir);
         }
+    }
+
+    @Test
+    public void testExecutionDetailsResolvesViaRunJsonFallbackWithSimpleKey() throws IOException
+    {
+        final String runId = "run-fallback-simple-key-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+
+        try
+        {
+            Files.createDirectories(runDir);
+
+            final String runJsonContent = """
+                {
+                    "runId": "run-fallback-simple-key-test",
+                    "executionMetrics": {
+                        "com.xceptance.neodymium.aura.sandbox.PayPalTest#testOrderPayPal#default#Chrome": {
+                            "id": "paypal-exec-1",
+                            "testClass": "com.xceptance.neodymium.aura.sandbox.PayPalTest",
+                            "testMethod": "testOrderPayPal",
+                            "title": "PayPal Payment Test",
+                            "browser": "Chrome",
+                            "status": "passed-clean",
+                            "blocks": {
+                                "steps": [
+                                    { "name": "Log in to PayPal", "status": "PASSED" },
+                                    { "name": "Approve Payment", "status": "PASSED" }
+                                ]
+                            }
+                        }
+                    },
+                    "executions": [
+                        {
+                            "id": "checkout-exec-2",
+                            "testClass": "com.xceptance.neodymium.aura.sandbox.CheckoutTest",
+                            "testMethod": "testCheckout",
+                            "title": "Guest Checkout",
+                            "browser": "Firefox",
+                            "status": "failed",
+                            "blocks": {
+                                "steps": [
+                                    { "name": "Enter Address", "status": "PASSED" },
+                                    { "name": "Place Order", "status": "FAILED" }
+                                ]
+                            }
+                        }
+                    ]
+                }
+                """;
+            Files.writeString(runDir.resolve("run.json"), runJsonContent);
+
+            // 1. Resolve from executionMetrics using simple class key
+            final TestExecutionDto dtoFromMetrics = dataService.getExecutionDetails(
+                runId,
+                "PayPalTest#testOrderPayPal#default#Chrome"
+            );
+            Assertions.assertNotNull(dtoFromMetrics, "Execution details must be resolved from executionMetrics via simple key");
+            Assertions.assertEquals("paypal-exec-1", dtoFromMetrics.getId());
+            Assertions.assertEquals("PayPal Payment Test", dtoFromMetrics.getTitle());
+            Assertions.assertEquals(2, dtoFromMetrics.getBlocks().path("steps").size());
+
+            // 2. Resolve from executions array using simple class key
+            final TestExecutionDto dtoFromArray = dataService.getExecutionDetails(
+                runId,
+                "CheckoutTest#testCheckout#Guest Checkout#Firefox"
+            );
+            Assertions.assertNotNull(dtoFromArray, "Execution details must be resolved from executions array via simple key");
+            Assertions.assertEquals("checkout-exec-2", dtoFromArray.getId());
+            Assertions.assertEquals("Guest Checkout", dtoFromArray.getTitle());
+            Assertions.assertEquals(2, dtoFromArray.getBlocks().path("steps").size());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testExecutionDetailsResolvesViaLiveBufferWithSimpleKey()
+    {
+        final String runId = "run-live-buffer-simple-key-test";
+
+        final Map<String, Object> payload = new HashMap<>();
+        payload.put("id", "live-exec-1");
+        payload.put("testClass", "com.xceptance.neodymium.aura.sandbox.OrderLiveTest");
+        payload.put("testMethod", "testSubmitOrder");
+        payload.put("title", "Live Submit Order");
+        payload.put("browser", "Chrome_1920x1080");
+        payload.put("status", "running");
+        payload.put("blocks", Map.of("steps", List.of(
+            Map.of("name", "Submit Step 1", "status", "PASSED")
+        )));
+
+        dataService.ingestExecution(runId, payload);
+
+        // Resolve via simple class key
+        final TestExecutionDto dto = dataService.getExecutionDetails(
+            runId,
+            "OrderLiveTest#testSubmitOrder#Live Submit Order#Chrome_1920x1080"
+        );
+        Assertions.assertNotNull(dto, "Execution details must be resolved from live buffer via simple key");
+        Assertions.assertEquals("live-exec-1", dto.getId());
+        Assertions.assertEquals("Live Submit Order", dto.getTitle());
+        Assertions.assertEquals("running", dto.getStatus());
+        Assertions.assertEquals(1, dto.getBlocks().path("steps").size());
     }
 }
 
