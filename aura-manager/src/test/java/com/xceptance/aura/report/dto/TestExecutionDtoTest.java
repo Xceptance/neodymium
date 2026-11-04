@@ -265,4 +265,26 @@ public final class TestExecutionDtoTest
         Assertions.assertFalse(execPlaybook.isKnownAi());
         Assertions.assertFalse(execPlaybook.isUnknownAi());
     }
+
+    @Test
+    public void testBlocksAndStepsJsonAreIgnoredDuringSerialization() throws Exception
+    {
+        final TestExecutionDto dto = new TestExecutionDto();
+        dto.setId("test-exec-1");
+        dto.setBlocks(objectMapper.readTree("{\"steps\":[{\"title\":\"Step 1\"}]}"));
+        dto.setSteps(objectMapper.readTree("[{\"title\":\"Step 1\"}]"));
+
+        // Direct getters must still work programmatically
+        Assertions.assertTrue(dto.getBlocksJson().contains("Step 1"));
+        Assertions.assertTrue(dto.getStepsJson().contains("Step 1"));
+
+        // Serialization must exclude redundant stringified versions to prevent payload bloat
+        final String json = objectMapper.writeValueAsString(dto);
+        final JsonNode tree = objectMapper.readTree(json);
+
+        Assertions.assertTrue(tree.has("blocks"), "Serialized output must contain structured 'blocks'");
+        Assertions.assertTrue(tree.has("steps"), "Serialized output must contain structured 'steps'");
+        Assertions.assertFalse(tree.has("blocksJson"), "Serialized output must NOT contain redundant 'blocksJson'");
+        Assertions.assertFalse(tree.has("stepsJson"), "Serialized output must NOT contain redundant 'stepsJson'");
+    }
 }

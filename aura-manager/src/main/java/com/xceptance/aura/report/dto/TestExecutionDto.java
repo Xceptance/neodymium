@@ -25,6 +25,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonRawValue;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -40,6 +41,8 @@ import java.util.Map;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class TestExecutionDto
 {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     private String id;
     private final String runId;
     private final String testClass;
@@ -618,13 +621,14 @@ public final class TestExecutionDto
         return (bugs != null && !bugs.isEmpty()) ? bugs.get(0) : "";
     }
 
+    @JsonIgnore
     public String getBlocksJson()
     {
         if (blocks != null && !blocks.isMissingNode() && !blocks.isNull())
         {
             try
             {
-                return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(blocks);
+                return OBJECT_MAPPER.writeValueAsString(blocks);
             }
             catch (final Exception ignored)
             {
@@ -633,13 +637,14 @@ public final class TestExecutionDto
         return "{}";
     }
 
+    @JsonIgnore
     public String getStepsJson()
     {
         if (steps != null && !steps.isMissingNode() && !steps.isNull())
         {
             try
             {
-                return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(steps);
+                return OBJECT_MAPPER.writeValueAsString(steps);
             }
             catch (final Exception ignored)
             {
@@ -668,7 +673,7 @@ public final class TestExecutionDto
         {
             try
             {
-                return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(localDataBindings);
+                return OBJECT_MAPPER.writeValueAsString(localDataBindings);
             }
             catch (final Exception ignored)
             {

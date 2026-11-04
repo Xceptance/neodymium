@@ -1120,7 +1120,26 @@ public class AuraReportDataService
             return null;
         }
 
-        final Path runDir = localRunJsonStorageService.getRunDir(runId);
+        final String cleanRunId = runId.trim().replaceAll("^#+", "");
+        final String effectiveRunId;
+        if (!cleanRunId.isEmpty() && !"RUN_ID".equalsIgnoreCase(cleanRunId))
+        {
+            effectiveRunId = cleanRunId;
+        }
+        else
+        {
+            effectiveRunId = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc().stream()
+                .findFirst()
+                .map(TestRunEntity::getId)
+                .orElse("");
+        }
+
+        if (effectiveRunId.isEmpty())
+        {
+            return null;
+        }
+
+        final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
         if (Files.exists(runDir) && Files.isDirectory(runDir))
         {
             final List<File> files = new ArrayList<>();
@@ -1159,10 +1178,57 @@ public class AuraReportDataService
                 {
                     try
                     {
+                        final String parentFolder = (f.getParentFile() != null && !f.getParentFile().getName().equals(effectiveRunId))
+                                ? f.getParentFile().getName() : "";
+                        final String rawTestFile = node.path("testFile").asText("");
+                        final String testFileClass = rawTestFile.contains("#") ? rawTestFile.substring(0, rawTestFile.indexOf('#')) : rawTestFile;
+                        final String testFileMethod = rawTestFile.contains("#") ? rawTestFile.substring(rawTestFile.indexOf('#') + 1) : "";
+
+                        String testClass = node.path("testClass").asText("");
+                        if (testClass.isEmpty() || "DefaultClass".equalsIgnoreCase(testClass))
+                        {
+                            if (!parentFolder.isEmpty())
+                            {
+                                testClass = parentFolder;
+                            }
+                            else if (!testFileClass.isEmpty())
+                            {
+                                testClass = testFileClass;
+                            }
+                            else
+                            {
+                                testClass = "DefaultClass";
+                            }
+                        }
+
+                        String testMethod = LocalRunJsonStorageService.extractTestMethod(node);
+                        if (testMethod.isEmpty() && !testFileMethod.isEmpty())
+                        {
+                            testMethod = testFileMethod;
+                        }
+
+                        String title = node.path("title").asText("");
+                        if (title.isEmpty() || "Default".equalsIgnoreCase(title))
+                        {
+                            if (node.hasNonNull("datasetId"))
+                            {
+                                title = node.path("datasetId").asText();
+                            }
+                            else if (node.hasNonNull("dataSet"))
+                            {
+                                title = node.path("dataSet").asText();
+                            }
+                            else if (node.hasNonNull("testId"))
+                            {
+                                title = node.path("testId").asText();
+                            }
+                            else
+                            {
+                                title = "Default";
+                            }
+                        }
+
                         final String id = node.path("id").asText(f.getName().replaceAll("\\.json$", ""));
-                        final String testClass = node.path("testClass").asText("DefaultClass");
-                        final String testMethod = LocalRunJsonStorageService.extractTestMethod(node);
-                        final String title = node.path("title").asText("Default");
                         final String browser = node.path("browser").asText("Chrome");
 
                         final String execKey = LocalRunJsonStorageService.buildExecutionKey(testClass, testMethod, title, browser);
@@ -1171,6 +1237,8 @@ public class AuraReportDataService
                         final String classMethodBrowser = testClass + "#" + testMethod + "#" + browser;
                         final String fileName = f.getName();
                         final String fileNameNoExt = fileName.replaceAll("\\.json$", "");
+                        final String parentWithFileName = !parentFolder.isEmpty() ? parentFolder + "/" + fileName : "";
+                        final String parentWithId = !parentFolder.isEmpty() ? parentFolder + "#" + id : "";
 
                         if (executionId.equalsIgnoreCase(id)
                                 || executionId.equalsIgnoreCase(fullKey)
@@ -1178,7 +1246,10 @@ public class AuraReportDataService
                                 || executionId.equalsIgnoreCase(execKeyWithId)
                                 || executionId.equalsIgnoreCase(classMethodBrowser)
                                 || executionId.equalsIgnoreCase(fileNameNoExt)
-                                || executionId.equalsIgnoreCase(fileName))
+                                || executionId.equalsIgnoreCase(fileName)
+                                || (!parentWithFileName.isEmpty() && executionId.equalsIgnoreCase(parentWithFileName))
+                                || (!parentWithId.isEmpty() && executionId.equalsIgnoreCase(parentWithId))
+                                || (!parentFolder.isEmpty() && executionId.startsWith(parentFolder + "#")))
                         {
                             final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
                             if (dto.getId() == null || dto.getId().isBlank()
@@ -1188,7 +1259,7 @@ public class AuraReportDataService
                             {
                                 dto.setId(executionId);
                             }
-                            resolveBugsForExecution(runId, dto);
+                            resolveBugsForExecution(effectiveRunId, dto);
                             return dto;
                         }
                     }

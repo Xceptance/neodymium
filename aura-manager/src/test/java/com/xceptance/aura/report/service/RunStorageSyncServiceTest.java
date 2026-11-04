@@ -1163,6 +1163,61 @@ public class RunStorageSyncServiceTest
             runRepository.findById(runId).ifPresent(runRepository::delete);
         }
     }
+
+    @Test
+    public void testExecutionDetailsResolvesWithFolderFallbackAndMissingTopLevelMetadata() throws Exception
+    {
+        final String runId = "run_test_step_resolution_" + System.currentTimeMillis();
+        final Path runDir = storageService.getRunDir(runId);
+        final String parentFolderName = "Aura_tests_stokke_stokkeOrderPayPalTest_yml_Test";
+        final Path testFolder = runDir.resolve(parentFolderName);
+
+        try
+        {
+            Files.createDirectories(testFolder);
+            final String executionJson = """
+                {
+                    "testFile": "com.xceptance.test.PayPalTest#testOrderPayPal",
+                    "datasetId": "default",
+                    "status": "failed-assertion",
+                    "blocks": {
+                        "steps": [
+                            { "name": "Navigate to Home", "status": "PASSED" },
+                            { "name": "Add to Cart", "status": "FAILED" }
+                        ]
+                    }
+                }
+                """;
+            Files.writeString(testFolder.resolve("console-execution-1.json"), executionJson);
+
+            // 1. Resolve by composite key using parent folder and method
+            final TestExecutionDto dtoByKey = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#testOrderPayPal#default#Chrome"
+            );
+            Assertions.assertNotNull(dtoByKey, "Execution details must be located using folder and method composite key");
+            Assertions.assertNotNull(dtoByKey.getBlocks(), "Execution blocks must be populated");
+            Assertions.assertEquals(2, dtoByKey.getBlocks().path("steps").size());
+
+            // 2. Resolve when runId carries '#' prefix from frontend URL
+            final TestExecutionDto dtoWithHash = dataService.getExecutionDetails(
+                "#" + runId,
+                parentFolderName + "#console-execution-1"
+            );
+            Assertions.assertNotNull(dtoWithHash, "Execution details must be resolved even with leading hash in runId");
+
+            // 3. Resolve using folder prefix match
+            final TestExecutionDto dtoByPrefix = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#exec-random-postfix"
+            );
+            Assertions.assertNotNull(dtoByPrefix, "Execution details must match based on unique class folder prefix");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
 }
 
 

@@ -2156,12 +2156,27 @@ function syncAllRowsAiUsage() {
 }
 
 let liveStepRefreshTimer = null;
+let isLiveStepFetchInFlight = false;
+
+function isTerminalStatus(status) {
+    if (!status) return false;
+    const s = String(status).toLowerCase().trim();
+    return s.startsWith('pass') ||
+           s.startsWith('fail') ||
+           s.startsWith('succeed') ||
+           s.startsWith('error') ||
+           s.startsWith('abort') ||
+           s.startsWith('ignore') ||
+           s.startsWith('skip') ||
+           s === 'completed';
+}
 
 function stopLiveStepRefreshTimer() {
     if (liveStepRefreshTimer) {
         clearInterval(liveStepRefreshTimer);
         liveStepRefreshTimer = null;
     }
+    isLiveStepFetchInFlight = false;
 }
 
 function extractBlocksJson(execDto) {
@@ -2208,12 +2223,22 @@ function startLiveStepRefreshTimer(activeRow) {
     stopLiveStepRefreshTimer();
     if (!activeRow) return;
 
+    const currentStatus = activeRow.getAttribute('data-status') || '';
+    const currentStatusRaw = activeRow.getAttribute('data-status-raw') || '';
+    if (isTerminalStatus(currentStatus) || isTerminalStatus(currentStatusRaw)) {
+        return;
+    }
+
     const runId = activeRow.getAttribute('data-run-id') || (typeof activeRunId !== 'undefined' ? activeRunId : '#RUN_ID');
     const rowId = activeRow.getAttribute('data-row-id') || activeRow.id;
 
     if (!runId || !rowId) return;
 
     liveStepRefreshTimer = setInterval(() => {
+        if (isLiveStepFetchInFlight) {
+            return;
+        }
+
         let currentActiveEl = activeRow;
         if (!document.body.contains(currentActiveEl)) {
             const safeRowId = (rowId || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -2227,6 +2252,7 @@ function startLiveStepRefreshTimer(activeRow) {
             return;
         }
 
+        isLiveStepFetchInFlight = true;
         fetch(`/fragments/test-side-panel/steps?runId=${encodeURIComponent(runId)}&rowId=${encodeURIComponent(rowId)}`)
             .then(res => {
                 if (!res.ok) return null;
@@ -2304,17 +2330,20 @@ function startLiveStepRefreshTimer(activeRow) {
                         }
                     }
 
-                    const updatedSt = (currentActiveEl.getAttribute('data-status') || execDto.status || '').toUpperCase();
-                    const updatedStRaw = (currentActiveEl.getAttribute('data-status-raw') || execDto.status || '').toLowerCase();
-                    const isTerminal = updatedSt === 'PASSED' || updatedSt === 'FAILED' || updatedSt === 'IGNORED' || updatedSt === 'SKIPPED' || updatedStRaw === 'passed' || updatedStRaw === 'failed' || updatedStRaw === 'ignored';
+                    const updatedSt = currentActiveEl.getAttribute('data-status') || execDto.status || '';
+                    const updatedStRaw = currentActiveEl.getAttribute('data-status-raw') || execDto.status || '';
+                    const isTerminal = isTerminalStatus(updatedSt) || isTerminalStatus(updatedStRaw);
 
                     if (isTerminal && !changed) {
                         stopLiveStepRefreshTimer();
                     }
                 }
             })
-            .catch(() => {});
-    }, 1000);
+            .catch(() => {})
+            .finally(() => {
+                isLiveStepFetchInFlight = false;
+            });
+    }, 2500);
 }
 
 function escapeHtml(str) {
@@ -3602,7 +3631,12 @@ function renderStepsForExecution(activeRow) {
                 })
                 .catch(err => {
                     console.error('Error fetching execution details:', err);
-                    stepListEl.innerHTML = '<div style="padding: 1rem; color: #ef4444; font-size: 0.85rem;">Failed to load step details for this test execution.</div>';
+                    const hasExistingSteps = (activeRow.getAttribute('data-blocks') && activeRow.getAttribute('data-blocks') !== '{}' && activeRow.getAttribute('data-blocks') !== 'null') ||
+                                             (activeRow.getAttribute('data-steps') && activeRow.getAttribute('data-steps') !== '{}' && activeRow.getAttribute('data-steps') !== 'null') ||
+                                             (stepListEl.querySelector('.step-card') !== null);
+                    if (!hasExistingSteps) {
+                        stepListEl.innerHTML = '<div style="padding: 1rem; color: #ef4444; font-size: 0.85rem;">Failed to load step details for this test execution.</div>';
+                    }
                 });
             return;
         }
