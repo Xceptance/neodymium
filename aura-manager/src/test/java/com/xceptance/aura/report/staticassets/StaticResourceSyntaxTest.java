@@ -1039,5 +1039,178 @@ public final class StaticResourceSyntaxTest
         final int exitCode = process.waitFor();
         Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
     }
+
+    @Test
+    public void testSubStepLlmInvocationRenderingDoesNotReferenceUndeclaredSidx() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        final String content = Files.readString(jsFilePath, StandardCharsets.UTF_8);
+        Assertions.assertFalse(content.contains("sIdx"), "report-manager.js must not reference undeclared sIdx variable");
+
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sampleRow = {\n" +
+            "    id: 'row_1',\n" +
+            "    querySelector: () => null,\n" +
+            "    getAttribute: (name) => {\n" +
+            "        if (name === 'data-blocks') {\n" +
+            "            return JSON.stringify({\n" +
+            "                steps: [{\n" +
+            "                    instruction: 'Parent step',\n" +
+            "                    subSteps: [{\n" +
+            "                        instruction: 'Child sub-step',\n" +
+            "                        llmCalls: [{ model: 'gemini-2.5', userPrompt: 'prompt', responseContent: 'response' }]\n" +
+            "                    }]\n" +
+            "                }]\n" +
+            "            });\n" +
+            "        }\n" +
+            "        if (name === 'data-status') return 'FAILED';\n" +
+            "        return '';\n" +
+            "    },\n" +
+            "    hasAttribute: (name) => name === 'data-steps-fetched',\n" +
+            "    setAttribute: () => {},\n" +
+            "    removeAttribute: () => {}\n" +
+            "};\n" +
+            "const sideList = { innerHTML: '', querySelector: () => null };\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        readyState: 'complete',\n" +
+            "        getElementById: (id) => (id === 'sidePageStepList' ? sideList : null),\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {}, contains: () => true }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "sandbox.renderStepsForExecution(sampleRow);\n" +
+            "if (!sideList.innerHTML.includes('Child sub-step') || !sideList.innerHTML.includes('LLM Invocations')) {\n" +
+            "    throw new Error('Expected rendered step HTML with sub-step LLM invocations but got: ' + sideList.innerHTML);\n" +
+            "}\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+    }
+
+    @Test
+    public void testIsTerminalStatusRecognizesNormalizedStatusesAndHandlesAbort() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        readyState: 'complete',\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {}, contains: () => true }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "const terminalChecks = ['PASSED', 'passed-clean', 'failed-assertion', 'succeeded-fixed', 'SUCCESS', 'successful', 'cancelled', 'canceled', 'stopped', 'aborted', 'skipped', 'ignored', 'completed'];\n" +
+            "for (const st of terminalChecks) {\n" +
+            "    if (!sandbox.isTerminalStatus(st)) {\n" +
+            "        throw new Error('Status should be recognized as terminal: ' + st);\n" +
+            "    }\n" +
+            "}\n" +
+            "const nonTerminalChecks = ['running', 'in_progress', 'pending', 'queued', 'paused', 'waiting', '', null, undefined];\n" +
+            "for (const st of nonTerminalChecks) {\n" +
+            "    if (sandbox.isTerminalStatus(st)) {\n" +
+            "        throw new Error('Status should NOT be recognized as terminal: ' + st);\n" +
+            "    }\n" +
+            "}\n" +
+            "sandbox.stopLiveStepRefreshTimer();\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+    }
+
+    @Test
+    public void testOpenTestSidePagePanelInvokesStopLiveStepRefreshTimer() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        final String content = Files.readString(jsFilePath, StandardCharsets.UTF_8);
+        final int fnIndex = content.indexOf("function openTestSidePagePanel(");
+        Assertions.assertTrue(fnIndex >= 0, "openTestSidePagePanel must exist in report-manager.js");
+
+        final String fnBody = content.substring(fnIndex, Math.min(content.length(), fnIndex + 400));
+        Assertions.assertTrue(
+            fnBody.contains("stopLiveStepRefreshTimer();"),
+            "openTestSidePagePanel must invoke stopLiveStepRefreshTimer() on entry to clean up active timers"
+        );
+    }
+
+    @Test
+    public void testLiveStepFetchInFlightGuardsArePresent() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        final String content = Files.readString(jsFilePath, StandardCharsets.UTF_8);
+        Assertions.assertTrue(
+            content.contains("if (isLiveStepFetchInFlight && currentActiveRowId === rowId)"),
+            "renderStepsForExecution must guard against duplicate in-flight fetches for the active row"
+        );
+        Assertions.assertTrue(
+            content.contains("if (isLiveStepFetchInFlight)") && content.contains("liveStepRefreshTimer = setTimeout(poll, 1000)"),
+            "poll must reschedule when fetch is in-flight"
+        );
+    }
 }
 

@@ -24,16 +24,20 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
+import com.xceptance.neodymium.aura.AuraInteractiveService;
 import com.xceptance.aura.report.dto.AreaSummaryDto;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestClassSummaryDto;
@@ -1162,6 +1166,353 @@ public class RunStorageSyncServiceTest
             deleteRecursively(runDir);
             runRepository.findById(runId).ifPresent(runRepository::delete);
         }
+    }
+
+    @Test
+    public void testExecutionDetailsResolvesWithFolderFallbackAndMissingTopLevelMetadata() throws Exception
+    {
+        final String runId = "run_test_step_resolution_" + System.currentTimeMillis();
+        final Path runDir = storageService.getRunDir(runId);
+        final String parentFolderName = "Aura_tests_stokke_stokkeOrderPayPalTest_yml_Test";
+        final Path testFolder = runDir.resolve(parentFolderName);
+
+        try
+        {
+            Files.createDirectories(testFolder);
+            final String executionJson = """
+                {
+                    "testFile": "com.xceptance.test.PayPalTest#testOrderPayPal",
+                    "datasetId": "default",
+                    "status": "failed-assertion",
+                    "blocks": {
+                        "steps": [
+                            { "name": "Navigate to Home", "status": "PASSED" },
+                            { "name": "Add to Cart", "status": "FAILED" }
+                        ]
+                    }
+                }
+                """;
+            Files.writeString(testFolder.resolve("console-execution-1.json"), executionJson);
+
+            // 1. Resolve by composite key using parent folder and method
+            final TestExecutionDto dtoByKey = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#testOrderPayPal#default#Chrome"
+            );
+            Assertions.assertNotNull(dtoByKey, "Execution details must be located using folder and method composite key");
+            Assertions.assertNotNull(dtoByKey.getBlocks(), "Execution blocks must be populated");
+            Assertions.assertEquals(2, dtoByKey.getBlocks().path("steps").size());
+
+            // 2. Resolve when runId carries '#' prefix from frontend URL
+            final TestExecutionDto dtoWithHash = dataService.getExecutionDetails(
+                "#" + runId,
+                parentFolderName + "#console-execution-1"
+            );
+            Assertions.assertNotNull(dtoWithHash, "Execution details must be resolved even with leading hash in runId");
+
+            // 3. Resolve using folder prefix match
+            final TestExecutionDto dtoByPrefix = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#exec-random-postfix"
+            );
+            Assertions.assertNotNull(dtoByPrefix, "Execution details must match based on unique class folder prefix");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testMultiDatasetExecutionResolutionInSharedFolderDoesNotCrossTalk() throws IOException
+    {
+        final String runId = "run-multi-dataset-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final String parentFolderName = "Aura_tests_stokke_stokkeOrderPayPalTest_yml_Test";
+        final Path testFolder = runDir.resolve(parentFolderName);
+
+        try
+        {
+            Files.createDirectories(testFolder);
+
+            // Dataset A (File 1)
+            final String exec1Json = """
+                {
+                    "id": "order-us-dataset",
+                    "testClass": "com.xceptance.neodymium.aura.sandbox.Aura_tests_stokke_stokkeOrderPayPalTest_yml_Test",
+                    "testMethod": "executeYamlTest",
+                    "title": "Order US Product",
+                    "browser": "Chrome_1500x1000",
+                    "status": "passed-clean",
+                    "blocks": { "steps": [{ "name": "Step US" }] }
+                }
+                """;
+            Files.writeString(testFolder.resolve("console-execution-1.json"), exec1Json);
+
+            // Dataset B (File 2)
+            final String exec2Json = """
+                {
+                    "id": "order-de-dataset",
+                    "testClass": "com.xceptance.neodymium.aura.sandbox.Aura_tests_stokke_stokkeOrderPayPalTest_yml_Test",
+                    "testMethod": "executeYamlTest",
+                    "title": "Order DE Product",
+                    "browser": "Chrome_1500x1000",
+                    "status": "failed",
+                    "blocks": { "steps": [{ "name": "Step DE 1" }, { "name": "Step DE 2" }] }
+                }
+                """;
+            Files.writeString(testFolder.resolve("console-execution-2.json"), exec2Json);
+
+            // 1. Resolve Dataset B by simple class name key (must NOT be hijacked by File 1)
+            final TestExecutionDto dtoB = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#executeYamlTest#Order DE Product#Chrome_1500x1000"
+            );
+            Assertions.assertNotNull(dtoB, "Dataset B must be resolved");
+            Assertions.assertEquals("Order DE Product", dtoB.getTitle(), "Dataset B must not return Dataset A");
+            Assertions.assertEquals("failed", dtoB.getStatus());
+            Assertions.assertEquals(2, dtoB.getBlocks().path("steps").size());
+
+            // 2. Resolve Dataset A by simple class name key
+            final TestExecutionDto dtoA = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#executeYamlTest#Order US Product#Chrome_1500x1000"
+            );
+            Assertions.assertNotNull(dtoA, "Dataset A must be resolved");
+            Assertions.assertEquals("Order US Product", dtoA.getTitle(), "Dataset A must return Dataset A");
+            Assertions.assertEquals("passed-clean", dtoA.getStatus());
+            Assertions.assertEquals(1, dtoA.getBlocks().path("steps").size());
+
+            // 3. In multi-file folder, an arbitrary unknown postfix must NOT greedily match File 1
+            final TestExecutionDto dtoAmbiguous = dataService.getExecutionDetails(
+                runId,
+                parentFolderName + "#arbitrary-unknown-id"
+            );
+            Assertions.assertNull(dtoAmbiguous, "Ambiguous prefix on multi-dataset folder must not hijack first file");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testFuzzyFolderFallbackDoesNotHijackOtherDatasetOfSameClass() throws IOException
+    {
+        final String runId = "run-fuzzy-no-hijack-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path testFolder = runDir.resolve("OrderTest");
+
+        try
+        {
+            Files.createDirectories(testFolder);
+            // Only dataset A has been written so far (live run); dataset B is still pending.
+            Files.writeString(testFolder.resolve("console-execution-1.json"), """
+                {
+                    "id": "order-us-dataset",
+                    "testClass": "com.example.OrderTest",
+                    "testMethod": "order",
+                    "title": "Order US",
+                    "browser": "Chrome",
+                    "status": "running"
+                }
+                """);
+
+            Assertions.assertNull(dataService.getExecutionDetails(runId, "OrderTest#order#Order DE#Chrome#order-de-dataset"),
+                                  "A pending dataset must not be answered with the data of another dataset");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testSimpleClassKeyCollisionAcrossPackagesIsNotGuessed() throws IOException
+    {
+        final String runId = "run-simple-key-collision-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+
+        try
+        {
+            for (final String pkg : new String[]
+            {
+                "a", "b"
+            })
+            {
+                final Path folder = runDir.resolve("com_" + pkg + "_LoginTest");
+                Files.createDirectories(folder);
+                Files.writeString(folder.resolve("console-execution-1.json"), """
+                    {
+                        "id": "exec-%s",
+                        "testClass": "com.%s.LoginTest",
+                        "testMethod": "login",
+                        "title": "Default",
+                        "browser": "Chrome",
+                        "status": "passed-clean"
+                    }
+                    """.formatted(pkg, pkg));
+            }
+
+            Assertions.assertNull(dataService.getExecutionDetails(runId, "LoginTest#login#Default#Chrome"),
+                                  "Ambiguous simple-class key must not resolve to an arbitrary class");
+            final TestExecutionDto exact = dataService.getExecutionDetails(runId, "com.b.LoginTest#login#Default#Chrome");
+            Assertions.assertNotNull(exact, "Fully qualified key stays unambiguous");
+            Assertions.assertEquals("exec-b", exact.getId());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testExecutionDetailsResolvesViaRunJsonFallbackWithSimpleKey() throws IOException
+
+    {
+        final String runId = "run-fallback-simple-key-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+
+        try
+        {
+            Files.createDirectories(runDir);
+
+            final String runJsonContent = """
+                {
+                    "runId": "run-fallback-simple-key-test",
+                    "executionMetrics": {
+                        "com.xceptance.neodymium.aura.sandbox.PayPalTest#testOrderPayPal#default#Chrome": {
+                            "id": "paypal-exec-1",
+                            "testClass": "com.xceptance.neodymium.aura.sandbox.PayPalTest",
+                            "testMethod": "testOrderPayPal",
+                            "title": "PayPal Payment Test",
+                            "browser": "Chrome",
+                            "status": "passed-clean",
+                            "blocks": {
+                                "steps": [
+                                    { "name": "Log in to PayPal", "status": "PASSED" },
+                                    { "name": "Approve Payment", "status": "PASSED" }
+                                ]
+                            }
+                        }
+                    },
+                    "executions": [
+                        {
+                            "id": "checkout-exec-2",
+                            "testClass": "com.xceptance.neodymium.aura.sandbox.CheckoutTest",
+                            "testMethod": "testCheckout",
+                            "title": "Guest Checkout",
+                            "browser": "Firefox",
+                            "status": "failed",
+                            "blocks": {
+                                "steps": [
+                                    { "name": "Enter Address", "status": "PASSED" },
+                                    { "name": "Place Order", "status": "FAILED" }
+                                ]
+                            }
+                        }
+                    ]
+                }
+                """;
+            Files.writeString(runDir.resolve("run.json"), runJsonContent);
+
+            // 1. Resolve from executionMetrics using simple class key
+            final TestExecutionDto dtoFromMetrics = dataService.getExecutionDetails(
+                runId,
+                "PayPalTest#testOrderPayPal#default#Chrome"
+            );
+            Assertions.assertNotNull(dtoFromMetrics, "Execution details must be resolved from executionMetrics via simple key");
+            Assertions.assertEquals("paypal-exec-1", dtoFromMetrics.getId());
+            Assertions.assertEquals("PayPal Payment Test", dtoFromMetrics.getTitle());
+            Assertions.assertEquals(2, dtoFromMetrics.getBlocks().path("steps").size());
+
+            // 2. Resolve from executions array using simple class key
+            final TestExecutionDto dtoFromArray = dataService.getExecutionDetails(
+                runId,
+                "CheckoutTest#testCheckout#Guest Checkout#Firefox"
+            );
+            Assertions.assertNotNull(dtoFromArray, "Execution details must be resolved from executions array via simple key");
+            Assertions.assertEquals("checkout-exec-2", dtoFromArray.getId());
+            Assertions.assertEquals("Guest Checkout", dtoFromArray.getTitle());
+            Assertions.assertEquals(2, dtoFromArray.getBlocks().path("steps").size());
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testExecutionDetailsResolvesViaLiveBufferWithSimpleKey()
+    {
+        final String runId = "run-live-buffer-simple-key-test";
+
+        final Map<String, Object> payload = new HashMap<>();
+        payload.put("id", "live-exec-1");
+        payload.put("testClass", "com.xceptance.neodymium.aura.sandbox.OrderLiveTest");
+        payload.put("testMethod", "testSubmitOrder");
+        payload.put("title", "Live Submit Order");
+        payload.put("browser", "Chrome_1920x1080");
+        payload.put("status", "running");
+        payload.put("blocks", Map.of("steps", List.of(
+            Map.of("name", "Submit Step 1", "status", "PASSED")
+        )));
+
+        dataService.ingestExecution(runId, payload);
+
+        // Resolve via simple class key
+        final TestExecutionDto dto = dataService.getExecutionDetails(
+            runId,
+            "OrderLiveTest#testSubmitOrder#Live Submit Order#Chrome_1920x1080"
+        );
+        Assertions.assertNotNull(dto, "Execution details must be resolved from live buffer via simple key");
+        Assertions.assertEquals("live-exec-1", dto.getId());
+        Assertions.assertEquals("Live Submit Order", dto.getTitle());
+        Assertions.assertEquals("running", dto.getStatus());
+        Assertions.assertEquals(1, dto.getBlocks().path("steps").size());
+    }
+
+    @Test
+    public void testExecutionDetailsWithInteractiveSessionDoesNotHijackUnrelatedExecutions()
+    {
+        final AuraInteractiveService mockInteractiveService = new AuraInteractiveService();
+        final InteractiveConsoleEngine mockEngine = Mockito.mock(InteractiveConsoleEngine.class);
+        final String activeStateJson = """
+            {
+                "runId": "run-interactive-test",
+                "id": "interactive-active-exec",
+                "testClass": "com.xceptance.neodymium.aura.sandbox.LiveLoginTest",
+                "testMethod": "testLogin",
+                "title": "Default",
+                "browser": "Chrome",
+                "status": "running"
+            }
+            """;
+        Mockito.when(mockEngine.getCurrentStateJson()).thenReturn(activeStateJson);
+        mockInteractiveService.setCurrentConsoleEngine(mockEngine);
+
+        final AuraReportDataService service = new AuraReportDataService(
+            runRepository,
+            null,
+            variationRepository,
+            bugRepository,
+            storageService,
+            null,
+            mockInteractiveService
+        );
+
+        // 1. Matches when querying the interactive test directly via simple execution key
+        final TestExecutionDto matchedDto = service.getExecutionDetails("run-interactive-test", "LiveLoginTest#testLogin#Default#Chrome");
+        Assertions.assertNotNull(matchedDto, "Interactive execution must match its own composite key");
+        Assertions.assertEquals("interactive-active-exec", matchedDto.getId());
+
+        // 2. Matches when querying a generic console execution id
+        final TestExecutionDto genericDto = service.getExecutionDetails("run-interactive-test", "console-execution");
+        Assertions.assertNotNull(genericDto, "Generic execution ID must resolve to active interactive session");
+
+        // 3. Does NOT hijack an unrelated execution ID when the session belongs to a different test
+        final TestExecutionDto unrelatedDto = service.getExecutionDetails("run-interactive-test", "UnrelatedOrderTest#testOrder#Default#Chrome");
+        Assertions.assertNull(unrelatedDto, "Interactive session must NOT match an unrelated execution key");
     }
 }
 
