@@ -24,6 +24,8 @@
 		<junit.jupiter.version>6.1.0-M1</junit.jupiter.version>
 		<javalin.version>6.4.0</javalin.version>
 		<thymeleaf.version>3.1.3.RELEASE</thymeleaf.version>
+		<skipServerTests>false</skipServerTests>
+		<surefire.skip>${skipServerTests}</surefire.skip>
 	</properties>
 
 	<dependencies>
@@ -98,6 +100,9 @@
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>${surefire.version}</version>
+				<configuration>
+					<skipTests>${surefire.skip}</skipTests>
+				</configuration>
 			</plugin>
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
@@ -109,4 +114,80 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<!-- 3. Direct in-memory unit tests -->
+		<profile>
+			<id>unit-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>**/VerlaCatalogTest.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 5. All VÉRLA storefront UI and mock AI integration tests -->
+		<profile>
+			<id>verla-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>**/JavalinVerlaServerTest.java</include>
+								<include>**/VerlaCatalogTest.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 8. Aura Glance visual defect & baseline sandbox tests -->
+		<profile>
+			<id>aura-sandbox</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>**/JavalinAuraGlanceServerTest.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 10. Smoke suite subset in test-server -->
+		<profile>
+			<id>smoke</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>**/JavalinTestServerLifecycleTest.java</include>
+								<include>**/VerlaCatalogTest.java</include>
+							</includes>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>

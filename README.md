@@ -188,7 +188,25 @@ mvn clean compile
 mvn clean test
 ```
 
-#### 3. Fast Local Install (Skip Tests & Javadocs)
+#### 3. Test Profiles
+Neodymium organizes test suites into dedicated Maven profiles for fast, targeted execution without running into legacy tests or incurring live LLM costs:
+
+| Profile | Command | Description |
+| :--- | :--- | :--- |
+| **Non-LLM Modern** | `mvn test -Pnon-llm-tests` | Complete modern suite: Core AI, Server, VÉRLA UI/Mock, Sandbox Mock, Manager (0 LLM cost) |
+| **Direct Unit** | `mvn test -Punit-tests` | Fast in-memory unit tests only (< 5s, no browser/server/LLM) |
+| **Neo Classic JUnit 4** | `mvn test -Pneo-classic-junit4` | Legacy JUnit 4 Neodymium tests via Vintage engine |
+| **Neo Classic JUnit 5** | `mvn test -Pneo-classic-junit5` | Legacy JUnit 5 Neodymium tests via Jupiter engine |
+| **VÉRLA Storefront** | `mvn test -Pverla-tests` | VÉRLA storefront UI and mock AI integration flows |
+| **AI Mock** | `mvn test -Pai-mock-tests` | AI pipeline and integration tests using golden mock responses (0 tokens) |
+| **AI Live** | `mvn test -Pai-live-tests` | Real LLM verification tests requiring API keys (`LiveAPI`, `LiveLlm`) |
+| **Aura Sandbox** | `mvn test -Paura-sandbox` | Aura Glance visual defect & dHash baseline sandbox tests |
+| **Aura Manager** | `mvn test -Paura-manager` | Aura Manager Spring Boot hub test suite |
+| **Smoke** | `mvn test -Psmoke` | Fast sanity verification suite (< 60s) |
+
+For complete documentation on profile configurations, scoping, and examples, refer to [doc/TEST_PROFILES.md](doc/TEST_PROFILES.md).
+
+#### 4. Fast Local Install (Skip Tests & Javadocs)
 To quickly compile and update all local JARs in `~/.m2/repository`:
 ```bash
 mvn clean install -DskipTests -Dmaven.javadoc.skip=true
