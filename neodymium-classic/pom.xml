@@ -52,6 +52,7 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<maven.compiler.source.version>17</maven.compiler.source.version>
 		<maven.compiler.target.version>17</maven.compiler.target.version>
+		<maven.compiler.release>17</maven.compiler.release>
 		<surefire.version>3.5.4</surefire.version>
 		<allure.version>2.32.0</allure.version>
 		<selenide.version>7.12.0</selenide.version>
@@ -70,8 +71,7 @@
 				<artifactId>maven-compiler-plugin</artifactId>
 				<version>3.14.1</version>
 				<configuration>
-					<source>${maven.compiler.source.version}</source>
-					<target>${maven.compiler.target.version}</target>
+					<release>${maven.compiler.release}</release>
 				</configuration>
 			</plugin>
 			<plugin>
@@ -81,12 +81,14 @@
 				<configuration>
 					<systemPropertyVariables>
 						<java.util.logging.config.file>logging.properties</java.util.logging.config.file>
+						<selenide.headless>true</selenide.headless>
 					</systemPropertyVariables>
 					<forkCount>4</forkCount>
 					<reuseForks>false</reuseForks>
 					<includes>
 						<include>com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
 						<include>com/xceptance/neodymium/common/**/*Test.java</include>
+						<include>com/xceptance/neodymium/util/**/*Test.java</include>
 					</includes>
 				</configuration>
 			</plugin>
@@ -116,7 +118,7 @@
 					</execution>
 				</executions>
 				<configuration>
-					<source>16</source>
+					<source>17</source>
 					<detectJavaApiLink>false</detectJavaApiLink>
 				</configuration>
 			</plugin>
