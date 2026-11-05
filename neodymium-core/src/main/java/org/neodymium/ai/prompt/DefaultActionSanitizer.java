@@ -242,6 +242,10 @@ public final class DefaultActionSanitizer implements ActionSanitizer
         sanitizedAction.setDurationMs(rawAction.getDurationMs());
         sanitizedAction.setDelayMs(rawAction.getDelayMs());
         sanitizedAction.setHasElse(rawAction.getHasElse());
+        if (rawAction.getFrame() != null)
+        {
+            sanitizedAction.setFrame(sanitizeText(rawAction.getFrame(), data));
+        }
 
         // Copy dynamic parameters map
         sanitizedAction.getParameters().putAll(rawAction.getParameters());

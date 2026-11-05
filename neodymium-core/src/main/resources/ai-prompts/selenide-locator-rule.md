@@ -30,3 +30,9 @@
      - Table/Grid Rows: When targeting the Nth row of a table or grid (e.g. "third row in table"):
        * In HTML tables: NEVER use bare `tr >> nth=N` or `tbody >> tr >> nth=N` because the header row may be inside `tbody` (especially in legacy tables lacking `<thead>`). ALWAYS target data rows containing cells: use `table >> tr:has(td) >> nth=N`, `tbody >> tr:has(td) >> nth=N`, or `[class*="row"]:not([class*="header"]) >> nth=N` so that column headers (`th`) are never counted as data rows.
        * In ARIA grids/tables: NEVER use bare `[role="row"] >> nth=N` because column header rows also use `role="row"`. ALWAYS target data rows: use `[role="table"] [role="row"]:has([role="cell"]) >> nth=N`, `[role="grid"] [role="row"]:has([role="gridcell"]) >> nth=N`, `[role="rowgroup"]:not(.header) [role="row"] >> nth=N`, or `.data-row >> nth=N` so that column header rows are excluded.
+  7. Nested & Stacked Iframes (`>>>` or `frame` parameter):
+     - Browsing contexts across nested iframes cannot be pierced by standard CSS or `>>`.
+     - Elements inside iframes display `frameId="win_0:main >>> #iframe1 >>> #iframe2"` in the DOM tree.
+     - You can target iframe elements either by:
+       * Providing the optional `frame` parameter on tools (e.g. `frame: "#iframe1 >>> #iframe2"` with `selector: "#target"`).
+       * Using compound frame traversal syntax ` >>> ` in the selector (e.g. `selector: "#iframe1 >>> #iframe2 >>> #target"`).

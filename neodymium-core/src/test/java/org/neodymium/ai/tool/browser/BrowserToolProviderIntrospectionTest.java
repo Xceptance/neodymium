@@ -178,4 +178,27 @@ public class BrowserToolProviderIntrospectionTest
         assertNotNull(registry.getTool("browser_get_network_failures"));
         assertNotNull(registry.getTool("browser_get_console_errors"));
     }
+
+    @Test
+    public void testBrowserToolsExposeFrameParameterInSchema()
+    {
+        final ToolRegistry registry = new ToolRegistry();
+        BrowserToolProvider.registerBrowserTools(registry);
+
+        final String[] frameSupportedTools = new String[] {
+            "click", "fill", "fill_form", "type", "select", "check", "hover",
+            "clear", "assert_text", "assert_count", "assert_element_state",
+            "assert_attribute", "scroll", "execute_script", "query_dom",
+            "inspect", "press_key", "store", "upload_file", "drag", "drag_to"
+        };
+
+        for (final String toolName : frameSupportedTools)
+        {
+            final AiTool tool = registry.getTool(toolName).orElse(null);
+            assertNotNull(tool, "Expected tool '" + toolName + "' to be registered in ToolRegistry");
+            final JsonNode props = tool.getDefinition().parametersSchema().path("properties");
+            assertTrue(props.has("frame"), "Expected tool '" + toolName + "' to have optional 'frame' property in schema");
+            assertEquals("string", props.path("frame").path("type").asText());
+        }
+    }
 }

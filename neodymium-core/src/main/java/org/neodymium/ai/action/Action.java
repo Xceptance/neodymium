@@ -24,6 +24,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -34,6 +35,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.tool.ToolCall;
@@ -47,6 +49,13 @@ import org.neodymium.ai.tool.ToolCall;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class Action
 {
+    /**
+     * Action types whose {@code target} is not an element selector (URL, script, include path) and therefore must
+     * never be interpreted as a frame-prefixed compound selector.
+     */
+    private static final Set<String> FRAME_PREFIX_EXEMPT_TYPES = Set.of(
+        "NAVIGATE", "ASSERT_URL", "ASSERT_TITLE", "WAIT", "EXECUTE_SCRIPT", "SCRIPT", "INCLUDE", "BACK", "FORWARD", "REFRESH");
+
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private List<Action> condition;
@@ -137,6 +146,13 @@ public class Action
 
     @JsonProperty("healed")
     private boolean healed = false;
+
+    /**
+     * Hierarchical frame path (e.g. {@code "#pact1 >>> #pact2"}) indicating the iframe context.
+     */
+    @JsonProperty("frame")
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    private String frame;
 
     /**
      * Dynamic parameter binding bindings for extensible runtime properties.
@@ -327,6 +343,60 @@ public class Action
         copy.delayMs = this.delayMs;
         copy.expectedTarget = this.expectedTarget;
         copy.healed = this.healed;
+        copy.frame = this.frame;
+        copy.parameters.putAll(this.parameters);
+        return copy;
+    }
+
+    /**
+     * Gets the hierarchical frame path (e.g. {@code "#pact1 >>> #pact2"}) indicating the iframe context.
+     *
+     * @return the frame path, or null if at default content
+     */
+    @JsonProperty("frame")
+    public final String getFrame()
+    {
+        return this.frame;
+    }
+
+    /**
+     * Sets the hierarchical frame path (e.g. {@code "#pact1 >>> #pact2"}) indicating the iframe context.
+     *
+     * @param frame the frame path
+     */
+    @JsonProperty("frame")
+    public final void setFrame(final String frame)
+    {
+        this.frame = frame;
+    }
+
+    /**
+     * Creates a new Action copy with an updated frame path.
+     *
+     * @param newFrame the new frame path
+     * @return a new Action instance with the updated frame
+     */
+    public Action withFrame(final String newFrame)
+    {
+        final Action copy = new Action(this.type, this.target, this.value, this.description, this.reasoning, this.isRegex, this.negated);
+        copy.condition = this.condition;
+        copy.then = this.then;
+        copy.elseActions = this.elseActions;
+        copy.hasElse = this.hasElse;
+        copy.adjust = this.adjust;
+        copy.stepInstruction = this.stepInstruction;
+        copy.stepLine = this.stepLine;
+        copy.stepFile = this.stepFile;
+        copy.stepScreenshotHash = this.stepScreenshotHash;
+        copy.selfCritique = this.selfCritique;
+        copy.candidateLocators = new ArrayList<>(this.candidateLocators);
+        copy.domFeatureVector = this.domFeatureVector;
+        copy.toolCall = this.toolCall;
+        copy.durationMs = this.durationMs;
+        copy.delayMs = this.delayMs;
+        copy.expectedTarget = this.expectedTarget;
+        copy.healed = this.healed;
+        copy.frame = newFrame;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -401,6 +471,7 @@ public class Action
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
+        copy.frame = this.frame;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -430,6 +501,7 @@ public class Action
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
+        copy.frame = this.frame;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -458,6 +530,7 @@ public class Action
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
+        copy.frame = this.frame;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -486,6 +559,7 @@ public class Action
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
+        copy.frame = this.frame;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -520,6 +594,7 @@ public class Action
         copy.toolCall = this.toolCall;
         copy.durationMs = this.durationMs;
         copy.delayMs = this.delayMs;
+        copy.frame = this.frame;
         copy.parameters.putAll(this.parameters);
         return copy;
     }
@@ -1613,7 +1688,12 @@ public class Action
 
         final boolean adjust = args != null && args.path("adjust").asBoolean(false);
 
-        final Action action = new Action(type, target, value, description, reasoning, isRegex, negated);
+        // Selector-based actions may carry a frame prefix ("#a >>> #btn"); free-text/URL targets must stay untouched
+        final FrameContextManager.FrameTarget framed = !FRAME_PREFIX_EXEMPT_TYPES.contains(type) && !target.contains("://")
+            ? FrameContextManager.splitFrameTarget(target)
+            : new FrameContextManager.FrameTarget(null, target);
+
+        final Action action = new Action(type, framed.target(), value, description, reasoning, isRegex, negated);
         action.setAdjust(adjust);
         action.setToolCall(call);
 
@@ -1710,6 +1790,21 @@ public class Action
             {
                 action.getParameters().put("fields", args.get("fields"));
             }
+
+            if (args.hasNonNull("frame"))
+            {
+                action.setFrame(args.path("frame").asText());
+            }
+            else if (args.hasNonNull("frameId"))
+            {
+                action.setFrame(args.path("frameId").asText());
+            }
+        }
+
+        if (framed.frame() != null)
+        {
+            // Merge (not replace) so an explicit 'frame' argument and a selector prefix both contribute
+            action.setFrame(FrameContextManager.combine(action.getFrame(), framed.frame()));
         }
 
         if (args != null && args.has("domFeatureVector") && !args.path("domFeatureVector").isNull())

@@ -33,6 +33,7 @@ import org.neodymium.ai.action.Action;
 import org.neodymium.ai.executor.selenide.LocatorResolver;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
+import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.executor.selenide.plugins.FillFormAction;
 import org.neodymium.ai.executor.selenide.plugins.FillFormAction.FormFieldEntry;
@@ -122,6 +123,11 @@ public final class BrowserToolProvider
         final ObjectNode node = MAPPER.createObjectNode();
         node.put("status", "SUCCESS");
         node.put("action", action);
+        final String activeFrame = FrameContextManager.getActiveFramePath();
+        if (activeFrame != null && !activeFrame.isBlank())
+        {
+            node.put("frame", activeFrame);
+        }
         return node;
     }
 
@@ -193,6 +199,170 @@ public final class BrowserToolProvider
     }
 
     /**
+     * Adds the active frame path as {@code "frame"} to a JSON object result so the agent loop can record and
+     * replay it. Non-JSON results and results that already carry a {@code frame} are returned unchanged.
+     *
+     * @param result    the tool result
+     * @param framePath the frame path to attach
+     * @return the (possibly enriched) result
+     */
+    private static ToolResult attachFrameToResult(final ToolResult result, final String framePath)
+    {
+        if (result == null || framePath == null || framePath.isBlank() || result.content() == null || result.content().isBlank())
+        {
+            return result;
+        }
+        try
+        {
+            final JsonNode node = MAPPER.readTree(result.content());
+            if (node instanceof ObjectNode on && !on.hasNonNull("frame"))
+            {
+                on.put("frame", framePath);
+                return new ToolResult(result.callId(), result.status(), on.toString(), result.variables(), result.artifacts());
+            }
+        }
+        catch (final Exception e)
+        {
+            // Plain-text result: nothing to enrich
+            LOGGER.debug("Tool result is not a JSON object, frame '{}' not attached: {}", framePath, e.getMessage());
+        }
+        return result;
+    }
+
+    /**
+     * Rewrites a tool-call argument holding a (possibly frame-prefixed) selector so that it contains only the
+     * element selector.
+     *
+     * @param args  the (mutable) tool arguments
+     * @param field the argument name ({@code "selector"} or {@code "target"})
+     * @return the extracted frame prefix, or {@code null} if the argument had none
+     */
+    private static String stripFramePrefix(final ObjectNode args, final String field)
+    {
+        if (!args.hasNonNull(field))
+        {
+            return null;
+        }
+        final FrameContextManager.FrameTarget split = FrameContextManager.splitFrameTarget(args.path(field).asText());
+        if (split.frame() == null)
+        {
+            return null;
+        }
+        args.put(field, split.target());
+        return split.frame();
+    }
+
+    /**
+     * Decorates a browser tool so that it (a) advertises an optional {@code frame} parameter, (b) executes inside
+     * the requested (nested) iframe, merging an explicit {@code frame} with any {@code >>>} selector prefix,
+     * (c) restores the previous browsing context afterwards and (d) reports the effective frame in its result.
+     *
+     * @param delegate the tool to decorate
+     * @return the frame-aware tool
+     */
+    static AiTool wrapWithFrameSupport(final AiTool delegate)
+    {
+        final ToolDefinition origDef = delegate.getDefinition();
+        final JsonNode schemaNode = origDef.parametersSchema();
+        ToolDefinition enhancedDef = origDef;
+
+        if (schemaNode instanceof ObjectNode schemaObj)
+        {
+            final JsonNode propsNode = schemaObj.path("properties");
+            if (propsNode instanceof ObjectNode propsObj && !propsObj.has("frame"))
+            {
+                final ObjectNode newSchema = schemaObj.deepCopy();
+                ((ObjectNode) newSchema.path("properties")).putObject("frame")
+                        .put("type", "string")
+                        .put("description", "Optional CSS selector or path of iframe(s) containing the element (e.g. '#pact1 >>> #pact2')");
+                enhancedDef = new ToolDefinition(origDef.name(), origDef.description(), newSchema);
+            }
+        }
+
+        final ToolDefinition finalDef = enhancedDef;
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return finalDef;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context) throws Exception
+            {
+                final JsonNode args = call.arguments();
+                String frame = null;
+                if (args != null)
+                {
+                    if (args.hasNonNull("frame") && !args.path("frame").asText().isBlank())
+                    {
+                        frame = args.path("frame").asText().trim();
+                    }
+                    else if (args.hasNonNull("frameId") && !args.path("frameId").asText().isBlank())
+                    {
+                        frame = args.path("frameId").asText().trim();
+                    }
+                }
+
+                ToolCall effectiveCall = call;
+                if (args instanceof ObjectNode objArgs)
+                {
+                    final ObjectNode newArgs = objArgs.deepCopy();
+                    final String selectorPrefix = stripFramePrefix(newArgs, "selector");
+                    final String targetPrefix = selectorPrefix == null ? stripFramePrefix(newArgs, "target") : null;
+                    final String prefix = selectorPrefix != null ? selectorPrefix : targetPrefix;
+                    if (prefix != null)
+                    {
+                        frame = FrameContextManager.combine(frame, prefix);
+                        effectiveCall = new ToolCall(call.callId(), call.toolName(), newArgs);
+                    }
+                }
+
+                final WebDriver driver = WebDriverRunner.hasWebDriverStarted() ? WebDriverRunner.getWebDriver() : null;
+                try (final FrameContextManager.FrameScope frameScope = FrameContextManager.enter(driver, frame))
+                {
+                    final ToolResult result = delegate.execute(effectiveCall, context);
+                    final String activeFrame = FrameContextManager.getActiveFramePath();
+                    return attachFrameToResult(result, activeFrame != null ? activeFrame : frame);
+                }
+            }
+        };
+    }
+
+    /**
+     * Decorates a tool that changes the top-level browsing context (navigation, history, tab switch/close): after
+     * it ran the driver is at the top-level document of the target window, so the tracked frame path is cleared.
+     *
+     * @param delegate the tool to decorate
+     * @return the decorated tool
+     */
+    static AiTool wrapWithFrameReset(final AiTool delegate)
+    {
+        return new AiTool()
+        {
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return delegate.getDefinition();
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext context) throws Exception
+            {
+                try
+                {
+                    return delegate.execute(call, context);
+                }
+                finally
+                {
+                    FrameContextManager.resetActiveFramePath();
+                }
+            }
+        };
+    }
+
+    /**
      * Registers all standard browser tools, introspection tools, and active discovery tools into the given registry.
      *
      * @param registry tool registry to populate
@@ -204,43 +374,43 @@ public final class BrowserToolProvider
             throw new IllegalArgumentException("Registry must not be null.");
         }
 
-        registry.register(createClickTool());
-        registry.register(createFillTool());
-        registry.register(createFillFormTool());
-        registry.register(createTypeTool());
-        registry.register(createNavigateTool());
-        registry.register(createSelectTool());
-        registry.register(createCheckTool());
-        registry.register(createHoverTool());
-        registry.register(createClearTool());
+        registry.register(wrapWithFrameSupport(createClickTool()));
+        registry.register(wrapWithFrameSupport(createFillTool()));
+        registry.register(wrapWithFrameSupport(createFillFormTool()));
+        registry.register(wrapWithFrameSupport(createTypeTool()));
+        registry.register(wrapWithFrameReset(createNavigateTool()));
+        registry.register(wrapWithFrameSupport(createSelectTool()));
+        registry.register(wrapWithFrameSupport(createCheckTool()));
+        registry.register(wrapWithFrameSupport(createHoverTool()));
+        registry.register(wrapWithFrameSupport(createClearTool()));
         registry.register(createClearCookiesTool());
-        registry.register(createBackTool());
-        registry.register(createForwardTool());
-        registry.register(createRefreshTool());
+        registry.register(wrapWithFrameReset(createBackTool()));
+        registry.register(wrapWithFrameReset(createForwardTool()));
+        registry.register(wrapWithFrameReset(createRefreshTool()));
         registry.register(createWaitTool());
-        registry.register(createAssertTextTool());
-        registry.register(createAssertCountTool());
+        registry.register(wrapWithFrameSupport(createAssertTextTool()));
+        registry.register(wrapWithFrameSupport(createAssertCountTool()));
         registry.register(createAssertUrlTool());
         registry.register(createAssertTitleTool());
-        registry.register(createAssertElementStateTool());
-        registry.register(createAssertAttributeTool());
-        registry.register(createScrollTool());
-        registry.register(createExecuteScriptTool());
-        registry.register(createQueryDomTool());
-        registry.register(createInspectTool());
+        registry.register(wrapWithFrameSupport(createAssertElementStateTool()));
+        registry.register(wrapWithFrameSupport(createAssertAttributeTool()));
+        registry.register(wrapWithFrameSupport(createScrollTool()));
+        registry.register(wrapWithFrameSupport(createExecuteScriptTool()));
+        registry.register(wrapWithFrameSupport(createQueryDomTool()));
+        registry.register(wrapWithFrameSupport(createInspectTool()));
         registry.register(createTakeScreenshotTool());
         registry.register(createMarkElementsTool());
         registry.register(createInspectVisualTool());
-        registry.register(createPressKeyTool());
+        registry.register(wrapWithFrameSupport(createPressKeyTool()));
         registry.register(createRequestContextTool());
-        registry.register(createStoreTool());
+        registry.register(wrapWithFrameSupport(createStoreTool()));
         registry.register(createListTabsTool());
-        registry.register(createSwitchTabTool());
-        registry.register(createCloseTabTool());
-        registry.register(createUploadFileTool());
+        registry.register(wrapWithFrameReset(createSwitchTabTool()));
+        registry.register(wrapWithFrameReset(createCloseTabTool()));
+        registry.register(wrapWithFrameSupport(createUploadFileTool()));
         registry.register(createHandleAlertTool());
-        registry.register(createDragTool());
-        registry.register(createDragToTool());
+        registry.register(wrapWithFrameSupport(createDragTool()));
+        registry.register(wrapWithFrameSupport(createDragToTool()));
         registry.register(createIncludeTool());
         registry.register(createGetNetworkFailuresTool());
         registry.register(createGetConsoleErrorsTool());
