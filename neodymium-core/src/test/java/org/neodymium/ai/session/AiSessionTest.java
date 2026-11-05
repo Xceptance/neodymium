@@ -761,6 +761,52 @@ public class AiSessionTest
         Assertions.assertEquals(0, finishedEventCount.get(), "Session closed after disabling managed lifecycle must not emit SessionFinishedEvent");
     }
 
+    @Test
+    @DisplayName("execute(Playbook) accumulates beforeSteps and afterSteps across multiple calls")
+    public void testProgrammaticBeforeAndAfterStepsAccumulateAcrossCalls() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            final PlaybookStep before1 = new PlaybookStep("Before 1");
+            final PlaybookStep step1 = new PlaybookStep("Step 1");
+            final PlaybookStep after1 = new PlaybookStep("After 1");
+
+            final Playbook playbook1 = new Playbook(
+                List.of(before1),
+                List.of(step1),
+                List.of(after1),
+                Collections.emptyList(),
+                Collections.emptyMap(),
+                null
+            );
+
+            session.execute(playbook1);
+
+            final PlaybookStep step2 = new PlaybookStep("Step 2");
+            final Playbook playbook2 = new Playbook(
+                Collections.emptyList(),
+                List.of(step2),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                Collections.emptyMap(),
+                null
+            );
+
+            // Call with empty before/after steps should not overwrite existing before/after steps
+            session.execute(playbook2);
+
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) session.getExecutionContext().getTransientData().get("playbook.beforeSteps");
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> afterSteps = (List<PlaybookStep>) session.getExecutionContext().getTransientData().get("playbook.afterSteps");
+
+            Assertions.assertEquals(1, beforeSteps.size(), "beforeSteps must retain Before 1");
+            Assertions.assertEquals("Before 1", beforeSteps.get(0).getInstruction());
+            Assertions.assertEquals(1, afterSteps.size(), "afterSteps must retain After 1");
+            Assertions.assertEquals("After 1", afterSteps.get(0).getInstruction());
+        }
+    }
+
     private static class LegacyCustomSession extends AiSession
     {
         LegacyCustomSession()
