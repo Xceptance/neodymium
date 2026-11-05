@@ -20,12 +20,17 @@ package org.neodymium.ai.recorder;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Set;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEvent;
 import org.neodymium.ai.event.ExecutionListener;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -94,9 +99,41 @@ public final class PlaybookRecorder implements ExecutionListener
 
             try
             {
+                List<PlaybookStep> stepsToWrite = this.playbookSteps;
+                final ExecutionContext activeCtx = ExecutionContext.getActiveContext();
+                if (activeCtx != null)
+                {
+                    @SuppressWarnings("unchecked")
+                    final List<PlaybookStep> flatSteps = (List<PlaybookStep>) activeCtx.getTransientData().get("playbook.flatSteps");
+                    if (flatSteps != null && !flatSteps.isEmpty())
+                    {
+                        // flatSteps holds leaf steps only: a composite step (e.g. a folded ">-" block) is represented by
+                        // its children, which carry a parent reference. Record the root of each step so a composite is
+                        // written once, together with its sub-steps, instead of being dropped.
+                        final Set<PlaybookStep> seenRoots = Collections.newSetFromMap(new IdentityHashMap<>());
+                        final List<PlaybookStep> topLevel = new ArrayList<>();
+                        for (final PlaybookStep s : flatSteps)
+                        {
+                            if (s == null)
+                            {
+                                continue;
+                            }
+                            final PlaybookStep root = s.getRootStep();
+                            if (seenRoots.add(root))
+                            {
+                                topLevel.add(root);
+                            }
+                        }
+                        if (!topLevel.isEmpty())
+                        {
+                            stepsToWrite = topLevel;
+                        }
+                    }
+                }
+
                 final ObjectMapper mapper = new ObjectMapper();
                 mapper.enable(SerializationFeature.INDENT_OUTPUT);
-                final String candidateJson = mapper.writeValueAsString(this.playbookSteps);
+                final String candidateJson = mapper.writeValueAsString(stepsToWrite);
 
                 if (!this.executionMode.isRecording())
                 {

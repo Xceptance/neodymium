@@ -82,7 +82,7 @@ class SelenideBrowserSession extends AiSession
     }
 
     @Override
-    public void close() throws Exception
+    protected void doClose() throws Exception
     {
         // Cleanup resources bound to target executor if AutoCloseable
         if (getTargetExecutor() instanceof AutoCloseable closeable)

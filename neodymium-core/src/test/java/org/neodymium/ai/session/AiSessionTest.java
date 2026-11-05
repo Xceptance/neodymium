@@ -18,17 +18,31 @@
  */
 package org.neodymium.ai.session;
 
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.client.LlmCapability;
+import org.neodymium.ai.client.LlmProvider;
+import org.neodymium.ai.client.LlmRegistry;
+import org.neodymium.ai.client.LlmRequest;
+import org.neodymium.ai.client.LlmResponse;
+import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
+import org.neodymium.ai.event.ExecutionEvent;
+import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.event.ExecutionListener;
+import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.executor.MockTargetExecutor;
 import org.neodymium.ai.executor.rest.RestTargetExecutor;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
@@ -438,6 +452,334 @@ public class AiSessionTest
         Assertions.assertEquals(1, esc2);
         Assertions.assertEquals(1, counts.get("LEAN"));
         Assertions.assertEquals(1, counts.get("STANDARD"));
+    }
+
+    @Test
+    @DisplayName("Custom subclass of AiSession without overriding doClose() can be instantiated and closed cleanly")
+    public void testLegacyCustomSubclassCompatibilityWithoutOverridingDoClose() throws Exception
+    {
+        try (final AiSession session = new LegacyCustomSession())
+        {
+            Assertions.assertNotNull(session);
+            Assertions.assertEquals(ExecutionMode.LLM_ONLY, session.getExecutionMode());
+        }
+    }
+
+    @Test
+    @DisplayName("setManagedLifecycle(true) suppresses intermediate SessionFinishedEvents until close()")
+    public void testManagedLifecycleDefersSessionFinishedEventUntilClose() throws Exception
+    {
+        final AtomicInteger finishedEventCount = new AtomicInteger(0);
+        final AtomicReference<SessionFinishedEvent> lastFinishedEvent = new AtomicReference<>();
+
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            session.getEventBus().registerListener(new ExecutionListener()
+            {
+                @Override
+                public void onEvent(final ExecutionEvent event)
+                {
+                    if (event instanceof SessionFinishedEvent sfe)
+                    {
+                        finishedEventCount.incrementAndGet();
+                        lastFinishedEvent.set(sfe);
+                    }
+                }
+            });
+
+            session.setManagedLifecycle(true);
+
+            final PlaybookRecording rec1 = session.execute("Step 1");
+            Assertions.assertNotNull(rec1);
+            Assertions.assertEquals(0, finishedEventCount.get(), "SessionFinishedEvent must NOT fire after step 1 in managed lifecycle");
+
+            final PlaybookRecording rec2 = session.execute("Step 2");
+            Assertions.assertNotNull(rec2);
+            Assertions.assertEquals(0, finishedEventCount.get(), "SessionFinishedEvent must NOT fire after step 2 in managed lifecycle");
+        }
+
+        Assertions.assertEquals(1, finishedEventCount.get(), "SessionFinishedEvent must fire exactly once upon close()");
+        Assertions.assertNotNull(lastFinishedEvent.get());
+        Assertions.assertTrue(lastFinishedEvent.get().isSuccess(), "SessionFinishedEvent must report overallSuccess = true");
+    }
+
+    @Test
+    @DisplayName("setManagedLifecycle(true) propagates execution error to SessionFinishedEvent on close()")
+    public void testManagedLifecyclePropagatesErrorToSessionFinishedEvent() throws Exception
+    {
+        final AtomicReference<SessionFinishedEvent> lastFinishedEvent = new AtomicReference<>();
+
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            session.getEventBus().registerListener(new ExecutionListener()
+            {
+                @Override
+                public void onEvent(final ExecutionEvent event)
+                {
+                    if (event instanceof SessionFinishedEvent sfe)
+                    {
+                        lastFinishedEvent.set(sfe);
+                    }
+                }
+            });
+
+            final LlmProvider failingLlm = new LlmProvider()
+            {
+                @Override
+                public LlmResponse chat(final LlmRequest request)
+                {
+                    throw new RuntimeException("Simulated LLM failure");
+                }
+
+                @Override
+                public Set<LlmCapability> getCapabilities()
+                {
+                    return Set.of(LlmCapability.values());
+                }
+            };
+
+            session.getLlmRegistry().setDefaultProvider(failingLlm);
+            for (final LlmCapability cap : LlmCapability.values())
+            {
+                session.getLlmRegistry().registerProvider(cap, failingLlm);
+            }
+
+            session.setManagedLifecycle(true);
+
+            boolean caught = false;
+            try
+            {
+                session.execute("Failing step");
+            }
+            catch (final Exception expected)
+            {
+                caught = true;
+            }
+            Assertions.assertTrue(caught, "Execution exception should be thrown to caller");
+        }
+
+        Assertions.assertNotNull(lastFinishedEvent.get(), "SessionFinishedEvent must fire upon close()");
+        Assertions.assertFalse(lastFinishedEvent.get().isSuccess(), "SessionFinishedEvent must report overallSuccess = false when an error occurred");
+    }
+
+    @Test
+    @DisplayName("clearLastExecutionError() removes recorded error so managed session reports success on close()")
+    public void testManagedLifecycleClearLastExecutionErrorReportsSuccessOnClose() throws Exception
+    {
+        final AtomicReference<SessionFinishedEvent> lastFinishedEvent = new AtomicReference<>();
+
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            session.getEventBus().registerListener(new ExecutionListener()
+            {
+                @Override
+                public void onEvent(final ExecutionEvent event)
+                {
+                    if (event instanceof SessionFinishedEvent sfe)
+                    {
+                        lastFinishedEvent.set(sfe);
+                    }
+                }
+            });
+
+            final LlmProvider failingLlm = new LlmProvider()
+            {
+                @Override
+                public LlmResponse chat(final LlmRequest request)
+                {
+                    throw new RuntimeException("Simulated intentional failure to catch");
+                }
+
+                @Override
+                public Set<LlmCapability> getCapabilities()
+                {
+                    return Set.of(LlmCapability.values());
+                }
+            };
+
+            session.getLlmRegistry().setDefaultProvider(failingLlm);
+            for (final LlmCapability cap : LlmCapability.values())
+            {
+                session.getLlmRegistry().registerProvider(cap, failingLlm);
+            }
+
+            session.setManagedLifecycle(true);
+
+            boolean caught = false;
+            try
+            {
+                session.execute("Failing step");
+            }
+            catch (final Exception expected)
+            {
+                caught = true;
+            }
+            Assertions.assertTrue(caught, "Execution exception should be thrown to caller");
+
+            // User intentionally handles the failure and clears the error before closing
+            session.clearLastExecutionError();
+        }
+
+        Assertions.assertNotNull(lastFinishedEvent.get(), "SessionFinishedEvent must fire upon close()");
+        Assertions.assertTrue(lastFinishedEvent.get().isSuccess(), "SessionFinishedEvent must report overallSuccess = true when error was cleared");
+    }
+
+    @Test
+    @DisplayName("Standalone unmanaged session dispatches SessionFinishedEvent immediately on first execute()")
+    public void testStandaloneUnmanagedSessionDispatchesFinishedEventOnFirstExecution() throws Exception
+    {
+        final AtomicInteger finishedEventCount = new AtomicInteger(0);
+        final AtomicReference<SessionFinishedEvent> lastFinishedEvent = new AtomicReference<>();
+
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            session.getEventBus().registerListener(new ExecutionListener()
+            {
+                @Override
+                public void onEvent(final ExecutionEvent event)
+                {
+                    if (event instanceof SessionFinishedEvent sfe)
+                    {
+                        finishedEventCount.incrementAndGet();
+                        lastFinishedEvent.set(sfe);
+                    }
+                }
+            });
+
+            // Without session.setManagedLifecycle(true), unmanaged session finalizes immediately upon execute()
+            final PlaybookRecording rec1 = session.execute("Step 1");
+            Assertions.assertNotNull(rec1);
+            Assertions.assertEquals(1, finishedEventCount.get(), "SessionFinishedEvent must fire immediately after step 1 in unmanaged session");
+            Assertions.assertTrue(lastFinishedEvent.get().isSuccess());
+
+            // Subsequent execute in unmanaged session does not re-dispatch SessionFinishedEvent
+            final PlaybookRecording rec2 = session.execute("Step 2");
+            Assertions.assertNotNull(rec2);
+            Assertions.assertEquals(1, finishedEventCount.get(), "SessionFinishedEvent must NOT re-fire on subsequent execute in unmanaged session");
+        }
+
+        // close() must NOT duplicate SessionFinishedEvent when already handled
+        Assertions.assertEquals(1, finishedEventCount.get(), "SessionFinishedEvent must not fire again upon close() if already handled");
+    }
+
+    /**
+     * Goal: Verifies that an unmanaged session that is opened and closed without any execute() calls
+     * does not emit a spurious SessionFinishedEvent or log a passed session.
+     */
+    @Test
+    public void testUnmanagedSessionClosedWithoutExecutionDoesNotDispatchFinishedEvent() throws Exception
+    {
+        final AtomicInteger finishedEventCount = new AtomicInteger(0);
+
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            session.getEventBus().registerListener(new ExecutionListener()
+            {
+                @Override
+                public void onEvent(final ExecutionEvent event)
+                {
+                    if (event instanceof SessionFinishedEvent)
+                    {
+                        finishedEventCount.incrementAndGet();
+                    }
+                }
+            });
+        }
+
+        Assertions.assertEquals(0, finishedEventCount.get(), "Unmanaged session closed without any execution must NOT dispatch SessionFinishedEvent");
+    }
+
+    /**
+     * Goal: Verifies that programmatic execution of an inline step does not overwrite
+     * or empty pre-existing playbook.beforeSteps and playbook.afterSteps in transient data.
+     */
+    @Test
+    public void testProgrammaticStepExecutionPreservesExistingBeforeAndAfterSteps() throws Exception
+    {
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            final PlaybookStep beforeStep = new PlaybookStep("Pre-configured before step");
+            beforeStep.setBlock("before");
+            final PlaybookStep afterStep = new PlaybookStep("Pre-configured after step");
+            afterStep.setBlock("after");
+
+            final List<PlaybookStep> beforeSteps = new ArrayList<>(List.of(beforeStep));
+            final List<PlaybookStep> afterSteps = new ArrayList<>(List.of(afterStep));
+
+            session.getExecutionContext().getTransientData().put("playbook.beforeSteps", beforeSteps);
+            session.getExecutionContext().getTransientData().put("playbook.afterSteps", afterSteps);
+
+            session.execute("Inline programmatic step");
+
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> actualBefore = (List<PlaybookStep>) session.getExecutionContext().getTransientData().get("playbook.beforeSteps");
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> actualAfter = (List<PlaybookStep>) session.getExecutionContext().getTransientData().get("playbook.afterSteps");
+
+            Assertions.assertNotNull(actualBefore);
+            Assertions.assertFalse(actualBefore.isEmpty(), "playbook.beforeSteps must not be cleared by inline execution");
+            Assertions.assertEquals(1, actualBefore.size());
+            Assertions.assertEquals(beforeStep, actualBefore.get(0));
+
+            Assertions.assertNotNull(actualAfter);
+            Assertions.assertFalse(actualAfter.isEmpty(), "playbook.afterSteps must not be cleared by inline execution");
+            Assertions.assertEquals(1, actualAfter.size());
+            Assertions.assertEquals(afterStep, actualAfter.get(0));
+        }
+    }
+
+    /**
+     * Goal: Verifies that toggling setManagedLifecycle(false) after setManagedLifecycle(true)
+     * cleans up managed start time and does not dispatch SessionFinishedEvent on close.
+     */
+    @Test
+    public void testDisablingManagedLifecycleDoesNotEmitFinishedEventOnClose() throws Exception
+    {
+        final AtomicInteger finishedEventCount = new AtomicInteger(0);
+
+        try (final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY))
+        {
+            session.getEventBus().registerListener(new ExecutionListener()
+            {
+                @Override
+                public void onEvent(final ExecutionEvent event)
+                {
+                    if (event instanceof SessionFinishedEvent)
+                    {
+                        finishedEventCount.incrementAndGet();
+                    }
+                }
+            });
+
+            session.setManagedLifecycle(true);
+            session.setManagedLifecycle(false);
+
+            Assertions.assertFalse(session.getExecutionContext().getTransientData().containsKey(ExecutionContext.KEY_MANAGED_LIFECYCLE));
+            Assertions.assertFalse(session.getExecutionContext().getTransientData().containsKey(ExecutionContext.KEY_MANAGED_START_TIME));
+        }
+
+        Assertions.assertEquals(0, finishedEventCount.get(), "Session closed after disabling managed lifecycle must not emit SessionFinishedEvent");
+    }
+
+    private static class LegacyCustomSession extends AiSession
+    {
+        LegacyCustomSession()
+        {
+            super(
+                new SessionData(),
+                createRegistry(),
+                new ExecutionEventBus(),
+                new MockTargetExecutor(),
+                ExecutionMode.LLM_ONLY
+            );
+        }
+
+        private static LlmRegistry createRegistry()
+        {
+            final LlmRegistry registry = new LlmRegistry();
+            registry.setDefaultProvider(AiSession.createMockLlmProvider());
+            return registry;
+        }
     }
 }
 

@@ -57,6 +57,8 @@ import org.neodymium.ai.runner.StateMachineRunner;
 import org.neodymium.ai.telemetry.TokenBudgetGuard;
 import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.util.Neodymium;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Abstract class representing an execution session context that manages the active
@@ -68,6 +70,7 @@ import org.neodymium.util.Neodymium;
  */
 public abstract class AiSession implements AutoCloseable
 {
+    private static final Logger LOGGER = LoggerFactory.getLogger(AiSession.class);
     /**
      * The thread-isolated execution context.
      */
@@ -666,15 +669,76 @@ public abstract class AiSession implements AutoCloseable
             }
         }
 
-        this.executionContext.getTransientData().put("playbook.beforeSteps", new ArrayList<>(beforeSteps));
-        this.executionContext.getTransientData().put("playbook.steps", new ArrayList<>(playbookSteps));
-        this.executionContext.getTransientData().put("playbook.afterSteps", new ArrayList<>(afterSteps));
+        if (beforeSteps != null && !beforeSteps.isEmpty())
+        {
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> existingBefore = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.beforeSteps");
+            if (existingBefore == null)
+            {
+                this.executionContext.getTransientData().put("playbook.beforeSteps", new ArrayList<>(beforeSteps));
+            }
+            else
+            {
+                try
+                {
+                    existingBefore.addAll(beforeSteps);
+                }
+                catch (final UnsupportedOperationException uoe)
+                {
+                    final List<PlaybookStep> mutableBefore = new ArrayList<>(existingBefore);
+                    mutableBefore.addAll(beforeSteps);
+                    this.executionContext.getTransientData().put("playbook.beforeSteps", mutableBefore);
+                }
+            }
+        }
+        else if (!this.executionContext.getTransientData().containsKey("playbook.beforeSteps"))
+        {
+            this.executionContext.getTransientData().put("playbook.beforeSteps", new ArrayList<PlaybookStep>());
+        }
 
-        final List<PlaybookStep> flatSteps = new ArrayList<>();
+        if (afterSteps != null && !afterSteps.isEmpty())
+        {
+            @SuppressWarnings("unchecked")
+            final List<PlaybookStep> existingAfter = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.afterSteps");
+            if (existingAfter == null)
+            {
+                this.executionContext.getTransientData().put("playbook.afterSteps", new ArrayList<>(afterSteps));
+            }
+            else
+            {
+                try
+                {
+                    existingAfter.addAll(afterSteps);
+                }
+                catch (final UnsupportedOperationException uoe)
+                {
+                    final List<PlaybookStep> mutableAfter = new ArrayList<>(existingAfter);
+                    mutableAfter.addAll(afterSteps);
+                    this.executionContext.getTransientData().put("playbook.afterSteps", mutableAfter);
+                }
+            }
+        }
+        else if (!this.executionContext.getTransientData().containsKey("playbook.afterSteps"))
+        {
+            this.executionContext.getTransientData().put("playbook.afterSteps", new ArrayList<PlaybookStep>());
+        }
+
+        @SuppressWarnings("unchecked")
+        List<PlaybookStep> flatSteps = (List<PlaybookStep>) this.executionContext.getTransientData().get("playbook.flatSteps");
+        if (flatSteps == null)
+        {
+            flatSteps = new ArrayList<>();
+            this.executionContext.getTransientData().put("playbook.flatSteps", flatSteps);
+        }
+        else if (!(flatSteps instanceof ArrayList))
+        {
+            flatSteps = new ArrayList<>(flatSteps);
+            this.executionContext.getTransientData().put("playbook.flatSteps", flatSteps);
+        }
         flattenSteps(allSteps, flatSteps);
-        this.executionContext.getTransientData().put("playbook.flatSteps", flatSteps);
 
         final long sessionStartTime = System.currentTimeMillis();
+        final Object prevDefer = this.executionContext.getTransientData().get("playbook.deferSessionFinished");
         this.executionContext.getTransientData().put("playbook.deferSessionFinished", Boolean.TRUE);
 
         Throwable primaryFailure = null;
@@ -739,31 +803,51 @@ public abstract class AiSession implements AutoCloseable
             }
             finally
             {
-                this.executionContext.getTransientData().remove("playbook.deferSessionFinished");
-                if (!Boolean.TRUE.equals(this.executionContext.getTransientData().get("sessionFinishedHandled")))
+                if (prevDefer != null)
                 {
-                    this.executionContext.getTransientData().put("sessionFinishedHandled", true);
-                    final boolean overallSuccess = (primaryFailure == null);
-                    final long totalDurationMs = Math.max(1, System.currentTimeMillis() - sessionStartTime);
-                    @SuppressWarnings("unchecked")
-                    final List<String> warningsList = (List<String>) this.executionContext.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
-                    final ExecutionContext prev = ExecutionContext.getActiveContext();
-                    try
+                    this.executionContext.getTransientData().put("playbook.deferSessionFinished", prevDefer);
+                }
+                else
+                {
+                    this.executionContext.getTransientData().remove("playbook.deferSessionFinished");
+                }
+                final boolean isManagedLifecycle = Boolean.TRUE.equals(this.executionContext.getTransientData().get(ExecutionContext.KEY_MANAGED_LIFECYCLE));
+                if (!isManagedLifecycle)
+                {
+                    if (!Boolean.TRUE.equals(this.executionContext.getTransientData().get(ExecutionContext.KEY_SESSION_FINISHED_HANDLED)))
                     {
-                        ExecutionContext.setActiveContext(this.executionContext);
-                        this.eventBus.dispatch(new SessionFinishedEvent(totalDurationMs, overallSuccess, warningsList != null ? warningsList : Collections.emptyList()));
-                        StateMachineRunner.logFinalStatsSummary(this.executionContext, totalDurationMs, overallSuccess, primaryFailure);
-                        this.runPostHooks(overallSuccess);
+                        this.executionContext.getTransientData().put(ExecutionContext.KEY_SESSION_FINISHED_HANDLED, true);
+                        final boolean overallSuccess = (primaryFailure == null);
+                        final long totalDurationMs = Math.max(1, System.currentTimeMillis() - sessionStartTime);
+                        @SuppressWarnings("unchecked")
+                        final List<String> warningsList = (List<String>) this.executionContext.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+                        final ExecutionContext prev = ExecutionContext.getActiveContext();
+                        try
+                        {
+                            ExecutionContext.setActiveContext(this.executionContext);
+                            this.eventBus.dispatch(new SessionFinishedEvent(totalDurationMs, overallSuccess, warningsList != null ? warningsList : Collections.emptyList()));
+                            StateMachineRunner.logFinalStatsSummary(this.executionContext, totalDurationMs, overallSuccess, primaryFailure);
+                            this.runPostHooks(overallSuccess);
+                        }
+                        finally
+                        {
+                            ExecutionContext.setActiveContext(prev);
+                        }
                     }
-                    finally
+                    else
                     {
-                        ExecutionContext.setActiveContext(prev);
+                        LOGGER.warn("⚠️ Further execute() call on an unmanaged AiSession whose SessionFinishedEvent was already dispatched; its outcome ({}) is not reflected in the report. Call session.setManagedLifecycle(true) before the first execute() or use @ExtendWith(NeodymiumAiRunner.class) to aggregate multi-step session lifecycles.",
+                            primaryFailure == null ? "success" : "failed: " + primaryFailure.getMessage());
                     }
                 }
             }
         }
 
-        if (primaryFailure != null)
+        if (primaryFailure == null)
+        {
+            this.executionContext.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+        }
+        else
         {
             Throwable root = primaryFailure;
             while (root != null)
@@ -916,12 +1000,128 @@ public abstract class AiSession implements AutoCloseable
     }
 
     /**
-     * Closes the session and associated resources.
+     * Configures whether this session's lifecycle is managed externally (e.g. by a test runner or batch executor).
+     * When managed, individual execute() calls do not dispatch SessionFinishedEvent or log final summaries.
+     * <p>
+     * An unmanaged session (the default for standalone use) finalizes on its first execute() call: the
+     * SessionFinishedEvent, report and recording reflect that call only. Later execute() calls on the same session still
+     * run and still throw on failure, but their outcome is not added to the already dispatched event. Call this method
+     * with {@code true} before the first execute() when a session is used for several calls.
+     *
+     * @param managed true to defer session completion to external finalizer
+     */
+    public final void setManagedLifecycle(final boolean managed)
+    {
+        if (managed)
+        {
+            this.executionContext.getTransientData().put(ExecutionContext.KEY_MANAGED_LIFECYCLE, Boolean.TRUE);
+            if (!this.executionContext.getTransientData().containsKey(ExecutionContext.KEY_MANAGED_START_TIME))
+            {
+                this.executionContext.getTransientData().put(ExecutionContext.KEY_MANAGED_START_TIME, System.currentTimeMillis());
+            }
+        }
+        else
+        {
+            this.executionContext.getTransientData().remove(ExecutionContext.KEY_MANAGED_LIFECYCLE);
+            this.executionContext.getTransientData().remove(ExecutionContext.KEY_MANAGED_START_TIME);
+        }
+    }
+
+    /**
+     * Clears any recorded last execution error from the session context.
+     * Useful when an execution failure is intentionally handled or asserted in user test code.
+     * <p>
+     * This only influences sessions that are finalized from the recorded error, i.e. standalone sessions with a managed
+     * lifecycle that end in {@link #close()}. Under {@code NeodymiumAiRunner} the JUnit verdict decides the outcome: a test
+     * that catches a failed step and ends normally is reported as passed whether or not this method was called.
+     */
+    public final void clearLastExecutionError()
+    {
+        this.executionContext.getTransientData().remove(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+    }
+
+    /**
+     * Authoritatively finalizes the session if not already handled, dispatching SessionFinishedEvent,
+     * logging final execution statistics, and running post-execution hooks.
+     */
+    public final void finishSession()
+    {
+        finishSession(null);
+    }
+
+    /**
+     * Authoritatively finalizes the session with an optional explicit failure override,
+     * dispatching SessionFinishedEvent, logging final execution statistics, and running post-execution hooks.
+     *
+     * @param explicitFailure failure throwable to record, or null to inspect recorded context failure
+     */
+    public final void finishSession(final Throwable explicitFailure)
+    {
+        if (Boolean.TRUE.equals(this.executionContext.getTransientData().get(ExecutionContext.KEY_SESSION_FINISHED_HANDLED)))
+        {
+            return;
+        }
+        this.executionContext.getTransientData().put(ExecutionContext.KEY_SESSION_FINISHED_HANDLED, true);
+
+        if (explicitFailure != null)
+        {
+            this.executionContext.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, explicitFailure);
+        }
+        final Throwable failure = (Throwable) this.executionContext.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+        final boolean overallSuccess = (failure == null);
+        final Long startTime = (Long) this.executionContext.getTransientData().get(ExecutionContext.KEY_MANAGED_START_TIME);
+        final long totalDurationMs = (startTime != null)
+            ? Math.max(1, System.currentTimeMillis() - startTime)
+            : 0;
+
+        @SuppressWarnings("unchecked")
+        final List<String> warningsList = (List<String>) this.executionContext.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+        final ExecutionContext prev = ExecutionContext.getActiveContext();
+        try
+        {
+            ExecutionContext.setActiveContext(this.executionContext);
+            this.eventBus.dispatch(new SessionFinishedEvent(totalDurationMs, overallSuccess, warningsList != null ? warningsList : Collections.emptyList()));
+            StateMachineRunner.logFinalStatsSummary(this.executionContext, totalDurationMs, overallSuccess, failure);
+            this.runPostHooks(overallSuccess);
+        }
+        finally
+        {
+            ExecutionContext.setActiveContext(prev);
+        }
+    }
+
+    /**
+     * Closes the session and associated resources, ensuring any unfinalized managed session is concluded.
+     * If the session is managed or has executed steps, it is authoritatively concluded before closing resources.
      *
      * @throws Exception if closing resources fails
      */
     @Override
-    public abstract void close() throws Exception;
+    public void close() throws Exception
+    {
+        try
+        {
+            final boolean isManaged = Boolean.TRUE.equals(this.executionContext.getTransientData().get(ExecutionContext.KEY_MANAGED_LIFECYCLE));
+            if (isManaged)
+            {
+                finishSession();
+            }
+        }
+        finally
+        {
+            doClose();
+        }
+    }
+
+    /**
+     * Subclass-specific resource cleanup hook. Default implementation is a no-op
+     * to maintain backward compatibility with external subclasses.
+     *
+     * @throws Exception if cleanup fails
+     */
+    protected void doClose() throws Exception
+    {
+    }
 
     /**
      * Static factory creating a Selenide browser automation session with default LLM_ONLY execution mode.
@@ -1087,7 +1287,12 @@ public abstract class AiSession implements AutoCloseable
         }
     }
 
-    private static LlmProvider createMockLlmProvider()
+    /**
+     * Static factory creating a mock LLM provider that returns complete_step for testing.
+     *
+     * @return a mock LlmProvider
+     */
+    public static LlmProvider createMockLlmProvider()
     {
         return new LlmProvider()
         {

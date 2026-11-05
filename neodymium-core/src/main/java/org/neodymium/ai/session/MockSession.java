@@ -91,7 +91,7 @@ final class MockSession extends AiSession
      * @throws Exception if closing fails
      */
     @Override
-    public void close() throws Exception
+    protected void doClose() throws Exception
     {
         this.closed = true;
     }
