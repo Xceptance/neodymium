@@ -305,4 +305,12 @@ public class FrameContextManagerScopeTest
         final String selector = FrameContextManager.describeFrame(driver, frame);
         Assertions.assertFalse(selector.contains("name='dup'"), "Non-unique name must not be used: " + selector);
     }
+
+    @Test
+    public void testDescribeFrameUsesUniqueSrcFilename()
+    {
+        final WebDriver driver = simpleDriver();
+        final WebElement frame = element("f", Map.of("src", "https://example.com/checkout/frame1.html?v=1"));
+        Assertions.assertEquals("iframe[src*='frame1.html']", FrameContextManager.describeFrame(driver, frame));
+    }
 }

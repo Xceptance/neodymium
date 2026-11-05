@@ -133,6 +133,10 @@ public class FrameContextManagerTest
 
         // Tail frame deduplication
         Assertions.assertEquals("#pact1 >>> #pact2", FrameContextManager.combine("#pact1 >>> #pact2", "#pact2"));
+
+        // Multi-segment sliding-window overlap
+        Assertions.assertEquals("#pact1 >>> #pact2 >>> #pact3", FrameContextManager.combine("#pact1 >>> #pact2", "#pact2 >>> #pact3"));
+        Assertions.assertEquals("#a >>> #b >>> #c >>> #d", FrameContextManager.combine("#a >>> #b >>> #c", "#b >>> #c >>> #d"));
     }
 
     @Test

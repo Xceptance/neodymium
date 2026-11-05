@@ -261,36 +261,48 @@ public final class FrameContextManager
      */
     public static String combine(final String frame, final String prefix)
     {
-        final String normFrame = normalizeFramePath(frame);
-        final String normPrefix = normalizeFramePath(prefix);
-        final boolean hasFrame = !normFrame.isEmpty();
-        final boolean hasPrefix = !normPrefix.isEmpty();
+        final List<String> segs1 = parseFrameHierarchy(frame);
+        final List<String> segs2 = parseFrameHierarchy(prefix);
+        if (segs1.isEmpty() && segs2.isEmpty())
+        {
+            return null;
+        }
+        if (segs1.isEmpty())
+        {
+            return String.join(FRAME_DELIMITER, segs2);
+        }
+        if (segs2.isEmpty())
+        {
+            return String.join(FRAME_DELIMITER, segs1);
+        }
 
-        if (hasFrame && hasPrefix)
+        // If segs1 already starts with segs2 (segs1 contains segs2 from root), segs1 is more specific
+        if (segs1.size() >= segs2.size() && segs1.subList(0, segs2.size()).equals(segs2))
         {
-            if (normFrame.equals(normPrefix))
-            {
-                return normFrame;
-            }
-            if (normPrefix.startsWith(normFrame + FRAME_DELIMITER))
-            {
-                return normPrefix;
-            }
-            if (normFrame.startsWith(normPrefix + FRAME_DELIMITER))
-            {
-                return normFrame;
-            }
-            if (normFrame.endsWith(FRAME_DELIMITER + normPrefix))
-            {
-                return normFrame;
-            }
-            return normFrame + FRAME_DELIMITER + normPrefix;
+            return String.join(FRAME_DELIMITER, segs1);
         }
-        if (hasFrame)
+
+        // If segs2 extends segs1 from root, segs2 is more specific
+        if (segs2.size() >= segs1.size() && segs2.subList(0, segs1.size()).equals(segs1))
         {
-            return normFrame;
+            return String.join(FRAME_DELIMITER, segs2);
         }
-        return hasPrefix ? normPrefix : null;
+
+        // Find longest suffix of segs1 that matches the prefix of segs2 (sliding-window overlap)
+        final int maxOverlap = Math.min(segs1.size(), segs2.size());
+        int overlap = 0;
+        for (int k = maxOverlap; k >= 1; k--)
+        {
+            if (segs1.subList(segs1.size() - k, segs1.size()).equals(segs2.subList(0, k)))
+            {
+                overlap = k;
+                break;
+            }
+        }
+
+        final List<String> merged = new ArrayList<>(segs1);
+        merged.addAll(segs2.subList(overlap, segs2.size()));
+        return String.join(FRAME_DELIMITER, merged);
     }
 
     /**
@@ -443,6 +455,21 @@ public final class FrameContextManager
                 if (isUnique(driver, selector))
                 {
                     return selector;
+                }
+            }
+        }
+
+        final String src = safeAttribute(frameEl, "src");
+        if (src != null && src.indexOf('/') != -1 && !src.startsWith("blob:") && !src.startsWith("data:"))
+        {
+            final String cleanSrc = src.split("\\?")[0].split("#")[0];
+            final String filename = cleanSrc.substring(cleanSrc.lastIndexOf('/') + 1);
+            if (filename.length() >= 3)
+            {
+                final String srcSel = tag + "[src*='" + filename.replace("\\", "\\\\").replace("'", "\\'") + "']";
+                if (isUnique(driver, srcSel))
+                {
+                    return srcSel;
                 }
             }
         }

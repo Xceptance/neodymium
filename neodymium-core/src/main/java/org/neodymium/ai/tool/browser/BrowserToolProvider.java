@@ -310,11 +310,19 @@ public final class BrowserToolProvider
                 {
                     final ObjectNode newArgs = objArgs.deepCopy();
                     final String selectorPrefix = stripFramePrefix(newArgs, "selector");
-                    final String targetPrefix = selectorPrefix == null ? stripFramePrefix(newArgs, "target") : null;
-                    final String prefix = selectorPrefix != null ? selectorPrefix : targetPrefix;
-                    if (prefix != null)
+                    final String targetPrefix = stripFramePrefix(newArgs, "target");
+                    final String sourcePrefix = stripFramePrefix(newArgs, "source");
+
+                    for (final String prefix : new String[] {selectorPrefix, targetPrefix, sourcePrefix})
                     {
-                        frame = FrameContextManager.combine(frame, prefix);
+                        if (prefix != null)
+                        {
+                            frame = FrameContextManager.combine(frame, prefix);
+                        }
+                    }
+
+                    if (selectorPrefix != null || targetPrefix != null || sourcePrefix != null)
+                    {
                         effectiveCall = new ToolCall(call.callId(), call.toolName(), newArgs);
                     }
                 }

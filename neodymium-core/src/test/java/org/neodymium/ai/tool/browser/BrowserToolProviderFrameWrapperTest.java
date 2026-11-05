@@ -158,4 +158,19 @@ public class BrowserToolProviderFrameWrapperTest
         }
         assertNull(FrameContextManager.getActiveFramePath());
     }
+
+    @Test
+    public void testSourceAndTargetPrefixesAreBothStrippedAndMerged() throws Exception
+    {
+        final AiTool wrapped = BrowserToolProvider.wrapWithFrameSupport(fakeTool());
+        final ObjectNode args = MAPPER.createObjectNode()
+            .put("source", "#frame1 >>> #draggable")
+            .put("target", "#frame1 >>> #dropzone");
+
+        final ToolResult result = wrapped.execute(new ToolCall("c5", "fake", args), null);
+
+        assertEquals("#draggable", this.seenArgs.get().path("source").asText());
+        assertEquals("#dropzone", this.seenArgs.get().path("target").asText());
+        assertEquals("#frame1", MAPPER.readTree(result.content()).path("frame").asText());
+    }
 }

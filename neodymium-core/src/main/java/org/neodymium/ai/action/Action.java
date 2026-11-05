@@ -54,7 +54,9 @@ public class Action
      * never be interpreted as a frame-prefixed compound selector.
      */
     private static final Set<String> FRAME_PREFIX_EXEMPT_TYPES = Set.of(
-        "NAVIGATE", "ASSERT_URL", "ASSERT_TITLE", "WAIT", "EXECUTE_SCRIPT", "SCRIPT", "INCLUDE", "BACK", "FORWARD", "REFRESH");
+        "NAVIGATE", "ASSERT_URL", "ASSERT_TITLE", "WAIT", "EXECUTE_SCRIPT", "SCRIPT", "INCLUDE",
+        "BACK", "FORWARD", "REFRESH", "SWITCH_TAB", "CLOSE_TAB", "HANDLE_ALERT",
+        "GET", "POST", "PUT", "DELETE");
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 

@@ -26,11 +26,19 @@
   4. In `FrameContextManager.java`:
      - Extracted precompiled static `Pattern VOLATILE_ID_DETECTOR`.
      - Updated `normalizeFramePath`, `parseFrameHierarchy`, and `splitFrameTarget` with flexible whitespace regex `\s*>>>\s*`.
-     - Updated `combine()` to normalize both input paths, check prefixes, and perform tail deduplication.
-  5. In `FrameContextManagerTest.java` and `FrameContextManagerScopeTest.java`, added tests covering unspaced delimiters, window prefix normalization, coordinate expression exemptions, and path deduplication.
+     - Implemented segment-level sliding-window suffix-prefix overlap merging in `combine()` to eliminate duplication across window prefixes, sub-hierarchies, and partial overlaps.
+     - Added unique `src` filename resolution to `describeFrame()` to align runtime auto-discovery with `PageAnalyzer` DOM tree generation.
+  5. In `BrowserToolProvider.java`:
+     - Updated `wrapWithFrameSupport` to strip and combine frame prefixes from `source`, `target`, and `selector` arguments (supporting `drag_to`).
+  6. In `Action.java`:
+     - Expanded `FRAME_PREFIX_EXEMPT_TYPES` to protect tab management (`SWITCH_TAB`, `CLOSE_TAB`), alerts (`HANDLE_ALERT`), and REST actions (`GET`, `POST`, `PUT`, `DELETE`).
+  7. In `FrameContextManagerTest.java`, `FrameContextManagerScopeTest.java`, and `BrowserToolProviderFrameWrapperTest.java`:
+     - Added tests covering unspaced delimiters, window prefix normalization, coordinate expression exemptions, sliding-window overlap deduplication, `src` attribute frame description, and multi-endpoint tool argument stripping.
 - **Safety Net Added:**
   - `FrameContextManagerTest.testParseFrameHierarchyFlexibleWhitespace`
   - `FrameContextManagerTest.testSplitFrameTargetFlexibleWhitespace`
   - `FrameContextManagerTest.testNormalizeFramePathWindowPrefixAndWhitespace`
   - `FrameContextManagerTest.testCombineWithWindowPrefixAndDeduplication`
+  - `FrameContextManagerScopeTest.testDescribeFrameUsesUniqueSrcFilename`
+  - `BrowserToolProviderFrameWrapperTest.testSourceAndTargetPrefixesAreBothStrippedAndMerged`
   - `NestedIframesSandboxMockTest.testNestedIframesAutonomousWorkflow`
