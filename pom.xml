@@ -55,11 +55,7 @@
 		<maven.compiler.target.version>21</maven.compiler.target.version>
 		<maven.compiler.release>21</maven.compiler.release>
 
-		<!-- Default module test skipping controls (active across profiles) -->
-		<skipCoreTests>false</skipCoreTests>
-		<skipServerTests>false</skipServerTests>
-		<skipManagerTests>false</skipManagerTests>
-		<skipE2eTests>false</skipE2eTests>
+		<!-- Safe root-level -Dtest filtering across modules -->
 		<surefire.failIfNoSpecifiedTests>false</surefire.failIfNoSpecifiedTests>
 	</properties>
 
@@ -67,111 +63,51 @@
 		<!-- 1. Strictly classic JUnit 4 tests (Vintage engine) -->
 		<profile>
 			<id>neo-classic-junit4</id>
-			<properties>
-				<skipCoreTests>false</skipCoreTests>
-				<skipServerTests>true</skipServerTests>
-				<skipManagerTests>true</skipManagerTests>
-				<skipE2eTests>true</skipE2eTests>
-			</properties>
 		</profile>
 
 		<!-- 2. Strictly classic JUnit 5 tests (Jupiter engine) -->
 		<profile>
 			<id>neo-classic-junit5</id>
-			<properties>
-				<skipCoreTests>false</skipCoreTests>
-				<skipServerTests>true</skipServerTests>
-				<skipManagerTests>true</skipManagerTests>
-				<skipE2eTests>true</skipE2eTests>
-			</properties>
 		</profile>
 
 		<!-- 3. Direct in-memory unit tests (no browser, no Javalin server, no LLM calls) -->
 		<profile>
 			<id>unit-tests</id>
-			<properties>
-				<skipCoreTests>false</skipCoreTests>
-				<skipServerTests>false</skipServerTests>
-				<skipManagerTests>false</skipManagerTests>
-				<skipE2eTests>true</skipE2eTests>
-			</properties>
 		</profile>
 
 		<!-- 4. All modern tests: Non-Classic, Zero Real AI (deterministic & offline) -->
 		<profile>
 			<id>non-llm-tests</id>
-			<properties>
-				<skipCoreTests>false</skipCoreTests>
-				<skipServerTests>false</skipServerTests>
-				<skipManagerTests>false</skipManagerTests>
-				<skipE2eTests>false</skipE2eTests>
-			</properties>
 		</profile>
 
 		<!-- 5. All VÉRLA storefront UI and mock AI integration tests -->
 		<profile>
 			<id>verla-tests</id>
-			<properties>
-				<skipCoreTests>true</skipCoreTests>
-				<skipServerTests>false</skipServerTests>
-				<skipManagerTests>true</skipManagerTests>
-				<skipE2eTests>false</skipE2eTests>
-			</properties>
 		</profile>
 
 		<!-- 6. AI pipeline, replay, and integration tests using mocked LLM fixtures -->
 		<profile>
 			<id>ai-mock-tests</id>
-			<properties>
-				<skipCoreTests>false</skipCoreTests>
-				<skipServerTests>false</skipServerTests>
-				<skipManagerTests>true</skipManagerTests>
-				<skipE2eTests>false</skipE2eTests>
-			</properties>
 		</profile>
 
 		<!-- 7. Real LLM tests requiring API keys (LiveAPI, LiveLlm) -->
 		<profile>
 			<id>ai-live-tests</id>
-			<properties>
-				<skipCoreTests>true</skipCoreTests>
-				<skipServerTests>false</skipServerTests>
-				<skipManagerTests>true</skipManagerTests>
-				<skipE2eTests>false</skipE2eTests>
-			</properties>
 		</profile>
 
 		<!-- 8. Aura Glance visual defect & baseline sandbox tests -->
 		<profile>
 			<id>aura-sandbox</id>
-			<properties>
-				<skipCoreTests>true</skipCoreTests>
-				<skipServerTests>false</skipServerTests>
-				<skipManagerTests>true</skipManagerTests>
-				<skipE2eTests>false</skipE2eTests>
-			</properties>
 		</profile>
 
 		<!-- 9. Aura Manager Spring Boot hub test suite -->
 		<profile>
 			<id>aura-manager</id>
-			<properties>
-				<skipCoreTests>true</skipCoreTests>
-				<skipServerTests>true</skipServerTests>
-				<skipManagerTests>false</skipManagerTests>
-				<skipE2eTests>true</skipE2eTests>
-			</properties>
 		</profile>
 
 		<!-- 10. Fast sanity verification suite (< 60s) -->
 		<profile>
 			<id>smoke</id>
-			<properties>
-				<skipCoreTests>false</skipCoreTests>
-				<skipServerTests>false</skipServerTests>
-				<skipManagerTests>true</skipManagerTests>
-				<skipE2eTests>false</skipE2eTests>
-			</properties>
 		</profile>
 	</profiles>
 

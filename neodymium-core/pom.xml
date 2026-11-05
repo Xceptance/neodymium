@@ -66,8 +66,6 @@
 		<junit.vintage.version>6.1.0-M1</junit.vintage.version>
 		<langchain4j.version>1.20.0</langchain4j.version>
 		<surefire.forkCount>1</surefire.forkCount>
-		<skipCoreTests>false</skipCoreTests>
-		<surefire.skip>${skipCoreTests}</surefire.skip>
 	</properties>
 
 	<build>
@@ -105,7 +103,6 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>${surefire.version}</version>
 				<configuration>
-					<skipTests>${surefire.skip}</skipTests>
 					<systemPropertyVariables>
 						<java.util.logging.config.file>logging.properties</java.util.logging.config.file>
 						<allure.results.directory>${allure.results.directory}</allure.results.directory>
@@ -277,8 +274,10 @@
 						<configuration>
 							<includes combine.self="override">
 								<include>com/xceptance/neodymium/junit4/tests/**/*Test.java</include>
+								<include>com/xceptance/neodymium/util/**/*Test.java</include>
 							</includes>
 							<excludes combine.self="override">
+								<exclude>com/xceptance/neodymium/util/**/*JUnit5Test.java</exclude>
 								<exclude>com/xceptance/neodymium/junit5/**</exclude>
 								<exclude>org/neodymium/**</exclude>
 								<exclude>com/xceptance/neodymium/aura/**</exclude>
@@ -308,8 +307,10 @@
 						<configuration>
 							<includes combine.self="override">
 								<include>com/xceptance/neodymium/junit4/tests/**/*Test.java</include>
+								<include>com/xceptance/neodymium/util/**/*Test.java</include>
 							</includes>
 							<excludes combine.self="override">
+								<exclude>com/xceptance/neodymium/util/**/*JUnit5Test.java</exclude>
 								<exclude>com/xceptance/neodymium/junit5/**</exclude>
 								<exclude>org/neodymium/**</exclude>
 								<exclude>com/xceptance/neodymium/aura/**</exclude>
@@ -339,7 +340,7 @@
 						<configuration>
 							<includes combine.self="override">
 								<include>com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
-								<include>com/xceptance/neodymium/util/**/*Test.java</include>
+								<include>com/xceptance/neodymium/util/**/*JUnit5Test.java</include>
 							</includes>
 							<excludes combine.self="override">
 								<exclude>**/*UiTest.java</exclude>
@@ -365,7 +366,7 @@
 						<configuration>
 							<includes combine.self="override">
 								<include>com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
-								<include>com/xceptance/neodymium/util/**/*Test.java</include>
+								<include>com/xceptance/neodymium/util/**/*JUnit5Test.java</include>
 							</includes>
 							<excludes combine.self="override">
 								<exclude>**/*UiTest.java</exclude>
@@ -390,17 +391,23 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<configuration>
 							<includes combine.self="override">
-								<include>org/neodymium/ai/**/*Test.java</include>
-								<include>com/xceptance/neodymium/aura/**/unit/*Test.java</include>
-								<include>com/xceptance/neodymium/util/**/*Test.java</include>
+								<include>org/neodymium/ai/model/**/*Test.java</include>
+								<include>org/neodymium/ai/unit/**/*Test.java</include>
+								<include>org/neodymium/ai/client/TokenUsageTest.java</include>
+								<include>com/xceptance/neodymium/aura/manager/unit/*Test.java</include>
+								<include>com/xceptance/neodymium/util/AllureAddonsTest.java</include>
+								<include>com/xceptance/neodymium/util/AssertionUtilsTest.java</include>
+								<include>com/xceptance/neodymium/util/DebugUtilsTest.java</include>
+								<include>com/xceptance/neodymium/util/SelenideErrorDetailsFormatterTest.java</include>
 								<include>org/neodymium/common/**/*Test.java</include>
 								<include>org/neodymium/util/**/*Test.java</include>
 							</includes>
 							<excludes combine.self="override">
 								<exclude>**/*UiTest.java</exclude>
+								<exclude>**/*BrowserTest.java</exclude>
 								<exclude>com/xceptance/neodymium/junit4/**</exclude>
 								<exclude>com/xceptance/neodymium/junit5/**</exclude>
-								<exclude>org/neodymium/ai/executor/selenide/**</exclude>
+								<exclude>com/xceptance/neodymium/aura/interactive/**</exclude>
 							</excludes>
 							<excludedGroups>verla,AuraIntegration,LiveAPI,LiveLlm,ExternalSite,ui</excludedGroups>
 						</configuration>
@@ -434,6 +441,14 @@
 			</build>
 		</profile>
 
+		<!-- 5. Skip VÉRLA tests in core (run in test-server and e2e-tests) -->
+		<profile>
+			<id>verla-tests</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
 		<!-- 6. AI mock tests: pipeline, replay, and core AI unit/mock tests -->
 		<profile>
 			<id>ai-mock-tests</id>
@@ -458,6 +473,30 @@
 			</build>
 		</profile>
 
+		<!-- 7. Skip AI live tests in core (run in e2e-tests) -->
+		<profile>
+			<id>ai-live-tests</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
+		<!-- 8. Skip Aura Glance sandbox tests in core (run in test-server and e2e-tests) -->
+		<profile>
+			<id>aura-sandbox</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
+		<!-- 9. Skip Aura Manager profile in core -->
+		<profile>
+			<id>aura-manager</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
 		<!-- 10. Smoke suite subset in core -->
 		<profile>
 			<id>smoke</id>
@@ -468,9 +507,9 @@
 						<artifactId>maven-surefire-plugin</artifactId>
 						<configuration>
 							<includes combine.self="override">
-								<include>org/neodymium/ai/model/AiRoleTest.java</include>
+								<include>org/neodymium/ai/client/TokenUsageTest.java</include>
 								<include>org/neodymium/ai/model/ExecutionMetricsTest.java</include>
-								<include>com/xceptance/neodymium/util/DataUtilsTest.java</include>
+								<include>com/xceptance/neodymium/junit5/tests/DataUtilsTest.java</include>
 							</includes>
 						</configuration>
 					</plugin>

@@ -28,8 +28,6 @@
 		<junit.jupiter.version>6.1.0-M1</junit.jupiter.version>
 		<junit.vintage.version>6.1.0-M1</junit.vintage.version>
 		<surefire.forkCount>1</surefire.forkCount>
-		<skipE2eTests>false</skipE2eTests>
-		<surefire.skip>${skipE2eTests}</surefire.skip>
 		<!--
 			JUnit tags excluded from the default run. LiveAPI/LiveLlm tests call a real LLM provider (cost, API key,
 			non-determinism), ExternalSite tests need internet access to third-party sites.
@@ -108,7 +106,6 @@
 				<artifactId>maven-surefire-plugin</artifactId>
 				<version>${surefire.version}</version>
 				<configuration>
-					<skipTests>${surefire.skip}</skipTests>
 					<systemPropertyVariables>
 						<java.util.logging.config.file>logging.properties</java.util.logging.config.file>
 						<allure.results.directory>${allure.results.directory}</allure.results.directory>
@@ -124,6 +121,30 @@
 	</build>
 
 	<profiles>
+		<!-- 1. Skip classic JUnit 4 tests in E2E -->
+		<profile>
+			<id>neo-classic-junit4</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
+		<!-- 2. Skip classic JUnit 5 tests in E2E -->
+		<profile>
+			<id>neo-classic-junit5</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
+		<!-- 3. Skip in-memory unit tests in E2E (E2E module contains browser/integration tests) -->
+		<profile>
+			<id>unit-tests</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
 		<!-- 4. Non-LLM tests: all modern e2e tests excluding live LLM and external sites -->
 		<profile>
 			<id>non-llm-tests</id>
@@ -231,6 +252,14 @@
 			</build>
 		</profile>
 
+		<!-- 9. Skip Aura Manager profile in E2E -->
+		<profile>
+			<id>aura-manager</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
 		<!-- 10. Smoke suite subset in e2e-tests -->
 		<profile>
 			<id>smoke</id>
@@ -243,7 +272,7 @@
 							<includes combine.self="override">
 								<include>org/neodymium/verla/VerlaTailwindStorefrontTest.java</include>
 								<include>org/neodymium/ai/integration/verla/checkout/normal/basic/CheckoutTest.java</include>
-								<include>org/neodymium/ai/integration/sandbox/mock/AuraSandboxBaselineMockTest.java</include>
+								<include>org/neodymium/ai/integration/sandbox/mock/AutocompleteSandboxMockTest.java</include>
 							</includes>
 							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
 						</configuration>
