@@ -320,4 +320,22 @@ public class DefaultActionSanitizerTest
         Assertions.assertEquals("ORD-987654", sanitized.getValues().get(1),
             "STORE literal value must not be replaced with self-referential placeholder ${customOrder}");
     }
+
+    @Test
+    public void testSanitizeFramePropertyPreservedAndParameterized()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("tenantId", "tenant-12345", false);
+
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+
+        final Action action = new Action("TYPE", "#inp_val", List.of("Tea"), "Type Tea", "Reasoning");
+        action.setFrame("iframe[name='tenant-12345'] >>> #pact2");
+
+        final Action sanitized = sanitizer.sanitize(action, sessionData);
+
+        Assertions.assertNotNull(sanitized);
+        Assertions.assertEquals("iframe[name='${tenantId}'] >>> #pact2", sanitized.getFrame(),
+            "Frame path should be preserved and parameterized with dynamic session variables");
+    }
 }

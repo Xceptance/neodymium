@@ -1152,6 +1152,16 @@ public class PageAnalyzer
                             } catch (e) {
                                 return null;
                             }
+                            var volatilePatterns = arguments[1] || [];
+                            function isVolatile(idStr) {
+                              if (!idStr) return true;
+                              for (var v = 0; v < volatilePatterns.length; v++) {
+                                try {
+                                  if (new RegExp(volatilePatterns[v]).test(idStr)) return true;
+                                } catch(e) {}
+                              }
+                              return false;
+                            }
                             function escapeId(str) {
                               if (typeof CSS !== 'undefined' && CSS.escape) { return CSS.escape(str); }
                               return str;
@@ -1159,11 +1169,31 @@ public class PageAnalyzer
                             function escapeAttr(str) {
                               return (str || '').replaceAll("'", "\\\\'");
                             }
-                            if (el.id) { return '#' + escapeId(el.id); }
-                            if (el.name) { return el.tagName.toLowerCase() + "[name='" + escapeAttr(el.name) + "']"; }
+                            function isUnique(sel) {
+                              try { return el.ownerDocument.querySelectorAll(sel).length === 1; } catch (e) { return false; }
+                            }
+                            if (el.id && !isVolatile(el.id)) { return '#' + escapeId(el.id); }
+                            if (el.name) {
+                              var nameSel = el.tagName.toLowerCase() + "[name='" + escapeAttr(el.name) + "']";
+                              if (isUnique(nameSel)) { return nameSel; }
+                            }
+                            var title = el.getAttribute('title');
+                            if (title && title.trim()) {
+                              var titleSel = el.tagName.toLowerCase() + "[title='" + escapeAttr(title.trim()) + "']";
+                              if (isUnique(titleSel)) { return titleSel; }
+                            }
+                            var src = el.getAttribute('src');
+                            if (src && src.indexOf('/') !== -1 && src.indexOf('blob:') !== 0 && src.indexOf('data:') !== 0) {
+                              var cleanSrc = src.split('?')[0].split('#')[0];
+                              var filename = cleanSrc.substring(cleanSrc.lastIndexOf('/') + 1);
+                              if (filename && filename.length >= 3) {
+                                var srcSel = el.tagName.toLowerCase() + "[src*='" + escapeAttr(filename) + "']";
+                                if (isUnique(srcSel)) { return srcSel; }
+                              }
+                            }
                             var path = [];
                             while (el && el.nodeType === 1) {
-                              if (el.id) {
+                              if (el.id && !isVolatile(el.id)) {
                                 path.unshift('#' + escapeId(el.id));
                                 break;
                               }
@@ -1180,7 +1210,8 @@ public class PageAnalyzer
                             }
                             return path.join(' > ');
                             """,
-                            frames.get(i));
+                            frames.get(i),
+                            this.volatileIdDetector.getPatterns().stream().map(Pattern::pattern).toList());
                     if (selector == null) {
                         skippedFrames++;
                         continue;

@@ -981,6 +981,11 @@ public final class AgentToolLoopStep implements PipelineStep
                                     updatedArgs.set("domFeatureVector", resJson.path("domFeatureVector"));
                                     updated = true;
                                 }
+                                if (resJson.hasNonNull("frame") && !resJson.path("frame").asText().isBlank())
+                                {
+                                    updatedArgs.put("frame", resJson.path("frame").asText().trim());
+                                    updated = true;
+                                }
                                 if (resJson.hasNonNull("target") && resJson.path("target").asText().startsWith("coord:"))
                                 {
                                     updatedArgs.put("target", resJson.path("target").asText());
@@ -1495,6 +1500,11 @@ public final class AgentToolLoopStep implements PipelineStep
                                 {
                                     updatedArgs.put("target", resolvedTarget);
                                     updatedArgs.put("selector", resolvedTarget);
+                                    updated = true;
+                                }
+                                if (resJson.hasNonNull("frame") && !resJson.path("frame").asText().isBlank())
+                                {
+                                    updatedArgs.put("frame", resJson.path("frame").asText().trim());
                                     updated = true;
                                 }
                             }

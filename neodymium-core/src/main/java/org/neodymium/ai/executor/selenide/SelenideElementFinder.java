@@ -33,6 +33,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.action.LocatorCandidate;
+import org.neodymium.ai.config.AiConfiguration;
+import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.model.DomFeatureVector;
 import org.neodymium.ai.util.SelectorSyntaxChecker;
@@ -110,6 +112,23 @@ public final class SelenideElementFinder
             throw new IllegalArgumentException("Action cannot be null");
         }
 
+        // A compound target ("#a >>> #btn") is merged with an explicit frame so neither information source is lost
+        final FrameContextManager.FrameTarget compound = FrameContextManager.splitFrameTarget(action.getTarget());
+        if (compound.frame() != null)
+        {
+            return findElement(action
+                .withFrame(FrameContextManager.combine(action.getFrame(), compound.frame()))
+                .withTarget(compound.target()));
+        }
+
+        if (action.getFrame() != null && !action.getFrame().isBlank()
+            && !FrameContextManager.isDefaultContent(action.getFrame())
+            && WebDriverRunner.hasWebDriverStarted())
+        {
+            // The enclosing FrameScope (executor / tool wrapper) restores the previous context
+            FrameContextManager.ensureEntered(WebDriverRunner.getWebDriver(), action.getFrame());
+        }
+
         final String target = action.getTarget();
         final String val = action.getValue();
         final String type = action.getType() != null ? action.getType().toUpperCase() : "";
@@ -149,7 +168,8 @@ public final class SelenideElementFinder
             {
                 if (candidate != null && candidate.getLocator() != null && !candidate.getLocator().isBlank())
                 {
-                    fallbacks.add(candidate.getLocator());
+                    final FrameContextManager.FrameTarget candSplit = FrameContextManager.splitFrameTarget(candidate.getLocator());
+                    fallbacks.add(candSplit.target());
                 }
             }
         }
@@ -170,6 +190,23 @@ public final class SelenideElementFinder
         {
             throw new IllegalArgumentException("Action and target cannot be null or blank");
         }
+
+        // A compound target ("#a >>> #item") is merged with an explicit frame
+        final FrameContextManager.FrameTarget compound = FrameContextManager.splitFrameTarget(action.getTarget());
+        if (compound.frame() != null)
+        {
+            return findElements(action
+                .withFrame(FrameContextManager.combine(action.getFrame(), compound.frame()))
+                .withTarget(compound.target()));
+        }
+
+        if (action.getFrame() != null && !action.getFrame().isBlank()
+            && !FrameContextManager.isDefaultContent(action.getFrame())
+            && WebDriverRunner.hasWebDriverStarted())
+        {
+            FrameContextManager.ensureEntered(WebDriverRunner.getWebDriver(), action.getFrame());
+        }
+
         if (isAutomationIdSelector(action.getTarget()))
         {
             ensureAutomationIdsStampedIfNeeded(action.getTarget());
@@ -218,6 +255,27 @@ public final class SelenideElementFinder
         if (target == null || target.isBlank())
         {
             throw new IllegalArgumentException("Target cannot be empty");
+        }
+
+        final FrameContextManager.FrameTarget compoundTarget = FrameContextManager.splitFrameTarget(target);
+        if (compoundTarget.frame() != null)
+        {
+            if (WebDriverRunner.hasWebDriverStarted())
+            {
+                FrameContextManager.ensureEntered(WebDriverRunner.getWebDriver(), compoundTarget.frame());
+            }
+            final List<String> cleanFallbacks = new ArrayList<>();
+            if (fallbackCandidates != null)
+            {
+                for (final String fb : fallbackCandidates)
+                {
+                    if (fb != null)
+                    {
+                        cleanFallbacks.add(FrameContextManager.splitFrameTarget(fb).target());
+                    }
+                }
+            }
+            return findElement(compoundTarget.target(), cleanFallbacks, recordedVector);
         }
 
         final List<String> allCandidates = new ArrayList<>();
@@ -276,6 +334,12 @@ public final class SelenideElementFinder
 
             if (System.currentTimeMillis() - start >= timeoutMs)
             {
+                // Opt-in last resort, only after the full timeout: search child iframes (see AiConfiguration)
+                final SelenideElement inChildFrame = findInChildFrames(allCandidates);
+                if (inChildFrame != null)
+                {
+                    return inChildFrame;
+                }
                 break;
             }
 
@@ -720,5 +784,114 @@ public final class SelenideElementFinder
         catch (final Throwable ignored)
         {
         }
+    }
+
+    /**
+     * Opt-in last-resort lookup: recursively searches child iframes of the current browsing context for any of the
+     * given candidates. Only active if {@code neodymium.ai.frames.autoDiscovery.enabled=true}.
+     * On a hit the driver is left inside the matching frame and the tracked frame path is updated (the enclosing
+     * {@link FrameContextManager.FrameScope} restores the previous context); on a miss the original context is restored.
+     *
+     * @param candidates the candidate selectors, in priority order
+     * @return the resolved {@link SelenideElement} in a child frame, or {@code null} if disabled or not found
+     */
+    private static SelenideElement findInChildFrames(final List<String> candidates)
+    {
+        final AiConfiguration config = AiConfiguration.getInstance();
+        if (!config.isFrameAutoDiscoveryEnabled() || !WebDriverRunner.hasWebDriverStarted())
+        {
+            return null;
+        }
+        final WebDriver driver = WebDriverRunner.getWebDriver();
+        final String originalFrame = FrameContextManager.getActiveFramePath();
+        try
+        {
+            final SelenideElement found = searchChildFramesRecursively(driver, candidates, originalFrame, 1,
+                config.getFrameAutoDiscoveryMaxDepth());
+            if (found != null)
+            {
+                LOG.warn("   🖼️ Resolved {} via iframe auto-discovery in frame '{}'. Set an explicit 'frame' to make this deterministic.",
+                    candidates, FrameContextManager.getActiveFramePath());
+                return found;
+            }
+        }
+        catch (final Exception e)
+        {
+            LOG.debug("Iframe auto-discovery aborted: {}", e.getMessage());
+        }
+        FrameContextManager.restoreContext(driver, originalFrame);
+        return null;
+    }
+
+    /**
+     * Depth-first search through the child frames of the current context. Every frame is entered once and all
+     * candidates are tried inside it before descending further.
+     *
+     * @param driver      the WebDriver positioned in the frame whose children are searched
+     * @param candidates  the candidate selectors
+     * @param currentPath the tracked path of the current context (null for default content)
+     * @param depth       the current nesting depth (1 = direct children)
+     * @param maxDepth    the maximum nesting depth to search
+     * @return the element, with the driver left inside its frame, or {@code null}
+     */
+    private static SelenideElement searchChildFramesRecursively(
+        final WebDriver driver,
+        final List<String> candidates,
+        final String currentPath,
+        final int depth,
+        final int maxDepth)
+    {
+        if (depth > maxDepth)
+        {
+            return null;
+        }
+
+        final List<WebElement> iframes = driver.findElements(By.cssSelector("iframe, frame"));
+        for (final WebElement frameEl : iframes)
+        {
+            boolean switched = false;
+            try
+            {
+                final String frameSelector = FrameContextManager.describeFrame(driver, frameEl);
+                final String newPath = FrameContextManager.combine(currentPath, frameSelector);
+
+                driver.switchTo().frame(frameEl);
+                switched = true;
+
+                for (final String candidate : candidates)
+                {
+                    final SelenideElement direct = findDirect(candidate);
+                    if (direct != null)
+                    {
+                        FrameContextManager.setActiveFramePath(newPath);
+                        return direct;
+                    }
+                }
+
+                final SelenideElement deeper = searchChildFramesRecursively(driver, candidates, newPath, depth + 1, maxDepth);
+                if (deeper != null)
+                {
+                    return deeper;
+                }
+            }
+            catch (final Exception e)
+            {
+                LOG.debug("Skipping iframe during auto-discovery: {}", e.getMessage());
+            }
+            if (switched)
+            {
+                try
+                {
+                    driver.switchTo().parentFrame();
+                }
+                catch (final Exception e)
+                {
+                    // Cannot navigate back (e.g. frame detached): abort, the caller restores the original context
+                    LOG.debug("Could not return to parent frame: {}", e.getMessage());
+                    return null;
+                }
+            }
+        }
+        return null;
     }
 }

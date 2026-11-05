@@ -56,6 +56,7 @@ import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
+import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
@@ -1835,11 +1836,23 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             }
             finally
             {
-                if (!Neodymium.hasDriver() && com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+                // Never leak the tracked iframe context into the next test running on this (pooled) thread
+                if (WebDriverRunner.hasWebDriverStarted() && FrameContextManager.getActiveFramePath() != null)
                 {
                     try
                     {
-                        com.codeborne.selenide.WebDriverRunner.closeWebDriver();
+                        FrameContextManager.switchToDefaultContent(WebDriverRunner.getWebDriver());
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+                FrameContextManager.resetActiveFramePath();
+                if (!Neodymium.hasDriver() && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        WebDriverRunner.closeWebDriver();
                     }
                     catch (final Exception ignored)
                     {

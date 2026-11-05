@@ -531,6 +531,28 @@ public final class AiConfiguration
     }
 
     /**
+     * Checks if the element finder may search child iframes when a locator cannot be resolved in the current
+     * browsing context. Disabled by default because it can resolve a selector to an unrelated element inside an
+     * arbitrary (e.g. third-party) iframe; prefer explicit {@code frame} paths.
+     *
+     * @return true if iframe auto-discovery is enabled, false otherwise
+     */
+    public boolean isFrameAutoDiscoveryEnabled()
+    {
+        return getBoolean("neodymium.ai.frames.autoDiscovery.enabled", false);
+    }
+
+    /**
+     * Gets the maximum iframe nesting depth searched by iframe auto-discovery.
+     *
+     * @return the maximum depth (at least 1)
+     */
+    public int getFrameAutoDiscoveryMaxDepth()
+    {
+        return Math.max(1, getInt("neodymium.ai.frames.autoDiscovery.maxDepth", 3));
+    }
+
+    /**
      * Checks if semantic verification is enabled for pipeline steps outcome validation.
      *
      * @return true if semantic verification is enabled, false otherwise
