@@ -118,20 +118,7 @@ public final class ClickAction implements BrowserActionPlugin
                         {
                             SelenideElementFinder.scrollIntoViewIfNeeded(anchorElement);
                             final Object rectObj = Selenide.executeJavaScript(
-                                "var el = arguments[0];"
-                                + "var r = el.getBoundingClientRect();"
-                                + "var x = r.left, y = r.top;"
-                                + "var win = el.ownerDocument ? el.ownerDocument.defaultView : window;"
-                                + "try {"
-                                + "  while (win && win !== window.top) {"
-                                + "    if (win.frameElement) {"
-                                + "      var fr = win.frameElement.getBoundingClientRect();"
-                                + "      x += fr.left; y += fr.top;"
-                                + "    }"
-                                + "    win = win.parent;"
-                                + "  }"
-                                + "} catch(e) {}"
-                                + "return [Math.round(x), Math.round(y)];",
+                                "var r = arguments[0].getBoundingClientRect(); return [Math.round(r.left), Math.round(r.top)];",
                                 anchorElement);
                             if (rectObj instanceof List<?> list && list.size() >= 2)
                             {

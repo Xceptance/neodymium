@@ -124,5 +124,31 @@ public class FrameContextManagerTest
 
         // Normal append
         Assertions.assertEquals("#pact1 >>> #pact2", FrameContextManager.combine("#pact1", "#pact2"));
+
+        // Window prefix normalization and deduplication
+        Assertions.assertEquals("#pact1", FrameContextManager.combine("win_0:main >>> #pact1", "#pact1"));
+        Assertions.assertEquals("#pact1", FrameContextManager.combine("#pact1", "win_0:main >>> #pact1"));
+        Assertions.assertEquals("#pact1", FrameContextManager.combine("win_0:main", "#pact1"));
+        Assertions.assertEquals("#pact1", FrameContextManager.combine("#pact1", "win_0:main"));
+
+        // Tail frame deduplication
+        Assertions.assertEquals("#pact1 >>> #pact2", FrameContextManager.combine("#pact1 >>> #pact2", "#pact2"));
+    }
+
+    @Test
+    public void testNormalizeAndParseWithFlexibleSpacing()
+    {
+        Assertions.assertEquals("#pact1", FrameContextManager.normalizeFramePath("main>>>#pact1"));
+        Assertions.assertEquals("#pact1", FrameContextManager.normalizeFramePath("main >>> #pact1"));
+        Assertions.assertEquals("#pact1", FrameContextManager.normalizeFramePath("win_0:main>>>#pact1"));
+
+        Assertions.assertEquals(
+            List.of("#pact1", "#pact2"),
+            FrameContextManager.parseFrameHierarchy("#pact1>>>#pact2")
+        );
+        Assertions.assertEquals(
+            List.of("#pact1", "#pact2"),
+            FrameContextManager.parseFrameHierarchy("main >>> #pact1 >>> #pact2")
+        );
     }
 }

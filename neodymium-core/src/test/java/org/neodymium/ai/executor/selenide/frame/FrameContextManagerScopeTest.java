@@ -248,6 +248,18 @@ public class FrameContextManagerScopeTest
         Assertions.assertEquals("#a >>> #b", compound.frame());
         Assertions.assertEquals("#btn", compound.target());
 
+        final FrameContextManager.FrameTarget unspaced = FrameContextManager.splitFrameTarget("#a>>>#b>>>#btn");
+        Assertions.assertEquals("#a>>>#b", unspaced.frame());
+        Assertions.assertEquals("#btn", unspaced.target());
+
+        final FrameContextManager.FrameTarget coordTarget = FrameContextManager.splitFrameTarget("coord: 50, 100@#frame >>> #btn");
+        Assertions.assertNull(coordTarget.frame());
+        Assertions.assertEquals("coord: 50, 100@#frame >>> #btn", coordTarget.target());
+
+        final FrameContextManager.FrameTarget urlTarget = FrameContextManager.splitFrameTarget("https://example.com/test>>>page");
+        Assertions.assertNull(urlTarget.frame());
+        Assertions.assertEquals("https://example.com/test>>>page", urlTarget.target());
+
         Assertions.assertNull(FrameContextManager.splitFrameTarget(null).target());
     }
 

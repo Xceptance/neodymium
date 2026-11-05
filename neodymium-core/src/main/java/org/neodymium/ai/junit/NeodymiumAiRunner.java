@@ -1837,12 +1837,22 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             finally
             {
                 // Never leak the tracked iframe context into the next test running on this (pooled) thread
-                FrameContextManager.resetActiveFramePath();
-                if (!Neodymium.hasDriver() && com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+                if (WebDriverRunner.hasWebDriverStarted() && FrameContextManager.getActiveFramePath() != null)
                 {
                     try
                     {
-                        com.codeborne.selenide.WebDriverRunner.closeWebDriver();
+                        FrameContextManager.switchToDefaultContent(WebDriverRunner.getWebDriver());
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+                FrameContextManager.resetActiveFramePath();
+                if (!Neodymium.hasDriver() && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        WebDriverRunner.closeWebDriver();
                     }
                     catch (final Exception ignored)
                     {

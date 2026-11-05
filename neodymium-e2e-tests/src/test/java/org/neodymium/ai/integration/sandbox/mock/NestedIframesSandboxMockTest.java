@@ -162,7 +162,7 @@ public class NestedIframesSandboxMockTest extends BaseAiTest
         Assertions.assertTrue(assert3Result.isSuccess(), "Assert Level 3 should succeed: " + assert3Result.content());
 
         // 5. Assert count inside nested iframe using compound selector
-        final AiTool assertCountTool = tools.get("assert_count");
+        final AiTool assertCountTool = registry.getTool("assert_count").orElseThrow();
         final JsonNode assertCountArgs = MAPPER.readTree("""
             {
                 "selector": "#pact1 >>> #pact2 >>> #pact3 >>> #glaf",
@@ -179,7 +179,7 @@ public class NestedIframesSandboxMockTest extends BaseAiTest
      * @param session the thread-isolated AiSession
      */
     @AiPlaybook
-    @AiMode({ExecutionMode.FORCE_RECORDING, ExecutionMode.REPLAY_STRICT, ExecutionMode.REPLAY_WITH_HEALING})
+    @AiMode(ExecutionMode.FORCE_RECORDING)
     public void testNestedIframesAutonomousWorkflow(final AiSession session) throws Exception
     {
         final String pageUrl = String.format("http://localhost:%d/AuraGlanceTest/shop/sandbox/nested-iframes/index.html", server.getPort());

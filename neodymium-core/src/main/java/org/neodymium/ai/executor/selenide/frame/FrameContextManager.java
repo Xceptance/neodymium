@@ -90,6 +90,9 @@ public final class FrameContextManager
     /** Active (normalized) frame path of the current thread; {@code null} means default content. */
     private static final ThreadLocal<String> ACTIVE_FRAME_PATH = new ThreadLocal<>();
 
+    /** Cached detector for dynamic/volatile frame id attributes. */
+    private static final VolatileIdDetector VOLATILE_ID_DETECTOR = new VolatileIdDetector();
+
     private FrameContextManager()
     {
         // Utility class
@@ -179,10 +182,10 @@ public final class FrameContextManager
             final int colonIdx = clean.indexOf(':');
             clean = clean.substring(colonIdx + 1).trim();
         }
-        // Strip leading "main >>> " if present
-        if (clean.startsWith("main >>> "))
+        // Strip leading "main >>> " or "main>>>" if present
+        if (clean.matches("(?i)^main\\s*>>>\\s*.*"))
         {
-            clean = clean.substring("main >>> ".length()).trim();
+            clean = clean.replaceFirst("(?i)^main\\s*>>>\\s*", "").trim();
         }
         else if ("main".equalsIgnoreCase(clean))
         {
@@ -204,7 +207,7 @@ public final class FrameContextManager
         {
             return List.of();
         }
-        final String[] segments = normalized.split(FRAME_DELIMITER);
+        final String[] segments = normalized.split("\\s*>>>\\s*");
         final List<String> result = new ArrayList<>(segments.length);
         for (final String seg : segments)
         {
@@ -226,12 +229,26 @@ public final class FrameContextManager
      */
     public static FrameTarget splitFrameTarget(final String rawTarget)
     {
-        if (rawTarget == null || !rawTarget.contains(FRAME_DELIMITER))
+        if (rawTarget == null)
+        {
+            return new FrameTarget(null, null);
+        }
+        if (rawTarget.contains("://") || rawTarget.startsWith("coord:") || rawTarget.contains("@"))
         {
             return new FrameTarget(null, rawTarget);
         }
-        final int last = rawTarget.lastIndexOf(FRAME_DELIMITER);
-        return new FrameTarget(rawTarget.substring(0, last).trim(), rawTarget.substring(last + FRAME_DELIMITER.length()).trim());
+        final int last = rawTarget.lastIndexOf(">>>");
+        if (last < 0)
+        {
+            return new FrameTarget(null, rawTarget);
+        }
+        final String framePart = rawTarget.substring(0, last).trim();
+        final String targetPart = rawTarget.substring(last + 3).trim();
+        if (framePart.isEmpty())
+        {
+            return new FrameTarget(null, targetPart);
+        }
+        return new FrameTarget(framePart, targetPart);
     }
 
     /**
@@ -244,31 +261,36 @@ public final class FrameContextManager
      */
     public static String combine(final String frame, final String prefix)
     {
-        final boolean hasFrame = frame != null && !frame.isBlank();
-        final boolean hasPrefix = prefix != null && !prefix.isBlank();
+        final String normFrame = normalizeFramePath(frame);
+        final String normPrefix = normalizeFramePath(prefix);
+        final boolean hasFrame = !normFrame.isEmpty();
+        final boolean hasPrefix = !normPrefix.isEmpty();
+
         if (hasFrame && hasPrefix)
         {
-            final String trimmedFrame = frame.trim();
-            final String trimmedPrefix = prefix.trim();
-            if (trimmedFrame.equals(trimmedPrefix))
+            if (normFrame.equals(normPrefix))
             {
-                return trimmedFrame;
+                return normFrame;
             }
-            if (trimmedPrefix.startsWith(trimmedFrame + FRAME_DELIMITER))
+            if (normPrefix.startsWith(normFrame + FRAME_DELIMITER))
             {
-                return trimmedPrefix;
+                return normPrefix;
             }
-            if (trimmedFrame.startsWith(trimmedPrefix + FRAME_DELIMITER))
+            if (normFrame.startsWith(normPrefix + FRAME_DELIMITER))
             {
-                return trimmedFrame;
+                return normFrame;
             }
-            return trimmedFrame + FRAME_DELIMITER + trimmedPrefix;
+            if (normFrame.endsWith(FRAME_DELIMITER + normPrefix))
+            {
+                return normFrame;
+            }
+            return normFrame + FRAME_DELIMITER + normPrefix;
         }
         if (hasFrame)
         {
-            return frame.trim();
+            return normFrame;
         }
-        return hasPrefix ? prefix.trim() : null;
+        return hasPrefix ? normPrefix : null;
     }
 
     /**
@@ -401,11 +423,10 @@ public final class FrameContextManager
      */
     public static String describeFrame(final WebDriver driver, final WebElement frameEl)
     {
-        final VolatileIdDetector volatileDetector = new VolatileIdDetector();
         final String tag = safeTag(frameEl);
 
         final String id = safeAttribute(frameEl, "id");
-        if (id != null && !id.isBlank() && !volatileDetector.isVolatile(id))
+        if (id != null && !id.isBlank() && !VOLATILE_ID_DETECTOR.isVolatile(id))
         {
             final String idSelector = id.trim().matches(SAFE_CSS_IDENT) ? "#" + id.trim() : attributeSelector(tag, "id", id.trim());
             if (isUnique(driver, idSelector))
