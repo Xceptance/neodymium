@@ -264,14 +264,37 @@ public abstract class AiSession implements AutoCloseable
     }
 
     /**
-     * Retrieves a variable value from the session dataset container.
+     * Retrieves a variable value from the session dataset container, leniently resolving variable placeholders.
      *
      * @param key the variable key name
-     * @return the variable object value, or null
+     * @return the resolved variable object value, or null
      */
     public final Object getData(final String key)
     {
-        return this.executionContext.getSessionData().get(key);
+        return this.executionContext.getSessionData().get(key, false);
+    }
+
+    /**
+     * Retrieves a variable value from the session dataset container, resolving variable placeholders.
+     *
+     * @param key the variable key name
+     * @param strict if true, throws an exception when a placeholder cannot be resolved; if false, leaves unresolvable placeholders intact
+     * @return the resolved variable object value, or null
+     */
+    public final Object getData(final String key, final boolean strict)
+    {
+        return this.executionContext.getSessionData().get(key, strict);
+    }
+
+    /**
+     * Retrieves the raw un-resolved variable value from the session dataset container without placeholder substitution.
+     *
+     * @param key the variable key name
+     * @return the raw variable object value, or null
+     */
+    public final Object getRawData(final String key)
+    {
+        return this.executionContext.getSessionData().getRaw(key);
     }
 
     /**
