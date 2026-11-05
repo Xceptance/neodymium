@@ -53,7 +53,7 @@ public final class DomQuiescenceWatcher
                     window.fetch = function() {
                         window.__neo_network_tracker.active++;
                         window.__neo_network_tracker.lastActivity = performance.now();
-                        return origFetch.apply(this, arguments).finally(function() {
+                        return origFetch.apply(window, arguments).finally(function() {
                             window.__neo_network_tracker.active = Math.max(0, window.__neo_network_tracker.active - 1);
                             window.__neo_network_tracker.lastActivity = performance.now();
                         });
@@ -89,7 +89,7 @@ public final class DomQuiescenceWatcher
                     window.fetch = function() {
                         window.__neo_network_tracker.active++;
                         window.__neo_network_tracker.lastActivity = performance.now();
-                        return origFetch.apply(this, arguments).finally(function() {
+                        return origFetch.apply(window, arguments).finally(function() {
                             window.__neo_network_tracker.active = Math.max(0, window.__neo_network_tracker.active - 1);
                             window.__neo_network_tracker.lastActivity = performance.now();
                         });
