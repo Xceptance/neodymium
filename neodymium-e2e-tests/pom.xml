@@ -121,6 +121,166 @@
 	</build>
 
 	<profiles>
+		<!-- 1. Skip classic JUnit 4 tests in E2E -->
+		<profile>
+			<id>neo-classic-junit4</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
+		<!-- 2. Skip classic JUnit 5 tests in E2E -->
+		<profile>
+			<id>neo-classic-junit5</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
+		<!-- 3. Skip in-memory unit tests in E2E (E2E module contains browser/integration tests) -->
+		<profile>
+			<id>unit-tests</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
+		<!-- 4. Non-LLM tests: all modern e2e tests excluding live LLM and external sites -->
+		<profile>
+			<id>non-llm-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/**/*Test.java</include>
+							</includes>
+							<excludes combine.self="override">
+								<exclude>**/BaseAiTest.java</exclude>
+								<exclude>**/BaseLlmTest.java</exclude>
+								<exclude>com/xceptance/neodymium/junit4/**</exclude>
+								<exclude>com/xceptance/neodymium/junit5/**</exclude>
+							</excludes>
+							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 5. All VÉRLA storefront UI and mock AI integration tests -->
+		<profile>
+			<id>verla-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/verla/**/*Test.java</include>
+								<include>org/neodymium/ai/integration/verla/**/*Test.java</include>
+							</includes>
+							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 6. AI mock tests: all AI tests using mocked LLM responses -->
+		<profile>
+			<id>ai-mock-tests</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/ai/**/*Test.java</include>
+							</includes>
+							<excludes combine.self="override">
+								<exclude>**/BaseAiTest.java</exclude>
+								<exclude>**/BaseLlmTest.java</exclude>
+							</excludes>
+							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 7. Real LLM tests only (requires API key) -->
+		<profile>
+			<id>ai-live-tests</id>
+			<properties>
+				<e2e.excludedGroups></e2e.excludedGroups>
+			</properties>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<groups>LiveAPI,LiveLlm</groups>
+							<excludedGroups combine.self="override"></excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 8. Aura Glance visual defect & baseline sandbox tests -->
+		<profile>
+			<id>aura-sandbox</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/ai/integration/sandbox/**/*Test.java</include>
+							</includes>
+							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
+		<!-- 9. Skip Aura Manager profile in E2E -->
+		<profile>
+			<id>aura-manager</id>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
+		</profile>
+
+		<!-- 10. Smoke suite subset in e2e-tests -->
+		<profile>
+			<id>smoke</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-surefire-plugin</artifactId>
+						<configuration>
+							<includes combine.self="override">
+								<include>org/neodymium/verla/VerlaTailwindStorefrontTest.java</include>
+								<include>org/neodymium/ai/integration/verla/checkout/normal/basic/CheckoutTest.java</include>
+								<include>org/neodymium/ai/integration/sandbox/mock/AutocompleteSandboxMockTest.java</include>
+							</includes>
+							<excludedGroups>LiveAPI,LiveLlm,ExternalSite</excludedGroups>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+
 		<!--
 			Lifts the default tag exclusion so live-LLM and external-site tests run as well.
 			Requires network access and API keys (e.g. GEMINI_API_KEY). To run only the live tests,
