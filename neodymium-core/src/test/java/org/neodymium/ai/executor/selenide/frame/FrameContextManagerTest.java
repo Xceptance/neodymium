@@ -155,4 +155,44 @@ public class FrameContextManagerTest
             FrameContextManager.parseFrameHierarchy("main >>> #pact1 >>> #pact2")
         );
     }
+
+    @Test
+    public void testSplitFrameTargetSupportsXPathWithAtSign()
+    {
+        final FrameContextManager.FrameTarget target1 = FrameContextManager.splitFrameTarget("#pact1 >>> //input[@id='inp_val']");
+        Assertions.assertEquals("#pact1", target1.frame());
+        Assertions.assertEquals("//input[@id='inp_val']", target1.target());
+
+        final FrameContextManager.FrameTarget target2 = FrameContextManager.splitFrameTarget("//iframe[@id='frame1'] >>> //button[@name='login']");
+        Assertions.assertEquals("//iframe[@id='frame1']", target2.frame());
+        Assertions.assertEquals("//button[@name='login']", target2.target());
+    }
+
+    @Test
+    public void testSplitFrameTargetSupportsCssAttributeWithAtSign()
+    {
+        final FrameContextManager.FrameTarget target = FrameContextManager.splitFrameTarget("#pact1 >>> a[href*='test@example.com']");
+        Assertions.assertEquals("#pact1", target.frame());
+        Assertions.assertEquals("a[href*='test@example.com']", target.target());
+    }
+
+    @Test
+    public void testSplitFrameTargetProtectsQuotedDelimiterInElementSelector()
+    {
+        final FrameContextManager.FrameTarget singleQuoted = FrameContextManager.splitFrameTarget("#frame >>> //button[text()='Next >>>']");
+        Assertions.assertEquals("#frame", singleQuoted.frame());
+        Assertions.assertEquals("//button[text()='Next >>>']", singleQuoted.target());
+
+        final FrameContextManager.FrameTarget doubleQuoted = FrameContextManager.splitFrameTarget("#frame >>> button[aria-label=\"Next >>>\"]");
+        Assertions.assertEquals("#frame", doubleQuoted.frame());
+        Assertions.assertEquals("button[aria-label=\"Next >>>\"]", doubleQuoted.target());
+    }
+
+    @Test
+    public void testSplitFrameTargetFramedAnchoredCoordinates()
+    {
+        final FrameContextManager.FrameTarget target = FrameContextManager.splitFrameTarget("#pact1 >>> #canvas@50,100");
+        Assertions.assertEquals("#pact1", target.frame());
+        Assertions.assertEquals("#canvas@50,100", target.target());
+    }
 }

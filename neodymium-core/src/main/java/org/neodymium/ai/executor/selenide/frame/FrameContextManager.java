@@ -233,11 +233,11 @@ public final class FrameContextManager
         {
             return new FrameTarget(null, null);
         }
-        if (rawTarget.contains("://") || rawTarget.startsWith("coord:") || rawTarget.contains("@"))
+        if (rawTarget.contains("://") || rawTarget.startsWith("coord:"))
         {
             return new FrameTarget(null, rawTarget);
         }
-        final int last = rawTarget.lastIndexOf(">>>");
+        final int last = findLastUnquotedDelimiter(rawTarget, ">>>");
         if (last < 0)
         {
             return new FrameTarget(null, rawTarget);
@@ -249,6 +249,43 @@ public final class FrameContextManager
             return new FrameTarget(null, targetPart);
         }
         return new FrameTarget(framePart, targetPart);
+    }
+
+    /**
+     * Finds the index of the last occurrence of {@code delimiter} in {@code s} that does not appear inside
+     * single- or double-quoted string literals.
+     *
+     * @param s         the string to inspect
+     * @param delimiter the literal delimiter to look for
+     * @return the last unquoted index, or -1 if not found
+     */
+    private static int findLastUnquotedDelimiter(final String s, final String delimiter)
+    {
+        if (s == null || !s.contains(delimiter))
+        {
+            return -1;
+        }
+        final int delimLen = delimiter.length();
+        boolean inSingle = false;
+        boolean inDouble = false;
+        int last = -1;
+        for (int i = 0; i <= s.length() - delimLen; i++)
+        {
+            final char c = s.charAt(i);
+            if (c == '\'' && !inDouble)
+            {
+                inSingle = !inSingle;
+            }
+            else if (c == '"' && !inSingle)
+            {
+                inDouble = !inDouble;
+            }
+            else if (!inSingle && !inDouble && s.startsWith(delimiter, i))
+            {
+                last = i;
+            }
+        }
+        return last;
     }
 
     /**
@@ -317,14 +354,28 @@ public final class FrameContextManager
     public static FrameScope enter(final WebDriver driver, final String framePath)
     {
         final String previous = ACTIVE_FRAME_PATH.get();
-        if (driver == null || isDefaultContent(framePath))
+        if (driver == null)
         {
+            return new FrameScope(null, false, previous);
+        }
+        if (isDefaultContent(framePath))
+        {
+            if (previous != null)
+            {
+                restoreContext(driver, null);
+                return new FrameScope(driver, true, previous);
+            }
             return new FrameScope(driver, false, previous);
         }
 
         final List<String> hierarchy = parseFrameHierarchy(framePath);
         if (hierarchy.isEmpty())
         {
+            if (previous != null)
+            {
+                restoreContext(driver, null);
+                return new FrameScope(driver, true, previous);
+            }
             return new FrameScope(driver, false, previous);
         }
 

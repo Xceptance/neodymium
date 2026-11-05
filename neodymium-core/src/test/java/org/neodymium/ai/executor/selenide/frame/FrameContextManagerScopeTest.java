@@ -205,6 +205,22 @@ public class FrameContextManagerScopeTest
     }
 
     @Test
+    public void testEnterDefaultContentFromInsideFrameSwitchesAndRestores()
+    {
+        final WebDriver driver = simpleDriver();
+        FrameContextManager.setActiveFramePath("#a");
+
+        try (final FrameContextManager.FrameScope scope = FrameContextManager.enter(driver, "main"))
+        {
+            Assertions.assertNull(FrameContextManager.getActiveFramePath());
+            Assertions.assertTrue(this.calls.contains("default"));
+        }
+
+        Assertions.assertEquals("#a", FrameContextManager.getActiveFramePath());
+        Assertions.assertTrue(this.calls.get(this.calls.size() - 1).startsWith("frame:"));
+    }
+
+    @Test
     public void testEnterFailureRestoresPreviousContextAndThrows()
     {
         final WebDriver driver = driver(List.of("#missing"), Map.of(), Map.of());
