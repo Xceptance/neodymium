@@ -263,122 +263,36 @@
 				</plugins>
 			</build>
 		</profile>
-		<!-- 1. Strictly classic JUnit 4 tests (Vintage engine) -->
+		<!-- 1. Skip classic JUnit 4 tests in neodymium-core (delegated exclusively to neodymium-classic) -->
 		<profile>
 			<id>neo-classic-junit4</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-surefire-plugin</artifactId>
-						<configuration>
-							<includes combine.self="override">
-								<include>com/xceptance/neodymium/junit4/tests/**/*Test.java</include>
-								<include>com/xceptance/neodymium/util/**/*Test.java</include>
-							</includes>
-							<excludes combine.self="override">
-								<exclude>com/xceptance/neodymium/util/**/*JUnit5Test.java</exclude>
-								<exclude>com/xceptance/neodymium/junit5/**</exclude>
-								<exclude>org/neodymium/**</exclude>
-								<exclude>com/xceptance/neodymium/aura/**</exclude>
-								<exclude>com/xceptance/neodymium/ai/**</exclude>
-							</excludes>
-						</configuration>
-						<dependencies>
-							<dependency>
-								<groupId>org.junit.vintage</groupId>
-								<artifactId>junit-vintage-engine</artifactId>
-								<version>${junit.vintage.version}</version>
-							</dependency>
-						</dependencies>
-					</plugin>
-				</plugins>
-			</build>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
 		</profile>
 
 		<!-- Alias for backward compatibility -->
 		<profile>
 			<id>junit-4</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-surefire-plugin</artifactId>
-						<configuration>
-							<includes combine.self="override">
-								<include>com/xceptance/neodymium/junit4/tests/**/*Test.java</include>
-								<include>com/xceptance/neodymium/util/**/*Test.java</include>
-							</includes>
-							<excludes combine.self="override">
-								<exclude>com/xceptance/neodymium/util/**/*JUnit5Test.java</exclude>
-								<exclude>com/xceptance/neodymium/junit5/**</exclude>
-								<exclude>org/neodymium/**</exclude>
-								<exclude>com/xceptance/neodymium/aura/**</exclude>
-								<exclude>com/xceptance/neodymium/ai/**</exclude>
-							</excludes>
-						</configuration>
-						<dependencies>
-							<dependency>
-								<groupId>org.junit.vintage</groupId>
-								<artifactId>junit-vintage-engine</artifactId>
-								<version>${junit.vintage.version}</version>
-							</dependency>
-						</dependencies>
-					</plugin>
-				</plugins>
-			</build>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
 		</profile>
 
-		<!-- 2. Strictly classic JUnit 5 tests (Jupiter engine) -->
+		<!-- 2. Skip classic JUnit 5 tests in neodymium-core (delegated exclusively to neodymium-classic) -->
 		<profile>
 			<id>neo-classic-junit5</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-surefire-plugin</artifactId>
-						<configuration>
-							<includes combine.self="override">
-								<include>com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
-								<include>com/xceptance/neodymium/util/**/*JUnit5Test.java</include>
-							</includes>
-							<excludes combine.self="override">
-								<exclude>**/*UiTest.java</exclude>
-								<exclude>com/xceptance/neodymium/junit4/**</exclude>
-								<exclude>org/neodymium/**</exclude>
-								<exclude>com/xceptance/neodymium/aura/**</exclude>
-								<exclude>com/xceptance/neodymium/ai/**</exclude>
-							</excludes>
-						</configuration>
-					</plugin>
-				</plugins>
-			</build>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
 		</profile>
 
 		<!-- Alias for backward compatibility -->
 		<profile>
 			<id>junit-5</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-surefire-plugin</artifactId>
-						<configuration>
-							<includes combine.self="override">
-								<include>com/xceptance/neodymium/junit5/tests/**/*Test.java</include>
-								<include>com/xceptance/neodymium/util/**/*JUnit5Test.java</include>
-							</includes>
-							<excludes combine.self="override">
-								<exclude>**/*UiTest.java</exclude>
-								<exclude>com/xceptance/neodymium/junit4/**</exclude>
-								<exclude>org/neodymium/**</exclude>
-								<exclude>com/xceptance/neodymium/aura/**</exclude>
-								<exclude>com/xceptance/neodymium/ai/**</exclude>
-							</excludes>
-						</configuration>
-					</plugin>
-				</plugins>
-			</build>
+			<properties>
+				<skipTests>true</skipTests>
+			</properties>
 		</profile>
 
 		<!-- 3. Direct in-memory unit tests -->

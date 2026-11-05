@@ -46,6 +46,7 @@
 		<module>neodymium-core</module>
 		<module>aura-manager</module>
 		<module>neodymium-e2e-tests</module>
+		<module>neodymium-classic</module>
 	</modules>
 
 	<properties>
