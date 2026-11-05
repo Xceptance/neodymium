@@ -43,6 +43,8 @@ final class DomQuiescenceWatcherTest
 {
     private String previousBrowser;
 
+    private Boolean previousHeadless;
+
     @AfterEach
     void tearDown()
     {
@@ -53,6 +55,10 @@ final class DomQuiescenceWatcherTest
         if (previousBrowser != null)
         {
             Configuration.browser = previousBrowser;
+        }
+        if (previousHeadless != null)
+        {
+            Configuration.headless = previousHeadless;
         }
     }
 
@@ -84,38 +90,24 @@ final class DomQuiescenceWatcherTest
     @Test
     void testBareFetchCallAfterInstallingTracker()
     {
-        previousBrowser = Configuration.browser;
-        Configuration.browser = "firefox";
-        Configuration.headless = true;
-        Selenide.open("data:text/html;charset=utf-8,<html><head><title>Test</title></head><body></body></html>");
-
-        DomQuiescenceWatcher.installTracker();
-
-        final String result = Selenide.executeAsyncJavaScript("""
-            var done = arguments[arguments.length - 1];
-            (async function() {
-                try {
-                    await fetch('data:text/plain,ok');
-                    done('SUCCESS');
-                } catch (err) {
-                    done('ERROR [' + navigator.userAgent + ']: ' + err.name + ' - ' + err.message);
-                }
-            })();
-            """);
-
-        assertEquals("SUCCESS", result,
-                     "Bare fetch() call must succeed after tracker installation");
+        assertBareFetchSucceeds(DomQuiescenceWatcher::installTracker);
     }
 
     @Test
     void testBareFetchCallAfterWaitForDomQuiet()
     {
+        assertBareFetchSucceeds(() -> DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(50), Duration.ofMillis(10)));
+    }
+
+    private void assertBareFetchSucceeds(final Runnable trackerPreparationAction)
+    {
         previousBrowser = Configuration.browser;
+        previousHeadless = Configuration.headless;
         Configuration.browser = "firefox";
         Configuration.headless = true;
         Selenide.open("data:text/html;charset=utf-8,<html><head><title>Test</title></head><body></body></html>");
 
-        DomQuiescenceWatcher.waitForDomQuiet(Duration.ofMillis(50), Duration.ofMillis(10));
+        trackerPreparationAction.run();
 
         final String result = Selenide.executeAsyncJavaScript("""
             var done = arguments[arguments.length - 1];
@@ -130,6 +122,6 @@ final class DomQuiescenceWatcherTest
             """);
 
         assertEquals("SUCCESS", result,
-                     "Bare fetch() call must succeed after waitForDomQuiet");
+                     "Bare fetch() call must succeed after tracker preparation");
     }
 }
