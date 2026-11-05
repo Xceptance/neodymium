@@ -1414,7 +1414,15 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             flattenSteps(afterSteps, afterFlat);
 
             executionContext.getTransientData().put("playbook.beforeSteps", beforeFlat);
-            executionContext.getTransientData().put("playbook.steps", new ArrayList<PlaybookStep>());
+            // The executed-step history starts empty and grows chronologically as phases run. The one exception is
+            // programmatic replay: AiSession.execute() derives its replay cursor from this list, so it must hold the
+            // recorded steps, otherwise recorded statuses and tool calls are never applied to the live execute() calls.
+            final List<PlaybookStep> initialExecutedSteps = new ArrayList<>();
+            if (isProgrammatic && this.effectiveMode.isReplay())
+            {
+                initialExecutedSteps.addAll(playbookSteps);
+            }
+            executionContext.getTransientData().put("playbook.steps", initialExecutedSteps);
             executionContext.getTransientData().put("playbook.afterSteps", afterFlat);
 
             executionContext.getTransientData().put("playbook.flatSteps", new ArrayList<PlaybookStep>());
@@ -1486,10 +1494,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExtensionContext extensionContext
         ) throws Throwable
         {
-            if (this.session != null && this.session.getExecutionContext() != null)
-            {
-                this.session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_ACTIVE_PHASE, "before");
-            }
             invocation.proceed();
             runPlaybookForMethod(invocationContext.getExecutable());
         }
@@ -1501,10 +1505,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExtensionContext extensionContext
         ) throws Throwable
         {
-            if (this.session != null && this.session.getExecutionContext() != null)
-            {
-                this.session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_ACTIVE_PHASE, "steps");
-            }
             executeTestLifecycle(invocation);
         }
 
@@ -1515,10 +1515,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExtensionContext extensionContext
         ) throws Throwable
         {
-            if (this.session != null && this.session.getExecutionContext() != null)
-            {
-                this.session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_ACTIVE_PHASE, "steps");
-            }
             executeTestLifecycle(invocation);
         }
 
@@ -1529,10 +1525,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final ExtensionContext extensionContext
         ) throws Throwable
         {
-            if (this.session != null && this.session.getExecutionContext() != null)
-            {
-                this.session.getExecutionContext().getTransientData().put(ExecutionContext.KEY_ACTIVE_PHASE, "after");
-            }
             try
             {
                 runPlaybookForMethod(invocationContext.getExecutable());
@@ -1884,11 +1876,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     Neodymium.getData().remove("neodymium.ai.ssim.minScore");
                     com.xceptance.neodymium.util.Neodymium.getData().remove("neodymium.ai.ssim.minScore");
                 }
-
-                if (this.session != null && this.session.getExecutionContext() != null)
-                {
-                    this.session.getExecutionContext().getTransientData().remove(ExecutionContext.KEY_ACTIVE_PHASE);
-                }
             }
 
             if (afterPlaybookError != null)
@@ -2202,7 +2189,13 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             currentSteps = new ArrayList<>(currentSteps);
             execCtx.getTransientData().put("playbook.steps", currentSteps);
         }
-        currentSteps.addAll(steps);
+        for (final PlaybookStep step : steps)
+        {
+            if (!containsIdentity(currentSteps, step))
+            {
+                currentSteps.add(step);
+            }
+        }
 
         List<PlaybookStep> flatSteps = (List<PlaybookStep>) execCtx.getTransientData().get("playbook.flatSteps");
         if (flatSteps == null)
@@ -2215,7 +2208,35 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             flatSteps = new ArrayList<>(flatSteps);
             execCtx.getTransientData().put("playbook.flatSteps", flatSteps);
         }
-        flattenSteps(steps, flatSteps);
+        final List<PlaybookStep> flattened = new ArrayList<>();
+        flattenSteps(steps, flattened);
+        for (final PlaybookStep step : flattened)
+        {
+            if (!containsIdentity(flatSteps, step))
+            {
+                flatSteps.add(step);
+            }
+        }
+    }
+
+    /**
+     * Identity-based membership check. Steps are mutable model objects, so the same instance must never be
+     * recorded twice in the executed-step history, while distinct steps with equal content must both be kept.
+     *
+     * @param steps the list to search
+     * @param step  the step instance to look for
+     * @return {@code true} if the very same instance is already contained
+     */
+    private static boolean containsIdentity(final List<PlaybookStep> steps, final PlaybookStep step)
+    {
+        for (final PlaybookStep candidate : steps)
+        {
+            if (candidate == step)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

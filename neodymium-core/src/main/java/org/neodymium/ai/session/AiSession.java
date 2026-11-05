@@ -836,7 +836,8 @@ public abstract class AiSession implements AutoCloseable
                     }
                     else
                     {
-                        LOGGER.warn("⚠️ Multiple execute() calls detected on unmanaged AiSession. Call session.setManagedLifecycle(true) or use @ExtendWith(NeodymiumAiRunner.class) to aggregate multi-step session lifecycles.");
+                        LOGGER.warn("⚠️ Further execute() call on an unmanaged AiSession whose SessionFinishedEvent was already dispatched; its outcome ({}) is not reflected in the report. Call session.setManagedLifecycle(true) before the first execute() or use @ExtendWith(NeodymiumAiRunner.class) to aggregate multi-step session lifecycles.",
+                            primaryFailure == null ? "success" : "failed: " + primaryFailure.getMessage());
                     }
                 }
             }
@@ -1001,6 +1002,11 @@ public abstract class AiSession implements AutoCloseable
     /**
      * Configures whether this session's lifecycle is managed externally (e.g. by a test runner or batch executor).
      * When managed, individual execute() calls do not dispatch SessionFinishedEvent or log final summaries.
+     * <p>
+     * An unmanaged session (the default for standalone use) finalizes on its first execute() call: the
+     * SessionFinishedEvent, report and recording reflect that call only. Later execute() calls on the same session still
+     * run and still throw on failure, but their outcome is not added to the already dispatched event. Call this method
+     * with {@code true} before the first execute() when a session is used for several calls.
      *
      * @param managed true to defer session completion to external finalizer
      */
@@ -1024,6 +1030,10 @@ public abstract class AiSession implements AutoCloseable
     /**
      * Clears any recorded last execution error from the session context.
      * Useful when an execution failure is intentionally handled or asserted in user test code.
+     * <p>
+     * This only influences sessions that are finalized from the recorded error, i.e. standalone sessions with a managed
+     * lifecycle that end in {@link #close()}. Under {@code NeodymiumAiRunner} the JUnit verdict decides the outcome: a test
+     * that catches a failed step and ends normally is reported as passed whether or not this method was called.
      */
     public final void clearLastExecutionError()
     {

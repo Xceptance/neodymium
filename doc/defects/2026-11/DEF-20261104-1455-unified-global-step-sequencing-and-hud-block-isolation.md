@@ -20,7 +20,7 @@
   1. In `ExecuteActionsStep.java`: updated `resolveStepIndex()` to check `flatSteps` first by identity, establishing `flatSteps` as the sole canonical global index authority across all lifecycle phases.
   2. In `PlaybookRecorder.java`: updated `onEvent(SessionFinishedEvent)` to query the active `ExecutionContext`'s `flatSteps` list (filtering for top-level steps), ensuring all live interactive edits and runtime additions are serialized into the companion JSON.
   3. In `InteractiveConsoleListener.java`: ensured `handleAddAction` and `handleReorderStep` synchronize both `mainSteps` and `playbook.steps` when both are present in transient context.
-  4. In `NeodymiumAiRunner.java`: set `KEY_ACTIVE_PHASE` (`"before"`, `"steps"`, `"after"`) across `interceptBeforeEachMethod`, `interceptTestMethod`, and `interceptAfterEachMethod` so dynamic programmatic steps inherit their enclosing lifecycle block.
+  4. (Withdrawn 2026-11-05) An earlier revision stamped a `KEY_ACTIVE_PHASE` marker in `NeodymiumAiRunner` so programmatic steps would inherit their lifecycle block. Nothing ever read the marker, so it had no effect and was removed. Programmatic steps keep the default block `steps`; placing them in the `before`/`after` block of the interactive HUD is not implemented.
 - **Safety Net Added:**
   - `PlaybookLifecycleExecutionTest.testHybridTestChronologicalOrderingInStateBuilder`: verifies chronological serialization of hybrid YAML and programmatic steps.
   - `PlaybookLifecycleExecutionTest.testInteractiveStateBuilderResolvesMainStepsWhenStepsEmptyAndFiltersDuplicates`: verifies setup step filtering and relative block indexing.

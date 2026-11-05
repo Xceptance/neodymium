@@ -1063,14 +1063,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
         final List<PlaybookStep> rawSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
         if (rawSteps != null && rawSteps != targetList && "steps".equalsIgnoreCase(blockName))
         {
-            if (targetIndex >= 0 && targetIndex <= rawSteps.size())
-            {
-                rawSteps.add(targetIndex, newStep);
-            }
-            else
-            {
-                rawSteps.add(newStep);
-            }
+            mirrorIntoExecutedSteps(rawSteps, targetList, newStep);
         }
 
         if (isInsertBeforeOrAtCurrent && currentStep != null)
@@ -1110,6 +1103,70 @@ public final class InteractiveConsoleListener implements ExecutionListener
 
         LOG.info("[InteractiveConsoleListener] Added new step to '{}' at index {}: \"{}\"", blockName, targetIndex, instruction);
         return !isInsertBeforeOrAtCurrent;
+    }
+
+    /**
+     * Keeps the executed-steps history ({@code playbook.steps}) aligned with an interactive add or move that was
+     * applied to the pending main-steps list.
+     * <p>
+     * The history also contains executed setup steps ahead of the main steps, so an index relative to the main-steps
+     * list must never be applied to it directly. Instead, the step is positioned by identity, directly behind its
+     * predecessor in {@code mainList} (or in front of its successor when it is the first main step).
+     * If no main step is part of the history yet (the main phase has not been appended), nothing is changed:
+     * the step is appended together with the other main steps when that phase starts.
+     *
+     * @param executedSteps the executed-steps history to adjust (mutated in place)
+     * @param mainList      the already updated main-steps list that defines the desired order
+     * @param step          the step that was added to, or moved within, {@code mainList}
+     */
+    private static void mirrorIntoExecutedSteps(final List<PlaybookStep> executedSteps, final List<PlaybookStep> mainList, final PlaybookStep step)
+    {
+        final int previousPosition = indexOfIdentity(executedSteps, step);
+        if (previousPosition >= 0)
+        {
+            executedSteps.remove(previousPosition);
+        }
+
+        final int mainIndex = indexOfIdentity(mainList, step);
+        if (mainIndex < 0)
+        {
+            return;
+        }
+
+        for (int i = mainIndex - 1; i >= 0; i--)
+        {
+            final int anchor = indexOfIdentity(executedSteps, mainList.get(i));
+            if (anchor >= 0)
+            {
+                executedSteps.add(anchor + 1, step);
+                return;
+            }
+        }
+        for (int i = mainIndex + 1; i < mainList.size(); i++)
+        {
+            final int anchor = indexOfIdentity(executedSteps, mainList.get(i));
+            if (anchor >= 0)
+            {
+                executedSteps.add(anchor, step);
+                return;
+            }
+        }
+        if (previousPosition >= 0)
+        {
+            executedSteps.add(Math.min(previousPosition, executedSteps.size()), step);
+        }
+    }
+
+    private static int indexOfIdentity(final List<PlaybookStep> steps, final PlaybookStep step)
+    {
+        for (int i = 0; i < steps.size(); i++)
+        {
+            if (steps.get(i) == step)
+            {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private boolean handleReorderStep(final JsonObject userAction, final PlaybookStep currentStep, final ExecutionContext context)
@@ -1311,12 +1368,7 @@ public final class InteractiveConsoleListener implements ExecutionListener
         final List<PlaybookStep> rawSteps = (List<PlaybookStep>) context.getTransientData().get("playbook.steps");
         if (rawSteps != null && rawSteps != fromList && "steps".equalsIgnoreCase(fromBlock) && "steps".equalsIgnoreCase(toBlock))
         {
-            if (fromIndex >= 0 && fromIndex < rawSteps.size() && adjustedToIndex >= 0 && adjustedToIndex <= rawSteps.size())
-            {
-                final PlaybookStep moved = rawSteps.remove(fromIndex);
-                final int insertIdx = Math.min(adjustedToIndex, rawSteps.size());
-                rawSteps.add(insertIdx, moved);
-            }
+            mirrorIntoExecutedSteps(rawSteps, toList, removed);
         }
 
         final boolean isFromCurrent = currentBlock.equalsIgnoreCase(fromBlock) && fromIndex == currentIdx;
