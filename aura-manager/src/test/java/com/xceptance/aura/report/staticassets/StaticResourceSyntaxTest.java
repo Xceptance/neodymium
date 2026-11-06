@@ -1212,5 +1212,165 @@ public final class StaticResourceSyntaxTest
             "poll must reschedule when fetch is in-flight"
         );
     }
+
+    @Test
+    public void testResponsibilityTableOmitsPesapAndParsesModernBuckets() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        readyState: 'complete',\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {}, contains: () => true }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "const respJson = JSON.stringify({\n" +
+            "    action: { calls: 10, inputTokens: 50000, outputTokens: 500, cachedTokens: 1000, totalTokens: 50500, estimatedCostUsd: 0.015 },\n" +
+            "    verification: { calls: 5, inputTokens: 20000, outputTokens: 200, cachedTokens: 500, totalTokens: 20200, estimatedCostUsd: 0.006 },\n" +
+            "    judge: { calls: 2, inputTokens: 5000, outputTokens: 50, cachedTokens: 0, totalTokens: 5050, estimatedCostUsd: 0.0015 },\n" +
+            "    visualRca: { calls: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, totalTokens: 0, estimatedCostUsd: 0 }\n" +
+            "});\n" +
+            "const buckets = sandbox.parseResponsibilityBuckets(respJson);\n" +
+            "if (!buckets) throw new Error('parseResponsibilityBuckets should successfully parse modern categories without pesap');\n" +
+            "if (!buckets.total || buckets.total.calls !== 17) throw new Error('Calculated total calls should be 17, got: ' + JSON.stringify(buckets.total));\n" +
+            "if (buckets.pesap) throw new Error('buckets should not contain pesap');\n" +
+            "const tbody = { innerHTML: '' };\n" +
+            "sandbox.renderLlmResponsibilityRows(tbody, respJson, null);\n" +
+            "if (tbody.innerHTML.includes('PESAP')) throw new Error('renderLlmResponsibilityRows should not contain PESAP');\n" +
+            "if (!tbody.innerHTML.includes('Action (Standard Generation)')) throw new Error('renderLlmResponsibilityRows should contain Action');\n" +
+            "const heuristicHtml = sandbox.renderHeuristicLlmRows({ totalCalls: 10, totalTokens: 5000, inputTokens: 4000, outputTokens: 1000, cachedTokens: 0, cost: 0.01 });\n" +
+            "if (heuristicHtml.includes('PESAP')) throw new Error('renderHeuristicLlmRows should not contain PESAP');\n" +
+            "if (!heuristicHtml.includes('Action (Standard Generation)')) throw new Error('renderHeuristicLlmRows should contain Action');\n" +
+            "sandbox.stopLiveStepRefreshTimer();\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+    }
+
+    @Test
+    public void testSyncRowAiUsageRecursivelyTraversesSubStepsAndPreFlightCalls() throws Exception
+    {
+        final Path jsFilePath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsFilePath), "report-manager.js must exist");
+
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final String nodeTestScript =
+            "const fs = require('fs');\n" +
+            "const vm = require('vm');\n" +
+            "const code = fs.readFileSync('" + jsFilePath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');\n" +
+            "const sandbox = {\n" +
+            "    console,\n" +
+            "    window: {},\n" +
+            "    document: {\n" +
+            "        readyState: 'complete',\n" +
+            "        getElementById: () => null,\n" +
+            "        querySelectorAll: () => [],\n" +
+            "        querySelector: () => null,\n" +
+            "        addEventListener: () => {},\n" +
+            "        body: { addEventListener: () => {}, contains: () => true }\n" +
+            "    }\n" +
+            "};\n" +
+            "sandbox.window = sandbox;\n" +
+            "vm.runInNewContext(code, sandbox);\n" +
+            "const blocksObj = {\n" +
+            "    llmCalls: [\n" +
+            "        { id: 'pre-1', stepIndex: -1, inputTokens: 3474, outputTokens: 0, cachedTokens: 0, durationMs: 120 }\n" +
+            "    ],\n" +
+            "    steps: [\n" +
+            "        {\n" +
+            "            instruction: 'Step 1',\n" +
+            "            llmCalls: [\n" +
+            "                { id: 'call-1', stepIndex: 0, inputTokens: 10000, outputTokens: 100, cachedTokens: 1000, durationMs: 500 }\n" +
+            "            ]\n" +
+            "        },\n" +
+            "        {\n" +
+            "            instruction: 'Step 2 - fragment',\n" +
+            "            subSteps: [\n" +
+            "                {\n" +
+            "                    instruction: 'SubStep 2.1',\n" +
+            "                    llmCalls: [\n" +
+            "                        { id: 'sub-call-1', stepIndex: 1, subStepIndex: 0, inputTokens: 20000, outputTokens: 200, cachedTokens: 2000, durationMs: 600 }\n" +
+            "                    ]\n" +
+            "                },\n" +
+            "                {\n" +
+            "                    instruction: 'SubStep 2.2',\n" +
+            "                    llmCalls: [\n" +
+            "                        { id: 'sub-call-2', stepIndex: 1, subStepIndex: 1, inputTokens: 30000, outputTokens: 300, cachedTokens: 3000, durationMs: 700 }\n" +
+            "                    ]\n" +
+            "                }\n" +
+            "            ]\n" +
+            "        }\n" +
+            "    ]\n" +
+            "};\n" +
+            "const attributes = {\n" +
+            "    'data-blocks': JSON.stringify(blocksObj),\n" +
+            "    'data-steps': '{}'\n" +
+            "};\n" +
+            "const mockRow = {\n" +
+            "    getAttribute: (k) => attributes[k] || null,\n" +
+            "    setAttribute: (k, v) => { attributes[k] = String(v); },\n" +
+            "    querySelector: () => ({ innerHTML: '' })\n" +
+            "};\n" +
+            "const result = sandbox.syncRowAiUsage(mockRow);\n" +
+            "if (!result) throw new Error('syncRowAiUsage returned null');\n" +
+            "if (result.llmCalls !== 4) throw new Error('Expected 4 llmCalls, got: ' + result.llmCalls);\n" +
+            "if (result.inputTokens !== 63474) throw new Error('Expected 63474 inputTokens, got: ' + result.inputTokens);\n" +
+            "if (result.outputTokens !== 600) throw new Error('Expected 600 outputTokens, got: ' + result.outputTokens);\n" +
+            "if (result.cachedTokens !== 6000) throw new Error('Expected 6000 cachedTokens, got: ' + result.cachedTokens);\n" +
+            "sandbox.stopLiveStepRefreshTimer();\n";
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process process = pb.start();
+
+        final StringBuilder output = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                output.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = process.waitFor();
+        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+    }
 }
 

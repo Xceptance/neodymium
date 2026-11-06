@@ -444,7 +444,20 @@ public class LocalRunJsonStorageService
                                 blocksNode.set("steps", stepsArr);
                                 blocksNode.set("after", afterArr);
 
+                                if (objNode.has("llmCalls") && !blocksNode.has("llmCalls"))
+                                {
+                                    blocksNode.set("llmCalls", objNode.get("llmCalls"));
+                                }
+
                                 objNode.set("blocks", blocksNode);
+                            }
+                            else if (objNode.has("llmCalls") && objNode.get("blocks").isObject())
+                            {
+                                final ObjectNode existingBlocks = (ObjectNode) objNode.get("blocks");
+                                if (!existingBlocks.has("llmCalls"))
+                                {
+                                    existingBlocks.set("llmCalls", objNode.get("llmCalls"));
+                                }
                             }
 
                             // Keep the execution JSON at its current location on disk (class folders
@@ -697,7 +710,18 @@ public class LocalRunJsonStorageService
                     metricObj.put("healed", isHealed);
                     metricObj.put("llmCallsCount", extractLlmCalls(objNode));
                     metricObj.put("llmTotalTokens", extractLlmTokens(objNode));
+                    metricObj.put("inputTokensCount", extractInputTokens(objNode));
+                    metricObj.put("outputTokensCount", extractOutputTokens(objNode));
+                    metricObj.put("cachedTokensCount", extractCachedTokens(objNode));
                     metricObj.put("llmCost", extractLlmCost(objNode));
+                    if (objNode.has("metrics"))
+                    {
+                        metricObj.set("metrics", objNode.get("metrics"));
+                    }
+                    if (objNode.has("llmResponsibility"))
+                    {
+                        metricObj.set("llmResponsibility", objNode.get("llmResponsibility"));
+                    }
                     metricObj.set("bugs", objNode.path("bugs"));
 
                     String uniqueKey = key;
@@ -953,17 +977,17 @@ public class LocalRunJsonStorageService
 
     private int extractLlmCalls(final JsonNode node)
     {
-        if (node.has("llmCallsCount") && node.path("llmCallsCount").isInt())
+        if (node.has("llmCallsCount") && node.path("llmCallsCount").isInt() && node.path("llmCallsCount").asInt() > 0)
         {
             return node.path("llmCallsCount").asInt();
         }
         final JsonNode metrics = node.path("metrics");
-        if (metrics.has("totalLlmCalls") && metrics.path("totalLlmCalls").isInt())
+        if (metrics.has("totalLlmCalls") && metrics.path("totalLlmCalls").isInt() && metrics.path("totalLlmCalls").asInt() > 0)
         {
             return metrics.path("totalLlmCalls").asInt();
         }
         final JsonNode blocks = node.path("blocks");
-        if (blocks.has("llmCalls") && blocks.path("llmCalls").isArray())
+        if (blocks.has("llmCalls") && blocks.path("llmCalls").isArray() && !blocks.path("llmCalls").isEmpty())
         {
             return blocks.path("llmCalls").size();
         }
@@ -977,26 +1001,109 @@ public class LocalRunJsonStorageService
 
     private long extractLlmTokens(final JsonNode node)
     {
-        if (node.has("llmTotalTokens") && node.path("llmTotalTokens").isNumber())
+        if (node.has("llmTotalTokens") && node.path("llmTotalTokens").isNumber() && node.path("llmTotalTokens").asLong() > 0L)
         {
             return node.path("llmTotalTokens").asLong();
         }
         final JsonNode metrics = node.path("metrics");
-        if (metrics.has("totalTokens") && metrics.path("totalTokens").isNumber())
+        if (metrics.has("totalTokens") && metrics.path("totalTokens").isNumber() && metrics.path("totalTokens").asLong() > 0L)
         {
             return metrics.path("totalTokens").asLong();
+        }
+        final long in = extractInputTokens(node);
+        final long out = extractOutputTokens(node);
+        if (in > 0L || out > 0L)
+        {
+            return in + out;
+        }
+        final JsonNode calls = node.has("llmCalls") && node.get("llmCalls").isArray()
+            ? node.get("llmCalls")
+            : (node.path("blocks").has("llmCalls") && node.path("blocks").get("llmCalls").isArray()
+                ? node.path("blocks").get("llmCalls") : null);
+        if (calls != null && calls.isArray() && !calls.isEmpty())
+        {
+            long sum = 0L;
+            for (final JsonNode c : calls)
+            {
+                if (c.has("totalTokens") && c.path("totalTokens").isNumber())
+                {
+                    sum += c.path("totalTokens").asLong();
+                }
+                else
+                {
+                    sum += (c.path("inputTokens").asLong(0L) + c.path("outputTokens").asLong(0L));
+                }
+            }
+            if (sum > 0L)
+            {
+                return sum;
+            }
+        }
+        return 0L;
+    }
+
+    private long extractInputTokens(final JsonNode node)
+    {
+        if (node.has("inputTokensCount") && node.path("inputTokensCount").isNumber() && node.path("inputTokensCount").asLong() > 0L)
+        {
+            return node.path("inputTokensCount").asLong();
+        }
+        final JsonNode metrics = node.path("metrics");
+        if (metrics.has("tokenUsageInput") && metrics.path("tokenUsageInput").isNumber() && metrics.path("tokenUsageInput").asLong() > 0L)
+        {
+            return metrics.path("tokenUsageInput").asLong();
+        }
+        if (metrics.has("inputTokens") && metrics.path("inputTokens").isNumber() && metrics.path("inputTokens").asLong() > 0L)
+        {
+            return metrics.path("inputTokens").asLong();
+        }
+        return 0L;
+    }
+
+    private long extractOutputTokens(final JsonNode node)
+    {
+        if (node.has("outputTokensCount") && node.path("outputTokensCount").isNumber() && node.path("outputTokensCount").asLong() > 0L)
+        {
+            return node.path("outputTokensCount").asLong();
+        }
+        final JsonNode metrics = node.path("metrics");
+        if (metrics.has("tokenUsageOutput") && metrics.path("tokenUsageOutput").isNumber() && metrics.path("tokenUsageOutput").asLong() > 0L)
+        {
+            return metrics.path("tokenUsageOutput").asLong();
+        }
+        if (metrics.has("outputTokens") && metrics.path("outputTokens").isNumber() && metrics.path("outputTokens").asLong() > 0L)
+        {
+            return metrics.path("outputTokens").asLong();
+        }
+        return 0L;
+    }
+
+    private long extractCachedTokens(final JsonNode node)
+    {
+        if (node.has("cachedTokensCount") && node.path("cachedTokensCount").isNumber() && node.path("cachedTokensCount").asLong() > 0L)
+        {
+            return node.path("cachedTokensCount").asLong();
+        }
+        final JsonNode metrics = node.path("metrics");
+        if (metrics.has("tokenUsageCached") && metrics.path("tokenUsageCached").isNumber() && metrics.path("tokenUsageCached").asLong() > 0L)
+        {
+            return metrics.path("tokenUsageCached").asLong();
+        }
+        if (metrics.has("cachedTokens") && metrics.path("cachedTokens").isNumber() && metrics.path("cachedTokens").asLong() > 0L)
+        {
+            return metrics.path("cachedTokens").asLong();
         }
         return 0L;
     }
 
     private double extractLlmCost(final JsonNode node)
     {
-        if (node.has("llmCost") && node.path("llmCost").isNumber())
+        if (node.has("llmCost") && node.path("llmCost").isNumber() && node.path("llmCost").asDouble() > 0.0)
         {
             return node.path("llmCost").asDouble();
         }
         final JsonNode metrics = node.path("metrics");
-        if (metrics.has("estimatedCostUsd") && metrics.path("estimatedCostUsd").isNumber())
+        if (metrics.has("estimatedCostUsd") && metrics.path("estimatedCostUsd").isNumber() && metrics.path("estimatedCostUsd").asDouble() > 0.0)
         {
             return metrics.path("estimatedCostUsd").asDouble();
         }
@@ -1091,6 +1198,14 @@ public class LocalRunJsonStorageService
                         }
                         actionsArr.add(actObj);
                     }
+                }
+                if (stepNode.has("llmCalls"))
+                {
+                    stepObj.set("llmCalls", stepNode.get("llmCalls"));
+                }
+                if (stepNode.has("subSteps"))
+                {
+                    stepObj.set("subSteps", stepNode.get("subSteps"));
                 }
                 stepObj.set("actions", actionsArr);
                 targetArray.add(stepObj);

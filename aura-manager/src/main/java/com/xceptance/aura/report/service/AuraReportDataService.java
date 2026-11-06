@@ -1464,6 +1464,14 @@ public class AuraReportDataService
     private TestExecutionDto buildExecutionDetailsDto(final JsonNode node, final String executionId, final String effectiveRunId)
         throws JsonProcessingException
     {
+        if (node.has("llmCalls") && node.path("blocks").isObject())
+        {
+            final ObjectNode blk = (ObjectNode) node.path("blocks");
+            if (!blk.has("llmCalls"))
+            {
+                blk.set("llmCalls", node.get("llmCalls"));
+            }
+        }
         final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
         if (dto.getId() == null || dto.getId().isBlank()
                 || "bad".equalsIgnoreCase(dto.getId())

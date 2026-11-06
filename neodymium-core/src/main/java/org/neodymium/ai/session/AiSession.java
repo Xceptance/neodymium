@@ -146,11 +146,11 @@ public abstract class AiSession implements AutoCloseable
         this.eventBus = eventBus != null ? eventBus : new ExecutionEventBus();
         this.targetExecutor = targetExecutor;
         this.executionMode = executionMode != null ? executionMode : ExecutionMode.LLM_ONLY;
-        this.eventBus.registerListener(new TokenBudgetGuard());
         if (AiConfiguration.getInstance().isDiskReportEnabled())
         {
             this.eventBus.registerListener(new PreliminaryReportListener());
         }
+        this.eventBus.registerListener(new TokenBudgetGuard());
     }
 
     /**
