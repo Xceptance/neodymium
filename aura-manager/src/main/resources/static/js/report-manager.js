@@ -3721,14 +3721,23 @@ function renderStepsForExecution(activeRow) {
     const playbookFile = activeRow.getAttribute('data-playbook-file') || '';
     const failureText = activeRow.getAttribute('data-failure') || '';
 
+    const stInitialVal = (activeRow.getAttribute('data-status') || '').toUpperCase();
+    const stInitialRawVal = (activeRow.getAttribute('data-status-raw') || '').toLowerCase();
+    const isInitialFailureState = stInitialVal === 'FAILED' || stInitialVal === 'FAILED_UNKNOWN' || stInitialVal === 'FAILED_KNOWN' || stInitialVal === 'ERROR'
+        || stInitialRawVal === 'failed' || stInitialRawVal === 'failed-unknown' || stInitialRawVal === 'failed-known' || stInitialRawVal === 'error' || stInitialRawVal === 'known';
+
     // Update Top Error Card (Initial check from row data-failure attribute)
     const errorCard = document.getElementById('sidePageErrorDisplayCard');
     const errorTextEl = document.getElementById('sidePageErrorText');
     if (errorCard && errorTextEl) {
-        const initialHtml = renderErrorBoxContent(failureText, activeRow.getAttribute('data-failure-reason') || '', activeRow.getAttribute('data-visual-rca-explanation') || '', []);
-        if (initialHtml) {
-            errorTextEl.innerHTML = initialHtml;
-            errorCard.style.display = 'flex';
+        if (isInitialFailureState) {
+            const initialHtml = renderErrorBoxContent(failureText, activeRow.getAttribute('data-failure-reason') || '', activeRow.getAttribute('data-visual-rca-explanation') || '', []);
+            if (initialHtml) {
+                errorTextEl.innerHTML = initialHtml;
+                errorCard.style.display = 'flex';
+            } else {
+                errorCard.style.display = 'none';
+            }
         } else {
             errorCard.style.display = 'none';
         }
@@ -3879,24 +3888,30 @@ function renderStepsForExecution(activeRow) {
     const coreSteps = blocksObj ? (blocksObj.steps || []) : [];
     const afterSteps = blocksObj ? (blocksObj.after || []) : [];
 
-    const stVal = (activeRow.getAttribute('data-status') || '').toUpperCase();
-    const stRawVal = (activeRow.getAttribute('data-status-raw') || '').toLowerCase();
+    const stVal = (activeRow.getAttribute('data-status') || blocksObj?.status || '').toUpperCase();
+    const stRawVal = (activeRow.getAttribute('data-status-raw') || blocksObj?.status || '').toLowerCase();
     const isRunningState = stVal === 'RUNNING' || stRawVal === 'running' || stRawVal === 'in_progress' || stRawVal === 'executing' || stRawVal === 'pending';
+    const isFailureState = stVal === 'FAILED' || stVal === 'FAILED_UNKNOWN' || stVal === 'FAILED_KNOWN' || stVal === 'ERROR'
+        || stRawVal === 'failed' || stRawVal === 'failed-unknown' || stRawVal === 'failed-known' || stRawVal === 'error' || stRawVal === 'known';
 
     const failureReason = activeRow.getAttribute('data-failure-reason') || blocksObj?.failureReason || '';
     const failureStackTrace = activeRow.getAttribute('data-failure-stack-trace') || blocksObj?.failureStackTrace || '';
     const visualRcaExplanation = activeRow.getAttribute('data-visual-rca-explanation') || blocksObj?.visualRcaExplanation || '';
 
     if (errorCard && errorTextEl) {
-        const allStackTraces = [];
-        if (failureStackTrace && failureStackTrace.trim().length > 0) {
-            allStackTraces.push(failureStackTrace.trim());
-        }
+        if (isFailureState) {
+            const allStackTraces = [];
+            if (failureStackTrace && failureStackTrace.trim().length > 0) {
+                allStackTraces.push(failureStackTrace.trim());
+            }
 
-        const renderedHtml = renderErrorBoxContent(failureText, failureReason, visualRcaExplanation, allStackTraces);
-        if (renderedHtml) {
-            errorTextEl.innerHTML = renderedHtml;
-            errorCard.style.display = 'flex';
+            const renderedHtml = renderErrorBoxContent(failureText, failureReason, visualRcaExplanation, allStackTraces);
+            if (renderedHtml) {
+                errorTextEl.innerHTML = renderedHtml;
+                errorCard.style.display = 'flex';
+            } else {
+                errorCard.style.display = 'none';
+            }
         } else {
             errorCard.style.display = 'none';
         }
