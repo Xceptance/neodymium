@@ -30,6 +30,7 @@ import com.xceptance.aura.report.service.AuraReportDataService;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -840,23 +841,36 @@ public final class TestExecutionDto
 
     public long getLlmTotalTokens()
     {
-        return llmTotalTokens;
+        if (llmTotalTokens > 0L)
+        {
+            return llmTotalTokens;
+        }
+        return getTotalTokensCount();
     }
 
     public String getLlmTotalTokensFormatted()
     {
-        return String.format("%,d", llmTotalTokens);
+        return String.format("%,d", getLlmTotalTokens());
     }
 
     public double getLlmCost()
     {
+        if (llmCost > 0.0)
+        {
+            return llmCost;
+        }
+        if (metrics != null && metrics.has("estimatedCostUsd") && metrics.get("estimatedCostUsd").isNumber())
+        {
+            return metrics.get("estimatedCostUsd").asDouble();
+        }
         return llmCost;
     }
 
     public String getLlmCostFormatted()
     {
-        final double roundedUp = Math.ceil(llmCost * 10000.0) / 10000.0;
-        return String.format(java.util.Locale.ROOT, "%.4f", roundedUp);
+        final double cost = getLlmCost();
+        final double roundedUp = Math.ceil(cost * 10000.0) / 10000.0;
+        return String.format(Locale.ROOT, "%.4f", roundedUp);
     }
 
     public String getFailureSnippet()
@@ -958,7 +972,8 @@ public final class TestExecutionDto
     public boolean isAiDriven()
     {
         return "AI".equalsIgnoreCase(getDisplayMode())
-            || (llmCallsCount > 0)
+            || (getLlmCallsCount() > 0)
+            || (getLlmTotalTokens() > 0L)
             || "LLM_RECORDING".equalsIgnoreCase(this.executionMode)
             || "LLM_ONLY".equalsIgnoreCase(this.executionMode);
     }
@@ -994,6 +1009,25 @@ public final class TestExecutionDto
         if (in > 0 || out > 0)
         {
             return in + out;
+        }
+        if (llmCalls != null && llmCalls.isArray() && !llmCalls.isEmpty())
+        {
+            long sum = 0L;
+            for (final JsonNode call : llmCalls)
+            {
+                if (call.has("totalTokens") && call.path("totalTokens").isNumber())
+                {
+                    sum += call.path("totalTokens").asLong();
+                }
+                else
+                {
+                    sum += (call.path("inputTokens").asLong(0L) + call.path("outputTokens").asLong(0L));
+                }
+            }
+            if (sum > 0L)
+            {
+                return sum;
+            }
         }
         return llmTotalTokens;
     }

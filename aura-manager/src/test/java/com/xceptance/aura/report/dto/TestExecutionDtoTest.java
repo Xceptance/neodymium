@@ -398,5 +398,35 @@ public final class TestExecutionDtoTest
         Assertions.assertEquals(300L, dto.getOutputTokensCount());
         Assertions.assertEquals(150L, dto.getCachedTokensCount());
         Assertions.assertEquals(1500L, dto.getTotalTokensCount());
+        Assertions.assertEquals(1500L, dto.getLlmTotalTokens());
+        Assertions.assertTrue(dto.isAiDriven());
+    }
+
+    @Test
+    public void testCostAndTokensFallbacksFromMetricsAndLlmCalls() throws Exception
+    {
+        final String jsonMetricsOnly = """
+            {
+                "id": "exec-metrics-cost",
+                "testClass": "com.xceptance.test.MetricsCostTest",
+                "metrics": {
+                    "estimatedCostUsd": 0.04567,
+                    "totalLlmCalls": 3
+                },
+                "llmCalls": [
+                    { "inputTokens": 1000, "outputTokens": 200 },
+                    { "totalTokens": 800 }
+                ]
+            }
+            """;
+
+        final TestExecutionDto dto = objectMapper.readValue(jsonMetricsOnly, TestExecutionDto.class);
+
+        Assertions.assertEquals(0.04567, dto.getLlmCost(), 0.00001);
+        Assertions.assertEquals("0.0457", dto.getLlmCostFormatted());
+        Assertions.assertEquals(3, dto.getLlmCallsCount());
+        Assertions.assertEquals(2000L, dto.getTotalTokensCount());
+        Assertions.assertEquals(2000L, dto.getLlmTotalTokens());
+        Assertions.assertTrue(dto.isAiDriven());
     }
 }
