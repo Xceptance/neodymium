@@ -4088,7 +4088,7 @@ body[data-bs-theme="dark"] .step-row.step-row-substep {
     border-color: var(--accent);
 }
 
-/* PESAP AI Step Review Button & Cards */
+/* AI Step Review Button & Cards */
 .btn-editor.btn-review {
     color: var(--accent-purple);
     border-color: rgba(168, 85, 247, 0.35);

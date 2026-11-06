@@ -417,7 +417,6 @@ const AI_EXPLICIT_KEYWORDS = [
     'test case completed',
     'ai execution statistics',
     'ai step execution statistics',
-    'pre-step pesap',
     'executing action',
     '[exec]',
     '[replay]'

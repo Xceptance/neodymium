@@ -307,4 +307,96 @@ public final class TestExecutionDtoTest
         Assertions.assertNotNull(deserialized.getSteps());
         Assertions.assertEquals("Step 1", deserialized.getSteps().get(0).path("title").asText());
     }
+
+    @Test
+    public void testTokenUsageAndResponsibilityDeserializationFromMetrics() throws Exception
+    {
+        final String json = """
+            {
+                "id": "exec-tokens-metrics",
+                "testClass": "com.xceptance.test.FragmentTest",
+                "status": "passed-clean",
+                "metrics": {
+                    "totalLlmCalls": 49,
+                    "tokenUsageInput": 509249,
+                    "tokenUsageOutput": 2100,
+                    "tokenUsageCached": 39940,
+                    "totalTokens": 511349,
+                    "categories": {
+                        "action": {
+                            "calls": 32,
+                            "inputTokens": 300000,
+                            "outputTokens": 1500,
+                            "cachedTokens": 17918,
+                            "totalTokens": 301500,
+                            "estimatedCostUsd": 0.0937
+                        },
+                        "verification": {
+                            "calls": 16,
+                            "inputTokens": 205775,
+                            "outputTokens": 600,
+                            "cachedTokens": 22022,
+                            "totalTokens": 206375,
+                            "estimatedCostUsd": 0.0620
+                        },
+                        "linter": {
+                            "calls": 1,
+                            "inputTokens": 3474,
+                            "outputTokens": 0,
+                            "cachedTokens": 0,
+                            "totalTokens": 3474,
+                            "estimatedCostUsd": 0.0010
+                        }
+                    }
+                },
+                "llmCalls": [
+                    { "stepIndex": -1, "inputTokens": 3474, "outputTokens": 0 },
+                    { "stepIndex": 1, "inputTokens": 10000, "outputTokens": 100 }
+                ]
+            }
+            """;
+
+        final TestExecutionDto dto = objectMapper.readValue(json, TestExecutionDto.class);
+
+        Assertions.assertNotNull(dto);
+        Assertions.assertEquals(49, dto.getLlmCallsCount());
+        Assertions.assertEquals(509249L, dto.getInputTokensCount());
+        Assertions.assertEquals(2100L, dto.getOutputTokensCount());
+        Assertions.assertEquals(39940L, dto.getCachedTokensCount());
+        Assertions.assertEquals(511349L, dto.getTotalTokensCount());
+
+        Assertions.assertNotNull(dto.getLlmCalls());
+        Assertions.assertTrue(dto.getLlmCalls().isArray());
+        Assertions.assertEquals(2, dto.getLlmCalls().size());
+
+        final String respJson = dto.getLlmResponsibilityJson();
+        Assertions.assertFalse(respJson.isBlank());
+        Assertions.assertTrue(respJson.contains("\"action\""));
+        Assertions.assertTrue(respJson.contains("\"verification\""));
+        Assertions.assertTrue(respJson.contains("\"linter\""));
+        Assertions.assertFalse(respJson.contains("\"pesap\""));
+    }
+
+    @Test
+    public void testTokenUsageDirectFieldsAndFallbacks() throws Exception
+    {
+        final String jsonDirect = """
+            {
+                "id": "exec-direct-tokens",
+                "testClass": "com.xceptance.test.DirectTokensTest",
+                "inputTokensCount": 1200,
+                "outputTokensCount": 300,
+                "cachedTokensCount": 150,
+                "llmCallsCount": 5
+            }
+            """;
+
+        final TestExecutionDto dto = objectMapper.readValue(jsonDirect, TestExecutionDto.class);
+
+        Assertions.assertEquals(5, dto.getLlmCallsCount());
+        Assertions.assertEquals(1200L, dto.getInputTokensCount());
+        Assertions.assertEquals(300L, dto.getOutputTokensCount());
+        Assertions.assertEquals(150L, dto.getCachedTokensCount());
+        Assertions.assertEquals(1500L, dto.getTotalTokensCount());
+    }
 }

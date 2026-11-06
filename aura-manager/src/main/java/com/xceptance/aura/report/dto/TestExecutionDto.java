@@ -87,10 +87,14 @@ public final class TestExecutionDto
     private final String videoUrl;
     private final JsonNode linterFindings;
     private final JsonNode postFlightFindings;
+    private final Long inputTokensCount;
+    private final Long outputTokensCount;
+    private final Long cachedTokensCount;
+    private final JsonNode llmCalls;
 
     public TestExecutionDto()
     {
-        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
+        this("", "", "", "", "", "", "", "", "passed-clean", "Java", "UNKNOWN", null, "Unknown", "NONE", new ArrayList<>(), null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, null, null, null, null);
     }
 
     @JsonCreator
@@ -141,7 +145,11 @@ public final class TestExecutionDto
         @JsonProperty("videoUrl") @JsonAlias({"videoPath", "video"}) final String videoUrl,
         @JsonProperty("healed") final Boolean healed,
         @JsonProperty("linterFindings") final JsonNode linterFindings,
-        @JsonProperty("postFlightFindings") final JsonNode postFlightFindings)
+        @JsonProperty("postFlightFindings") final JsonNode postFlightFindings,
+        @JsonProperty("inputTokensCount") final Long inputTokensCount,
+        @JsonProperty("outputTokensCount") final Long outputTokensCount,
+        @JsonProperty("cachedTokensCount") final Long cachedTokensCount,
+        @JsonProperty("llmCalls") final JsonNode llmCalls)
     {
         final String effectiveTestClass;
         if (testClass != null && !testClass.trim().isEmpty())
@@ -301,6 +309,10 @@ public final class TestExecutionDto
         this.healed = Boolean.TRUE.equals(healed);
         this.linterFindings = linterFindings;
         this.postFlightFindings = postFlightFindings;
+        this.inputTokensCount = inputTokensCount;
+        this.outputTokensCount = outputTokensCount;
+        this.cachedTokensCount = cachedTokensCount;
+        this.llmCalls = llmCalls;
     }
 
     public TestExecutionDto(
@@ -342,7 +354,7 @@ public final class TestExecutionDto
         final Double llmCost,
         final String failureSnippet)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, "", "", "", null, null, "", false, null, null);
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, "", "", "", null, null, "", false, null, null, null, null, null, null);
     }
 
     public TestExecutionDto(
@@ -387,7 +399,7 @@ public final class TestExecutionDto
         final String failureStackTrace,
         final String visualRcaExplanation)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, null, null, "", false, null, null);
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, locale, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, testId, datasetId, executionMode, mode, startTime, dateFormatted, timeFormatted, timestampMs, totalStepsCount, failedStepsCount, durationMs, durationFormatted, llmCallsCount, llmTotalTokens, llmCost, failureSnippet, failureReason, failureStackTrace, visualRcaExplanation, null, null, "", false, null, null, null, null, null, null);
     }
 
     public TestExecutionDto(
@@ -413,7 +425,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
+        this(id, runId, testClass, testMethod, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, null, null, null, null);
     }
 
     public TestExecutionDto(
@@ -438,7 +450,7 @@ public final class TestExecutionDto
         final JsonNode blocks,
         final JsonNode steps)
     {
-        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
+        this(id, runId, testClass, null, title, testName, playbookFile, testFile, status, engine, location, null, browser, failure, bugs, comment, areaName, junitTags, dataBindings, localDataBindings, blocks, steps, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, null, null, null, null);
     }
 
     public TestExecutionDto(
@@ -452,7 +464,7 @@ public final class TestExecutionDto
         final String failure,
         final List<String> bugs)
     {
-        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null);
+        this(id, "", testClass, null, title, testClass + " " + title, "", "", status, engine, location, null, browser, failure, bugs, null, "Browsing (default)", new ArrayList<>(), new HashMap<>(), new HashMap<>(), null, null, null, null, null, null, null, null, null, 0L, 0, 0, 0L, null, 0, 0L, 0.0, null, "", "", "", null, null, "", false, null, null, null, null, null, null);
     }
 
     public String getId()
@@ -811,7 +823,19 @@ public final class TestExecutionDto
 
     public int getLlmCallsCount()
     {
-        return llmCallsCount;
+        if (llmCallsCount > 0)
+        {
+            return llmCallsCount;
+        }
+        if (metrics != null && metrics.has("totalLlmCalls") && metrics.get("totalLlmCalls").isInt())
+        {
+            return metrics.get("totalLlmCalls").asInt();
+        }
+        if (llmCalls != null && llmCalls.isArray())
+        {
+            return llmCalls.size();
+        }
+        return 0;
     }
 
     public long getLlmTotalTokens()
@@ -961,22 +985,82 @@ public final class TestExecutionDto
 
     public long getTotalTokensCount()
     {
+        if (metrics != null && metrics.has("totalTokens") && metrics.get("totalTokens").isNumber())
+        {
+            return metrics.get("totalTokens").asLong();
+        }
+        final long in = getInputTokensCount();
+        final long out = getOutputTokensCount();
+        if (in > 0 || out > 0)
+        {
+            return in + out;
+        }
         return llmTotalTokens;
     }
 
     public long getInputTokensCount()
     {
+        if (inputTokensCount != null && inputTokensCount > 0)
+        {
+            return inputTokensCount;
+        }
+        if (metrics != null)
+        {
+            if (metrics.has("tokenUsageInput") && metrics.get("tokenUsageInput").isNumber())
+            {
+                return metrics.get("tokenUsageInput").asLong();
+            }
+            if (metrics.has("inputTokens") && metrics.get("inputTokens").isNumber())
+            {
+                return metrics.get("inputTokens").asLong();
+            }
+        }
         return (long) (llmTotalTokens * 0.85);
     }
 
     public long getOutputTokensCount()
     {
+        if (outputTokensCount != null && outputTokensCount > 0)
+        {
+            return outputTokensCount;
+        }
+        if (metrics != null)
+        {
+            if (metrics.has("tokenUsageOutput") && metrics.get("tokenUsageOutput").isNumber())
+            {
+                return metrics.get("tokenUsageOutput").asLong();
+            }
+            if (metrics.has("outputTokens") && metrics.get("outputTokens").isNumber())
+            {
+                return metrics.get("outputTokens").asLong();
+            }
+        }
         return (long) (llmTotalTokens * 0.15);
     }
 
     public long getCachedTokensCount()
     {
+        if (cachedTokensCount != null && cachedTokensCount > 0)
+        {
+            return cachedTokensCount;
+        }
+        if (metrics != null)
+        {
+            if (metrics.has("tokenUsageCached") && metrics.get("tokenUsageCached").isNumber())
+            {
+                return metrics.get("tokenUsageCached").asLong();
+            }
+            if (metrics.has("cachedTokens") && metrics.get("cachedTokens").isNumber())
+            {
+                return metrics.get("cachedTokens").asLong();
+            }
+        }
         return 0L;
+    }
+
+    public JsonNode getLlmCalls()
+    {
+        return llmCalls;
     }
 
     public String getEstimatedCostUsd()
@@ -986,11 +1070,22 @@ public final class TestExecutionDto
 
     public String getLlmResponsibilityJson()
     {
-        if (llmResponsibility == null || llmResponsibility.isNull())
+        if (llmResponsibility != null && !llmResponsibility.isNull() && !llmResponsibility.isEmpty())
         {
-            return "";
+            return llmResponsibility.toString();
         }
-        return llmResponsibility.toString();
+        if (metrics != null && !metrics.isNull())
+        {
+            if (metrics.has("categories") && metrics.get("categories").isObject() && !metrics.get("categories").isEmpty())
+            {
+                return metrics.get("categories").toString();
+            }
+            if (metrics.has("action") || metrics.has("verification") || metrics.has("total"))
+            {
+                return metrics.toString();
+            }
+        }
+        return "";
     }
 
     public String getContextLevelCountsJson()

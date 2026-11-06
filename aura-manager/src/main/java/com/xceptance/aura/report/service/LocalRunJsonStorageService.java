@@ -444,7 +444,20 @@ public class LocalRunJsonStorageService
                                 blocksNode.set("steps", stepsArr);
                                 blocksNode.set("after", afterArr);
 
+                                if (objNode.has("llmCalls") && !blocksNode.has("llmCalls"))
+                                {
+                                    blocksNode.set("llmCalls", objNode.get("llmCalls"));
+                                }
+
                                 objNode.set("blocks", blocksNode);
+                            }
+                            else if (objNode.has("llmCalls") && objNode.get("blocks").isObject())
+                            {
+                                final ObjectNode existingBlocks = (ObjectNode) objNode.get("blocks");
+                                if (!existingBlocks.has("llmCalls"))
+                                {
+                                    existingBlocks.set("llmCalls", objNode.get("llmCalls"));
+                                }
                             }
 
                             // Keep the execution JSON at its current location on disk (class folders
@@ -697,7 +710,18 @@ public class LocalRunJsonStorageService
                     metricObj.put("healed", isHealed);
                     metricObj.put("llmCallsCount", extractLlmCalls(objNode));
                     metricObj.put("llmTotalTokens", extractLlmTokens(objNode));
+                    metricObj.put("inputTokensCount", extractInputTokens(objNode));
+                    metricObj.put("outputTokensCount", extractOutputTokens(objNode));
+                    metricObj.put("cachedTokensCount", extractCachedTokens(objNode));
                     metricObj.put("llmCost", extractLlmCost(objNode));
+                    if (objNode.has("metrics"))
+                    {
+                        metricObj.set("metrics", objNode.get("metrics"));
+                    }
+                    if (objNode.has("llmResponsibility"))
+                    {
+                        metricObj.set("llmResponsibility", objNode.get("llmResponsibility"));
+                    }
                     metricObj.set("bugs", objNode.path("bugs"));
 
                     String uniqueKey = key;
@@ -986,6 +1010,66 @@ public class LocalRunJsonStorageService
         {
             return metrics.path("totalTokens").asLong();
         }
+        final long in = extractInputTokens(node);
+        final long out = extractOutputTokens(node);
+        if (in > 0 || out > 0)
+        {
+            return in + out;
+        }
+        return 0L;
+    }
+
+    private long extractInputTokens(final JsonNode node)
+    {
+        if (node.has("inputTokensCount") && node.path("inputTokensCount").isNumber())
+        {
+            return node.path("inputTokensCount").asLong();
+        }
+        final JsonNode metrics = node.path("metrics");
+        if (metrics.has("tokenUsageInput") && metrics.path("tokenUsageInput").isNumber())
+        {
+            return metrics.path("tokenUsageInput").asLong();
+        }
+        if (metrics.has("inputTokens") && metrics.path("inputTokens").isNumber())
+        {
+            return metrics.path("inputTokens").asLong();
+        }
+        return 0L;
+    }
+
+    private long extractOutputTokens(final JsonNode node)
+    {
+        if (node.has("outputTokensCount") && node.path("outputTokensCount").isNumber())
+        {
+            return node.path("outputTokensCount").asLong();
+        }
+        final JsonNode metrics = node.path("metrics");
+        if (metrics.has("tokenUsageOutput") && metrics.path("tokenUsageOutput").isNumber())
+        {
+            return metrics.path("tokenUsageOutput").asLong();
+        }
+        if (metrics.has("outputTokens") && metrics.path("outputTokens").isNumber())
+        {
+            return metrics.path("outputTokens").asLong();
+        }
+        return 0L;
+    }
+
+    private long extractCachedTokens(final JsonNode node)
+    {
+        if (node.has("cachedTokensCount") && node.path("cachedTokensCount").isNumber())
+        {
+            return node.path("cachedTokensCount").asLong();
+        }
+        final JsonNode metrics = node.path("metrics");
+        if (metrics.has("tokenUsageCached") && metrics.path("tokenUsageCached").isNumber())
+        {
+            return metrics.path("tokenUsageCached").asLong();
+        }
+        if (metrics.has("cachedTokens") && metrics.path("cachedTokens").isNumber())
+        {
+            return metrics.path("cachedTokens").asLong();
+        }
         return 0L;
     }
 
@@ -1091,6 +1175,14 @@ public class LocalRunJsonStorageService
                         }
                         actionsArr.add(actObj);
                     }
+                }
+                if (stepNode.has("llmCalls"))
+                {
+                    stepObj.set("llmCalls", stepNode.get("llmCalls"));
+                }
+                if (stepNode.has("subSteps"))
+                {
+                    stepObj.set("subSteps", stepNode.get("subSteps"));
                 }
                 stepObj.set("actions", actionsArr);
                 targetArray.add(stepObj);

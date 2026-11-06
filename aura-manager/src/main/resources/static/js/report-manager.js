@@ -2081,16 +2081,39 @@ function syncRowAiUsage(row) {
 
     let allLlmCalls = [];
     if (blocksObj) {
-        if (Array.isArray(blocksObj.llmCalls) && blocksObj.llmCalls.length > 0) {
-            allLlmCalls = blocksObj.llmCalls;
-        } else {
-            const allSteps = [...(blocksObj.before || []), ...(blocksObj.steps || []), ...(blocksObj.after || [])];
-            allSteps.forEach(s => {
+        const seenCalls = new Set();
+        const addCall = (c) => {
+            if (!c || typeof c !== 'object') return;
+            const key = (c.id || '') + '|' + (c.stepIndex !== undefined ? c.stepIndex : '') + '|'
+                + (c.subStepIndex !== undefined ? c.subStepIndex : '') + '|' + (c.modelName || '') + '|'
+                + (c.capability || '') + '|' + (c.inputTokens || 0) + '|' + (c.outputTokens || 0) + '|'
+                + (c.durationMs || 0) + '|' + ((c.userPrompt || '').substring(0, 30));
+            if (!seenCalls.has(key)) {
+                seenCalls.add(key);
+                allLlmCalls.push(c);
+            }
+        };
+
+        if (Array.isArray(blocksObj.llmCalls)) {
+            blocksObj.llmCalls.forEach(addCall);
+        }
+
+        const collectFromSteps = (steps) => {
+            if (!Array.isArray(steps)) return;
+            steps.forEach(s => {
+                if (!s) return;
                 if (Array.isArray(s.llmCalls)) {
-                    allLlmCalls.push(...s.llmCalls);
+                    s.llmCalls.forEach(addCall);
+                }
+                if (Array.isArray(s.subSteps)) {
+                    collectFromSteps(s.subSteps);
                 }
             });
-        }
+        };
+
+        collectFromSteps(blocksObj.before);
+        collectFromSteps(blocksObj.steps);
+        collectFromSteps(blocksObj.after);
     }
 
     let calcLlmCalls = 0;
@@ -2201,18 +2224,22 @@ function stopLiveStepRefreshTimer() {
 
 function extractBlocksJson(execDto) {
     if (!execDto) return null;
-    if (typeof execDto.blocksJson === 'string' && execDto.blocksJson !== '{}' && execDto.blocksJson !== 'null' && execDto.blocksJson.trim().length > 0) {
-        return execDto.blocksJson;
-    }
     if (execDto.blocks) {
         try {
             // Guard against Jackson ObjectNode POJO metadata leak (where nodeType/containerNode are serialized instead of step data)
             if (typeof execDto.blocks === 'object' && execDto.blocks.nodeType && !execDto.blocks.steps && !execDto.blocks.before) {
                 return null;
             }
-            const str = typeof execDto.blocks === 'string' ? execDto.blocks : JSON.stringify(execDto.blocks);
+            let bObj = typeof execDto.blocks === 'string' ? JSON.parse(execDto.blocks) : Object.assign({}, execDto.blocks);
+            if (execDto.llmCalls && Array.isArray(execDto.llmCalls) && (!bObj.llmCalls || !bObj.llmCalls.length)) {
+                bObj.llmCalls = execDto.llmCalls;
+            }
+            const str = JSON.stringify(bObj);
             if (str && str !== '{}' && str !== 'null' && str.trim().length > 0) return str;
         } catch (e) {}
+    }
+    if (typeof execDto.blocksJson === 'string' && execDto.blocksJson !== '{}' && execDto.blocksJson !== 'null' && execDto.blocksJson.trim().length > 0) {
+        return execDto.blocksJson;
     }
     return null;
 }
@@ -2338,6 +2365,12 @@ function startLiveStepRefreshTimer(activeRow) {
                     else if (execDto.videoPath) currentActiveEl.setAttribute('data-video-url', execDto.videoPath);
                     if (execDto.llmResponsibilityJson) currentActiveEl.setAttribute('data-llm-responsibility', execDto.llmResponsibilityJson);
                     if (execDto.contextLevelCountsJson) currentActiveEl.setAttribute('data-context-level-counts', execDto.contextLevelCountsJson);
+                    if (execDto.inputTokensCount !== undefined && execDto.inputTokensCount !== null) currentActiveEl.setAttribute('data-input-tokens', execDto.inputTokensCount);
+                    if (execDto.outputTokensCount !== undefined && execDto.outputTokensCount !== null) currentActiveEl.setAttribute('data-output-tokens', execDto.outputTokensCount);
+                    if (execDto.cachedTokensCount !== undefined && execDto.cachedTokensCount !== null) currentActiveEl.setAttribute('data-cached-tokens', execDto.cachedTokensCount);
+                    if (execDto.totalTokensCount !== undefined && execDto.totalTokensCount !== null) currentActiveEl.setAttribute('data-total-tokens', execDto.totalTokensCount);
+                    if (execDto.llmCallsCount !== undefined && execDto.llmCallsCount !== null) currentActiveEl.setAttribute('data-llm-calls', execDto.llmCallsCount);
+                    if (execDto.estimatedCostUsd) currentActiveEl.setAttribute('data-est-cost', execDto.estimatedCostUsd);
 
                     const liveLinter = extractFindingsArray(execDto.linterFindings).length > 0
                         ? extractFindingsArray(execDto.linterFindings)
@@ -3658,6 +3691,12 @@ function renderStepsForExecution(activeRow) {
                         else if (execDto.videoPath) activeRow.setAttribute('data-video-url', execDto.videoPath);
                         if (execDto.llmResponsibilityJson) activeRow.setAttribute('data-llm-responsibility', execDto.llmResponsibilityJson);
                         if (execDto.contextLevelCountsJson) activeRow.setAttribute('data-context-level-counts', execDto.contextLevelCountsJson);
+                        if (execDto.inputTokensCount !== undefined && execDto.inputTokensCount !== null) activeRow.setAttribute('data-input-tokens', execDto.inputTokensCount);
+                        if (execDto.outputTokensCount !== undefined && execDto.outputTokensCount !== null) activeRow.setAttribute('data-output-tokens', execDto.outputTokensCount);
+                        if (execDto.cachedTokensCount !== undefined && execDto.cachedTokensCount !== null) activeRow.setAttribute('data-cached-tokens', execDto.cachedTokensCount);
+                        if (execDto.totalTokensCount !== undefined && execDto.totalTokensCount !== null) activeRow.setAttribute('data-total-tokens', execDto.totalTokensCount);
+                        if (execDto.llmCallsCount !== undefined && execDto.llmCallsCount !== null) activeRow.setAttribute('data-llm-calls', execDto.llmCallsCount);
+                        if (execDto.estimatedCostUsd) activeRow.setAttribute('data-est-cost', execDto.estimatedCostUsd);
 
                         const linterArray = extractFindingsArray(execDto.linterFindings).length > 0
                             ? extractFindingsArray(execDto.linterFindings)
@@ -4791,16 +4830,20 @@ window.contextLevelClass = contextLevelClass;
 
 function renderLlmResponsibilityRows(llmTbody, responsibilityJson, fallback) {
     const labels = [
-        { key: 'total',        label: 'Total',                                                       total: true  },
-        { key: 'action',       label: 'Action (Standard Generation)',                                total: false },
-        { key: 'pesap',        label: 'PESAP (Pre-Execution Semantic Anchor)',                        total: false },
-        { key: 'judge',        label: 'Self-Judging Validation',                                      total: false },
-        { key: 'verification', label: 'Semantic Outcome Verification',                                total: false },
-        { key: 'visualRca',    label: 'Visual Root Cause Analysis (RCA)',                             total: false }
+        { key: 'total',            label: 'Total',                                                       total: true  },
+        { key: 'action',           label: 'Action (Standard Generation)',                                total: false },
+        { key: 'judge',            label: 'Self-Judging Validation',                                      total: false },
+        { key: 'verification',     label: 'Semantic Outcome Verification',                                total: false },
+        { key: 'visualRca',        label: 'Visual Root Cause Analysis (RCA)',                             total: false },
+        { key: 'linter',           label: 'Playbook Pre-Flight Linter',                                  total: false },
+        { key: 'postFlightLinter', label: 'Playbook Post-Flight Linter',                                 total: false }
     ];
     const buckets = parseResponsibilityBuckets(responsibilityJson);
     if (buckets) {
-        llmTbody.innerHTML = labels.map(({ key, label, total }) => {
+        llmTbody.innerHTML = labels.filter(({ key, total }) => {
+            if (total || key === 'action' || key === 'judge' || key === 'verification' || key === 'visualRca') return true;
+            return buckets[key] && buckets[key].calls > 0;
+        }).map(({ key, label, total }) => {
             const b = buckets[key] || { calls: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, totalTokens: 0, estimatedCostUsd: 0 };
             return renderResponsibilityRow(label, b, total);
         }).join('');
@@ -4812,25 +4855,71 @@ function renderLlmResponsibilityRows(llmTbody, responsibilityJson, fallback) {
 function parseResponsibilityBuckets(json) {
     if (!json) return null;
     try {
-        const obj = JSON.parse(json);
+        const obj = (typeof json === 'object') ? json : JSON.parse(json);
         if (!obj || typeof obj !== 'object') return null;
-        const required = ['total', 'action', 'pesap', 'judge', 'verification', 'visualRca'];
-        for (let i = 0; i < required.length; i++) {
-            if (!obj[required[i]] || typeof obj[required[i]] !== 'object') return null;
-        }
+
+        const target = (obj.categories && typeof obj.categories === 'object') ? obj.categories : obj;
+
+        const knownKeys = ['total', 'action', 'judge', 'verification', 'visualRca', 'linter', 'postFlightLinter'];
         const normalized = {};
-        for (let i = 0; i < required.length; i++) {
-            const k = required[i];
-            const src = obj[k];
-            normalized[k] = {
-                calls:           Number(src.calls)           || 0,
-                inputTokens:     Number(src.inputTokens)     || 0,
-                outputTokens:    Number(src.outputTokens)    || 0,
-                cachedTokens:    Number(src.cachedTokens)    || 0,
-                totalTokens:     Number(src.totalTokens)     || 0,
-                estimatedCostUsd:Number(src.estimatedCostUsd)|| 0
+        let foundAny = false;
+
+        knownKeys.forEach(k => {
+            if (target[k] && typeof target[k] === 'object') {
+                const src = target[k];
+                normalized[k] = {
+                    calls:           Number(src.calls)           || 0,
+                    inputTokens:     Number(src.inputTokens)     || 0,
+                    outputTokens:    Number(src.outputTokens)    || 0,
+                    cachedTokens:    Number(src.cachedTokens)    || 0,
+                    totalTokens:     Number(src.totalTokens)     || 0,
+                    estimatedCostUsd:Number(src.estimatedCostUsd)|| 0
+                };
+                foundAny = true;
+            }
+        });
+
+        Object.keys(target).forEach(k => {
+            if (!normalized[k] && target[k] && typeof target[k] === 'object' && k !== 'pesap') {
+                const src = target[k];
+                if (src.calls !== undefined || src.totalTokens !== undefined || src.inputTokens !== undefined) {
+                    normalized[k] = {
+                        calls:           Number(src.calls)           || 0,
+                        inputTokens:     Number(src.inputTokens)     || 0,
+                        outputTokens:    Number(src.outputTokens)    || 0,
+                        cachedTokens:    Number(src.cachedTokens)    || 0,
+                        totalTokens:     Number(src.totalTokens)     || 0,
+                        estimatedCostUsd:Number(src.estimatedCostUsd)|| 0
+                    };
+                    foundAny = true;
+                }
+            }
+        });
+
+        if (!foundAny) return null;
+
+        if (!normalized.total) {
+            let totCalls = 0, totIn = 0, totOut = 0, totCac = 0, totTok = 0, totCost = 0;
+            Object.keys(normalized).forEach(k => {
+                if (k !== 'total') {
+                    totCalls += normalized[k].calls;
+                    totIn += normalized[k].inputTokens;
+                    totOut += normalized[k].outputTokens;
+                    totCac += normalized[k].cachedTokens;
+                    totTok += normalized[k].totalTokens;
+                    totCost += normalized[k].estimatedCostUsd;
+                }
+            });
+            normalized.total = {
+                calls: totCalls,
+                inputTokens: totIn,
+                outputTokens: totOut,
+                cachedTokens: totCac,
+                totalTokens: totTok || (totIn + totOut),
+                estimatedCostUsd: totCost
             };
         }
+
         return normalized;
     } catch (e) {
         return null;
@@ -4857,7 +4946,7 @@ function renderResponsibilityRow(label, bucket, isTotal) {
 
 function renderHeuristicLlmRows(fallback) {
     const f = fallback || { totalCalls: 0, totalTokens: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, cost: 0 };
-    const cost = Number(f.cost) || 0;
+    const cost = Number(f.cost !== undefined ? f.cost : (f.totalCost || 0)) || 0;
     return `
         <tr style="font-weight: 700; background: var(--bg-hover);">
             <td style="padding: 0.35rem 0.6rem;">Total</td>
@@ -4870,21 +4959,12 @@ function renderHeuristicLlmRows(fallback) {
         </tr>
         <tr>
             <td style="padding: 0.35rem 0.6rem;">Action (Standard Generation)</td>
-            <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.ceil((f.totalCalls || 0) * 0.5)}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.totalTokens || 0) * 0.92).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.inputTokens || 0) * 0.92).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.outputTokens || 0) * 0.92).toLocaleString()}</td>
+            <td style="text-align: center; padding: 0.35rem 0.6rem;">${(f.totalCalls || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.totalTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.inputTokens || 0).toLocaleString()}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.outputTokens || 0).toLocaleString()}</td>
             <td style="text-align: right; padding: 0.35rem 0.6rem;">${(f.cachedTokens || 0).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(cost * 0.92).toFixed(4)}</td>
-        </tr>
-        <tr>
-            <td style="padding: 0.35rem 0.6rem;">PESAP (Pre-Execution Semantic Anchor)</td>
-            <td style="text-align: center; padding: 0.35rem 0.6rem;">${Math.floor((f.totalCalls || 0) * 0.5)}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.totalTokens || 0) * 0.08).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.inputTokens || 0) * 0.08).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">${Math.floor((f.outputTokens || 0) * 0.08).toLocaleString()}</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;">0</td>
-            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${(cost * 0.08).toFixed(4)}</td>
+            <td style="text-align: right; padding: 0.35rem 0.6rem;" class="text-accent">$${cost.toFixed(4)}</td>
         </tr>
     `;
 }
