@@ -1,3 +1,21 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 package com.xceptance.aura.mcp.service;
 
 import com.xceptance.aura.mcp.dto.DistilledFailureDto;
@@ -80,5 +98,83 @@ public class SeleniumErrorDistillerTest
         final DistilledFailureDto result = distiller.distill("LargeTraceTest", hugeTrace.toString(), List.of());
         Assertions.assertTrue(result.getCleanedStackTrace().length() <= 1500, "Must be capped at 1,500 chars");
         Assertions.assertTrue(result.getCleanedStackTrace().endsWith("... [TRUNCATED]"));
+    }
+
+    @Test
+    public void testExtractDomSnippetVariousTags()
+    {
+        final String rawErrorSelect = """
+            org.openqa.selenium.ElementNotInteractableException: element not interactable
+              (Session info: chrome=122.0.6261.94)
+            Element: <select name="country" class="form-select" id="country-picker">
+            at com.xceptance.neodymium.util.Neodymium.find(Neodymium.java:85)
+            """;
+        final DistilledFailureDto resultSelect = distiller.distill("SelectTest", rawErrorSelect, List.of());
+        Assertions.assertNotNull(resultSelect.getDomSnippet());
+        Assertions.assertEquals("<select name=\"country\" class=\"form-select\" id=\"country-picker\">", resultSelect.getDomSnippet());
+
+        final String rawErrorTextarea = """
+            org.openqa.selenium.NoSuchElementException: could not find element
+            <textarea id="comments" rows="5"></textarea>
+            """;
+        final DistilledFailureDto resultTextarea = distiller.distill("TextareaTest", rawErrorTextarea, List.of());
+        Assertions.assertNotNull(resultTextarea.getDomSnippet());
+        Assertions.assertEquals("<textarea id=\"comments\" rows=\"5\">", resultTextarea.getDomSnippet());
+
+        final String rawErrorAnchor = """
+            org.openqa.selenium.ElementClickInterceptedException: element click intercepted
+            <a href="/login" class="nav-link">
+            """;
+        final DistilledFailureDto resultAnchor = distiller.distill("AnchorTest", rawErrorAnchor, List.of());
+        Assertions.assertNotNull(resultAnchor.getDomSnippet());
+        Assertions.assertEquals("<a href=\"/login\" class=\"nav-link\">", resultAnchor.getDomSnippet());
+
+        final String rawErrorAnchorBoolean = """
+            org.openqa.selenium.ElementClickInterceptedException: element click intercepted
+            <a download>
+            """;
+        final DistilledFailureDto resultAnchorBoolean = distiller.distill("AnchorBooleanTest", rawErrorAnchorBoolean, List.of());
+        Assertions.assertNotNull(resultAnchorBoolean.getDomSnippet());
+        Assertions.assertEquals("<a download>", resultAnchorBoolean.getDomSnippet());
+
+        final String rawErrorParagraph = """
+            org.openqa.selenium.NoSuchElementException: could not find element
+            <p hidden>
+            """;
+        final DistilledFailureDto resultParagraph = distiller.distill("ParagraphTest", rawErrorParagraph, List.of());
+        Assertions.assertNotNull(resultParagraph.getDomSnippet());
+        Assertions.assertEquals("<p hidden>", resultParagraph.getDomSnippet());
+
+        final String rawErrorIcon = """
+            org.openqa.selenium.ElementClickInterceptedException: element click intercepted
+            <i class="fa fa-trash">
+            """;
+        final DistilledFailureDto resultIcon = distiller.distill("IconTest", rawErrorIcon, List.of());
+        Assertions.assertNotNull(resultIcon.getDomSnippet());
+        Assertions.assertEquals("<i class=\"fa fa-trash\">", resultIcon.getDomSnippet());
+
+        final String rawErrorCustomElement = """
+            org.openqa.selenium.NoSuchElementException: element: <custom-card id="user-123" class="active"> is not attached
+            """;
+        final DistilledFailureDto resultCustomElement = distiller.distill("CustomElementTest", rawErrorCustomElement, List.of());
+        Assertions.assertNotNull(resultCustomElement.getDomSnippet());
+        Assertions.assertEquals("<custom-card id=\"user-123\" class=\"active\">", resultCustomElement.getDomSnippet());
+    }
+
+    @Test
+    public void testIgnoreJavaGenericsAndConstructorsInDomSnippet()
+    {
+        final String rawErrorJava = """
+            java.lang.NoSuchMethodError: java.util.List<String> com.example.Service.getItems()
+            at java.base/java.lang.reflect.Constructor.newInstanceWithCaller(Constructor.java:502)
+            at com.xceptance.neodymium.MyClass.<init>(MyClass.java:24)
+            at com.example.GenericService.process(GenericService.java:50)
+            Caused by: java.lang.ClassCastException: class java.util.Map<A, B> cannot be cast to List<A>
+            at com.example.Handler.<P>handle(Handler.java:12)
+            at com.example.TableHandler.process(TableHandler.java:99) [List<TD>, Pair<TR, TH>, Collection<LI>]
+            at com.example.BoundedHandler.map(BoundedHandler.java:42) [List<A extends Number>, Map<P extends Serializable, Object>, List<TD super Object>]
+            """;
+        final DistilledFailureDto result = distiller.distill("GenericsTest", rawErrorJava, List.of());
+        Assertions.assertNull(result.getDomSnippet(), "Java generics and constructors should not be parsed as DOM snippets");
     }
 }

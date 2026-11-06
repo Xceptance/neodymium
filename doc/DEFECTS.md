@@ -41,6 +41,95 @@ When recording a defect, add a new entry directly under the [Active Defect Recor
 
 ## Active Defect Records
 
+### [DEF-20261106-03] MCP Diagnostic & Error Distiller: Unclassified Locator Filter Mismatch & Generic DOM Regex False Positives
+- **Date:** 2026-11-06
+- **Component:** `aura-manager` (`AuraDiagnosticServiceImpl`, `SeleniumErrorDistiller`)
+- **Scope:** `Framework`
+- **Symptom:**
+  1. `AuraDiagnosticServiceImpl.getRunFailures()` with filter `category="UNCLASSIFIED"` or `"UNKNOWN"` silently omitted unclassified failures that had extracted locators appended (e.g. `UNCLASSIFIED_ERROR: By.id: btn`).
+  2. `SeleniumErrorDistiller` extracted Java generic type parameters (`List<A>`, `<P>`, `List<TD>`, `Pair<TR, TH>`, `Collection<LI>`, `<A extends Number>`, `<P extends Serializable>`) from stack traces as DOM snippets due to case-insensitive word-boundary matching on short tag names.
+  3. `SeleniumErrorDistiller` failed to extract valid HTML elements having boolean or valueless attributes (e.g. `<a download>`, `<p hidden>`), icon tags (`<i class="...">`), or custom Web Components output by Selenium (`element: <custom-tag>`).
+- **Root Cause:**
+  `UNCLASSIFIED` / `UNKNOWN` filters performed exact equality checks against category rather than prefix matching; `DOM_SNIPPET_PATTERN` evaluated short/single/two-letter tags with case-insensitive whitespace matching without constraining attribute syntax, and dropped the explicit `element:` prefix matcher.
+- **Detection Gap ("What did we miss?"):**
+  Previous tests for `getRunFailures` tested categorized errors (`ELEMENT_NOT_FOUND`, `TIMEOUT`) rather than unclassified errors with locator attachments; generic type parameters in stack traces were tested without bounded type parameters (`<A extends ...>`); DOM snippet tests did not cover boolean valueless HTML attributes or custom web components.
+- **Resolution:**
+  1. Added symmetric `UNCLASSIFIED` and `UNKNOWN` prefix-matching and category prefix-matching for failure clusters in `AuraDiagnosticServiceImpl.getRunFailures()`.
+  2. Refactored `DOM_SNIPPET_PATTERN` in `SeleniumErrorDistiller` to restore `element:?\s*<[^>]+>`, enforce lowercase matching for short tags (`a`, `p`, `tr`, `td`, `th`, `li`, `ul`, `ol`, `i`, `b`), and require explicit `=` attributes for uppercase short tags, strictly eliminating Java generic type bounds while capturing boolean attributes and custom Web Components.
+  3. Removed unreachable dead code in `AuraDiagnosticServiceImpl.getRunStatus()` where `coordinatorStatus.equalsIgnoreCase("ENQUEUED")` was evaluated twice.
+- **Safety Net Added:**
+  - `AuraDiagnosticServiceTest.testGetRunFailuresFilteringByUnclassifiedWithLocator`
+  - `SeleniumErrorDistillerTest.testIgnoreJavaGenericsAndConstructorsInDomSnippet`
+  - `SeleniumErrorDistillerTest.testExtractDomSnippetVariousElements`
+
+### [DEF-20261106-02] MCP Server & Diagnostic Manager: Incomplete Suite Cancellation, Self-Test Socket Leak, Pass Metric Inconsistency, Fragile DOM Tag Matching, Entropy Explosion & Phantom Statuses
+- **Date:** 2026-11-06
+- **Component:** `aura-manager` (`McpExecutionCoordinator`, `AuraTestSettingsController`, `AuraDiagnosticServiceImpl`, `SeleniumErrorDistiller`, `AdaptivePayloadReporter`, `AuraExecutionServiceImpl`)
+- **Scope:** `Framework`
+- **Symptom:**
+  1. Cancelling an MCP-dispatched test suite run (`cancel_run`) only skipped the single active test batch rather than aborting the entire suite, allowing subsequent tests in the suite queue to continue executing.
+  2. `AuraTestSettingsController.runMcpSelfTest()` used `BodyHandlers.ofInputStream()` without reading or closing the response input stream, risking socket and connection pool leaks.
+  3. Tests healed by AI (`fixedCount`) were counted as passed in pass-rate calculations, but omitted from `passed` in `RunStatusResponseDto.getMetrics()`, causing `passed + failed + skipped != total`.
+  4. Cancelling an active test run caused `AuraDiagnosticServiceImpl.getRunStatus()` to return `NOT_FOUND` if report files were not yet written.
+  5. `SeleniumErrorDistiller` DOM snippet extraction was restricted to a static array of only 7 HTML tags (omitting `<select>`, `<form>`, `<textarea>`, `<table>`, etc.).
+  6. Varied element locators appended to cluster categories in `SeleniumErrorDistiller` caused `AdaptivePayloadReporter` to split single-root-cause failures into dozens of distinct clusters, erroneously triggering the `HighEntropyNotice` token safeguard.
+  7. `AuraExecutionServiceImpl.dispatchRun()` and `dispatchSuite()` launched doomed background executions when playbook files were missing or unresolvable instead of failing fast with `ERROR`.
+  8. `AuraExecutionServiceImpl.cancelRun()` returned phantom `ALREADY_COMPLETED` when queried with arbitrary non-existent run IDs while the queue runner was idle.
+- **Root Cause:**
+  `McpExecutionCoordinator.cancelRun()` called `queueService.stopCurrentTest()` instead of `stopProcess()`; self-test HTTP request discarded response bodies via unclosed `InputStream`; metric arithmetic omitted `fixedCount` from passed totals; cancelled runs with empty reports fell back to `NOT_FOUND`; DOM extraction used hardcoded 7-tag search rather than comprehensive tag regex; failure clustering grouped by locator-qualified category instead of root category; dispatch methods fell back to raw paths when resolution returned null; cancelRun defaulted to `alreadyCompleted` when queue was idle without verifying run registry.
+- **Detection Gap ("What did we miss?"):**
+  Previous test cases simulated single-test cancellations rather than multi-test suite queues, mock reports did not assert `passed + failed + skipped == total`, and tests did not assert high-entropy clustering behavior under varied locators for the same root cause.
+- **Resolution:**
+  1. Updated `McpExecutionCoordinator.cancelRun()` to call `queueService.stopProcess()`.
+  2. Switched `AuraTestSettingsController.runMcpSelfTest()` to `BodyHandlers.discarding()`.
+  3. Added `report.getFixedCount()` to passed metric aggregation in `AuraDiagnosticServiceImpl.getRunStatus()`.
+  4. Preserved coordinator `CANCELLED` status in `AuraDiagnosticServiceImpl.getRunStatus()` when report is empty.
+  5. Replaced fragile tag array in `SeleniumErrorDistiller` with comprehensive `DOM_SNIPPET_PATTERN`.
+  6. Updated `AdaptivePayloadReporter` to cluster failures by root category (splitting on `:`).
+  7. Added fast-fail check in `AuraExecutionServiceImpl.dispatchRun()` and `dispatchSuite()` when playbook resolution returns null.
+  8. Verified run status in coordinator registry before returning `ALREADY_COMPLETED` in `AuraExecutionServiceImpl.cancelRun()`.
+- **Safety Net Added:**
+  Regression tests added in:
+  - `McpExecutionCoordinatorTest.testCancelRunAbortsSuiteExecution`
+  - `SeleniumErrorDistillerTest.testExtractDomSnippetVariousTags` and `testIgnoreJavaGenericsAndConstructorsInDomSnippet`
+  - `AdaptivePayloadReporterTest.testClusteringByRootCategoryPreventsEntropyExplosion`
+  - `AuraExecutionServiceTest.testDispatchRunPlaybookNotFound`, `testDispatchSuitePlaybookNotFound`, and `testCancelRunWhenNotFoundAndQueueIdle`
+  - `AuraDiagnosticServiceTest.testGetRunStatusExcludesHealedFromFailures`, `testGetRunStatusWhenCancelledWithoutReport`, and `testGetRunStatusWhenSkippedOnly`
+
+### [DEF-20261106-01] MCP Server & Manager Execution: Queue Deadlock, Collateral Process Termination, Status Aggregation & Security Hardening
+- **Date:** 2026-11-06
+- **Component:** `neodymium-core` (`AuraQueueService`, `AuraFileService`), `aura-manager` (`AuraExecutionServiceImpl`, `AuraDiagnosticServiceImpl`, `SeleniumErrorDistiller`, `McpExecutionCoordinator`, `McpSecurityInterceptor`)
+- **Scope:** `Framework`
+- **Symptom:**
+  1. Chained/sequential test runs triggered from MCP coordinators deadlocked or failed immediately because `AuraQueueService` fired completion listeners prior to resetting its internal `runningQueue` state to `false`.
+  2. Attempting to cancel an inactive or already completed run ID via `cancel_run` inadvertently killed whatever unrelated test execution was currently active in the queue runner.
+  3. Tests automatically healed by AI were counted in the failure tally within `AuraDiagnosticServiceImpl.getRunStatus()`, triggering false "FAILED" badges on test runs where failures had been healed.
+  4. Category filtering in `AuraDiagnosticServiceImpl.getRunFailures()` failed to match clustered failure categories containing specific selectors (e.g. `ELEMENT_NOT_FOUND: #btn`).
+  5. The DOM snippet extractor in `SeleniumErrorDistiller` matched generic opening brackets (`<`) at the start of stack traces (such as `List<String>`) rather than actual HTML tags.
+  6. Dynamic port allocation (`server.port=0`) in test or ephemeral environments was ignored by `McpExecutionCoordinator` when constructing internal execution URLs.
+  7. `McpSecurityInterceptor` did not protect `/sse` and `/sse/**` routes, permitted unauthenticated remote network traffic when no token was configured, and compared tokens using standard `String.equals()` rather than constant-time byte comparison.
+  8. Path traversal validation in `AuraFileService` used un-normalized string prefix checks, and repeated directory lookups caused excessive disk I/O.
+- **Root Cause:**
+  Listeners were triggered synchronously in `AuraQueueService` before state flags were cleared; `AuraExecutionServiceImpl.cancelRun` failed to verify that the specified `runId` matched the active run before stopping the process; healed tests (`fixedCount`) were aggregated into `failed`; category matching was strict equality instead of prefix-aware; DOM extraction lacked tag marker validation; security interceptor path patterns omitted SSE routes and lacked loopback-only gating for default local mode.
+- **Detection Gap ("What did we miss?"):**
+  Existing unit tests relied on static mocks that did not simulate synchronous re-invocation inside listener callbacks or multi-run concurrent queuing, and tests did not assert remote address validation.
+- **Resolution:**
+  1. Relocated `onRunCompletedListeners` execution to the `finally` block in `AuraQueueService` after `runningQueue.set(false)` and `activeFile.set("")`.
+  2. Required active `runId` verification before terminating processes in `AuraExecutionServiceImpl.cancelRun()`.
+  3. Excluded `fixedCount` from failed totals and run status calculation in `AuraDiagnosticServiceImpl`.
+  4. Added prefix matching for clustered failure categories in `AuraDiagnosticServiceImpl`.
+  5. Restricted DOM snippet extraction in `SeleniumErrorDistiller` to recognized HTML tag markers.
+  6. Implemented `ApplicationListener<WebServerInitializedEvent>` in `McpExecutionCoordinator` to bind dynamic ports.
+  7. Added `/sse/**` interceptor mapping, constant-time `MessageDigest.isEqual` comparison, and loopback gating in `McpSecurityInterceptor`.
+  8. Normalized path validation using `Path.normalize()` in `AuraFileService` with cached resources directory.
+- **Safety Net Added:**
+  Regression tests added in:
+  - `AuraQueueServiceTest.testRunCompletedListenerObservesIdleQueue`
+  - `AuraExecutionServiceTest.testCancelRunWhenActiveRunDiffersDoesNotKillProcess`
+  - `AuraDiagnosticServiceTest.testGetRunStatusExcludesHealedFromFailures`
+  - `McpSecurityInterceptorTest.testPreHandleWhenNoTokenConfiguredAndRemoteClientRejected`
+  - `AuraMcpToolServiceTest.testCancelRunWhenActiveRunDiffersReturnsNotFound`
+
 ### [DEF-20261019-01] MCP Manager Self-Test Fails Under STATELESS Protocol Due to Fallback to SSE GET
 - **Date:** 2026-10-19
 - **Component:** `aura-manager` (`AuraTestSettingsController` / `mcp-transport`)

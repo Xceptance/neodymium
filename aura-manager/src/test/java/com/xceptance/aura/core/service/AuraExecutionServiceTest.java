@@ -51,6 +51,8 @@ public class AuraExecutionServiceTest
         queueService = Mockito.mock(AuraQueueService.class);
         allowlistValidator = new HostAllowlistValidator();
         playbookService = Mockito.mock(AuraPlaybookService.class);
+        Mockito.when(playbookService.resolvePlaybookPath(Mockito.anyString()))
+            .thenAnswer(inv -> inv.getArgument(0));
         executionService = new AuraExecutionServiceImpl(coordinator, queueService, allowlistValidator, playbookService);
     }
 
@@ -111,16 +113,56 @@ public class AuraExecutionServiceTest
     public void testCancelRunWhenActive()
     {
         Mockito.when(queueService.isRunningQueue()).thenReturn(true);
+        Mockito.when(queueService.getCurrentRunId()).thenReturn("run_001");
         final var res = executionService.cancelRun("run_001");
         Assertions.assertEquals("CANCELLED", res.getStatus().name());
         Mockito.verify(queueService).stopProcess();
     }
 
     @Test
+    public void testCancelRunWhenActiveRunDiffersDoesNotKillProcess()
+    {
+        Mockito.when(queueService.isRunningQueue()).thenReturn(true);
+        Mockito.when(queueService.getCurrentRunId()).thenReturn("run_001");
+        final var res = executionService.cancelRun("run_999_different");
+        Assertions.assertEquals("NOT_FOUND", res.getStatus().name());
+        Mockito.verify(queueService, Mockito.never()).stopProcess();
+    }
+
+    @Test
+    public void testDispatchRunPlaybookNotFound()
+    {
+        Mockito.when(playbookService.resolvePlaybookPath("tests/Missing.yaml")).thenReturn(null);
+        final ExecutionLaunchResultDto res = executionService.dispatchRun("tests/Missing.yaml", null, null);
+        Assertions.assertEquals("ERROR", res.getStatus());
+        Assertions.assertTrue(res.getMessage().contains("Test playbook not found"));
+    }
+
+    @Test
+    public void testDispatchSuitePlaybookNotFound()
+    {
+        Mockito.when(playbookService.resolvePlaybookPath("tests/Missing.yaml")).thenReturn(null);
+        final ExecutionLaunchResultDto res = executionService.dispatchSuite(List.of("tests/Login.yaml", "tests/Missing.yaml"), null);
+        Assertions.assertEquals("ERROR", res.getStatus());
+        Assertions.assertTrue(res.getMessage().contains("Test playbook not found in suite"));
+    }
+
+    @Test
     public void testCancelRunWhenAlreadyCompleted()
     {
+        Mockito.when(coordinator.getRunStatus("run_001")).thenReturn("COMPLETED");
         Mockito.when(queueService.isRunningQueue()).thenReturn(false);
         final var res = executionService.cancelRun("run_001");
         Assertions.assertEquals("ALREADY_COMPLETED", res.getStatus().name());
+    }
+
+    @Test
+    public void testCancelRunWhenNotFoundAndQueueIdle()
+    {
+        Mockito.when(coordinator.getRunStatus("bogus_run")).thenReturn(null);
+        Mockito.when(queueService.isRunningQueue()).thenReturn(false);
+        final var res = executionService.cancelRun("bogus_run");
+        Assertions.assertEquals("NOT_FOUND", res.getStatus().name());
+        Assertions.assertTrue(res.getMessage().contains("was not found"));
     }
 }

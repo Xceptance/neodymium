@@ -290,6 +290,7 @@ public class AuraMcpToolService
         {
             case CANCELLED -> "CANCELLED";
             case ALREADY_COMPLETED -> "ALREADY_COMPLETED";
+            case NOT_FOUND -> "NOT_FOUND";
             default -> "ERROR";
         };
 

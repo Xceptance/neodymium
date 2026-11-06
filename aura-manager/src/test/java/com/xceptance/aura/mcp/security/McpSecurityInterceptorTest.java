@@ -63,12 +63,28 @@ public class McpSecurityInterceptorTest
     {
         properties.getAuth().setToken(null);
         final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("127.0.0.1");
         final MockHttpServletResponse response = new MockHttpServletResponse();
 
         final boolean allowed = interceptor.preHandle(request, response, new Object());
 
-        Assertions.assertTrue(allowed, "Requests must be allowed when no auth token is configured");
+        Assertions.assertTrue(allowed, "Loopback requests must be allowed when no auth token is configured");
         Assertions.assertEquals(HttpServletResponse.SC_OK, response.getStatus());
+    }
+
+    @Test
+    public void testPreHandleWhenNoTokenConfiguredAndRemoteClientRejected() throws Exception
+    {
+        properties.getAuth().setToken(null);
+        final MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setRemoteAddr("198.51.100.25");
+        final MockHttpServletResponse response = new MockHttpServletResponse();
+
+        final boolean allowed = interceptor.preHandle(request, response, new Object());
+
+        Assertions.assertFalse(allowed, "Remote requests without auth token configured must be rejected with 403 Forbidden");
+        Assertions.assertEquals(HttpServletResponse.SC_FORBIDDEN, response.getStatus());
+        Assertions.assertTrue(response.getContentAsString().contains("Remote MCP access requires an authentication token"));
     }
 
     @Test

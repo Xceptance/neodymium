@@ -69,11 +69,14 @@ public class AuraExecutionServiceImpl implements AuraExecutionService
         }
 
         final String resolvedPath = (playbookService != null) ? playbookService.resolvePlaybookPath(testPath) : testPath;
-        final String effectivePath = (resolvedPath != null) ? resolvedPath : testPath;
+        if (resolvedPath == null)
+        {
+            return ExecutionLaunchResultDto.error("Test playbook not found: " + testPath);
+        }
 
         try
         {
-            final McpExecutionCoordinator.DispatchResult dispatch = executionCoordinator.submitRun(effectivePath, browserProfile, dataset);
+            final McpExecutionCoordinator.DispatchResult dispatch = executionCoordinator.submitRun(resolvedPath, browserProfile, dataset);
             return new ExecutionLaunchResultDto(
                 dispatch.getRunId(),
                 dispatch.getStatus(),
@@ -104,7 +107,11 @@ public class AuraExecutionServiceImpl implements AuraExecutionService
                 return ExecutionLaunchResultDto.error("Invalid or unsafe test path in suite: " + path);
             }
             final String resolved = (playbookService != null) ? playbookService.resolvePlaybookPath(path) : path;
-            resolvedPaths.add((resolved != null) ? resolved : path);
+            if (resolved == null)
+            {
+                return ExecutionLaunchResultDto.error("Test playbook not found in suite: " + path);
+            }
+            resolvedPaths.add(resolved);
         }
 
         try
@@ -135,13 +142,30 @@ public class AuraExecutionServiceImpl implements AuraExecutionService
                 return AuraOperationResult.cancelled("Test run cancelled successfully.");
             }
 
+            final String activeRunId = queueService.getCurrentRunId();
+            if (queueService.isRunningQueue() && runId != null && runId.equals(activeRunId))
+            {
+                queueService.stopProcess();
+                return AuraOperationResult.cancelled("Test run cancelled successfully.");
+            }
+
+            final String coordinatorStatus = executionCoordinator.getRunStatus(runId);
+            if ("COMPLETED".equalsIgnoreCase(coordinatorStatus) || "CANCELLED".equalsIgnoreCase(coordinatorStatus))
+            {
+                return AuraOperationResult.alreadyCompleted("The run has already completed or was previously cancelled.");
+            }
+
+            if (coordinatorStatus == null && !queueService.isRunningQueue())
+            {
+                return AuraOperationResult.notFound("Run '" + runId + "' was not found.");
+            }
+
             if (!queueService.isRunningQueue())
             {
                 return AuraOperationResult.alreadyCompleted("The run has already completed or is not currently active.");
             }
 
-            queueService.stopProcess();
-            return AuraOperationResult.cancelled("Test run cancelled successfully.");
+            return AuraOperationResult.notFound("Run '" + runId + "' is not active (current active run is '" + activeRunId + "').");
         }
         catch (final Exception e)
         {

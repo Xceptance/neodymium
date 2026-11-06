@@ -24,7 +24,6 @@ import com.xceptance.aura.mcp.tool.AuraMcpToolService;
 import com.xceptance.neodymium.aura.AuraSettingsService;
 import com.xceptance.neodymium.aura.AuraSettingsService.SettingsDataDto;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.URI;
@@ -444,8 +443,8 @@ public class AuraTestSettingsController implements ApplicationListener<WebServer
                         .build();
             }
 
-            final HttpResponse<InputStream> httpResponse = client.send(
-                    request, HttpResponse.BodyHandlers.ofInputStream());
+            final HttpResponse<Void> httpResponse = client.send(
+                    request, HttpResponse.BodyHandlers.discarding());
 
             final int statusCode = httpResponse.statusCode();
             response.put("httpStatus", statusCode);

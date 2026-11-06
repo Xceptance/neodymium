@@ -989,19 +989,6 @@ public final class AuraQueueService
                 }
 
                 final String completedRunId = currentRunId.get();
-                for (final Consumer<String> listener : onRunCompletedListeners)
-                {
-                    try
-                    {
-                        LOGGER.info("[Aura Server] Notifying run completion listener for runId: {}", completedRunId);
-                        listener.accept(completedRunId);
-                    }
-                    catch (final Exception e)
-                    {
-                        LOGGER.error("[Aura Server] Error in onRunCompletedListener for runId {}: {}", completedRunId, e.getMessage(), e);
-                    }
-                }
-
                 final Map<String, Object> event = new HashMap<>();
                 event.put("type", "reportReady");
                 event.put("reportId", completedRunId);
@@ -1061,6 +1048,20 @@ public final class AuraQueueService
                 }
                 runningQueue.set(false);
                 activeFile.set("");
+
+                final String completedRunId = currentRunId.get();
+                for (final Consumer<String> listener : onRunCompletedListeners)
+                {
+                    try
+                    {
+                        LOGGER.info("[Aura Server] Notifying run completion listener for runId: {}", completedRunId);
+                        listener.accept(completedRunId);
+                    }
+                    catch (final Exception e)
+                    {
+                        LOGGER.error("[Aura Server] Error in onRunCompletedListener for runId {}: {}", completedRunId, e.getMessage(), e);
+                    }
+                }
             }
         });
         thread.setName("NeodymiumAuraQueueExecutor");

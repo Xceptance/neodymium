@@ -1,3 +1,21 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 package com.xceptance.aura.mcp.service;
 
 import com.xceptance.aura.mcp.dto.DistilledFailureDto;
@@ -22,6 +40,23 @@ public class SeleniumErrorDistiller
 
     private static final Pattern LOCATOR_PATTERN = Pattern.compile("(?i)(?:\"selector\"\\s*:\\s*\"([^\"]+)\"|By\\.[a-zA-Z0-9_]+:\\s*([^\\n\\r]+?)(?:\\s*\\(tried|\\s*\\(Session|$)|locator:\\s*([^\\n\\r]+)|element:\\s*<([^>]+)>)");
     private static final Pattern URL_PATTERN = Pattern.compile("(?i)(https?://[^\\s\"',]+)");
+    private static final Pattern DOM_SNIPPET_PATTERN = Pattern.compile(
+        "(?:"
+        // Explicit Selenium element prefix (captures all tags including custom Web Components):
+        + "element:?\\s*<[^>]+>"
+        + "|"
+        // Multi-character HTML tags that cannot collide with standard single or two-letter generics:
+        + "<(?:html|body|button|div|span|input|form|select|textarea|table|thead|tbody|tfoot|label|svg|section|header|nav|main|footer|dialog|img|h[1-6]|iframe|option|optgroup)\\b[^>]*>"
+        + "|"
+        // Short/single/two-letter tags in lowercase with any attribute, self-closing, or valueless (<a download>, <p hidden>, <i>, <i class="fa">).
+        // Prevents matching uppercase Java type parameters/generics in stack traces (<A>, <P>, <TD>, <TR>, <LI>, <A extends Number>).
+        + "(?-i:<(?:[apib]|t[rdh]|li|[uo]l)\\b[^>]*>)"
+        + "|"
+        // Legacy uppercase short tags requiring explicit attribute key-value syntax (<A HREF="...">, <A/>):
+        + "<(?:[apib]|t[rdh]|li|[uo]l)(?:\\s+[^>]*=[^>]*>|/>)"
+        + ")",
+        Pattern.CASE_INSENSITIVE
+    );
 
     /**
      * Distills a raw exception message, stack trace, and execution log into a compact DistilledFailureDto.
@@ -60,13 +95,15 @@ public class SeleniumErrorDistiller
         }
 
         // 3. Extract failing DOM snippet if present
-        if (safeRaw.contains("Element: <") || safeRaw.contains("<html") || safeRaw.contains("<button") || safeRaw.contains("<div"))
+        final Matcher domMatcher = DOM_SNIPPET_PATTERN.matcher(safeRaw);
+        if (domMatcher.find())
         {
-            final int startIdx = safeRaw.indexOf('<');
-            final int endIdx = safeRaw.indexOf('>', startIdx);
-            if (startIdx >= 0 && endIdx > startIdx)
+            final String match = domMatcher.group().trim();
+            final int startIdx = match.indexOf('<');
+            if (startIdx >= 0)
             {
-                dto.setDomSnippet(safeRaw.substring(startIdx, Math.min(endIdx + 1, startIdx + 200)));
+                final String tagContent = match.substring(startIdx);
+                dto.setDomSnippet(tagContent.substring(0, Math.min(tagContent.length(), 200)));
             }
         }
 

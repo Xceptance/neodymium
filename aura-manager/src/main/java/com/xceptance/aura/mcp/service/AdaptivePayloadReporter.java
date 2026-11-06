@@ -1,3 +1,21 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 package com.xceptance.aura.mcp.service;
 
 import com.xceptance.aura.mcp.dto.DistilledFailureDto;
@@ -69,12 +87,13 @@ public class AdaptivePayloadReporter
             return response;
         }
 
-        // 3. Cluster failures by category
+        // 3. Cluster failures by root category
         final Map<String, List<DistilledFailureDto>> clusterMap = new LinkedHashMap<>();
         for (final DistilledFailureDto f : safeFailures)
         {
-            final String category = (f.getClusterCategory() != null) ? f.getClusterCategory() : "UNKNOWN_FAILURE";
-            clusterMap.computeIfAbsent(category, k -> new ArrayList<>()).add(f);
+            final String rawCategory = (f.getClusterCategory() != null) ? f.getClusterCategory() : "UNKNOWN_FAILURE";
+            final String rootCategory = rawCategory.contains(":") ? rawCategory.substring(0, rawCategory.indexOf(':')).trim() : rawCategory;
+            clusterMap.computeIfAbsent(rootCategory, k -> new ArrayList<>()).add(f);
         }
 
         final int clusterCount = clusterMap.size();

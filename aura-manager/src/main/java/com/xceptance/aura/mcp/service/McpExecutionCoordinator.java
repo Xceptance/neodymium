@@ -1,3 +1,21 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 package com.xceptance.aura.mcp.service;
 
 import com.xceptance.neodymium.aura.AuraQueueService;
@@ -16,6 +34,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicLong;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.web.server.context.WebServerInitializedEvent;
+import org.springframework.context.ApplicationListener;
 
 /**
  * Coordinates asynchronous execution requests from MCP agents, managing a thread-safe
@@ -25,7 +45,7 @@ import org.springframework.beans.factory.annotation.Value;
  * @author Xceptance GmbH 2026
  */
 @Service
-public class McpExecutionCoordinator
+public class McpExecutionCoordinator implements ApplicationListener<WebServerInitializedEvent>
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(McpExecutionCoordinator.class);
 
@@ -33,6 +53,8 @@ public class McpExecutionCoordinator
 
     @Value("${server.port:8080}")
     private int serverPort = 8080;
+
+    private volatile int activeServerPort = -1;
 
     private final AtomicLong runCounter = new AtomicLong(0);
 
@@ -175,7 +197,7 @@ public class McpExecutionCoordinator
                 run.setStatus("CANCELLED");
             }
             LOGGER.info("[Aura MCP] Aborting active run '{}' via queueService.", runId);
-            queueService.stopCurrentTest();
+            queueService.stopProcess();
             return true;
         }
 
@@ -221,8 +243,18 @@ public class McpExecutionCoordinator
         }
     }
 
+    @Override
+    public void onApplicationEvent(final WebServerInitializedEvent event)
+    {
+        this.activeServerPort = event.getWebServer().getPort();
+    }
+
     private int getEffectiveServerPort()
     {
+        if (activeServerPort > 0)
+        {
+            return activeServerPort;
+        }
         return this.serverPort <= 0 ? 8080 : this.serverPort;
     }
 

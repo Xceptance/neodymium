@@ -160,9 +160,24 @@ public class AuraMcpToolServiceTest
 
         // Step 2: Call with valid token cancels run
         Mockito.when(queueService.isRunningQueue()).thenReturn(true);
+        Mockito.when(queueService.getCurrentRunId()).thenReturn("run_abc");
         final Map<String, Object> step2 = toolService.cancelRun("run_abc", token);
         Assertions.assertEquals("CANCELLED", step2.get("status"));
         Mockito.verify(queueService).stopProcess();
+    }
+
+    @Test
+    public void testCancelRunWhenActiveRunDiffersReturnsNotFound()
+    {
+        final Map<String, Object> step1 = toolService.cancelRun("run_different", null);
+        Assertions.assertEquals("CONFIRMATION_REQUIRED", step1.get("status"));
+        final String token = (String) step1.get("confirmationToken");
+
+        Mockito.when(queueService.isRunningQueue()).thenReturn(true);
+        Mockito.when(queueService.getCurrentRunId()).thenReturn("run_currently_active");
+        final Map<String, Object> step2 = toolService.cancelRun("run_different", token);
+        Assertions.assertEquals("NOT_FOUND", step2.get("status"));
+        Mockito.verify(queueService, Mockito.never()).stopProcess();
     }
 
     @Test

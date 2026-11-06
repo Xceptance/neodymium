@@ -102,20 +102,23 @@ public class AuraDiagnosticServiceImpl implements AuraDiagnosticService
             if (isEmptyReport)
             {
                 final boolean isRunning = "RUNNING".equalsIgnoreCase(coordinatorStatus);
+                final boolean isCancelled = "CANCELLED".equalsIgnoreCase(coordinatorStatus);
                 final RunStatusResponseDto fallback = new RunStatusResponseDto();
                 fallback.setRunId(runId);
-                fallback.setStatus(isRunning ? "RUNNING" : "NOT_FOUND");
+                fallback.setStatus(isRunning ? "RUNNING" : (isCancelled ? "CANCELLED" : "NOT_FOUND"));
                 fallback.setMetrics(new RunStatusResponseDto.MetricsDto(0, 0, 0, 0, 0L));
-                fallback.setSummary(isRunning ? "Test run is currently active." : "Test run not found.");
-                fallback.setNextSteps(isRunning ? "Poll get_status(runId=\"" + runId + "\") until completion." : "Verify runId parameter.");
+                fallback.setSummary(isRunning ? "Test run is currently active."
+                    : (isCancelled ? "Test run was cancelled before execution." : "Test run not found."));
+                fallback.setNextSteps(isRunning ? "Poll get_status(runId=\"" + runId + "\") until completion."
+                    : (isCancelled ? "No further action needed for cancelled run." : "Verify runId parameter."));
                 return fallback;
             }
 
             final List<DistilledFailureDto> distilledFailures = extractDistilledFailures(report);
             final String status = determineStatus(report);
             final int total = report.getTotalCount();
-            final int passed = report.getPassCount();
-            final int failed = report.getUnknownCount() + report.getKnownCount() + report.getFixedCount();
+            final int passed = report.getPassCount() + report.getFixedCount();
+            final int failed = report.getUnknownCount() + report.getKnownCount();
             final int skipped = report.getIgnoredCount();
 
             return payloadReporter.buildReport(
@@ -189,7 +192,36 @@ public class AuraDiagnosticServiceImpl implements AuraDiagnosticService
                     List.of()
                 );
 
-                if (category == null || category.isBlank() || category.equalsIgnoreCase(distilled.getClusterCategory()))
+                final String normalizedCategory = (category != null) ? category.trim() : null;
+                final boolean matchesCategory;
+                if (normalizedCategory == null || normalizedCategory.isBlank() || "ALL".equalsIgnoreCase(normalizedCategory))
+                {
+                    matchesCategory = true;
+                }
+                else
+                {
+                    final String clusterCat = distilled.getClusterCategory();
+                    if (clusterCat == null)
+                    {
+                        matchesCategory = false;
+                    }
+                    else if ("UNCLASSIFIED".equalsIgnoreCase(normalizedCategory) || "UNKNOWN".equalsIgnoreCase(normalizedCategory))
+                    {
+                        final String upper = clusterCat.toUpperCase();
+                        matchesCategory = upper.startsWith("UNCLASSIFIED")
+                                || upper.startsWith("UNKNOWN");
+                    }
+                    else
+                    {
+                        final String upperCluster = clusterCat.toUpperCase();
+                        final String upperFilter = normalizedCategory.toUpperCase();
+                        matchesCategory = upperCluster.equals(upperFilter)
+                                || upperCluster.startsWith(upperFilter + ":")
+                                || upperCluster.startsWith(upperFilter + "_");
+                    }
+                }
+
+                if (matchesCategory)
                 {
                     matching.add(distilled);
                 }
@@ -282,8 +314,17 @@ public class AuraDiagnosticServiceImpl implements AuraDiagnosticService
         {
             return "RUNNING";
         }
-        final int failed = report.getUnknownCount() + report.getKnownCount() + report.getFixedCount();
-        return (failed > 0) ? "FAILED" : "PASSED";
+        final int failed = report.getUnknownCount() + report.getKnownCount();
+        if (failed > 0)
+        {
+            return "FAILED";
+        }
+        final int passed = report.getPassCount() + report.getFixedCount();
+        if (passed == 0 && report.getIgnoredCount() > 0)
+        {
+            return "SKIPPED";
+        }
+        return "PASSED";
     }
 
     private long parseDurationMs(final String durationStr)

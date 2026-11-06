@@ -1,3 +1,21 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 package com.xceptance.aura.mcp.security;
 
 import com.xceptance.aura.mcp.config.AuraMcpProperties;
@@ -5,6 +23,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.HandlerInterceptor;
+
+import java.net.InetAddress;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 /**
  * Interceptor for enforcing Bearer token authentication and security policies on the MCP endpoint.
@@ -37,9 +59,15 @@ public class McpSecurityInterceptor implements HandlerInterceptor
 
         final String configuredToken = properties.getAuth() != null ? properties.getAuth().getToken() : null;
 
-        // If no token is configured, allow local access
+        // If no token is configured, allow only loopback/local access
         if (configuredToken == null || configuredToken.isBlank())
         {
+            if (!isLoopbackRequest(request))
+            {
+                response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                response.getWriter().write("{\"error\": \"Remote MCP access requires an authentication token\"}");
+                return false;
+            }
             return true;
         }
 
@@ -53,7 +81,10 @@ public class McpSecurityInterceptor implements HandlerInterceptor
         }
 
         final String presentedToken = authHeader.substring(BEARER_PREFIX.length()).trim();
-        if (!configuredToken.equals(presentedToken))
+        final byte[] expectedBytes = configuredToken.getBytes(StandardCharsets.UTF_8);
+        final byte[] actualBytes = presentedToken.getBytes(StandardCharsets.UTF_8);
+
+        if (!MessageDigest.isEqual(expectedBytes, actualBytes))
         {
             response.setStatus(HttpServletResponse.SC_FORBIDDEN);
             response.getWriter().write("{\"error\": \"Invalid MCP authentication token\"}");
@@ -61,5 +92,28 @@ public class McpSecurityInterceptor implements HandlerInterceptor
         }
 
         return true;
+    }
+
+    private boolean isLoopbackRequest(final HttpServletRequest request)
+    {
+        final String remoteAddr = request.getRemoteAddr();
+        if (remoteAddr == null || remoteAddr.isBlank())
+        {
+            return false;
+        }
+
+        if ("127.0.0.1".equals(remoteAddr) || "0:0:0:0:0:0:0:1".equals(remoteAddr) || "::1".equals(remoteAddr) || "localhost".equalsIgnoreCase(remoteAddr))
+        {
+            return true;
+        }
+
+        try
+        {
+            return InetAddress.getByName(remoteAddr).isLoopbackAddress();
+        }
+        catch (final Exception e)
+        {
+            return false;
+        }
     }
 }

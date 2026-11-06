@@ -138,5 +138,83 @@ public class AuraDiagnosticServiceTest
         Assertions.assertNotNull(single);
         Assertions.assertEquals("LoginTest", single.getTestName());
         Assertions.assertTrue(single.getClusterCategory().startsWith("ELEMENT_NOT_FOUND"));
+
+        // Test category prefix filtering
+        final FailurePageResultDto<DistilledFailureDto> filteredPage =
+                diagnosticService.getRunFailures("run_123", "ELEMENT_NOT_FOUND", "0", 5);
+        Assertions.assertEquals(1, filteredPage.getTotalCount());
+        Assertions.assertEquals("LoginTest", filteredPage.getFailures().get(0).getTestName());
+    }
+
+    @Test
+    public void testGetRunStatusExcludesHealedFromFailures()
+    {
+        final RunReportDto report = new RunReportDto(
+            "run_healed", "Batch", "2026-10-02T10:00:00Z", "300ms",
+            2, 1, 1, 0, 0, 0, 0,
+            List.of(), List.of(), 0, 0L, 0.0
+        );
+        Mockito.when(reportDataService.getRunReport("run_healed")).thenReturn(report);
+
+        final RunStatusResponseDto res = diagnosticService.getRunStatus("run_healed");
+        Assertions.assertEquals(0, res.getMetrics().getFailed());
+        Assertions.assertEquals(2, res.getMetrics().getPassed(), "Passed count includes healed tests so total equals passed + failed + skipped");
+        Assertions.assertEquals(2, res.getMetrics().getTotal());
+        Assertions.assertEquals("PASSED", res.getStatus());
+    }
+
+    @Test
+    public void testGetRunStatusWhenCancelledWithoutReport()
+    {
+        Mockito.when(reportDataService.getRunReport("run_cancelled")).thenReturn(null);
+        Mockito.when(executionService.getCoordinatorRunStatus("run_cancelled")).thenReturn("CANCELLED");
+
+        final RunStatusResponseDto res = diagnosticService.getRunStatus("run_cancelled");
+        Assertions.assertEquals("CANCELLED", res.getStatus());
+        Assertions.assertEquals(0, res.getMetrics().getTotal());
+    }
+
+    @Test
+    public void testGetRunStatusWhenSkippedOnly()
+    {
+        final RunReportDto report = new RunReportDto(
+            "run_skipped", "Batch", "2026-10-02T10:00:00Z", "100ms",
+            3, 0, 0, 0, 0, 3, 0,
+            List.of(), List.of(), 0, 0L, 0.0
+        );
+        Mockito.when(reportDataService.getRunReport("run_skipped")).thenReturn(report);
+
+        final RunStatusResponseDto res = diagnosticService.getRunStatus("run_skipped");
+        Assertions.assertEquals("SKIPPED", res.getStatus());
+        Assertions.assertEquals(3, res.getMetrics().getSkipped());
+        Assertions.assertEquals(0, res.getMetrics().getPassed());
+        Assertions.assertEquals(0, res.getMetrics().getFailed());
+    }
+
+    @Test
+    public void testGetRunFailuresFilteringByUnclassifiedWithLocator()
+    {
+        final TestExecutionDto exec = new TestExecutionDto(
+            "1", "run_123", "TestClass", "test1", "UnclassifiedTest", "UnclassifiedTest",
+            "tests/Unclassified.yaml", "tests/Unclassified.yaml", "FAILED", "Java", "UNKNOWN", null,
+            "Chrome", "Some custom error occurred with locator: By.id: custom-btn",
+            new ArrayList<>(), null, "Area", new ArrayList<>(), null, null,
+            null, null, null, null, "MODE", null, null, null, null, 0L, 1, 1, 100L, "100ms", 0, 0L, 0.0,
+            null, "Custom error", null, null, null, null
+        );
+        final RunReportDto report = new RunReportDto(
+            "run_123", "Batch", "2026-10-02T10:00:00Z", "100ms",
+            1, 0, 0, 1, 0, 0, 0,
+            List.of(exec), List.of(), 1, 100L, 0.0
+        );
+        Mockito.when(reportDataService.getRunReport("run_123")).thenReturn(report);
+
+        final FailurePageResultDto<DistilledFailureDto> failures = diagnosticService.getRunFailures("run_123", "UNCLASSIFIED", "0", 10);
+        Assertions.assertEquals(1, failures.getTotalCount());
+        Assertions.assertEquals(1, failures.getFailures().size());
+
+        final FailurePageResultDto<DistilledFailureDto> failuresUnknown = diagnosticService.getRunFailures("run_123", "UNKNOWN", "0", 10);
+        Assertions.assertEquals(1, failuresUnknown.getTotalCount());
+        Assertions.assertEquals(1, failuresUnknown.getFailures().size());
     }
 }

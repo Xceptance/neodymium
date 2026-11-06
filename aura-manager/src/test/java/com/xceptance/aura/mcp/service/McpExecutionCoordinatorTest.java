@@ -143,7 +143,7 @@ public class McpExecutionCoordinatorTest
 
         final boolean cancelled = coordinator.cancelRun(res.getRunId());
         Assertions.assertTrue(cancelled);
-        Mockito.verify(queueService).stopCurrentTest();
+        Mockito.verify(queueService).stopProcess();
         Assertions.assertEquals("CANCELLED", coordinator.getRunStatus(res.getRunId()));
     }
 

@@ -1,3 +1,21 @@
+/*
+ * GNU Affero General Public License (AGPLv3)
+ *
+ * Copyright (c) 2026 Xceptance Software Technologies GmbH
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
 package com.xceptance.aura.mcp.service;
 
 import com.xceptance.aura.mcp.dto.DistilledFailureDto;
@@ -78,6 +96,27 @@ public class AdaptivePayloadReporterTest
         Assertions.assertEquals(2, dto.getFailureClusters().size(), "Tier 2: 2 clusters returned");
         Assertions.assertTrue(dto.getNextSteps().contains("get_execution_failure"));
         Assertions.assertTrue(dto.getNextSteps().contains("get_run_failures"));
+    }
+
+    @Test
+    public void testClusteringByRootCategoryPreventsEntropyExplosion()
+    {
+        final List<DistilledFailureDto> failures = new ArrayList<>();
+        // 6 failures with same root category ELEMENT_NOT_FOUND but different locators
+        for (int i = 0; i < 6; i++)
+        {
+            failures.add(createFailure("TestElement" + i, "ELEMENT_NOT_FOUND: button#" + i, "button#" + i));
+        }
+
+        final RunStatusResponseDto dto = reporter.buildReport(
+            "run_cluster_root", "FAILED", 6, 0, 6, 0, 10000L, failures
+        );
+
+        Assertions.assertNull(dto.getHighEntropyNotice(), "Should NOT trip high-entropy notice when root cause is uniform");
+        Assertions.assertNotNull(dto.getFailureClusters());
+        Assertions.assertEquals(1, dto.getFailureClusters().size(), "Must cluster all 6 failures under single root category");
+        Assertions.assertEquals("ELEMENT_NOT_FOUND", dto.getFailureClusters().getFirst().getCategory());
+        Assertions.assertEquals(6, dto.getFailureClusters().getFirst().getCount());
     }
 
     @Test

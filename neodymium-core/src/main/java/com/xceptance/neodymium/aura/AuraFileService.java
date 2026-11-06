@@ -56,6 +56,7 @@ public final class AuraFileService
     private final Set<String> expandedFiles = ConcurrentHashMap.newKeySet();
     private final File customResourcesDir;
     private volatile String activeEditingFile = null;
+    private volatile File cachedResourcesDir = null;
 
     public AuraFileService()
     {
@@ -89,6 +90,12 @@ public final class AuraFileService
             }
         }
 
+        final File cached = cachedResourcesDir;
+        if (cached != null && cached.exists() && cached.isDirectory())
+        {
+            return cached;
+        }
+
         final List<File> candidates = List.of(
                 new File("src/test/resources").getAbsoluteFile(),
                 new File("neodymium-core/src/test/resources").getAbsoluteFile(),
@@ -99,6 +106,7 @@ public final class AuraFileService
         {
             if (candidate.exists() && candidate.isDirectory() && containsYamlFiles(candidate))
             {
+                cachedResourcesDir = candidate;
                 return candidate;
             }
         }
@@ -107,11 +115,13 @@ public final class AuraFileService
         {
             if (candidate.exists() && candidate.isDirectory())
             {
+                cachedResourcesDir = candidate;
                 return candidate;
             }
         }
 
-        return candidates.getFirst();
+        cachedResourcesDir = candidates.getFirst();
+        return cachedResourcesDir;
     }
 
     private boolean containsYamlFiles(final File dir)
@@ -561,7 +571,7 @@ public final class AuraFileService
                 yamlFile = found.getCanonicalFile();
             }
         }
-        if (!yamlFile.getPath().startsWith(resourcesDir.getPath()))
+        if (!yamlFile.toPath().normalize().startsWith(resourcesDir.toPath().normalize()))
         {
             throw new SecurityException("Access denied: Directory traversal detected");
         }
@@ -694,7 +704,7 @@ public final class AuraFileService
 
         final File resourcesDir = getResourcesDirectory().getCanonicalFile();
         final File newFile = new File(resourcesDir, targetPath).getCanonicalFile();
-        if (!newFile.getPath().startsWith(resourcesDir.getPath()))
+        if (!newFile.toPath().normalize().startsWith(resourcesDir.toPath().normalize()))
         {
             throw new SecurityException("Access denied: Directory traversal detected");
         }
