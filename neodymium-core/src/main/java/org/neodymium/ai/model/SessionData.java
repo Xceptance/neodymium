@@ -114,6 +114,11 @@ public final class SessionData
      */
     public DataEntry getEntry(final String key)
     {
+        if (key == null)
+        {
+            return null;
+        }
+
         // 1. Resolve from dynamic data first
         if (this.dynamicData.containsKey(key))
         {
@@ -221,16 +226,47 @@ public final class SessionData
     }
 
     /**
-     * Returns the raw value for a variable key. Checks the dynamic layer first,
-     * falling back to the static layer.
+     * Returns the raw un-resolved value for a variable key without placeholder substitution.
+     * Checks the dynamic layer first, falling back to the static layer.
      *
      * @param key the variable key name
      * @return the raw object value, or null
      */
-    public Object get(final String key)
+    public Object getRaw(final String key)
     {
         final DataEntry entry = getEntry(key);
         return entry != null ? entry.value() : null;
+    }
+
+    /**
+     * Returns the value for a variable key, resolving any variable placeholders leniently.
+     * Checks the dynamic layer first, falling back to the static layer.
+     *
+     * @param key the variable key name
+     * @return the resolved object value, or null
+     */
+    public Object get(final String key)
+    {
+        return get(key, false);
+    }
+
+    /**
+     * Returns the value for a variable key, resolving any variable placeholders.
+     * Checks the dynamic layer first, falling back to the static layer.
+     *
+     * @param key the variable key name
+     * @param strict if true, throws {@link UnresolvableVariableException} when a placeholder cannot be resolved;
+     *               if false, leaves unresolvable placeholders intact
+     * @return the resolved object value, or null
+     */
+    public Object get(final String key, final boolean strict)
+    {
+        final Object raw = getRaw(key);
+        if (raw instanceof String str && str.contains("${"))
+        {
+            return strict ? resolveVariables(str) : resolveAvailableVariables(str);
+        }
+        return raw;
     }
 
     /**
@@ -363,7 +399,15 @@ public final class SessionData
 
     private String resolveVariables(final String template, final int depth, final boolean strict)
     {
-        if (depth > 10 || template == null || template.isEmpty())
+        if (depth > 10)
+        {
+            if (strict)
+            {
+                throw new IllegalStateException("Circular variable reference or recursion depth limit (10) exceeded in template: " + template);
+            }
+            return template;
+        }
+        if (template == null || template.isEmpty())
         {
             return template;
         }
@@ -377,7 +421,7 @@ public final class SessionData
         {
             sb.append(template, lastEnd, matcher.start());
             final String placeholderKey = matcher.group(1);
-            final Object value = this.get(placeholderKey);
+            final Object value = this.getRaw(placeholderKey);
             if (value == null)
             {
                 if (strict)

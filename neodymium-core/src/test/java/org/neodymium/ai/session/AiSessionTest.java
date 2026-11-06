@@ -51,6 +51,7 @@ import org.neodymium.ai.model.PlaybookRecording;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.model.UnresolvableVariableException;
 import org.neodymium.ai.pipeline.ConclusiveFailureException;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.pipeline.StepStats;
@@ -231,6 +232,39 @@ public class AiSessionTest
             Assertions.assertTrue(session.isReplay());
             Assertions.assertFalse(session.isLive());
             Assertions.assertFalse(session.isRecording());
+        }
+    }
+
+    @Test
+    @DisplayName("session.getData(key) resolves dynamic variable placeholders, supports strict overload and raw access")
+    public void testGetDataResolvesPlaceholders() throws Exception
+    {
+        try (final AiSession session = AiSession.mock())
+        {
+            session.setData("random", "12345");
+            session.setData("email", "user${random}@example.org");
+
+            // Standard getData(key) resolves available placeholders
+            Assertions.assertEquals("user12345@example.org", session.getData("email"));
+            Assertions.assertEquals("user12345@example.org", session.getSessionData().get("email"));
+
+            // Raw access preserves un-substituted template
+            Assertions.assertEquals("user${random}@example.org", session.getRawData("email"));
+            Assertions.assertEquals("user${random}@example.org", session.getSessionData().getRaw("email"));
+
+            // Dynamic updates are immediately reflected without stale caching
+            session.setData("random", "67890");
+            Assertions.assertEquals("user67890@example.org", session.getData("email"));
+
+            // Unresolvable placeholder in lenient mode remains intact
+            session.setData("unresolved", "prefix_${missing}_suffix");
+            Assertions.assertEquals("prefix_${missing}_suffix", session.getData("unresolved"));
+
+            // Strict mode throws UnresolvableVariableException on missing placeholder
+            Assertions.assertThrows(UnresolvableVariableException.class, () -> session.getData("unresolved", true));
+
+            // Strict mode succeeds when all placeholders resolve
+            Assertions.assertEquals("user67890@example.org", session.getData("email", true));
         }
     }
 
