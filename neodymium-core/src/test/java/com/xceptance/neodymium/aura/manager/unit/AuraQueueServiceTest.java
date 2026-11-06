@@ -180,6 +180,186 @@ public final class AuraQueueServiceTest
     }
 
     @Test
+    public void testUpdateExecutionSnapshotsAndFallbacksPreservesPassedExecutionWithoutInjectingBatchFailure() throws Exception
+    {
+        final Path tempDir = Files.createTempDirectory("aura-queue-test-");
+        try
+        {
+            final File runDir = tempDir.toFile();
+            final String className = "Aura_tests_stokke_self_include_yaml_Test";
+            final File testDir = new File(runDir, className);
+            Assertions.assertTrue(testDir.mkdirs());
+
+            final File exec1 = new File(testDir, "console-execution-1.json");
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode node = mapper.createObjectNode();
+            node.put("id", 1);
+            node.put("name", "DEU");
+            node.put("status", "passed");
+            node.put("currentStepIndex", 3);
+            final ObjectNode metrics = node.putObject("metrics");
+            metrics.put("totalSteps", 3);
+            node.putArray("steps").addObject().put("status", "passed");
+            mapper.writeValue(exec1, node);
+
+            queueService.updateExecutionSnapshotsAndFallbacks(
+                "run_123",
+                className,
+                List.of("DEU"),
+                List.of("Default"),
+                List.of(runDir),
+                1,
+                true,
+                false,
+                "Error: Tests run: 2, Failures: 1 <<< FAILURE! Caused by: NoSuchElementException"
+            );
+
+            Assertions.assertTrue(exec1.exists());
+            final ObjectNode updatedNode = (ObjectNode) mapper.readTree(exec1);
+            Assertions.assertEquals("passed", updatedNode.path("status").asText());
+            Assertions.assertFalse(updatedNode.hasNonNull("failureReason"), "Passed test must not be injected with batch failureReason");
+            Assertions.assertFalse(updatedNode.hasNonNull("error"), "Passed test must not be injected with batch error");
+        }
+        finally
+        {
+            AuraQueueService.deleteDirRecursively(tempDir.toFile());
+        }
+    }
+
+    @Test
+    public void testUpdateExecutionSnapshotsAndFallbacksPreservesSkippedExecutionInFailedBatch() throws Exception
+    {
+        final Path tempDir = Files.createTempDirectory("aura-queue-test-");
+        try
+        {
+            final File runDir = tempDir.toFile();
+            final String className = "Aura_tests_stokke_self_include_yaml_Test";
+            final File testDir = new File(runDir, className);
+            Assertions.assertTrue(testDir.mkdirs());
+
+            final File exec1 = new File(testDir, "console-execution-1.json");
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode node = mapper.createObjectNode();
+            node.put("id", 1);
+            node.put("name", "DEU");
+            node.put("status", "skipped");
+            mapper.writeValue(exec1, node);
+
+            queueService.updateExecutionSnapshotsAndFallbacks(
+                "run_123",
+                className,
+                List.of("DEU"),
+                List.of("Default"),
+                List.of(runDir),
+                1,
+                true,
+                false,
+                "Error: Sibling test failure"
+            );
+
+            Assertions.assertTrue(exec1.exists());
+            final ObjectNode updatedNode = (ObjectNode) mapper.readTree(exec1);
+            Assertions.assertEquals("skipped", updatedNode.path("status").asText());
+            Assertions.assertFalse(updatedNode.hasNonNull("failureReason"), "Skipped test must not be injected with batch failureReason");
+            Assertions.assertFalse(updatedNode.hasNonNull("error"), "Skipped test must not be injected with batch error");
+        }
+        finally
+        {
+            AuraQueueService.deleteDirRecursively(tempDir.toFile());
+        }
+    }
+
+    @Test
+    public void testUpdateExecutionSnapshotsAndFallbacksPreservesZeroStepPassedExecutionInFailedBatch() throws Exception
+    {
+        final Path tempDir = Files.createTempDirectory("aura-queue-test-");
+        try
+        {
+            final File runDir = tempDir.toFile();
+            final String className = "Aura_tests_stokke_self_include_yaml_Test";
+            final File testDir = new File(runDir, className);
+            Assertions.assertTrue(testDir.mkdirs());
+
+            final File exec1 = new File(testDir, "console-execution-1.json");
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode node = mapper.createObjectNode();
+            node.put("id", 1);
+            node.put("name", "DEU");
+            node.put("status", "passed");
+            node.put("currentStepIndex", 0);
+            final ObjectNode metrics = node.putObject("metrics");
+            metrics.put("totalSteps", 0);
+            node.putArray("steps");
+            mapper.writeValue(exec1, node);
+
+            queueService.updateExecutionSnapshotsAndFallbacks(
+                "run_123",
+                className,
+                List.of("DEU"),
+                List.of("Default"),
+                List.of(runDir),
+                1,
+                true,
+                false,
+                "Error: Sibling test failure"
+            );
+
+            Assertions.assertTrue(exec1.exists());
+            final ObjectNode updatedNode = (ObjectNode) mapper.readTree(exec1);
+            Assertions.assertEquals("passed", updatedNode.path("status").asText(), "0-step passed test must not be turned into failed");
+            Assertions.assertFalse(updatedNode.hasNonNull("failureReason"));
+        }
+        finally
+        {
+            AuraQueueService.deleteDirRecursively(tempDir.toFile());
+        }
+    }
+
+    @Test
+    public void testUpdateExecutionSnapshotsAndFallbacksEnrichesFailedExecutionWithNullFailureReason() throws Exception
+    {
+        final Path tempDir = Files.createTempDirectory("aura-queue-test-");
+        try
+        {
+            final File runDir = tempDir.toFile();
+            final String className = "Aura_tests_stokke_self_include_yaml_Test";
+            final File testDir = new File(runDir, className);
+            Assertions.assertTrue(testDir.mkdirs());
+
+            final File exec1 = new File(testDir, "console-execution-1.json");
+            final ObjectMapper mapper = new ObjectMapper();
+            final ObjectNode node = mapper.createObjectNode();
+            node.put("id", 1);
+            node.put("name", "DEU");
+            node.put("status", "failed");
+            node.putNull("failureReason");
+            mapper.writeValue(exec1, node);
+
+            queueService.updateExecutionSnapshotsAndFallbacks(
+                "run_123",
+                className,
+                List.of("DEU"),
+                List.of("Default"),
+                List.of(runDir),
+                1,
+                true,
+                false,
+                "Subprocess crashed during execution"
+            );
+
+            Assertions.assertTrue(exec1.exists());
+            final ObjectNode updatedNode = (ObjectNode) mapper.readTree(exec1);
+            Assertions.assertEquals("failed", updatedNode.path("status").asText());
+            Assertions.assertTrue(updatedNode.path("failureReason").asText().contains("Subprocess crashed"));
+            Assertions.assertTrue(updatedNode.path("error").asText().contains("Subprocess crashed"));
+        }
+        finally
+        {
+            AuraQueueService.deleteDirRecursively(tempDir.toFile());
+        }
+    }
+
+    @Test
     public void testUpdateExecutionSnapshotsAndFallbacksCreatesFallbackWhenZeroExecutionsExist() throws Exception
     {
         final Path tempDir = Files.createTempDirectory("aura-queue-test-");

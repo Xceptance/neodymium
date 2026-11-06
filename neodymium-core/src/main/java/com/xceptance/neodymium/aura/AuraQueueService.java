@@ -997,15 +997,15 @@ public final class AuraQueueService
                             if (node instanceof ObjectNode objNode)
                             {
                                 final String currentStatus = objNode.has("status") ? objNode.get("status").asText("") : "";
-                                final boolean isFailureStatus = "failed".equalsIgnoreCase(currentStatus) || "failed-unknown".equalsIgnoreCase(currentStatus)
-                                        || "failed-known".equalsIgnoreCase(currentStatus) || "error".equalsIgnoreCase(currentStatus)
-                                        || "skipped".equalsIgnoreCase(currentStatus) || "cancelled".equalsIgnoreCase(currentStatus);
+                                final boolean isActualFailure = "failed".equalsIgnoreCase(currentStatus)
+                                        || "failed-unknown".equalsIgnoreCase(currentStatus)
+                                        || "failed-known".equalsIgnoreCase(currentStatus)
+                                        || "error".equalsIgnoreCase(currentStatus);
+                                final boolean isFinalStatus = isFinalExecutionStatus(currentStatus);
+                                final boolean lacksFailureReason = !objNode.hasNonNull("failureReason")
+                                        || objNode.get("failureReason").asText("").isBlank();
 
-                                final boolean isZeroStep = objNode.path("currentStepIndex").asInt(0) == 0
-                                        && (!objNode.has("steps") || objNode.get("steps").isEmpty() || objNode.get("steps").isNull())
-                                        && objNode.path("metrics").path("totalSteps").asInt(0) == 0;
-
-                                if (!isFailureStatus && (isZeroStep || testWasCancelled || !isFinalExecutionStatus(currentStatus)))
+                                if (!isFinalStatus)
                                 {
                                     objNode.put("status", statusStr);
                                     objNode.put("runnerStatus", testWasCancelled ? "cancelled" : statusStr);
@@ -1014,7 +1014,7 @@ public final class AuraQueueService
                                         objNode.put("failureReason", extractedError);
                                         objNode.put("error", extractedError);
                                     }
-                                    else if (!objNode.has("failureReason"))
+                                    else if (lacksFailureReason)
                                     {
                                         final String defaultFallback = "Test execution failed during setup (exit code " + exitCode + "). Check process logs or API configuration.";
                                         objNode.put("failureReason", defaultFallback);
@@ -1022,10 +1022,13 @@ public final class AuraQueueService
                                     }
                                     AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
                                 }
-                                else if (isFailedRun && !objNode.has("failureReason") && extractedError != null)
+                                else if (isFailedRun && isActualFailure && lacksFailureReason)
                                 {
-                                    objNode.put("failureReason", extractedError);
-                                    objNode.put("error", extractedError);
+                                    final String fallbackMessage = extractedError != null
+                                            ? extractedError
+                                            : "Test execution failed (exit code " + exitCode + "). Check process logs or API configuration.";
+                                    objNode.put("failureReason", fallbackMessage);
+                                    objNode.put("error", fallbackMessage);
                                     AtomicFileUtils.writeStringAtomic(existingFile.toPath(), mapper.writerWithDefaultPrettyPrinter().writeValueAsString(objNode));
                                 }
                             }
