@@ -6,6 +6,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WrapsDriver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -128,6 +129,79 @@ public class WebDriverCache
             }
             return removed;
         }
+    }
+
+    /**
+     * Checks if the given {@link WebDriver} instance is currently present in the cache.
+     *
+     * @param driver
+     *            the {@link WebDriver} instance to check
+     * @return true if the driver is stored in the cache, false otherwise
+     */
+    public boolean containsWebDriver(final WebDriver driver)
+    {
+        if (driver == null)
+        {
+            return false;
+        }
+        final WebDriver unwrapped = unwrap(driver);
+        synchronized (cache)
+        {
+            for (final Entry<String, WebDriverStateContainer> entry : cache.entrySet())
+            {
+                final WebDriverStateContainer container = entry.getValue();
+                if (container != null)
+                {
+                    if (container.getWebDriver() == driver || container.getDecoratedWebDriver() == driver
+                        || container.getWebDriver() == unwrapped || container.getDecoratedWebDriver() == unwrapped)
+                    {
+                        return true;
+                    }
+                    final WebDriver rawDriver = unwrap(container.getWebDriver());
+                    final WebDriver rawDecorated = unwrap(container.getDecoratedWebDriver());
+                    if (unwrapped == rawDriver || unwrapped == rawDecorated)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Unwraps any {@link WrapsDriver} decorators to extract the underlying raw {@link WebDriver}.
+     * Safely handles cycles, null values, and driver invocation exceptions.
+     *
+     * @param driver
+     *            the candidate {@link WebDriver}
+     * @return the raw unwrapped {@link WebDriver}, or the input instance if not wrapped
+     */
+    private static WebDriver unwrap(final WebDriver driver)
+    {
+        if (driver == null)
+        {
+            return null;
+        }
+        WebDriver current = driver;
+        int depth = 0;
+        while (current instanceof WrapsDriver wrapsDriver && depth++ < 10)
+        {
+            try
+            {
+                final WebDriver next = wrapsDriver.getWrappedDriver();
+                if (next == null || next == current)
+                {
+                    break;
+                }
+                current = next;
+            }
+            catch (final Exception ignored)
+            {
+                break;
+            }
+        }
+        return current;
     }
 
     /**
