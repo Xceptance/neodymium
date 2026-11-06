@@ -45,6 +45,7 @@ import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
+import org.neodymium.ai.tool.ToolCallVariableResolver;
 import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.tool.ToolRegistry;
 import org.neodymium.ai.model.SessionData;
@@ -65,7 +66,6 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -509,79 +509,7 @@ public final class PlaybookToolReplayer
 
     private static ToolCall resolveVariables(final ToolCall call, final SessionData sessionData)
     {
-        if (sessionData == null || call.arguments() == null || !call.arguments().isObject())
-        {
-            return call;
-        }
-
-        final ObjectNode args = call.arguments().deepCopy();
-        final List<String> textKeys = new ArrayList<>();
-        final Iterator<String> fieldNames = args.fieldNames();
-        while (fieldNames.hasNext())
-        {
-            final String fieldName = fieldNames.next();
-            if (args.get(fieldName).isTextual())
-            {
-                textKeys.add(fieldName);
-            }
-        }
-        final boolean isStoreTool = call.toolName() != null && "store".equalsIgnoreCase(call.toolName().trim());
-        final String storeTargetVar;
-        if (isStoreTool)
-        {
-            if (args.hasNonNull("variableName"))
-            {
-                storeTargetVar = args.path("variableName").asText().trim();
-            }
-            else if (args.hasNonNull("variable"))
-            {
-                storeTargetVar = args.path("variable").asText().trim();
-            }
-            else if (args.hasNonNull("name"))
-            {
-                storeTargetVar = args.path("name").asText().trim();
-            }
-            else if (args.hasNonNull("key"))
-            {
-                storeTargetVar = args.path("key").asText().trim();
-            }
-            else
-            {
-                storeTargetVar = null;
-            }
-        }
-        else
-        {
-            storeTargetVar = null;
-        }
-
-        boolean changed = false;
-        for (final String key : textKeys)
-        {
-            if (isStoreTool && ("variableName".equals(key) || "variable".equals(key) || "name".equals(key) || "key".equals(key)))
-            {
-                continue;
-            }
-
-            final String original = args.get(key).asText();
-
-            if (isStoreTool && storeTargetVar != null && "value".equals(key) && original.equals("${" + storeTargetVar + "}"))
-            {
-                if (sessionData.get(storeTargetVar) == null)
-                {
-                    LOGGER.warn("Skipping unresolvable self-referential variable placeholder '{}' in store tool value", original);
-                    continue;
-                }
-            }
-
-            final String resolved = sessionData.resolveVariables(original);
-            if (!resolved.equals(original))
-            {
-                args.put(key, resolved);
-                changed = true;
-            }
-        }
-        return changed ? new ToolCall(call.callId(), call.toolName(), args) : call;
+        return ToolCallVariableResolver.resolveVariables(call, sessionData);
     }
 
     private static ToolCall attemptHealing(
