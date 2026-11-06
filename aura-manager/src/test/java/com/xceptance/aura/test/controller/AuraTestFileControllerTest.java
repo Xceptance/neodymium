@@ -39,8 +39,9 @@ import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 /**
- * Unit tests validating test file list rendering and tag-based filtering in {@link AuraTestFileController}.
+ * Unit tests validating test file list rendering, cookie fallback, folder totals, and tag-based filtering in {@link AuraTestFileController}.
  *
+ * @author AI-generated: Antigravity
  * @author AI-generated: Gemini 3.8 Flash (High)
  * @author Xceptance GmbH 2026
  */
@@ -49,6 +50,7 @@ public class AuraTestFileControllerTest
     private AuraFileService fileService;
     private AuraTestQueueController queueController;
     private AuraTestFileController controller;
+    private AuraTestFileController fileController;
     private HttpServletResponse response;
 
     @BeforeEach
@@ -58,7 +60,12 @@ public class AuraTestFileControllerTest
         queueController = Mockito.mock(AuraTestQueueController.class);
         response = Mockito.mock(HttpServletResponse.class);
 
+        Mockito.when(fileService.getYamlFilesList()).thenReturn(List.of());
+        Mockito.when(fileService.getStepsFilesList()).thenReturn(List.of());
+        Mockito.when(fileService.getExpandedFiles()).thenReturn(Set.of());
+
         controller = new AuraTestFileController(fileService, queueController);
+        fileController = controller;
     }
 
     @Test
@@ -91,7 +98,6 @@ public class AuraTestFileControllerTest
         Assertions.assertNotNull(availableTags);
         Assertions.assertEquals(List.of("feature:checkout", "feature:login", "smoke:true"), availableTags);
     }
-
     @Test
     public void testSearchFilesWithTagFilter()
     {
@@ -118,7 +124,6 @@ public class AuraTestFileControllerTest
         Assertions.assertNotNull(availableTags);
         Assertions.assertEquals(List.of("feature:checkout", "smoke:true"), availableTags);
     }
-
     @Test
     public void testSearchFilesWithMultipleTagFilters()
     {
@@ -145,7 +150,6 @@ public class AuraTestFileControllerTest
         Assertions.assertNotNull(availableTags);
         Assertions.assertEquals(List.of("feature:checkout", "smoke:true"), availableTags);
     }
-
     @Test
     public void testRenderTestSelectionTemplateWithAvailableTags()
     {
@@ -187,5 +191,95 @@ public class AuraTestFileControllerTest
         Assertions.assertTrue(html.contains("data-tag=\"feature:checkout\""), "Must contain feature:checkout quick tag button");
         Assertions.assertTrue(html.contains("data-tag=\"smoke:true\""), "Must contain smoke:true quick tag button");
         Assertions.assertTrue(html.contains("filterTestsByTag(this.getAttribute('data-tag'))"), "Must use data-tag in event handler without Thymeleaf string restriction error");
+    }
+
+    @Test
+    public void testGetFilesListFragmentWithoutQueryReturnsFullList()
+    {
+        final Model model = new ConcurrentModel();
+        final String view = fileController.getFilesListFragment("", response, model);
+
+        Assertions.assertEquals("fragments/test-selection :: yamlFileListContent", view);
+        Mockito.verify(fileService).getYamlFilesList();
+        Mockito.verify(fileService, Mockito.never()).getFilteredYamlFilesList(Mockito.anyString());
+    }
+    @Test
+    public void testGetFilesListFragmentWithQueryReturnsFilteredList()
+    {
+        final Model model = new ConcurrentModel();
+        final YamlFileDto fileDto = new YamlFileDto("CheckoutTest.yaml", List.of());
+        Mockito.when(fileService.getFilteredYamlFilesList("checkout")).thenReturn(List.of(fileDto));
+        Mockito.when(fileService.getFilteredStepsFilesList("checkout")).thenReturn(List.of("checkout.steps"));
+
+        final String view = fileController.getFilesListFragment("checkout", response, model);
+
+        Assertions.assertEquals("fragments/test-selection :: yamlFileListContent", view);
+        Mockito.verify(fileService).getFilteredYamlFilesList("checkout");
+        Mockito.verify(fileService).getFilteredStepsFilesList("checkout");
+        Assertions.assertEquals(List.of(fileDto), model.getAttribute("files"));
+        Assertions.assertEquals(List.of("checkout.steps"), model.getAttribute("stepsFiles"));
+    }
+    @Test
+    public void testFilesListFragmentWithCookieFallback()
+    {
+        final Model model = new ConcurrentModel();
+        final YamlFileDto fileDto = new YamlFileDto("CheckoutTest.yaml", List.of());
+        Mockito.when(fileService.getFilteredYamlFilesList("checkout")).thenReturn(List.of(fileDto));
+        Mockito.when(fileService.getFilteredStepsFilesList("checkout")).thenReturn(List.of("checkout.steps"));
+
+        final String view = fileController.getFilesListFragment(null, "checkout", response, model);
+
+        Assertions.assertEquals("fragments/test-selection :: yamlFileListContent", view);
+        Mockito.verify(fileService).getFilteredYamlFilesList("checkout");
+        Mockito.verify(fileService).getFilteredStepsFilesList("checkout");
+        Assertions.assertEquals(List.of(fileDto), model.getAttribute("files"));
+        Assertions.assertEquals(List.of("checkout.steps"), model.getAttribute("stepsFiles"));
+    }
+    @Test
+    public void testFilesListFragmentWithEncodedCookieFallback()
+    {
+        final Model model = new ConcurrentModel();
+        final YamlFileDto fileDto = new YamlFileDto("CheckoutTest.yaml", List.of());
+        Mockito.when(fileService.getFilteredYamlFilesList("checkout flow")).thenReturn(List.of(fileDto));
+        Mockito.when(fileService.getFilteredStepsFilesList("checkout flow")).thenReturn(List.of("checkout.steps"));
+
+        final String view = fileController.getFilesListFragment(null, "checkout%20flow", response, model);
+
+        Assertions.assertEquals("fragments/test-selection :: yamlFileListContent", view);
+        Mockito.verify(fileService).getFilteredYamlFilesList("checkout flow");
+        Mockito.verify(fileService).getFilteredStepsFilesList("checkout flow");
+        Assertions.assertEquals(List.of(fileDto), model.getAttribute("files"));
+        Assertions.assertEquals(List.of("checkout.steps"), model.getAttribute("stepsFiles"));
+    }
+    @Test
+    public void testSearchFilesReturnsFilteredList()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(fileService.getFilteredYamlFilesList("cart")).thenReturn(List.of());
+        Mockito.when(fileService.getFilteredStepsFilesList("cart")).thenReturn(List.of());
+
+        final String view = fileController.searchFiles("cart", response, model);
+
+        Assertions.assertEquals("fragments/test-selection :: yamlFileListContent", view);
+        Mockito.verify(fileService).getFilteredYamlFilesList("cart");
+        Mockito.verify(fileService).getFilteredStepsFilesList("cart");
+    }
+    @Test
+    public void testGetFilesPanelReturnsTestSelectionContent()
+    {
+        final Model model = new ConcurrentModel();
+        final String view = fileController.getFilesPanel(response, model);
+
+        Assertions.assertEquals("fragments/test-selection :: testSelectionContent", view);
+        Mockito.verify(fileService).getYamlFilesList();
+    }
+    @Test
+    public void testPopulateFileModelIncludesFolderTotals()
+    {
+        Mockito.when(queueController.getFolderTotalDatasetsJson()).thenReturn("{\"tests\":10}");
+        final Model model = new ConcurrentModel();
+        fileController.getFilesPanel(response, model);
+
+        Assertions.assertEquals("{\"tests\":10}", model.getAttribute("folderTotalDatasetsJson"));
     }
 }

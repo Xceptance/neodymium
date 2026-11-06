@@ -233,6 +233,22 @@ public class InteractiveConsoleEngineTest
     }
 
     @Test
+    public void testBuildStateJsonIncludesTestClassMethodAndTitleMetadata()
+    {
+        final ExecutionContext context = new ExecutionContext(null);
+        context.getTransientData().put("testClass", "com.xceptance.test.OrderTest");
+        context.getTransientData().put("testMethod", "testPlaceOrder");
+        context.getTransientData().put("datasetLabel", "DataSet_DE");
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-metadata", 0, "running");
+
+        assertTrue(stateJson.contains("\"testClass\":\"com.xceptance.test.OrderTest\""), "State JSON must contain testClass property");
+        assertTrue(stateJson.contains("\"testMethod\":\"testPlaceOrder\""), "State JSON must contain testMethod property");
+        assertTrue(stateJson.contains("\"title\":\"DataSet_DE\""), "State JSON must contain title property");
+        assertTrue(stateJson.contains("\"testFile\":\"com.xceptance.test.OrderTest#testPlaceOrder\""), "State JSON must contain testFile property");
+    }
+
+    @Test
     public void testBuildStateJsonSerializesFailureReasonWhenPaused()
     {
         final org.neodymium.ai.pipeline.ExecutionContext context = new org.neodymium.ai.pipeline.ExecutionContext(null);

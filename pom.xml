@@ -46,6 +46,7 @@
 		<module>neodymium-core</module>
 		<module>aura-manager</module>
 		<module>neodymium-e2e-tests</module>
+		<module>neodymium-classic</module>
 	</modules>
 
 	<properties>
@@ -54,11 +55,74 @@
 		<maven.compiler.source.version>21</maven.compiler.source.version>
 		<maven.compiler.target.version>21</maven.compiler.target.version>
 		<maven.compiler.release>21</maven.compiler.release>
+
+		<!-- Safe root-level -Dtest filtering across modules -->
+		<surefire.failIfNoSpecifiedTests>false</surefire.failIfNoSpecifiedTests>
 	</properties>
+
+	<profiles>
+		<!-- 1. Strictly classic JUnit 4 tests (Vintage engine) -->
+		<profile>
+			<id>neo-classic-junit4</id>
+		</profile>
+
+		<!-- 2. Strictly classic JUnit 5 tests (Jupiter engine) -->
+		<profile>
+			<id>neo-classic-junit5</id>
+		</profile>
+
+		<!-- 3. Direct in-memory unit tests (no browser, no Javalin server, no LLM calls) -->
+		<profile>
+			<id>unit-tests</id>
+		</profile>
+
+		<!-- 4. All modern tests: Non-Classic, Zero Real AI (deterministic & offline) -->
+		<profile>
+			<id>non-llm-tests</id>
+		</profile>
+
+		<!-- 5. All VÉRLA storefront UI and mock AI integration tests -->
+		<profile>
+			<id>verla-tests</id>
+		</profile>
+
+		<!-- 6. AI pipeline, replay, and integration tests using mocked LLM fixtures -->
+		<profile>
+			<id>ai-mock-tests</id>
+		</profile>
+
+		<!-- 7. Real LLM tests requiring API keys (LiveAPI, LiveLlm) -->
+		<profile>
+			<id>ai-live-tests</id>
+		</profile>
+
+		<!-- 8. Aura Glance visual defect & baseline sandbox tests -->
+		<profile>
+			<id>aura-sandbox</id>
+		</profile>
+
+		<!-- 9. Aura Manager Spring Boot hub test suite -->
+		<profile>
+			<id>aura-manager</id>
+		</profile>
+
+		<!-- 10. Fast sanity verification suite (< 60s) -->
+		<profile>
+			<id>smoke</id>
+		</profile>
+	</profiles>
 
 	<build>
 		<pluginManagement>
 			<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-surefire-plugin</artifactId>
+					<version>3.5.4</version>
+					<configuration>
+						<failIfNoSpecifiedTests>${surefire.failIfNoSpecifiedTests}</failIfNoSpecifiedTests>
+					</configuration>
+				</plugin>
 				<plugin>
 					<groupId>org.springframework.boot</groupId>
 					<artifactId>spring-boot-maven-plugin</artifactId>

@@ -1034,6 +1034,255 @@ public class BrowserToolProviderStabilityTest
     }
 
     @Test
+    public void testAssertElementStateAutoScrollsOffscreenElement() throws Exception
+    {
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 200;
+        try
+        {
+            final AtomicBoolean scrolled = new AtomicBoolean(false);
+
+            final WebElement offscreenButton = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("isDisplayed".equals(name))
+                        {
+                            return scrolled.get();
+                        }
+                        if ("isEnabled".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "button";
+                        }
+                        if ("getAttribute".equals(name) && "id".equals(args[0]))
+                        {
+                            return "checkout-btn";
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("executeScript".equals(name))
+                        {
+                            final String script = args != null && args.length > 0 ? String.valueOf(args[0]) : "";
+                            if (script.contains("scrollIntoView"))
+                            {
+                                scrolled.set(true);
+                            }
+                            return Collections.emptyMap();
+                        }
+                        if ("findElement".equals(name))
+                        {
+                            return offscreenButton;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(offscreenButton);
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool tool = this.registry.getTool("browser_assert_element_state").orElseThrow();
+
+            final ObjectNode assertArgs = MAPPER.createObjectNode();
+            assertArgs.put("selector", "#checkout-btn");
+            assertArgs.put("state", "visible, enabled");
+
+            final ToolResult result = tool.execute(new ToolCall("call-offscreen-checkout", "browser_assert_element_state", assertArgs), null);
+
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertTrue(scrolled.get(), "Element must have been scrolled into view when initially off-screen");
+
+            final JsonNode json = MAPPER.readTree(result.content());
+            Assertions.assertEquals("SUCCESS", json.path("status").asText());
+            Assertions.assertEquals("visible, enabled", json.path("state").asText());
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
+    public void testAssertElementStateDoesNotScrollWhenAlreadyVisible() throws Exception
+    {
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 200;
+        try
+        {
+            final AtomicBoolean scrolled = new AtomicBoolean(false);
+
+            final WebElement visibleButton = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("isDisplayed".equals(name) || "isEnabled".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "button";
+                        }
+                        if ("getAttribute".equals(name) && "id".equals(args[0]))
+                        {
+                            return "visible-btn";
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("executeScript".equals(name))
+                        {
+                            final String script = args != null && args.length > 0 ? String.valueOf(args[0]) : "";
+                            if (script.contains("scrollIntoView"))
+                            {
+                                scrolled.set(true);
+                            }
+                            return Collections.emptyMap();
+                        }
+                        if ("findElement".equals(name))
+                        {
+                            return visibleButton;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(visibleButton);
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool tool = this.registry.getTool("browser_assert_element_state").orElseThrow();
+
+            final ObjectNode assertArgs = MAPPER.createObjectNode();
+            assertArgs.put("selector", "#visible-btn");
+            assertArgs.put("state", "visible, enabled");
+
+            final ToolResult result = tool.execute(new ToolCall("call-visible-btn", "browser_assert_element_state", assertArgs), null);
+
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertFalse(scrolled.get(), "Element must not be scrolled into view when already visible");
+
+            final JsonNode json = MAPPER.readTree(result.content());
+            Assertions.assertEquals("SUCCESS", json.path("status").asText());
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
+    public void testAssertElementStateDoesNotScrollForHiddenState() throws Exception
+    {
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 200;
+        try
+        {
+            final AtomicBoolean scrolled = new AtomicBoolean(false);
+
+            final WebElement hiddenButton = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("isDisplayed".equals(name))
+                        {
+                            return false;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "button";
+                        }
+                        if ("getAttribute".equals(name) && "id".equals(args[0]))
+                        {
+                            return "hidden-btn";
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
+            final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{MockJsDriver.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("executeScript".equals(name))
+                        {
+                            final String script = args != null && args.length > 0 ? String.valueOf(args[0]) : "";
+                            if (script.contains("scrollIntoView"))
+                            {
+                                scrolled.set(true);
+                            }
+                            return Collections.emptyMap();
+                        }
+                        if ("findElement".equals(name))
+                        {
+                            return hiddenButton;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return List.of(hiddenButton);
+                        }
+                        return null;
+                    }
+            );
+            WebDriverRunner.setWebDriver(mockDriver);
+
+            final AiTool tool = this.registry.getTool("browser_assert_element_state").orElseThrow();
+
+            final ObjectNode assertArgs = MAPPER.createObjectNode();
+            assertArgs.put("selector", "#hidden-btn");
+            assertArgs.put("state", "hidden");
+
+            final ToolResult result = tool.execute(new ToolCall("call-hidden-btn", "browser_assert_element_state", assertArgs), null);
+
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, result.status());
+            Assertions.assertFalse(scrolled.get(), "Element must not be scrolled into view when asserting hidden state");
+
+            final JsonNode json = MAPPER.readTree(result.content());
+            Assertions.assertEquals("SUCCESS", json.path("status").asText());
+            Assertions.assertEquals("hidden", json.path("state").asText());
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+        }
+    }
+
+    @Test
     public void testAssertAttributeSuccessAndFailure() throws Exception
     {
         final long originalTimeout = Configuration.timeout;
@@ -2005,6 +2254,349 @@ public class BrowserToolProviderStabilityTest
                     () -> tool.execute(new ToolCall("call-assert-attr-mismatch", "assert_attribute", args), null)
             );
             Assertions.assertNotNull(error);
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+            WebDriverRunner.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testAssertElementStateReturnsErrorWhenElementNotFoundInDom() throws Exception
+    {
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        throw new NoSuchElementException("Element not found");
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 50;
+        try
+        {
+            final AiTool tool = this.registry.getTool("assert_element_state").orElseThrow();
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "#missing-quantity-selector");
+            args.put("state", "visible");
+
+            final ToolResult result = tool.execute(new ToolCall("call-assert-state-not-found", "assert_element_state", args), null);
+            Assertions.assertEquals(ToolResult.Status.ERROR, result.status());
+            Assertions.assertTrue(result.content().contains("Target element not found in DOM for selector '#missing-quantity-selector'"),
+                    "Error result must specify that target element was not found in DOM");
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+            WebDriverRunner.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testAssertElementStateThrowsAssertionErrorWhenStateMismatchesOnExistingElement() throws Exception
+    {
+        final WebElement existingElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("getTagName".equals(name))
+                    {
+                        return "button";
+                    }
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("isEnabled".equals(name))
+                    {
+                        return false;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) -> {
+                    final String name = method.getName();
+                    if ("findElements".equals(name))
+                    {
+                        return List.of(existingElement);
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        return existingElement;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 50;
+        try
+        {
+            final AiTool tool = this.registry.getTool("assert_element_state").orElseThrow();
+            final ObjectNode args = MAPPER.createObjectNode();
+            args.put("selector", "#existing-btn");
+            args.put("state", "enabled");
+
+            final AssertionError error = Assertions.assertThrows(
+                    AssertionError.class,
+                    () -> tool.execute(new ToolCall("call-assert-state-mismatch", "assert_element_state", args), null)
+            );
+            Assertions.assertNotNull(error);
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+            WebDriverRunner.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testAssertAttributeRegexSubstringAndAnchoredMatching() throws Exception
+    {
+        final WebElement photoElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "div";
+                    }
+                    if ("getAttribute".equals(name))
+                    {
+                        final String attr = (String) args[0];
+                        if ("aria-label".equals(attr))
+                        {
+                            return "Hochgeladenes Foto mit dem Namen ifolor-image-1792586054022-1846296935174937703.jpg";
+                        }
+                        if ("role".equals(attr))
+                        {
+                            return "img";
+                        }
+                        return null;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("findElements".equals(name))
+                    {
+                        return List.of(photoElement);
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        return photoElement;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 100;
+        try
+        {
+            final AiTool tool = this.registry.getTool("assert_attribute").orElseThrow();
+
+            // 1. Unanchored regex matching substring prefix should SUCCEED
+            final ObjectNode unanchoredArgs = MAPPER.createObjectNode();
+            unanchoredArgs.put("selector", "[role=\"img\"]");
+            unanchoredArgs.put("attribute", "aria-label");
+            unanchoredArgs.put("expectedValue", "Hochgeladenes Foto");
+            unanchoredArgs.put("regex", true);
+
+            final ToolResult unanchoredResult = tool.execute(new ToolCall("call-regex-1", "assert_attribute", unanchoredArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, unanchoredResult.status());
+            final JsonNode resJson = MAPPER.readTree(unanchoredResult.content());
+            Assertions.assertEquals("SUCCESS", resJson.path("status").asText());
+
+            // 2. Anchored full-string regex should FAIL if whole string does not match
+            final ObjectNode anchoredMismatchArgs = MAPPER.createObjectNode();
+            anchoredMismatchArgs.put("selector", "[role=\"img\"]");
+            anchoredMismatchArgs.put("attribute", "aria-label");
+            anchoredMismatchArgs.put("expectedValue", "^Hochgeladenes Foto$");
+            anchoredMismatchArgs.put("regex", true);
+
+            Assertions.assertThrows(
+                    AssertionError.class,
+                    () -> tool.execute(new ToolCall("call-regex-2", "assert_attribute", anchoredMismatchArgs), null)
+            );
+
+            // 3. Anchored full-string regex that matches full string should SUCCEED
+            final ObjectNode anchoredSuccessArgs = MAPPER.createObjectNode();
+            anchoredSuccessArgs.put("selector", "[role=\"img\"]");
+            anchoredSuccessArgs.put("attribute", "aria-label");
+            anchoredSuccessArgs.put("expectedValue", "^Hochgeladenes Foto.*\\.jpg$");
+            anchoredSuccessArgs.put("regex", true);
+
+            final ToolResult anchoredSuccessResult = tool.execute(new ToolCall("call-regex-3", "assert_attribute", anchoredSuccessArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, anchoredSuccessResult.status());
+
+            // 4. Negated unanchored regex that is present should FAIL
+            final ObjectNode negatedFailArgs = MAPPER.createObjectNode();
+            negatedFailArgs.put("selector", "[role=\"img\"]");
+            negatedFailArgs.put("attribute", "aria-label");
+            negatedFailArgs.put("expectedValue", "Hochgeladenes Foto");
+            negatedFailArgs.put("regex", true);
+            negatedFailArgs.put("negated", true);
+
+            Assertions.assertThrows(
+                    AssertionError.class,
+                    () -> tool.execute(new ToolCall("call-regex-4", "assert_attribute", negatedFailArgs), null)
+            );
+
+            // 5. Negated unanchored regex that is absent should SUCCEED
+            final ObjectNode negatedSuccessArgs = MAPPER.createObjectNode();
+            negatedSuccessArgs.put("selector", "[role=\"img\"]");
+            negatedSuccessArgs.put("attribute", "aria-label");
+            negatedSuccessArgs.put("expectedValue", "Unbekanntes Bild");
+            negatedSuccessArgs.put("regex", true);
+            negatedSuccessArgs.put("negated", true);
+
+            final ToolResult negatedSuccessResult = tool.execute(new ToolCall("call-regex-5", "assert_attribute", negatedSuccessArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, negatedSuccessResult.status());
+        }
+        finally
+        {
+            Configuration.timeout = originalTimeout;
+            WebDriverRunner.closeWebDriver();
+        }
+    }
+
+    @Test
+    public void testAssertAttributeDefaultsToSubstringMatch() throws Exception
+    {
+        final WebElement photoElement = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "div";
+                    }
+                    if ("getAttribute".equals(name))
+                    {
+                        final String attr = (String) args[0];
+                        if ("aria-label".equals(attr))
+                        {
+                            return "Hochgeladenes Foto mit dem Namen ifolor-image-1792587957645-7204938647068727335.jpg";
+                        }
+                        if ("role".equals(attr))
+                        {
+                            return "img";
+                        }
+                        return null;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("findElements".equals(name))
+                    {
+                        return List.of(photoElement);
+                    }
+                    if ("findElement".equals(name))
+                    {
+                        return photoElement;
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final long originalTimeout = Configuration.timeout;
+        Configuration.timeout = 100;
+        try
+        {
+            final AiTool tool = this.registry.getTool("assert_attribute").orElseThrow();
+
+            // 1. Calling assert_attribute WITHOUT exact parameter should default to substring matching and SUCCEED
+            final ObjectNode defaultSubstringArgs = MAPPER.createObjectNode();
+            defaultSubstringArgs.put("selector", "[role=\"img\"]");
+            defaultSubstringArgs.put("attribute", "aria-label");
+            defaultSubstringArgs.put("expectedValue", "Hochgeladenes Foto");
+            defaultSubstringArgs.put("regex", false);
+
+            final ToolResult defaultResult = tool.execute(new ToolCall("call-default-1", "assert_attribute", defaultSubstringArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, defaultResult.status());
+            final JsonNode defaultJson = MAPPER.readTree(defaultResult.content());
+            Assertions.assertEquals("SUCCESS", defaultJson.path("status").asText());
+            Assertions.assertFalse(defaultJson.path("exact").asBoolean());
+
+            // 2. Explicitly setting exact: true on partial substring should FAIL
+            final ObjectNode explicitExactFailArgs = MAPPER.createObjectNode();
+            explicitExactFailArgs.put("selector", "[role=\"img\"]");
+            explicitExactFailArgs.put("attribute", "aria-label");
+            explicitExactFailArgs.put("expectedValue", "Hochgeladenes Foto");
+            explicitExactFailArgs.put("exact", true);
+
+            Assertions.assertThrows(
+                    AssertionError.class,
+                    () -> tool.execute(new ToolCall("call-exact-fail", "assert_attribute", explicitExactFailArgs), null)
+            );
+
+            // 3. Explicitly setting exact: true with complete string value should SUCCEED
+            final ObjectNode explicitExactSuccessArgs = MAPPER.createObjectNode();
+            explicitExactSuccessArgs.put("selector", "[role=\"img\"]");
+            explicitExactSuccessArgs.put("attribute", "aria-label");
+            explicitExactSuccessArgs.put("expectedValue", "Hochgeladenes Foto mit dem Namen ifolor-image-1792587957645-7204938647068727335.jpg");
+            explicitExactSuccessArgs.put("exact", true);
+
+            final ToolResult exactSuccessResult = tool.execute(new ToolCall("call-exact-success", "assert_attribute", explicitExactSuccessArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, exactSuccessResult.status());
         }
         finally
         {

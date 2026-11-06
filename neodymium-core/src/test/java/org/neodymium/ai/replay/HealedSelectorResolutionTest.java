@@ -109,6 +109,23 @@ public class HealedSelectorResolutionTest
     }
 
     /**
+     * Authentic test attributes (data-qa, data-cy, data-test, data-test-id) must be preserved in replay selectors.
+     */
+    @Test
+    public void testAuthenticTestAttributesPreservedInReplaySelector()
+    {
+        final DomFeatureVector qaCandidate = candidate("button", "", Collections.emptySet(), Map.of("data-qa", "submit-order"), "", 0, 0, 0, 0);
+        final DomFeatureVector cyCandidate = candidate("input", "", Collections.emptySet(), Map.of("data-cy", "login-email"), "", 0, 0, 0, 0);
+        final DomFeatureVector testCandidate = candidate("div", "", Collections.emptySet(), Map.of("data-test", "banner-modal"), "", 0, 0, 0, 0);
+        final DomFeatureVector testIdAltCandidate = candidate("a", "", Collections.emptySet(), Map.of("data-test-id", "nav-cart"), "", 0, 0, 0, 0);
+
+        assertEquals("button[data-qa=\"submit-order\"]", PlaybookToolReplayer.resolveSelectorForCandidate(qaCandidate));
+        assertEquals("input[data-cy=\"login-email\"]", PlaybookToolReplayer.resolveSelectorForCandidate(cyCandidate));
+        assertEquals("div[data-test=\"banner-modal\"]", PlaybookToolReplayer.resolveSelectorForCandidate(testCandidate));
+        assertEquals("a[data-test-id=\"nav-cart\"]", PlaybookToolReplayer.resolveSelectorForCandidate(testIdAltCandidate));
+    }
+
+    /**
      * Identity-bearing selectors keep their existing priority: id first.
      */
     @Test

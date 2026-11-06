@@ -26,6 +26,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
+import com.xceptance.neodymium.aura.AuraFileService.IssueSeverity;
+import com.xceptance.neodymium.aura.AuraFileService.ValidationIssue;
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -894,6 +897,62 @@ public class AuraFileServiceTest
     }
 
     @Test
+    public final void testParsePlaybookSectionsWithPropertiesAndMeta()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            _properties:
+              neodymium.ai.tokenBudget.input: 1500000
+              skipReplay: true
+
+            _meta:
+              author: "QA Team"
+              tags:
+                - smoke
+                - checkout
+
+            description: "Smoke test verifying guest checkout"
+
+            promptAddon:
+              visual: "Do not dismiss the modal before asserting banner"
+
+            steps: |
+              Open https://verla.xceptance.com
+              Click checkout button
+            """;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        Assertions.assertNotNull(sections);
+        Assertions.assertEquals(Boolean.FALSE, sections.get("hasError"));
+
+        final String propertiesYaml = (String) sections.get("propertiesYaml");
+        Assertions.assertNotNull(propertiesYaml, "Must extract propertiesYaml");
+        Assertions.assertTrue(propertiesYaml.contains("neodymium.ai.tokenBudget.input"), "Should contain tokenBudget property");
+        Assertions.assertTrue(propertiesYaml.contains("skipReplay"), "Should contain skipReplay property");
+        Assertions.assertFalse(propertiesYaml.startsWith("{"), "propertiesYaml must use clean block style, not flow JSON: " + propertiesYaml);
+
+        @SuppressWarnings("unchecked")
+        final List<Map<String, String>> propertiesList = (List<Map<String, String>>) sections.get("propertiesList");
+        Assertions.assertNotNull(propertiesList, "Must extract propertiesList");
+        Assertions.assertEquals(2, propertiesList.size());
+        Assertions.assertEquals("neodymium.ai.tokenBudget.input", propertiesList.get(0).get("key"));
+        Assertions.assertEquals("1500000", propertiesList.get(0).get("value"));
+        Assertions.assertEquals("skipReplay", propertiesList.get(1).get("key"));
+        Assertions.assertEquals("true", propertiesList.get(1).get("value"));
+
+        final String metaYaml = (String) sections.get("metaYaml");
+        Assertions.assertNotNull(metaYaml, "Must extract metaYaml");
+        Assertions.assertTrue(metaYaml.contains("author"), "Should contain author");
+        Assertions.assertTrue(metaYaml.contains("QA Team"), "Should contain QA Team");
+
+        Assertions.assertEquals("Smoke test verifying guest checkout", sections.get("description"));
+
+        final String promptAddonYaml = (String) sections.get("promptAddonYaml");
+        Assertions.assertNotNull(promptAddonYaml, "Must extract promptAddonYaml");
+        Assertions.assertTrue(promptAddonYaml.contains("visual"), "Should contain visual promptAddon");
+    }
+
+    @Test
     public void testParsePlaybookSectionsWithRootAndDatasetTags()
     {
         final AuraFileService fileService = new AuraFileService();
@@ -989,6 +1048,131 @@ public class AuraFileServiceTest
             Assertions.assertEquals(2, datasets.size());
             Assertions.assertEquals(List.of("p1"), datasets.get(0).tags.get("tier"));
             Assertions.assertEquals(List.of("p2"), datasets.get(1).tags.get("tier"));
+        }
+        finally
+        {
+            fileService.deleteYamlFile(fileName);
+        }
+    }
+
+    @Test
+    public final void testParsePlaybookSectionsWithRootVariablesAndLifecycleBlocks()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            baseUrl: "https://verla.xceptance.com"
+            browser: "Chrome_1920x1080"
+
+            beforeAll: |
+              Set up test database
+
+            beforeEach: |
+              Clear browser cookies
+
+            steps: |
+              Open ${baseUrl}
+              Click search
+
+            afterEach: |
+              Log out user
+
+            afterAll: |
+              Tear down test database
+            """;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        Assertions.assertNotNull(sections);
+        Assertions.assertEquals(Boolean.FALSE, sections.get("hasError"));
+
+        @SuppressWarnings("unchecked")
+        final List<String> beforeSteps = (List<String>) sections.get("beforeSteps");
+        Assertions.assertNotNull(beforeSteps);
+        Assertions.assertTrue(beforeSteps.contains("Clear browser cookies"), "beforeSteps should contain beforeEach step");
+
+        @SuppressWarnings("unchecked")
+        final List<String> afterSteps = (List<String>) sections.get("afterSteps");
+        Assertions.assertNotNull(afterSteps);
+        Assertions.assertTrue(afterSteps.contains("Log out user"), "afterSteps should contain afterEach step");
+
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> rootVariables = (Map<String, Object>) sections.get("rootVariables");
+        Assertions.assertNotNull(rootVariables, "Must extract rootVariables");
+        Assertions.assertEquals("https://verla.xceptance.com", rootVariables.get("baseUrl"));
+        Assertions.assertEquals("Chrome_1920x1080", rootVariables.get("browser"));
+    }
+
+    @Test
+    public final void testValidateFileContentRecognizesRootVariablesAndProperties()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            baseUrl: "https://verla.xceptance.com"
+            _properties:
+              neodymium.ai.tokenBudget.input: 1000000
+
+            steps: |
+              Open ${baseUrl}
+              Observe consistency (visual)
+            """;
+
+        final List<ValidationIssue> issues = fileService.validateFileContent("test.yaml", content);
+        Assertions.assertNotNull(issues);
+        final boolean hasUndefinedVarError = issues.stream().anyMatch(issue ->
+                issue.severity() == IssueSeverity.ERROR && issue.message().contains("Undefined variable"));
+        Assertions.assertFalse(hasUndefinedVarError, "baseUrl defined at root level should not be flagged as undefined variable");
+    }
+
+    @Test
+    public final void testFilteredYamlFilesListWithListArg()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final YamlFileDto file1 = new YamlFileDto("tests/alpha/Login.yaml", List.of());
+        final YamlFileDto file2 = new YamlFileDto("tests/beta/Checkout.yaml", List.of());
+
+        final List<YamlFileDto> list = List.of(file1, file2);
+
+        final List<YamlFileDto> filtered = fileService.getFilteredYamlFilesList(list, "login");
+        Assertions.assertEquals(1, filtered.size());
+        Assertions.assertEquals("tests/alpha/Login.yaml", filtered.get(0).file);
+
+        final List<YamlFileDto> allWhenEmpty = fileService.getFilteredYamlFilesList(list, "");
+        Assertions.assertEquals(2, allWhenEmpty.size());
+    }
+
+    @Test
+    public final void testYamlFilesListCachingAndInvalidation() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String fileName = "test_caching_unit.yaml";
+
+        try
+        {
+            fileService.createYamlFile(fileName);
+            fileService.saveYamlFileContent(fileName, "steps:\n  - Step One");
+
+            final List<YamlFileDto> firstScan = fileService.getYamlFilesList();
+            final YamlFileDto firstEntry = firstScan.stream()
+                    .filter(f -> fileName.equals(f.file))
+                    .findFirst()
+                    .orElse(null);
+            Assertions.assertNotNull(firstEntry, "First scan should contain created file");
+
+            final List<YamlFileDto> secondScan = fileService.getYamlFilesList();
+            final YamlFileDto secondEntry = secondScan.stream()
+                    .filter(f -> fileName.equals(f.file))
+                    .findFirst()
+                    .orElse(null);
+            Assertions.assertNotNull(secondEntry, "Second scan should contain created file");
+            Assertions.assertSame(firstEntry, secondEntry, "Second scan should return the cached YamlFileDto instance");
+
+            fileService.saveYamlFileContent(fileName, "steps:\n  - Step Two");
+            final List<YamlFileDto> thirdScan = fileService.getYamlFilesList();
+            final YamlFileDto thirdEntry = thirdScan.stream()
+                    .filter(f -> fileName.equals(f.file))
+                    .findFirst()
+                    .orElse(null);
+            Assertions.assertNotNull(thirdEntry);
+            Assertions.assertNotSame(firstEntry, thirdEntry, "Third scan should return a freshly parsed instance after save");
         }
         finally
         {
@@ -1095,5 +1279,48 @@ public class AuraFileServiceTest
         Assertions.assertTrue(multiMatch.stream().anyMatch(f -> "checkout_both.yaml".equals(f.file)));
         Assertions.assertTrue(multiMatch.stream().anyMatch(f -> "checkout_inherited.yaml".equals(f.file)));
         Assertions.assertFalse(multiMatch.stream().anyMatch(f -> "disjoint.yaml".equals(f.file)));
+    }
+
+    @Test
+    public void testUpdateFragmentReferencesInvalidatesCache() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String testFile = "test_fragment_cache_invalidation.yaml";
+        final String fragmentOld = "fragments/old.steps";
+        final String fragmentNew = "fragments/new.steps";
+
+        try
+        {
+            fileService.createYamlFile(testFile);
+            fileService.saveYamlFileContent(testFile, "steps:\n  - _include: " + fragmentOld);
+
+            final List<YamlFileDto> firstScan = fileService.getYamlFilesList();
+            final YamlFileDto firstEntry = firstScan.stream()
+                    .filter(f -> testFile.equals(f.file))
+                    .findFirst()
+                    .orElse(null);
+            Assertions.assertNotNull(firstEntry);
+
+            final List<YamlFileDto> secondScan = fileService.getYamlFilesList();
+            final YamlFileDto secondEntry = secondScan.stream()
+                    .filter(f -> testFile.equals(f.file))
+                    .findFirst()
+                    .orElse(null);
+            Assertions.assertSame(firstEntry, secondEntry);
+
+            fileService.updateFragmentReferences(fragmentOld, fragmentNew);
+
+            final List<YamlFileDto> thirdScan = fileService.getYamlFilesList();
+            final YamlFileDto thirdEntry = thirdScan.stream()
+                    .filter(f -> testFile.equals(f.file))
+                    .findFirst()
+                    .orElse(null);
+            Assertions.assertNotNull(thirdEntry);
+            Assertions.assertNotSame(firstEntry, thirdEntry, "Cache should be invalidated after updating fragment references");
+        }
+        finally
+        {
+            fileService.deleteYamlFile(testFile);
+        }
     }
 }

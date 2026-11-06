@@ -48,6 +48,7 @@ import org.neodymium.ai.util.AtomicFileUtils;
 import org.neodymium.util.TagUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
 /**
@@ -371,6 +372,17 @@ public final class AuraFileService
         }
     }
 
+    private record CachedYamlEntry(long lastModified, long length, YamlFileDto dto)
+    {
+    }
+
+    private final Map<String, CachedYamlEntry> yamlFilesCache = new ConcurrentHashMap<>();
+
+    public void clearYamlFilesCache()
+    {
+        yamlFilesCache.clear();
+    }
+
     public List<YamlFileDto> getYamlFilesList()
     {
         final List<String> yamlFiles = new ArrayList<>();
@@ -384,6 +396,15 @@ public final class AuraFileService
         for (final String file : yamlFiles)
         {
             final File yamlFile = new File(resourcesDir, file);
+            final long lastModified = yamlFile.lastModified();
+            final long length = yamlFile.length();
+            final CachedYamlEntry cached = yamlFilesCache.get(file);
+            if (cached != null && cached.lastModified() == lastModified && cached.length() == length)
+            {
+                responseList.add(cached.dto());
+                continue;
+            }
+
             final Map<String, Object> details = getFileDetails(yamlFile);
             @SuppressWarnings("unchecked")
             final List<DatasetDto> datasets = (List<DatasetDto>) details.get("datasets");
@@ -411,8 +432,11 @@ public final class AuraFileService
             }
             @SuppressWarnings("unchecked")
             final Map<String, List<String>> fileTags = (Map<String, List<String>>) details.getOrDefault("tags", Collections.emptyMap());
-            responseList.add(new YamlFileDto(file, enrichedDatasets, hasError, error, fileHasPlaybook, fileTags));
+            final YamlFileDto dto = new YamlFileDto(file, enrichedDatasets, hasError, error, fileHasPlaybook, fileTags);
+            yamlFilesCache.put(file, new CachedYamlEntry(lastModified, length, dto));
+            responseList.add(dto);
         }
+        yamlFilesCache.keySet().retainAll(yamlFiles);
         return responseList;
     }
 
@@ -938,6 +962,11 @@ public final class AuraFileService
             LOGGER.error("Failed to accept playbook healing for file='{}', datasetId='{}': {}", file, datasetId, e.getMessage(), e);
             return false;
         }
+    }
+
+    public List<YamlFileDto> getFilteredYamlFilesList(final List<YamlFileDto> files, final String query)
+    {
+        return filterYamlFiles(files != null ? files : getYamlFilesList(), query);
     }
 
     public List<YamlFileDto> getFilteredYamlFilesList(final String query)
@@ -1724,6 +1753,7 @@ public final class AuraFileService
             yamlFile.getParentFile().mkdirs();
         }
         Files.writeString(yamlFile.toPath(), content, StandardCharsets.UTF_8);
+        clearYamlFilesCache();
     }
 
     public void createYamlFile(final String name) throws IOException
@@ -1740,6 +1770,7 @@ public final class AuraFileService
                 yamlFile.getParentFile().mkdirs();
             }
             Files.writeString(yamlFile.toPath(), "", StandardCharsets.UTF_8);
+            clearYamlFilesCache();
         }
     }
 
@@ -1750,6 +1781,7 @@ public final class AuraFileService
         if (yamlFile.exists() && yamlFile.isFile())
         {
             Files.delete(yamlFile.toPath());
+            clearYamlFilesCache();
             return true;
         }
         return false;
@@ -1822,6 +1854,7 @@ public final class AuraFileService
         fragmentVarsCache.remove(oldRelativePath);
         fragmentVarsCache.remove(targetPath);
 
+        clearYamlFilesCache();
         return true;
     }
 
@@ -1931,6 +1964,10 @@ public final class AuraFileService
             fragmentVarsCache.clear();
         }
         LOGGER.info("[Fragment Refs] Finished. {} file(s) updated.", updatedFiles.size());
+        if (!updatedFiles.isEmpty())
+        {
+            clearYamlFilesCache();
+        }
         return new UpdateFragmentRefsResult(updatedFiles.size(), List.copyOf(updatedFiles));
     }
 
@@ -1952,7 +1989,10 @@ public final class AuraFileService
             try
             {
                 final String normalizedContent = normalizeBlockScalars(content);
-                final Yaml yaml = new Yaml();
+                final DumperOptions dumperOptions = new DumperOptions();
+                dumperOptions.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+                dumperOptions.setPrettyFlow(true);
+                final Yaml yaml = new Yaml(dumperOptions);
                 final Object loaded = yaml.load(normalizedContent);
                 if (loaded instanceof Map)
                 {
@@ -1964,17 +2004,24 @@ public final class AuraFileService
                         rootTags.putAll(TagUtils.parseTags(tagsObj));
                     }
 
-                    final List<String> extractedBefore = extractSectionStepsWithComments(content, "before");
-                    if (!extractedBefore.isEmpty())
+                    final String[] beforeAliases = {"before", "beforeEach", "_beforeEach", "_beforeAll", "beforeAll"};
+                    for (final String alias : beforeAliases)
                     {
-                        beforeSteps.addAll(extractedBefore);
-                    }
-                    else if (root.containsKey("before"))
-                    {
-                        parseSectionSteps(root.get("before"), beforeSteps);
+                        if (beforeSteps.isEmpty())
+                        {
+                            final List<String> extractedBefore = extractSectionStepsWithComments(content, alias);
+                            if (!extractedBefore.isEmpty())
+                            {
+                                beforeSteps.addAll(extractedBefore);
+                            }
+                            else if (root.containsKey(alias))
+                            {
+                                parseSectionSteps(root.get(alias), beforeSteps);
+                            }
+                        }
                     }
 
-                    if (!root.containsKey("steps") && !root.containsKey("before") && !root.containsKey("after")
+                    if (!root.containsKey("steps") && !root.containsKey("_steps") && beforeSteps.isEmpty() && afterSteps.isEmpty()
                             && (root.containsKey("_include") || root.containsKey("include")))
                     {
                         final String incPath = root.containsKey("_include")
@@ -1983,25 +2030,130 @@ public final class AuraFileService
                         mainSteps.add("_include: " + incPath);
                     }
 
-                    final List<String> extractedSteps = extractSectionStepsWithComments(content, "steps");
-                    if (!extractedSteps.isEmpty())
+                    final String[] stepsAliases = {"steps", "_steps"};
+                    for (final String alias : stepsAliases)
                     {
-                        mainSteps.addAll(extractedSteps);
-                    }
-                    else if (root.containsKey("steps"))
-                    {
-                        parseSectionSteps(root.get("steps"), mainSteps);
+                        if (mainSteps.isEmpty())
+                        {
+                            final List<String> extractedSteps = extractSectionStepsWithComments(content, alias);
+                            if (!extractedSteps.isEmpty())
+                            {
+                                mainSteps.addAll(extractedSteps);
+                            }
+                            else if (root.containsKey(alias))
+                            {
+                                parseSectionSteps(root.get(alias), mainSteps);
+                            }
+                        }
                     }
 
-                    final List<String> extractedAfter = extractSectionStepsWithComments(content, "after");
-                    if (!extractedAfter.isEmpty())
+                    final String[] afterAliases = {"after", "afterEach", "_afterEach", "_afterAll", "afterAll"};
+                    for (final String alias : afterAliases)
                     {
-                        afterSteps.addAll(extractedAfter);
+                        if (afterSteps.isEmpty())
+                        {
+                            final List<String> extractedAfter = extractSectionStepsWithComments(content, alias);
+                            if (!extractedAfter.isEmpty())
+                            {
+                                afterSteps.addAll(extractedAfter);
+                            }
+                            else if (root.containsKey(alias))
+                            {
+                                parseSectionSteps(root.get(alias), afterSteps);
+                            }
+                        }
                     }
-                    else if (root.containsKey("after"))
+
+                    // Root properties (_properties or properties)
+                    final Object rawProperties = root.containsKey("_properties") ? root.get("_properties") : root.get("properties");
+                    final List<Map<String, String>> propertiesList = new ArrayList<>();
+                    if (rawProperties != null)
                     {
-                        parseSectionSteps(root.get("after"), afterSteps);
+                        result.put("properties", rawProperties);
+                        if (rawProperties instanceof Map<?, ?> map)
+                        {
+                            for (final Map.Entry<?, ?> entry : map.entrySet())
+                            {
+                                if (entry.getKey() != null)
+                                {
+                                    final Map<String, String> propEntry = new LinkedHashMap<>();
+                                    propEntry.put("key", String.valueOf(entry.getKey()));
+                                    propEntry.put("value", entry.getValue() != null ? String.valueOf(entry.getValue()) : "");
+                                    propertiesList.add(propEntry);
+                                }
+                            }
+                            result.put("propertiesYaml", yaml.dump(rawProperties).trim());
+                        }
+                        else if (rawProperties instanceof List<?>)
+                        {
+                            result.put("propertiesYaml", yaml.dump(rawProperties).trim());
+                        }
+                        else
+                        {
+                            result.put("propertiesYaml", String.valueOf(rawProperties).trim());
+                        }
                     }
+                    result.put("propertiesList", propertiesList);
+
+                    // Root metadata (_meta or meta)
+                    final Object rawMeta = root.containsKey("_meta") ? root.get("_meta") : root.get("meta");
+                    if (rawMeta != null)
+                    {
+                        result.put("meta", rawMeta);
+                        if (rawMeta instanceof Map<?, ?> || rawMeta instanceof List<?>)
+                        {
+                            result.put("metaYaml", yaml.dump(rawMeta).trim());
+                        }
+                        else
+                        {
+                            result.put("metaYaml", String.valueOf(rawMeta).trim());
+                        }
+                    }
+
+                    // Playbook description
+                    if (root.get("description") instanceof String desc && !desc.isBlank())
+                    {
+                        result.put("description", desc.trim());
+                    }
+
+                    // Prompt addon
+                    final Object rawPromptAddon = root.get("promptAddon");
+                    if (rawPromptAddon != null)
+                    {
+                        result.put("promptAddon", rawPromptAddon);
+                        if (rawPromptAddon instanceof Map<?, ?> || rawPromptAddon instanceof List<?>)
+                        {
+                            result.put("promptAddonYaml", yaml.dump(rawPromptAddon).trim());
+                        }
+                        else
+                        {
+                            result.put("promptAddonYaml", String.valueOf(rawPromptAddon).trim());
+                        }
+                    }
+
+                    // Top-level variables (unreserved keys)
+                    final Set<String> reservedKeys = Set.of(
+                        "before", "beforeEach", "_beforeEach", "_beforeAll", "beforeAll",
+                        "steps", "_steps",
+                        "after", "afterEach", "_afterEach", "_afterAll", "afterAll",
+                        "variables", "data", "_data",
+                        "_properties", "properties",
+                        "_meta", "meta",
+                        "description", "promptAddon",
+                        "_include", "include",
+                        "_onSuccess", "_onSuccessEach", "_onSuccessAll", "onSuccessAll",
+                        "_onFailure", "_onFailureEach", "_onFailureAll", "onFailureAll"
+                    );
+                    final Map<String, Object> rootVariables = new LinkedHashMap<>();
+                    for (final Map.Entry<String, Object> entry : root.entrySet())
+                    {
+                        final String k = entry.getKey();
+                        if (!reservedKeys.contains(k) && entry.getValue() != null)
+                        {
+                            rootVariables.put(k, entry.getValue());
+                        }
+                    }
+                    result.put("rootVariables", rootVariables);
 
                     if (root.containsKey("variables") && root.get("variables") instanceof Map)
                     {
@@ -2012,9 +2164,10 @@ public final class AuraFileService
                         }
                     }
 
-                    if (root.containsKey("data") && root.get("data") instanceof List)
+                    final Object rawData = root.containsKey("data") ? root.get("data") : root.get("_data");
+                    if (rawData instanceof List)
                     {
-                        final List<?> dataList = (List<?>) root.get("data");
+                        final List<?> dataList = (List<?>) rawData;
                         for (final Object item : dataList)
                         {
                             if (item instanceof Map)
@@ -2160,6 +2313,8 @@ public final class AuraFileService
             result.put("error", null);
         }
 
+        result.putIfAbsent("propertiesList", List.of());
+        result.putIfAbsent("propertiesYaml", "");
         result.put("beforeSteps", beforeSteps);
         result.put("mainSteps", mainSteps);
         result.put("afterSteps", afterSteps);
@@ -2572,10 +2727,15 @@ public final class AuraFileService
                 }
             }
 
+            @SuppressWarnings("unchecked")
+            final Map<String, Object> rootVariables = sections.get("rootVariables") instanceof Map
+                    ? (Map<String, Object>) sections.get("rootVariables")
+                    : Map.of();
+
             final List<String> undefinedVars = new ArrayList<>();
             for (final String usedVar : usedVars)
             {
-                if (!definedVarKeys.contains(usedVar) && !includedDefinedVars.contains(usedVar))
+                if (!definedVarKeys.contains(usedVar) && !includedDefinedVars.contains(usedVar) && !rootVariables.containsKey(usedVar))
                 {
                     undefinedVars.add(usedVar);
                 }

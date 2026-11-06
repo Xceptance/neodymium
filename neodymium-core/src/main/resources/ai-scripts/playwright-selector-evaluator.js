@@ -911,7 +911,7 @@ return (function(contextRoot, rawSelector) {
             var prefix = s.substring(0, eqIdx).trim().toLowerCase();
             var knownEngines = [
                 'css', 'xpath', 'text', 'text*', 'has-text', 'has-text*',
-                'role', 'id', 'data-testid', 'testid', 'data-test-id', 'data-test',
+                'role', 'id', 'data-testid', 'testid', 'data-test-id', 'data-test', 'data-qa', 'data-cy',
                 'data-ai', 'nth', 'visible', 'label', 'placeholder', 'alt', 'title'
             ];
             if (knownEngines.indexOf(prefix) !== -1 || prefix.startsWith('internal:')) {
@@ -951,6 +951,10 @@ return (function(contextRoot, rawSelector) {
             matched = evaluateCss(currentNodes, '[id="' + unquote(body) + '"]');
         } else if (engine === 'data-testid' || engine === 'data-test-id' || engine === 'data-test' || engine === 'testid' || engine === 'internal:testid') {
             matched = evaluateCss(currentNodes, '[data-testid="' + unquote(body) + '"], [data-test-id="' + unquote(body) + '"], [data-test="' + unquote(body) + '"]');
+        } else if (engine === 'data-qa') {
+            matched = evaluateCss(currentNodes, '[data-qa="' + unquote(body) + '"]');
+        } else if (engine === 'data-cy') {
+            matched = evaluateCss(currentNodes, '[data-cy="' + unquote(body) + '"]');
         } else if (engine === 'data-ai') {
             matched = evaluateCss(currentNodes, '[data-ai="' + unquote(body) + '"]');
         } else if (engine === 'label' || engine === 'internal:label') {

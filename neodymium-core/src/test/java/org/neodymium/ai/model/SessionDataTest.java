@@ -323,4 +323,88 @@ public final class SessionDataTest
         assertEquals("updatedSneakers", session.getStaticDataVariables().get("searchTerm"));
         assertEquals("shoes", session.getStaticDataVariables().get("category"));
     }
+
+    /**
+     * Verifies that get(key) automatically resolves variable placeholders leniently,
+     * get(key, true) resolves strictly, and getRaw(key) preserves the raw template.
+     */
+    @Test
+    public void testGetResolvesPlaceholdersAndPreservesRaw()
+    {
+        final Map<String, SessionData.DataEntry> staticMap = new HashMap<>();
+        staticMap.put("email", new SessionData.DataEntry("user${random}@example.org", false));
+        staticMap.put("siteUrl", new SessionData.DataEntry("https://${host}:${port}/app", false));
+        staticMap.put("unresolved", new SessionData.DataEntry("prefix_${missing}_suffix", false));
+
+        final SessionData session = new SessionData(staticMap);
+        session.set("random", "12345");
+        session.set("host", "example.org");
+        session.set("port", 8443);
+
+        // Standard get() resolves available variables
+        assertEquals("user12345@example.org", session.get("email"));
+        assertEquals("https://example.org:8443/app", session.get("siteUrl"));
+
+        // Raw get preserves un-substituted template
+        assertEquals("user${random}@example.org", session.getRaw("email"));
+        assertEquals("https://${host}:${port}/app", session.getRaw("siteUrl"));
+
+        // Unresolved variable in lenient mode leaves placeholder intact
+        assertEquals("prefix_${missing}_suffix", session.get("unresolved"));
+
+        // Strict mode throws UnresolvableVariableException when missing placeholder exists
+        assertThrows(UnresolvableVariableException.class, () -> session.get("unresolved", true));
+
+        // Strict mode succeeds when all placeholders resolve
+        assertEquals("user12345@example.org", session.get("email", true));
+    }
+
+    /**
+     * Verifies circular reference protection and maximum depth guarding in get() and resolveVariables().
+     */
+    @Test
+    public void testGetResolvesNestedAndGuardsCircularPlaceholders()
+    {
+        final SessionData session = new SessionData();
+        session.set("varA", "${varB}");
+        session.set("varB", "${varA}");
+
+        // Lenient mode terminates safely at depth 10 without StackOverflowError
+        final Object result = session.get("varA");
+        assertTrue(result.toString().contains("${varA}") || result.toString().contains("${varB}"));
+
+        // Strict mode throws IllegalStateException on circular reference depth limit exceeded
+        assertThrows(IllegalStateException.class, () -> session.get("varA", true));
+    }
+
+    /**
+     * Verifies that null keys are handled safely without NullPointerException.
+     */
+    @Test
+    public void testGetNullKeyHandling()
+    {
+        final SessionData session = new SessionData();
+        assertNull(session.get(null));
+        assertNull(session.getRaw(null));
+        assertNull(session.getEntry(null));
+    }
+
+    /**
+     * Verifies that non-string objects (Integers, Booleans, Maps) are preserved without string conversion.
+     */
+    @Test
+    public void testGetNonStringObjectPreservation()
+    {
+        final SessionData session = new SessionData();
+        session.set("intVal", 42);
+        session.set("boolVal", true);
+
+        final Map<String, Object> mapVal = new HashMap<>();
+        mapVal.put("leaf", "val");
+        session.set("mapVal", mapVal);
+
+        assertEquals(42, session.get("intVal"));
+        assertEquals(true, session.get("boolVal"));
+        assertEquals(mapVal, session.get("mapVal"));
+    }
 }

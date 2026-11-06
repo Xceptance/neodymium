@@ -155,4 +155,26 @@ public class SelenideElementFinderTest
             () -> SelenideElementFinder.findAllInShadowRoots("button:frobnicate"));
         Assertions.assertTrue(ex.getMessage().contains(":frobnicate"));
     }
+
+    @Test
+    public void testActionWithFramePropertyPreservation()
+    {
+        final Action action = new Action("CLICK", "#button", "Click nested button")
+            .withFrame("#pact1 >>> #pact2");
+        Assertions.assertEquals("#pact1 >>> #pact2", action.getFrame());
+        Assertions.assertEquals("#button", action.getTarget());
+    }
+
+    @Test
+    public void testFindElementsRequiresValidTarget()
+    {
+        Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> SelenideElementFinder.findElements(null));
+
+        final Action emptyAction = new Action("ASSERT_COUNT", "  ", "empty");
+        Assertions.assertThrows(
+            IllegalArgumentException.class,
+            () -> SelenideElementFinder.findElements(emptyAction));
+    }
 }

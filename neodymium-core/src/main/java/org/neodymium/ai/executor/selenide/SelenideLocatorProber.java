@@ -48,7 +48,7 @@ public final class SelenideLocatorProber
 
     private static final List<String> STANDARD_PROBE_ATTRIBUTES = List.of(
             "id", "name", "class", "type", "role", "aria-label", "aria-expanded",
-            "data-testid", "data-test", "placeholder", "href", "value", "title", "data-ai"
+            "data-testid", "data-test-id", "data-test", "data-qa", "data-cy", "placeholder", "href", "value", "title", "data-ai"
     );
 
     private SelenideLocatorProber()

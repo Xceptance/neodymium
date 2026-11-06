@@ -563,6 +563,158 @@ public class PlaybookLifecycleExecutionTest
         assertEquals("pending", afterArr.get(0).get("status").asText());
     }
 
+    /**
+     * Goal: Verifies that InteractiveStateBuilder resolves pending steps from playbook.mainSteps
+     * when playbook.steps is initially empty, and ensures that before and after steps accumulated
+     * into playbook.steps are not duplicated inside blocks.steps.
+     */
+    @Test
+    public void testInteractiveStateBuilderResolvesMainStepsWhenStepsEmptyAndFiltersDuplicates() throws IOException
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final PlaybookStep before1 = new PlaybookStep("Navigate to homepage");
+        before1.setBlock("before");
+        before1.setStatus(PlaybookStepStatus.SUCCESS);
+
+        final PlaybookStep core1 = new PlaybookStep("Click search button");
+        core1.setBlock("steps");
+        core1.setStatus(PlaybookStepStatus.PENDING);
+
+        final PlaybookStep core2 = new PlaybookStep("Enter search query");
+        core2.setBlock("steps");
+        core2.setStatus(PlaybookStepStatus.PENDING);
+
+        final PlaybookStep after1 = new PlaybookStep("Clean up session");
+        after1.setBlock("after");
+        after1.setStatus(PlaybookStepStatus.PENDING);
+
+        final List<PlaybookStep> beforeList = List.of(before1);
+        final List<PlaybookStep> coreList = List.of(core1, core2);
+        final List<PlaybookStep> afterList = List.of(after1);
+
+        // Case 1: playbook.steps is empty list (prior to test execution), but playbook.mainSteps is present
+        context.getTransientData().put("playbook.beforeSteps", beforeList);
+        context.getTransientData().put("playbook.steps", new ArrayList<PlaybookStep>());
+        context.getTransientData().put("playbook.mainSteps", new ArrayList<>(coreList));
+        context.getTransientData().put("playbook.afterSteps", afterList);
+
+        final ObjectMapper mapper = new ObjectMapper();
+        final String stateJsonInitial = InteractiveStateBuilder.buildStateJson(null, context, "run-mainsteps", 0, "running");
+        final JsonNode stateInitial = mapper.readTree(stateJsonInitial);
+        final JsonNode blocksInitial = stateInitial.get("blocks");
+        assertNotNull(blocksInitial);
+
+        final JsonNode beforeArrInitial = blocksInitial.get("before");
+        assertEquals(1, beforeArrInitial.size());
+        assertEquals("Navigate to homepage", beforeArrInitial.get(0).get("instruction").asText());
+
+        final JsonNode stepsArrInitial = blocksInitial.get("steps");
+        assertEquals(2, stepsArrInitial.size(), "blocks.steps must resolve mainSteps when playbook.steps is empty");
+        assertEquals("Click search button", stepsArrInitial.get(0).get("instruction").asText());
+        assertEquals("Enter search query", stepsArrInitial.get(1).get("instruction").asText());
+
+        final JsonNode afterArrInitial = blocksInitial.get("after");
+        assertEquals(1, afterArrInitial.size());
+        assertEquals("Clean up session", afterArrInitial.get(0).get("instruction").asText());
+
+        // Case 2: playbook.steps has accumulated all steps across lifecycle execution (before, core, after)
+        final List<PlaybookStep> accumulatedSteps = new ArrayList<>();
+        accumulatedSteps.addAll(beforeList);
+        accumulatedSteps.addAll(coreList);
+        accumulatedSteps.addAll(afterList);
+        context.getTransientData().put("playbook.steps", accumulatedSteps);
+        context.getTransientData().remove("playbook.mainSteps");
+
+        final String stateJsonAccumulated = InteractiveStateBuilder.buildStateJson(null, context, "run-accumulated", 0, "running");
+        final JsonNode stateAccumulated = mapper.readTree(stateJsonAccumulated);
+        final JsonNode blocksAccumulated = stateAccumulated.get("blocks");
+        assertNotNull(blocksAccumulated);
+
+        final JsonNode stepsArrAccumulated = blocksAccumulated.get("steps");
+        assertEquals(2, stepsArrAccumulated.size(), "blocks.steps must filter out before and after steps from accumulated playbook.steps");
+        assertEquals("Click search button", stepsArrAccumulated.get(0).get("instruction").asText());
+        assertEquals("Enter search query", stepsArrAccumulated.get(1).get("instruction").asText());
+
+        // Case 3: Hybrid setup pause: programmatic setup step has executed into playbook.steps,
+        // while playbook.mainSteps is still pending and awaiting test method execution.
+        final ExecutionContext contextCase3 = new ExecutionContext(new SessionData());
+        final PlaybookStep setupStep = new PlaybookStep("Programmatic setup step in BeforeEach");
+        setupStep.setStatus(PlaybookStepStatus.SUCCESS);
+
+        contextCase3.getTransientData().put("playbook.beforeSteps", beforeList);
+        contextCase3.getTransientData().put("playbook.steps", new ArrayList<>(List.of(setupStep)));
+        contextCase3.getTransientData().put("playbook.mainSteps", new ArrayList<>(coreList));
+        contextCase3.getTransientData().put("playbook.afterSteps", afterList);
+
+        final String stateJsonHybrid = InteractiveStateBuilder.buildStateJson(null, contextCase3, "run-hybrid", 0, "running");
+        final JsonNode stateHybrid = mapper.readTree(stateJsonHybrid);
+        final JsonNode blocksHybrid = stateHybrid.get("blocks");
+        assertNotNull(blocksHybrid);
+
+        final JsonNode stepsArrHybrid = blocksHybrid.get("steps");
+        assertEquals(3, stepsArrHybrid.size(), "blocks.steps must include executed setup steps ahead of pending mainSteps");
+        assertEquals("Programmatic setup step in BeforeEach", stepsArrHybrid.get(0).get("instruction").asText());
+        assertEquals("passed", stepsArrHybrid.get(0).get("status").asText());
+        assertEquals("Click search button", stepsArrHybrid.get(1).get("instruction").asText());
+        assertEquals("Enter search query", stepsArrHybrid.get(2).get("instruction").asText());
+
+        // Case 4: Null step safety: steps collection containing a null element is safely skipped
+        final ExecutionContext contextCase4 = new ExecutionContext(new SessionData());
+        final List<PlaybookStep> listWithNull = new ArrayList<>();
+        listWithNull.add(null);
+        listWithNull.add(core1);
+        listWithNull.add(null);
+        contextCase4.getTransientData().put("playbook.steps", listWithNull);
+
+        final String stateJsonNullSafety = InteractiveStateBuilder.buildStateJson(null, contextCase4, "run-null-safety", 0, "running");
+        final JsonNode stateNullSafety = mapper.readTree(stateJsonNullSafety);
+        final JsonNode blocksNullSafety = stateNullSafety.get("blocks");
+        assertNotNull(blocksNullSafety);
+        final JsonNode stepsArrNullSafety = blocksNullSafety.get("steps");
+        assertEquals(1, stepsArrNullSafety.size(), "blocks.steps must safely skip null step entries without NPE");
+        assertEquals("Click search button", stepsArrNullSafety.get(0).get("instruction").asText());
+    }
+
+    /**
+     * Goal: Verifies that in hybrid tests, programmatic inline steps executed after a YAML step
+     * appear strictly in chronological sequence after that YAML step in the serialized state JSON.
+     */
+    @Test
+    public void testHybridTestChronologicalOrderingInStateBuilder() throws IOException
+    {
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+
+        final PlaybookStep yamlStep1 = new PlaybookStep("YAML step 1");
+        yamlStep1.setStatus(PlaybookStepStatus.SUCCESS);
+        yamlStep1.setBlock("steps");
+
+        final PlaybookStep inlineStep = new PlaybookStep("Inline programmatic step");
+        inlineStep.setStatus(PlaybookStepStatus.SUCCESS);
+        inlineStep.setBlock("steps");
+
+        final PlaybookStep yamlStep2 = new PlaybookStep("YAML step 2");
+        yamlStep2.setStatus(PlaybookStepStatus.PENDING);
+        yamlStep2.setBlock("steps");
+
+        // Executed so far: yamlStep1, followed by inlineStep
+        final List<PlaybookStep> sessionSteps = new ArrayList<>(List.of(yamlStep1, inlineStep));
+        // Remaining/configured main steps from YAML: yamlStep1, yamlStep2
+        final List<PlaybookStep> mainSteps = new ArrayList<>(List.of(yamlStep1, yamlStep2));
+
+        context.getTransientData().put("playbook.steps", sessionSteps);
+        context.getTransientData().put("playbook.mainSteps", mainSteps);
+
+        final ObjectMapper mapper = new ObjectMapper();
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run-hybrid-order", 0, "running");
+        final JsonNode root = mapper.readTree(stateJson);
+        final JsonNode stepsArr = root.get("blocks").get("steps");
+        assertNotNull(stepsArr);
+        assertEquals(3, stepsArr.size(), "All 3 steps must be rendered in blocks.steps");
+        assertEquals("YAML step 1", stepsArr.get(0).get("instruction").asText());
+        assertEquals("Inline programmatic step", stepsArr.get(1).get("instruction").asText());
+        assertEquals("YAML step 2", stepsArr.get(2).get("instruction").asText());
+    }
+
     private static class ActionTrackingTargetExecutor implements TargetExecutor
     {
         private final MockTargetExecutor delegate = new MockTargetExecutor();

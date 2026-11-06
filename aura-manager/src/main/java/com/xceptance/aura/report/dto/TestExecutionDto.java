@@ -29,6 +29,7 @@ import com.fasterxml.jackson.databind.DeserializationContext;
 import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.xceptance.aura.report.service.AuraReportDataService;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -48,6 +49,8 @@ import org.neodymium.util.TagUtils;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public final class TestExecutionDto
 {
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+
     /**
      * Custom deserializer that safely extracts bug ticket IDs whether the incoming JSON property
      * is an array of strings, an array of structured bug objects (e.g. Jira issue objects with "id"),
@@ -1156,14 +1159,50 @@ public final class TestExecutionDto
         return localDataBindings;
     }
 
+    @JsonIgnore
     public JsonNode getBlocks()
     {
         return blocks;
     }
 
+    @JsonIgnore
     public JsonNode getSteps()
     {
         return steps;
+    }
+
+    @JsonProperty("blocks")
+    @JsonRawValue
+    public String getBlocksRaw()
+    {
+        if (blocks != null && !blocks.isMissingNode() && !blocks.isNull())
+        {
+            try
+            {
+                return OBJECT_MAPPER.writeValueAsString(blocks);
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        return null;
+    }
+
+    @JsonProperty("steps")
+    @JsonRawValue
+    public String getStepsRaw()
+    {
+        if (steps != null && !steps.isMissingNode() && !steps.isNull())
+        {
+            try
+            {
+                return OBJECT_MAPPER.writeValueAsString(steps);
+            }
+            catch (final Exception ignored)
+            {
+            }
+        }
+        return null;
     }
 
     public String getPrimaryBug()
@@ -1171,34 +1210,18 @@ public final class TestExecutionDto
         return (bugs != null && !bugs.isEmpty()) ? bugs.get(0) : "";
     }
 
+    @JsonIgnore
     public String getBlocksJson()
     {
-        if (blocks != null && !blocks.isMissingNode() && !blocks.isNull())
-        {
-            try
-            {
-                return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(blocks);
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-        return "{}";
+        final String raw = getBlocksRaw();
+        return raw != null ? raw : "{}";
     }
 
+    @JsonIgnore
     public String getStepsJson()
     {
-        if (steps != null && !steps.isMissingNode() && !steps.isNull())
-        {
-            try
-            {
-                return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(steps);
-            }
-            catch (final Exception ignored)
-            {
-            }
-        }
-        return "{}";
+        final String raw = getStepsRaw();
+        return raw != null ? raw : "{}";
     }
 
     public void setBlocks(final JsonNode blocks)
@@ -1221,7 +1244,7 @@ public final class TestExecutionDto
         {
             try
             {
-                return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(localDataBindings);
+                return OBJECT_MAPPER.writeValueAsString(localDataBindings);
             }
             catch (final Exception ignored)
             {

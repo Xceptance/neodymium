@@ -253,15 +253,16 @@ public final class LocatorImprover
             return 10;
         }
 
-        // 3. Test ID attributes (data-testid / data-test)
-        if (unquoted.contains("[data-testid=") || unquoted.contains("[data-test="))
+        // 3. Test ID attributes (data-testid / data-test-id / data-test / data-qa / data-cy)
+        if (unquoted.contains("[data-testid=") || unquoted.contains("[data-test-id=") || unquoted.contains("[data-test=")
+                || unquoted.contains("[data-qa=") || unquoted.contains("[data-cy="))
         {
             return 10;
         }
 
-        // 4. Semantic data attributes (data-country, data-value, data-code, data-lang, data-qa, data-id)
+        // 4. Semantic data attributes (data-country, data-value, data-code, data-lang, data-id)
         if (unquoted.contains("[data-country=") || unquoted.contains("[data-value=") || unquoted.contains("[data-code=")
-                || unquoted.contains("[data-lang=") || unquoted.contains("[data-qa=") || unquoted.contains("[data-id="))
+                || unquoted.contains("[data-lang=") || unquoted.contains("[data-id="))
         {
             return 9;
         }
@@ -349,20 +350,18 @@ public final class LocatorImprover
                 candidates.add("#" + escapeCssIdentifier(id));
             }
 
-            // Candidate 2: data-testid / data-test
-            final String testId = element.getAttribute("data-testid");
-            if (testId != null && !testId.isBlank())
+            // Candidate 2: Test ID attributes (data-testid, data-test-id, data-test, data-qa, data-cy)
+            for (final String testAttr : new String[] {"data-testid", "data-test-id", "data-test", "data-qa", "data-cy"})
             {
-                candidates.add("[data-testid='" + escapeAttributeValue(testId) + "']");
-            }
-            final String testAttr = element.getAttribute("data-test");
-            if (testAttr != null && !testAttr.isBlank())
-            {
-                candidates.add("[data-test='" + escapeAttributeValue(testAttr) + "']");
+                final String val = element.getAttribute(testAttr);
+                if (val != null && !val.isBlank())
+                {
+                    candidates.add("[" + testAttr + "='" + escapeAttributeValue(val) + "']");
+                }
             }
 
             // Candidate 3: Semantic domain data attributes
-            for (final String attr : new String[] {"data-country", "data-value", "data-code", "data-lang", "data-qa", "data-id"})
+            for (final String attr : new String[] {"data-country", "data-value", "data-code", "data-lang", "data-id"})
             {
                 final String val = element.getAttribute(attr);
                 if (val != null && !val.isBlank() && !VOLATILE_ID_DETECTOR.isVolatile(val))

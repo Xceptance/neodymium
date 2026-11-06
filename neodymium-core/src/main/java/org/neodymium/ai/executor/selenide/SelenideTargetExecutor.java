@@ -48,6 +48,7 @@ import org.neodymium.ai.executor.ActionDefinition;
 import org.neodymium.ai.executor.SutState;
 import org.neodymium.ai.executor.TargetExecutor;
 import org.neodymium.ai.executor.probe.LocatorProbeResult;
+import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
 import org.neodymium.ai.model.ContextLevel;
 import org.neodymium.ai.pipeline.ExecutionContext;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
@@ -332,7 +333,10 @@ public final class SelenideTargetExecutor implements TargetExecutor
         try
         {
             final Action executableAction = resolveVariables(action);
-            plugin.execute(executableAction);
+            try (final FrameContextManager.FrameScope frameScope = FrameContextManager.enter(driverBefore, executableAction.getFrame()))
+            {
+                plugin.execute(executableAction);
+            }
 
             if (WebDriverRunner.hasWebDriverStarted())
             {
@@ -473,9 +477,11 @@ public final class SelenideTargetExecutor implements TargetExecutor
         }
         final String origTarget = action.getTarget();
         final String origValue = action.getValue();
+        final String origFrame = action.getFrame();
 
         String resolvedTarget = interpolateString(origTarget);
         final String resolvedValue = interpolateString(origValue);
+        final String resolvedFrame = interpolateString(origFrame);
 
         if (resolvedTarget != null && resolvedTarget.matches("https?://(localhost|127\\.0\\.0\\.1):\\d+.*"))
         {
@@ -491,7 +497,7 @@ public final class SelenideTargetExecutor implements TargetExecutor
             }
         }
 
-        if (Objects.equals(origTarget, resolvedTarget) && Objects.equals(origValue, resolvedValue))
+        if (Objects.equals(origTarget, resolvedTarget) && Objects.equals(origValue, resolvedValue) && Objects.equals(origFrame, resolvedFrame))
         {
             return action;
         }
@@ -504,6 +510,10 @@ public final class SelenideTargetExecutor implements TargetExecutor
         if (!Objects.equals(origValue, resolvedValue))
         {
             resolved = resolved.withValue(resolvedValue);
+        }
+        if (!Objects.equals(origFrame, resolvedFrame))
+        {
+            resolved = resolved.withFrame(resolvedFrame);
         }
         return resolved;
     }

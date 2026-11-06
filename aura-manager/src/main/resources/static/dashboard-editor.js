@@ -50,6 +50,9 @@ function toggleFileCheckboxesInstant(fileCb) {
     datasetCbs.forEach(cb => {
         cb.checked = fileCb.checked;
     });
+    if (typeof updateParentFolderCheckboxes === 'function') {
+        updateParentFolderCheckboxes(fileCb);
+    }
 }
 window.toggleFileCheckboxesInstant = toggleFileCheckboxesInstant;
 
@@ -68,8 +71,352 @@ function toggleDatasetCheckboxInstant(datasetCb) {
     });
     fileCb.checked = allChecked;
     fileCb.indeterminate = (!allChecked && anyChecked);
+    if (typeof updateParentFolderCheckboxes === 'function') {
+        updateParentFolderCheckboxes(fileCb);
+    }
 }
 window.toggleDatasetCheckboxInstant = toggleDatasetCheckboxInstant;
+
+function getFolderTotalDatasets(folderPath) {
+    if (!folderPath) return 0;
+    if (!window.currentFolderTotals) {
+        try {
+            const targetEl = document.querySelector('[data-folder-totals]') || document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+            const raw = targetEl ? targetEl.getAttribute('data-folder-totals') : null;
+            if (raw) {
+                window.currentFolderTotals = JSON.parse(raw);
+            }
+        } catch (e) {}
+    }
+    if (window.currentFolderTotals && typeof window.currentFolderTotals[folderPath] === 'number') {
+        return window.currentFolderTotals[folderPath];
+    }
+    return 0;
+}
+window.getFolderTotalDatasets = getFolderTotalDatasets;
+
+function countFolderTotalDatasets(groupEl, folderPath) {
+    const knownTotal = getFolderTotalDatasets(folderPath);
+    if (knownTotal > 0) {
+        return knownTotal;
+    }
+    if (!groupEl) return 0;
+    let domTotal = 0;
+    const fileContainers = groupEl.querySelectorAll('.file-container');
+    fileContainers.forEach(container => {
+        const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+        if (datasetCbs.length > 0) {
+            domTotal += datasetCbs.length;
+        } else {
+            domTotal += 1;
+        }
+    });
+    return domTotal;
+}
+window.countFolderTotalDatasets = countFolderTotalDatasets;
+
+function countFolderSelectedDatasets(groupEl, folderPath) {
+    if (!groupEl) return 0;
+    let selectedCount = 0;
+
+    // 1. Count selected datasets/files currently present in DOM under groupEl
+    const fileContainers = groupEl.querySelectorAll('.file-container');
+    const domFilePaths = new Set();
+
+    fileContainers.forEach(container => {
+        const filePath = container.getAttribute('data-file');
+        if (filePath) {
+            domFilePaths.add(filePath);
+        }
+        const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+        if (datasetCbs.length > 0) {
+            datasetCbs.forEach(dcb => {
+                if (dcb.checked) {
+                    selectedCount++;
+                }
+            });
+        } else {
+            const fileCb = container.querySelector('.file-select-cb');
+            if (fileCb && fileCb.checked) {
+                selectedCount++;
+            }
+        }
+    });
+
+    // 2. Count selected items from queue that belong to this folder but are filtered out of the DOM
+    if (folderPath) {
+        const queueContainer = document.getElementById('queueListContainer');
+        if (queueContainer) {
+            const queueItems = queueContainer.querySelectorAll('.queue-item');
+            queueItems.forEach(qItem => {
+                const qFile = qItem.getAttribute('data-file');
+                if (qFile && !domFilePaths.has(qFile)) {
+                    const prefix = folderPath.endsWith('/') ? folderPath : (folderPath + '/');
+                    if (qFile.startsWith(prefix) || qFile === folderPath) {
+                        selectedCount++;
+                    }
+                }
+            });
+        }
+    }
+
+    return selectedCount;
+}
+window.countFolderSelectedDatasets = countFolderSelectedDatasets;
+
+function applyFolderCheckboxState(folderCb, selectedCount, totalCount) {
+    if (!folderCb) return;
+    if (selectedCount === 0 || totalCount === 0) {
+        folderCb.checked = false;
+        folderCb.indeterminate = false;
+    } else if (selectedCount >= totalCount) {
+        folderCb.checked = true;
+        folderCb.indeterminate = false;
+    } else {
+        folderCb.checked = false;
+        folderCb.indeterminate = true;
+    }
+}
+window.applyFolderCheckboxState = applyFolderCheckboxState;
+
+function updateFolderCheckboxState(groupEl) {
+    if (!groupEl) return;
+    const folderHeader = groupEl.querySelector(':scope > .tree-folder-header');
+    const folderCb = folderHeader ? folderHeader.querySelector('.folder-select-cb') : null;
+    if (!folderCb) return;
+
+    const folderPath = groupEl.getAttribute('data-folder-path');
+    const knownTotal = getFolderTotalDatasets(folderPath);
+    const totalCount = countFolderTotalDatasets(groupEl, folderPath);
+    const selectedCount = countFolderSelectedDatasets(groupEl, folderPath);
+
+    const searchInput = document.getElementById('testSearchInput');
+    const activeQuery = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
+    const isFiltered = Boolean(activeQuery);
+
+    if (selectedCount === 0 || totalCount === 0) {
+        folderCb.checked = false;
+        folderCb.indeterminate = false;
+    } else if (isFiltered && knownTotal === 0 && selectedCount > 0) {
+        // When filtered and project total is unknown, ancestor folders cannot be safely assumed 100% selected
+        folderCb.checked = false;
+        folderCb.indeterminate = true;
+    } else if (selectedCount >= totalCount) {
+        folderCb.checked = true;
+        folderCb.indeterminate = false;
+    } else {
+        folderCb.checked = false;
+        folderCb.indeterminate = true;
+    }
+
+    if (folderPath) {
+        if (!window.currentFolderSelectionStates) {
+            window.currentFolderSelectionStates = {};
+        }
+        window.currentFolderSelectionStates[folderPath] = folderCb.checked ? 'checked' : (folderCb.indeterminate ? 'indeterminate' : 'unchecked');
+    }
+}
+window.updateFolderCheckboxState = updateFolderCheckboxState;
+
+function toggleFolderCheckboxesInstant(folderCb) {
+    if (!folderCb) return;
+    const folderGroup = folderCb.closest('.tree-folder-group');
+    if (!folderGroup) return;
+
+    const folderPath = folderGroup.getAttribute('data-folder-path');
+    const searchInput = document.getElementById('testSearchInput');
+    const activeQuery = (searchInput && searchInput.value) ? searchInput.value.trim() : '';
+    const isFiltered = Boolean(activeQuery);
+
+    const content = folderGroup.querySelector(':scope > .tree-folder-content');
+    let isChecked = folderCb.checked;
+
+    if (content) {
+        if (isFiltered) {
+            // Determine desired target state based on visible files
+            const fileContainers = content.querySelectorAll('.file-container');
+            const visibleContainers = Array.from(fileContainers).filter(fc => fc.style.display !== 'none');
+            const visibleFileCbs = visibleContainers.map(fc => fc.querySelector('.file-select-cb')).filter(Boolean);
+
+            if (visibleFileCbs.length > 0) {
+                const allVisibleChecked = visibleFileCbs.every(cb => cb.checked);
+                // If all visible files are already checked, user is deselecting them; otherwise selecting.
+                isChecked = !allVisibleChecked;
+            }
+
+            // Scoped selection: only toggle visible matching file containers and their datasets
+            fileContainers.forEach(container => {
+                if (container.style.display !== 'none') {
+                    const fileCb = container.querySelector('.file-select-cb');
+                    if (fileCb) {
+                        fileCb.checked = isChecked;
+                        fileCb.indeterminate = false;
+                    }
+                    const datasetCbs = container.querySelectorAll('.dataset-select-cb');
+                    datasetCbs.forEach(dcb => {
+                        const dItem = dcb.closest('.dataset-item');
+                        if (!dItem || dItem.style.display !== 'none') {
+                            dcb.checked = isChecked;
+                        }
+                    });
+                }
+            });
+
+            // Update subfolder checkboxes within this folder (deepest first)
+            const subFolderGroups = Array.from(content.querySelectorAll('.tree-folder-group'));
+            subFolderGroups.sort((a, b) => {
+                const depthA = (a.getAttribute('data-folder-path') || '').split('/').length;
+                const depthB = (b.getAttribute('data-folder-path') || '').split('/').length;
+                return depthB - depthA;
+            });
+            subFolderGroups.forEach(subGroup => {
+                updateFolderCheckboxState(subGroup);
+            });
+
+            // Update clicked folder checkbox state accurately using total datasets
+            updateFolderCheckboxState(folderGroup);
+        } else {
+            // Not filtered: full cascade
+            folderCb.checked = isChecked;
+            folderCb.indeterminate = false;
+
+            // Cascade to all descendant folder checkboxes
+            const subFolderCbs = content.querySelectorAll('.folder-select-cb');
+            subFolderCbs.forEach(cb => {
+                cb.checked = isChecked;
+                cb.indeterminate = false;
+            });
+
+            // Cascade to all descendant file checkboxes
+            const fileCbs = content.querySelectorAll('.file-select-cb');
+            fileCbs.forEach(cb => {
+                cb.checked = isChecked;
+                cb.indeterminate = false;
+            });
+
+            // Cascade to all descendant dataset checkboxes
+            const datasetCbs = content.querySelectorAll('.dataset-select-cb');
+            datasetCbs.forEach(cb => {
+                cb.checked = isChecked;
+            });
+
+            // Update subfolder selection states cache
+            const subFolderGroups = content.querySelectorAll('.tree-folder-group');
+            subFolderGroups.forEach(subGroup => {
+                const subPath = subGroup.getAttribute('data-folder-path');
+                if (subPath && window.currentFolderSelectionStates) {
+                    window.currentFolderSelectionStates[subPath] = isChecked ? 'checked' : 'unchecked';
+                }
+            });
+
+            if (folderPath && window.currentFolderSelectionStates) {
+                window.currentFolderSelectionStates[folderPath] = isChecked ? 'checked' : 'unchecked';
+            }
+        }
+    }
+
+    if (folderPath && window.currentFolderSelectionStates) {
+        window.currentFolderSelectionStates[folderPath] = folderCb.checked ? 'checked' : (folderCb.indeterminate ? 'indeterminate' : 'unchecked');
+    }
+
+    if (typeof updateParentFolderCheckboxes === 'function') {
+        updateParentFolderCheckboxes(folderGroup);
+    }
+
+    // Call backend endpoint to synchronize queue
+    if (folderPath && typeof htmx !== 'undefined' && htmx.ajax) {
+        let url = '/api/queue/toggleFolder?folder=' + encodeURIComponent(folderPath) + '&checked=' + isChecked;
+        if (activeQuery) {
+            url += '&q=' + encodeURIComponent(activeQuery);
+        }
+        htmx.ajax('POST', url, {
+            target: '#queueListContainer',
+            swap: 'innerHTML'
+        });
+    }
+}
+window.toggleFolderCheckboxesInstant = toggleFolderCheckboxesInstant;
+
+function updateParentFolderCheckboxes(startEl) {
+    if (!startEl) return;
+    let parentGroup = startEl.parentElement ? startEl.parentElement.closest('.tree-folder-group') : null;
+    while (parentGroup) {
+        updateFolderCheckboxState(parentGroup);
+        parentGroup = parentGroup.parentElement ? parentGroup.parentElement.closest('.tree-folder-group') : null;
+    }
+}
+window.updateParentFolderCheckboxes = updateParentFolderCheckboxes;
+
+function updateAllFolderCheckboxes(rootContainer) {
+    const root = rootContainer || document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+    if (!root) return;
+    const folderGroups = Array.from(root.querySelectorAll('.tree-folder-group'));
+    if (folderGroups.length === 0) return;
+
+    folderGroups.sort((a, b) => {
+        const depthA = (a.getAttribute('data-folder-path') || '').split('/').length;
+        const depthB = (b.getAttribute('data-folder-path') || '').split('/').length;
+        return depthB - depthA;
+    });
+
+    folderGroups.forEach(group => {
+        updateFolderCheckboxState(group);
+    });
+}
+window.updateAllFolderCheckboxes = updateAllFolderCheckboxes;
+
+function applyFolderSelectionStates(states) {
+    if (!states || typeof states !== 'object') return;
+    window.currentFolderSelectionStates = Object.assign(window.currentFolderSelectionStates || {}, states);
+    const root = document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+    if (!root) return;
+
+    try {
+        const targetContainer = document.getElementById('sidebarTestsContainer') || root;
+        targetContainer.setAttribute('data-folder-states', JSON.stringify(window.currentFolderSelectionStates));
+    } catch (e) {}
+
+    const folderGroups = root.querySelectorAll('.tree-folder-group');
+    folderGroups.forEach(group => {
+        const folderPath = group.getAttribute('data-folder-path');
+        if (!folderPath) return;
+        const header = group.querySelector(':scope > .tree-folder-header');
+        const folderCb = header ? header.querySelector('.folder-select-cb') : null;
+        if (!folderCb) return;
+
+        const state = window.currentFolderSelectionStates[folderPath];
+        if (state === 'checked') {
+            folderCb.checked = true;
+            folderCb.indeterminate = false;
+        } else if (state === 'indeterminate') {
+            folderCb.checked = false;
+            folderCb.indeterminate = true;
+        } else if (state === 'unchecked') {
+            folderCb.checked = false;
+            folderCb.indeterminate = false;
+        }
+    });
+}
+window.applyFolderSelectionStates = applyFolderSelectionStates;
+
+if (typeof document !== 'undefined') {
+    document.body.addEventListener('folderStatesUpdated', function(evt) {
+        if (evt && evt.detail) {
+            applyFolderSelectionStates(evt.detail);
+        }
+    });
+    document.body.addEventListener('folderTotalsUpdated', function(evt) {
+        if (evt && evt.detail) {
+            window.currentFolderTotals = Object.assign(window.currentFolderTotals || {}, evt.detail);
+            try {
+                const target = document.getElementById('sidebarTestsContainer') || document.getElementById('yamlFileList');
+                if (target) {
+                    target.setAttribute('data-folder-totals', JSON.stringify(window.currentFolderTotals));
+                }
+            } catch (e) {}
+        }
+    });
+}
 
 function toggleExpandFile(file, targetEl) {
     if (!file) return;
@@ -102,7 +449,125 @@ function toggleExpandFile(file, targetEl) {
 }
 window.toggleExpandFile = toggleExpandFile;
 
-function loadFiles() {
+function setFilterCookie(query) {
+    try {
+        const trimmed = (query || '').trim();
+        if (trimmed) {
+            document.cookie = 'aura_test_search_query=' + encodeURIComponent(trimmed) + '; path=/; max-age=31536000; SameSite=Lax';
+        } else {
+            document.cookie = 'aura_test_search_query=; path=/; max-age=0; SameSite=Lax';
+        }
+    } catch (e) {}
+}
+window.setFilterCookie = setFilterCookie;
+
+function getFilterCookie() {
+    try {
+        const match = document.cookie.match(/(?:^|;\s*)aura_test_search_query=([^;]*)/);
+        return match ? decodeURIComponent(match[1]) : null;
+    } catch (e) {
+        return null;
+    }
+}
+window.getFilterCookie = getFilterCookie;
+
+function applyInstantTestFilter(query) {
+    const term = (query || '').trim().toLowerCase();
+    const yamlContainer = document.getElementById('yamlFileList');
+    if (!yamlContainer) return;
+
+    const fileContainers = yamlContainer.querySelectorAll('.file-container');
+    const folderGroups = yamlContainer.querySelectorAll('.tree-folder-group');
+    if (fileContainers.length === 0 && folderGroups.length === 0) return;
+
+    if (!term) {
+        fileContainers.forEach(container => {
+            container.style.display = 'flex';
+            const datasetItems = container.querySelectorAll('.dataset-item');
+            datasetItems.forEach(d => { d.style.display = 'flex'; });
+        });
+        folderGroups.forEach(folder => {
+            folder.style.display = '';
+        });
+        return;
+    }
+
+    // 1. Identify which folder groups directly match the filter
+    const matchingFolders = new Set();
+    folderGroups.forEach(folder => {
+        const folderPath = (folder.getAttribute('data-folder-path') || '').toLowerCase();
+        const folderNameEl = folder.querySelector('.tree-folder-name');
+        const folderName = (folderNameEl ? folderNameEl.textContent : '').toLowerCase();
+        if ((folderPath && folderPath.includes(term)) || (folderName && folderName.includes(term))) {
+            matchingFolders.add(folder);
+        }
+    });
+
+    // 2. Filter file containers
+    fileContainers.forEach(container => {
+        // Check if any ancestor folder matches the filter
+        let inMatchingFolder = false;
+        let parent = container.parentElement;
+        while (parent && parent !== yamlContainer) {
+            if (parent.classList && parent.classList.contains('tree-folder-group') && matchingFolders.has(parent)) {
+                inMatchingFolder = true;
+                break;
+            }
+            parent = parent.parentElement;
+        }
+
+        const datasetItems = container.querySelectorAll('.dataset-item');
+
+        if (inMatchingFolder) {
+            container.style.display = 'flex';
+            datasetItems.forEach(d => { d.style.display = 'flex'; });
+            return;
+        }
+
+        const fileName = (container.getAttribute('data-file') || '').toLowerCase();
+        const matchesFile = fileName.includes(term);
+
+        let anyDatasetMatched = false;
+        if (datasetItems.length > 0) {
+            datasetItems.forEach(d => {
+                const label = (d.textContent || '').toLowerCase();
+                const dId = (d.getAttribute('data-id') || '').toLowerCase();
+                const matched = matchesFile || label.includes(term) || dId.includes(term);
+                d.style.display = matched ? 'flex' : 'none';
+                if (matched) anyDatasetMatched = true;
+            });
+        }
+
+        if (matchesFile || anyDatasetMatched) {
+            container.style.display = 'flex';
+        } else {
+            container.style.display = 'none';
+        }
+    });
+
+    // 3. Update folder visibility bottom-up (reverse DOM order)
+    const reversedFolders = Array.from(folderGroups).reverse();
+    reversedFolders.forEach(folder => {
+        if (matchingFolders.has(folder)) {
+            folder.style.display = '';
+            // Ensure all subfolders inside a matching folder are also displayed
+            const subFolders = folder.querySelectorAll('.tree-folder-group');
+            subFolders.forEach(sub => { sub.style.display = ''; });
+            return;
+        }
+
+        const visibleFile = folder.querySelector('.file-container:not([style*="display: none"])');
+        const visibleSubFolder = folder.querySelector('.tree-folder-group:not([style*="display: none"])');
+        folder.style.display = (visibleFile || visibleSubFolder) ? '' : 'none';
+    });
+
+    if (typeof updateAllFolderCheckboxes === 'function') {
+        updateAllFolderCheckboxes();
+    }
+}
+window.applyInstantTestFilter = applyInstantTestFilter;
+
+function loadFiles(forceSwap = false) {
     return new Promise(async (resolve, reject) => {
         let resolved = false;
         const done = () => {
@@ -118,7 +583,16 @@ function loadFiles() {
             currentFilesListCached = await res.json();
             window.currentFilesListCached = currentFilesListCached;
             const fileListEl = document.getElementById('yamlFileList');
-            if (fileListEl) {
+            const searchInput = document.getElementById('testSearchInput');
+            const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
+            const cookieQuery = (typeof getFilterCookie === 'function') ? getFilterCookie() : null;
+            const activeQuery = (searchInput && searchInput.value.trim()) ? searchInput.value.trim() : (cookieQuery ? cookieQuery.trim() : (storedQuery ? storedQuery.trim() : ''));
+            if (searchInput && !searchInput.value && activeQuery) {
+                searchInput.value = activeQuery;
+            }
+            updateClearTestSearchBtn(activeQuery);
+
+            if (fileListEl && (forceSwap || window.initializedAlready)) {
                 const listener = function(evt) {
                     if (evt.detail.target && evt.detail.target.id === 'yamlFileList') {
                         document.removeEventListener('htmx:afterSwap', listener);
@@ -129,7 +603,8 @@ function loadFiles() {
                     }
                 };
                 document.addEventListener('htmx:afterSwap', listener);
-                htmx.ajax('GET', '/api/files/list?t=' + timestamp, { target: '#yamlFileList', swap: 'innerHTML' });
+                const targetUrl = activeQuery ? ('/api/files/search?q=' + encodeURIComponent(activeQuery) + '&t=' + timestamp) : ('/api/files/list?t=' + timestamp);
+                htmx.ajax('GET', targetUrl, { target: '#yamlFileList', swap: 'innerHTML' });
             } else {
                 window.initializedAlready = true;
                 syncCheckboxesFromState();
@@ -143,6 +618,60 @@ function loadFiles() {
     });
 }
 window.loadFiles = loadFiles;
+
+function onTestSearchInput(query) {
+    const trimmed = (query || '').trim();
+    if (typeof sessionStorage !== 'undefined') {
+        if (trimmed) {
+            sessionStorage.setItem('aura_test_search_query', trimmed);
+        } else {
+            sessionStorage.removeItem('aura_test_search_query');
+        }
+    }
+    setFilterCookie(trimmed);
+    updateClearTestSearchBtn(trimmed);
+    applyInstantTestFilter(trimmed);
+    if (typeof updateActiveTagFilterUI === 'function') {
+        updateActiveTagFilterUI();
+    }
+}
+window.onTestSearchInput = onTestSearchInput;
+
+function updateClearTestSearchBtn(query) {
+    const clearBtn = document.getElementById('clearTestSearchBtn');
+    if (!clearBtn) return;
+    const searchInput = document.getElementById('testSearchInput');
+    const val = (query !== undefined && query !== null) ? query : (searchInput ? searchInput.value : '');
+    const hasQuery = (typeof val === 'string' ? val.trim() : String(val).trim()).length > 0;
+    clearBtn.style.display = hasQuery ? 'inline-flex' : 'none';
+}
+window.updateClearTestSearchBtn = updateClearTestSearchBtn;
+
+function clearTestSearch() {
+    const searchInput = document.getElementById('testSearchInput');
+    if (searchInput) {
+        searchInput.value = '';
+    }
+    if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('aura_test_search_query');
+    }
+    setFilterCookie('');
+    updateClearTestSearchBtn('');
+    applyInstantTestFilter('');
+    if (window.history && window.history.replaceState) {
+        try {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('q')) {
+                url.searchParams.delete('q');
+                window.history.replaceState({}, '', url.toString());
+            }
+        } catch (e) {}
+    }
+    if (window.htmx) {
+        htmx.ajax('GET', '/api/files/list', { target: '#yamlFileList', swap: 'innerHTML' });
+    }
+}
+window.clearTestSearch = clearTestSearch;
 
 function syncCheckboxesFromState() {
     const fileContainers = document.querySelectorAll('.file-container');
@@ -575,7 +1104,15 @@ window.openYamlEditor = openYamlEditor;
 /* HTMX save request listeners */
 document.addEventListener('htmx:configRequest', function(evt) {
     if (evt.detail && evt.detail.elt && evt.detail.elt.id === 'saveYamlBtn') {
-        const yaml = compilePlaybookToYaml();
+        const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw') 
+            || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
+        let yaml;
+        if (isRaw) {
+            const rawTextarea = document.getElementById('rawYamlTextarea');
+            yaml = rawTextarea ? rawTextarea.value : '';
+        } else {
+            yaml = compilePlaybookToYaml(true);
+        }
         const hiddenInput = document.getElementById('editorContent');
         if (hiddenInput) {
             hiddenInput.value = yaml;
@@ -606,6 +1143,10 @@ async function saveYamlFile() {
             activeEditingFile = fileEl.getAttribute('data-file');
             window.activeEditingFile = activeEditingFile;
         }
+    }
+    if (activeEditingFile && activeEditingFile.includes(',')) {
+        activeEditingFile = activeEditingFile.split(',')[0].trim();
+        window.activeEditingFile = activeEditingFile;
     }
     if (!activeEditingFile) return;
 
@@ -1247,16 +1788,13 @@ window.addEventListener('popstate', function(evt) {
 document.addEventListener('DOMContentLoaded', function() {
     const fileSpan = document.getElementById('editorFileName');
     if (fileSpan) {
-        const dataFile = fileSpan.getAttribute('data-file');
+        let dataFile = fileSpan.getAttribute('data-file');
         if (dataFile && dataFile.trim() !== '') {
+            if (dataFile.includes(',')) {
+                dataFile = dataFile.split(',')[0].trim();
+            }
             activeEditingFile = dataFile.trim();
             window.activeEditingFile = activeEditingFile;
-            if (typeof compilePlaybookToYaml === 'function') {
-                initialEditorContent = compilePlaybookToYaml();
-            }
-            if (typeof checkEditorDirtyStatus === 'function') {
-                checkEditorDirtyStatus();
-            }
             if (typeof updateCenterLayout === 'function') {
                 updateCenterLayout();
             }
@@ -1349,9 +1887,11 @@ function setEditorMode(mode) {
     if (mode === 'raw') {
         if (visualContainer && rawPanel) {
             if (visualContainer.style.display !== 'none') {
-                const compiled = compilePlaybookToYaml();
-                if (rawTextarea) {
-                    rawTextarea.value = compiled;
+                if (typeof isEditorDirty === 'function' && isEditorDirty()) {
+                    const compiled = compilePlaybookToYaml(true);
+                    if (rawTextarea) {
+                        rawTextarea.value = compiled;
+                    }
                 }
             }
             visualContainer.style.display = 'none';
@@ -1379,6 +1919,18 @@ function setEditorMode(mode) {
             showToast("Cannot switch to Visual Editor: file contains YAML syntax errors.", "error");
             return;
         }
+
+        // If raw textarea has been modified while in raw mode, re-sync visual editor via POST /api/editor
+        if (currentEditorMode === 'raw' && rawTextarea && initialEditorContent && rawTextarea.value !== initialEditorContent && activeEditingFile) {
+            const cleanFile = activeEditingFile.split(',')[0].trim();
+            htmx.ajax('POST', '/api/editor', {
+                target: '#editorPanel',
+                swap: 'outerHTML',
+                values: { file: cleanFile, content: rawTextarea.value }
+            });
+            return;
+        }
+
         currentEditorMode = 'visual';
         window.currentEditorMode = 'visual';
         if (visualContainer && rawPanel) {
@@ -1680,7 +2232,8 @@ function initVisualPlaybookEditor() {
     });
 
     updateFragmentVariablesList();
-    compilePlaybookToYaml();
+    compilePlaybookToYaml(false);
+    updateAllLineNumbers();
 
     // Live typing & editing delegation for full Undo/Redo tracking
     const mainEditor = document.getElementById('visualEditorMain');
@@ -1697,17 +2250,21 @@ function initVisualPlaybookEditor() {
                     stepContent.setAttribute('data-raw', getStepRawText(stepContent));
                 }
                 updateFragmentVariablesList();
-                compilePlaybookToYaml();
+                compilePlaybookToYaml(true);
                 debouncedPushSnapshot();
             } else if (evt.target.classList.contains('var-key-input') || evt.target.classList.contains('cell-val')) {
-                compilePlaybookToYaml();
+                compilePlaybookToYaml(true);
                 debouncedPushSnapshot();
             }
         });
     }
 
     // Record initial baseline content and initialize undo/redo snapshot stack
-    const currentYaml = compilePlaybookToYaml();
+    const currentYaml = compilePlaybookToYaml(false);
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    if (rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
+        rawTextarea.value = currentYaml;
+    }
     if (!initialEditorContent || undoStack.length === 0) {
         initialEditorContent = currentYaml;
         if (typeof pushEditorSnapshot === 'function') {
@@ -1902,7 +2459,7 @@ function formatYamlTagValue(val) {
     return JSON.stringify(val);
 }
 
-function compilePlaybookToYaml() {
+function compilePlaybookToYaml(syncToRaw = true) {
     const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
         || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
 
@@ -1940,6 +2497,32 @@ function compilePlaybookToYaml() {
     }
 
     yaml += "# Neodymium YAML Test Data File\n\n";
+
+    // _properties block (Only for test playbooks, above steps)
+    if (!isFragmentFile) {
+        const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+        if (propertiesPanel && propertiesPanel.style.display !== 'none') {
+            const propRows = document.querySelectorAll('#propertiesTableBody tr.property-row');
+            const validProps = [];
+            propRows.forEach(tr => {
+                const keyInput = tr.querySelector('.property-key-input');
+                const valInput = tr.querySelector('.property-val-input');
+                const k = keyInput ? keyInput.value.trim() : '';
+                const v = valInput ? valInput.value.trim() : '';
+                if (k) {
+                    validProps.push({ key: k, value: v });
+                }
+            });
+
+            if (validProps.length > 0) {
+                yaml += "_properties:\n";
+                validProps.forEach(p => {
+                    yaml += `  ${p.key}: ${p.value}\n`;
+                });
+                yaml += "\n";
+            }
+        }
+    }
 
     function serializeStepRows(rows) {
         let block = "";
@@ -2075,7 +2658,7 @@ function compilePlaybookToYaml() {
         hiddenInput.value = yaml;
     }
     const rawTextarea = document.getElementById('rawYamlTextarea');
-    if (rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
+    if (syncToRaw && rawTextarea && (typeof currentEditorMode === 'undefined' || currentEditorMode !== 'raw')) {
         rawTextarea.value = yaml;
     }
     return yaml;
@@ -2184,6 +2767,102 @@ document.addEventListener('htmx:afterSwap', function(evt) {
 });
 
 /* Optional Block Management */
+function addPropertyRow(key = '', value = '') {
+    const tbody = document.getElementById('propertiesTableBody');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.className = 'property-row';
+
+    const tdKey = document.createElement('td');
+    const inputKey = document.createElement('input');
+    inputKey.type = 'text';
+    inputKey.className = 'property-key-input';
+    inputKey.value = key || '';
+    inputKey.placeholder = 'e.g. skipReplay';
+    inputKey.setAttribute('list', 'propertyKeySuggestions');
+    inputKey.oninput = () => {
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    };
+    tdKey.appendChild(inputKey);
+
+    const tdVal = document.createElement('td');
+    const inputVal = document.createElement('input');
+    inputVal.type = 'text';
+    inputVal.className = 'property-val-input';
+    inputVal.value = value !== undefined && value !== null ? String(value) : '';
+    inputVal.placeholder = 'Value';
+    inputVal.oninput = () => {
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    };
+    tdVal.appendChild(inputVal);
+
+    const tdAction = document.createElement('td');
+    tdAction.className = 'property-action-col';
+    const btnRemove = document.createElement('button');
+    btnRemove.type = 'button';
+    btnRemove.className = 'btn-remove-property';
+    btnRemove.title = 'Remove Property';
+    btnRemove.onclick = function() { removePropertyRow(this); };
+    btnRemove.innerHTML = '<span class="material-symbols-outlined">delete</span>';
+    tdAction.appendChild(btnRemove);
+
+    tr.appendChild(tdKey);
+    tr.appendChild(tdVal);
+    tr.appendChild(tdAction);
+    tbody.appendChild(tr);
+
+    compilePlaybookToYaml(true);
+    debouncedPushSnapshot();
+    if (!key) {
+        inputKey.focus();
+    }
+}
+window.addPropertyRow = addPropertyRow;
+
+function removePropertyRow(btn) {
+    const tr = btn.closest('.property-row');
+    if (tr) {
+        tr.remove();
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    }
+}
+window.removePropertyRow = removePropertyRow;
+
+function addPropertiesBlock() {
+    const panel = document.getElementById('playbookPropertiesPanel');
+    const btnContainer = document.getElementById('addPropertiesBtnContainer');
+    const tbody = document.getElementById('propertiesTableBody');
+    if (!panel) return;
+
+    panel.style.display = 'flex';
+    if (btnContainer) btnContainer.style.display = 'none';
+
+    if (tbody && tbody.querySelectorAll('tr.property-row').length === 0) {
+        addPropertyRow('neodymium.ai.tokenBudget.input', '1500000');
+    } else {
+        compilePlaybookToYaml(true);
+        debouncedPushSnapshot();
+    }
+}
+window.addPropertiesBlock = addPropertiesBlock;
+
+function removePropertiesBlock() {
+    const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
+        || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+    const panel = document.getElementById('playbookPropertiesPanel');
+    const btnContainer = document.getElementById('addPropertiesBtnContainer');
+    const tbody = document.getElementById('propertiesTableBody');
+    if (panel) panel.style.display = 'none';
+    if (btnContainer) btnContainer.style.display = isFragmentFile ? 'none' : 'block';
+    if (tbody) tbody.innerHTML = '';
+    compilePlaybookToYaml(true);
+    debouncedPushSnapshot();
+}
+window.removePropertiesBlock = removePropertiesBlock;
+
 function addBeforeBlock() {
     const panel = document.getElementById('beforeCodePanel');
     const btnContainer = document.getElementById('addBeforeBtnContainer');
@@ -4894,6 +5573,18 @@ function getEditorSnapshot() {
         }
     }
 
+    const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+    const hasProperties = propertiesPanel && propertiesPanel.style.display !== 'none';
+    const propertyRows = [];
+    const propRows = document.querySelectorAll('#propertiesTableBody tr.property-row');
+    propRows.forEach(tr => {
+        const keyInput = tr.querySelector('.property-key-input');
+        const valInput = tr.querySelector('.property-val-input');
+        if (keyInput && valInput) {
+            propertyRows.push({ key: keyInput.value, value: valInput.value });
+        }
+    });
+
     const beforePanel = document.getElementById('beforeCodePanel');
     const hasBefore = beforePanel && beforePanel.style.display !== 'none';
     const afterPanel = document.getElementById('afterCodePanel');
@@ -4919,6 +5610,8 @@ function getEditorSnapshot() {
     }
 
     return {
+        hasProperties,
+        propertyRows,
         hasBefore,
         hasAfter,
         beforeSteps: captureBlock('beforeStepsList'),
@@ -4966,6 +5659,20 @@ function restoreEditorSnapshot(snap) {
 
     const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
         || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
+
+    const propertiesPanel = document.getElementById('playbookPropertiesPanel');
+    const addPropertiesBtn = document.getElementById('addPropertiesBtnContainer');
+    const tbody = document.getElementById('propertiesTableBody');
+    if (propertiesPanel && addPropertiesBtn) {
+        propertiesPanel.style.display = (snap.hasProperties && !isFragmentFile) ? 'flex' : 'none';
+        addPropertiesBtn.style.display = (isFragmentFile || snap.hasProperties) ? 'none' : 'block';
+        if (tbody && Array.isArray(snap.propertyRows)) {
+            tbody.innerHTML = '';
+            snap.propertyRows.forEach(p => {
+                addPropertyRow(p.key, p.value);
+            });
+        }
+    }
 
     const beforePanel = document.getElementById('beforeCodePanel');
     const addBeforeBtn = document.getElementById('addBeforeBtnContainer');

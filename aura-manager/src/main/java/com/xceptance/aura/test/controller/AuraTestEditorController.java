@@ -38,6 +38,8 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
@@ -61,26 +63,34 @@ public class AuraTestEditorController
         this.fileService = fileService;
     }
 
-    @GetMapping("/api/editor")
-    public String getEditorFragment(@RequestParam(value = "file", required = false) final String relativePath, final Model model)
+    @RequestMapping(value = "/api/editor", method = {RequestMethod.GET, RequestMethod.POST})
+    public String getEditorFragment(@RequestParam(value = "file", required = false) final String relativePath,
+                                   @RequestParam(value = "content", required = false) final String customContent,
+                                   final Model model)
     {
         model.addAttribute("stepsFiles", fileService.getStepsFilesList());
         model.addAttribute("fragmentRequiredVarsMap", fileService.getFragmentRequiredVariablesMap());
-        if (relativePath != null && !relativePath.isBlank())
+        final String effectivePath = (relativePath != null && relativePath.contains(","))
+                ? relativePath.split(",")[0].trim()
+                : relativePath;
+        if (effectivePath != null && !effectivePath.isBlank())
         {
-            fileService.setActiveEditingFile(relativePath);
-            String content = "";
-            try
+            fileService.setActiveEditingFile(effectivePath);
+            String content = customContent != null ? customContent : "";
+            if (customContent == null)
             {
-                content = fileService.readYamlFileContent(relativePath);
+                try
+                {
+                    content = fileService.readYamlFileContent(effectivePath);
+                }
+                catch (final Exception ignored)
+                {
+                }
             }
-            catch (final Exception ignored)
-            {
-            }
-            final boolean isFragment = relativePath.toLowerCase().endsWith(".steps");
-            model.addAttribute("activeEditingFile", relativePath);
+            final boolean isFragment = effectivePath.toLowerCase().endsWith(".steps");
+            model.addAttribute("activeEditingFile", effectivePath);
             model.addAttribute("editingFileContent", content);
-            model.addAttribute("currentTestFile", relativePath);
+            model.addAttribute("currentTestFile", effectivePath);
             model.addAttribute("fileContent", content);
             model.addAttribute("isFragment", isFragment);
 
@@ -102,6 +112,12 @@ public class AuraTestEditorController
             final Object dsTagsObj = sections.get("datasetTagsList");
             model.addAttribute("datasetTagsList", dsTagsObj != null ? dsTagsObj : List.of());
             model.addAttribute("areaTag", sections.get("areaTag"));
+            model.addAttribute("propertiesYaml", sections.get("propertiesYaml") != null ? sections.get("propertiesYaml") : "");
+            model.addAttribute("propertiesList", sections.get("propertiesList") != null ? sections.get("propertiesList") : List.of());
+            model.addAttribute("metaYaml", sections.get("metaYaml") != null ? sections.get("metaYaml") : "");
+            model.addAttribute("description", sections.get("description") != null ? sections.get("description") : "");
+            model.addAttribute("promptAddonYaml", sections.get("promptAddonYaml") != null ? sections.get("promptAddonYaml") : "");
+            model.addAttribute("rootVariables", sections.get("rootVariables") != null ? sections.get("rootVariables") : Map.of());
         }
         else
         {
@@ -123,8 +139,19 @@ public class AuraTestEditorController
             model.addAttribute("rootTags", Map.of());
             model.addAttribute("datasetTagsList", List.of());
             model.addAttribute("areaTag", null);
+            model.addAttribute("propertiesYaml", "");
+            model.addAttribute("propertiesList", List.of());
+            model.addAttribute("metaYaml", "");
+            model.addAttribute("description", "");
+            model.addAttribute("promptAddonYaml", "");
+            model.addAttribute("rootVariables", Map.of());
         }
         return "fragments/editor :: editorPanelContent";
+    }
+
+    public String getEditorFragment(final String relativePath, final Model model)
+    {
+        return getEditorFragment(relativePath, null, model);
     }
 
     @GetMapping("/api/editor/steps-files")
@@ -191,16 +218,22 @@ public class AuraTestEditorController
     @ResponseBody
     public ResponseEntity<Map<String, String>> readFile(@RequestParam("file") final String relativePath)
     {
+        final String effectivePath = (relativePath != null && relativePath.contains(","))
+                ? relativePath.split(",")[0].trim()
+                : relativePath;
         String content = "";
         try
         {
-            content = fileService.readYamlFileContent(relativePath);
+            if (effectivePath != null && !effectivePath.isBlank())
+            {
+                content = fileService.readYamlFileContent(effectivePath);
+            }
         }
         catch (final Exception ignored)
         {
         }
         final Map<String, String> response = new HashMap<>();
-        response.put("file", relativePath);
+        response.put("file", effectivePath != null ? effectivePath : "");
         response.put("content", content);
         return ResponseEntity.ok(response);
     }
@@ -210,12 +243,13 @@ public class AuraTestEditorController
     public ResponseEntity<Map<String, Object>> saveFile(@RequestParam("file") final String file,
                                                        @RequestParam(value = "content", required = false) final String content)
     {
+        final String effectiveFile = (file != null && file.contains(",")) ? file.split(",")[0].trim() : file;
         boolean success = false;
-        if (file != null && !file.isBlank())
+        if (effectiveFile != null && !effectiveFile.isBlank())
         {
             try
             {
-                fileService.saveYamlFileContent(file, content != null ? content : "");
+                fileService.saveYamlFileContent(effectiveFile, content != null ? content : "");
                 success = true;
             }
             catch (final Exception ignored)
@@ -224,7 +258,7 @@ public class AuraTestEditorController
         }
         final Map<String, Object> response = new HashMap<>();
         response.put("status", success ? "SUCCESS" : "ERROR");
-        response.put("file", file);
+        response.put("file", effectiveFile);
         return ResponseEntity.ok(response);
     }
 

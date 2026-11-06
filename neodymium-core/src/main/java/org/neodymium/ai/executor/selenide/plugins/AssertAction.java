@@ -36,6 +36,7 @@ import com.codeborne.selenide.SelenideElement;
 import com.codeborne.selenide.WebDriverRunner;
 import com.codeborne.selenide.WebElementCondition;
 import org.neodymium.ai.action.Action;
+import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
 import org.neodymium.ai.tool.browser.BrowserToolProvider;
 import org.neodymium.util.SelenideAddons;
 
@@ -78,6 +79,10 @@ public final class AssertAction implements BrowserActionPlugin
         // Handle URL assertions
         if ("ASSERT_URL".equals(type) || ("ASSERT".equals(type) && ("url".equalsIgnoreCase(action.getTarget()) || "currentUrl".equalsIgnoreCase(action.getTarget()) || "pageUrl".equalsIgnoreCase(action.getTarget()))))
         {
+            if (FrameContextManager.isDefaultContent(action.getFrame()) && WebDriverRunner.hasWebDriverStarted())
+            {
+                FrameContextManager.switchToDefaultContent(WebDriverRunner.getWebDriver());
+            }
             executeUrlAssertion(action, expected);
             return;
         }
@@ -85,6 +90,10 @@ public final class AssertAction implements BrowserActionPlugin
         // Handle Title assertions
         if ("ASSERT_TITLE".equals(type) || ("ASSERT".equals(type) && ("title".equalsIgnoreCase(action.getTarget()) || "pageTitle".equalsIgnoreCase(action.getTarget()))))
         {
+            if (FrameContextManager.isDefaultContent(action.getFrame()) && WebDriverRunner.hasWebDriverStarted())
+            {
+                FrameContextManager.switchToDefaultContent(WebDriverRunner.getWebDriver());
+            }
             executeTitleAssertion(action, expected);
             return;
         }

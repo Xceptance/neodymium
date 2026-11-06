@@ -36,6 +36,8 @@ public enum SelectorEngine
     DATA_TESTID("data-testid"),
     DATA_TEST_ID("data-test-id"),
     DATA_TEST("data-test"),
+    DATA_QA("data-qa"),
+    DATA_CY("data-cy"),
     NTH("nth"),
     VISIBLE("visible"),
     INTERNAL("internal"),

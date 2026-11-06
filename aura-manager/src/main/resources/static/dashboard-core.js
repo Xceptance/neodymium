@@ -442,6 +442,31 @@ function organizeContainerView(container, itemSelector, mode) {
     });
 
     const collapsedList = getCollapsedFolders();
+    const hasCheckboxes = container.id === 'sidebarTestsContainer' || items.some(it => it.querySelector('.file-select-cb') !== null);
+    let folderStates = (typeof window !== 'undefined' && window.currentFolderSelectionStates) ? window.currentFolderSelectionStates : null;
+    if (!folderStates) {
+        try {
+            const rawStates = container.getAttribute('data-folder-states');
+            if (rawStates) {
+                folderStates = JSON.parse(rawStates);
+                if (typeof window !== 'undefined') {
+                    window.currentFolderSelectionStates = folderStates;
+                }
+            }
+        } catch (e) {}
+    }
+    let folderTotals = (typeof window !== 'undefined' && window.currentFolderTotals) ? window.currentFolderTotals : null;
+    if (!folderTotals) {
+        try {
+            const rawTotals = container.getAttribute('data-folder-totals');
+            if (rawTotals) {
+                folderTotals = JSON.parse(rawTotals);
+                if (typeof window !== 'undefined') {
+                    window.currentFolderTotals = folderTotals;
+                }
+            }
+        } catch (e) {}
+    }
 
     function buildFolderElement(folderPath) {
         const node = nodes[folderPath];
@@ -461,6 +486,38 @@ function organizeContainerView(container, itemSelector, mode) {
         arrowSpan.className = 'material-symbols-outlined tree-folder-arrow';
         arrowSpan.textContent = isCollapsed ? 'keyboard_arrow_right' : 'keyboard_arrow_down';
 
+        headerDiv.appendChild(arrowSpan);
+
+        if (hasCheckboxes) {
+            const checkboxLabel = document.createElement('label');
+            checkboxLabel.className = 'custom-checkbox';
+            checkboxLabel.setAttribute('onclick', 'event.stopPropagation();');
+
+            const checkboxInput = document.createElement('input');
+            checkboxInput.type = 'checkbox';
+            checkboxInput.className = 'folder-select-cb';
+            checkboxInput.setAttribute('data-folder', folderPath);
+            checkboxInput.setAttribute('onchange', "if(typeof toggleFolderCheckboxesInstant==='function') toggleFolderCheckboxesInstant(this);");
+
+            if (folderStates && folderStates[folderPath]) {
+                const st = folderStates[folderPath];
+                if (st === 'checked') {
+                    checkboxInput.checked = true;
+                    checkboxInput.indeterminate = false;
+                } else if (st === 'indeterminate') {
+                    checkboxInput.checked = false;
+                    checkboxInput.indeterminate = true;
+                } else if (st === 'unchecked') {
+                    checkboxInput.checked = false;
+                    checkboxInput.indeterminate = false;
+                }
+            }
+
+            checkboxLabel.appendChild(checkboxInput);
+
+            headerDiv.appendChild(checkboxLabel);
+        }
+
         const iconSpan = document.createElement('span');
         iconSpan.className = 'material-symbols-outlined tree-folder-icon';
         iconSpan.textContent = isCollapsed ? 'folder' : 'folder_open';
@@ -469,7 +526,6 @@ function organizeContainerView(container, itemSelector, mode) {
         nameSpan.className = 'tree-folder-name';
         nameSpan.textContent = node.name;
 
-        headerDiv.appendChild(arrowSpan);
         headerDiv.appendChild(iconSpan);
         headerDiv.appendChild(nameSpan);
 
@@ -504,6 +560,10 @@ function organizeContainerView(container, itemSelector, mode) {
         }
         container.appendChild(item);
     });
+
+    if (hasCheckboxes && typeof updateAllFolderCheckboxes === 'function') {
+        updateAllFolderCheckboxes(container);
+    }
 }
 
 // Layout Resizers (Sidebar & Console)
@@ -713,6 +773,7 @@ function init() {
                               document.getElementById('dashboardView') !== null;
 
     if (isTestManagerPage) {
+        if (typeof initTestSearchFilter === 'function') initTestSearchFilter();
         if (typeof scrollToBottom === 'function') scrollToBottom();
         if (typeof loadFiles === 'function') loadFiles();
         if (typeof startPolling === 'function') startPolling();
@@ -749,6 +810,7 @@ function init() {
         if (evt.detail && evt.detail.target) {
             if (evt.detail.target.id === 'yamlFileList' || evt.detail.target.id === 'editorPanel' || evt.detail.target.querySelector('#fragmentCardsContainer')) {
                 if (evt.detail.target.id === 'yamlFileList') {
+                    if (typeof updateClearTestSearchBtn === 'function') updateClearTestSearchBtn();
                     const scrollPos = savedYamlFileListScrollTop;
                     evt.detail.target.scrollTop = scrollPos;
                     requestAnimationFrame(() => {
@@ -906,6 +968,50 @@ document.addEventListener('keydown', function(event) {
         if (typeof submitCreateTest === 'function') {
             submitCreateTest();
         }
+    }
+});
+
+function initTestSearchFilter() {
+    const searchInput = document.getElementById('testSearchInput');
+    if (!searchInput) return;
+
+    let query = '';
+    try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlQuery = urlParams.get('q');
+        const serverQuery = searchInput.value || '';
+        const cookieQuery = (typeof getFilterCookie === 'function') ? getFilterCookie() : null;
+        const storedQuery = (typeof sessionStorage !== 'undefined') ? sessionStorage.getItem('aura_test_search_query') : null;
+        query = (urlQuery !== null && urlQuery !== '') ? urlQuery : (serverQuery || cookieQuery || storedQuery || '');
+    } catch (e) {}
+
+    if (query) {
+        searchInput.value = query;
+        if (typeof sessionStorage !== 'undefined') {
+            sessionStorage.setItem('aura_test_search_query', query);
+        }
+        if (typeof setFilterCookie === 'function') {
+            setFilterCookie(query);
+        }
+        if (typeof updateClearTestSearchBtn === 'function') {
+            updateClearTestSearchBtn(query);
+        }
+        if (typeof applyInstantTestFilter === 'function') {
+            applyInstantTestFilter(query);
+        }
+    } else {
+        if (typeof updateClearTestSearchBtn === 'function') {
+            updateClearTestSearchBtn('');
+        }
+    }
+}
+window.initTestSearchFilter = initTestSearchFilter;
+
+window.addEventListener('pageshow', function() {
+    const isMgr = document.getElementById('auraTestManagerWorkspace') !== null ||
+                  document.getElementById('dashboardView') !== null;
+    if (isMgr && typeof initTestSearchFilter === 'function') {
+        initTestSearchFilter();
     }
 });
 

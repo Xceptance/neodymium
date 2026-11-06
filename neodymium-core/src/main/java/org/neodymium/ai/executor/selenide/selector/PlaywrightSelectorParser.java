@@ -170,6 +170,8 @@ public final class PlaywrightSelectorParser
             case "data-testid", "testid" -> SelectorEngine.DATA_TESTID;
             case "data-test-id" -> SelectorEngine.DATA_TEST_ID;
             case "data-test" -> SelectorEngine.DATA_TEST;
+            case "data-qa" -> SelectorEngine.DATA_QA;
+            case "data-cy" -> SelectorEngine.DATA_CY;
             case "nth" -> SelectorEngine.NTH;
             case "visible" -> SelectorEngine.VISIBLE;
             case "label" -> SelectorEngine.LABEL;

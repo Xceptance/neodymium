@@ -27,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
+import java.util.stream.Collectors;
 
 /**
  * Immutable definition of an AI-callable tool, describing its name, purpose,
@@ -135,6 +136,23 @@ public record ToolDefinition(String name, String description, ObjectNode paramet
     public String toFormattedSummary()
     {
         return "• " + signature() + " — " + this.description;
+    }
+
+    /**
+     * Produces a concise, single-line comma-separated summary of available tool names.
+     *
+     * @param tools list of available tools
+     * @return concise comma-separated string, e.g. {@code "[click, fill, type, query_dom, ...]"}
+     */
+    public static String formatToolsCompact(final List<ToolDefinition> tools)
+    {
+        if (tools == null || tools.isEmpty())
+        {
+            return "[]";
+        }
+        return tools.stream()
+                .map(ToolDefinition::name)
+                .collect(Collectors.joining(", ", "[", "]"));
     }
 
     /**

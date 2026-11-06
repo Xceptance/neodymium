@@ -19,9 +19,11 @@
 package org.neodymium.ai.pipeline.steps;
 
 import com.codeborne.selenide.WebDriverRunner;
+import com.codeborne.selenide.ex.ElementNotFound;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.neodymium.ai.action.Action;
 import org.neodymium.ai.client.ChatMessage;
 import org.neodymium.ai.client.ChatMessage.Role;
@@ -65,11 +67,14 @@ import org.neodymium.ai.pipeline.TokenBudgetExceededException;
 import org.neodymium.ai.prompt.AiAgentPrompts;
 import org.neodymium.ai.prompt.DefaultActionSanitizer;
 import org.neodymium.ai.prompt.LlmResponseSanitizer;
+import org.neodymium.ai.prompt.LlmSanitizerHelper;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.model.UnresolvableVariableException;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
+import org.neodymium.ai.tool.ToolCallVariableResolver;
 import org.neodymium.ai.tool.ToolContext;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.ai.tool.ToolRegistry;
@@ -80,9 +85,13 @@ import org.neodymium.ai.tool.guard.InterceptionVerdict;
 import org.neodymium.ai.tool.guard.QualityJudgeToolInterceptor;
 import org.neodymium.ai.tool.guard.ToolInterceptor;
 import org.neodymium.ai.util.DomQuiescenceWatcher;
+import org.openqa.selenium.ElementNotInteractableException;
 import org.openqa.selenium.InvalidElementStateException;
 import org.openqa.selenium.InvalidSelectorException;
 import org.openqa.selenium.JavascriptException;
+import org.openqa.selenium.NoSuchElementException;
+import org.openqa.selenium.StaleElementReferenceException;
+import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebDriverException;
 import org.slf4j.Logger;
@@ -95,10 +104,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Pipeline step driving iterative agent tool execution (Think -&gt; ToolCall -&gt; Observe -&gt; Finish)
@@ -502,12 +513,17 @@ public final class AgentToolLoopStep implements PipelineStep
         List<SutAttachment> pendingVisualAttachments = null;
         String pendingVisualNote = null;
         int visualScrollCount = 0;
+        boolean domAttachedToCurrentTurn = true;
 
         LOGGER.info("🚀 Starting Agent Tool Loop for instruction: \"{}\" (milestones: {})",
                 instruction, milestones != null ? milestones.size() : 0);
         if (LOGGER.isDebugEnabled())
         {
-            LOGGER.debug("🛠️ Available Native Tools ({}):\n{}", availableTools.size(), ToolDefinition.formatTools(availableTools));
+            LOGGER.debug("🛠️ Available Native Tools ({}): {}", availableTools.size(), ToolDefinition.formatToolsCompact(availableTools));
+            if (LOGGER.isTraceEnabled())
+            {
+                LOGGER.trace("Detailed Native Tool Schemas:\n{}", ToolDefinition.formatTools(availableTools));
+            }
         }
 
         ReasoningEffort reasoningEffort = AiConfiguration.getInstance().getReasoningEffort();
@@ -542,9 +558,12 @@ public final class AgentToolLoopStep implements PipelineStep
             // Stop Criterion 5: Step Wall-Clock Timeout (compensated for interactive pause durations)
             final long stepPauseMs = Math.max(totalPauseDurationMs, context.getStepInteractivePauseMs());
             final long elapsedSeconds = Math.max(0L, (System.currentTimeMillis() - startTimeMs - stepPauseMs) / 1000);
-            final long effectiveTimeoutSeconds = step != null && step.hasSubSteps() && !step.getSubSteps().isEmpty()
-                    ? Math.max(this.timeoutSeconds, this.timeoutSeconds * step.getSubSteps().size())
+            final long baseTimeoutSeconds = (step != null && step.getTimeoutMs() != null && step.getTimeoutMs() > 0)
+                    ? (step.getTimeoutMs() + 999L) / 1000L
                     : this.timeoutSeconds;
+            final long effectiveTimeoutSeconds = (step != null && step.hasSubSteps())
+                    ? baseTimeoutSeconds * step.getSubSteps().size()
+                    : baseTimeoutSeconds;
             if (elapsedSeconds >= effectiveTimeoutSeconds)
             {
                 throw new StepTimeoutExceededException(instruction, elapsedSeconds, (int) effectiveTimeoutSeconds);
@@ -559,13 +578,17 @@ public final class AgentToolLoopStep implements PipelineStep
                         ToolDefinition.formatTools(availableTools));
             }
 
+            final int turnTimeoutSeconds = AiConfiguration.getInstance().getInt(
+                    "neodymium.ai.execution.timeoutSeconds",
+                    AiConfiguration.getInstance().getInt("neodymium.ai.execution.timeout", 30));
+
             final LlmRequest request = new LlmRequest(
                     conversation,
                     availableTools,
                     attachments,
                     ResponseSchema.TEXT,
                     0.0,
-                    30,
+                    turnTimeoutSeconds,
                     reasoningEffort
             );
 
@@ -918,19 +941,28 @@ public final class AgentToolLoopStep implements PipelineStep
                         if (verdict.decision() == InterceptionVerdict.Decision.RETRY_WITH_FEEDBACK)
                         {
                             LOGGER.info("⚖️ Quality Judge requested retry with feedback for single-shot action '{}'; falling back to interactive agent loop", singleShotCall.toolName());
+                            conversation.add(ChatMessage.assistant(response != null && response.content() != null ? response.content() : ""));
+                            conversation.add(ChatMessage.user("Action rejected by Quality Judge: " + verdict.reason() + ". Please retry using interactive tools."));
                             isSingleShotAction = false;
                             executedCalls.clear();
                             break;
                         }
                         throw new ConclusiveFailureException("Tool call rejected by guard: " + verdict.reason());
                     }
-                    final java.util.Optional<AiTool> toolOpt = this.toolRegistry.getTool(effectiveCall.toolName());
+                    final Optional<AiTool> toolOpt = this.toolRegistry.getTool(effectiveCall.toolName());
                     if (toolOpt.isPresent())
                     {
                         final ToolResult result;
                         try
                         {
-                            result = toolOpt.get().execute(effectiveCall, toolContext);
+                            final ToolCall executableCall = ToolCallVariableResolver.resolveVariables(effectiveCall, context.getSessionData());
+                            result = toolOpt.get().execute(executableCall, toolContext);
+                        }
+                        catch (final UnresolvableVariableException e)
+                        {
+                            handleSingleShotUnresolvableVariable(e, effectiveCall, executedCalls, conversation, response);
+                            isSingleShotAction = false;
+                            break;
                         }
                         catch (final AssertionError e)
                         {
@@ -961,6 +993,11 @@ public final class AgentToolLoopStep implements PipelineStep
                                 if (resJson.hasNonNull("domFeatureVector"))
                                 {
                                     updatedArgs.set("domFeatureVector", resJson.path("domFeatureVector"));
+                                    updated = true;
+                                }
+                                if (resJson.hasNonNull("frame") && !resJson.path("frame").asText().isBlank())
+                                {
+                                    updatedArgs.put("frame", resJson.path("frame").asText().trim());
                                     updated = true;
                                 }
                                 if (resJson.hasNonNull("target") && resJson.path("target").asText().startsWith("coord:"))
@@ -1000,13 +1037,25 @@ public final class AgentToolLoopStep implements PipelineStep
                                 final SessionData sessionData = context.getSessionData();
                                 final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
                                 final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
-                                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
+                                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
                             }
                         }
                     }
                     else if (executor != null)
                     {
-                        Action mappedAction = mapToolCallToAction(effectiveCall);
+                        final ToolCall executableCall;
+                        try
+                        {
+                            executableCall = ToolCallVariableResolver.resolveVariables(effectiveCall, context.getSessionData());
+                        }
+                        catch (final UnresolvableVariableException e)
+                        {
+                            handleSingleShotUnresolvableVariable(e, effectiveCall, executedCalls, conversation, response);
+                            isSingleShotAction = false;
+                            break;
+                        }
+
+                        Action mappedAction = mapToolCallToAction(executableCall);
                         if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
                         {
                             mappedAction = mappedAction.withReasoning(thought.trim());
@@ -1029,14 +1078,19 @@ public final class AgentToolLoopStep implements PipelineStep
                         {
                             final SessionData sessionData = context.getSessionData();
                             final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
-                            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
-                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
+                            final Action rawAction = mapToolCallToAction(effectiveCall);
+                            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(rawAction, sessionData) : rawAction;
+                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
                         }
                     }
                     else
                     {
                         throw new IllegalArgumentException("Unknown tool: " + effectiveCall.toolName());
                     }
+                }
+                if (!isSingleShotAction)
+                {
+                    continue turnLoop;
                 }
                 final String summary = "Actions completed";
                 context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
@@ -1225,47 +1279,45 @@ public final class AgentToolLoopStep implements PipelineStep
                     {
                         final AiTool tool = this.toolRegistry.getTool(effectiveCall.toolName())
                                 .orElseThrow(() -> new IllegalArgumentException("Unknown tool: " + effectiveCall.toolName()));
-                        toolExecResult = tool.execute(effectiveCall, toolContext);
+                        final ToolCall executableCall = ToolCallVariableResolver.resolveVariables(effectiveCall, context.getSessionData());
+                        toolExecResult = tool.execute(executableCall, toolContext);
                     }
                     catch (final AssertionError e)
                     {
-                        if (effectiveCall.toolName().startsWith("assert") || effectiveCall.toolName().startsWith("browser_assert"))
+                        final boolean isMissingElement = isElementNotFoundFailure(e);
+                        if (isAssertionTool(effectiveCall.toolName()))
                         {
-                            // Stop Criterion 2: Immediate fail on real defects!
-                            LOGGER.error("❌ Stop Criterion 2 triggered: Assertion failure: {}", e.getMessage());
-                            executedCalls.add(effectiveCall);
-                            final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
-                            if (session != null && session.getEventBus() != null)
+                            if (isMissingElement && !domAttachedToCurrentTurn)
                             {
-                                Action mappedAction = mapToolCallToAction(effectiveCall);
-                                if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                                LOGGER.warn("⚠️ Assertion tool '{}' failed with missing element on omitted-DOM turn. Converting to tool error for JIT DOM recovery: {}",
+                                        effectiveCall.toolName(), e.getMessage());
+                                toolExecResult = ToolResult.error(effectiveCall.callId(),
+                                        "Target element not found: " + e.getMessage() + ". Prior DOM snapshot was omitted; refreshing ground-truth DOM for inspection.");
+                                if (activeContextLevel.escalate() != null)
                                 {
-                                    mappedAction = mappedAction.withReasoning(thought.trim());
+                                    activeContextLevel = activeContextLevel.escalate();
+                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                                    LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
                                 }
-                                final SessionData sessionData = context.getSessionData();
-                                final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
-                                final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
-                                executedActions.add(canonicalAction);
-                                if (step != null)
-                                {
-                                    step.setToolCalls(new ArrayList<>(executedCalls));
-                                    step.setActions(new ArrayList<>(executedActions));
-                                    if (step.hasSubSteps())
-                                    {
-                                        partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
-                                    }
-                                }
-                                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, false));
                             }
-                            throw e;
+                            else
+                            {
+                                // Stop Criterion 2: Immediate fail on real defects or when DOM was present!
+                                LOGGER.error("❌ Stop Criterion 2 triggered: Assertion failure: {}", e.getMessage());
+                                recordAssertionFailureAndDispatch(effectiveCall, thought, step, context, executedCalls, executedActions);
+                                throw e;
+                            }
                         }
-                        LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), e.getMessage());
-                        toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool failed with error: " + e.getMessage());
-                        if (activeContextLevel.escalate() != null)
+                        else
                         {
-                            activeContextLevel = activeContextLevel.escalate();
-                            context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
-                            LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
+                            LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), e.getMessage());
+                            toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool failed with error: " + e.getMessage());
+                            if (activeContextLevel.escalate() != null)
+                            {
+                                activeContextLevel = activeContextLevel.escalate();
+                                context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                                LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
+                            }
                         }
                     }
                     catch (final JavascriptException | InvalidSelectorException | InvalidElementStateException e)
@@ -1285,10 +1337,71 @@ public final class AgentToolLoopStep implements PipelineStep
                         LOGGER.error("💀 Stop Criterion 6 triggered: Fatal environment failure: {}", e.getMessage());
                         throw new ConclusiveFailureException("Fatal environment failure: " + e.getMessage(), e);
                     }
-                    catch (final Exception e)
+                    catch (final Throwable e)
                     {
-                        LOGGER.warn("Unexpected exception executing tool '{}': {}", effectiveCall.toolName(), e.getMessage(), e);
-                        toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool error: " + e.getMessage());
+                        if (e instanceof VirtualMachineError vme)
+                        {
+                            throw vme;
+                        }
+                        if (e instanceof ConclusiveFailureException cfe)
+                        {
+                            throw cfe;
+                        }
+                        if (e instanceof TokenBudgetExceededException tbe)
+                        {
+                            throw tbe;
+                        }
+
+                        final Throwable root = ExceptionUtils.getRootCause(e);
+                        final Throwable effectiveRoot = root != null ? root : e;
+                        if (effectiveRoot instanceof VirtualMachineError vme)
+                        {
+                            throw vme;
+                        }
+
+                        if (effectiveRoot instanceof AssertionError ae)
+                        {
+                            final boolean isMissingElement = isElementNotFoundFailure(ae);
+                            if (isAssertionTool(effectiveCall.toolName()))
+                            {
+                                if (isMissingElement && !domAttachedToCurrentTurn)
+                                {
+                                    LOGGER.warn("⚠️ Assertion tool '{}' failed with root missing element on omitted-DOM turn. Converting to tool error for JIT DOM recovery: {}",
+                                            effectiveCall.toolName(), ae.getMessage());
+                                    toolExecResult = ToolResult.error(effectiveCall.callId(),
+                                            "Target element not found: " + ae.getMessage() + ". Prior DOM snapshot was omitted; refreshing ground-truth DOM for inspection.");
+                                    if (activeContextLevel.escalate() != null)
+                                    {
+                                        activeContextLevel = activeContextLevel.escalate();
+                                        context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                                        LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
+                                    }
+                                }
+                                else
+                                {
+                                    LOGGER.error("❌ Stop Criterion 2 triggered: Root assertion failure: {}", ae.getMessage());
+                                    recordAssertionFailureAndDispatch(effectiveCall, thought, step, context, executedCalls, executedActions);
+                                    throw ae;
+                                }
+                            }
+                            else
+                            {
+                                LOGGER.warn("Tool execution failed in '{}': {}", effectiveCall.toolName(), ae.getMessage());
+                                toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool failed with error: " + ae.getMessage());
+                                if (activeContextLevel.escalate() != null)
+                                {
+                                    activeContextLevel = activeContextLevel.escalate();
+                                    context.getTransientData().put(ExecutionContext.KEY_CURRENT_CONTEXT_LEVEL, activeContextLevel);
+                                    LOGGER.warn("⚠️ Tool execution failed; escalating active context depth to: {}", activeContextLevel);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            final String errorMsg = formatThrowableError(e, effectiveRoot);
+                            LOGGER.warn("Unexpected exception executing tool '{}': {}", effectiveCall.toolName(), errorMsg, e);
+                            toolExecResult = ToolResult.error(effectiveCall.callId(), "Tool error: " + errorMsg);
+                        }
                     }
                     result = toolExecResult;
                 }
@@ -1421,6 +1534,11 @@ public final class AgentToolLoopStep implements PipelineStep
                                     updatedArgs.put("selector", resolvedTarget);
                                     updated = true;
                                 }
+                                if (resJson.hasNonNull("frame") && !resJson.path("frame").asText().isBlank())
+                                {
+                                    updatedArgs.put("frame", resJson.path("frame").asText().trim());
+                                    updated = true;
+                                }
                             }
                             if (updated)
                             {
@@ -1459,7 +1577,7 @@ public final class AgentToolLoopStep implements PipelineStep
                                     partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
                                 }
                             }
-                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
+                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
                         }
                     }
                     if ("screenshot".equals(effectiveCall.toolName()) || "browser_take_screenshot".equals(effectiveCall.toolName()))
@@ -1573,6 +1691,12 @@ public final class AgentToolLoopStep implements PipelineStep
 
                 // Task 3.3: Append structured ToolResult JSON directly to role: "TOOL"
                 String toolContent = result != null ? result.content() : "{\"status\":\"SUCCESS\"}";
+                final SessionData sessionData = context.getSessionData();
+                final Map<String, String> sensitiveMap = sessionData != null ? sessionData.getRawSensitiveData() : null;
+                if (sensitiveMap != null && !sensitiveMap.isEmpty())
+                {
+                    toolContent = LlmSanitizerHelper.maskJsonOrTextContent(toolContent, sensitiveMap);
+                }
                 if (result == null || result.status() != ToolResult.Status.SUCCESS)
                 {
                     final String alert = generatePassiveDiagnosticAlert(
@@ -1581,7 +1705,10 @@ public final class AgentToolLoopStep implements PipelineStep
                     );
                     if (alert != null)
                     {
-                        toolContent = toolContent + "\n\n" + alert;
+                        final String sanitizedAlert = (sensitiveMap != null && !sensitiveMap.isEmpty())
+                            ? LlmSanitizerHelper.maskSensitiveValues(alert, sensitiveMap)
+                            : alert;
+                        toolContent = toolContent + "\n\n" + sanitizedAlert;
                     }
                 }
                 conversation.add(ChatMessage.tool(effectiveCall.callId(), effectiveCall.toolName(), toolContent));
@@ -1825,6 +1952,7 @@ public final class AgentToolLoopStep implements PipelineStep
                             }
                             conversation.add(ChatMessage.user(turnPrompt.toString(), freshAttachments));
                             attachments = freshAttachments;
+                            domAttachedToCurrentTurn = true;
                         }
                     }
                     catch (final Exception e)
@@ -1933,6 +2061,7 @@ public final class AgentToolLoopStep implements PipelineStep
 
                         conversation.add(ChatMessage.user(turnPrompt.toString(), nextAttachments));
                         attachments = nextAttachments;
+                        domAttachedToCurrentTurn = false;
                     }
                     catch (final Exception ignored)
                     {
@@ -3511,6 +3640,63 @@ public final class AgentToolLoopStep implements PipelineStep
         };
     }
 
+    private static void recordAssertionFailureAndDispatch(
+            final ToolCall effectiveCall,
+            final String thought,
+            final PlaybookStep step,
+            final ExecutionContext context,
+            final List<ToolCall> executedCalls,
+            final List<Action> executedActions)
+    {
+        executedCalls.add(effectiveCall);
+        final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
+        if (session != null && session.getEventBus() != null)
+        {
+            Action mappedAction = mapToolCallToAction(effectiveCall);
+            if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+            {
+                mappedAction = mappedAction.withReasoning(thought.trim());
+            }
+            final SessionData sessionData = context.getSessionData();
+            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+            executedActions.add(canonicalAction);
+            if (step != null)
+            {
+                step.setToolCalls(new ArrayList<>(executedCalls));
+                step.setActions(new ArrayList<>(executedActions));
+                if (step.hasSubSteps())
+                {
+                    partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
+                }
+            }
+            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, false));
+        }
+    }
+
+    private static void handleSingleShotUnresolvableVariable(
+        final UnresolvableVariableException e,
+        final ToolCall effectiveCall,
+        final List<ToolCall> executedCalls,
+        final List<ChatMessage> conversation,
+        final LlmResponse response
+    )
+    {
+        LOGGER.warn("⚠️ Unresolvable variable '{}' in single-shot action '{}'; falling back to interactive agent loop", e.getVariableName(), effectiveCall.toolName());
+        final int executedBeforeFailure = executedCalls.size();
+        final String executedSummary = executedBeforeFailure > 0
+                ? executedCalls.stream().map(ToolCall::toolName).collect(Collectors.joining(", "))
+                : "";
+        final String priorInfo = executedBeforeFailure > 0
+                ? executedBeforeFailure + " preceding action(s) (" + executedSummary + ") in this single-shot batch were already executed in the browser. Do not repeat them. "
+                : "";
+        final String feedbackMsg = priorInfo + "Action '" + effectiveCall.toolName()
+                + "' execution failed: Unresolvable variable placeholder '${" + e.getVariableName()
+                + "}'. Please resolve or store the variable first, or proceed using interactive tools.";
+        conversation.add(ChatMessage.assistant(response != null && response.content() != null ? response.content() : ""));
+        conversation.add(ChatMessage.user(feedbackMsg));
+    }
+
     private static boolean isAssertionTool(final String toolName)
     {
         if (toolName == null)
@@ -3519,6 +3705,64 @@ public final class AgentToolLoopStep implements PipelineStep
         }
         final String name = stripNamespacePrefix(toolName.trim()).toLowerCase();
         return name.startsWith("assert") || name.startsWith("browser_assert");
+    }
+
+    private static boolean isElementNotFoundFailure(final Throwable t)
+    {
+        if (t == null)
+        {
+            return false;
+        }
+        if (t instanceof ElementNotFound
+                || t instanceof NoSuchElementException
+                || t instanceof StaleElementReferenceException
+                || t instanceof ElementNotInteractableException
+                || t instanceof TimeoutException)
+        {
+            return true;
+        }
+        if (t.getCause() != null && isElementNotFoundFailure(t.getCause()))
+        {
+            return true;
+        }
+        final String msg = t.getMessage();
+        if (msg != null)
+        {
+            final String lower = msg.toLowerCase(Locale.ROOT);
+            if (lower.contains("target element not found in dom")
+                    || lower.contains("no element exists matching this selector")
+                    || lower.contains("element not found {"))
+            {
+                return true;
+            }
+            if (lower.startsWith("element not found") || lower.contains("nosuchelementexception"))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String formatThrowableError(final Throwable cause, final Throwable root)
+    {
+        final String causeName = !cause.getClass().getSimpleName().isBlank()
+                ? cause.getClass().getSimpleName()
+                : cause.getClass().getName();
+        final String causeMsg = cause.getMessage();
+        final String causeDesc = causeName + (causeMsg != null && !causeMsg.isBlank() ? ": " + causeMsg : "");
+
+        if (root == null || root == cause)
+        {
+            return causeDesc;
+        }
+
+        final String rootName = !root.getClass().getSimpleName().isBlank()
+                ? root.getClass().getSimpleName()
+                : root.getClass().getName();
+        final String rootMsg = root.getMessage();
+        final String rootDesc = rootName + (rootMsg != null && !rootMsg.isBlank() ? ": " + rootMsg : "");
+
+        return causeDesc + " (Root cause: " + rootDesc + ")";
     }
 
     private static ToolRegistry createDefaultRegistry()

@@ -1698,7 +1698,7 @@ Neodymium AI enforces two layers of budget protection during agent execution:
 Guards individual step execution loops against infinite tool-calling loops and runaway token consumption:
 * **`neodymium.ai.step.maxTokens`**: Maximum cumulative tokens across all turns in a single step (default: `100000`). If cumulative tokens breach this limit, the step halts with `TokenBudgetExceededException`.
 * **`neodymium.ai.step.maxTurns`**: Maximum tool-execution turns allowed per step loop (default: `15`).
-* **`neodymium.ai.step.timeoutSeconds`**: Wall-clock timeout in seconds for an individual step loop (default: `60`).
+* **`neodymium.ai.step.timeoutSeconds`**: Wall-clock timeout in seconds for an individual step loop (default: `120`).
 
 > [!NOTE]
 > When `neodymium.ai.contextLevel` is set to `STANDARD` (or higher), DOM payloads per turn are ~2-3x larger due to static copy inclusion (`p, span, li, td, div`). It is strongly recommended to increase `neodymium.ai.step.maxTokens` to `200000` - `250000` to prevent compound multi-turn steps from prematurely exhausting the default budget.
@@ -1836,8 +1836,9 @@ Neodymium AI uses hierarchical property loading (`AiConfiguration`):
 * `neodymium.ai.provider` - Global active LLM provider (`gemini`, `openai`, `vertex`, `mistral`, `mock`). (Default: `gemini`)
 * `neodymium.ai.model` - Global active model. (Default: `gemini-3.5-flash-lite`)
 * `neodymium.ai.apiKey` - Global API Key (`${GEMINI_API_KEY}`). All API keys must be injected dynamically via environment variables (such as `GEMINI_API_KEY`, `OPENAI_API_KEY`) or passed at run-time as JVM arguments (e.g., `-Dneodymium.ai.apiKey=...`). Never commit API keys to git or configuration files.
-* `neodymium.ai.timeoutSeconds` - Global network timeout for LLM HTTP calls. (Default: `180`)
+* `neodymium.ai.timeoutSeconds` - Global network timeout for LLM HTTP calls on one-shot batch tasks (such as verification and linter). (Default: `180`)
 * `neodymium.ai.temperature` - Global LLM temperature. (Default: `0.0`)
+* `neodymium.ai.execution.timeoutSeconds` - Per-turn LLM HTTP call timeout during agent step execution. (Default: `30`)
 
 #### CLI Test Execution & API Key Injection Examples
 
@@ -1866,7 +1867,7 @@ mvn test -Dtest=AddToCartJudgeAndVerificationsTest -Dneodymium.ai.apiKey="your-g
 ### 8.4 Network and Budget Limits
 * `neodymium.ai.step.maxTokens` - Maximum cumulative token budget per individual step loop. Throws `TokenBudgetExceededException` if exceeded. Aliases: `neodymium.ai.tokenBudget.step`, `neodymium.ai.step.tokenBudget`, `tokenBudget.step`. (Default: `100000`, recommended `250000` when `contextLevel = STANDARD`)
 * `neodymium.ai.step.maxTurns` - Maximum tool execution turns allowed per individual step loop. (Default: `15`)
-* `neodymium.ai.step.timeoutSeconds` - Per-step execution wall-clock timeout in seconds. (Default: `60`, fallback: `neodymium.ai.timeoutSeconds`)
+* `neodymium.ai.step.timeoutSeconds` - Per-step execution wall-clock timeout in seconds across all turns and tool calls. (Default: `120`, fallback: `neodymium.ai.timeoutSeconds`)
 * `neodymium.ai.judge.discussion.maxTurns` - Maximum turns allowed in multi-agent consensus judge deliberation. (Default: `3`)
 * `neodymium.ai.maxRetriesAtMaxLevel` - Number of LLM self-healing iterations allowed after reaching maximum context level. (Default: `1`)
 * `neodymium.ai.llm.maxRetries` - Maximum network retries for 429/500 LLM API failures.

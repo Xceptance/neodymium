@@ -132,6 +132,8 @@ public class ProgrammaticTestDataYamlTest extends BaseAiTest
             """);
 
         $("#input-text").shouldHave(value("Neodymium"));
+        Assertions.assertTrue(Neodymium.hasDriver(), "Neodymium.hasDriver() must be true in AI tests with @Browser");
+        Assertions.assertNotNull(Neodymium.getDriver(), "Neodymium.getDriver() must not be null in AI tests with @Browser");
         Assertions.assertEquals("Deutsch", session.data().get("language"));
         Assertions.assertEquals("Neo", session.data().get("phrase.Part1"));
         Assertions.assertEquals("dymium", session.data().get("phrase.Part2"));

@@ -135,11 +135,20 @@ public class PageAnalyzerTest extends BaseAiTest
             // Form inputs and buttons in MINIMAL mode
             assertTrue(minimalDom.contains("data-testid=\"email-input\""), "MINIMAL DOM must render data-testid on input elements");
             assertTrue(minimalDom.contains("data-testid=\"submit-register\""), "MINIMAL DOM must render data-testid on submit button");
+            assertTrue(minimalDom.contains("data-qa=\"qa-order-action\""), "MINIMAL DOM must render authentic data-qa on button elements");
+            assertTrue(minimalDom.contains("data-cy=\"cy-search-input\""), "MINIMAL DOM must render authentic data-cy on input elements");
 
             // Containers, tables, and buttons in STANDARD mode
             assertTrue(standardDom.contains("data-testid=\"items-table\""), "STANDARD DOM must render data-testid on table container");
             assertTrue(standardDom.contains("data-testid=\"buy-hoodie\""), "STANDARD DOM must render data-testid on table row button");
-            assertTrue(standardDom.contains("data-testid=\"close-banner-btn\""), "STANDARD DOM must render data-testid mapped from data-test attribute");
+            assertTrue(standardDom.contains("data-test=\"close-banner-btn\""), "STANDARD DOM must render authentic data-test attribute verbatim without bucketing into data-testid");
+            assertTrue(standardDom.contains("data-qa=\"qa-order-action\""), "STANDARD DOM must render authentic data-qa attribute verbatim without bucketing into data-testid");
+            assertTrue(standardDom.contains("data-cy=\"cy-search-input\""), "STANDARD DOM must render authentic data-cy attribute verbatim without bucketing into data-testid");
+
+            // Verify synthetic rewriting into data-testid does NOT occur
+            assertFalse(standardDom.contains("data-testid=\"close-banner-btn\""), "STANDARD DOM must not rewrite data-test to synthetic data-testid");
+            assertFalse(standardDom.contains("data-testid=\"qa-order-action\""), "STANDARD DOM must not rewrite data-qa to synthetic data-testid");
+            assertFalse(standardDom.contains("data-testid=\"cy-search-input\""), "STANDARD DOM must not rewrite data-cy to synthetic data-testid");
         }
         finally
         {

@@ -57,6 +57,7 @@ import org.neodymium.ai.event.ExecutionEventBus;
 import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.executor.selenide.SelenideTargetExecutor;
+import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
 import org.neodymium.ai.model.Playbook;
 import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.model.SessionData;
@@ -132,6 +133,8 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
     @Override
     public Stream<TestTemplateInvocationContext> provideTestTemplateInvocationContexts(final ExtensionContext context)
     {
+        Neodymium.clearThreadContext();
+
         final Method method = context.getRequiredTestMethod();
         final Class<?> testClass = context.getRequiredTestClass();
 
@@ -685,6 +688,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                                         @Override
                                         public List<Extension> getAdditionalExtensions()
                                         {
+                                            Neodymium.clearThreadContext();
                                             final List<Extension> extensions = new ArrayList<>();
                                             if (browser != null)
                                             {
@@ -859,8 +863,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
         private void executeBeforeEach(final ExtensionContext context) throws Exception
         {
-            Neodymium.clearThreadContext();
-
             // Set test name dynamically in the Neodymium context
             if (context.getRequiredTestMethod() != null && context.getRequiredTestClass() != null)
             {
@@ -1413,44 +1415,19 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             final List<PlaybookStep> afterFlat = new ArrayList<>();
             flattenSteps(afterSteps, afterFlat);
 
-            if (testClass != null)
-            {
-                for (final Method m : testClass.getDeclaredMethods())
-                {
-                    if (m.isAnnotationPresent(org.junit.jupiter.api.BeforeEach.class) && m.isAnnotationPresent(AiPlaybook.class))
-                    {
-                        final String beforePbPath = m.getAnnotation(AiPlaybook.class).value();
-                        try
-                        {
-                            final Playbook beforePb = parser.parse(beforePbPath, manager);
-                            flattenSteps(beforePb.getAllSteps(), beforeFlat);
-                        }
-                        catch (final Exception ignored)
-                        {
-                        }
-                    }
-                    else if (m.isAnnotationPresent(org.junit.jupiter.api.AfterEach.class) && m.isAnnotationPresent(AiPlaybook.class))
-                    {
-                        final String afterPbPath = m.getAnnotation(AiPlaybook.class).value();
-                        try
-                        {
-                            final Playbook afterPb = parser.parse(afterPbPath, manager);
-                            flattenSteps(afterPb.getAllSteps(), afterFlat);
-                        }
-                        catch (final Exception ignored)
-                        {
-                        }
-                    }
-                }
-            }
-
             executionContext.getTransientData().put("playbook.beforeSteps", beforeFlat);
-            executionContext.getTransientData().put("playbook.steps", playbookSteps);
+            // The executed-step history starts empty and grows chronologically as phases run. The one exception is
+            // programmatic replay: AiSession.execute() derives its replay cursor from this list, so it must hold the
+            // recorded steps, otherwise recorded statuses and tool calls are never applied to the live execute() calls.
+            final List<PlaybookStep> initialExecutedSteps = new ArrayList<>();
+            if (isProgrammatic && this.effectiveMode.isReplay())
+            {
+                initialExecutedSteps.addAll(playbookSteps);
+            }
+            executionContext.getTransientData().put("playbook.steps", initialExecutedSteps);
             executionContext.getTransientData().put("playbook.afterSteps", afterFlat);
 
-            final List<PlaybookStep> flatSteps = new ArrayList<>();
-            flattenSteps(allSteps, flatSteps);
-            executionContext.getTransientData().put("playbook.flatSteps", flatSteps);
+            executionContext.getTransientData().put("playbook.flatSteps", new ArrayList<PlaybookStep>());
             executionContext.getTransientData().put("playbook.beforeStepsToRun", new ArrayList<>(beforeSteps));
             executionContext.getTransientData().put("playbook.afterStepsToRun", new ArrayList<>(afterSteps));
 
@@ -1519,7 +1496,13 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
             }
 
-            executionContext.getTransientData().put("playbook.mainSteps", playbookSteps);
+            if (!isProgrammatic)
+            {
+                executionContext.getTransientData().put("playbook.mainSteps", new ArrayList<>(playbookSteps));
+                executionContext.getTransientData().put("playbook.mainStepsToRun", new ArrayList<>(playbookSteps));
+            }
+            executionContext.getTransientData().put(ExecutionContext.KEY_MANAGED_LIFECYCLE, Boolean.TRUE);
+            executionContext.getTransientData().put(ExecutionContext.KEY_MANAGED_START_TIME, System.currentTimeMillis());
 
             final ExtensionContext.Store store = context.getStore(ExtensionContext.Namespace.create(context.getRequiredTestInstance()));
             store.put(AiSession.class, this.session);
@@ -1616,12 +1599,28 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
                     if (method.isAnnotationPresent(org.junit.jupiter.api.BeforeEach.class))
                     {
-                        execCtx.getTransientData().put("playbook.beforeSteps", flat);
+                        @SuppressWarnings("unchecked")
+                        List<PlaybookStep> beforeSteps = (List<PlaybookStep>) execCtx.getTransientData().get("playbook.beforeSteps");
+                        if (beforeSteps == null)
+                        {
+                            beforeSteps = new ArrayList<>();
+                            execCtx.getTransientData().put("playbook.beforeSteps", beforeSteps);
+                        }
+                        beforeSteps.addAll(flat);
                     }
                     else if (method.isAnnotationPresent(org.junit.jupiter.api.AfterEach.class))
                     {
-                        execCtx.getTransientData().put("playbook.afterSteps", flat);
+                        @SuppressWarnings("unchecked")
+                        List<PlaybookStep> afterSteps = (List<PlaybookStep>) execCtx.getTransientData().get("playbook.afterSteps");
+                        if (afterSteps == null)
+                        {
+                            afterSteps = new ArrayList<>();
+                            execCtx.getTransientData().put("playbook.afterSteps", afterSteps);
+                        }
+                        afterSteps.addAll(flat);
                     }
+
+                    appendExecutedSteps(execCtx, playbookSteps);
 
                     for (int i = playbookSteps.size() - 1; i >= 0; i--)
                     {
@@ -1636,7 +1635,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
 
         private void executeTestLifecycle(final Invocation<Void> invocation) throws Throwable
         {
-            final long sessionStartTime = System.currentTimeMillis();
             if (this.session != null && this.session.getExecutionContext() != null)
             {
                 this.session.getExecutionContext().getTransientData().put("playbook.deferSessionFinished", Boolean.TRUE);
@@ -1683,26 +1681,6 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     {
                         final ExecutionContext execCtx = this.session.getExecutionContext();
                         execCtx.getTransientData().remove("playbook.deferSessionFinished");
-                        if (!Boolean.TRUE.equals(execCtx.getTransientData().get("sessionFinishedHandled")))
-                        {
-                            execCtx.getTransientData().put("sessionFinishedHandled", true);
-                            final boolean overallSuccess = (primaryFailure == null);
-                            final long totalDurationMs = Math.max(1, System.currentTimeMillis() - sessionStartTime);
-                            @SuppressWarnings("unchecked")
-                            final List<String> warnings = (List<String>) execCtx.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
-                            final ExecutionContext prev = ExecutionContext.getActiveContext();
-                            try
-                            {
-                                ExecutionContext.setActiveContext(execCtx);
-                                this.session.getEventBus().dispatch(new SessionFinishedEvent(totalDurationMs, overallSuccess, warnings != null ? warnings : Collections.emptyList()));
-                                StateMachineRunner.logFinalStatsSummary(execCtx, totalDurationMs, overallSuccess, primaryFailure);
-                                this.session.runPostHooks(overallSuccess);
-                            }
-                            finally
-                            {
-                                ExecutionContext.setActiveContext(prev);
-                            }
-                        }
                     }
                 }
             }
@@ -1726,6 +1704,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 final List<PlaybookStep> beforeSteps = (List<PlaybookStep>) execCtx.getTransientData().remove("playbook.beforeStepsToRun");
                 if (beforeSteps != null && !beforeSteps.isEmpty())
                 {
+                    appendExecutedSteps(execCtx, beforeSteps);
                     @SuppressWarnings("unchecked")
                     final List<PlaybookStep> mainSteps = (List<PlaybookStep>) execCtx.getTransientData().get("playbook.mainSteps");
                     @SuppressWarnings("unchecked")
@@ -1755,9 +1734,10 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 final ExecutionContext execCtx = this.session.getExecutionContext();
                 @SuppressWarnings("unchecked")
-                final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) execCtx.getTransientData().remove("playbook.mainSteps");
+                final List<PlaybookStep> playbookSteps = (List<PlaybookStep>) execCtx.getTransientData().remove("playbook.mainStepsToRun");
                 if (playbookSteps != null && !playbookSteps.isEmpty())
                 {
+                    appendExecutedSteps(execCtx, playbookSteps);
                     execCtx.getTransientData().put("playbook.deferSessionFinished", Boolean.TRUE);
                     syncWebDriverWithSelenide();
                     for (int i = playbookSteps.size() - 1; i >= 0; i--)
@@ -1787,6 +1767,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 final List<PlaybookStep> afterSteps = (List<PlaybookStep>) execCtx.getTransientData().remove("playbook.afterStepsToRun");
                 if (afterSteps != null && !afterSteps.isEmpty())
                 {
+                    appendExecutedSteps(execCtx, afterSteps);
                     syncWebDriverWithSelenide();
                     for (int i = afterSteps.size() - 1; i >= 0; i--)
                     {
@@ -1801,13 +1782,9 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
         @Override
         public void afterEach(final ExtensionContext context) throws Exception
         {
+            Throwable afterPlaybookError = null;
             try
             {
-                if (context.getExecutionException().isPresent())
-                {
-                    handleEarlyFailure(context, context.getExecutionException().get());
-                }
-
                 if (this.session != null)
                 {
                     final ExecutionContext execCtx = this.session.getExecutionContext();
@@ -1821,15 +1798,21 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                         {
                             LOGGER.warn("⚠️ Error executing deferred after-playbook steps in afterEach: {}", t.getMessage(), t);
                             execCtx.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, t);
+                            afterPlaybookError = t;
                         }
                     }
+
+                    finalizeManagedSession(context, afterPlaybookError);
+
                     if (execCtx != null)
                     {
                         final String recordingID = (String) execCtx.getTransientData().get("recordingID");
                         if (recordingID != null)
                         {
-                            final boolean testFailed = context.getExecutionException().isPresent()
-                                || execCtx.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR);
+                            final boolean hasExecutionError = (context == null && execCtx.getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR));
+                            final boolean testFailed = (context != null && context.getExecutionException().isPresent())
+                                || afterPlaybookError != null
+                                || hasExecutionError;
                             try
                             {
                                 FilmTestExecution.finishVideoFilming(recordingID, testFailed);
@@ -1850,29 +1833,65 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                         {
                         }
                     }
-                    this.session.close();
+                    try
+                    {
+                        this.session.close();
+                    }
+                    catch (final Throwable closeEx)
+                    {
+                        LOGGER.warn("⚠️ Error closing session in afterEach: {}", closeEx.getMessage(), closeEx);
+                        if (afterPlaybookError != null)
+                        {
+                            afterPlaybookError.addSuppressed(closeEx);
+                        }
+                        else if (context != null && context.getExecutionException().isPresent())
+                        {
+                            context.getExecutionException().get().addSuppressed(closeEx);
+                        }
+                        else
+                        {
+                            afterPlaybookError = closeEx;
+                        }
+                    }
                 }
             }
             finally
             {
-                if (!Neodymium.hasDriver() && com.codeborne.selenide.WebDriverRunner.hasWebDriverStarted())
+                // Never leak the tracked iframe context into the next test running on this (pooled) thread
+                if (WebDriverRunner.hasWebDriverStarted() && FrameContextManager.getActiveFramePath() != null)
                 {
                     try
                     {
-                        com.codeborne.selenide.WebDriverRunner.closeWebDriver();
+                        FrameContextManager.switchToDefaultContent(WebDriverRunner.getWebDriver());
                     }
                     catch (final Exception ignored)
                     {
                     }
                 }
-                final boolean hasFailed = context.getExecutionException().isPresent()
-                    || (this.session != null && this.session.getExecutionContext() != null && this.session.getExecutionContext().getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR));
+                FrameContextManager.resetActiveFramePath();
+                if (!Neodymium.hasDriver() && WebDriverRunner.hasWebDriverStarted())
+                {
+                    try
+                    {
+                        WebDriverRunner.closeWebDriver();
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+                final boolean hasExecutionError = (context == null
+                    && this.session != null
+                    && this.session.getExecutionContext() != null
+                    && this.session.getExecutionContext().getTransientData().containsKey(ExecutionContext.KEY_LAST_EXECUTION_ERROR));
+                final boolean hasFailed = (context != null && context.getExecutionException().isPresent())
+                    || afterPlaybookError != null
+                    || hasExecutionError;
                 if (hasFailed && this.effectiveMode == ExecutionMode.FORCE_RECORDING && this.recordingPath != null && this.resourceManager != null)
                 {
                     try
                     {
                         this.resourceManager.delete(this.recordingPath);
-                        final Method m = context.getTestMethod().orElse(null);
+                        final Method m = context != null ? context.getTestMethod().orElse(null) : null;
                         org.slf4j.LoggerFactory.getLogger(NeodymiumAiRunner.class).warn(
                             "⚠️ Test method '{}' failed. Voided invalid recorded playbook at {}",
                             m != null ? m.getName() : "unknown",
@@ -1891,8 +1910,79 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                     Neodymium.getData().remove("neodymium.ai.ssim.minScore");
                     com.xceptance.neodymium.util.Neodymium.getData().remove("neodymium.ai.ssim.minScore");
                 }
+            }
 
-                Neodymium.clearThreadContext();
+            if (afterPlaybookError != null)
+            {
+                if (context != null && context.getExecutionException().isPresent())
+                {
+                    context.getExecutionException().get().addSuppressed(afterPlaybookError);
+                }
+                else if (afterPlaybookError instanceof Exception exception)
+                {
+                    throw exception;
+                }
+                else if (afterPlaybookError instanceof Error error)
+                {
+                    throw error;
+                }
+                else
+                {
+                    throw new RuntimeException(afterPlaybookError);
+                }
+            }
+        }
+
+        private void finalizeManagedSession(final ExtensionContext context, final Throwable afterPlaybookError)
+        {
+            if (this.sessionFinishedHandled)
+            {
+                return;
+            }
+            if (this.session == null || this.session.getExecutionContext() == null)
+            {
+                return;
+            }
+            final ExecutionContext execCtx = this.session.getExecutionContext();
+            if (Boolean.TRUE.equals(execCtx.getTransientData().get(ExecutionContext.KEY_SESSION_FINISHED_HANDLED)))
+            {
+                this.sessionFinishedHandled = true;
+                return;
+            }
+            this.sessionFinishedHandled = true;
+            execCtx.getTransientData().put(ExecutionContext.KEY_SESSION_FINISHED_HANDLED, true);
+
+            final Throwable testException = context != null ? context.getExecutionException().orElse(null) : null;
+            final Throwable failure = testException != null
+                ? testException
+                : (afterPlaybookError != null
+                    ? afterPlaybookError
+                    : (context == null ? (Throwable) execCtx.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR) : null));
+            if (failure != null)
+            {
+                execCtx.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, failure);
+            }
+            final boolean overallSuccess = (failure == null);
+
+            final Long startTime = (Long) execCtx.getTransientData().get(ExecutionContext.KEY_MANAGED_START_TIME);
+            final long totalDurationMs = (startTime != null)
+                ? Math.max(1, System.currentTimeMillis() - startTime)
+                : 0;
+
+            @SuppressWarnings("unchecked")
+            final List<String> warnings = (List<String>) execCtx.getTransientData().get(ExecutionContext.KEY_EXECUTION_WARNINGS);
+
+            final ExecutionContext prev = ExecutionContext.getActiveContext();
+            try
+            {
+                ExecutionContext.setActiveContext(execCtx);
+                this.session.getEventBus().dispatch(new SessionFinishedEvent(totalDurationMs, overallSuccess, warnings != null ? warnings : Collections.emptyList()));
+                StateMachineRunner.logFinalStatsSummary(execCtx, totalDurationMs, overallSuccess, failure);
+                this.session.runPostHooks(overallSuccess);
+            }
+            finally
+            {
+                ExecutionContext.setActiveContext(prev);
             }
         }
 
@@ -1902,7 +1992,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
             {
                 return;
             }
-            if (this.session != null && Boolean.TRUE.equals(this.session.getExecutionContext().getTransientData().get("sessionFinishedHandled")))
+            if (this.session != null && Boolean.TRUE.equals(this.session.getExecutionContext().getTransientData().get(ExecutionContext.KEY_SESSION_FINISHED_HANDLED)))
             {
                 this.sessionFinishedHandled = true;
                 return;
@@ -1922,7 +2012,7 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 }
 
                 final ExecutionContext execCtx = this.session.getExecutionContext();
-                execCtx.getTransientData().put("sessionFinishedHandled", true);
+                execCtx.getTransientData().put(ExecutionContext.KEY_SESSION_FINISHED_HANDLED, true);
 
                 final Class<?> testClass = context.getTestClass().orElse(null);
                 final Method method = context.getTestMethod().orElse(null);
@@ -2113,6 +2203,74 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 target.add(step);
             }
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void appendExecutedSteps(final ExecutionContext execCtx, final List<PlaybookStep> steps)
+    {
+        if (execCtx == null || steps == null || steps.isEmpty())
+        {
+            return;
+        }
+        List<PlaybookStep> currentSteps = (List<PlaybookStep>) execCtx.getTransientData().get("playbook.steps");
+        if (currentSteps == null)
+        {
+            currentSteps = new ArrayList<>();
+            execCtx.getTransientData().put("playbook.steps", currentSteps);
+        }
+        else if (!(currentSteps instanceof ArrayList))
+        {
+            currentSteps = new ArrayList<>(currentSteps);
+            execCtx.getTransientData().put("playbook.steps", currentSteps);
+        }
+        for (final PlaybookStep step : steps)
+        {
+            if (!containsIdentity(currentSteps, step))
+            {
+                currentSteps.add(step);
+            }
+        }
+
+        List<PlaybookStep> flatSteps = (List<PlaybookStep>) execCtx.getTransientData().get("playbook.flatSteps");
+        if (flatSteps == null)
+        {
+            flatSteps = new ArrayList<>();
+            execCtx.getTransientData().put("playbook.flatSteps", flatSteps);
+        }
+        else if (!(flatSteps instanceof ArrayList))
+        {
+            flatSteps = new ArrayList<>(flatSteps);
+            execCtx.getTransientData().put("playbook.flatSteps", flatSteps);
+        }
+        final List<PlaybookStep> flattened = new ArrayList<>();
+        flattenSteps(steps, flattened);
+        for (final PlaybookStep step : flattened)
+        {
+            if (!containsIdentity(flatSteps, step))
+            {
+                flatSteps.add(step);
+            }
+        }
+    }
+
+    /**
+     * Identity-based membership check. Steps are mutable model objects, so the same instance must never be
+     * recorded twice in the executed-step history, while distinct steps with equal content must both be kept.
+     *
+     * @param steps the list to search
+     * @param step  the step instance to look for
+     * @return {@code true} if the very same instance is already contained
+     */
+    private static boolean containsIdentity(final List<PlaybookStep> steps, final PlaybookStep step)
+    {
+        for (final PlaybookStep candidate : steps)
+        {
+            if (candidate == step)
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

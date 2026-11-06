@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.report.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -76,7 +77,9 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -4667,6 +4670,37 @@ public class AuraReportDataService
         }
     }
 
+    private JsonNode readJsonNodeWithRetry(final File f)
+    {
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                final JsonNode node = objectMapper.readTree(f);
+                if (node != null && !node.isEmpty())
+                {
+                    return node;
+                }
+            }
+            catch (final Exception e)
+            {
+                if (attempt < 2)
+                {
+                    try
+                    {
+                        Thread.sleep(20L * (attempt + 1));
+                    }
+                    catch (final InterruptedException ignored)
+                    {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
     public TestExecutionDto getExecutionDetails(final String runId, final String executionId)
     {
         if (runId == null || executionId == null || executionId.isBlank())
@@ -4674,80 +4708,58 @@ public class AuraReportDataService
             return null;
         }
 
-        final Path runDir = localRunJsonStorageService.getRunDir(runId);
+        final String cleanRunId = runId.trim().replaceAll("^#+", "");
+        final String effectiveRunId;
+        if (!cleanRunId.isEmpty() && !"RUN_ID".equalsIgnoreCase(cleanRunId))
+        {
+            effectiveRunId = cleanRunId;
+        }
+        else
+        {
+            effectiveRunId = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc().stream()
+                .findFirst()
+                .map(TestRunEntity::getId)
+                .orElse("");
+            LOG.warn("Execution lookup received placeholder runId='{}'; falling back to latest run '{}'.", runId, effectiveRunId);
+        }
+
+        if (effectiveRunId.isEmpty())
+        {
+            return null;
+        }
+
+        final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
         if (Files.exists(runDir) && Files.isDirectory(runDir))
         {
             final List<File> files = new ArrayList<>();
-            // Fast candidate lookup: if executionId starts with "ClassName#...", inspect that folder first
-            if (executionId.contains("#"))
-            {
-                final String classCandidate = executionId.substring(0, executionId.indexOf('#'));
-                final File candidateDir = runDir.resolve(classCandidate).toFile();
-                if (candidateDir.exists() && candidateDir.isDirectory())
-                {
-                    localRunJsonStorageService.scanForTestExecJsonFiles(candidateDir, files);
-                }
-            }
-            if (files.isEmpty())
-            {
-                localRunJsonStorageService.scanForTestExecJsonFiles(runDir.toFile(), files);
-            }
+            localRunJsonStorageService.scanForTestExecJsonFiles(runDir.toFile(), files);
 
+            // Pass 1: Scan for exact matches (FQCN keys, execution IDs, and specific file names). Simple-class-name
+            // matches are gathered as ambiguity-checked candidates.
+            final List<JsonNode> simpleKeyCandidates = new ArrayList<>();
             for (final File f : files)
             {
-                JsonNode node = null;
-                for (int attempt = 0; attempt < 3; attempt++)
-                {
-                    try
-                    {
-                        node = objectMapper.readTree(f);
-                        if (node != null && !node.isEmpty())
-                        {
-                            break;
-                        }
-                    }
-                    catch (final Exception e)
-                    {
-                        if (attempt < 2)
-                        {
-                            try
-                            {
-                                Thread.sleep(20L * (attempt + 1));
-                            }
-                            catch (final InterruptedException ignored)
-                            {
-                                Thread.currentThread().interrupt();
-                                break;
-                            }
-                        }
-                    }
-                }
-
+                final JsonNode node = readJsonNodeWithRetry(f);
                 if (node != null)
                 {
                     try
                     {
-                        final String id = node.path("id").asText(f.getName().replaceAll("\\.json$", ""));
+                        final String parentFolder = (f.getParentFile() != null && !f.getParentFile().getName().equals(effectiveRunId))
+                                ? f.getParentFile().getName() : "";
+                        final String rawTestFile = node.path("testFile").asText("");
+                        final String testFileClass = rawTestFile.contains("#") ? rawTestFile.substring(0, rawTestFile.indexOf('#')) : rawTestFile;
+                        final String testFileMethod = rawTestFile.contains("#") ? rawTestFile.substring(rawTestFile.indexOf('#') + 1) : "";
+
                         String testClass = node.path("testClass").asText("");
-                        if (testClass.isEmpty() || "DefaultClass".equalsIgnoreCase(testClass) || "GeneralClass".equalsIgnoreCase(testClass))
+                        if (testClass.isEmpty() || "DefaultClass".equalsIgnoreCase(testClass))
                         {
-                            if (f.getParentFile() != null && !f.getParentFile().getName().equalsIgnoreCase(f.getName())
-                                    && !f.getParentFile().getName().startsWith("run_") && !f.getParentFile().getName().startsWith("run-"))
+                            if (!parentFolder.isEmpty())
                             {
-                                testClass = f.getParentFile().getName();
+                                testClass = parentFolder;
                             }
-                            else if (node.has("testFile") && !node.path("testFile").asText().isEmpty())
+                            else if (!testFileClass.isEmpty())
                             {
-                                String tf = node.path("testFile").asText();
-                                if (tf.contains("#"))
-                                {
-                                    tf = tf.substring(0, tf.indexOf('#'));
-                                }
-                                if (tf.contains("."))
-                                {
-                                    tf = tf.substring(tf.lastIndexOf('.') + 1);
-                                }
-                                testClass = tf;
+                                testClass = testFileClass;
                             }
                             else
                             {
@@ -4755,22 +4767,26 @@ public class AuraReportDataService
                             }
                         }
 
-                        final String testMethod = LocalRunJsonStorageService.extractTestMethod(node);
+                        String testMethod = LocalRunJsonStorageService.extractTestMethod(node);
+                        if (testMethod.isEmpty() && !testFileMethod.isEmpty())
+                        {
+                            testMethod = testFileMethod;
+                        }
 
                         String title = node.path("title").asText("");
                         if (title.isEmpty() || "Default".equalsIgnoreCase(title))
                         {
-                            if (node.has("datasetId") && !node.path("datasetId").asText().isBlank())
+                            if (node.hasNonNull("datasetId"))
                             {
                                 title = node.path("datasetId").asText();
                             }
-                            else if (node.has("testId") && !node.path("testId").asText().isBlank())
+                            else if (node.hasNonNull("dataSet"))
+                            {
+                                title = node.path("dataSet").asText();
+                            }
+                            else if (node.hasNonNull("testId"))
                             {
                                 title = node.path("testId").asText();
-                            }
-                            else if (node.has("testName") && !node.path("testName").asText().isBlank())
-                            {
-                                title = node.path("testName").asText();
                             }
                             else
                             {
@@ -4778,19 +4794,28 @@ public class AuraReportDataService
                             }
                         }
 
+                        final String id = node.path("id").asText(f.getName().replaceAll("\\.json$", ""));
                         final String browser = node.path("browser").asText("Chrome");
                         final String nodeDatasetId = node.path("datasetId").asText("");
                         final String nodeTestId = node.path("testId").asText("");
 
+                        final String simpleClass = testClass.contains(".") ? testClass.substring(testClass.lastIndexOf('.') + 1) : testClass;
+
                         final String execKey = LocalRunJsonStorageService.buildExecutionKey(testClass, testMethod, title, browser);
                         final String execKeyNoMethod = LocalRunJsonStorageService.buildExecutionKey(testClass, null, title, browser);
+                        final String simpleExecKey = LocalRunJsonStorageService.buildExecutionKey(simpleClass, testMethod, title, browser);
                         final String fullKey = testClass + "#" + id + "#" + browser;
+                        final String simpleFullKey = simpleClass + "#" + id + "#" + browser;
                         final String fullKeyDatasetId = !nodeDatasetId.isBlank() ? testClass + "#" + nodeDatasetId + "#" + browser : "";
                         final String fullKeyTestId = !nodeTestId.isBlank() ? testClass + "#" + nodeTestId + "#" + browser : "";
                         final String execKeyWithId = execKey + "#" + id;
+                        final String simpleExecKeyWithId = simpleExecKey + "#" + id;
                         final String classMethodBrowser = testClass + "#" + testMethod + "#" + browser;
+                        final String simpleClassMethodBrowser = simpleClass + "#" + testMethod + "#" + browser;
                         final String fileName = f.getName();
                         final String fileNameNoExt = fileName.replaceAll("\\.json$", "");
+                        final String parentWithFileName = !parentFolder.isEmpty() ? parentFolder + "/" + fileName : "";
+                        final String parentWithId = !parentFolder.isEmpty() ? parentFolder + "#" + id : "";
 
                         if (executionId.equalsIgnoreCase(id)
                                 || executionId.equalsIgnoreCase(fullKey)
@@ -4801,28 +4826,80 @@ public class AuraReportDataService
                                 || executionId.equalsIgnoreCase(execKeyWithId)
                                 || executionId.equalsIgnoreCase(classMethodBrowser)
                                 || executionId.equalsIgnoreCase(fileNameNoExt)
-                                || executionId.equalsIgnoreCase(fileName))
+                                || executionId.equalsIgnoreCase(fileName)
+                                || (!parentWithFileName.isEmpty() && executionId.equalsIgnoreCase(parentWithFileName))
+                                || (!parentWithId.isEmpty() && executionId.equalsIgnoreCase(parentWithId)))
                         {
-                            final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
-                            if (dto.getId() == null || dto.getId().isBlank()
-                                    || "bad".equalsIgnoreCase(dto.getId())
-                                    || "perfect".equalsIgnoreCase(dto.getId())
-                                    || "default".equalsIgnoreCase(dto.getId()))
-                            {
-                                dto.setId(executionId);
-                            }
-                            resolveBugsForExecution(runId, dto);
-                            return dto;
+                            return buildExecutionDetailsDto(node, executionId, effectiveRunId);
+                        }
+
+                        // Simple-class-name keys are only a weaker match: two classes in different packages may share a
+                        // simple name, so such hits are collected and only used if they are unambiguous.
+                        if (executionId.equalsIgnoreCase(simpleFullKey)
+                                || executionId.equalsIgnoreCase(simpleExecKey)
+                                || executionId.equalsIgnoreCase(simpleExecKeyWithId)
+                                || executionId.equalsIgnoreCase(simpleClassMethodBrowser))
+                        {
+                            simpleKeyCandidates.add(node);
                         }
                     }
-                    catch (final Exception ignored)
+                    catch (final Exception e)
                     {
+                        LOG.debug("Skipping execution file {} while resolving execId={}: {}", f.getName(), executionId, e.getMessage());
+                    }
+                }
+            }
+
+            if (simpleKeyCandidates.size() == 1)
+            {
+                try
+                {
+                    return buildExecutionDetailsDto(simpleKeyCandidates.get(0), executionId, effectiveRunId);
+                }
+                catch (final Exception e)
+                {
+                    LOG.debug("Failed mapping simple-key candidate for execId={}: {}", executionId, e.getMessage());
+                }
+            }
+            else if (simpleKeyCandidates.size() > 1)
+            {
+                LOG.warn("Ambiguous simple-class execution key '{}' in runId={} matches {} executions; not guessing.",
+                         executionId, effectiveRunId, simpleKeyCandidates.size());
+            }
+
+            // Pass 2: Fuzzy fallback matching. Only executed if no file in the run had an exact match in Pass 1.
+            // Safely matches single-execution class folders where executionId shares the parent folder prefix.
+            for (final File f : files)
+            {
+                final String parentFolder = (f.getParentFile() != null && !f.getParentFile().getName().equals(effectiveRunId))
+                        ? f.getParentFile().getName() : "";
+                if (!parentFolder.isEmpty() && (executionId.startsWith(parentFolder + "#") || executionId.equalsIgnoreCase(parentFolder)))
+                {
+                    final long classFileCount = files.stream()
+                            .filter(file -> parentFolder.equals(file.getParentFile() != null ? file.getParentFile().getName() : ""))
+                            .count();
+                    if (classFileCount == 1)
+                    {
+                        final JsonNode node = readJsonNodeWithRetry(f);
+                        // Guard against hijacking: a lone file of a multi-dataset class (other datasets not yet written
+                        // during a live run) must not answer for a different dataset's execution id.
+                        if (node != null && isIdentityCompatible(node, executionId))
+                        {
+                            try
+                            {
+                                return buildExecutionDetailsDto(node, executionId, effectiveRunId);
+                            }
+                            catch (final Exception e)
+                            {
+                                LOG.debug("Fuzzy match mapping failed for {}: {}", f.getName(), e.getMessage());
+                            }
+                        }
                     }
                 }
             }
         }
 
-        final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(runId);
+        final Optional<String> runJsonOpt = localRunJsonStorageService.readRunJson(effectiveRunId);
         if (runJsonOpt.isPresent())
         {
             try
@@ -4831,35 +4908,51 @@ public class AuraReportDataService
                 final JsonNode execMetrics = root.path("executionMetrics");
                 if (execMetrics.isObject() && !execMetrics.isEmpty())
                 {
-                    for (final java.util.Map.Entry<String, JsonNode> entry : (Iterable<java.util.Map.Entry<String, JsonNode>>) () -> execMetrics.fields())
+                    final List<JsonNode> simpleKeyHits = new ArrayList<>();
+                    for (final Entry<String, JsonNode> entry : (Iterable<Entry<String, JsonNode>>) () -> execMetrics.fields())
                     {
                         final JsonNode node = entry.getValue();
-                        final String id = node.path("id").asText(entry.getKey());
-                        if (executionId.equalsIgnoreCase(id) || executionId.equalsIgnoreCase(entry.getKey()))
+                        final String key = entry.getKey();
+                        final String id = node.path("id").asText(key);
+                        final String simpleKey = extractSimpleExecutionKey(key);
+
+                        if (executionId.equalsIgnoreCase(id) || executionId.equalsIgnoreCase(key))
                         {
                             final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
-                            resolveBugsForExecution(runId, dto);
+                            resolveBugsForExecution(effectiveRunId, dto);
                             return dto;
                         }
+                        if (!simpleKey.isEmpty() && executionId.equalsIgnoreCase(simpleKey))
+                        {
+                            simpleKeyHits.add(node);
+                        }
+                    }
+                    if (simpleKeyHits.size() == 1)
+                    {
+                        final TestExecutionDto dto = objectMapper.treeToValue(simpleKeyHits.get(0), TestExecutionDto.class);
+                        resolveBugsForExecution(effectiveRunId, dto);
+                        return dto;
                     }
                 }
                 final JsonNode execArray = root.path("executions");
                 if (execArray.isArray())
                 {
+                    final List<TestExecutionDto> parsed = new ArrayList<>();
                     for (final JsonNode execNode : execArray)
                     {
-                        if (executionId.equalsIgnoreCase(execNode.path("id").asText("")))
-                        {
-                            final TestExecutionDto dto = objectMapper.treeToValue(execNode, TestExecutionDto.class);
-                            resolveBugsForExecution(runId, dto);
-                            return dto;
-                        }
+                        parsed.add(objectMapper.treeToValue(execNode, TestExecutionDto.class));
+                    }
+                    final TestExecutionDto match = findUniqueExecution(parsed, executionId);
+                    if (match != null)
+                    {
+                        resolveBugsForExecution(effectiveRunId, match);
+                        return match;
                     }
                 }
             }
             catch (final Exception e)
             {
-                LOG.error("Failed reading execution details from run.json for runId={}, execId={}: {}", runId, executionId, e.getMessage());
+                LOG.error("Failed reading execution details from run.json for runId={}, execId={}: {}", effectiveRunId, executionId, e.getMessage());
             }
         }
 
@@ -4872,10 +4965,16 @@ public class AuraReportDataService
                 {
                     final JsonNode node = objectMapper.readTree(liveJson);
                     final String liveRunId = node.path("runId").asText("");
-                    if (runId.equalsIgnoreCase(liveRunId) || liveRunId.isEmpty())
+                    if (effectiveRunId.equalsIgnoreCase(liveRunId) || runId.equalsIgnoreCase(liveRunId) || liveRunId.isEmpty())
                     {
                         final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
-                        if (dto != null)
+                        final boolean matchesTarget = dto != null && (executionId.equalsIgnoreCase(dto.getId()) || matchesExecution(dto, executionId));
+                        final boolean isGenericId = "console-execution".equalsIgnoreCase(executionId)
+                                || "default".equalsIgnoreCase(executionId)
+                                || "live".equalsIgnoreCase(executionId)
+                                || executionId.equalsIgnoreCase(effectiveRunId);
+
+                        if (dto != null && (matchesTarget || isGenericId))
                         {
                             if (dto.getId() == null || dto.getId().isBlank()
                                     || "bad".equalsIgnoreCase(dto.getId())
@@ -4884,7 +4983,7 @@ public class AuraReportDataService
                             {
                                 dto.setId(executionId);
                             }
-                            resolveBugsForExecution(runId, dto);
+                            resolveBugsForExecution(effectiveRunId, dto);
                             return dto;
                         }
                     }
@@ -4895,36 +4994,105 @@ public class AuraReportDataService
             }
         }
 
-        final RunReportDto cachedReport = runReportCache.get(runId);
+        final RunReportDto cachedReport = runReportCache.get(effectiveRunId) != null ? runReportCache.get(effectiveRunId) : runReportCache.get(runId);
         if (cachedReport != null && cachedReport.getExecutions() != null)
         {
-            for (final TestExecutionDto dto : cachedReport.getExecutions())
+            final TestExecutionDto cachedMatch = findUniqueExecution(cachedReport.getExecutions(), executionId);
+            if (cachedMatch != null)
             {
-                if (matchesExecution(dto, executionId))
-                {
-                    resolveBugsForExecution(runId, dto);
-                    return dto;
-                }
+                resolveBugsForExecution(effectiveRunId, cachedMatch);
+                return cachedMatch;
             }
         }
 
-        final List<TestExecutionDto> liveList = liveRunBuffer.get(runId);
+        final List<TestExecutionDto> liveList = liveRunBuffer.get(effectiveRunId) != null ? liveRunBuffer.get(effectiveRunId) : liveRunBuffer.get(runId);
         if (liveList != null)
         {
-            for (final TestExecutionDto dto : liveList)
+            final TestExecutionDto liveMatch = findUniqueExecution(liveList, executionId);
+            if (liveMatch != null)
             {
-                if (matchesExecution(dto, executionId))
-                {
-                    resolveBugsForExecution(runId, dto);
-                    return dto;
-                }
+                resolveBugsForExecution(effectiveRunId, liveMatch);
+                return liveMatch;
             }
         }
 
         return null;
     }
 
+    /**
+     * Maps a raw execution JSON node to a {@link TestExecutionDto}, normalizing placeholder ids to the requested
+     * execution id and resolving linked bugs.
+     */
+    private TestExecutionDto buildExecutionDetailsDto(final JsonNode node, final String executionId, final String effectiveRunId)
+        throws JsonProcessingException
+    {
+        final TestExecutionDto dto = objectMapper.treeToValue(node, TestExecutionDto.class);
+        if (dto.getId() == null || dto.getId().isBlank()
+                || "bad".equalsIgnoreCase(dto.getId())
+                || "perfect".equalsIgnoreCase(dto.getId())
+                || "default".equalsIgnoreCase(dto.getId()))
+        {
+            dto.setId(executionId);
+        }
+        resolveBugsForExecution(effectiveRunId, dto);
+        return dto;
+    }
+
+    /**
+     * Checks that a fuzzily matched execution file does not contradict the requested execution id. If the file carries
+     * identifying values (id, title, dataset) that are not placeholders, at least one of them must occur in
+     * the requested id; otherwise the file belongs to a different dataset of the same class.
+     */
+    private static boolean isIdentityCompatible(final JsonNode node, final String executionId)
+    {
+        final String target = executionId.toLowerCase(Locale.ROOT);
+        boolean hasIdentity = false;
+        for (final String field : List.of("id", "title", "datasetId", "dataSet", "testId"))
+        {
+            final String value = node.path(field).asText("").trim();
+            if (value.isEmpty() || "default".equalsIgnoreCase(value) || "bad".equalsIgnoreCase(value)
+                    || "perfect".equalsIgnoreCase(value))
+            {
+                continue;
+            }
+            hasIdentity = true;
+            if (target.contains(value.toLowerCase(Locale.ROOT)))
+            {
+                return true;
+            }
+        }
+        return !hasIdentity;
+    }
+
+    private static String extractSimpleExecutionKey(final String key)
+    {
+        if (key == null || key.isBlank())
+        {
+            return "";
+        }
+        final int hashIdx = key.indexOf('#');
+        final String classPart = hashIdx >= 0 ? key.substring(0, hashIdx) : key;
+        final int dotIdx = classPart.lastIndexOf('.');
+        if (dotIdx >= 0)
+        {
+            return classPart.substring(dotIdx + 1) + (hashIdx >= 0 ? key.substring(hashIdx) : "");
+        }
+        return key;
+    }
+
     private boolean matchesExecution(final TestExecutionDto dto, final String targetId)
+    {
+        return matchesExecution(dto, targetId, true);
+    }
+
+    /**
+     * Matches an execution against an id or composite key.
+     *
+     * @param includeSimple
+     *            whether keys built from the simple (package-less) class name count as a match; those are weaker because
+     *            different packages may share a simple class name
+     */
+    private boolean matchesExecution(final TestExecutionDto dto, final String targetId, final boolean includeSimple)
     {
         if (dto == null || targetId == null || targetId.isBlank())
         {
@@ -4947,10 +5115,42 @@ public class AuraReportDataService
         final String execKeyWithId = execKey + "#" + id;
         final String classMethodBrowser = testClass + "#" + testMethod + "#" + browser;
 
+        final String simpleClass = testClass.contains(".") ? testClass.substring(testClass.lastIndexOf('.') + 1) : testClass;
+        final String simpleFullKey = simpleClass + "#" + id + "#" + browser;
+        final String simpleExecKey = LocalRunJsonStorageService.buildExecutionKey(simpleClass, testMethod, title, browser);
+        final String simpleExecKeyWithId = simpleExecKey + "#" + id;
+        final String simpleClassMethodBrowser = simpleClass + "#" + testMethod + "#" + browser;
+
         return targetId.equalsIgnoreCase(fullKey)
             || targetId.equalsIgnoreCase(execKey)
             || targetId.equalsIgnoreCase(execKeyWithId)
-            || targetId.equalsIgnoreCase(classMethodBrowser);
+            || targetId.equalsIgnoreCase(classMethodBrowser)
+            || (includeSimple
+                && (targetId.equalsIgnoreCase(simpleFullKey)
+                    || targetId.equalsIgnoreCase(simpleExecKey)
+                    || targetId.equalsIgnoreCase(simpleExecKeyWithId)
+                    || targetId.equalsIgnoreCase(simpleClassMethodBrowser)));
+    }
+
+    /**
+     * Finds an execution for the given id: the first exact match wins; a simple-class-key match is only accepted if it is
+     * unambiguous, so equally named classes of different packages are never mixed up.
+     */
+    private TestExecutionDto findUniqueExecution(final Iterable<TestExecutionDto> executions, final String executionId)
+    {
+        final List<TestExecutionDto> simpleHits = new ArrayList<>();
+        for (final TestExecutionDto dto : executions)
+        {
+            if (matchesExecution(dto, executionId, false))
+            {
+                return dto;
+            }
+            if (matchesExecution(dto, executionId, true))
+            {
+                simpleHits.add(dto);
+            }
+        }
+        return simpleHits.size() == 1 ? simpleHits.get(0) : null;
     }
 
     private void resolveBugsForExecution(final String runId, final TestExecutionDto dto)

@@ -134,7 +134,7 @@ function fingerprint(el) {
     }
 
     // Prioritize stable E2E testing and automation selectors over presentation attributes
-    var testId = el.getAttribute('data-testid') || el.getAttribute('data-test') || el.getAttribute('data-qa') || el.getAttribute('data-cy') || '';
+    var testId = el.getAttribute('data-testid') || el.getAttribute('data-test-id') || el.getAttribute('data-test') || el.getAttribute('data-qa') || el.getAttribute('data-cy') || '';
 
     // Normalize CSS classes to remove transient and dynamic segments
     var cls = (typeof el.className === 'string' ? el.className : '').trim().replace(new RegExp('\\s+', 'g'), ' ');

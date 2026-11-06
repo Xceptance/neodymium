@@ -73,12 +73,62 @@ public class AuraTestDashboardControllerTest
     public void testRenderDashboardFullPage()
     {
         final Model model = new ConcurrentModel();
+        Mockito.when(queueController.getFolderSelectionStatesJson()).thenReturn("{\"tests\":\"indeterminate\"}");
+        Mockito.when(queueController.getFolderTotalDatasetsJson()).thenReturn("{\"tests\":10}");
+
         final String view = controller.renderDashboard("false", null, model);
 
         Assertions.assertEquals("index", view);
         Assertions.assertEquals("AuraTestManager", model.getAttribute("activeTab"));
         Assertions.assertEquals("Neodymium Aura Manager Dashboard", model.getAttribute("pageTitle"));
         Assertions.assertEquals("fragments/aura-test-manager :: auraTestManager", model.getAttribute("viewFragment"));
+        Assertions.assertEquals("{\"tests\":\"indeterminate\"}", model.getAttribute("folderSelectionStatesJson"));
+        Assertions.assertEquals("{\"tests\":10}", model.getAttribute("folderTotalDatasetsJson"));
+    }
+
+    @Test
+    public void testRenderDashboardWithSearchQuery()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(fileService.getFilteredYamlFilesList("login")).thenReturn(List.of());
+        Mockito.when(fileService.getFilteredStepsFilesList("login")).thenReturn(List.of());
+
+        final String view = controller.renderDashboard("false", null, "login", model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals("login", model.getAttribute("q"));
+        Mockito.verify(fileService).getFilteredYamlFilesList("login");
+        Mockito.verify(fileService).getFilteredStepsFilesList("login");
+    }
+
+    @Test
+    public void testRenderDashboardWithCookieFallback()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(fileService.getFilteredYamlFilesList("checkout")).thenReturn(List.of());
+        Mockito.when(fileService.getFilteredStepsFilesList("checkout")).thenReturn(List.of());
+
+        final String view = controller.renderDashboard("false", null, null, "checkout", model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals("checkout", model.getAttribute("q"));
+        Mockito.verify(fileService).getFilteredYamlFilesList("checkout");
+        Mockito.verify(fileService).getFilteredStepsFilesList("checkout");
+    }
+
+    @Test
+    public void testRenderDashboardWithEncodedCookieFallback()
+    {
+        final Model model = new ConcurrentModel();
+        Mockito.when(fileService.getFilteredYamlFilesList("login test")).thenReturn(List.of());
+        Mockito.when(fileService.getFilteredStepsFilesList("login test")).thenReturn(List.of());
+
+        final String view = controller.renderDashboard("false", null, null, "login%20test", model);
+
+        Assertions.assertEquals("index", view);
+        Assertions.assertEquals("login test", model.getAttribute("q"));
+        Mockito.verify(fileService).getFilteredYamlFilesList("login test");
+        Mockito.verify(fileService).getFilteredStepsFilesList("login test");
     }
 
     @Test
