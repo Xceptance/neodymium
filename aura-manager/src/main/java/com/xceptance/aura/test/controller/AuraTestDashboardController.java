@@ -86,6 +86,7 @@ public class AuraTestDashboardController
         model.addAttribute("selectedKeys", queueController.getSelectedQueueKeys());
         model.addAttribute("selectedFileKeys", queueController.getFullySelectedFileKeys(testFiles));
         model.addAttribute("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(testFiles));
+        model.addAttribute("availableTags", AuraFileService.extractAvailableTestTags(testFiles));
         model.addAttribute("selectedBrowser", queueController.getSelectedBrowser());
         model.addAttribute("headless", queueController.isHeadless());
         model.addAttribute("video", queueController.isVideo());
@@ -97,6 +98,7 @@ public class AuraTestDashboardController
         model.addAttribute("browserGroups", queueController.getGroupedBrowserProfiles(queueController.getGlobalBrowserProfiles()));
         model.addAttribute("totalRuns", queueController.getTotalExecutionRuns());
         model.addAttribute("queueController", queueController);
+        model.addAttribute("runTags", queueController.getRunTags());
 
         final List<ChatSessionDto> chatSessions = sessionService != null ? sessionService.getSessions() : List.of();
         final String currentSessionId = chatSessions.isEmpty() ? "" : chatSessions.get(0).id;

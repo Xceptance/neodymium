@@ -265,4 +265,195 @@ public final class TestExecutionDtoTest
         Assertions.assertFalse(execPlaybook.isKnownAi());
         Assertions.assertFalse(execPlaybook.isUnknownAi());
     }
+
+    @Test
+    public void testFlakyDeserializationAndGetters() throws Exception
+    {
+        final String jsonFlaky = """
+            {
+                "id": "exec-flaky-1",
+                "testClass": "com.xceptance.test.FlakyTest",
+                "flaky": true,
+                "flakyFailureCount": 3,
+                "flakyTotalRuns": 5,
+                "flakyReason": "Flaky test: failed in 3 of 5 previous runs (60%) due to unknown failures"
+            }
+            """;
+        final TestExecutionDto dto = objectMapper.readValue(jsonFlaky, TestExecutionDto.class);
+        Assertions.assertNotNull(dto);
+        Assertions.assertTrue(dto.isFlaky());
+        Assertions.assertTrue(dto.getFlaky());
+        Assertions.assertEquals(3, dto.getFlakyFailureCount());
+        Assertions.assertEquals(5, dto.getFlakyTotalRuns());
+        Assertions.assertEquals("Flaky test: failed in 3 of 5 previous runs (60%) due to unknown failures", dto.getFlakyReason());
+
+        // Verify serialization preserves flaky properties
+        final String serialized = objectMapper.writeValueAsString(dto);
+        final JsonNode tree = objectMapper.readTree(serialized);
+        Assertions.assertTrue(tree.path("flaky").asBoolean());
+        Assertions.assertEquals(3, tree.path("flakyFailureCount").asInt());
+        Assertions.assertEquals(5, tree.path("flakyTotalRuns").asInt());
+        Assertions.assertEquals("Flaky test: failed in 3 of 5 previous runs (60%) due to unknown failures", tree.path("flakyReason").asText());
+    }
+
+    @Test
+    public void testSubAreaDirectPropertyDeserialization() throws Exception
+    {
+        final String json = """
+            {
+                "id": "exec-subarea-1",
+                "testClass": "com.xceptance.test.SearchTest",
+                "areaName": "@Search",
+                "subArea": "@Browsing"
+            }
+            """;
+        final TestExecutionDto dto = objectMapper.readValue(json, TestExecutionDto.class);
+        Assertions.assertNotNull(dto);
+        Assertions.assertEquals("@Search", dto.getAreaName());
+        Assertions.assertEquals("@Browsing", dto.getSubArea());
+    }
+
+    @Test
+    public void testSubAreaResolutionFromTagsArray() throws Exception
+    {
+        final String json = """
+            {
+                "id": "exec-subarea-2",
+                "testClass": "com.xceptance.test.SearchTest",
+                "tags": {
+                    "Area": ["Search", "Browsing"]
+                }
+            }
+            """;
+        final TestExecutionDto dto = objectMapper.readValue(json, TestExecutionDto.class);
+        Assertions.assertNotNull(dto);
+        Assertions.assertEquals("@Search", dto.getAreaName());
+        Assertions.assertEquals("@Browsing", dto.getSubArea());
+    }
+
+    @Test
+    public void testSubAreaResolutionFromLocalDataBindings() throws Exception
+    {
+        final String json = """
+            {
+                "id": "exec-subarea-3",
+                "testClass": "com.xceptance.test.SearchTest",
+                "localDataBindings": {
+                    "Area": "Search",
+                    "subArea": "Browsing"
+                }
+            }
+            """;
+        final TestExecutionDto dto = objectMapper.readValue(json, TestExecutionDto.class);
+        Assertions.assertNotNull(dto);
+        Assertions.assertEquals("@Search", dto.getAreaName());
+        Assertions.assertEquals("@Browsing", dto.getSubArea());
+    }
+
+    @Test
+    public void testDeserializationWithObjectStructuredBugs() throws Exception
+    {
+        final String json = """
+            {
+                "id": "console-execution-34",
+                "testClass": "OrderHistoryTest",
+                "testMethod": "verifyCustomerOrderHistory",
+                "title": "US",
+                "browser": "Chrome_iPhoneX",
+                "status": "failed-known",
+                "bugs": [
+                    {
+                        "id": "HUG-85323",
+                        "title": "Identified issue in OrderHistoryTest",
+                        "url": "https://jira.xceptance.de/browse/HUG-85323",
+                        "status": "Open"
+                    }
+                ]
+            }
+            """;
+        final TestExecutionDto dto = objectMapper.readValue(json, TestExecutionDto.class);
+        Assertions.assertNotNull(dto);
+        Assertions.assertEquals("console-execution-34", dto.getId());
+        Assertions.assertEquals("OrderHistoryTest", dto.getTestClass());
+        Assertions.assertEquals("verifyCustomerOrderHistory", dto.getTestMethod());
+        Assertions.assertEquals(1, dto.getBugs().size());
+        Assertions.assertEquals("HUG-85323", dto.getBugs().get(0));
+        Assertions.assertEquals(1, dto.getBugDetails().size());
+        Assertions.assertEquals("HUG-85323", dto.getBugDetails().get(0).getTicket());
+        Assertions.assertEquals("MAJOR", dto.getBugDetails().get(0).getSeverity());
+    }
+
+    @Test
+    public void testDeserializationWithMixedBugsAndBugDetails() throws Exception
+    {
+        // 1. Array with mixed string and object
+        final String jsonMixed = """
+            {
+                "id": "exec-mixed",
+                "testClass": "DemoTest",
+                "bugs": [
+                    "BUG-PLAIN",
+                    {
+                        "ticket": "BUG-RICH",
+                        "severity": "CRITICAL"
+                    }
+                ]
+            }
+            """;
+        final TestExecutionDto dtoMixed = objectMapper.readValue(jsonMixed, TestExecutionDto.class);
+        Assertions.assertNotNull(dtoMixed);
+        Assertions.assertEquals(2, dtoMixed.getBugs().size());
+        Assertions.assertTrue(dtoMixed.getBugs().contains("BUG-PLAIN"));
+        Assertions.assertTrue(dtoMixed.getBugs().contains("BUG-RICH"));
+
+        // 2. Single string bug
+        final String jsonSingleString = """
+            {
+                "id": "exec-single-str",
+                "testClass": "DemoTest",
+                "bugs": "BUG-SINGLE"
+            }
+            """;
+        final TestExecutionDto dtoSingleStr = objectMapper.readValue(jsonSingleString, TestExecutionDto.class);
+        Assertions.assertNotNull(dtoSingleStr);
+        Assertions.assertEquals(1, dtoSingleStr.getBugs().size());
+        Assertions.assertEquals("BUG-SINGLE", dtoSingleStr.getBugs().get(0));
+
+        // 3. Single object bug
+        final String jsonSingleObj = """
+            {
+                "id": "exec-single-obj",
+                "testClass": "DemoTest",
+                "bugs": {
+                    "id": "BUG-SINGLE-OBJ"
+                }
+            }
+            """;
+        final TestExecutionDto dtoSingleObj = objectMapper.readValue(jsonSingleObj, TestExecutionDto.class);
+        Assertions.assertNotNull(dtoSingleObj);
+        Assertions.assertEquals(1, dtoSingleObj.getBugs().size());
+        Assertions.assertEquals("BUG-SINGLE-OBJ", dtoSingleObj.getBugs().get(0));
+
+        // 4. bugDetails with "id" alias and custom severity
+        final String jsonBugDetailsAlias = """
+            {
+                "id": "exec-details-alias",
+                "testClass": "DemoTest",
+                "bugDetails": [
+                    {
+                        "id": "HUG-9999",
+                        "severity": "BLOCKER"
+                    }
+                ]
+            }
+            """;
+        final TestExecutionDto dtoDetailsAlias = objectMapper.readValue(jsonBugDetailsAlias, TestExecutionDto.class);
+        Assertions.assertNotNull(dtoDetailsAlias);
+        Assertions.assertEquals(1, dtoDetailsAlias.getBugs().size());
+        Assertions.assertEquals("HUG-9999", dtoDetailsAlias.getBugs().get(0));
+        Assertions.assertEquals(1, dtoDetailsAlias.getBugDetails().size());
+        Assertions.assertEquals("HUG-9999", dtoDetailsAlias.getBugDetails().get(0).getTicket());
+        Assertions.assertEquals("BLOCKER", dtoDetailsAlias.getBugDetails().get(0).getSeverity());
+    }
 }
+

@@ -41,6 +41,7 @@ import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.resources.ClasspathResourceManager;
 import org.neodymium.ai.resources.InMemoryResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
+import org.neodymium.util.TagUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
@@ -73,7 +74,7 @@ public final class YamlPlaybookParser implements PlaybookParser
      * Pattern matching standard top-level YAML section keys at the start of lines.
      */
     private static final Pattern YAML_BLOCK_PATTERN = Pattern.compile(
-        "(?m)^(steps|_steps|data|_data|before|beforeEach|_beforeEach|_beforeAll|after|afterEach|_afterEach|_afterAll|inline|_include|include|playbook|actions|promptAddon|description|teardown|_meta|meta|_properties|properties):",
+        "(?m)^(steps|_steps|tags|_tags|data|_data|before|beforeEach|_beforeEach|_beforeAll|after|afterEach|_afterEach|_afterAll|inline|_include|include|playbook|actions|promptAddon|description|teardown|_meta|meta|_properties|properties):",
         Pattern.CASE_INSENSITIVE
     );
 
@@ -317,7 +318,7 @@ public final class YamlPlaybookParser implements PlaybookParser
 
         Map<String, String> promptAddons = new HashMap<>();
         String description = null;
-        String areaName = null;
+        Map<String, List<String>> rootTags = Collections.emptyMap();
         if (!identifier.endsWith(".json"))
         {
             try (final InputStream in = manager.read(identifier))
@@ -326,7 +327,6 @@ public final class YamlPlaybookParser implements PlaybookParser
                 {
                     final byte[] bytes = in.readAllBytes();
                     final String fileContent = new String(bytes, StandardCharsets.UTF_8);
-                    areaName = AuraFileService.extractAreaTag(fileContent);
                     final String normalizedContent = AuraFileService.normalizeBlockScalars(fileContent);
                     final Yaml yaml = new Yaml();
                     final Object loadedObject = yaml.load(normalizedContent);
@@ -339,6 +339,8 @@ public final class YamlPlaybookParser implements PlaybookParser
                         {
                             description = descStr.trim();
                         }
+                        final Object rawTags = map.get("tags") != null ? map.get("tags") : map.get("_tags");
+                        rootTags = TagUtils.parseTags(rawTags);
                     }
                 }
             }
@@ -389,7 +391,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         resetExecutionState(beforeSteps);
                         resetExecutionState(steps);
                         resetExecutionState(afterSteps);
-                        return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, areaName);
+                        return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, rootTags);
                     }
                 }
                 catch (final IllegalArgumentException e)
@@ -448,7 +450,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                         }
                     }
                 }
-                return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, areaName);
+                return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, rootTags);
             }
         }
 
@@ -463,7 +465,7 @@ public final class YamlPlaybookParser implements PlaybookParser
         validateNoUnresolvedIncludeDirectives(steps, identifier);
         validateNoUnresolvedIncludeDirectives(afterSteps, identifier);
 
-        return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, areaName);
+        return new Playbook(beforeSteps, steps, afterSteps, dataSets, promptAddons, description, rootTags);
     }
 
     private Map<String, String> parsePromptAddons(final Map<String, Object> loadedMap)
@@ -560,10 +562,13 @@ public final class YamlPlaybookParser implements PlaybookParser
 
             if (loadedObject instanceof Map<?, ?> loadedMap)
             {
-                // 1. Root-level properties
+                // 1. Root-level properties and tags
                 final Map<String, String> rootProperties = new HashMap<>();
                 parseAndFlattenProperties(loadedMap.get("_properties"), rootProperties);
                 parseAndFlattenProperties(loadedMap.get("properties"), rootProperties);
+
+                final Object rawRootTags = loadedMap.get("tags") != null ? loadedMap.get("tags") : loadedMap.get("_tags");
+                final Map<String, List<String>> fileRootTags = TagUtils.parseTags(rawRootTags);
 
                 // 2. Parse datasets ('data' or '_data')
                 Object rawData = loadedMap.get("data");
@@ -578,20 +583,25 @@ public final class YamlPlaybookParser implements PlaybookParser
                     {
                         if (entry instanceof Map<?, ?> mapRow)
                         {
-                            parseDatasetRow(mapRow, rootProperties, loadedMap.get("_meta"), fileName, identifier, outDataSets);
+                            parseDatasetRow(mapRow, rootProperties, fileRootTags, loadedMap.get("_meta"), fileName, identifier, outDataSets);
                         }
                     }
                 }
                 else if (rawData instanceof Map<?, ?> mapRow)
                 {
-                    parseDatasetRow(mapRow, rootProperties, loadedMap.get("_meta"), fileName, identifier, outDataSets);
+                    parseDatasetRow(mapRow, rootProperties, fileRootTags, loadedMap.get("_meta"), fileName, identifier, outDataSets);
                 }
-                else if (loadedMap.containsKey("_meta") || !rootProperties.isEmpty())
+                else if (loadedMap.containsKey("_meta") || !rootProperties.isEmpty() || !fileRootTags.isEmpty())
                 {
                     final Map<String, SessionData.DataEntry> datasetMap = new HashMap<>();
                     for (final Map.Entry<String, String> propEntry : rootProperties.entrySet())
                     {
                         datasetMap.put(propEntry.getKey(), new SessionData.DataEntry(propEntry.getValue(), false));
+                    }
+                    final Map<String, List<String>> resolvedTags = TagUtils.resolveTags(fileRootTags, null);
+                    if (!resolvedTags.isEmpty())
+                    {
+                        datasetMap.put("tags", new SessionData.DataEntry(resolvedTags, false));
                     }
                     injectMetaEntries(datasetMap, loadedMap.get("_meta"), fileName, identifier);
                     outDataSets.add(datasetMap);
@@ -1465,7 +1475,7 @@ public final class YamlPlaybookParser implements PlaybookParser
                     resetExecutionState(jBefore);
                     resetExecutionState(jSteps);
                     resetExecutionState(jAfter);
-                    return new Playbook(jBefore, jSteps, jAfter, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons(), yamlPlaybook.getDescription(), yamlPlaybook.getAreaName());
+                    return new Playbook(jBefore, jSteps, jAfter, yamlPlaybook.getDataSets(), yamlPlaybook.getPromptAddons(), yamlPlaybook.getDescription(), yamlPlaybook.getTags());
                 }
                 catch (final Exception e)
                 {
@@ -1533,6 +1543,7 @@ public final class YamlPlaybookParser implements PlaybookParser
     private void parseDatasetRow(
         final Map<?, ?> rawRow,
         final Map<String, String> rootProperties,
+        final Map<String, List<String>> rootTags,
         final Object rawMeta,
         final String fileName,
         final String identifier,
@@ -1548,6 +1559,7 @@ public final class YamlPlaybookParser implements PlaybookParser
 
         // 2. Parse dataset keys and local row properties
         final Map<String, String> rowProperties = new HashMap<>();
+        Object rowTagsObj = null;
         for (final Map.Entry<?, ?> mapEntry : rawRow.entrySet())
         {
             final String key = String.valueOf(mapEntry.getKey());
@@ -1556,6 +1568,10 @@ public final class YamlPlaybookParser implements PlaybookParser
             {
                 parseAndFlattenProperties(val, rowProperties);
             }
+            else if ("_tags".equals(key) || "tags".equals(key))
+            {
+                rowTagsObj = val;
+            }
             else
             {
                 final boolean sensitive = isSensitiveKey(key);
@@ -1563,7 +1579,14 @@ public final class YamlPlaybookParser implements PlaybookParser
             }
         }
 
-        // 3. Overlay row-level properties
+        // 3. Resolve tags (CLI > Dataset > Root)
+        final Map<String, List<String>> resolvedTags = TagUtils.resolveTags(rootTags, rowTagsObj);
+        if (!resolvedTags.isEmpty())
+        {
+            datasetMap.put("tags", new SessionData.DataEntry(resolvedTags, false));
+        }
+
+        // 4. Overlay row-level properties
         for (final Map.Entry<String, String> propEntry : rowProperties.entrySet())
         {
             datasetMap.put(propEntry.getKey(), new SessionData.DataEntry(propEntry.getValue(), false));

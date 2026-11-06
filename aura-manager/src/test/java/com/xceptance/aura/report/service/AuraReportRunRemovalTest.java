@@ -153,6 +153,23 @@ public class AuraReportRunRemovalTest
         variation.setLastExecutedAt(2000L);
         variation.setHealed(false);
 
+        final String run2Json = """
+            {
+              "runId": "RUN_2",
+              "batch": "PaymentBatch",
+              "executions": [
+                {
+                  "id": "e2",
+                  "testClass": "com.xceptance.neodymium.test.PaymentTest",
+                  "testMethod": "testCreditCard",
+                  "title": "Visa",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "failed-unknown"
+                }
+              ]
+            }
+            """;
         final String run1Json = """
             {
               "runId": "RUN_1",
@@ -170,7 +187,9 @@ public class AuraReportRunRemovalTest
               ]
             }
             """;
+        Mockito.when(storageService.readRunJson(runId2)).thenReturn(Optional.of(run2Json));
         Mockito.when(storageService.readRunJson(runId1)).thenReturn(Optional.of(run1Json));
+        Mockito.when(variationRepository.findAllById(Mockito.anyCollection())).thenReturn(List.of(variation));
         Mockito.when(variationRepository.findAll()).thenReturn(List.of(variation));
         Mockito.when(variationRepository.findById(varId)).thenReturn(Optional.of(variation));
         Mockito.when(bugRepository.findByVariationId(varId)).thenReturn(List.of());
@@ -213,6 +232,25 @@ public class AuraReportRunRemovalTest
 
         final TestBaseBugEntity soloBug = new TestBaseBugEntity(varId, "NEO-999", "SoloBatch", "Prod", 1000L, runId);
 
+        final String runSoloJson = """
+            {
+              "runId": "RUN_SOLO",
+              "batch": "SoloBatch",
+              "executions": [
+                {
+                  "id": "e_solo",
+                  "testClass": "com.xceptance.neodymium.test.SoloTest",
+                  "testMethod": "testSolo",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson(runId)).thenReturn(Optional.of(runSoloJson));
+        Mockito.when(variationRepository.findAllById(Mockito.anyCollection())).thenReturn(List.of(variation));
         Mockito.when(variationRepository.findAll()).thenReturn(List.of(variation));
         Mockito.when(variationRepository.findById(varId)).thenReturn(Optional.of(variation));
         Mockito.when(bugRepository.findByVariationId(varId)).thenReturn(List.of(soloBug));

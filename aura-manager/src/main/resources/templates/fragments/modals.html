@@ -161,27 +161,609 @@
     </div>
 </div>
 
-<!-- ASSIGN TO AREA MODAL FRAGMENT -->
-<div class="modal-overlay" id="assignAreaModal" th:fragment="assignAreaModal" style="display: none;">
+<!-- TAG MANAGER MODAL FRAGMENT -->
+<div class="modal-overlay" id="tagModal" th:fragment="tagModal" style="display: none;">
     <div class="modal-card">
         <div class="modal-header">
             <div style="display: flex; align-items: center; gap: 8px;">
                 <span class="material-symbols-outlined" style="color: var(--accent);">label</span>
-                <span>Assign to Area</span>
+                <span id="tagModalTitle">Add Tag</span>
             </div>
         </div>
-        <form onsubmit="event.preventDefault(); submitAssignArea();">
+        <form onsubmit="event.preventDefault(); submitTagModal();">
             <div class="modal-body">
-                <label class="neo-u-47">Area Name / Tag</label>
-                <input class="modal-input" id="assignAreaTagInput" name="areaTag" placeholder="e.g. Checkout, @Checkout, or #@Checkout" type="text" required autofocus/>
+                <input type="hidden" id="tagModalTargetType" value="root" />
+                <input type="hidden" id="tagModalTargetCol" value="-1" />
+                <label class="neo-u-47" for="tagModalKeyInput">Tag Key / Name</label>
+                <input class="modal-input" id="tagModalKeyInput" name="tagKey" placeholder="e.g. area, locale, smoke, priority" type="text" required autofocus />
+                
+                <label class="neo-u-47" for="tagModalValueInput" style="margin-top: 12px; display: block;">Tag Value(s)</label>
+                <input class="modal-input" id="tagModalValueInput" name="tagValue" placeholder="e.g. Checkout or value1, value2" type="text" required />
                 <div style="font-size: 11.5px; color: var(--text-secondary, #64748b); margin-top: 4px; line-height: 1.4;">
-                    Assigns an area category tag (e.g. <code>#@Checkout</code>) to this test playbook.
+                    Separate multiple values with commas (e.g. <code>value1, value2</code>) to create a list of values.
                 </div>
-                <div id="assignAreaError" class="error-message" style="color: var(--color-danger, #ef4444); margin-top: 8px; font-size: 0.875rem; display: none;"></div>
+                <div id="tagModalError" class="error-message" style="color: var(--color-danger, #ef4444); margin-top: 8px; font-size: 0.875rem; display: none;"></div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn-editor" id="closeAssignAreaModalBtn" onclick="closeAssignAreaModal()">Cancel</button>
-                <button type="button" class="btn-primary neo-u-48" id="submitAssignAreaBtn" onclick="submitAssignArea()">Assign</button>
+                <button type="button" class="btn-editor" id="closeTagModalBtn" onclick="closeTagModal()">Cancel</button>
+                <button type="button" class="btn-primary neo-u-48" id="submitTagModalBtn" onclick="submitTagModal()">Save Tag</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- CREATE DASHBOARD PAGE MODAL FRAGMENT -->
+<div class="modal-overlay" id="createPageModal" th:fragment="createPageModal" style="display: none;" onclick="if (event.target === this) closeCreatePageModal();">
+    <div class="modal-card" style="max-width: 640px; width: 95%; max-height: 85vh; display: flex; flex-direction: column;">
+        <div class="modal-header d-flex align-items-center justify-content-between">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="material-symbols-outlined" style="color: var(--accent);">space_dashboard</span>
+                <span style="font-weight: 700; font-size: 1.05rem;">Create New Dashboard Page</span>
+            </div>
+            <button type="button" class="btn-icon-widget" onclick="closeCreatePageModal()" title="Close dialog">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <form id="createPageForm" method="post" action="/dashboard-pages/create" onsubmit="submitCreatePage(event)" style="display: flex; flex-direction: column; overflow: hidden;">
+            <div class="modal-body d-flex flex-column gap-3" style="overflow-y: auto; max-height: 65vh; padding: 1.25rem;">
+                <!-- 0. Dashboard Type Switcher (Standard vs Group of Tests) -->
+                <div class="d-flex align-items-center p-1 rounded" style="background: var(--bg-surface); border: 1px solid var(--border); gap: 4px;">
+                    <button type="button" class="modal-type-tab-btn active flex-fill d-flex align-items-center justify-content-center gap-2" id="tabBtnStandardDashboard" onclick="switchCreatePageTab('standard')">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">space_dashboard</span>
+                        <span>Standard Dashboard</span>
+                    </button>
+                    <button type="button" class="modal-type-tab-btn flex-fill d-flex align-items-center justify-content-center gap-2" id="tabBtnGroupDashboard" onclick="switchCreatePageTab('group')">
+                        <span class="material-symbols-outlined" style="font-size: 1rem;">grid_view</span>
+                        <span>Group of Tests</span>
+                    </button>
+                </div>
+                <input type="hidden" name="dashboardType" id="createPageDashboardTypeInput" value="standard" />
+
+                <!-- Group of Tests Configuration (shown when dashboardType == 'group') -->
+                <div id="groupDashboardConfigSection" class="config-section p-3 rounded" style="background: var(--bg-surface); border: 1px solid var(--border); display: none;">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <label class="d-inline-flex align-items-center gap-2 mb-0" style="font-size: 0.85rem; font-weight: 600; user-select: none;">
+                            <span class="material-symbols-outlined text-accent" style="font-size: 1rem;">layers</span>
+                            <span>Grouping Dimension</span>
+                        </label>
+                        <span class="text-muted" style="font-size: 0.72rem;">Generates overview cards & sub-dashboards</span>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-3" id="createPageGroupByPills">
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="batch" onclick="setCreatePageGroupBy('batch', this)">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">inventory_2</span>
+                            <span>Batch / Suite</span>
+                        </button>
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="browser" onclick="setCreatePageGroupBy('browser', this)">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">web</span>
+                            <span>Browser</span>
+                        </button>
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="environment" onclick="setCreatePageGroupBy('environment', this)">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">dns</span>
+                            <span>Environment</span>
+                        </button>
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="locale" onclick="setCreatePageGroupBy('locale', this)">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">public</span>
+                            <span>Locale</span>
+                        </button>
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="area" onclick="setCreatePageGroupBy('area', this)">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">category</span>
+                            <span>Area</span>
+                        </button>
+                        <th:block th:if="${availableIdentityTags != null}">
+                            <button type="button" th:each="tg : ${availableIdentityTags}"
+                                    th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment')}"
+                                    class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill"
+                                    th:attr="data-group-by=${tg}"
+                                    onclick="setCreatePageGroupBy(this.getAttribute('data-group-by'), this)">
+                                <span class="material-symbols-outlined" style="font-size: 0.85rem;">sell</span>
+                                <span th:text="${tg}">Tag</span>
+                            </button>
+                        </th:block>
+                    </div>
+                    <input type="hidden" name="groupBy" id="createPageGroupByInput" value="" />
+
+                    <!-- Status Evaluation Scope -->
+                    <div class="border-top pt-2 mt-2">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Group Cards Status Evaluation:</label>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="radio" name="createPageCardScopeRadio" value="LATEST_TEST_STATUS" checked onchange="setCreatePageCardScope('LATEST_TEST_STATUS')" />
+                                <span>Latest Test Status</span>
+                            </label>
+                            <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="radio" name="createPageCardScopeRadio" value="LAST_RUN" onchange="setCreatePageCardScope('LAST_RUN')" />
+                                <span>Last Run</span>
+                            </label>
+                        </div>
+                        <input type="hidden" name="groupCardScope" id="createPageGroupCardScopeInput" value="LATEST_TEST_STATUS" />
+                        <div id="groupCardScopeHelpText" style="font-size: 11px; color: var(--text-secondary, #64748b); margin-top: 4px;">
+                            Shows the latest known status of each test across execution history.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 1. Page Name -->
+                <div class="config-section">
+                    <label class="neo-u-47" for="createPageNameInput">Dashboard Name</label>
+                    <input class="modal-input" id="createPageNameInput" name="name" placeholder="e.g. Executive Summary or Performance Overview" type="text" required autofocus autocomplete="off"/>
+                    <div id="createPageNameDesc" style="font-size: 11.5px; color: var(--text-secondary, #64748b); margin-top: 4px; line-height: 1.4;">
+                        Creates a dedicated dashboard page where you can curate custom telemetry widgets.
+                    </div>
+                </div>
+
+                <!-- 2. Default Execution Identity -->
+                <div class="config-section p-2 rounded" style="background: var(--bg-surface); border: 1px solid var(--border);">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <label class="d-inline-flex align-items-center gap-2 mb-0" style="font-size: 0.85rem; font-weight: 600; user-select: none;">
+                            <span class="material-symbols-outlined text-accent" style="font-size: 1rem;">fingerprint</span>
+                            <span>Default Execution Identity</span>
+                            <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.85rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                        </label>
+                        <span class="text-muted" style="font-size: 0.72rem;">Defines unique test executions</span>
+                    </div>
+                    <div class="text-muted mt-1 mb-2" style="font-size: 0.75rem;">
+                        Select dimensions that identify unique test executions across runs on this dashboard.
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="run-scope-pill active" style="cursor: default; opacity: 0.85; pointer-events: none;" title="Test Class + Method + DataSet (Mandatory Base Coordinate)">
+                            <span class="material-symbols-outlined pill-icon" style="font-size: 0.75rem;">lock</span>
+                            <span>Test</span>
+                        </span>
+                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                            <input type="checkbox" name="createPageIdentityDimCheckbox" value="browser" checked onchange="updateCreatePageIdentityDimensionsInput()" />
+                            <span>Browser</span>
+                        </label>
+                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                            <input type="checkbox" name="createPageIdentityDimCheckbox" value="locale" onchange="updateCreatePageIdentityDimensionsInput()" />
+                            <span>Locale</span>
+                        </label>
+                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                            <input type="checkbox" name="createPageIdentityDimCheckbox" value="environment" onchange="updateCreatePageIdentityDimensionsInput()" />
+                            <span>Environment</span>
+                        </label>
+                        <th:block th:if="${availableIdentityTags != null}">
+                            <label th:each="tg : ${availableIdentityTags}"
+                                   th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment')}"
+                                   class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="createPageIdentityDimCheckbox" th:value="${tg}" onchange="updateCreatePageIdentityDimensionsInput()" />
+                                <span th:text="${'+ Tag: ' + tg}">+ Tag: Area</span>
+                            </label>
+                        </th:block>
+                    </div>
+                    <input type="hidden" name="executionIdentityDimensions" id="createPageIdentityDimensionsInput" value="browser" />
+                </div>
+
+                <!-- 3. Default Runs Filter -->
+                <div class="config-section p-2 rounded" style="background: var(--bg-surface); border: 1px solid var(--border);">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <label class="d-inline-flex align-items-center gap-2 mb-0" style="font-size: 0.85rem; font-weight: 600; user-select: none;">
+                            <span class="material-symbols-outlined text-accent" style="font-size: 1rem;">filter_alt</span>
+                            <span>Default Runs Filter</span>
+                        </label>
+                        <span class="text-muted" style="font-size: 0.72rem;">Scopes runs for widgets on this dashboard</span>
+                    </div>
+                    <div class="text-muted mt-1 mb-2" style="font-size: 0.75rem;">
+                        Filter runs and executions evaluated on this dashboard. Individual widgets can still override these.
+                    </div>
+
+                    <!-- Run Limit (Last N Runs) -->
+                    <div class="mb-2">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Run Limit (Last N Runs):</label>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <div class="d-flex align-items-center gap-1">
+                                <button type="button" class="btn-clear-ratio" onclick="setCreatePageFilterLimit(null)">All</button>
+                                <button type="button" class="btn-clear-ratio" onclick="setCreatePageFilterLimit(5)">5</button>
+                                <button type="button" class="btn-clear-ratio" onclick="setCreatePageFilterLimit(10)">10</button>
+                                <button type="button" class="btn-clear-ratio" onclick="setCreatePageFilterLimit(25)">25</button>
+                                <button type="button" class="btn-clear-ratio" onclick="setCreatePageFilterLimit(50)">50</button>
+                            </div>
+                            <div class="d-flex align-items-center gap-1">
+                                <input type="number" name="filterLimit" id="createPageFilterLimitInput" min="1" max="1000"
+                                       class="form-control form-control-sm" style="width: 120px; font-size: 0.75rem; background: var(--bg-hover); color: var(--text-main); border-color: var(--border);"
+                                       placeholder="e.g. 10 (all)" />
+                                <span class="text-muted" style="font-size: 0.72rem;">runs</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timestamp Filter (Timespan Date Range) -->
+                    <div class="mb-2">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Timestamp Range (Optional):</label>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="text-muted" style="font-size: 0.75rem;">From:</span>
+                                <input type="date" name="filterStartDate" id="createPageFilterStartDateInput"
+                                       class="form-control form-control-sm" style="font-size: 0.75rem; background: var(--bg-hover); color: var(--text-main); border-color: var(--border);" />
+                            </div>
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="text-muted" style="font-size: 0.75rem;">To:</span>
+                                <input type="date" name="filterEndDate" id="createPageFilterEndDateInput"
+                                       class="form-control form-control-sm" style="font-size: 0.75rem; background: var(--bg-hover); color: var(--text-main); border-color: var(--border);" />
+                            </div>
+                            <button type="button" class="btn-clear-ratio" onclick="clearCreatePageFilterDates()" title="Clear date range">Clear</button>
+                        </div>
+                    </div>
+
+                    <!-- Browsers -->
+                    <div class="mb-2" th:if="${candidateBrowsers != null && !candidateBrowsers.isEmpty()}">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Filter by Browser:</label>
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <label th:each="br : ${candidateBrowsers}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="createPageFilterBrowsersCheckbox" th:value="${br}" onchange="updateCreatePageFilterInputs()" />
+                                <span th:text="${br}">Chrome</span>
+                            </label>
+                        </div>
+                        <input type="hidden" name="filterBrowsers" id="createPageFilterBrowsersInput" value="" />
+                    </div>
+
+                    <!-- Locales -->
+                    <div class="mb-2" th:if="${candidateLocales != null && !candidateLocales.isEmpty()}">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Filter by Locale:</label>
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <label th:each="loc : ${candidateLocales}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="createPageFilterLocalesCheckbox" th:value="${loc}" onchange="updateCreatePageFilterInputs()" />
+                                <span th:text="${loc}">en_US</span>
+                            </label>
+                        </div>
+                        <input type="hidden" name="filterLocales" id="createPageFilterLocalesInput" value="" />
+                    </div>
+
+                    <!-- Environments -->
+                    <div class="mb-2" th:if="${candidateEnvs != null && !candidateEnvs.isEmpty()}">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Filter by Environment:</label>
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <label th:each="env : ${candidateEnvs}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="createPageFilterEnvsCheckbox" th:value="${env}" onchange="updateCreatePageFilterInputs()" />
+                                <span th:text="${env}">Default</span>
+                            </label>
+                        </div>
+                        <input type="hidden" name="filterEnvs" id="createPageFilterEnvsInput" value="" />
+                    </div>
+
+                    <!-- Areas -->
+                    <div class="mb-2" th:if="${candidateAreas != null && !candidateAreas.isEmpty()}">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Filter by Area:</label>
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <label th:each="ar : ${candidateAreas}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="createPageFilterAreasCheckbox" th:value="${ar}" onchange="updateCreatePageFilterInputs()" />
+                                <span th:text="${ar}">@Browsing</span>
+                            </label>
+                        </div>
+                        <input type="hidden" name="filterAreas" id="createPageFilterAreasInput" value="" />
+                    </div>
+                </div>
+
+                <!-- 4. Copy Widgets from Dashboard (Optional) -->
+                <div class="config-section p-2 rounded" style="background: var(--bg-surface); border: 1px solid var(--border);">
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                        <label class="d-inline-flex align-items-center gap-2 mb-0" style="font-size: 0.85rem; font-weight: 600; user-select: none;">
+                            <span class="material-symbols-outlined text-accent" style="font-size: 1rem;">content_copy</span>
+                            <span>Copy Widgets (Optional)</span>
+                        </label>
+                        <span class="text-muted" style="font-size: 0.72rem;">Pre-populate with widgets</span>
+                    </div>
+                    <div class="text-muted mb-2" style="font-size: 0.75rem;">
+                        Optionally copy existing widgets from another dashboard into this new page.
+                    </div>
+                    <select name="copyFromPageId" id="createPageCopyFromSelect" class="form-control form-control-sm" style="font-size: 0.78rem; background: var(--bg-hover); color: var(--text-main); border-color: var(--border);">
+                        <option value="">Do not copy (start with empty dashboard)</option>
+                        <option value="default" th:text="${'Default Dashboard' + (defaultWidgetsCount != null ? ' (' + defaultWidgetsCount + ' widgets)' : '')}">Default Dashboard</option>
+                        <th:block th:if="${customPages != null}">
+                            <option th:each="p : ${customPages}"
+                                    th:value="${p.id}"
+                                    th:text="${p.name + (p.widgets != null ? ' (' + #lists.size(p.widgets) + ' widgets)' : ' (0 widgets)')}">
+                                Page Name
+                            </option>
+                        </th:block>
+                    </select>
+                </div>
+
+                <div id="createPageError" class="error-message" style="color: var(--color-danger, #ef4444); margin-top: 8px; font-size: 0.875rem; display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-editor" id="closeCreatePageModalBtn" onclick="closeCreatePageModal()">Cancel</button>
+                <button type="submit" class="btn-primary neo-u-48" id="submitCreatePageBtn">Create Page</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- CONVERT TO GROUP DASHBOARD MODAL -->
+<div class="modal-overlay" id="convertToGroupModal" th:fragment="convertToGroupModal" style="display: none;" onclick="if (event.target === this) closeConvertToGroupModal();">
+    <div class="modal-card" style="max-width: 640px; width: 95%; max-height: 85vh; display: flex; flex-direction: column;">
+        <div class="modal-header d-flex align-items-center justify-content-between">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="material-symbols-outlined" style="color: var(--accent);">grid_view</span>
+                <span style="font-weight: 700; font-size: 1.05rem;" id="convertToGroupModalTitle">Convert to Group Dashboard</span>
+            </div>
+            <button type="button" class="btn-icon-widget" onclick="closeConvertToGroupModal()" title="Close dialog">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <form id="convertToGroupForm" method="post" action="/dashboard-pages/convert-to-group" onsubmit="submitConvertToGroup(event)" style="display: flex; flex-direction: column; overflow: hidden;">
+            <input type="hidden" name="pageId" id="convertToGroupPageIdInput" value="" />
+            <input type="hidden" name="groupBy" id="convertToGroupGroupByInput" value="" />
+            <input type="hidden" name="groupCardScope" id="convertToGroupCardScopeInput" value="LATEST_TEST_STATUS" />
+            <input type="hidden" name="executionIdentityDimensions" id="convertToGroupIdentityDimensionsInput" value="browser" />
+            <input type="hidden" name="filterBrowsers" id="convertToGroupFilterBrowsersInput" value="" />
+            <input type="hidden" name="filterLocales" id="convertToGroupFilterLocalesInput" value="" />
+            <input type="hidden" name="filterEnvs" id="convertToGroupFilterEnvsInput" value="" />
+            <input type="hidden" name="filterAreas" id="convertToGroupFilterAreasInput" value="" />
+
+            <div class="modal-body d-flex flex-column gap-3" style="overflow-y: auto; max-height: 65vh; padding: 1.25rem;">
+                <div class="text-muted" style="font-size: 0.8rem;">
+                    Convert this dashboard into a main group page. Select a grouping dimension to generate overview cards with status pie charts and dedicated sub-dashboards.
+                </div>
+
+                <!-- 1. Grouping Dimension & Status Scope -->
+                <div class="config-section p-3 rounded" style="background: var(--bg-surface); border: 1px solid var(--border);">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <label class="d-inline-flex align-items-center gap-2 mb-0" style="font-size: 0.85rem; font-weight: 600; user-select: none;">
+                            <span class="material-symbols-outlined text-accent" style="font-size: 1rem;">layers</span>
+                            <span>Grouping Dimension</span>
+                        </label>
+                        <span class="text-muted" style="font-size: 0.72rem;">Generates cards & sub-dashboards</span>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 flex-wrap mb-2" id="convertToGroupGroupByPills">
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="browser" onclick="setConvertToGroupGroupBy('browser', this)">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">web</span>
+                            <span>Browser</span>
+                        </button>
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="batch" onclick="setConvertToGroupGroupBy('batch', this)">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">inventory_2</span>
+                            <span>Batch / Suite</span>
+                        </button>
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="environment" onclick="setConvertToGroupGroupBy('environment', this)">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">dns</span>
+                            <span>Environment</span>
+                        </button>
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="locale" onclick="setConvertToGroupGroupBy('locale', this)">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">public</span>
+                            <span>Locale</span>
+                        </button>
+                        <button type="button" class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill" data-group-by="area" onclick="setConvertToGroupGroupBy('area', this)">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">category</span>
+                            <span>Area</span>
+                        </button>
+                        <th:block th:if="${availableIdentityTags != null}">
+                            <button type="button" th:each="tg : ${availableIdentityTags}"
+                                    th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment')}"
+                                    class="pill-btn d-inline-flex align-items-center gap-1 group-by-pill"
+                                    th:attr="data-group-by=${tg}"
+                                    onclick="setConvertToGroupGroupBy(this.getAttribute('data-group-by'), this)">
+                                <span class="material-symbols-outlined" style="font-size: 0.85rem;">sell</span>
+                                <span th:text="${tg}">Tag</span>
+                            </button>
+                        </th:block>
+                    </div>
+
+                    <!-- Status Evaluation Scope -->
+                    <div class="border-top pt-2 mt-2">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Group Cards Status Evaluation:</label>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="radio" name="convertToGroupCardScopeRadio" value="LATEST_TEST_STATUS" checked onchange="setConvertToGroupCardScope('LATEST_TEST_STATUS')" />
+                                <span>Latest Test Status</span>
+                            </label>
+                            <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="radio" name="convertToGroupCardScopeRadio" value="LAST_RUN" onchange="setConvertToGroupCardScope('LAST_RUN')" />
+                                <span>Last Run</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Execution Identity -->
+                <div class="config-section p-2 rounded" style="background: var(--bg-surface); border: 1px solid var(--border);">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <label class="d-inline-flex align-items-center gap-2 mb-0" style="font-size: 0.85rem; font-weight: 600; user-select: none;">
+                            <span class="material-symbols-outlined text-accent" style="font-size: 1rem;">fingerprint</span>
+                            <span>Default Execution Identity</span>
+                            <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.85rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                        </label>
+                        <span class="text-muted" style="font-size: 0.72rem;">Defines unique test executions</span>
+                    </div>
+                    <div class="text-muted mt-1 mb-2" style="font-size: 0.75rem;">
+                        Select dimensions that identify unique test executions across runs on this dashboard.
+                    </div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="run-scope-pill active" style="cursor: default; opacity: 0.85; pointer-events: none;" title="Test Class + Method + DataSet (Mandatory Base Coordinate)">
+                            <span class="material-symbols-outlined pill-icon" style="font-size: 0.75rem;">lock</span>
+                            <span>Test</span>
+                        </span>
+                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                            <input type="checkbox" name="convertToGroupIdentityDimCheckbox" value="browser" checked onchange="updateConvertToGroupIdentityDimensionsInput()" />
+                            <span>Browser</span>
+                        </label>
+                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                            <input type="checkbox" name="convertToGroupIdentityDimCheckbox" value="locale" onchange="updateConvertToGroupIdentityDimensionsInput()" />
+                            <span>Locale</span>
+                        </label>
+                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                            <input type="checkbox" name="convertToGroupIdentityDimCheckbox" value="environment" onchange="updateConvertToGroupIdentityDimensionsInput()" />
+                            <span>Environment</span>
+                        </label>
+                        <th:block th:if="${availableIdentityTags != null}">
+                            <label th:each="tg : ${availableIdentityTags}"
+                                   th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment')}"
+                                   class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="convertToGroupIdentityDimCheckbox" th:value="${tg}" onchange="updateConvertToGroupIdentityDimensionsInput()" />
+                                <span th:text="${'+ Tag: ' + tg}">+ Tag: Area</span>
+                            </label>
+                        </th:block>
+                    </div>
+                </div>
+
+                <!-- 3. Default Runs Filter -->
+                <div class="config-section p-2 rounded" style="background: var(--bg-surface); border: 1px solid var(--border);">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <label class="d-inline-flex align-items-center gap-2 mb-0" style="font-size: 0.85rem; font-weight: 600; user-select: none;">
+                            <span class="material-symbols-outlined text-accent" style="font-size: 1rem;">filter_alt</span>
+                            <span>Default Runs Filter</span>
+                        </label>
+                        <span class="text-muted" style="font-size: 0.72rem;">Scopes runs for widgets on this dashboard</span>
+                    </div>
+                    <div class="text-muted mt-1 mb-2" style="font-size: 0.75rem;">
+                        Filter runs and executions evaluated on this dashboard. Individual widgets can still override these.
+                    </div>
+
+                    <!-- Run Limit (Last N Runs) -->
+                    <div class="mb-2">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Run Limit (Last N Runs):</label>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <div class="d-flex align-items-center gap-1">
+                                <button type="button" class="btn-clear-ratio" onclick="setConvertToGroupFilterLimit(null)">All</button>
+                                <button type="button" class="btn-clear-ratio" onclick="setConvertToGroupFilterLimit(5)">5</button>
+                                <button type="button" class="btn-clear-ratio" onclick="setConvertToGroupFilterLimit(10)">10</button>
+                                <button type="button" class="btn-clear-ratio" onclick="setConvertToGroupFilterLimit(25)">25</button>
+                                <button type="button" class="btn-clear-ratio" onclick="setConvertToGroupFilterLimit(50)">50</button>
+                            </div>
+                            <div class="d-flex align-items-center gap-1">
+                                <input type="number" name="filterLimit" id="convertToGroupFilterLimitInput" min="1" max="1000"
+                                       class="form-control form-control-sm" style="width: 120px; font-size: 0.75rem; background: var(--bg-hover); color: var(--text-main); border-color: var(--border);"
+                                       placeholder="e.g. 10 (all)" />
+                                <span class="text-muted" style="font-size: 0.72rem;">runs</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Timestamp Filter (Timespan Date Range) -->
+                    <div class="mb-2">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Timestamp Range (Optional):</label>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="text-muted" style="font-size: 0.75rem;">From:</span>
+                                <input type="date" name="filterStartDate" id="convertToGroupFilterStartDateInput"
+                                       class="form-control form-control-sm" style="font-size: 0.75rem; background: var(--bg-hover); color: var(--text-main); border-color: var(--border);" />
+                            </div>
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="text-muted" style="font-size: 0.75rem;">To:</span>
+                                <input type="date" name="filterEndDate" id="convertToGroupFilterEndDateInput"
+                                       class="form-control form-control-sm" style="font-size: 0.75rem; background: var(--bg-hover); color: var(--text-main); border-color: var(--border);" />
+                            </div>
+                            <button type="button" class="btn-clear-ratio" onclick="clearConvertToGroupFilterDates()" title="Clear date range">Clear</button>
+                        </div>
+                    </div>
+
+                    <!-- Browsers -->
+                    <div class="mb-2" th:if="${candidateBrowsers != null && !candidateBrowsers.isEmpty()}">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Filter by Browser:</label>
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <label th:each="br : ${candidateBrowsers}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="convertToGroupFilterBrowsersCheckbox" th:value="${br}" onchange="updateConvertToGroupFilterInputs()" />
+                                <span th:text="${br}">Chrome</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Locales -->
+                    <div class="mb-2" th:if="${candidateLocales != null && !candidateLocales.isEmpty()}">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Filter by Locale:</label>
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <label th:each="loc : ${candidateLocales}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="convertToGroupFilterLocalesCheckbox" th:value="${loc}" onchange="updateConvertToGroupFilterInputs()" />
+                                <span th:text="${loc}">en_US</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Environments -->
+                    <div class="mb-2" th:if="${candidateEnvs != null && !candidateEnvs.isEmpty()}">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Filter by Environment:</label>
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <label th:each="env : ${candidateEnvs}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="convertToGroupFilterEnvsCheckbox" th:value="${env}" onchange="updateConvertToGroupFilterInputs()" />
+                                <span th:text="${env}">Default</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Areas -->
+                    <div class="mb-2" th:if="${candidateAreas != null && !candidateAreas.isEmpty()}">
+                        <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Filter by Area:</label>
+                        <div class="d-flex align-items-center gap-1 flex-wrap">
+                            <label th:each="ar : ${candidateAreas}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="convertToGroupFilterAreasCheckbox" th:value="${ar}" onchange="updateConvertToGroupFilterInputs()" />
+                                <span th:text="${ar}">@Browsing</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="convertToGroupError" class="error-message" style="color: var(--color-danger, #ef4444); margin-top: 8px; font-size: 0.875rem; display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-editor" id="closeConvertToGroupModalBtn" onclick="closeConvertToGroupModal()">Cancel</button>
+                <button type="submit" class="btn-primary neo-u-48" id="submitConvertToGroupBtn">Convert to Group</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- COPY WIDGETS CONFIGURATION MODAL -->
+<div class="modal-overlay" id="copyWidgetsModal" th:fragment="copyWidgetsModal" style="display: none;" onclick="if (event.target === this) closeCopyWidgetsModal();">
+    <div class="modal-card" style="max-width: 540px; width: 95%; max-height: 85vh; display: flex; flex-direction: column;">
+        <div class="modal-header d-flex align-items-center justify-content-between">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="material-symbols-outlined" style="color: var(--accent);">content_copy</span>
+                <span style="font-weight: 700; font-size: 1.05rem;" id="copyWidgetsModalTitle">Copy Widgets Configuration</span>
+            </div>
+            <button type="button" class="btn-icon-widget" onclick="closeCopyWidgetsModal()" title="Close dialog">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+        <form id="copyWidgetsForm" method="post" action="/dashboard-pages/copy-widgets" onsubmit="submitCopyWidgets(event)" style="display: flex; flex-direction: column; overflow: hidden;">
+            <input type="hidden" name="targetPageId" id="copyWidgetsTargetPageIdInput" th:value="${customPage != null ? customPage.id : ''}" />
+            <div class="modal-body d-flex flex-column gap-3" style="overflow-y: auto; max-height: 65vh; padding: 1.25rem;">
+                <p style="margin: 0; font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+                    Copy widgets from another dashboard into this dashboard. All cloned widgets will receive new unique identifiers.
+                </p>
+
+                <!-- Source Dashboard Selection -->
+                <div class="config-section">
+                    <label class="neo-u-47" for="copyWidgetsSourceSelect" style="display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">Source Dashboard</label>
+                    <select name="sourcePageId" id="copyWidgetsSourceSelect" class="form-control form-control-sm" style="font-size: 0.85rem; background: var(--bg-hover); color: var(--text-main); border-color: var(--border);" required>
+                        <option value="">-- Select Source Dashboard --</option>
+                        <option value="default" th:text="${'Default Dashboard' + (defaultWidgetsCount != null ? ' (' + defaultWidgetsCount + ' widgets)' : '')}">Default Dashboard</option>
+                        <th:block th:if="${customPages != null}">
+                            <option th:each="p : ${customPages}"
+                                    th:if="${customPage == null or p.id != customPage.id}"
+                                    th:value="${p.id}"
+                                    th:text="${p.name + (p.widgets != null ? ' (' + #lists.size(p.widgets) + ' widgets)' : ' (0 widgets)')}">
+                                Page Name
+                            </option>
+                        </th:block>
+                    </select>
+                </div>
+
+                <!-- Copy Mode (Replace vs Append) -->
+                <div class="config-section p-2 rounded" style="background: var(--bg-surface); border: 1px solid var(--border);">
+                    <label class="config-sublabel text-muted d-block mb-2" style="font-size: 0.78rem; font-weight: 600;">Copy Mode:</label>
+                    <div class="d-flex flex-column gap-2">
+                        <label class="d-flex align-items-start gap-2" style="cursor: pointer; font-size: 0.82rem; margin: 0;">
+                            <input type="radio" name="mode" value="replace" checked style="margin-top: 2px;" />
+                            <div>
+                                <strong style="color: var(--text-main);">Replace existing widgets</strong>
+                                <div class="text-muted" style="font-size: 0.75rem;">Removes any widgets currently on this dashboard and replaces them with the copied widgets.</div>
+                            </div>
+                        </label>
+                        <label class="d-flex align-items-start gap-2" style="cursor: pointer; font-size: 0.82rem; margin: 0;">
+                            <input type="radio" name="mode" value="append" style="margin-top: 2px;" />
+                            <div>
+                                <strong style="color: var(--text-main);">Append to existing widgets</strong>
+                                <div class="text-muted" style="font-size: 0.75rem;">Keeps all current widgets and adds the copied widgets after them.</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <div id="copyWidgetsError" class="error-message" style="color: var(--color-danger, #ef4444); margin-top: 4px; font-size: 0.875rem; display: none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn-editor" id="closeCopyWidgetsModalBtn" onclick="closeCopyWidgetsModal()">Cancel</button>
+                <button type="submit" class="btn-primary neo-u-48" id="btnSubmitCopyWidgets">Copy Widgets</button>
             </div>
         </form>
     </div>
@@ -189,5 +771,6 @@
 
 </body>
 </html>
+
 
 

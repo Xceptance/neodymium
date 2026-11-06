@@ -22,19 +22,33 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import jakarta.annotation.PostConstruct;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import com.xceptance.aura.report.dto.AreaSummaryDto;
+import com.xceptance.aura.report.dto.BatchLatestExecutionsDto;
+import com.xceptance.aura.report.dto.BatchLatestVariationDto;
 import com.xceptance.aura.report.dto.BatchOverviewDataDto;
+import com.xceptance.aura.report.dto.BatchSuiteEvolutionDto;
+import com.xceptance.aura.report.dto.BatchSuiteEvolutionPointDto;
 import com.xceptance.aura.report.dto.BatchSummaryDto;
-import com.xceptance.aura.report.dto.RunReportDto;
+import com.xceptance.aura.report.dto.SubAreaSummaryDto;
 import com.xceptance.aura.report.dto.TestBaseAreaDto;
 import com.xceptance.aura.report.dto.TestBaseClassDto;
 import com.xceptance.aura.report.dto.TestBaseDataDto;
+import com.xceptance.aura.report.dto.TestBaseSubAreaDto;
+import com.xceptance.aura.report.dto.ContributingRunCostDto;
+import com.xceptance.aura.report.dto.DistributionRatioDto;
+import com.xceptance.aura.report.dto.widget.WidgetPointScope;
+import java.util.Locale;
+import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestBaseVariationHistoryDto;
 import com.xceptance.aura.report.dto.TestClassSummaryDto;
 import com.xceptance.aura.report.dto.TestExecutionDto;
+import com.xceptance.aura.report.dto.TestExecutionDto.BugDetailDto;
+import com.xceptance.aura.report.dto.TokenCostPointGroupDto;
+import com.xceptance.aura.report.dto.TokenCostTrendDto;
 import com.xceptance.aura.report.entity.TestBaseBugEntity;
 import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 import com.xceptance.aura.report.entity.TestBatchEntity;
@@ -50,7 +64,12 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -61,12 +80,16 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.xceptance.neodymium.aura.AuraInteractiveService;
+import org.neodymium.util.TagUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,6 +113,7 @@ public class AuraReportDataService
     private final LocalRunJsonStorageService localRunJsonStorageService;
     private final AttachmentStorageService attachmentStorageService;
     private final AuraInteractiveService interactiveService;
+    private final ReportDashboardSettingService dashboardSettingService;
     private final ObjectMapper objectMapper;
 
     private final Map<String, List<TestExecutionDto>> liveRunBuffer = new ConcurrentHashMap<>();
@@ -103,7 +127,7 @@ public class AuraReportDataService
         final LocalRunJsonStorageService localRunJsonStorageService,
         final AttachmentStorageService attachmentStorageService)
     {
-        this(runRepository, batchRepository, variationRepository, bugRepository, null, localRunJsonStorageService, attachmentStorageService, null);
+        this(runRepository, batchRepository, variationRepository, bugRepository, null, localRunJsonStorageService, attachmentStorageService, null, null);
     }
 
     public AuraReportDataService(
@@ -115,7 +139,20 @@ public class AuraReportDataService
         final AttachmentStorageService attachmentStorageService,
         final AuraInteractiveService interactiveService)
     {
-        this(runRepository, batchRepository, variationRepository, bugRepository, null, localRunJsonStorageService, attachmentStorageService, interactiveService);
+        this(runRepository, batchRepository, variationRepository, bugRepository, null, localRunJsonStorageService, attachmentStorageService, interactiveService, null);
+    }
+
+    public AuraReportDataService(
+        final TestRunRepository runRepository,
+        final TestBatchRepository batchRepository,
+        final TestBaseVariationRepository variationRepository,
+        final TestBaseBugRepository bugRepository,
+        final LocalRunJsonStorageService localRunJsonStorageService,
+        final AttachmentStorageService attachmentStorageService,
+        final AuraInteractiveService interactiveService,
+        final ReportDashboardSettingService dashboardSettingService)
+    {
+        this(runRepository, batchRepository, variationRepository, bugRepository, null, localRunJsonStorageService, attachmentStorageService, interactiveService, dashboardSettingService);
     }
 
     public AuraReportDataService(
@@ -127,7 +164,20 @@ public class AuraReportDataService
         final LocalRunJsonStorageService localRunJsonStorageService,
         final AttachmentStorageService attachmentStorageService)
     {
-        this(runRepository, batchRepository, variationRepository, bugRepository, tagRepository, localRunJsonStorageService, attachmentStorageService, null);
+        this(runRepository, batchRepository, variationRepository, bugRepository, tagRepository, localRunJsonStorageService, attachmentStorageService, null, null);
+    }
+
+    public AuraReportDataService(
+        final TestRunRepository runRepository,
+        final TestBatchRepository batchRepository,
+        final TestBaseVariationRepository variationRepository,
+        final TestBaseBugRepository bugRepository,
+        final TestRunTagRepository tagRepository,
+        final LocalRunJsonStorageService localRunJsonStorageService,
+        final AttachmentStorageService attachmentStorageService,
+        final AuraInteractiveService interactiveService)
+    {
+        this(runRepository, batchRepository, variationRepository, bugRepository, tagRepository, localRunJsonStorageService, attachmentStorageService, interactiveService, null);
     }
 
     @Autowired
@@ -139,7 +189,8 @@ public class AuraReportDataService
         @Autowired(required = false) final TestRunTagRepository tagRepository,
         final LocalRunJsonStorageService localRunJsonStorageService,
         final AttachmentStorageService attachmentStorageService,
-        @Autowired(required = false) final AuraInteractiveService interactiveService)
+        @Autowired(required = false) final AuraInteractiveService interactiveService,
+        @Autowired(required = false) final ReportDashboardSettingService dashboardSettingService)
     {
         this.runRepository = runRepository;
         this.batchRepository = batchRepository;
@@ -149,7 +200,45 @@ public class AuraReportDataService
         this.localRunJsonStorageService = localRunJsonStorageService;
         this.attachmentStorageService = attachmentStorageService;
         this.interactiveService = interactiveService;
+        this.dashboardSettingService = dashboardSettingService;
         this.objectMapper = new ObjectMapper();
+    }
+
+    @PostConstruct
+    public void normalizeTagBoundBugsScope()
+    {
+        if (bugRepository != null)
+        {
+            try
+            {
+                final List<TestBaseBugEntity> allBugs = bugRepository.findAll();
+                for (final TestBaseBugEntity b : allBugs)
+                {
+                    if (b.getTagCriteria() != null && !b.getTagCriteria().isBlank())
+                    {
+                        boolean changed = false;
+                        if (!"ALL".equalsIgnoreCase(b.getBatchName()))
+                        {
+                            b.setBatchName("ALL");
+                            changed = true;
+                        }
+                        if (!"ALL".equalsIgnoreCase(b.getEnvironment()))
+                        {
+                            b.setEnvironment("ALL");
+                            changed = true;
+                        }
+                        if (changed)
+                        {
+                            bugRepository.save(b);
+                        }
+                    }
+                }
+            }
+            catch (final Exception e)
+            {
+                LOG.warn("Failed to normalize tag-bound bugs scope on startup: {}", e.getMessage());
+            }
+        }
     }
 
     public void evictRunReportCache(final String runId)
@@ -523,6 +612,667 @@ public class AuraReportDataService
         );
     }
 
+    public BatchOverviewDataDto getGroupOverviewData(final String groupBy)
+    {
+        if (groupBy == null || groupBy.isBlank())
+        {
+            return getGroupOverviewData(List.of("batch"));
+        }
+        final String[] tokens = groupBy.split(",");
+        final List<String> dimensions = new ArrayList<>();
+        for (final String t : tokens)
+        {
+            final String trimmed = t.trim();
+            if (!trimmed.isEmpty())
+            {
+                dimensions.add(trimmed);
+            }
+        }
+        return getGroupOverviewData(dimensions);
+    }
+
+    public BatchOverviewDataDto getGroupOverviewData(final List<String> groupDimensions)
+    {
+        return getGroupOverviewData(groupDimensions, null, null, null, Collections.emptyMap());
+    }
+
+    public BatchOverviewDataDto getGroupOverviewData(
+        final List<String> groupDimensions,
+        final List<TestRunEntity> baseRuns,
+        final String parentGroupType,
+        final String parentGroupValue,
+        final Map<String, String> parentCriteria)
+    {
+        return getGroupOverviewData(groupDimensions, baseRuns, parentGroupType, parentGroupValue, parentCriteria, WidgetPointScope.LATEST_TEST_STATUS);
+    }
+
+    public BatchOverviewDataDto getGroupOverviewData(
+        final List<String> groupDimensions,
+        final List<TestRunEntity> baseRuns,
+        final String parentGroupType,
+        final String parentGroupValue,
+        final Map<String, String> parentCriteria,
+        final WidgetPointScope pointScope)
+    {
+        final Set<String> validDimensions = new LinkedHashSet<>();
+        if (groupDimensions != null)
+        {
+            for (final String dim : groupDimensions)
+            {
+                if (dim == null || dim.isBlank())
+                {
+                    continue;
+                }
+                final String clean = dim.trim().toLowerCase(Locale.ROOT);
+                if ("none".equals(clean) || "all".equals(clean))
+                {
+                    continue;
+                }
+                if ("tag".equals(clean) || "batch".equals(clean))
+                {
+                    validDimensions.add("batch");
+                }
+                else if ("environment".equals(clean) || "env".equals(clean))
+                {
+                    validDimensions.add("environment");
+                }
+                else if ("locale".equals(clean) || "locales".equals(clean))
+                {
+                    validDimensions.add("locale");
+                }
+                else if ("browser".equals(clean) || "browsers".equals(clean))
+                {
+                    validDimensions.add("browser");
+                }
+                else if ("area".equals(clean) || "areas".equals(clean))
+                {
+                    validDimensions.add("area");
+                }
+                else
+                {
+                    validDimensions.add(dim.trim());
+                }
+            }
+        }
+        if (validDimensions.isEmpty())
+        {
+            validDimensions.add("batch");
+        }
+        final List<String> activeDimensions = new ArrayList<>(validDimensions);
+
+        final List<TestRunEntity> allRuns;
+        if (baseRuns == null)
+        {
+            allRuns = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc();
+            populateRunTags(allRuns);
+
+            for (final TestRunEntity r : allRuns)
+            {
+                try
+                {
+                    final RunReportDto report = getRunReport(r.getId());
+                    if (report != null)
+                    {
+                        boolean changed = false;
+                        if (!Objects.equals(r.getPassedHealedCount(), report.getPassHealedCount()))
+                        {
+                            r.setPassedHealedCount(report.getPassHealedCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getSucceededFixedHealedCount(), report.getFixedHealedCount()))
+                        {
+                            r.setSucceededFixedHealedCount(report.getFixedHealedCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getFailedKnownHealedCount(), report.getKnownHealedCount()))
+                        {
+                            r.setFailedKnownHealedCount(report.getKnownHealedCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getFailedUnknownHealedCount(), report.getUnknownHealedCount()))
+                        {
+                            r.setFailedUnknownHealedCount(report.getUnknownHealedCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getPassedAiCount(), report.getPassAiCount()))
+                        {
+                            r.setPassedAiCount(report.getPassAiCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getSucceededFixedAiCount(), report.getFixedAiCount()))
+                        {
+                            r.setSucceededFixedAiCount(report.getFixedAiCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getFailedKnownAiCount(), report.getKnownAiCount()))
+                        {
+                            r.setFailedKnownAiCount(report.getKnownAiCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getFailedUnknownAiCount(), report.getUnknownAiCount()))
+                        {
+                            r.setFailedUnknownAiCount(report.getUnknownAiCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getPassedCount(), report.getPassCount()))
+                        {
+                            r.setPassedCount(report.getPassCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getSucceededFixedCount(), report.getFixedCount()))
+                        {
+                            r.setSucceededFixedCount(report.getFixedCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getFailedKnownCount(), report.getKnownCount()))
+                        {
+                            r.setFailedKnownCount(report.getKnownCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getFailedUnknownCount(), report.getUnknownCount()))
+                        {
+                            r.setFailedUnknownCount(report.getUnknownCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getIgnoredCount(), report.getIgnoredCount()))
+                        {
+                            r.setIgnoredCount(report.getIgnoredCount());
+                            changed = true;
+                        }
+                        if (!Objects.equals(r.getTotalTests(), report.getTotalCount()))
+                        {
+                            r.setTotalTests(report.getTotalCount());
+                            changed = true;
+                        }
+                        if (changed)
+                        {
+                            r.recalculatePassRate();
+                            runRepository.save(r);
+                        }
+                    }
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
+        }
+        else
+        {
+            allRuns = new ArrayList<>(baseRuns);
+            populateRunTags(allRuns);
+        }
+        final Map<String, List<TestRunEntity>> groupedRuns = new LinkedHashMap<>();
+
+        if (baseRuns == null && activeDimensions.size() == 1 && "batch".equals(activeDimensions.get(0)))
+        {
+            final List<TestBatchEntity> allBatchEntities = batchRepository.findAll();
+            for (final TestBatchEntity b : allBatchEntities)
+            {
+                if (b.getBatchName() != null && !b.getBatchName().isBlank())
+                {
+                    groupedRuns.putIfAbsent(b.getBatchName().trim(), new ArrayList<>());
+                }
+            }
+        }
+        else if (baseRuns == null && activeDimensions.size() == 2 && activeDimensions.contains("batch") && activeDimensions.contains("environment"))
+        {
+            final List<TestBatchEntity> allBatchEntities = batchRepository.findAll();
+            for (final TestBatchEntity b : allBatchEntities)
+            {
+                if (b.getBatchName() != null && !b.getBatchName().isBlank())
+                {
+                    final String bName = b.getBatchName().trim();
+                    final String bEnv = (b.getEnvironment() != null && !b.getEnvironment().isBlank()) ? b.getEnvironment().trim() : "Default";
+                    final String compoundKey = "batch".equals(activeDimensions.get(0)) ? (bName + " • " + bEnv) : (bEnv + " • " + bName);
+                    groupedRuns.putIfAbsent(compoundKey, new ArrayList<>());
+                }
+            }
+        }
+
+        for (final TestRunEntity r : allRuns)
+        {
+            final List<List<String>> dimValuesList = new ArrayList<>();
+            for (final String dim : activeDimensions)
+            {
+                final List<String> vals = new ArrayList<>();
+                if ("environment".equals(dim))
+                {
+                    final String env = (r.getEnvironment() != null && !r.getEnvironment().isBlank()) ? r.getEnvironment().trim() : "Default";
+                    vals.add(env);
+                }
+                else if ("locale".equals(dim))
+                {
+                    if (r.getLocalesCsv() != null && !r.getLocalesCsv().isBlank())
+                    {
+                        final String[] locs = r.getLocalesCsv().split(",");
+                        for (final String l : locs)
+                        {
+                            final String trimmed = l.trim();
+                            if (!trimmed.isEmpty() && !vals.contains(trimmed))
+                            {
+                                vals.add(trimmed);
+                            }
+                        }
+                    }
+                    if (vals.isEmpty())
+                    {
+                        vals.add("Default");
+                    }
+                }
+                else if ("browser".equals(dim))
+                {
+                    if (r.getBrowsersCsv() != null && !r.getBrowsersCsv().isBlank())
+                    {
+                        final String[] brs = r.getBrowsersCsv().split(",");
+                        for (final String b : brs)
+                        {
+                            final String trimmed = b.trim();
+                            if (!trimmed.isEmpty() && !vals.contains(trimmed))
+                            {
+                                vals.add(trimmed);
+                            }
+                        }
+                    }
+                    if (vals.isEmpty())
+                    {
+                        vals.add("Chrome");
+                    }
+                }
+                else if ("area".equals(dim))
+                {
+                    final List<String> rAreas = getRunAreas(r);
+                    for (final String a : rAreas)
+                    {
+                        final String norm = normalizeArea(a);
+                        if (!vals.contains(norm))
+                        {
+                            vals.add(norm);
+                        }
+                    }
+                    if (vals.isEmpty())
+                    {
+                        vals.add(normalizeArea("@Browsing (default)"));
+                    }
+                }
+                else if ("batch".equalsIgnoreCase(dim))
+                {
+                    final String batch = (r.getBatchName() != null && !r.getBatchName().isBlank()) ? r.getBatchName().trim() : "Default";
+                    vals.add(batch);
+                }
+                else
+                {
+                    final boolean isBool = isBooleanTag(dim, allRuns);
+                    final List<String> tagVals = getRunTagValues(r, dim);
+                    if (isBool)
+                    {
+                        final boolean hasTrue = tagVals.stream().anyMatch(tv -> "true".equalsIgnoreCase(tv.trim()) || dim.equalsIgnoreCase(tv.trim()));
+                        if (hasTrue)
+                        {
+                            vals.add(dim);
+                        }
+                        else
+                        {
+                            vals.add("Not " + dim);
+                        }
+                    }
+                    else
+                    {
+                        for (final String tv : tagVals)
+                        {
+                            final String trimmed = tv.trim();
+                            if (!trimmed.isEmpty() && !vals.contains(trimmed))
+                            {
+                                vals.add(trimmed);
+                            }
+                        }
+                        if (vals.isEmpty())
+                        {
+                            vals.add("Default");
+                        }
+                    }
+                }
+                dimValuesList.add(vals);
+            }
+
+            final List<List<String>> combinations = computeCartesianCombinations(dimValuesList);
+            for (final List<String> combo : combinations)
+            {
+                final String groupName = String.join(" • ", combo);
+                groupedRuns.computeIfAbsent(groupName, k -> new ArrayList<>()).add(r);
+            }
+        }
+
+        final List<BatchSummaryDto> groupCards = new ArrayList<>();
+        for (final Map.Entry<String, List<TestRunEntity>> entry : groupedRuns.entrySet())
+        {
+            final String groupName = entry.getKey();
+            final List<TestRunEntity> gRuns = entry.getValue();
+
+            final Set<String> groupRunBrowsers = new LinkedHashSet<>();
+            if (activeDimensions.contains("browser"))
+            {
+                final String brVal = extractDimensionValue(activeDimensions, groupName, "browser");
+                if (brVal != null && !brVal.isEmpty())
+                {
+                    groupRunBrowsers.add(brVal);
+                }
+            }
+            if (parentCriteria != null && parentCriteria.containsKey("browser"))
+            {
+                groupRunBrowsers.add(parentCriteria.get("browser"));
+            }
+
+            final Set<String> groupRunLocales = new LinkedHashSet<>();
+            if (activeDimensions.contains("locale"))
+            {
+                final String locVal = extractDimensionValue(activeDimensions, groupName, "locale");
+                if (locVal != null && !locVal.isEmpty())
+                {
+                    groupRunLocales.add(locVal);
+                }
+            }
+            if (parentCriteria != null && parentCriteria.containsKey("locale"))
+            {
+                groupRunLocales.add(parentCriteria.get("locale"));
+            }
+
+            final Set<String> groupRunEnvs = new LinkedHashSet<>();
+            if (activeDimensions.contains("environment"))
+            {
+                final String envVal = extractDimensionValue(activeDimensions, groupName, "environment");
+                if (envVal != null && !envVal.isEmpty())
+                {
+                    groupRunEnvs.add(envVal);
+                }
+            }
+            if (parentCriteria != null && parentCriteria.containsKey("environment"))
+            {
+                groupRunEnvs.add(parentCriteria.get("environment"));
+            }
+
+            final Set<String> groupRunAreas = new LinkedHashSet<>();
+            if (activeDimensions.contains("area"))
+            {
+                final String areaVal = extractDimensionValue(activeDimensions, groupName, "area");
+                if (areaVal != null && !areaVal.isEmpty())
+                {
+                    groupRunAreas.add(areaVal);
+                }
+            }
+            if (parentCriteria != null && parentCriteria.containsKey("area"))
+            {
+                groupRunAreas.add(parentCriteria.get("area"));
+            }
+
+            final Set<String> groupRunTags = new LinkedHashSet<>();
+            if (activeDimensions.contains("batch"))
+            {
+                final String batchVal = extractDimensionValue(activeDimensions, groupName, "batch");
+                if (batchVal != null && !batchVal.isEmpty())
+                {
+                    groupRunTags.add(batchVal);
+                }
+            }
+            if (parentCriteria != null && parentCriteria.containsKey("batch"))
+            {
+                groupRunTags.add(parentCriteria.get("batch"));
+            }
+
+            final Map<String, Set<String>> groupRunTagsByType = new LinkedHashMap<>();
+            for (final String dim : activeDimensions)
+            {
+                if (!"browser".equalsIgnoreCase(dim) && !"locale".equalsIgnoreCase(dim)
+                    && !"environment".equalsIgnoreCase(dim) && !"area".equalsIgnoreCase(dim)
+                    && !"batch".equalsIgnoreCase(dim))
+                {
+                    final String val = extractDimensionValue(activeDimensions, groupName, dim);
+                    if (val != null && !val.isEmpty())
+                    {
+                        groupRunTagsByType.computeIfAbsent(dim, k -> new LinkedHashSet<>()).add(val);
+                    }
+                }
+            }
+            if (parentCriteria != null)
+            {
+                for (final Map.Entry<String, String> pEntry : parentCriteria.entrySet())
+                {
+                    final String pDim = pEntry.getKey();
+                    final String pVal = pEntry.getValue();
+                    if (!"browser".equalsIgnoreCase(pDim) && !"locale".equalsIgnoreCase(pDim)
+                        && !"environment".equalsIgnoreCase(pDim) && !"area".equalsIgnoreCase(pDim)
+                        && !"batch".equalsIgnoreCase(pDim))
+                    {
+                        if (pVal != null && !pVal.isBlank())
+                        {
+                            groupRunTagsByType.computeIfAbsent(pDim, k -> new LinkedHashSet<>()).add(pVal);
+                        }
+                    }
+                }
+            }
+
+            final List<TestRunEntity> effectiveExecutionRuns = (pointScope == WidgetPointScope.LAST_RUN && !gRuns.isEmpty())
+                ? List.of(gRuns.get(0))
+                : gRuns;
+
+            final BatchLatestExecutionsDto latestExec = getBatchLatestTestExecutionsSummary(
+                groupName,
+                effectiveExecutionRuns,
+                Collections.emptySet(),
+                null,
+                null,
+                groupRunBrowsers,
+                groupRunLocales,
+                groupRunEnvs,
+                groupRunAreas,
+                groupRunTags,
+                Collections.emptyMap(),
+                groupRunTagsByType
+            );
+            final BatchSummaryDto summary = (latestExec != null) ? latestExec.getBatchSummary() : null;
+
+            final List<String> gLocales;
+            if (activeDimensions.contains("locale"))
+            {
+                final String locVal = extractDimensionValue(activeDimensions, groupName, "locale");
+                gLocales = (locVal != null && !locVal.isBlank()) ? List.of(locVal) : List.of("Default");
+            }
+            else
+            {
+                gLocales = gRuns.stream()
+                    .flatMap(r -> r.getLocalesCsv() != null ? Arrays.stream(r.getLocalesCsv().split(",")) : Stream.empty())
+                    .map(String::trim)
+                    .filter(s -> !s.isBlank())
+                    .distinct()
+                    .sorted()
+                    .collect(Collectors.toList());
+            }
+
+            final List<String> gBrowsers;
+            if (activeDimensions.contains("browser"))
+            {
+                final String brVal = extractDimensionValue(activeDimensions, groupName, "browser");
+                gBrowsers = (brVal != null && !brVal.isBlank()) ? List.of(brVal) : List.of("Chrome");
+            }
+            else
+            {
+                gBrowsers = gRuns.stream()
+                    .flatMap(r -> r.getBrowsersCsv() != null ? Arrays.stream(r.getBrowsersCsv().split(",")) : Stream.empty())
+                    .map(String::trim)
+                    .filter(s -> !s.isBlank())
+                    .distinct()
+                    .sorted()
+                    .collect(Collectors.toList());
+            }
+
+            final String gEnv = activeDimensions.contains("environment")
+                ? Optional.ofNullable(extractDimensionValue(activeDimensions, groupName, "environment")).orElse("Default")
+                : gRuns.stream().map(TestRunEntity::getEnvironment).filter(e -> e != null && !e.isBlank()).findFirst().orElse("Default");
+
+            final String gBatch = activeDimensions.contains("batch")
+                ? extractDimensionValue(activeDimensions, groupName, "batch")
+                : null;
+            final String gDescription = (gBatch != null)
+                ? batchRepository.findById(gBatch).map(TestBatchEntity::getDescription).orElse("")
+                : "";
+
+            final String latestRunId = (summary != null && summary.getLatestRunId() != null)
+                ? summary.getLatestRunId()
+                : (!gRuns.isEmpty() ? gRuns.get(0).getId() : null);
+
+            final String lastExecuted = (summary != null && summary.getLastExecuted() != null && !summary.getLastExecuted().isBlank())
+                ? summary.getLastExecuted()
+                : (!gRuns.isEmpty() && gRuns.get(0).getTimestampLabel() != null ? gRuns.get(0).getTimestampLabel() : "No runs");
+
+            final int pass = (summary != null) ? summary.getLatestPassedCount() : 0;
+            final int fixed = (summary != null) ? summary.getLatestFixedCount() : 0;
+            final int known = (summary != null) ? summary.getLatestKnownCount() : 0;
+            final int unknown = (summary != null) ? summary.getLatestUnknownCount() : 0;
+            final int ignored = (summary != null) ? summary.getLatestIgnoredCount() : 0;
+            final int total = (summary != null) ? summary.getLatestTotalTests() : 0;
+            final int passHealed = (summary != null) ? summary.getLatestPassHealedCount() : 0;
+            final int fixedHealed = (summary != null) ? summary.getLatestFixedHealedCount() : 0;
+            final int knownHealed = (summary != null) ? summary.getLatestKnownHealedCount() : 0;
+            final int unknownHealed = (summary != null) ? summary.getLatestUnknownHealedCount() : 0;
+            final int passAi = (summary != null) ? summary.getLatestPassAiCount() : 0;
+            final int fixedAi = (summary != null) ? summary.getLatestFixedAiCount() : 0;
+            final int knownAi = (summary != null) ? summary.getLatestKnownAiCount() : 0;
+            final int unknownAi = (summary != null) ? summary.getLatestUnknownAiCount() : 0;
+
+            final String passRateText = total > 0
+                ? String.format(Locale.ROOT, "%.0f%% Pass", ((double) (pass + fixed) / total * 100.0))
+                : "N/A";
+
+            final String cardId = "group-" + String.join("-", activeDimensions) + "-" + groupName.replaceAll("[^a-zA-Z0-9]", "_");
+
+            final String historyUrl;
+            if (parentGroupType != null && !parentGroupType.isBlank() && parentGroupValue != null && !parentGroupValue.isBlank())
+            {
+                final String compoundType = parentGroupType + "," + String.join(",", activeDimensions);
+                final String compoundValue = parentGroupValue + " • " + groupName;
+                historyUrl = "/batch-history?groupType=" + URLEncoder.encode(compoundType, StandardCharsets.UTF_8)
+                    + "&groupValue=" + URLEncoder.encode(compoundValue, StandardCharsets.UTF_8);
+            }
+            else
+            {
+                historyUrl = "/batch-history?groupType=" + URLEncoder.encode(String.join(",", activeDimensions), StandardCharsets.UTF_8)
+                    + "&groupValue=" + URLEncoder.encode(groupName, StandardCharsets.UTF_8);
+            }
+
+            groupCards.add(new BatchSummaryDto(
+                cardId,
+                groupName,
+                gEnv,
+                gDescription,
+                lastExecuted,
+                passRateText,
+                "",
+                gLocales,
+                gBrowsers,
+                latestRunId,
+                pass,
+                fixed,
+                known,
+                unknown,
+                ignored,
+                total,
+                passHealed,
+                fixedHealed,
+                knownHealed,
+                unknownHealed,
+                passAi,
+                fixedAi,
+                knownAi,
+                unknownAi,
+                historyUrl
+            ));
+        }
+
+        final List<String> filterEnvs = allRuns.stream()
+            .map(TestRunEntity::getEnvironment)
+            .filter(e -> e != null && !e.isBlank())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+
+        final List<String> filterLocales = allRuns.stream()
+            .flatMap(r -> r.getLocalesCsv() != null ? Arrays.stream(r.getLocalesCsv().split(",")) : Stream.empty())
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+
+        final List<String> filterBrowsers = allRuns.stream()
+            .flatMap(r -> r.getBrowsersCsv() != null ? Arrays.stream(r.getBrowsersCsv().split(",")) : Stream.empty())
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .distinct()
+            .sorted()
+            .collect(Collectors.toList());
+
+        return new BatchOverviewDataDto(groupCards, allRuns, filterEnvs, filterLocales, filterBrowsers);
+    }
+
+    private static List<List<String>> computeCartesianCombinations(final List<List<String>> lists)
+    {
+        List<List<String>> result = new ArrayList<>();
+        if (lists == null || lists.isEmpty())
+        {
+            return result;
+        }
+        result.add(new ArrayList<>());
+        for (final List<String> list : lists)
+        {
+            final List<List<String>> current = new ArrayList<>();
+            for (final List<String> combination : result)
+            {
+                for (final String item : list)
+                {
+                    final List<String> newCombination = new ArrayList<>(combination);
+                    newCombination.add(item);
+                    current.add(newCombination);
+                }
+            }
+            result = current;
+        }
+        return result;
+    }
+
+    private static String extractDimensionValue(final List<String> dimensions, final String groupName, final String targetDimension)
+    {
+        if (dimensions == null || groupName == null || targetDimension == null)
+        {
+            return null;
+        }
+        final int idx = dimensions.indexOf(targetDimension);
+        if (idx == -1)
+        {
+            return null;
+        }
+        final String[] parts;
+        if (groupName.contains(" • "))
+        {
+            parts = groupName.split(" • ");
+        }
+        else if (groupName.contains(" / "))
+        {
+            parts = groupName.split(" / ");
+        }
+        else if (groupName.contains(" | "))
+        {
+            parts = groupName.split(" \\| ");
+        }
+        else
+        {
+            parts = new String[] { groupName };
+        }
+        if (idx < parts.length)
+        {
+            return parts[idx].trim();
+        }
+        return null;
+    }
+
     public TestBaseDataDto getTestBaseData()
     {
         final List<TestBaseVariationEntity> allVariations = variationRepository.findAllByOrderByLastExecutedAtDesc();
@@ -639,6 +1389,8 @@ public class AuraReportDataService
             }
         }
 
+        annotateFlakyVariations(variations);
+
         // 1. Dynamic Batches
         final List<String> batchNamesFromBatches = batchRepository.findAll().stream()
             .map(TestBatchEntity::getBatchName)
@@ -751,6 +1503,2604 @@ public class AuraReportDataService
         if (lower.contains("search") || lower.contains("catalog")) return "search";
         if (lower.contains("payment") || lower.contains("billing")) return "payments";
         return "folder";
+    }
+
+    public List<TestBaseClassDto> getBatchTestBaseClasses(final String batchName)
+    {
+        final String effectiveBatchName = (batchName != null && !batchName.isBlank()) ? batchName.trim() : "Default";
+        final List<TestRunEntity> allRuns = runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(effectiveBatchName);
+        return getBatchTestBaseClasses(effectiveBatchName, allRuns);
+    }
+
+    public List<TestBaseClassDto> getBatchTestBaseClasses(final String batchName, final List<TestRunEntity> allRuns)
+    {
+        return getBatchTestBaseClasses(
+            batchName,
+            allRuns,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet()
+        );
+    }
+
+    public List<TestBaseClassDto> getBatchTestBaseClasses(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final Set<String> runBrowsers,
+        final Set<String> runLocales,
+        final Set<String> runEnvs,
+        final Set<String> runAreas,
+        final Set<String> runTags)
+    {
+        return getBatchTestBaseClasses(
+            batchName,
+            allRuns,
+            runBrowsers,
+            Collections.emptySet(),
+            runLocales,
+            Collections.emptySet(),
+            runEnvs,
+            Collections.emptySet(),
+            runAreas,
+            Collections.emptySet(),
+            runTags,
+            Collections.emptySet()
+        );
+    }
+
+    public List<TestBaseClassDto> getBatchTestBaseClasses(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final List<String> uniquenessDimensions)
+    {
+        return getBatchTestBaseClasses(
+            batchName,
+            allRuns,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            uniquenessDimensions
+        );
+    }
+
+    public List<TestBaseClassDto> getBatchTestBaseClasses(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final Set<String> runBrowsers,
+        final Set<String> runLocales,
+        final Set<String> runEnvs,
+        final Set<String> runAreas,
+        final Set<String> runTags,
+        final List<String> uniquenessDimensions)
+    {
+        return getBatchTestBaseClasses(
+            batchName,
+            allRuns,
+            runBrowsers,
+            Collections.emptySet(),
+            runLocales,
+            Collections.emptySet(),
+            runEnvs,
+            Collections.emptySet(),
+            runAreas,
+            Collections.emptySet(),
+            runTags,
+            Collections.emptySet(),
+            uniquenessDimensions
+        );
+    }
+
+    public List<TestBaseClassDto> getBatchTestBaseClasses(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final Set<String> runBrowsers,
+        final Set<String> excludedRunBrowsers,
+        final Set<String> runLocales,
+        final Set<String> excludedRunLocales,
+        final Set<String> runEnvs,
+        final Set<String> excludedRunEnvs,
+        final Set<String> runAreas,
+        final Set<String> excludedRunAreas,
+        final Set<String> runTags,
+        final Set<String> excludedRunTags)
+    {
+        return getBatchTestBaseClasses(
+            batchName,
+            allRuns,
+            runBrowsers,
+            excludedRunBrowsers,
+            runLocales,
+            excludedRunLocales,
+            runEnvs,
+            excludedRunEnvs,
+            runAreas,
+            excludedRunAreas,
+            runTags,
+            excludedRunTags,
+            null
+        );
+    }
+
+    public List<TestBaseClassDto> getBatchTestBaseClasses(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final Set<String> runBrowsers,
+        final Set<String> excludedRunBrowsers,
+        final Set<String> runLocales,
+        final Set<String> excludedRunLocales,
+        final Set<String> runEnvs,
+        final Set<String> excludedRunEnvs,
+        final Set<String> runAreas,
+        final Set<String> excludedRunAreas,
+        final Set<String> runTags,
+        final Set<String> excludedRunTags,
+        final List<String> uniquenessDimensions)
+    {
+        if (allRuns == null || allRuns.isEmpty())
+        {
+            return List.of();
+        }
+
+        if ((runBrowsers != null && runBrowsers.contains("_none_"))
+            || (runLocales != null && runLocales.contains("_none_"))
+            || (runEnvs != null && runEnvs.contains("_none_"))
+            || (runAreas != null && runAreas.contains("_none_"))
+            || (runTags != null && runTags.contains("_none_")))
+        {
+            return List.of();
+        }
+
+        final List<TestBaseBugEntity> allBugs = bugRepository.findAll();
+        final Map<String, List<String>> bugsMap = allBugs.stream()
+            .filter(b -> b.getRemovedRunId() == null)
+            .collect(Collectors.groupingBy(
+                TestBaseBugEntity::getVariationId,
+                Collectors.mapping(TestBaseBugEntity::getBugTicket, Collectors.toList())
+            ));
+
+        final List<TestRunEntity> sortedRuns = allRuns.stream()
+            .sorted((a, b) -> Long.compare(
+                b.getStartTimeMs() != null ? b.getStartTimeMs() : 0L,
+                a.getStartTimeMs() != null ? a.getStartTimeMs() : 0L))
+            .collect(Collectors.toList());
+
+        populateRunTags(sortedRuns);
+        final List<String> knownTagKeys = getAllTagKeys();
+        final Map<String, TestBaseVariationEntity> variationMap = new LinkedHashMap<>();
+        final Map<String, Integer> execCountMap = new HashMap<>();
+
+        for (final TestRunEntity run : sortedRuns)
+        {
+            if (runEnvs != null && !runEnvs.isEmpty())
+            {
+                final String runEnv = run.getEnvironment() != null ? run.getEnvironment().trim() : "Default";
+                final boolean matchEnv = runEnvs.stream().anyMatch(re -> re.equalsIgnoreCase(runEnv));
+                if (!matchEnv)
+                {
+                    continue;
+                }
+            }
+            if (excludedRunEnvs != null && !excludedRunEnvs.isEmpty())
+            {
+                final String runEnv = run.getEnvironment() != null ? run.getEnvironment().trim() : "Default";
+                final boolean matchEnv = excludedRunEnvs.stream().anyMatch(re -> re.equalsIgnoreCase(runEnv));
+                if (matchEnv)
+                {
+                    continue;
+                }
+            }
+
+            if (runTags != null && !runTags.isEmpty())
+            {
+                final String runBatch = run.getBatchName() != null ? run.getBatchName().trim() : "Default";
+                final boolean matchTag = runTags.stream().anyMatch(rt -> rt.equalsIgnoreCase(runBatch));
+                if (!matchTag)
+                {
+                    continue;
+                }
+            }
+            if (excludedRunTags != null && !excludedRunTags.isEmpty())
+            {
+                final String runBatch = run.getBatchName() != null ? run.getBatchName().trim() : "Default";
+                final boolean matchTag = excludedRunTags.stream().anyMatch(rt -> rt.equalsIgnoreCase(runBatch));
+                if (matchTag)
+                {
+                    continue;
+                }
+            }
+
+            final RunReportDto report = getRunReport(run.getId());
+            if (report == null || report.getExecutions() == null)
+            {
+                continue;
+            }
+
+            for (final TestExecutionDto exec : report.getExecutions())
+            {
+                final String testClass = (exec.getTestClass() != null && !exec.getTestClass().isBlank())
+                    ? exec.getTestClass().trim()
+                    : "GeneralTest";
+                final String testMethod = (exec.getTestMethod() != null && !exec.getTestMethod().isBlank())
+                    ? exec.getTestMethod().trim()
+                    : "";
+                final String dataSet = cleanDataSetString(exec.getTitle());
+                if (!isValidTestVariation(testClass, testMethod, dataSet))
+                {
+                    continue;
+                }
+                final String normLoc = normalizeLocation(exec.getLocation());
+                final String normBr = normalizeBrowser(exec.getBrowser());
+                final String normArea = normalizeArea(exec.getAreaName());
+
+                if (runBrowsers != null && !runBrowsers.isEmpty())
+                {
+                    final boolean matchBr = runBrowsers.stream().anyMatch(rb ->
+                        rb.equalsIgnoreCase(normBr) || rb.equalsIgnoreCase(exec.getBrowser()) || normalizeBrowser(rb).equalsIgnoreCase(normBr)
+                    );
+                    if (!matchBr)
+                    {
+                        continue;
+                    }
+                }
+                if (excludedRunBrowsers != null && !excludedRunBrowsers.isEmpty())
+                {
+                    final boolean matchBr = excludedRunBrowsers.stream().anyMatch(eb ->
+                        eb.equalsIgnoreCase(normBr) || eb.equalsIgnoreCase(exec.getBrowser()) || normalizeBrowser(eb).equalsIgnoreCase(normBr)
+                    );
+                    if (matchBr)
+                    {
+                        continue;
+                    }
+                }
+
+                if (runLocales != null && !runLocales.isEmpty())
+                {
+                    final boolean matchLoc = runLocales.stream().anyMatch(rl ->
+                        rl.equalsIgnoreCase(normLoc) || rl.equalsIgnoreCase(exec.getLocation()) || normalizeLocation(rl).equalsIgnoreCase(normLoc)
+                    );
+                    if (!matchLoc)
+                    {
+                        continue;
+                    }
+                }
+                if (excludedRunLocales != null && !excludedRunLocales.isEmpty())
+                {
+                    final boolean matchLoc = excludedRunLocales.stream().anyMatch(el ->
+                        el.equalsIgnoreCase(normLoc) || el.equalsIgnoreCase(exec.getLocation()) || normalizeLocation(el).equalsIgnoreCase(normLoc)
+                    );
+                    if (matchLoc)
+                    {
+                        continue;
+                    }
+                }
+
+                if (runAreas != null && !runAreas.isEmpty())
+                {
+                    final boolean matchArea = runAreas.stream().anyMatch(ra ->
+                        normalizeArea(ra).equalsIgnoreCase(normArea)
+                    );
+                    if (!matchArea)
+                    {
+                        continue;
+                    }
+                }
+                if (excludedRunAreas != null && !excludedRunAreas.isEmpty())
+                {
+                    final boolean matchArea = excludedRunAreas.stream().anyMatch(ea ->
+                        normalizeArea(ea).equalsIgnoreCase(normArea)
+                    );
+                    if (matchArea)
+                    {
+                        continue;
+                    }
+                }
+
+                final List<String> effectiveDims = (uniquenessDimensions != null && !uniquenessDimensions.isEmpty())
+                    ? uniquenessDimensions
+                    : ReportDashboardSettingService.DEFAULT_EXECUTION_IDENTITY_DIMENSIONS;
+                final String logicalKey = buildLogicalKey(testClass, testMethod, dataSet, normLoc, normBr, run, exec, effectiveDims);
+                final String canonicalId = generateVariationId(testClass, testMethod, dataSet, normLoc, normBr);
+                final String varId = isDefaultExecutionIdentity(effectiveDims)
+                    ? canonicalId
+                    : (canonicalId + "-" + Math.abs(logicalKey.hashCode()));
+
+                execCountMap.put(logicalKey, execCountMap.getOrDefault(logicalKey, 0) + 1);
+
+                if (!variationMap.containsKey(logicalKey))
+                {
+                    final boolean hasBugs = bugsMap.containsKey(canonicalId) && !bugsMap.get(canonicalId).isEmpty();
+                    final String rawStatus = exec.getStatus() != null ? exec.getStatus() : "passed-clean";
+                    final String effectiveStatus;
+                    if ("failed".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus))
+                    {
+                        effectiveStatus = hasBugs ? "failed-known" : "failed-unknown";
+                    }
+                    else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus) || "healed".equalsIgnoreCase(rawStatus))
+                    {
+                        effectiveStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
+                    }
+                    else
+                    {
+                        effectiveStatus = rawStatus;
+                    }
+
+                    final String mode = (exec.getDisplayMode() != null && !exec.getDisplayMode().isBlank())
+                        ? exec.getDisplayMode()
+                        : ((exec.getMode() != null && !exec.getMode().isBlank()) ? exec.getMode() : "JAVA");
+                    final boolean isHealed = exec.isHealed();
+                    final String area = (exec.getAreaName() != null && !exec.getAreaName().isBlank())
+                        ? exec.getAreaName()
+                        : "@General";
+
+                    final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(
+                        varId,
+                        testClass,
+                        testMethod,
+                        dataSet.isEmpty() ? "Default" : dataSet,
+                        normalizeArea(area),
+                        normLoc,
+                        normBr
+                    );
+                    if (exec.getSubArea() != null && !exec.getSubArea().isBlank())
+                    {
+                        varEntity.setSubAreaTag(normalizeArea(exec.getSubArea()));
+                    }
+                    varEntity.setLastStatus(effectiveStatus);
+                    varEntity.setLastExecutedAt(run.getStartTimeMs() != null ? run.getStartTimeMs() : 0L);
+                    varEntity.setHealed(isHealed);
+                    varEntity.setExecutionMode(mode);
+                    varEntity.setLastRunId(run.getId());
+                    varEntity.setLastEnvironment(run.getEnvironment() != null ? run.getEnvironment() : "Default");
+                    varEntity.setLastBatch(run.getBatchName() != null ? run.getBatchName() : "Default");
+
+                    final Map<String, String> uProps = new LinkedHashMap<>();
+                    for (final String dim : effectiveDims)
+                    {
+                        final String normDim = ReportDashboardSettingService.normalizeDimensionName(dim);
+                        if ("environment".equals(normDim))
+                        {
+                            uProps.put("Environment", run.getEnvironment() != null ? run.getEnvironment() : "Default");
+                        }
+                        else if (!"browser".equals(normDim) && !"locale".equals(normDim))
+                        {
+                            List<String> tagVals = null;
+                            if (exec.getTags() != null)
+                            {
+                                tagVals = TagUtils.findTagValues(exec.getTags(), dim);
+                            }
+                            if (tagVals == null || tagVals.isEmpty())
+                            {
+                                tagVals = getRunTagValues(run, dim);
+                            }
+                            final String tagVal = (tagVals == null || tagVals.isEmpty()) ? "Default" : String.join(", ", tagVals);
+                            uProps.put(dim, tagVal);
+                        }
+                    }
+
+                    if (knownTagKeys != null)
+                    {
+                        for (final String tKey : knownTagKeys)
+                        {
+                            if (tKey != null && !tKey.isBlank() && !uProps.containsKey(tKey) && !"batch".equalsIgnoreCase(tKey))
+                            {
+                                List<String> tagVals = null;
+                                if (exec.getTags() != null)
+                                {
+                                    tagVals = TagUtils.findTagValues(exec.getTags(), tKey);
+                                }
+                                if (tagVals == null || tagVals.isEmpty())
+                                {
+                                    tagVals = getRunTagValues(run, tKey);
+                                }
+                                final String tagVal = (tagVals == null || tagVals.isEmpty()) ? "Default" : String.join(", ", tagVals);
+                                uProps.put(tKey, tagVal);
+                            }
+                        }
+                    }
+                    varEntity.setIdentityProperties(uProps);
+
+                    variationMap.put(logicalKey, varEntity);
+                }
+            }
+        }
+
+        for (final Map.Entry<String, TestBaseVariationEntity> entry : variationMap.entrySet())
+        {
+            final String logicalKey = entry.getKey();
+            final TestBaseVariationEntity var = entry.getValue();
+            var.setTotalExecutionsCount(execCountMap.getOrDefault(logicalKey, 1));
+        }
+
+        final Map<String, List<TestBaseVariationEntity>> byClass = variationMap.values().stream()
+            .collect(Collectors.groupingBy(
+                v -> (v.getTestClassName() != null && !v.getTestClassName().isEmpty()) ? v.getTestClassName() : "GeneralTest",
+                LinkedHashMap::new,
+                Collectors.toList()
+            ));
+
+        final List<TestBaseClassDto> classDtos = new ArrayList<>();
+        for (final Map.Entry<String, List<TestBaseVariationEntity>> classEntry : byClass.entrySet())
+        {
+            final String className = classEntry.getKey();
+            final List<TestBaseVariationEntity> classVars = classEntry.getValue();
+            final String classContainerId = "batchClassContainer" + className.replaceAll("[^a-zA-Z0-9]", "");
+
+            classDtos.add(new TestBaseClassDto(
+                className,
+                classContainerId,
+                classVars.size(),
+                classVars
+            ));
+        }
+
+        return classDtos;
+    }
+
+    public List<TestBaseAreaDto> groupBatchTestClassesByArea(final List<TestBaseClassDto> classDtos)
+    {
+        if (classDtos == null || classDtos.isEmpty())
+        {
+            return List.of();
+        }
+
+        final Map<String, List<TestBaseClassDto>> byAreaMap = new LinkedHashMap<>();
+        for (final TestBaseClassDto classDto : classDtos)
+        {
+            final List<TestBaseVariationEntity> classVars = classDto.getVariations();
+            String areaName = "@Browsing (default)";
+            if (classVars != null)
+            {
+                for (final TestBaseVariationEntity v : classVars)
+                {
+                    final String area = v.getAreaTag();
+                    if (area != null && !area.trim().isEmpty() && !"@General".equalsIgnoreCase(area.trim()))
+                    {
+                        areaName = area.startsWith("@") ? area : "@" + area;
+                        break;
+                    }
+                }
+            }
+            byAreaMap.computeIfAbsent(areaName, k -> new ArrayList<>()).add(classDto);
+        }
+
+        final List<TestBaseAreaDto> areas = new ArrayList<>();
+        for (final Map.Entry<String, List<TestBaseClassDto>> areaEntry : byAreaMap.entrySet())
+        {
+            final String areaName = areaEntry.getKey();
+            final List<TestBaseClassDto> areaClasses = areaEntry.getValue();
+
+            final String cleanAreaName = areaName.replace("@", "").replaceAll("[^a-zA-Z0-9]", "");
+            final String areaPaneId = "batchArea" + cleanAreaName;
+            final String tabBtnId = "batchTabBtn" + cleanAreaName;
+            final String icon = resolveAreaIcon(areaName);
+
+            final List<TestBaseSubAreaDto> subAreas = new ArrayList<>();
+            final boolean hasSub = areaClasses.stream()
+                .anyMatch(cd -> cd.getVariations() != null && cd.getVariations().stream().anyMatch(v -> v.getSubAreaTag() != null && !v.getSubAreaTag().isBlank()));
+
+            if (hasSub)
+            {
+                final Map<String, List<TestBaseVariationEntity>> varsBySub = new LinkedHashMap<>();
+                for (final TestBaseClassDto cd : areaClasses)
+                {
+                    if (cd.getVariations() != null)
+                    {
+                        for (final TestBaseVariationEntity v : cd.getVariations())
+                        {
+                            final String subTag = (v.getSubAreaTag() != null && !v.getSubAreaTag().isBlank())
+                                ? (v.getSubAreaTag().startsWith("@") ? v.getSubAreaTag() : "@" + v.getSubAreaTag())
+                                : "@General";
+                            varsBySub.computeIfAbsent(subTag, k -> new ArrayList<>()).add(v);
+                        }
+                    }
+                }
+
+                for (final Map.Entry<String, List<TestBaseVariationEntity>> subEntry : varsBySub.entrySet())
+                {
+                    final String subAreaName = subEntry.getKey();
+                    final List<TestBaseVariationEntity> subVars = subEntry.getValue();
+
+                    final Map<String, List<TestBaseVariationEntity>> classMap = new LinkedHashMap<>();
+                    for (final TestBaseVariationEntity v : subVars)
+                    {
+                        classMap.computeIfAbsent(v.getTestClassName(), k -> new ArrayList<>()).add(v);
+                    }
+
+                    final List<TestBaseClassDto> subClasses = new ArrayList<>();
+                    final String cleanSub = subAreaName.replace("@", "").replaceAll("[^a-zA-Z0-9]", "");
+                    for (final Map.Entry<String, List<TestBaseVariationEntity>> cEntry : classMap.entrySet())
+                    {
+                        final String cName = cEntry.getKey();
+                        final List<TestBaseVariationEntity> cvList = cEntry.getValue();
+                        final String cId = "batchClass" + cName.replaceAll("[^a-zA-Z0-9]", "") + cleanSub;
+                        subClasses.add(new TestBaseClassDto(cName, cId, cvList.size(), cvList));
+                    }
+
+                    final String subAreaPaneId = "batchSubArea" + cleanAreaName + cleanSub;
+                    subAreas.add(new TestBaseSubAreaDto(subAreaName, subAreaPaneId, subClasses.size(), subClasses));
+                }
+            }
+
+            areas.add(new TestBaseAreaDto(
+                areaName,
+                areaPaneId,
+                tabBtnId,
+                icon,
+                areaClasses.size(),
+                areaClasses,
+                subAreas
+            ));
+        }
+
+        return areas;
+    }
+
+    public List<TestBaseAreaDto> getBatchTestBaseAreas(final String batchName, final List<TestRunEntity> allRuns)
+    {
+        final List<TestBaseClassDto> classDtos = getBatchTestBaseClasses(batchName, allRuns);
+        return groupBatchTestClassesByArea(classDtos);
+    }
+
+    public BatchLatestExecutionsDto getBatchLatestTestExecutionsSummary(final String batchName, final List<TestRunEntity> allRuns)
+    {
+        return getBatchLatestTestExecutionsSummary(batchName, allRuns, Collections.emptySet(), null);
+    }
+
+    public BatchLatestExecutionsDto getBatchLatestTestExecutionsSummary(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final Set<String> excludedRunIds,
+        final Long cutoffTimestampMs)
+    {
+        return getBatchLatestTestExecutionsSummary(
+            batchName,
+            allRuns,
+            excludedRunIds,
+            cutoffTimestampMs,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptyMap()
+        );
+    }
+
+    public BatchLatestExecutionsDto getBatchLatestTestExecutionsSummary(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final Set<String> excludedRunIds,
+        final Long cutoffTimestampMs,
+        final Set<String> runBrowsers,
+        final Set<String> runLocales,
+        final Set<String> runEnvs,
+        final Set<String> runAreas,
+        final Set<String> runTags,
+        final Map<String, String> runAreasMap)
+    {
+        return getBatchLatestTestExecutionsSummary(
+            batchName,
+            allRuns,
+            excludedRunIds,
+            cutoffTimestampMs,
+            null,
+            runBrowsers,
+            runLocales,
+            runEnvs,
+            runAreas,
+            runTags,
+            runAreasMap,
+            Collections.emptyMap()
+        );
+    }
+
+    public BatchLatestExecutionsDto getBatchLatestTestExecutionsSummary(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final Set<String> excludedRunIds,
+        final Long fromTimestampMs,
+        final Long toTimestampMs,
+        final Set<String> runBrowsers,
+        final Set<String> runLocales,
+        final Set<String> runEnvs,
+        final Set<String> runAreas,
+        final Set<String> runTags,
+        final Map<String, String> runAreasMap)
+    {
+        return getBatchLatestTestExecutionsSummary(
+            batchName,
+            allRuns,
+            excludedRunIds,
+            fromTimestampMs,
+            toTimestampMs,
+            runBrowsers,
+            runLocales,
+            runEnvs,
+            runAreas,
+            runTags,
+            runAreasMap,
+            Collections.emptyMap()
+        );
+    }
+
+    public BatchLatestExecutionsDto getBatchLatestTestExecutionsSummary(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final Set<String> excludedRunIds,
+        final Long fromTimestampMs,
+        final Long toTimestampMs,
+        final Set<String> runBrowsers,
+        final Set<String> runLocales,
+        final Set<String> runEnvs,
+        final Set<String> runAreas,
+        final Set<String> runTags,
+        final Map<String, String> runAreasMap,
+        final Map<String, Set<String>> runTagsByType)
+    {
+        return getBatchLatestTestExecutionsSummary(
+            batchName,
+            allRuns,
+            excludedRunIds,
+            fromTimestampMs,
+            toTimestampMs,
+            runBrowsers,
+            Collections.emptySet(),
+            runLocales,
+            Collections.emptySet(),
+            runEnvs,
+            Collections.emptySet(),
+            runAreas,
+            Collections.emptySet(),
+            runTags,
+            Collections.emptySet(),
+            runAreasMap,
+            runTagsByType,
+            Collections.emptyMap()
+        );
+    }
+
+    public BatchLatestExecutionsDto getBatchLatestTestExecutionsSummary(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final List<String> uniquenessDimensions)
+    {
+        return getBatchLatestTestExecutionsSummary(
+            batchName,
+            allRuns,
+            Collections.emptySet(),
+            null,
+            null,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            uniquenessDimensions
+        );
+    }
+
+
+    public BatchLatestExecutionsDto getBatchLatestTestExecutionsSummary(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final Set<String> excludedRunIds,
+        final Long fromTimestampMs,
+        final Long toTimestampMs,
+        final Set<String> runBrowsers,
+        final Set<String> excludedRunBrowsers,
+        final Set<String> runLocales,
+        final Set<String> excludedRunLocales,
+        final Set<String> runEnvs,
+        final Set<String> excludedRunEnvs,
+        final Set<String> runAreas,
+        final Set<String> excludedRunAreas,
+        final Set<String> runTags,
+        final Set<String> excludedRunTags,
+        final Map<String, String> runAreasMap,
+        final Map<String, Set<String>> runTagsByType,
+        final Map<String, Set<String>> excludedRunTagsByType)
+    {
+        return getBatchLatestTestExecutionsSummary(
+            batchName,
+            allRuns,
+            excludedRunIds,
+            fromTimestampMs,
+            toTimestampMs,
+            runBrowsers,
+            excludedRunBrowsers,
+            runLocales,
+            excludedRunLocales,
+            runEnvs,
+            excludedRunEnvs,
+            runAreas,
+            excludedRunAreas,
+            runTags,
+            excludedRunTags,
+            runAreasMap,
+            runTagsByType,
+            excludedRunTagsByType,
+            null
+        );
+    }
+
+    public BatchLatestExecutionsDto getBatchLatestTestExecutionsSummary(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final Set<String> excludedRunIds,
+        final Long fromTimestampMs,
+        final Long toTimestampMs,
+        final Set<String> runBrowsers,
+        final Set<String> excludedRunBrowsers,
+        final Set<String> runLocales,
+        final Set<String> excludedRunLocales,
+        final Set<String> runEnvs,
+        final Set<String> excludedRunEnvs,
+        final Set<String> runAreas,
+        final Set<String> excludedRunAreas,
+        final Set<String> runTags,
+        final Set<String> excludedRunTags,
+        final Map<String, String> runAreasMap,
+        final Map<String, Set<String>> runTagsByType,
+        final Map<String, Set<String>> excludedRunTagsByType,
+        final List<String> uniquenessDimensions)
+    {
+        return getBatchLatestTestExecutionsSummary(
+            batchName, allRuns, excludedRunIds, fromTimestampMs, toTimestampMs,
+            runBrowsers, excludedRunBrowsers, runLocales, excludedRunLocales,
+            runEnvs, excludedRunEnvs, runAreas, excludedRunAreas,
+            runTags, excludedRunTags, runAreasMap, runTagsByType,
+            excludedRunTagsByType, uniquenessDimensions, null
+        );
+    }
+
+    public BatchLatestExecutionsDto getBatchLatestTestExecutionsSummary(
+        final String batchName,
+        final List<TestRunEntity> allRuns,
+        final Set<String> excludedRunIds,
+        final Long fromTimestampMs,
+        final Long toTimestampMs,
+        final Set<String> runBrowsers,
+        final Set<String> excludedRunBrowsers,
+        final Set<String> runLocales,
+        final Set<String> excludedRunLocales,
+        final Set<String> runEnvs,
+        final Set<String> excludedRunEnvs,
+        final Set<String> runAreas,
+        final Set<String> excludedRunAreas,
+        final Set<String> runTags,
+        final Set<String> excludedRunTags,
+        final Map<String, String> runAreasMap,
+        final Map<String, Set<String>> runTagsByType,
+        final Map<String, Set<String>> excludedRunTagsByType,
+        final List<String> uniquenessDimensions,
+        final String asOfRunId)
+    {
+        final String effectiveBatchName = (batchName != null && !batchName.isBlank()) ? batchName.trim() : "Default";
+
+        if (allRuns == null || allRuns.isEmpty())
+        {
+            final BatchSummaryDto emptySummary = new BatchSummaryDto(
+                "batch-" + effectiveBatchName,
+                effectiveBatchName,
+                "Default",
+                "",
+                "No runs",
+                "N/A",
+                "",
+                List.of(),
+                List.of()
+            );
+            final TokenCostTrendDto emptyTrend = new TokenCostTrendDto(0.0, -1.0, 0L, List.of());
+            final BatchSuiteEvolutionDto emptyEvolution = new BatchSuiteEvolutionDto(Collections.emptyList());
+            return new BatchLatestExecutionsDto(emptySummary, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Collections.emptyMap(), List.of(), 0, 0, List.of(), emptyTrend, emptyEvolution, null, "No runs", false);
+        }
+
+        final Set<String> exclusions = (excludedRunIds != null) ? excludedRunIds : Collections.emptySet();
+
+        final List<TestRunEntity> eligibleRuns = allRuns.stream()
+            .filter(r -> r.getId() != null && !exclusions.contains(r.getId()))
+            .filter(r -> fromTimestampMs == null || (r.getStartTimeMs() != null && r.getStartTimeMs() >= fromTimestampMs))
+            .filter(r -> toTimestampMs == null || (r.getStartTimeMs() != null && r.getStartTimeMs() <= toTimestampMs))
+            .filter(r -> matchesRunCriteria(r, runBrowsers, excludedRunBrowsers, runLocales, excludedRunLocales, runEnvs, excludedRunEnvs, runAreas, excludedRunAreas, runTags, excludedRunTags, runAreasMap, runTagsByType, excludedRunTagsByType))
+            .sorted((a, b) -> Long.compare(
+                b.getStartTimeMs() != null ? b.getStartTimeMs() : 0L,
+                a.getStartTimeMs() != null ? a.getStartTimeMs() : 0L))
+            .collect(Collectors.toList());
+
+        if (eligibleRuns.isEmpty())
+        {
+            final BatchSummaryDto emptySummary = new BatchSummaryDto(
+                "batch-" + effectiveBatchName,
+                effectiveBatchName,
+                "Default",
+                "",
+                "No runs",
+                "N/A",
+                "",
+                List.of(),
+                List.of()
+            );
+            final TokenCostTrendDto emptyTrend = new TokenCostTrendDto(0.0, -1.0, 0L, List.of());
+            final BatchSuiteEvolutionDto emptyEvolution = new BatchSuiteEvolutionDto(Collections.emptyList());
+            return new BatchLatestExecutionsDto(emptySummary, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(), Collections.emptyMap(), List.of(), 0, 0, List.of(), emptyTrend, emptyEvolution, null, "No runs", false);
+        }
+
+        int targetIdx = -1;
+        if (asOfRunId != null && !asOfRunId.isBlank())
+        {
+            for (int i = 0; i < eligibleRuns.size(); i++)
+            {
+                if (asOfRunId.equalsIgnoreCase(eligibleRuns.get(i).getId()))
+                {
+                    targetIdx = i;
+                    break;
+                }
+            }
+        }
+
+        final boolean isHistoricalSnapshot = (targetIdx > 0);
+        final String effectiveAsOfRunId = (targetIdx >= 0)
+            ? eligibleRuns.get(targetIdx).getId()
+            : (!eligibleRuns.isEmpty() ? eligibleRuns.get(0).getId() : null);
+        final String asOfTimestampLabel = (targetIdx >= 0)
+            ? eligibleRuns.get(targetIdx).getTimestampLabel()
+            : (!eligibleRuns.isEmpty() ? eligibleRuns.get(0).getTimestampLabel() : "No runs");
+
+        final List<TestBaseBugEntity> allBugs = bugRepository.findAll();
+        final Map<String, List<String>> bugsMap = allBugs.stream()
+            .filter(b -> b.getRemovedRunId() == null)
+            .collect(Collectors.groupingBy(
+                TestBaseBugEntity::getVariationId,
+                Collectors.mapping(TestBaseBugEntity::getBugTicket, Collectors.toList())
+            ));
+        final Map<String, List<String>> bugSeveritiesMap = allBugs.stream()
+            .filter(b -> b.getRemovedRunId() == null)
+            .collect(Collectors.groupingBy(
+                TestBaseBugEntity::getVariationId,
+                Collectors.mapping(b -> b.getSeverity() != null ? b.getSeverity().toUpperCase(Locale.ROOT) : "MAJOR", Collectors.toList())
+            ));
+
+        final Map<String, String> variationStatus = new LinkedHashMap<>();
+        final Map<String, Boolean> variationHealed = new LinkedHashMap<>();
+        final Map<String, String> variationMode = new LinkedHashMap<>();
+        final Map<String, String> variationRunId = new LinkedHashMap<>();
+        final Map<String, String> variationEnvironment = new LinkedHashMap<>();
+        final Map<String, String> variationBrowser = new LinkedHashMap<>();
+        final Map<String, String> variationLocation = new LinkedHashMap<>();
+        final Map<String, String> variationArea = new LinkedHashMap<>();
+        final Map<String, String> variationBatch = new LinkedHashMap<>();
+        final Map<String, Map<String, List<String>>> variationTags = new LinkedHashMap<>();
+        final Map<String, Double> variationLlmCost = new LinkedHashMap<>();
+        final Map<String, Long> variationLlmTokens = new LinkedHashMap<>();
+        final Map<String, String> variationExecutionId = new LinkedHashMap<>();
+        final Map<String, String> variationCanonicalId = new LinkedHashMap<>();
+        final Map<String, List<String>> variationBugs = new LinkedHashMap<>();
+        final Map<String, List<String>> variationBugSeverities = new LinkedHashMap<>();
+        final Map<String, Boolean> variationFlaky = new LinkedHashMap<>();
+        final Map<String, Integer> variationFlakyFailureCount = new LinkedHashMap<>();
+        final Map<String, Integer> variationFlakyTotalRuns = new LinkedHashMap<>();
+        final Map<String, String> variationFlakyReason = new LinkedHashMap<>();
+        final Map<String, List<RunVariationCost>> runVariationsMap = new HashMap<>();
+        final Map<String, Map<String, VariationRunState>> runExecutionsMap = new HashMap<>();
+        final Map<String, String> varAreaMap = new HashMap<>();
+        final Map<String, String> varBrowserMap = new HashMap<>();
+        final Map<String, String> varLocationMap = new HashMap<>();
+        final Map<String, String> varEnvMap = new HashMap<>();
+        final Map<String, Map<String, List<String>>> varTagsMap = new HashMap<>();
+        final Map<String, Map<String, Map<String, List<String>>>> runVariationTagsMap = new HashMap<>();
+
+        for (int runOrderIdx = 0; runOrderIdx < eligibleRuns.size(); runOrderIdx++)
+        {
+            final TestRunEntity run = eligibleRuns.get(runOrderIdx);
+            final boolean isRunInSnapshot = (targetIdx < 0) || (runOrderIdx >= targetIdx);
+            final RunReportDto report = getRunReport(run.getId());
+            if (report == null || report.getExecutions() == null)
+            {
+                continue;
+            }
+
+            for (final TestExecutionDto exec : report.getExecutions())
+            {
+                final String testClass = (exec.getTestClass() != null && !exec.getTestClass().isBlank())
+                    ? exec.getTestClass().trim()
+                    : "GeneralTest";
+                final String testMethod = (exec.getTestMethod() != null && !exec.getTestMethod().isBlank())
+                    ? exec.getTestMethod().trim()
+                    : "";
+                final String dataSet = cleanDataSetString(exec.getTitle());
+                if (!isValidTestVariation(testClass, testMethod, dataSet))
+                {
+                    continue;
+                }
+                final String normLoc = normalizeLocation(exec.getLocation());
+                final String normBr = normalizeBrowser(exec.getBrowser());
+                final String normArea = normalizeArea(exec.getAreaName());
+
+                if (runBrowsers != null && !runBrowsers.isEmpty())
+                {
+                    final boolean matchBr = runBrowsers.stream().anyMatch(rb ->
+                        rb.equalsIgnoreCase(normBr) || rb.equalsIgnoreCase(exec.getBrowser()) || normalizeBrowser(rb).equalsIgnoreCase(normBr)
+                    );
+                    if (!matchBr)
+                    {
+                        continue;
+                    }
+                }
+                if (excludedRunBrowsers != null && !excludedRunBrowsers.isEmpty())
+                {
+                    final boolean matchBr = excludedRunBrowsers.stream().anyMatch(eb ->
+                        eb.equalsIgnoreCase(normBr) || eb.equalsIgnoreCase(exec.getBrowser()) || normalizeBrowser(eb).equalsIgnoreCase(normBr)
+                    );
+                    if (matchBr)
+                    {
+                        continue;
+                    }
+                }
+
+                if (runLocales != null && !runLocales.isEmpty())
+                {
+                    final boolean matchLoc = runLocales.stream().anyMatch(rl ->
+                        rl.equalsIgnoreCase(normLoc) || rl.equalsIgnoreCase(exec.getLocation()) || normalizeLocation(rl).equalsIgnoreCase(normLoc)
+                    );
+                    if (!matchLoc)
+                    {
+                        continue;
+                    }
+                }
+                if (excludedRunLocales != null && !excludedRunLocales.isEmpty())
+                {
+                    final boolean matchLoc = excludedRunLocales.stream().anyMatch(el ->
+                        el.equalsIgnoreCase(normLoc) || el.equalsIgnoreCase(exec.getLocation()) || normalizeLocation(el).equalsIgnoreCase(normLoc)
+                    );
+                    if (matchLoc)
+                    {
+                        continue;
+                    }
+                }
+
+                if (runAreas != null && !runAreas.isEmpty())
+                {
+                    final boolean matchArea = runAreas.stream().anyMatch(ra ->
+                        normalizeArea(ra).equalsIgnoreCase(normArea)
+                    );
+                    if (!matchArea)
+                    {
+                        continue;
+                    }
+                }
+                if (excludedRunAreas != null && !excludedRunAreas.isEmpty())
+                {
+                    final boolean matchArea = excludedRunAreas.stream().anyMatch(ea ->
+                        normalizeArea(ea).equalsIgnoreCase(normArea)
+                    );
+                    if (matchArea)
+                    {
+                        continue;
+                    }
+                }
+
+                final List<String> effectiveDims = getEffectiveExecutionIdentityDimensions(uniquenessDimensions);
+                final String logicalKey = buildLogicalKey(testClass, testMethod, dataSet, normLoc, normBr, run, exec, effectiveDims);
+                final String canonicalId = generateVariationId(testClass, testMethod, dataSet, normLoc, normBr);
+
+                varAreaMap.putIfAbsent(logicalKey, normArea);
+                varBrowserMap.putIfAbsent(logicalKey, normBr);
+                varLocationMap.putIfAbsent(logicalKey, normLoc);
+                varEnvMap.putIfAbsent(logicalKey, (run.getEnvironment() != null && !run.getEnvironment().isBlank()) ? run.getEnvironment() : "Default");
+                final Map<String, List<String>> combinedTags = new LinkedHashMap<>();
+                final Map<String, List<String>> currentRunTags = getRunTagsMap(run);
+                if (currentRunTags != null && !currentRunTags.isEmpty())
+                {
+                    for (final Map.Entry<String, List<String>> rEntry : currentRunTags.entrySet())
+                    {
+                        if (rEntry.getKey() != null && rEntry.getValue() != null)
+                        {
+                            combinedTags.put(rEntry.getKey().toLowerCase(Locale.ROOT), new ArrayList<>(rEntry.getValue()));
+                        }
+                    }
+                }
+                if (exec.getTags() != null && !exec.getTags().isEmpty())
+                {
+                    for (final Map.Entry<String, List<String>> eEntry : exec.getTags().entrySet())
+                    {
+                        if (eEntry.getKey() != null && eEntry.getValue() != null)
+                        {
+                            combinedTags.put(eEntry.getKey().toLowerCase(Locale.ROOT), new ArrayList<>(eEntry.getValue()));
+                        }
+                    }
+                }
+                if (!combinedTags.isEmpty())
+                {
+                    varTagsMap.putIfAbsent(logicalKey, combinedTags);
+                    runVariationTagsMap.computeIfAbsent(run.getId(), k -> new HashMap<>()).put(logicalKey, combinedTags);
+                }
+
+                runVariationsMap.computeIfAbsent(run.getId(), k -> new ArrayList<>())
+                    .add(new RunVariationCost(logicalKey, exec.getLlmCost(), exec.getLlmTotalTokens()));
+
+                final boolean hasBugs = bugsMap.containsKey(canonicalId) && !bugsMap.get(canonicalId).isEmpty();
+                final String rawStatus = exec.getStatus() != null ? exec.getStatus() : "passed-clean";
+                final String effectiveStatus;
+                if ("failed".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus))
+                {
+                    effectiveStatus = hasBugs ? "failed-known" : "failed-unknown";
+                }
+                else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus) || "healed".equalsIgnoreCase(rawStatus))
+                {
+                    effectiveStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
+                }
+                else
+                {
+                    effectiveStatus = rawStatus;
+                }
+
+                final String mode = (exec.getDisplayMode() != null && !exec.getDisplayMode().isBlank())
+                    ? exec.getDisplayMode()
+                    : ((exec.getMode() != null && !exec.getMode().isBlank()) ? exec.getMode() : "JAVA");
+
+                runExecutionsMap.computeIfAbsent(run.getId(), k -> new LinkedHashMap<>())
+                    .put(logicalKey, new VariationRunState(effectiveStatus, exec.isHealed(), mode, exec.isFlaky()));
+
+                if (isRunInSnapshot && !variationStatus.containsKey(logicalKey))
+                {
+                    final String env = (run.getEnvironment() != null && !run.getEnvironment().isBlank())
+                        ? run.getEnvironment()
+                        : "Default";
+                    final String bName = (run.getBatchName() != null && !run.getBatchName().isBlank())
+                        ? run.getBatchName()
+                        : "Default";
+
+                    variationStatus.put(logicalKey, effectiveStatus);
+                    variationHealed.put(logicalKey, exec.isHealed());
+                    variationMode.put(logicalKey, mode);
+                    variationFlaky.put(logicalKey, exec.isFlaky());
+                    variationFlakyFailureCount.put(logicalKey, exec.getFlakyFailureCount());
+                    variationFlakyTotalRuns.put(logicalKey, exec.getFlakyTotalRuns());
+                    variationFlakyReason.put(logicalKey, exec.getFlakyReason());
+                    variationRunId.put(logicalKey, run.getId());
+                    variationEnvironment.put(logicalKey, env);
+                    variationBrowser.put(logicalKey, normBr);
+                    variationLocation.put(logicalKey, normLoc);
+                    variationArea.put(logicalKey, normArea);
+                    variationBatch.put(logicalKey, bName);
+                    variationTags.put(logicalKey, exec.getTags() != null ? exec.getTags() : Collections.emptyMap());
+                    variationLlmCost.put(logicalKey, exec.getLlmCost());
+                    variationLlmTokens.put(logicalKey, exec.getLlmTotalTokens());
+                    variationExecutionId.put(logicalKey, exec.getId());
+                    variationCanonicalId.put(logicalKey, canonicalId);
+                    if (bugsMap.containsKey(canonicalId))
+                    {
+                        variationBugs.put(logicalKey, bugsMap.get(canonicalId));
+                    }
+                    if (bugSeveritiesMap.containsKey(canonicalId))
+                    {
+                        variationBugSeverities.put(logicalKey, bugSeveritiesMap.get(canonicalId));
+                    }
+                }
+            }
+        }
+
+        int passClean = 0;
+        int passHealed = 0;
+        int passAi = 0;
+        int fixedClean = 0;
+        int fixedHealed = 0;
+        int fixedAi = 0;
+        int knownClean = 0;
+        int knownHealed = 0;
+        int knownAi = 0;
+        int unknownClean = 0;
+        int unknownHealed = 0;
+        int unknownAi = 0;
+        int ignored = 0;
+
+        final Map<String, ScopedRunStats> runStatsMap = new LinkedHashMap<>();
+        for (final String key : variationStatus.keySet())
+        {
+            final String rId = variationRunId.get(key);
+            final ScopedRunStats runStats = (rId != null)
+                ? runStatsMap.computeIfAbsent(rId, k -> new ScopedRunStats())
+                : null;
+            if (runStats != null)
+            {
+                final String b = variationBrowser.get(key);
+                if (b != null && !b.isBlank())
+                {
+                    runStats.browsers.add(b);
+                }
+                final String l = variationLocation.get(key);
+                if (l != null && !l.isBlank())
+                {
+                    runStats.locales.add(l);
+                }
+            }
+
+            if (Boolean.TRUE.equals(variationFlaky.get(key)) && runStats != null)
+            {
+                runStats.flakyCount++;
+            }
+
+            final String status = variationStatus.get(key);
+            final boolean healed = Boolean.TRUE.equals(variationHealed.get(key));
+            final String mode = variationMode.getOrDefault(key, "JAVA");
+            final boolean ai = "AI".equalsIgnoreCase(mode);
+
+            if ("passed-clean".equalsIgnoreCase(status) || "passed".equalsIgnoreCase(status) || "succeeded".equalsIgnoreCase(status))
+            {
+                if (healed)
+                {
+                    passHealed++;
+                    if (runStats != null)
+                    {
+                        runStats.passHealed++;
+                    }
+                }
+                else if (ai)
+                {
+                    passAi++;
+                    if (runStats != null)
+                    {
+                        runStats.passAi++;
+                    }
+                }
+                else
+                {
+                    passClean++;
+                    if (runStats != null)
+                    {
+                        runStats.passClean++;
+                    }
+                }
+            }
+            else if ("succeeded-fixed".equalsIgnoreCase(status) || "fixed".equalsIgnoreCase(status))
+            {
+                if (healed)
+                {
+                    fixedHealed++;
+                    if (runStats != null)
+                    {
+                        runStats.fixedHealed++;
+                    }
+                }
+                else if (ai)
+                {
+                    fixedAi++;
+                    if (runStats != null)
+                    {
+                        runStats.fixedAi++;
+                    }
+                }
+                else
+                {
+                    fixedClean++;
+                    if (runStats != null)
+                    {
+                        runStats.fixedClean++;
+                    }
+                }
+            }
+            else if ("failed-known".equalsIgnoreCase(status) || "known".equalsIgnoreCase(status))
+            {
+                if (healed)
+                {
+                    knownHealed++;
+                    if (runStats != null)
+                    {
+                        runStats.knownHealed++;
+                    }
+                }
+                else if (ai)
+                {
+                    knownAi++;
+                    if (runStats != null)
+                    {
+                        runStats.knownAi++;
+                    }
+                }
+                else
+                {
+                    knownClean++;
+                    if (runStats != null)
+                    {
+                        runStats.knownClean++;
+                    }
+                }
+            }
+            else if ("failed-unknown".equalsIgnoreCase(status) || "unknown".equalsIgnoreCase(status) || "failed".equalsIgnoreCase(status) || "error".equalsIgnoreCase(status))
+            {
+                if (healed)
+                {
+                    unknownHealed++;
+                    if (runStats != null)
+                    {
+                        runStats.unknownHealed++;
+                    }
+                }
+                else if (ai)
+                {
+                    unknownAi++;
+                    if (runStats != null)
+                    {
+                        runStats.unknownAi++;
+                    }
+                }
+                else
+                {
+                    unknownClean++;
+                    if (runStats != null)
+                    {
+                        runStats.unknownClean++;
+                    }
+                }
+            }
+            else
+            {
+                ignored++;
+                if (runStats != null)
+                {
+                    runStats.ignored++;
+                }
+            }
+        }
+
+        final int totalPassed = passClean + passHealed + passAi;
+        final int totalFixed = fixedClean + fixedHealed + fixedAi;
+        final int totalKnown = knownClean + knownHealed + knownAi;
+        final int totalUnknown = unknownClean + unknownHealed + unknownAi;
+        final int totalTests = totalPassed + totalFixed + totalKnown + totalUnknown + ignored;
+
+        final Set<String> contributingRunIds = new LinkedHashSet<>(variationRunId.values());
+        final List<TestRunEntity> contributingRuns = new ArrayList<>();
+        for (final TestRunEntity r : eligibleRuns)
+        {
+            if (r.getId() != null && contributingRunIds.contains(r.getId()))
+            {
+                final ScopedRunStats stats = runStatsMap.get(r.getId());
+                final TestRunEntity scopedRun = new TestRunEntity();
+                scopedRun.setId(r.getId());
+                scopedRun.setBatchName(r.getBatchName());
+                scopedRun.setStatus(r.getStatus());
+                scopedRun.setTriggerSource(r.getTriggerSource());
+                scopedRun.setEnvironment(r.getEnvironment());
+                scopedRun.setTimestampLabel(r.getTimestampLabel());
+                scopedRun.setStartTimeMs(r.getStartTimeMs());
+                scopedRun.setEndTimeMs(r.getEndTimeMs());
+                scopedRun.setRunComment(r.getRunComment());
+                scopedRun.setRunJsonPath(r.getRunJsonPath());
+                scopedRun.setIsDeleted(false);
+                scopedRun.setTags(r.getTags());
+
+                if (stats != null)
+                {
+                    scopedRun.setPassedHealedCount(stats.passHealed);
+                    scopedRun.setPassedAiCount(stats.passAi);
+                    final int runPassed = stats.passClean + stats.passHealed + stats.passAi;
+                    scopedRun.setPassedCount(runPassed);
+
+                    scopedRun.setSucceededFixedHealedCount(stats.fixedHealed);
+                    scopedRun.setSucceededFixedAiCount(stats.fixedAi);
+                    final int runFixed = stats.fixedClean + stats.fixedHealed + stats.fixedAi;
+                    scopedRun.setSucceededFixedCount(runFixed);
+
+                    scopedRun.setFailedKnownHealedCount(stats.knownHealed);
+                    scopedRun.setFailedKnownAiCount(stats.knownAi);
+                    final int runKnown = stats.knownClean + stats.knownHealed + stats.knownAi;
+                    scopedRun.setFailedKnownCount(runKnown);
+
+                    scopedRun.setFailedUnknownHealedCount(stats.unknownHealed);
+                    scopedRun.setFailedUnknownAiCount(stats.unknownAi);
+                    final int runUnknown = stats.unknownClean + stats.unknownHealed + stats.unknownAi;
+                    scopedRun.setFailedUnknownCount(runUnknown);
+
+                    scopedRun.setIgnoredCount(stats.ignored);
+                    scopedRun.setFlakyCount(stats.flakyCount);
+                    final int runTotal = runPassed + runFixed + runKnown + runUnknown + stats.ignored;
+                    scopedRun.setTotalTests(runTotal);
+                    scopedRun.setPassRate(runTotal > 0 ? ((double) (runPassed + runFixed) / runTotal * 100.0) : 0.0);
+
+                    if (!stats.browsers.isEmpty())
+                    {
+                        scopedRun.setBrowsersCsv(String.join(",", stats.browsers));
+                    }
+                    else
+                    {
+                        scopedRun.setBrowsersCsv(r.getBrowsersCsv());
+                    }
+
+                    if (!stats.locales.isEmpty())
+                    {
+                        scopedRun.setLocalesCsv(String.join(",", stats.locales));
+                    }
+                    else
+                    {
+                        scopedRun.setLocalesCsv(r.getLocalesCsv());
+                    }
+                }
+                else
+                {
+                    scopedRun.setTotalTests(0);
+                    scopedRun.setPassRate(0.0);
+                    scopedRun.setBrowsersCsv(r.getBrowsersCsv());
+                    scopedRun.setLocalesCsv(r.getLocalesCsv());
+                }
+
+                contributingRuns.add(scopedRun);
+            }
+        }
+
+        final String latestRunId = !contributingRuns.isEmpty() ? contributingRuns.get(0).getId() : null;
+        final String lastExecuted = !contributingRuns.isEmpty() ? contributingRuns.get(0).getTimestampLabel() : "No runs";
+        final String passRateText = totalTests > 0
+            ? String.format(Locale.ROOT, "%.0f%% Pass", ((double) (totalPassed + totalFixed) / totalTests * 100.0))
+            : "N/A";
+
+        final List<String> distinctLocales = variationLocation.values().stream().distinct().sorted().collect(Collectors.toList());
+        final List<String> distinctBrowsers = variationBrowser.values().stream().distinct().sorted().collect(Collectors.toList());
+
+        final String environment = !eligibleRuns.isEmpty() && eligibleRuns.get(0).getEnvironment() != null
+            ? eligibleRuns.get(0).getEnvironment()
+            : "Default";
+
+        final BatchSummaryDto summary = new BatchSummaryDto(
+            "batch-" + effectiveBatchName,
+            effectiveBatchName,
+            environment,
+            "",
+            lastExecuted,
+            passRateText,
+            "",
+            distinctLocales,
+            distinctBrowsers,
+            latestRunId,
+            totalPassed,
+            totalFixed,
+            totalKnown,
+            totalUnknown,
+            ignored,
+            totalTests,
+            passHealed,
+            fixedHealed,
+            knownHealed,
+            unknownHealed,
+            passAi,
+            fixedAi,
+            knownAi,
+            unknownAi
+        );
+
+        final String[] palette = new String[] {
+            "#10b981", "#3b82f6", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#6366f1", "#14b8a6"
+        };
+
+        final Map<String, Integer> bMap = new LinkedHashMap<>();
+        for (final String br : variationBrowser.values())
+        {
+            bMap.put(br, bMap.getOrDefault(br, 0) + 1);
+        }
+        final List<DistributionRatioDto> browserRatios = new ArrayList<>();
+        final int bTotal = bMap.values().stream().mapToInt(Integer::intValue).sum();
+        int colorIdx = 0;
+        for (final Map.Entry<String, Integer> entry : bMap.entrySet())
+        {
+            final double pct = bTotal > 0 ? ((double) entry.getValue() / bTotal * 100.0) : 0.0;
+            browserRatios.add(new DistributionRatioDto(
+                entry.getKey(),
+                entry.getValue(),
+                pct,
+                palette[colorIdx % palette.length]
+            ));
+            colorIdx++;
+        }
+
+        final Map<String, Integer> lMap = new LinkedHashMap<>();
+        for (final String loc : variationLocation.values())
+        {
+            lMap.put(loc, lMap.getOrDefault(loc, 0) + 1);
+        }
+        final List<DistributionRatioDto> localeRatios = new ArrayList<>();
+        final int lTotal = lMap.values().stream().mapToInt(Integer::intValue).sum();
+        colorIdx = 0;
+        for (final Map.Entry<String, Integer> entry : lMap.entrySet())
+        {
+            final double pct = lTotal > 0 ? ((double) entry.getValue() / lTotal * 100.0) : 0.0;
+            localeRatios.add(new DistributionRatioDto(
+                entry.getKey(),
+                entry.getValue(),
+                pct,
+                palette[colorIdx % palette.length]
+            ));
+            colorIdx++;
+        }
+
+        final Map<String, Integer> eMap = new LinkedHashMap<>();
+        for (final String env : variationEnvironment.values())
+        {
+            eMap.put(env, eMap.getOrDefault(env, 0) + 1);
+        }
+        final List<DistributionRatioDto> environmentRatios = new ArrayList<>();
+        final int eTotal = eMap.values().stream().mapToInt(Integer::intValue).sum();
+        colorIdx = 0;
+        for (final Map.Entry<String, Integer> entry : eMap.entrySet())
+        {
+            final double pct = eTotal > 0 ? ((double) entry.getValue() / eTotal * 100.0) : 0.0;
+            environmentRatios.add(new DistributionRatioDto(
+                entry.getKey(),
+                entry.getValue(),
+                pct,
+                palette[colorIdx % palette.length]
+            ));
+            colorIdx++;
+        }
+
+        final Map<String, Integer> aMap = new LinkedHashMap<>();
+        for (final String ar : variationArea.values())
+        {
+            aMap.put(ar, aMap.getOrDefault(ar, 0) + 1);
+        }
+        final List<DistributionRatioDto> areaRatios = new ArrayList<>();
+        final int aTotal = aMap.values().stream().mapToInt(Integer::intValue).sum();
+        colorIdx = 0;
+        for (final Map.Entry<String, Integer> entry : aMap.entrySet())
+        {
+            final double pct = aTotal > 0 ? ((double) entry.getValue() / aTotal * 100.0) : 0.0;
+            areaRatios.add(new DistributionRatioDto(
+                entry.getKey(),
+                entry.getValue(),
+                pct,
+                palette[colorIdx % palette.length]
+            ));
+            colorIdx++;
+        }
+
+        final Map<String, Integer> tagMap = new LinkedHashMap<>();
+        for (final String tg : variationBatch.values())
+        {
+            tagMap.put(tg, tagMap.getOrDefault(tg, 0) + 1);
+        }
+        final List<DistributionRatioDto> tagRatios = new ArrayList<>();
+        final int tagTotal = tagMap.values().stream().mapToInt(Integer::intValue).sum();
+        colorIdx = 0;
+        for (final Map.Entry<String, Integer> entry : tagMap.entrySet())
+        {
+            final double pct = tagTotal > 0 ? ((double) entry.getValue() / tagTotal * 100.0) : 0.0;
+            tagRatios.add(new DistributionRatioDto(
+                entry.getKey(),
+                entry.getValue(),
+                pct,
+                palette[colorIdx % palette.length]
+            ));
+            colorIdx++;
+        }
+
+        final Map<String, TestRunEntity> eligibleRunMap = new LinkedHashMap<>();
+        for (final TestRunEntity r : eligibleRuns)
+        {
+            if (r.getId() != null)
+            {
+                eligibleRunMap.put(r.getId(), r);
+            }
+        }
+
+        populateRunTags(eligibleRuns);
+
+        final Set<String> discoveredTagKeys = new LinkedHashSet<>(getAllTagKeys());
+        for (final TestRunEntity r : eligibleRuns)
+        {
+            if (r.getTags() != null)
+            {
+                for (final TestRunTagEntity t : r.getTags())
+                {
+                    if (t.getTagKey() != null && !t.getTagKey().isBlank())
+                    {
+                        discoveredTagKeys.add(t.getTagKey().trim());
+                    }
+                }
+            }
+        }
+        for (final Map<String, List<String>> vTags : variationTags.values())
+        {
+            if (vTags != null)
+            {
+                for (final String vKey : vTags.keySet())
+                {
+                    if (vKey != null && !vKey.isBlank())
+                    {
+                        discoveredTagKeys.add(vKey.trim());
+                    }
+                }
+            }
+        }
+        final Set<String> builtInKeywords = Set.of("browser", "browsers", "none", "all");
+        final List<String> distinctTagKeys = discoveredTagKeys.stream()
+            .filter(k -> k != null && !k.isBlank() && !builtInKeywords.contains(k.toLowerCase(Locale.ROOT)))
+            .collect(Collectors.toList());
+
+        final Map<String, Boolean> isBoolByTag = new HashMap<>();
+        for (final String tagKey : distinctTagKeys)
+        {
+            isBoolByTag.put(tagKey, isBooleanTag(tagKey, eligibleRuns));
+        }
+
+        final Map<String, List<DistributionRatioDto>> tagRatiosByType = new LinkedHashMap<>();
+        for (final String tagKey : distinctTagKeys)
+        {
+            final Map<String, Integer> valCounts = new LinkedHashMap<>();
+            final boolean isBool = Boolean.TRUE.equals(isBoolByTag.get(tagKey));
+            for (final String key : variationStatus.keySet())
+            {
+                final String rId = variationRunId.get(key);
+                final TestRunEntity varRun = (rId != null) ? eligibleRunMap.get(rId) : null;
+                final Map<String, List<String>> vTags = variationTags.get(key);
+                final List<String> execTagVals = (vTags != null) ? TagUtils.findTagValues(vTags, tagKey) : Collections.emptyList();
+                final String effectiveVal;
+                if (isBool)
+                {
+                    if (!execTagVals.isEmpty())
+                    {
+                        final boolean hasTrue = execTagVals.stream().anyMatch(v -> "true".equalsIgnoreCase(v) || tagKey.equalsIgnoreCase(v));
+                        effectiveVal = hasTrue ? tagKey : "Not " + tagKey;
+                    }
+                    else
+                    {
+                        effectiveVal = (varRun != null && matchesTagCriteria(varRun, tagKey, Set.of(tagKey, "true")))
+                            ? tagKey
+                            : "Not " + tagKey;
+                    }
+                }
+                else
+                {
+                    if (!execTagVals.isEmpty())
+                    {
+                        effectiveVal = execTagVals.get(0);
+                    }
+                    else
+                    {
+                        final List<String> vals = (varRun != null) ? getRunTagValues(varRun, tagKey) : Collections.emptyList();
+                        if (!vals.isEmpty())
+                        {
+                            effectiveVal = vals.get(0);
+                        }
+                        else if ("locale".equalsIgnoreCase(tagKey) && variationLocation.containsKey(key))
+                        {
+                            effectiveVal = variationLocation.get(key);
+                        }
+                        else if ("area".equalsIgnoreCase(tagKey) && variationArea.containsKey(key))
+                        {
+                            effectiveVal = variationArea.get(key);
+                        }
+                        else
+                        {
+                            effectiveVal = "Default";
+                        }
+                    }
+                }
+                valCounts.put(effectiveVal, valCounts.getOrDefault(effectiveVal, 0) + 1);
+            }
+            final List<DistributionRatioDto> ratios = new ArrayList<>();
+            final int tTotal = valCounts.values().stream().mapToInt(Integer::intValue).sum();
+            int cIdx = 0;
+            for (final Map.Entry<String, Integer> entry : valCounts.entrySet())
+            {
+                final double pct = tTotal > 0 ? ((double) entry.getValue() / tTotal * 100.0) : 0.0;
+                ratios.add(new DistributionRatioDto(
+                    entry.getKey(),
+                    entry.getValue(),
+                    pct,
+                    palette[cIdx % palette.length]
+                ));
+                cIdx++;
+            }
+            tagRatiosByType.put(tagKey, ratios);
+        }
+        if (!tagRatiosByType.containsKey("batch") && !tagRatios.isEmpty())
+        {
+            tagRatiosByType.put("batch", tagRatios);
+        }
+
+        final List<BatchLatestVariationDto> latestVariations = new ArrayList<>();
+        for (final String key : variationStatus.keySet())
+        {
+            final String rId = variationRunId.get(key);
+            final TestRunEntity varRun = (rId != null) ? eligibleRunMap.get(rId) : null;
+            final Map<String, List<String>> vTags = variationTags.get(key);
+            final Map<String, String> varTags = new LinkedHashMap<>();
+            for (final String tagKey : distinctTagKeys)
+            {
+                final boolean isBool = Boolean.TRUE.equals(isBoolByTag.get(tagKey));
+                final List<String> execTagVals = (vTags != null) ? TagUtils.findTagValues(vTags, tagKey) : Collections.emptyList();
+                if (isBool)
+                {
+                    final String val;
+                    if (!execTagVals.isEmpty())
+                    {
+                        final boolean hasTrue = execTagVals.stream().anyMatch(v -> "true".equalsIgnoreCase(v) || tagKey.equalsIgnoreCase(v));
+                        val = hasTrue ? tagKey : "Not " + tagKey;
+                    }
+                    else
+                    {
+                        val = (varRun != null && matchesTagCriteria(varRun, tagKey, Set.of(tagKey, "true")))
+                            ? tagKey
+                            : "Not " + tagKey;
+                    }
+                    varTags.put(tagKey, val);
+                }
+                else
+                {
+                    if (!execTagVals.isEmpty())
+                    {
+                        varTags.put(tagKey, execTagVals.get(0));
+                    }
+                    else
+                    {
+                        final List<String> vals = (varRun != null) ? getRunTagValues(varRun, tagKey) : Collections.emptyList();
+                        if (!vals.isEmpty())
+                        {
+                            varTags.put(tagKey, vals.get(0));
+                        }
+                        else if ("locale".equalsIgnoreCase(tagKey) && variationLocation.containsKey(key))
+                        {
+                            varTags.put(tagKey, variationLocation.get(key));
+                        }
+                        else if ("area".equalsIgnoreCase(tagKey) && variationArea.containsKey(key))
+                        {
+                            varTags.put(tagKey, variationArea.get(key));
+                        }
+                        else
+                        {
+                            varTags.put(tagKey, "Default");
+                        }
+                    }
+                }
+            }
+
+            latestVariations.add(new BatchLatestVariationDto(
+                key,
+                variationCanonicalId.getOrDefault(key, key),
+                variationStatus.get(key),
+                Boolean.TRUE.equals(variationHealed.get(key)),
+                variationMode.getOrDefault(key, "JAVA"),
+                rId,
+                variationEnvironment.getOrDefault(key, "Default"),
+                variationBrowser.getOrDefault(key, "Default"),
+                variationLocation.getOrDefault(key, "Default"),
+                variationArea.getOrDefault(key, "@Browsing (default)"),
+                variationBatch.getOrDefault(key, "Default"),
+                varTags,
+                variationLlmCost.getOrDefault(key, 0.0),
+                variationLlmTokens.getOrDefault(key, 0L),
+                variationExecutionId.get(key),
+                variationBugs.getOrDefault(key, Collections.emptyList()),
+                variationBugSeverities.getOrDefault(key, Collections.emptyList()),
+                Boolean.TRUE.equals(variationFlaky.get(key)),
+                variationFlakyFailureCount.getOrDefault(key, 0),
+                variationFlakyTotalRuns.getOrDefault(key, 0),
+                variationFlakyReason.getOrDefault(key, "")
+            ));
+        }
+
+        double latestTotalLlmCost = 0.0;
+        long latestTotalLlmTokens = 0L;
+        for (final String key : variationStatus.keySet())
+        {
+            latestTotalLlmCost += variationLlmCost.getOrDefault(key, 0.0);
+            latestTotalLlmTokens += variationLlmTokens.getOrDefault(key, 0L);
+        }
+
+        // Group eligible runs by calendar date (chronologically ascending)
+        final Map<LocalDate, List<TestRunEntity>> runsByDate = new TreeMap<>();
+        for (final TestRunEntity r : eligibleRuns)
+        {
+            final LocalDate d = resolveRunDate(r);
+            runsByDate.computeIfAbsent(d, k -> new ArrayList<>()).add(r);
+        }
+
+        final List<TokenCostPointGroupDto> pointGroups = new ArrayList<>();
+        final List<Double> trendPoints = new ArrayList<>();
+        double prevDayCost = -1.0;
+
+        int dayIdx = 0;
+        final int totalDays = runsByDate.size();
+
+        for (final Map.Entry<LocalDate, List<TestRunEntity>> entry : runsByDate.entrySet())
+        {
+            final LocalDate dayDate = entry.getKey();
+            final List<TestRunEntity> dayRuns = entry.getValue();
+
+            // Sort runs on this day chronologically
+            dayRuns.sort((a, b) -> Long.compare(
+                a.getStartTimeMs() != null ? a.getStartTimeMs() : 0L,
+                b.getStartTimeMs() != null ? b.getStartTimeMs() : 0L));
+
+            double dayTotalCost = 0.0;
+            long dayTotalTokens = 0L;
+            final List<ContributingRunCostDto> dayContribRuns = new ArrayList<>();
+
+            for (final TestRunEntity r : dayRuns)
+            {
+                final List<RunVariationCost> variations = runVariationsMap.get(r.getId());
+                double runCost = 0.0;
+                long runTokens = 0L;
+                int runTests = 0;
+                if (variations != null)
+                {
+                    runTests = variations.size();
+                    for (final RunVariationCost v : variations)
+                    {
+                        runCost += v.llmCost();
+                        runTokens += v.llmTokens();
+                    }
+                }
+                else
+                {
+                    runTests = (r.getTotalTests() != null) ? r.getTotalTests() : 0;
+                }
+
+                dayTotalCost += runCost;
+                dayTotalTokens += runTokens;
+
+                dayContribRuns.add(new ContributingRunCostDto(
+                    r.getId(),
+                    r.getTimestampLabel(),
+                    r.getEnvironment(),
+                    r.getBrowsersCsv(),
+                    r.getBatchName(),
+                    runTests,
+                    runCost,
+                    runTokens,
+                    0.0
+                ));
+            }
+
+            final List<ContributingRunCostDto> finalizedRuns = new ArrayList<>();
+            for (final ContributingRunCostDto cr : dayContribRuns)
+            {
+                final double pct = (dayTotalCost > 0.0) ? (cr.getContributedCost() / dayTotalCost * 100.0) : 0.0;
+                finalizedRuns.add(new ContributingRunCostDto(
+                    cr.getRunId(),
+                    cr.getTimestampLabel(),
+                    cr.getEnvironment(),
+                    cr.getBrowser(),
+                    cr.getBatchName(),
+                    cr.getContributedTestCount(),
+                    cr.getContributedCost(),
+                    cr.getContributedTokens(),
+                    pct
+                ));
+            }
+
+            final double deltaCost;
+            final double deltaPercentage;
+            if (prevDayCost >= 0.0)
+            {
+                deltaCost = dayTotalCost - prevDayCost;
+                if (prevDayCost > 0.0)
+                {
+                    deltaPercentage = (deltaCost / prevDayCost) * 100.0;
+                }
+                else
+                {
+                    deltaPercentage = (deltaCost > 0.0) ? 100.0 : 0.0;
+                }
+            }
+            else
+            {
+                deltaCost = 0.0;
+                deltaPercentage = 0.0;
+            }
+
+            final boolean isLatestDay = (dayIdx == totalDays - 1);
+            final String dayDateLabel = dayDate.toString();
+            final String anchorRunId = !dayRuns.isEmpty() ? dayRuns.get(dayRuns.size() - 1).getId() : "day-" + dayDateLabel;
+            final String pointLabel = String.format(Locale.ROOT, "Day %d of %d%s — %s (%d %s)",
+                dayIdx + 1, totalDays, isLatestDay ? " (Latest)" : "", dayDateLabel, dayRuns.size(), dayRuns.size() == 1 ? "run" : "runs");
+
+            pointGroups.add(new TokenCostPointGroupDto(
+                dayIdx,
+                pointLabel,
+                anchorRunId,
+                dayDateLabel,
+                dayTotalCost,
+                dayTotalTokens,
+                deltaCost,
+                deltaPercentage,
+                finalizedRuns
+            ));
+
+            trendPoints.add(dayTotalCost);
+            prevDayCost = dayTotalCost;
+            dayIdx++;
+        }
+
+        final double currentDailyCost = !trendPoints.isEmpty() ? trendPoints.get(trendPoints.size() - 1) : 0.0;
+        final long currentDailyTokens = !pointGroups.isEmpty() ? pointGroups.get(pointGroups.size() - 1).getTotalTokens() : 0L;
+        final double previousDayCost = trendPoints.size() >= 2 ? trendPoints.get(trendPoints.size() - 2) : -1.0;
+
+        final TokenCostTrendDto tokenCostTrend = new TokenCostTrendDto(
+            currentDailyCost,
+            previousDayCost,
+            currentDailyTokens,
+            trendPoints,
+            pointGroups
+        );
+
+        final List<TestRunEntity> chronologicalRuns = new ArrayList<>(eligibleRuns);
+        Collections.reverse(chronologicalRuns);
+
+        final Map<String, VariationRunState> cumulativeSuiteState = new LinkedHashMap<>();
+        final Map<String, Map<String, List<String>>> cumulativeVariationTags = new HashMap<>();
+        final List<BatchSuiteEvolutionPointDto> evolutionPoints = new ArrayList<>();
+
+        int runIdx = 0;
+        for (final TestRunEntity r : chronologicalRuns)
+        {
+            final Map<String, VariationRunState> runExecs = runExecutionsMap.getOrDefault(r.getId(), Collections.emptyMap());
+            final Map<String, Map<String, List<String>>> runVarTags = runVariationTagsMap.getOrDefault(r.getId(), Collections.emptyMap());
+            int newlyIntroducedCount = 0;
+
+            for (final Map.Entry<String, VariationRunState> entry : runExecs.entrySet())
+            {
+                final String vKey = entry.getKey();
+                if (!cumulativeSuiteState.containsKey(vKey))
+                {
+                    newlyIntroducedCount++;
+                }
+                cumulativeSuiteState.put(vKey, entry.getValue());
+                final Map<String, List<String>> vTags = runVarTags.get(vKey);
+                if (vTags != null)
+                {
+                    cumulativeVariationTags.put(vKey, vTags);
+                }
+            }
+
+            int pClean = 0;
+            int pHealed = 0;
+            int pAi = 0;
+            int fClean = 0;
+            int fHealed = 0;
+            int fAi = 0;
+            int kClean = 0;
+            int kHealed = 0;
+            int kAi = 0;
+            int uClean = 0;
+            int uHealed = 0;
+            int uAi = 0;
+            int ign = 0;
+            int pPlaybook = 0;
+            int flakyCumulative = 0;
+
+            for (final VariationRunState state : cumulativeSuiteState.values())
+            {
+                if (state.flaky())
+                {
+                    flakyCumulative++;
+                }
+
+                final String st = state.status();
+                final boolean isHealed = state.healed();
+                final boolean isAi = "AI".equalsIgnoreCase(state.mode());
+                final boolean isPlaybook = "PLAYBOOK".equalsIgnoreCase(state.mode()) && !isHealed;
+
+                if (isPlaybook)
+                {
+                    pPlaybook++;
+                }
+
+                if ("passed-clean".equalsIgnoreCase(st) || "passed".equalsIgnoreCase(st) || "succeeded".equalsIgnoreCase(st))
+                {
+                    if (isHealed)
+                    {
+                        pHealed++;
+                    }
+                    else if (isAi)
+                    {
+                        pAi++;
+                    }
+                    else
+                    {
+                        pClean++;
+                    }
+                }
+                else if ("succeeded-fixed".equalsIgnoreCase(st) || "fixed".equalsIgnoreCase(st))
+                {
+                    if (isHealed)
+                    {
+                        fHealed++;
+                    }
+                    else if (isAi)
+                    {
+                        fAi++;
+                    }
+                    else
+                    {
+                        fClean++;
+                    }
+                }
+                else if ("failed-known".equalsIgnoreCase(st) || "known".equalsIgnoreCase(st))
+                {
+                    if (isHealed)
+                    {
+                        kHealed++;
+                    }
+                    else if (isAi)
+                    {
+                        kAi++;
+                    }
+                    else
+                    {
+                        kClean++;
+                    }
+                }
+                else if ("failed-unknown".equalsIgnoreCase(st) || "failed".equalsIgnoreCase(st) || "unknown".equalsIgnoreCase(st) || "error".equalsIgnoreCase(st))
+                {
+                    if (isHealed)
+                    {
+                        uHealed++;
+                    }
+                    else if (isAi)
+                    {
+                        uAi++;
+                    }
+                    else
+                    {
+                        uClean++;
+                    }
+                }
+                else if ("ignored".equalsIgnoreCase(st) || "skipped".equalsIgnoreCase(st))
+                {
+                    ign++;
+                }
+                else
+                {
+                    pClean++;
+                }
+            }
+
+            final int currentKnownTotal = cumulativeSuiteState.size();
+            final int passedTotal = pClean + pHealed + pAi + fClean + fHealed + fAi;
+            final double passRate = (currentKnownTotal > 0) ? (passedTotal * 100.0 / currentKnownTotal) : 0.0;
+            final String tsLabel = (r.getTimestampLabel() != null && !r.getTimestampLabel().isBlank())
+                ? r.getTimestampLabel()
+                : ("Run " + (runIdx + 1));
+
+            final Map<String, Map<String, Integer>> tagCountsByType = new LinkedHashMap<>();
+            for (final String vKey : cumulativeSuiteState.keySet())
+            {
+                final String areaVal = varAreaMap.getOrDefault(vKey, "Default");
+                tagCountsByType.computeIfAbsent("area", k -> new LinkedHashMap<>()).merge(areaVal, 1, Integer::sum);
+
+                final String browserVal = varBrowserMap.getOrDefault(vKey, "Default");
+                tagCountsByType.computeIfAbsent("browser", k -> new LinkedHashMap<>()).merge(browserVal, 1, Integer::sum);
+
+                final String locVal = varLocationMap.getOrDefault(vKey, "Default");
+                tagCountsByType.computeIfAbsent("locale", k -> new LinkedHashMap<>()).merge(locVal, 1, Integer::sum);
+                tagCountsByType.computeIfAbsent("location", k -> new LinkedHashMap<>()).merge(locVal, 1, Integer::sum);
+
+                final String envVal = varEnvMap.getOrDefault(vKey, "Default");
+                tagCountsByType.computeIfAbsent("environment", k -> new LinkedHashMap<>()).merge(envVal, 1, Integer::sum);
+                tagCountsByType.computeIfAbsent("env", k -> new LinkedHashMap<>()).merge(envVal, 1, Integer::sum);
+
+                Map<String, List<String>> cTags = cumulativeVariationTags.get(vKey);
+                if (cTags == null || cTags.isEmpty())
+                {
+                    cTags = varTagsMap.get(vKey);
+                }
+                if (cTags != null && !cTags.isEmpty())
+                {
+                    for (final Map.Entry<String, List<String>> tEntry : cTags.entrySet())
+                    {
+                        final String tKey = tEntry.getKey().toLowerCase(Locale.ROOT);
+                        if ("area".equals(tKey) || "browser".equals(tKey) || "locale".equals(tKey)
+                            || "location".equals(tKey) || "environment".equals(tKey) || "env".equals(tKey))
+                        {
+                            continue;
+                        }
+                        if (tEntry.getValue() != null)
+                        {
+                            for (final String tVal : tEntry.getValue())
+                            {
+                                if (tVal != null && !tVal.isBlank())
+                                {
+                                    tagCountsByType.computeIfAbsent(tKey, k -> new LinkedHashMap<>()).merge(tVal.trim(), 1, Integer::sum);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            evolutionPoints.add(new BatchSuiteEvolutionPointDto(
+                r.getId(),
+                runIdx,
+                tsLabel,
+                currentKnownTotal,
+                newlyIntroducedCount,
+                pClean,
+                pHealed,
+                pAi,
+                fClean,
+                fHealed,
+                fAi,
+                kClean,
+                kHealed,
+                kAi,
+                uClean,
+                uHealed,
+                uAi,
+                ign,
+                pPlaybook,
+                passRate,
+                flakyCumulative,
+                tagCountsByType
+            ));
+            runIdx++;
+        }
+
+        final BatchSuiteEvolutionDto suiteEvolution = new BatchSuiteEvolutionDto(evolutionPoints, effectiveAsOfRunId);
+
+        return new BatchLatestExecutionsDto(summary, contributingRuns, browserRatios, localeRatios, environmentRatios, areaRatios, tagRatios, tagRatiosByType, latestVariations, variationStatus.size(), eligibleRuns.size(), eligibleRuns, tokenCostTrend, suiteEvolution, effectiveAsOfRunId, asOfTimestampLabel, isHistoricalSnapshot);
+    }
+
+    private LocalDate resolveRunDate(final TestRunEntity run)
+    {
+        if (run == null)
+        {
+            return LocalDate.now();
+        }
+        if (run.getStartTimeMs() != null && run.getStartTimeMs() > 0L)
+        {
+            return Instant.ofEpochMilli(run.getStartTimeMs()).atZone(ZoneId.systemDefault()).toLocalDate();
+        }
+        if (run.getTimestampLabel() != null && run.getTimestampLabel().trim().length() >= 10)
+        {
+            final String raw = run.getTimestampLabel().trim().substring(0, 10);
+            try
+            {
+                return LocalDate.parse(raw);
+            }
+            catch (final Exception e)
+            {
+                // ignore and fallback
+            }
+        }
+        return LocalDate.now();
+    }
+
+    private boolean matchesRunCriteria(
+        final TestRunEntity run,
+        final Set<String> runBrowsers,
+        final Set<String> runLocales,
+        final Set<String> runEnvs,
+        final Set<String> runAreas,
+        final Set<String> runTags,
+        final Map<String, String> runAreasMap)
+    {
+        return matchesRunCriteria(
+            run,
+            runBrowsers,
+            Collections.emptySet(),
+            runLocales,
+            Collections.emptySet(),
+            runEnvs,
+            Collections.emptySet(),
+            runAreas,
+            Collections.emptySet(),
+            runTags,
+            Collections.emptySet(),
+            runAreasMap,
+            Collections.emptyMap(),
+            Collections.emptyMap()
+        );
+    }
+
+    private boolean matchesRunCriteria(
+        final TestRunEntity run,
+        final Set<String> runBrowsers,
+        final Set<String> runLocales,
+        final Set<String> runEnvs,
+        final Set<String> runAreas,
+        final Set<String> runTags,
+        final Map<String, String> runAreasMap,
+        final Map<String, Set<String>> runTagsByType)
+    {
+        return matchesRunCriteria(
+            run,
+            runBrowsers,
+            Collections.emptySet(),
+            runLocales,
+            Collections.emptySet(),
+            runEnvs,
+            Collections.emptySet(),
+            runAreas,
+            Collections.emptySet(),
+            runTags,
+            Collections.emptySet(),
+            runAreasMap,
+            runTagsByType,
+            Collections.emptyMap()
+        );
+    }
+
+    private boolean matchesRunCriteria(
+        final TestRunEntity run,
+        final Set<String> runBrowsers,
+        final Set<String> excludedRunBrowsers,
+        final Set<String> runLocales,
+        final Set<String> excludedRunLocales,
+        final Set<String> runEnvs,
+        final Set<String> excludedRunEnvs,
+        final Set<String> runAreas,
+        final Set<String> excludedRunAreas,
+        final Set<String> runTags,
+        final Set<String> excludedRunTags,
+        final Map<String, String> runAreasMap,
+        final Map<String, Set<String>> runTagsByType,
+        final Map<String, Set<String>> excludedRunTagsByType)
+    {
+        if (runBrowsers != null && runBrowsers.contains("_none_"))
+        {
+            return false;
+        }
+        if (runLocales != null && runLocales.contains("_none_"))
+        {
+            return false;
+        }
+        if (runEnvs != null && runEnvs.contains("_none_"))
+        {
+            return false;
+        }
+        if (runAreas != null && runAreas.contains("_none_"))
+        {
+            return false;
+        }
+        if (runTags != null && runTags.contains("_none_"))
+        {
+            return false;
+        }
+
+        if (runBrowsers != null && !runBrowsers.isEmpty())
+        {
+            final List<String> rBrowsers = (run.getBrowsersCsv() != null && !run.getBrowsersCsv().isBlank())
+                ? Arrays.stream(run.getBrowsersCsv().split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList())
+                : List.of("Chrome");
+            final boolean match = rBrowsers.stream().anyMatch(b ->
+                runBrowsers.stream().anyMatch(rb -> rb.equalsIgnoreCase(b) || rb.equalsIgnoreCase(normalizeBrowser(b)) || normalizeBrowser(rb).equalsIgnoreCase(normalizeBrowser(b)))
+            );
+            if (!match)
+            {
+                return false;
+            }
+        }
+        if (excludedRunBrowsers != null && !excludedRunBrowsers.isEmpty())
+        {
+            final List<String> rBrowsers = (run.getBrowsersCsv() != null && !run.getBrowsersCsv().isBlank())
+                ? Arrays.stream(run.getBrowsersCsv().split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList())
+                : List.of("Chrome");
+            final boolean allExcluded = rBrowsers.stream().allMatch(b ->
+                excludedRunBrowsers.stream().anyMatch(eb -> eb.equalsIgnoreCase(b) || eb.equalsIgnoreCase(normalizeBrowser(b)) || normalizeBrowser(eb).equalsIgnoreCase(normalizeBrowser(b)))
+            );
+            if (allExcluded)
+            {
+                return false;
+            }
+        }
+
+        if (runLocales != null && !runLocales.isEmpty())
+        {
+            final List<String> rLocales = (run.getLocalesCsv() != null && !run.getLocalesCsv().isBlank())
+                ? Arrays.stream(run.getLocalesCsv().split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList())
+                : List.of("Default");
+            final boolean match = rLocales.stream().anyMatch(l ->
+                runLocales.stream().anyMatch(rl -> rl.equalsIgnoreCase(l) || rl.equalsIgnoreCase(normalizeLocation(l)) || normalizeLocation(rl).equalsIgnoreCase(normalizeLocation(l)))
+            );
+            if (!match)
+            {
+                return false;
+            }
+        }
+        if (excludedRunLocales != null && !excludedRunLocales.isEmpty())
+        {
+            final List<String> rLocales = (run.getLocalesCsv() != null && !run.getLocalesCsv().isBlank())
+                ? Arrays.stream(run.getLocalesCsv().split(",")).map(String::trim).filter(s -> !s.isEmpty()).collect(Collectors.toList())
+                : List.of("Default");
+            final boolean allExcluded = rLocales.stream().allMatch(l ->
+                excludedRunLocales.stream().anyMatch(el -> el.equalsIgnoreCase(l) || el.equalsIgnoreCase(normalizeLocation(l)) || normalizeLocation(el).equalsIgnoreCase(normalizeLocation(l)))
+            );
+            if (allExcluded)
+            {
+                return false;
+            }
+        }
+
+        if (runEnvs != null && !runEnvs.isEmpty())
+        {
+            final String rEnv = (run.getEnvironment() != null && !run.getEnvironment().isBlank())
+                ? run.getEnvironment().trim()
+                : "Default";
+            final boolean match = runEnvs.stream().anyMatch(re -> re.equalsIgnoreCase(rEnv));
+            if (!match)
+            {
+                return false;
+            }
+        }
+        if (excludedRunEnvs != null && !excludedRunEnvs.isEmpty())
+        {
+            final String rEnv = (run.getEnvironment() != null && !run.getEnvironment().isBlank())
+                ? run.getEnvironment().trim()
+                : "Default";
+            final boolean match = excludedRunEnvs.stream().anyMatch(re -> re.equalsIgnoreCase(rEnv));
+            if (match)
+            {
+                return false;
+            }
+        }
+
+        if (runTags != null && !runTags.isEmpty())
+        {
+            final String rBatch = (run.getBatchName() != null && !run.getBatchName().isBlank())
+                ? run.getBatchName().trim()
+                : "Default";
+            final boolean match = runTags.stream().anyMatch(rt -> rt.equalsIgnoreCase(rBatch));
+            if (!match)
+            {
+                return false;
+            }
+        }
+        if (excludedRunTags != null && !excludedRunTags.isEmpty())
+        {
+            final String rBatch = (run.getBatchName() != null && !run.getBatchName().isBlank())
+                ? run.getBatchName().trim()
+                : "Default";
+            final boolean match = excludedRunTags.stream().anyMatch(rt -> rt.equalsIgnoreCase(rBatch));
+            if (match)
+            {
+                return false;
+            }
+        }
+
+        if (runTagsByType != null && !runTagsByType.isEmpty())
+        {
+            for (final Map.Entry<String, Set<String>> entry : runTagsByType.entrySet())
+            {
+                final String tagType = entry.getKey();
+                final Set<String> selectedVals = entry.getValue();
+                if (selectedVals == null || selectedVals.isEmpty())
+                {
+                    continue;
+                }
+                if (selectedVals.contains("_none_"))
+                {
+                    return false;
+                }
+                if (!matchesTagCriteria(run, tagType, selectedVals))
+                {
+                    return false;
+                }
+            }
+        }
+        if (excludedRunTagsByType != null && !excludedRunTagsByType.isEmpty())
+        {
+            for (final Map.Entry<String, Set<String>> entry : excludedRunTagsByType.entrySet())
+            {
+                final String tagType = entry.getKey();
+                final Set<String> excludedVals = entry.getValue();
+                if (excludedVals == null || excludedVals.isEmpty())
+                {
+                    continue;
+                }
+                if (isExcludedByTagCriteria(run, tagType, excludedVals))
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (runAreas != null && !runAreas.isEmpty())
+        {
+            final String areasCsv = (runAreasMap != null) ? runAreasMap.get(run.getId()) : null;
+            final List<String> rAreas;
+            if (areasCsv != null && !areasCsv.isBlank())
+            {
+                rAreas = Arrays.stream(areasCsv.split(",")).map(String::trim).filter(s -> !s.isEmpty()).map(AuraReportDataService::normalizeArea).collect(Collectors.toList());
+            }
+            else
+            {
+                rAreas = getRunAreas(run);
+            }
+            final boolean match = rAreas.stream().anyMatch(a ->
+                runAreas.stream().anyMatch(ra -> normalizeArea(ra).equalsIgnoreCase(a))
+            );
+            if (!match)
+            {
+                return false;
+            }
+        }
+        if (excludedRunAreas != null && !excludedRunAreas.isEmpty())
+        {
+            final String areasCsv = (runAreasMap != null) ? runAreasMap.get(run.getId()) : null;
+            final List<String> rAreas;
+            if (areasCsv != null && !areasCsv.isBlank())
+            {
+                rAreas = Arrays.stream(areasCsv.split(",")).map(String::trim).filter(s -> !s.isEmpty()).map(AuraReportDataService::normalizeArea).collect(Collectors.toList());
+            }
+            else
+            {
+                rAreas = getRunAreas(run);
+            }
+            final boolean allExcluded = rAreas.stream().allMatch(a ->
+                excludedRunAreas.stream().anyMatch(ea -> normalizeArea(ea).equalsIgnoreCase(a))
+            );
+            if (allExcluded)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    public List<String> getRunTagValues(final TestRunEntity run, final String tagKey)
+    {
+        if (run == null)
+        {
+            return Collections.emptyList();
+        }
+        final List<String> values = new ArrayList<>();
+        if ("batch".equalsIgnoreCase(tagKey))
+        {
+            if (run.getBatchName() != null && !run.getBatchName().isBlank())
+            {
+                values.add(run.getBatchName().trim());
+            }
+        }
+        else if ("environment".equalsIgnoreCase(tagKey) || "env".equalsIgnoreCase(tagKey))
+        {
+            if (run.getEnvironment() != null && !run.getEnvironment().isBlank())
+            {
+                values.add(run.getEnvironment().trim());
+            }
+        }
+
+        if (run.getTags() != null && !run.getTags().isEmpty())
+        {
+            for (final TestRunTagEntity t : run.getTags())
+            {
+                if (t.getTagKey() != null && t.getTagKey().equalsIgnoreCase(tagKey))
+                {
+                    if (t.getTagValue() != null && !t.getTagValue().isBlank())
+                    {
+                        final String trimmed = t.getTagValue().trim();
+                        if (!values.contains(trimmed))
+                        {
+                            values.add(trimmed);
+                        }
+                    }
+                }
+            }
+            return values;
+        }
+
+        if (tagRepository != null && run.getId() != null)
+        {
+            final List<TestRunTagEntity> tags = tagRepository.findByRunId(run.getId());
+            if (tags != null && !tags.isEmpty())
+            {
+                run.setTags(tags);
+                for (final TestRunTagEntity t : tags)
+                {
+                    if (t.getTagKey() != null && t.getTagKey().equalsIgnoreCase(tagKey))
+                    {
+                        if (t.getTagValue() != null && !t.getTagValue().isBlank())
+                        {
+                            final String trimmed = t.getTagValue().trim();
+                            if (!values.contains(trimmed))
+                            {
+                                values.add(trimmed);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return values;
+    }
+
+    public boolean isBooleanTag(final String tagKey)
+    {
+        return isBooleanTag(tagKey, Collections.emptyList());
+    }
+
+    public boolean isBooleanTag(final String tagKey, final Collection<TestRunEntity> runs)
+    {
+        if (tagKey == null || tagKey.isBlank())
+        {
+            return false;
+        }
+        final String cleanKey = tagKey.trim();
+        final Set<String> distinctVals = new LinkedHashSet<>();
+        if (tagRepository != null)
+        {
+            final List<String> dbVals = tagRepository.findDistinctTagValuesByTagKey(cleanKey);
+            if (dbVals != null)
+            {
+                for (final String v : dbVals)
+                {
+                    if (v != null && !v.isBlank())
+                    {
+                        final String lower = v.trim().toLowerCase(Locale.ROOT);
+                        distinctVals.add(lower);
+                        if (!"true".equals(lower) && !"false".equals(lower))
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        if (distinctVals.isEmpty() && runs != null && !runs.isEmpty())
+        {
+            for (final TestRunEntity r : runs)
+            {
+                final List<String> rVals = getRunTagValues(r, cleanKey);
+                for (final String v : rVals)
+                {
+                    if (v != null && !v.isBlank())
+                    {
+                        final String lower = v.trim().toLowerCase(Locale.ROOT);
+                        distinctVals.add(lower);
+                        if (!"true".equals(lower) && !"false".equals(lower))
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+        }
+        if (distinctVals.isEmpty())
+        {
+            return false;
+        }
+        return distinctVals.stream().allMatch(v -> "true".equals(v) || "false".equals(v));
+    }
+
+    public boolean matchesTagCriteria(final TestRunEntity run, final String tagKey, final Set<String> targetValues)
+    {
+        if (run == null || tagKey == null || targetValues == null || targetValues.isEmpty())
+        {
+            return true;
+        }
+        if (targetValues.contains("_none_"))
+        {
+            return false;
+        }
+        final List<String> runTagVals = getRunTagValues(run, tagKey);
+        final boolean isBool = isBooleanTag(tagKey, (run != null ? List.of(run) : Collections.emptyList()));
+
+        if (isBool)
+        {
+            final boolean hasTrue = runTagVals.stream().anyMatch(v -> "true".equalsIgnoreCase(v) || tagKey.equalsIgnoreCase(v));
+            final boolean matchesPositive = targetValues.stream().anyMatch(tv ->
+                tagKey.equalsIgnoreCase(tv) || "true".equalsIgnoreCase(tv));
+            final boolean matchesNegative = targetValues.stream().anyMatch(tv ->
+                ("Not " + tagKey).equalsIgnoreCase(tv)
+                || ("Not" + tagKey).equalsIgnoreCase(tv)
+                || "false".equalsIgnoreCase(tv)
+                || "Default".equalsIgnoreCase(tv));
+
+            if (matchesPositive && matchesNegative)
+            {
+                return true;
+            }
+            if (matchesPositive)
+            {
+                return hasTrue;
+            }
+            if (matchesNegative)
+            {
+                return !hasTrue;
+            }
+            return false;
+        }
+
+        if (runTagVals.isEmpty())
+        {
+            return targetValues.stream().anyMatch("Default"::equalsIgnoreCase);
+        }
+
+        return runTagVals.stream().anyMatch(v ->
+            targetValues.stream().anyMatch(tv -> tv.equalsIgnoreCase(v))
+            || ("Default".equalsIgnoreCase(v) && targetValues.stream().anyMatch("Default"::equalsIgnoreCase))
+        );
+    }
+
+    public boolean isExcludedByTagCriteria(final TestRunEntity run, final String tagKey, final Set<String> excludedValues)
+    {
+        if (run == null || tagKey == null || excludedValues == null || excludedValues.isEmpty())
+        {
+            return false;
+        }
+        return matchesTagCriteria(run, tagKey, excludedValues);
+    }
+
+    public List<String> getRunAreas(final TestRunEntity run)
+    {
+        if (run == null || run.getId() == null)
+        {
+            return List.of(normalizeArea("@Browsing (default)"));
+        }
+        if (run.getAreasCsv() != null && !run.getAreasCsv().isBlank())
+        {
+            return Arrays.stream(run.getAreasCsv().split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .map(AuraReportDataService::normalizeArea)
+                .distinct()
+                .collect(Collectors.toList());
+        }
+        final RunReportDto report = getRunReport(run.getId());
+        if (report != null && report.getExecutions() != null && !report.getExecutions().isEmpty())
+        {
+            final List<String> areas = report.getExecutions().stream()
+                .map(TestExecutionDto::getAreaName)
+                .map(AuraReportDataService::normalizeArea)
+                .distinct()
+                .collect(Collectors.toList());
+            if (!areas.isEmpty())
+            {
+                return areas;
+            }
+        }
+        else if (report != null && report.getAreaSummaries() != null && !report.getAreaSummaries().isEmpty())
+        {
+            final List<String> areas = report.getAreaSummaries().stream()
+                .map(AreaSummaryDto::getAreaName)
+                .map(AuraReportDataService::normalizeArea)
+                .distinct()
+                .collect(Collectors.toList());
+            if (!areas.isEmpty())
+            {
+                return areas;
+            }
+        }
+        return List.of(normalizeArea("@Browsing (default)"));
+    }
+
+    public List<String> getRunAreas(final String runId)
+    {
+        if (runId == null || runId.isBlank())
+        {
+            return List.of(normalizeArea("@Browsing (default)"));
+        }
+        return runRepository.findById(runId)
+            .map(this::getRunAreas)
+            .orElseGet(() -> {
+                final RunReportDto report = getRunReport(runId);
+                if (report != null && report.getExecutions() != null && !report.getExecutions().isEmpty())
+                {
+                    return report.getExecutions().stream()
+                        .map(TestExecutionDto::getAreaName)
+                        .map(AuraReportDataService::normalizeArea)
+                        .distinct()
+                        .collect(Collectors.toList());
+                }
+                return List.of(normalizeArea("@Browsing (default)"));
+            });
     }
 
     public RunReportDto getRunReport(final String runId)
@@ -915,13 +4265,10 @@ public class AuraReportDataService
             final String runBatch = runEntity.getBatchName() != null ? runEntity.getBatchName() : "ALL";
             final List<TestBaseBugEntity> allRunBugs = bugRepository.findByBatchNameInAndEnvironmentIn(List.of(runBatch, "ALL"), List.of(runEnv, "ALL"));
 
-            final Map<String, List<String>> dbBugsByVarId = allRunBugs.stream()
+            final Map<String, List<TestBaseBugEntity>> activeBugsByVarId = allRunBugs.stream()
                 .filter(b -> (b.getLinkedRunId() == null || isRunAtOrAfter(effectiveRunId, b.getLinkedRunId(), runStartTimes))
                           && (b.getRemovedRunId() == null || !isRunAtOrAfter(effectiveRunId, b.getRemovedRunId(), runStartTimes)))
-                .collect(Collectors.groupingBy(
-                    TestBaseBugEntity::getVariationId,
-                    Collectors.mapping(TestBaseBugEntity::getBugTicket, Collectors.toList())
-                ));
+                .collect(Collectors.groupingBy(TestBaseBugEntity::getVariationId));
 
             final Map<String, java.util.Set<String>> removedBugsByVarId = allRunBugs.stream()
                 .filter(b -> b.getRemovedRunId() != null && isRunAtOrAfter(effectiveRunId, b.getRemovedRunId(), runStartTimes))
@@ -930,6 +4277,7 @@ public class AuraReportDataService
                     Collectors.mapping(b -> normalizeTicket(b.getBugTicket()), Collectors.toSet())
                 ));
 
+            final Map<String, List<String>> runTagsMap = getRunTagsMap(runEntity);
             for (final TestExecutionDto exec : rawExecutions)
             {
                 // Ensure healed steps count is computed and cached before omitting blocks
@@ -941,35 +4289,21 @@ public class AuraReportDataService
 
                 final String varId = generateVariationId(exec.getTestClass(), exec.getTestMethod(), exec.getTitle(), exec.getLocation(), exec.getBrowser());
                 final String varIdNoMethod = generateVariationId(exec.getTestClass(), null, exec.getTitle(), exec.getLocation(), exec.getBrowser());
-                final List<String> dbBugTickets = new ArrayList<>(dbBugsByVarId.getOrDefault(varId, List.of()));
-                for (final String t : dbBugsByVarId.getOrDefault(varIdNoMethod, List.of()))
+                final List<TestBaseBugEntity> candidateActiveBugs = new ArrayList<>(activeBugsByVarId.getOrDefault(varId, List.of()));
+                for (final TestBaseBugEntity b : activeBugsByVarId.getOrDefault(varIdNoMethod, List.of()))
                 {
-                    if (!dbBugTickets.contains(t))
+                    if (!candidateActiveBugs.contains(b))
                     {
-                        dbBugTickets.add(t);
+                        candidateActiveBugs.add(b);
                     }
                 }
 
                 final Set<String> removedTickets = new HashSet<>(removedBugsByVarId.getOrDefault(varId, Set.of()));
                 removedTickets.addAll(removedBugsByVarId.getOrDefault(varIdNoMethod, Set.of()));
 
-                final Set<String> combinedBugs = new LinkedHashSet<>();
-                if (exec.getBugs() != null)
-                {
-                    for (final String b : exec.getBugs())
-                    {
-                        if (!removedTickets.contains(normalizeTicket(b)))
-                        {
-                            combinedBugs.add(b);
-                        }
-                    }
-                }
-                combinedBugs.addAll(dbBugTickets);
+                applyBugsToExecution(exec, candidateActiveBugs, removedTickets, runEntity.getEnvironment(), runEntity.getBatchName(), runTagsMap);
 
-                final List<String> bugTickets = new ArrayList<>(combinedBugs);
-                exec.setBugs(bugTickets);
-
-                final boolean hasBugs = !bugTickets.isEmpty();
+                final boolean hasBugs = exec.getBugs() != null && !exec.getBugs().isEmpty();
                 final String raw = exec.getStatus() != null ? exec.getStatus() : (isInProgress ? "running" : "failed-unknown");
                 if ("running".equalsIgnoreCase(raw) || "in_progress".equalsIgnoreCase(raw) || "executing".equalsIgnoreCase(raw) || "pending".equalsIgnoreCase(raw))
                 {
@@ -994,6 +4328,8 @@ public class AuraReportDataService
 
                 executions.add(exec);
             }
+
+            annotateFlakyExecutions(effectiveRunId, runEntity, executions);
 
             final RunReportDto report = buildRunReportDto(runEntity, executions);
             if (!isInProgress)
@@ -1046,6 +4382,288 @@ public class AuraReportDataService
                 effectiveRunId, executions.size(), getReportMs);
 
             return report;
+        }
+    }
+
+    private static class FlakyHistoryStats
+    {
+        private final Map<String, Integer> unknownFailures = new HashMap<>();
+        private final Map<String, Integer> totalRuns = new HashMap<>();
+    }
+
+    /**
+     * Aggregates execution history across previous completed runs within the configured window
+     * to identify test variations with recurring unknown failures.
+     *
+     * @param excludeRunId run ID to exclude from history (e.g. current run), or null
+     * @param beforeTimestampMs upper bound timestamp for previous runs
+     * @param windowSize maximum number of previous completed runs to inspect
+     * @return aggregated stats containing total runs and unknown failure counts per variation ID
+     */
+    private FlakyHistoryStats computeFlakyHistoryStats(final String excludeRunId, final Long beforeTimestampMs, final int windowSize)
+    {
+        final FlakyHistoryStats stats = new FlakyHistoryStats();
+        final long maxTimestamp = (beforeTimestampMs != null && beforeTimestampMs > 0) ? beforeTimestampMs : Long.MAX_VALUE;
+
+        final List<TestRunEntity> previousRuns = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc().stream()
+            .filter(r -> excludeRunId == null || !r.getId().equals(excludeRunId))
+            .filter(r -> r.getStartTimeMs() != null && r.getStartTimeMs() < maxTimestamp)
+            .filter(r -> !"IN_PROGRESS".equalsIgnoreCase(r.getStatus()))
+            .limit(windowSize > 0 ? windowSize : ReportDashboardSettingService.DEFAULT_FLAKY_HISTORY_WINDOW)
+            .collect(Collectors.toList());
+
+        if (previousRuns.isEmpty())
+        {
+            return stats;
+        }
+
+        final Map<String, Long> runStartTimes = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc().stream()
+            .collect(Collectors.toMap(
+                TestRunEntity::getId,
+                r -> r.getStartTimeMs() != null ? r.getStartTimeMs() : 0L,
+                (a, b) -> a
+            ));
+
+        final List<TestBaseBugEntity> allBugs = bugRepository.findAll();
+
+        for (final TestRunEntity prevRun : previousRuns)
+        {
+            final String prevRunId = prevRun.getId();
+            final Set<String> runVariations = new HashSet<>();
+            final Set<String> runUnknownFailed = new HashSet<>();
+
+            final RunReportDto cachedReport = runReportCache.get(prevRunId);
+            if (cachedReport != null && cachedReport.getExecutions() != null)
+            {
+                for (final TestExecutionDto prevExec : cachedReport.getExecutions())
+                {
+                    final String vId = generateVariationId(prevExec.getTestClass(), prevExec.getTestMethod(), prevExec.getTitle(), prevExec.getLocation(), prevExec.getBrowser());
+                    final String vIdNoMethod = generateVariationId(prevExec.getTestClass(), null, prevExec.getTitle(), prevExec.getLocation(), prevExec.getBrowser());
+                    runVariations.add(vId);
+                    runVariations.add(vIdNoMethod);
+
+                    final String status = prevExec.getStatus();
+                    if ("failed-unknown".equalsIgnoreCase(status) || "failed".equalsIgnoreCase(status) || "error".equalsIgnoreCase(status))
+                    {
+                        runUnknownFailed.add(vId);
+                        runUnknownFailed.add(vIdNoMethod);
+                    }
+                }
+            }
+            else
+            {
+                final Optional<String> prevJsonOpt = localRunJsonStorageService.readRunJson(prevRunId);
+                if (prevJsonOpt.isPresent())
+                {
+                    try
+                    {
+                        final JsonNode root = objectMapper.readTree(prevJsonOpt.get());
+                        final JsonNode execMetrics = root.path("executionMetrics");
+                        final List<TestExecutionDto> prevExecs = new ArrayList<>();
+                        if (execMetrics.isObject() && !execMetrics.isEmpty())
+                        {
+                            execMetrics.fields().forEachRemaining(entry -> {
+                                try
+                                {
+                                    final TestExecutionDto prevExec = objectMapper.treeToValue(entry.getValue(), TestExecutionDto.class);
+                                    prevExecs.add(prevExec);
+                                }
+                                catch (final Exception ignored)
+                                {
+                                }
+                            });
+                        }
+                        else
+                        {
+                            final JsonNode execArray = root.path("executions");
+                            if (execArray.isArray())
+                            {
+                                prevExecs.addAll(objectMapper.readValue(
+                                    execArray.traverse(objectMapper),
+                                    objectMapper.getTypeFactory().constructCollectionType(List.class, TestExecutionDto.class)
+                                ));
+                            }
+                        }
+
+                        final String prevEnv = prevRun.getEnvironment() != null ? prevRun.getEnvironment() : "ALL";
+                        final String prevBatch = prevRun.getBatchName() != null ? prevRun.getBatchName() : "ALL";
+
+                        final Map<String, List<TestBaseBugEntity>> activeBugsByVarId = allBugs.stream()
+                            .filter(b -> (b.getBatchName().equalsIgnoreCase("ALL") || b.getBatchName().equalsIgnoreCase(prevBatch))
+                                      && (b.getEnvironment().equalsIgnoreCase("ALL") || b.getEnvironment().equalsIgnoreCase(prevEnv)))
+                            .filter(b -> (b.getLinkedRunId() == null || isRunAtOrAfter(prevRunId, b.getLinkedRunId(), runStartTimes))
+                                      && (b.getRemovedRunId() == null || !isRunAtOrAfter(prevRunId, b.getRemovedRunId(), runStartTimes)))
+                            .collect(Collectors.groupingBy(TestBaseBugEntity::getVariationId));
+
+                        final Map<String, Set<String>> removedBugsByVarId = allBugs.stream()
+                            .filter(b -> (b.getBatchName().equalsIgnoreCase("ALL") || b.getBatchName().equalsIgnoreCase(prevBatch))
+                                      && (b.getEnvironment().equalsIgnoreCase("ALL") || b.getEnvironment().equalsIgnoreCase(prevEnv)))
+                            .filter(b -> b.getRemovedRunId() != null && isRunAtOrAfter(prevRunId, b.getRemovedRunId(), runStartTimes))
+                            .collect(Collectors.groupingBy(
+                                TestBaseBugEntity::getVariationId,
+                                Collectors.mapping(b -> normalizeTicket(b.getBugTicket()), Collectors.toSet())
+                            ));
+
+                        final Map<String, List<String>> prevRunTags = getRunTagsMap(prevRun);
+
+                        for (final TestExecutionDto prevExec : prevExecs)
+                        {
+                            final String vId = generateVariationId(prevExec.getTestClass(), prevExec.getTestMethod(), prevExec.getTitle(), prevExec.getLocation(), prevExec.getBrowser());
+                            final String vIdNoMethod = generateVariationId(prevExec.getTestClass(), null, prevExec.getTitle(), prevExec.getLocation(), prevExec.getBrowser());
+
+                            runVariations.add(vId);
+                            runVariations.add(vIdNoMethod);
+
+                            final List<TestBaseBugEntity> candidateActiveBugs = new ArrayList<>(activeBugsByVarId.getOrDefault(vId, List.of()));
+                            for (final TestBaseBugEntity b : activeBugsByVarId.getOrDefault(vIdNoMethod, List.of()))
+                            {
+                                if (!candidateActiveBugs.contains(b))
+                                {
+                                    candidateActiveBugs.add(b);
+                                }
+                            }
+                            final Set<String> removedTickets = new HashSet<>(removedBugsByVarId.getOrDefault(vId, Set.of()));
+                            removedTickets.addAll(removedBugsByVarId.getOrDefault(vIdNoMethod, Set.of()));
+
+                            applyBugsToExecution(prevExec, candidateActiveBugs, removedTickets, prevEnv, prevBatch, prevRunTags);
+
+                            final boolean hasBugs = prevExec.getBugs() != null && !prevExec.getBugs().isEmpty();
+                            final String rawStatus = prevExec.getStatus() != null ? prevExec.getStatus().toLowerCase() : "failed-unknown";
+                            final boolean isFailed = rawStatus.contains("fail") || rawStatus.contains("error");
+
+                            if (isFailed && !hasBugs)
+                            {
+                                runUnknownFailed.add(vId);
+                                runUnknownFailed.add(vIdNoMethod);
+                            }
+                        }
+                    }
+                    catch (final Exception e)
+                    {
+                        LOG.warn("Failed to inspect previous run {} for flaky tests: {}", prevRunId, e.getMessage());
+                    }
+                }
+            }
+
+            for (final String vId : runVariations)
+            {
+                stats.totalRuns.put(vId, stats.totalRuns.getOrDefault(vId, 0) + 1);
+            }
+            for (final String vId : runUnknownFailed)
+            {
+                stats.unknownFailures.put(vId, stats.unknownFailures.getOrDefault(vId, 0) + 1);
+            }
+        }
+
+        return stats;
+    }
+
+    /**
+     * Evaluates historical unknown failure frequencies for test executions in the current run
+     * and annotates flaky status, failure counts, and detailed reason messages.
+     *
+     * @param currentRunId current run ID
+     * @param currentRunEntity current run entity (for start time and environment metadata)
+     * @param executions executions list to annotate in-place
+     */
+    private void annotateFlakyExecutions(
+        final String currentRunId,
+        final TestRunEntity currentRunEntity,
+        final List<TestExecutionDto> executions)
+    {
+        if (executions == null || executions.isEmpty())
+        {
+            return;
+        }
+
+        final int windowSize = (dashboardSettingService != null)
+            ? dashboardSettingService.getFlakyHistoryWindow()
+            : ReportDashboardSettingService.DEFAULT_FLAKY_HISTORY_WINDOW;
+        final int minUnknownFailures = (dashboardSettingService != null)
+            ? dashboardSettingService.getFlakyMinUnknownFailures()
+            : ReportDashboardSettingService.DEFAULT_FLAKY_MIN_UNKNOWN_FAILURES;
+        final double minFailureRate = (dashboardSettingService != null)
+            ? dashboardSettingService.getFlakyMinFailureRate()
+            : ReportDashboardSettingService.DEFAULT_FLAKY_MIN_FAILURE_RATE;
+
+        final long currentRunStart = (currentRunEntity != null && currentRunEntity.getStartTimeMs() != null && currentRunEntity.getStartTimeMs() > 0)
+            ? currentRunEntity.getStartTimeMs()
+            : Long.MAX_VALUE;
+
+        final FlakyHistoryStats stats = computeFlakyHistoryStats(currentRunId, currentRunStart, windowSize);
+
+        for (final TestExecutionDto exec : executions)
+        {
+            final String vId = generateVariationId(exec.getTestClass(), exec.getTestMethod(), exec.getTitle(), exec.getLocation(), exec.getBrowser());
+            final String vIdNoMethod = generateVariationId(exec.getTestClass(), null, exec.getTitle(), exec.getLocation(), exec.getBrowser());
+
+            int failCount = stats.unknownFailures.getOrDefault(vId, 0);
+            int totalRuns = stats.totalRuns.getOrDefault(vId, 0);
+            if (totalRuns == 0 && !vId.equals(vIdNoMethod))
+            {
+                failCount = stats.unknownFailures.getOrDefault(vIdNoMethod, 0);
+                totalRuns = stats.totalRuns.getOrDefault(vIdNoMethod, 0);
+            }
+
+            if (failCount >= minUnknownFailures && totalRuns > 0)
+            {
+                final double rate = (double) failCount / (double) totalRuns;
+                if (rate >= minFailureRate)
+                {
+                    exec.setFlaky(true);
+                    exec.setFlakyFailureCount(failCount);
+                    exec.setFlakyTotalRuns(totalRuns);
+                    final int pct = (int) Math.round(rate * 100.0);
+                    exec.setFlakyReason(String.format(
+                        "Flaky test: failed in %d of %d previous runs (%d%%) due to unknown failures",
+                        failCount, totalRuns, pct));
+                }
+            }
+        }
+    }
+
+    /**
+     * Evaluates historical unknown failure frequencies for all variations in Test Base
+     * and annotates flaky status, failure counts, and detailed reason messages.
+     *
+     * @param variations variations list to annotate in-place
+     */
+    private void annotateFlakyVariations(final List<TestBaseVariationEntity> variations)
+    {
+        if (variations == null || variations.isEmpty())
+        {
+            return;
+        }
+
+        final int windowSize = (dashboardSettingService != null)
+            ? dashboardSettingService.getFlakyHistoryWindow()
+            : ReportDashboardSettingService.DEFAULT_FLAKY_HISTORY_WINDOW;
+        final int minUnknownFailures = (dashboardSettingService != null)
+            ? dashboardSettingService.getFlakyMinUnknownFailures()
+            : ReportDashboardSettingService.DEFAULT_FLAKY_MIN_UNKNOWN_FAILURES;
+        final double minFailureRate = (dashboardSettingService != null)
+            ? dashboardSettingService.getFlakyMinFailureRate()
+            : ReportDashboardSettingService.DEFAULT_FLAKY_MIN_FAILURE_RATE;
+
+        final FlakyHistoryStats stats = computeFlakyHistoryStats(null, Long.MAX_VALUE, windowSize);
+
+        for (final TestBaseVariationEntity var : variations)
+        {
+            final String vId = var.getId();
+            final int failCount = stats.unknownFailures.getOrDefault(vId, 0);
+            final int totalRuns = stats.totalRuns.getOrDefault(vId, 0);
+
+            final boolean isFlaky = (failCount >= minUnknownFailures && totalRuns > 0 && ((double) failCount / (double) totalRuns) >= minFailureRate);
+            var.setFlaky(isFlaky);
+            var.setFlakyFailureCount(failCount);
+            var.setFlakyTotalRuns(totalRuns);
+            if (isFlaky)
+            {
+                final int pct = (int) Math.round(((double) failCount / (double) totalRuns) * 100.0);
+                var.setFlakyReason(String.format(
+                    "Flaky test: failed in %d of %d previous runs (%d%%) due to unknown failures",
+                    failCount, totalRuns, pct));
+            }
         }
     }
 
@@ -1356,12 +4974,10 @@ public class AuraReportDataService
         final String varId = generateVariationId(dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), dto.getLocation(), dto.getBrowser());
         final String varIdNoMethod = generateVariationId(dto.getTestClass(), null, dto.getTitle(), dto.getLocation(), dto.getBrowser());
 
-        final List<String> dbBugTickets = allRunBugs.stream()
+        final List<TestBaseBugEntity> candidateActiveBugs = allRunBugs.stream()
             .filter(b -> (b.getLinkedRunId() == null || isRunAtOrAfter(runId, b.getLinkedRunId(), runStartTimes))
                       && (b.getRemovedRunId() == null || !isRunAtOrAfter(runId, b.getRemovedRunId(), runStartTimes)))
             .filter(b -> varId.equals(b.getVariationId()) || varIdNoMethod.equals(b.getVariationId()))
-            .map(TestBaseBugEntity::getBugTicket)
-            .distinct()
             .collect(Collectors.toList());
 
         final Set<String> removedTickets = allRunBugs.stream()
@@ -1370,19 +4986,7 @@ public class AuraReportDataService
             .map(b -> normalizeTicket(b.getBugTicket()))
             .collect(Collectors.toSet());
 
-        final Set<String> combinedBugs = new LinkedHashSet<>();
-        if (dto.getBugs() != null)
-        {
-            for (final String b : dto.getBugs())
-            {
-                if (!removedTickets.contains(normalizeTicket(b)))
-                {
-                    combinedBugs.add(b);
-                }
-            }
-        }
-        combinedBugs.addAll(dbBugTickets);
-        dto.setBugs(new ArrayList<>(combinedBugs));
+        applyBugsToExecution(dto, candidateActiveBugs, removedTickets, runEnv, runBatch, getRunTagsMap(runId));
     }
 
     public void updateCachedReportBugsAndStats(final String runId)
@@ -1412,13 +5016,10 @@ public class AuraReportDataService
 
         final List<TestBaseBugEntity> allRunBugs = bugRepository.findByBatchNameInAndEnvironmentIn(List.of(runBatch, "ALL"), List.of(runEnv, "ALL"));
 
-        final Map<String, List<String>> dbBugsByVarId = allRunBugs.stream()
+        final Map<String, List<TestBaseBugEntity>> activeBugsByVarId = allRunBugs.stream()
             .filter(b -> (b.getLinkedRunId() == null || isRunAtOrAfter(runId, b.getLinkedRunId(), runStartTimes))
                       && (b.getRemovedRunId() == null || !isRunAtOrAfter(runId, b.getRemovedRunId(), runStartTimes)))
-            .collect(Collectors.groupingBy(
-                TestBaseBugEntity::getVariationId,
-                Collectors.mapping(TestBaseBugEntity::getBugTicket, Collectors.toList())
-            ));
+            .collect(Collectors.groupingBy(TestBaseBugEntity::getVariationId));
 
         final Map<String, java.util.Set<String>> removedBugsByVarId = allRunBugs.stream()
             .filter(b -> b.getRemovedRunId() != null && isRunAtOrAfter(runId, b.getRemovedRunId(), runStartTimes))
@@ -1431,40 +5032,27 @@ public class AuraReportDataService
         int passHealed = 0, fixedHealed = 0, knownHealed = 0, unknownHealed = 0;
         int passAi = 0, fixedAi = 0, knownAi = 0, unknownAi = 0;
         final List<TestExecutionDto> updatedExecutions = new ArrayList<>();
+        final Map<String, List<String>> runTagsMap = getRunTagsMap(runEntity);
 
         for (final TestExecutionDto exec : cachedReport.getExecutions())
         {
             final String varId = generateVariationId(exec.getTestClass(), exec.getTestMethod(), exec.getTitle(), exec.getLocation(), exec.getBrowser());
             final String varIdNoMethod = generateVariationId(exec.getTestClass(), null, exec.getTitle(), exec.getLocation(), exec.getBrowser());
-            final List<String> dbBugTickets = new ArrayList<>(dbBugsByVarId.getOrDefault(varId, List.of()));
-            for (final String t : dbBugsByVarId.getOrDefault(varIdNoMethod, List.of()))
+            final List<TestBaseBugEntity> candidateActiveBugs = new ArrayList<>(activeBugsByVarId.getOrDefault(varId, List.of()));
+            for (final TestBaseBugEntity b : activeBugsByVarId.getOrDefault(varIdNoMethod, List.of()))
             {
-                if (!dbBugTickets.contains(t))
+                if (!candidateActiveBugs.contains(b))
                 {
-                    dbBugTickets.add(t);
+                    candidateActiveBugs.add(b);
                 }
             }
 
             final Set<String> removedTickets = new HashSet<>(removedBugsByVarId.getOrDefault(varId, Set.of()));
             removedTickets.addAll(removedBugsByVarId.getOrDefault(varIdNoMethod, Set.of()));
 
-            final Set<String> combinedBugs = new LinkedHashSet<>();
-            if (exec.getBugs() != null)
-            {
-                for (final String b : exec.getBugs())
-                {
-                    if (!removedTickets.contains(normalizeTicket(b)))
-                    {
-                        combinedBugs.add(b);
-                    }
-                }
-            }
-            combinedBugs.addAll(dbBugTickets);
+            applyBugsToExecution(exec, candidateActiveBugs, removedTickets, runEntity.getEnvironment(), runEntity.getBatchName(), runTagsMap);
 
-            final List<String> bugTickets = new ArrayList<>(combinedBugs);
-            exec.setBugs(bugTickets);
-
-            final boolean hasBugs = !bugTickets.isEmpty();
+            final boolean hasBugs = exec.getBugs() != null && !exec.getBugs().isEmpty();
             final boolean isRunActive = "IN_PROGRESS".equalsIgnoreCase(runEntity.getStatus());
             final String raw = exec.getStatus() != null ? exec.getStatus() : (isRunActive ? "running" : "failed-unknown");
             if ("running".equalsIgnoreCase(raw) || "in_progress".equalsIgnoreCase(raw) || "executing".equalsIgnoreCase(raw) || "pending".equalsIgnoreCase(raw))
@@ -1594,7 +5182,14 @@ public class AuraReportDataService
         final List<TestExecutionDto> filteredExecs = baseReport.getExecutions().stream().filter(exec -> {
             if (statusFilter != null && !statusFilter.isEmpty() && !"ALL".equalsIgnoreCase(statusFilter))
             {
-                if (!statusFilter.equalsIgnoreCase(exec.getStatus()))
+                if ("FLAKY".equalsIgnoreCase(statusFilter))
+                {
+                    if (!exec.isFlaky())
+                    {
+                        return false;
+                    }
+                }
+                else if (!statusFilter.equalsIgnoreCase(exec.getStatus()))
                 {
                     return false;
                 }
@@ -1669,6 +5264,35 @@ public class AuraReportDataService
     }
 
     @Transactional
+    public String startRun(final String runId, final String batchName, final String environment, final String triggerSource, final Map<String, List<String>> tags)
+    {
+        final String effectiveRunId = startRun(runId, batchName, environment, triggerSource);
+        if (tags != null && !tags.isEmpty() && tagRepository != null)
+        {
+            final List<TestRunTagEntity> tagEntities = new ArrayList<>();
+            for (final Map.Entry<String, List<String>> entry : tags.entrySet())
+            {
+                final String tagKey = entry.getKey();
+                if (tagKey != null && !tagKey.isBlank() && entry.getValue() != null)
+                {
+                    for (final String tagVal : entry.getValue())
+                    {
+                        if (tagVal != null && !tagVal.isBlank())
+                        {
+                            tagEntities.add(new TestRunTagEntity(effectiveRunId, tagKey.trim(), tagVal.trim()));
+                        }
+                    }
+                }
+            }
+            if (!tagEntities.isEmpty())
+            {
+                tagRepository.saveAll(tagEntities);
+            }
+        }
+        return effectiveRunId;
+    }
+
+    @Transactional
     public String startRun(final String batchName, final String environment, final String triggerSource)
     {
         return startRun(null, batchName, environment, triggerSource);
@@ -1704,8 +5328,15 @@ public class AuraReportDataService
             if (dto.getTestClass() != null && !dto.getTestClass().isEmpty())
             {
                 final String varId = generateVariationId(dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), dto.getLocation(), dto.getBrowser());
+                final String area = (dto.getAreaName() != null && !dto.getAreaName().isBlank())
+                    ? (dto.getAreaName().startsWith("@") ? dto.getAreaName() : "@" + dto.getAreaName())
+                    : "@General";
                 final TestBaseVariationEntity var = variationRepository.findById(varId)
-                    .orElseGet(() -> new TestBaseVariationEntity(varId, dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), "@" + dto.getAreaName(), dto.getLocation(), dto.getBrowser()));
+                    .orElseGet(() -> new TestBaseVariationEntity(varId, dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), area, dto.getLocation(), dto.getBrowser()));
+                if (dto.getSubArea() != null && !dto.getSubArea().isBlank())
+                {
+                    var.setSubAreaTag(dto.getSubArea().startsWith("@") ? dto.getSubArea() : "@" + dto.getSubArea());
+                }
 
                 if (dto.getTestMethod() != null && !dto.getTestMethod().isBlank())
                 {
@@ -1730,28 +5361,30 @@ public class AuraReportDataService
 
                 if (dto.getTestClass() != null && !dto.getTestClass().isEmpty())
                 {
+                    final Map<String, Long> runStartTimes = runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc().stream()
+                        .collect(Collectors.toMap(
+                            TestRunEntity::getId,
+                            r -> r.getStartTimeMs() != null ? r.getStartTimeMs() : 0L,
+                            (a, b) -> a
+                        ));
+
                     final String varId = generateVariationId(dto.getTestClass(), dto.getTestMethod(), dto.getTitle(), dto.getLocation(), dto.getBrowser());
-                    final List<TestBaseBugEntity> activeBugs = bugRepository.findByVariationIdAndBatchNameInAndEnvironmentIn(
-                        varId, List.of(runBatch, "ALL"), List.of(runEnv, "ALL")).stream()
-                        .filter(b -> (b.getLinkedRunId() == null || isRunAtOrAfter(runId, b.getLinkedRunId()))
-                                  && (b.getRemovedRunId() == null || !isRunAtOrAfter(runId, b.getRemovedRunId())))
+                    final String varIdNoMethod = generateVariationId(dto.getTestClass(), null, dto.getTitle(), dto.getLocation(), dto.getBrowser());
+                    final List<TestBaseBugEntity> candidateActiveBugs = bugRepository.findByVariationIdIn(List.of(varId, varIdNoMethod)).stream()
+                        .filter(b -> (b.getBatchName().equalsIgnoreCase("ALL") || b.getBatchName().equalsIgnoreCase(runBatch))
+                                  && (b.getEnvironment().equalsIgnoreCase("ALL") || b.getEnvironment().equalsIgnoreCase(runEnv)))
+                        .filter(b -> (b.getLinkedRunId() == null || isRunAtOrAfter(runId, b.getLinkedRunId(), runStartTimes))
+                                  && (b.getRemovedRunId() == null || !isRunAtOrAfter(runId, b.getRemovedRunId(), runStartTimes)))
                         .collect(Collectors.toList());
 
-                    if (!activeBugs.isEmpty())
-                    {
-                        final List<String> bugTickets = activeBugs.stream()
-                            .map(TestBaseBugEntity::getBugTicket)
-                            .distinct()
-                            .collect(Collectors.toList());
+                    final Set<String> removedTickets = bugRepository.findByVariationIdIn(List.of(varId, varIdNoMethod)).stream()
+                        .filter(b -> (b.getBatchName().equalsIgnoreCase("ALL") || b.getBatchName().equalsIgnoreCase(runBatch))
+                                  && (b.getEnvironment().equalsIgnoreCase("ALL") || b.getEnvironment().equalsIgnoreCase(runEnv)))
+                        .filter(b -> b.getRemovedRunId() != null && isRunAtOrAfter(runId, b.getRemovedRunId(), runStartTimes))
+                        .map(b -> normalizeTicket(b.getBugTicket()))
+                        .collect(Collectors.toSet());
 
-                        final Set<String> combined = new LinkedHashSet<>();
-                        if (dto.getBugs() != null)
-                        {
-                            combined.addAll(dto.getBugs());
-                        }
-                        combined.addAll(bugTickets);
-                        dto.setBugs(new ArrayList<>(combined));
-                    }
+                    applyBugsToExecution(dto, candidateActiveBugs, removedTickets, runEnv, runBatch, getRunTagsMap(runId));
                 }
 
                 final boolean hasBugs = dto.getBugs() != null && !dto.getBugs().isEmpty();
@@ -2024,6 +5657,17 @@ public class AuraReportDataService
     @Transactional
     public TestExecutionDto addBugToExecution(final String runId, final String rowId, final String bugTicket)
     {
+        return addBugToExecution(runId, rowId, bugTicket, "MAJOR", null);
+    }
+
+    @Transactional
+    public TestExecutionDto addBugToExecution(
+        final String runId,
+        final String rowId,
+        final String bugTicket,
+        final String severity,
+        final String boundTags)
+    {
         final long startMs = System.currentTimeMillis();
         if (bugTicket == null || bugTicket.trim().isEmpty())
         {
@@ -2031,6 +5675,8 @@ public class AuraReportDataService
         }
 
         final String cleanTicket = bugTicket.trim().replaceAll("^#+", "");
+        final String cleanSeverity = (severity != null && !severity.isBlank()) ? severity.trim().toUpperCase(Locale.ROOT) : "MAJOR";
+        final String cleanBoundTags = (boundTags != null && !boundTags.isBlank()) ? boundTags.trim() : null;
         final String effectiveRunId = (runId != null) ? runId.trim().replaceAll("^#+", "") : "";
 
         try
@@ -2058,17 +5704,40 @@ public class AuraReportDataService
                 final String runEnv = runOpt.map(TestRunEntity::getEnvironment).orElse("ALL");
                 final long runStartTime = runOpt.map(TestRunEntity::getStartTimeMs).orElse(System.currentTimeMillis());
 
+                final String targetBatch = (cleanBoundTags != null && !cleanBoundTags.isBlank()) ? "ALL" : runBatch;
+                final String targetEnv = (cleanBoundTags != null && !cleanBoundTags.isBlank()) ? "ALL" : runEnv;
+
                 final long dbStart = System.currentTimeMillis();
                 final List<TestBaseBugEntity> existing = bugRepository.findByVariationIdAndBatchNameInAndEnvironmentIn(
-                    varId, List.of(runBatch, "ALL"), List.of(runEnv, "ALL"));
-                final boolean existsActive = existing.stream()
-                    .anyMatch(b -> normalizeTicket(b.getBugTicket()).equals(normalizeTicket(cleanTicket)) && b.getRemovedRunId() == null);
+                    varId, List.of(runBatch, targetBatch, "ALL"), List.of(runEnv, targetEnv, "ALL"));
+                final Optional<TestBaseBugEntity> activeOpt = existing.stream()
+                    .filter(b -> normalizeTicket(b.getBugTicket()).equals(normalizeTicket(cleanTicket)) && b.getRemovedRunId() == null)
+                    .findFirst();
 
-                if (!existsActive)
+                if (activeOpt.isEmpty())
                 {
-                    bugRepository.save(new TestBaseBugEntity(varId, cleanTicket, runBatch, runEnv, runStartTime, effectiveRunId));
+                    bugRepository.save(new TestBaseBugEntity(varId, cleanTicket, targetBatch, targetEnv, runStartTime, effectiveRunId, cleanSeverity, cleanBoundTags));
+                }
+                else
+                {
+                    final TestBaseBugEntity entity = activeOpt.get();
+                    entity.setSeverity(cleanSeverity);
+                    entity.setTagCriteria(cleanBoundTags);
+                    entity.setBatchName(targetBatch);
+                    entity.setEnvironment(targetEnv);
+                    bugRepository.save(entity);
                 }
                 final long dbMs = System.currentTimeMillis() - dbStart;
+
+                if (runEnv != null && !runEnv.isBlank() && target.getEnvironment().isEmpty())
+                {
+                    target.setEnvironment(runEnv);
+                }
+                if (runBatch != null && !runBatch.isBlank() && target.getBatchName().isEmpty())
+                {
+                    target.setBatchName(runBatch);
+                }
+                final boolean appliesToTarget = matchesBugTags(target, runEnv, runBatch, getRunTagsMap(effectiveRunId), cleanBoundTags);
 
                 localRunJsonStorageService.updateExecutionInRun(effectiveRunId, rowId, execNode -> {
                     final ArrayNode bugsArray = objectMapper.createArrayNode();
@@ -2077,26 +5746,34 @@ public class AuraReportDataService
                     {
                         for (final JsonNode bNode : execNode.path("bugs"))
                         {
-                            if (!bNode.asText().isBlank())
+                            final String existingB = extractTicket(bNode);
+                            if (!existingB.isBlank())
                             {
-                                currentBugs.add(bNode.asText());
+                                if (appliesToTarget || !normalizeTicket(existingB).equals(normalizeTicket(cleanTicket)))
+                                {
+                                    currentBugs.add(existingB);
+                                }
                             }
                         }
                     }
-                    currentBugs.add(cleanTicket);
+                    if (appliesToTarget)
+                    {
+                        currentBugs.add(cleanTicket);
+                    }
                     for (final String b : currentBugs)
                     {
                         bugsArray.add(b);
                     }
                     execNode.set("bugs", bugsArray);
+                    final boolean hasBugs = !currentBugs.isEmpty();
                     final String raw = execNode.has("status") ? execNode.path("status").asText() : "failed-unknown";
                     if ("failed".equalsIgnoreCase(raw) || "failed-known".equalsIgnoreCase(raw) || "failed-unknown".equalsIgnoreCase(raw) || "error".equalsIgnoreCase(raw) || "failure".equalsIgnoreCase(raw))
                     {
-                        execNode.put("status", "failed-known");
+                        execNode.put("status", hasBugs ? "failed-known" : "failed-unknown");
                     }
                     else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw) || "succeeded".equalsIgnoreCase(raw) || "healed".equalsIgnoreCase(raw))
                     {
-                        execNode.put("status", "succeeded-fixed");
+                        execNode.put("status", hasBugs ? "succeeded-fixed" : "passed-clean");
                     }
                 });
 
@@ -2209,9 +5886,10 @@ public class AuraReportDataService
                     {
                         for (final JsonNode bNode : execNode.path("bugs"))
                         {
-                            if (!normalizeTicket(bNode.asText()).equals(normalizeTicket(cleanTicket)))
+                            final String b = extractTicket(bNode);
+                            if (!b.isBlank() && !normalizeTicket(b).equals(normalizeTicket(cleanTicket)))
                             {
-                                newBugs.add(bNode.asText());
+                                newBugs.add(b);
                             }
                         }
                     }
@@ -2530,6 +6208,11 @@ public class AuraReportDataService
         }
     }
 
+    static String extractTicket(final JsonNode node)
+    {
+        return TestExecutionDto.FlexibleBugListDeserializer.extractTicket(node);
+    }
+
     static String normalizeTicket(final String ticket)
     {
         if (ticket == null)
@@ -2622,12 +6305,30 @@ public class AuraReportDataService
         final TestRunEntity run = runOpt.get();
         final String batchName = run.getBatchName();
 
-        // 1. Mark run as deleted
+        // 1. Identify affected variations BEFORE deleting storage or cache
+        final Set<String> affectedVarIds = new HashSet<>();
+        final RunReportDto deletedReport = getRunReport(cleanRunId);
+        if (deletedReport != null && deletedReport.getExecutions() != null)
+        {
+            for (final TestExecutionDto exec : deletedReport.getExecutions())
+            {
+                final String vId = generateVariationId(
+                    exec.getTestClass(),
+                    exec.getTestMethod(),
+                    exec.getTitle(),
+                    exec.getLocation(),
+                    exec.getBrowser()
+                );
+                affectedVarIds.add(vId);
+            }
+        }
+
+        // 2. Mark run as deleted
         run.setIsDeleted(true);
         runRepository.save(run);
         LOG.info("Soft-deleted run runId={}", cleanRunId);
 
-        // 2. Storage cleanup (disk JSON and attachments)
+        // 3. Storage cleanup (disk JSON and attachments)
         try
         {
             localRunJsonStorageService.deleteRunJson(cleanRunId);
@@ -2649,11 +6350,10 @@ public class AuraReportDataService
             LOG.warn("Failed to delete attachments for runId={}: {}", cleanRunId, e.getMessage());
         }
 
-        // 3. Evict cache
+        // 4. Evict only this deleted run from cache (keeping remaining runs warm in memory)
         runReportCache.remove(cleanRunId);
-        clearCache();
 
-        // 4. Update parent batch's latestRunId
+        // 5. Update parent batch's latestRunId
         if (batchName != null && !batchName.isBlank())
         {
             final List<TestRunEntity> remainingBatchRuns = runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc(batchName);
@@ -2668,28 +6368,10 @@ public class AuraReportDataService
             }
         }
 
-        // 5. Update Test Base variations and their history links
-        // 5. Update Test Base variations
-        final Set<String> affectedVarIds = new HashSet<>();
-        final RunReportDto deletedReport = getRunReport(cleanRunId);
-        if (deletedReport != null && deletedReport.getExecutions() != null)
-        {
-            for (final TestExecutionDto exec : deletedReport.getExecutions())
-            {
-                final String vId = generateVariationId(
-                    exec.getTestClass(),
-                    exec.getTestMethod(),
-                    exec.getTitle(),
-                    exec.getLocation(),
-                    exec.getBrowser()
-                );
-                affectedVarIds.add(vId);
-            }
-        }
-
+        // 6. Update Test Base variations for affected variation IDs only
         final List<TestBaseVariationEntity> variationsToProcess = !affectedVarIds.isEmpty()
             ? variationRepository.findAllById(affectedVarIds)
-            : variationRepository.findAll();
+            : Collections.emptyList();
 
         final List<TestBaseVariationEntity> variationsToDelete = new ArrayList<>();
 
@@ -2712,23 +6394,6 @@ public class AuraReportDataService
                     bugRepository.deleteAll(varBugs);
                 }
                 LOG.info("Pruned empty variation varId='{}' as all associated runs were removed", var.getId());
-            }
-            else
-            {
-                var.setTotalExecutionsCount(history.size());
-                final TestBaseVariationHistoryDto newLast = history.get(0);
-                var.setLastStatus(newLast.getStatus());
-                var.setHealed(newLast.isHealed());
-                if (newLast.getMode() != null && !newLast.getMode().isBlank())
-                {
-                    var.setExecutionMode(newLast.getMode());
-                }
-                final Optional<TestRunEntity> newLastRunOpt = runRepository.findById(newLast.getRunId());
-                if (newLastRunOpt.isPresent() && newLastRunOpt.get().getStartTimeMs() != null)
-                {
-                    var.setLastExecutedAt(newLastRunOpt.get().getStartTimeMs());
-                }
-                variationRepository.save(var);
             }
         }
 
@@ -2842,13 +6507,95 @@ public class AuraReportDataService
                 aRunning += tc.getRunningCount();
             }
 
+            final List<SubAreaSummaryDto> subAreas = new ArrayList<>();
+            final boolean hasSub = areaClasses.stream()
+                .anyMatch(tc -> tc.getExecutions().stream().anyMatch(e -> e.getSubArea() != null && !e.getSubArea().isBlank()));
+
+            if (hasSub)
+            {
+                final List<TestExecutionDto> allAreaExecs = areaClasses.stream()
+                    .flatMap(tc -> tc.getExecutions().stream())
+                    .toList();
+
+                final Map<String, List<TestExecutionDto>> bySubArea = allAreaExecs.stream()
+                    .collect(Collectors.groupingBy(
+                        e -> (e.getSubArea() != null && !e.getSubArea().isBlank()) ? e.getSubArea() : "General",
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                    ));
+
+                for (final Map.Entry<String, List<TestExecutionDto>> subEntry : bySubArea.entrySet())
+                {
+                    final String subName = subEntry.getKey();
+                    final List<TestExecutionDto> subExecs = subEntry.getValue();
+
+                    final Map<String, List<TestExecutionDto>> subByClass = subExecs.stream()
+                        .collect(Collectors.groupingBy(
+                            e -> (e.getTestClass() != null && !e.getTestClass().isEmpty()) ? e.getTestClass() : "GeneralTest",
+                            LinkedHashMap::new,
+                            Collectors.toList()
+                        ));
+
+                    final List<TestClassSummaryDto> subClasses = new ArrayList<>();
+                    int sPass = 0, sFixed = 0, sKnown = 0, sUnknown = 0, sIgnored = 0, sRunning = 0;
+                    for (final Map.Entry<String, List<TestExecutionDto>> scEntry : subByClass.entrySet())
+                    {
+                        final String scName = scEntry.getKey();
+                        final List<TestExecutionDto> scExecs = scEntry.getValue();
+
+                        int cPass = 0, cFixed = 0, cKnown = 0, cUnknown = 0, cIgnored = 0, cRunning = 0;
+                        for (final TestExecutionDto ce : scExecs)
+                        {
+                            final String status = ce.getStatus() != null ? ce.getStatus() : "passed-clean";
+                            switch (status)
+                            {
+                                case "passed-clean", "passed", "succeeded" -> cPass++;
+                                case "succeeded-fixed", "fixed", "healed" -> cFixed++;
+                                case "failed-known", "known" -> cKnown++;
+                                case "failed-unknown", "failed", "error", "unknown" -> cUnknown++;
+                                case "ignored", "skipped" -> cIgnored++;
+                                case "running", "in_progress", "executing", "pending" -> cRunning++;
+                                default -> cPass++;
+                            }
+                        }
+                        sPass += cPass;
+                        sFixed += cFixed;
+                        sKnown += cKnown;
+                        sUnknown += cUnknown;
+                        sIgnored += cIgnored;
+                        sRunning += cRunning;
+
+                        final String cleanSubName = subName.replace("@", "").replaceAll("[^a-zA-Z0-9]", "");
+                        subClasses.add(new TestClassSummaryDto(
+                            scName,
+                            "classContainer" + scName.replace(".", "") + cleanSubName,
+                            "Browsing (default)",
+                            scExecs.size(),
+                            cPass, cFixed, cKnown, cUnknown, cIgnored, cRunning,
+                            scExecs
+                        ));
+                    }
+
+                    final String cleanSub = subName.replace("@", "").replaceAll("[^a-zA-Z0-9]", "");
+                    final String cleanArea = areaName.replace("@", "").replaceAll("[^a-zA-Z0-9]", "");
+                    subAreas.add(new SubAreaSummaryDto(
+                        subName,
+                        "subAreaGroup" + cleanArea + cleanSub,
+                        sPass + sFixed + sKnown + sUnknown + sIgnored + sRunning,
+                        sPass, sFixed, sKnown, sUnknown, sIgnored, sRunning,
+                        subClasses
+                    ));
+                }
+            }
+
             areas.add(new AreaSummaryDto(
                 areaName,
                 "areaGroup" + areaName.replace(" ", "").replace("@", ""),
                 "Browsing (default)",
                 aPass + aFixed + aKnown + aUnknown + aIgnored + aRunning,
                 aPass, aFixed, aKnown, aUnknown, aIgnored, aRunning,
-                areaClasses
+                areaClasses,
+                subAreas
             ));
         }
         return areas;
@@ -2998,6 +6745,24 @@ public class AuraReportDataService
         return b;
     }
 
+    public static String normalizeArea(final String raw)
+    {
+        if (raw == null || raw.isBlank())
+        {
+            return "@Browsing (default)";
+        }
+        final String trimmed = raw.trim();
+        if ("General".equalsIgnoreCase(trimmed) || "@General".equalsIgnoreCase(trimmed))
+        {
+            return "@Browsing (default)";
+        }
+        if ("Browsing (default)".equalsIgnoreCase(trimmed) || "@Browsing (default)".equalsIgnoreCase(trimmed))
+        {
+            return "@Browsing (default)";
+        }
+        return trimmed.startsWith("@") ? trimmed : "@" + trimmed;
+    }
+
     public List<TestBaseVariationHistoryDto> getVariationHistory(
         final String targetTestClass,
         final String targetDataSet,
@@ -3125,13 +6890,11 @@ public class AuraReportDataService
                 final String runBatch = run.getBatchName() != null ? run.getBatchName() : "ALL";
                 final String runEnv = run.getEnvironment() != null ? run.getEnvironment() : "ALL";
 
-                final List<String> activeDbBugs = varBugs.stream()
+                final List<TestBaseBugEntity> activeDbBugs = varBugs.stream()
                     .filter(b -> (b.getBatchName().equalsIgnoreCase("ALL") || b.getBatchName().equalsIgnoreCase(runBatch))
                               && (b.getEnvironment().equalsIgnoreCase("ALL") || b.getEnvironment().equalsIgnoreCase(runEnv))
                               && (b.getLinkedRunId() == null || isRunAtOrAfter(run.getId(), b.getLinkedRunId(), runStartTimes))
                               && (b.getRemovedRunId() == null || !isRunAtOrAfter(run.getId(), b.getRemovedRunId(), runStartTimes)))
-                    .map(TestBaseBugEntity::getBugTicket)
-                    .distinct()
                     .collect(Collectors.toList());
 
                 final Set<String> removedTickets = varBugs.stream()
@@ -3141,20 +6904,9 @@ public class AuraReportDataService
                     .map(b -> normalizeTicket(b.getBugTicket()))
                     .collect(Collectors.toSet());
 
-                final Set<String> combinedBugsSet = new LinkedHashSet<>();
-                if (exec.getBugs() != null)
-                {
-                    for (final String b : exec.getBugs())
-                    {
-                        if (b != null && !b.isBlank() && !removedTickets.contains(normalizeTicket(b)))
-                        {
-                            combinedBugsSet.add(b.trim());
-                        }
-                    }
-                }
-                combinedBugsSet.addAll(activeDbBugs);
+                applyBugsToExecution(exec, activeDbBugs, removedTickets, runEnv, runBatch, getRunTagsMap(run));
 
-                final List<String> bugsList = new ArrayList<>(combinedBugsSet);
+                final List<String> bugsList = exec.getBugs() != null ? exec.getBugs() : Collections.emptyList();
                 final boolean hasBugs = !bugsList.isEmpty();
 
                 final String rawStatus = exec.getStatus() != null ? exec.getStatus() : "passed-clean";
@@ -3220,6 +6972,11 @@ public class AuraReportDataService
                 if (latest.getMode() != null && !latest.getMode().isBlank())
                 {
                     varEntity.setExecutionMode(latest.getMode());
+                }
+                final Optional<TestRunEntity> latestRunOpt = runRepository.findById(latest.getRunId());
+                if (latestRunOpt.isPresent() && latestRunOpt.get().getStartTimeMs() != null)
+                {
+                    varEntity.setLastExecutedAt(latestRunOpt.get().getStartTimeMs());
                 }
             }
             variationRepository.save(varEntity);
@@ -3287,10 +7044,23 @@ public class AuraReportDataService
 
             for (final TestExecutionDto exec : report.getExecutions())
             {
+                final String testClass = (exec.getTestClass() != null && !exec.getTestClass().isBlank())
+                    ? exec.getTestClass().trim()
+                    : "GeneralTest";
+                final String testMethod = (exec.getTestMethod() != null && !exec.getTestMethod().isBlank())
+                    ? exec.getTestMethod().trim()
+                    : "";
+                final String dataSet = cleanDataSetString(exec.getTitle());
+
+                if (!isValidTestVariation(testClass, testMethod, dataSet))
+                {
+                    continue;
+                }
+
                 final String varKey = generateVariationId(
-                    exec.getTestClass(),
-                    exec.getTestMethod(),
-                    cleanDataSetString(exec.getTitle()),
+                    testClass,
+                    testMethod,
+                    dataSet,
                     normalizeLocation(exec.getLocation()),
                     normalizeBrowser(exec.getBrowser())
                 );
@@ -3347,6 +7117,329 @@ public class AuraReportDataService
             result.put(key, tagRepository.findDistinctTagValuesByTagKey(key));
         }
         return result;
+    }
+
+    public Map<String, List<String>> getAllKnownTagMap()
+    {
+        final Map<String, Set<String>> rawTagMap = new LinkedHashMap<>();
+
+        final BiConsumer<String, String> addTag = (rawKey, rawVal) -> {
+            if (rawKey == null || rawVal == null)
+            {
+                return;
+            }
+            final String cleanVal = rawVal.trim();
+            if (cleanVal.isEmpty() || "unknown".equalsIgnoreCase(cleanVal) || "default".equalsIgnoreCase(cleanVal) || "all".equalsIgnoreCase(cleanVal))
+            {
+                return;
+            }
+            final String cleanKey = rawKey.trim();
+            final String lowerKey = cleanKey.toLowerCase();
+
+            final String canonicalKey;
+            if ("environment".equals(lowerKey) || "env".equals(lowerKey) || "instance".equals(lowerKey))
+            {
+                canonicalKey = "environment";
+            }
+            else if ("batch".equals(lowerKey) || "suite".equals(lowerKey) || "batchname".equals(lowerKey))
+            {
+                canonicalKey = "batch";
+            }
+            else if ("browser".equals(lowerKey))
+            {
+                canonicalKey = "browser";
+            }
+            else if ("location".equals(lowerKey) || "locale".equals(lowerKey))
+            {
+                canonicalKey = "location";
+            }
+            else if ("area".equals(lowerKey) || "areatag".equals(lowerKey))
+            {
+                canonicalKey = "area";
+            }
+            else
+            {
+                canonicalKey = lowerKey;
+            }
+
+            rawTagMap.computeIfAbsent(canonicalKey, k -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER)).add(cleanVal);
+        };
+
+        // 1. Standard browsers
+        for (final String br : List.of("Chrome", "Chrome_headless", "Firefox", "Firefox_headless", "Safari", "Edge"))
+        {
+            addTag.accept("browser", br);
+        }
+
+        // 2. Query batchRepository
+        if (batchRepository != null)
+        {
+            for (final TestBatchEntity b : batchRepository.findAll())
+            {
+                addTag.accept("environment", b.getEnvironment());
+                addTag.accept("batch", b.getBatchName());
+                if (b.getBrowsersCsv() != null)
+                {
+                    for (final String br : b.getBrowsersCsv().split(","))
+                    {
+                        addTag.accept("browser", br);
+                    }
+                }
+                if (b.getLocalesCsv() != null)
+                {
+                    for (final String loc : b.getLocalesCsv().split(","))
+                    {
+                        addTag.accept("location", loc);
+                    }
+                }
+            }
+        }
+
+        // 3. Query runRepository (all runs)
+        if (runRepository != null)
+        {
+            for (final TestRunEntity r : runRepository.findAll())
+            {
+                addTag.accept("environment", r.getEnvironment());
+                addTag.accept("batch", r.getBatchName());
+                if (r.getBrowsersCsv() != null)
+                {
+                    for (final String br : r.getBrowsersCsv().split(","))
+                    {
+                        addTag.accept("browser", br);
+                    }
+                }
+                if (r.getLocalesCsv() != null)
+                {
+                    for (final String loc : r.getLocalesCsv().split(","))
+                    {
+                        addTag.accept("location", loc);
+                    }
+                }
+            }
+        }
+
+        // 4. Query variationRepository
+        if (variationRepository != null)
+        {
+            for (final TestBaseVariationEntity v : variationRepository.findAll())
+            {
+                addTag.accept("environment", v.getLastEnvironment());
+                addTag.accept("batch", v.getLastBatch());
+                addTag.accept("browser", v.getBrowser());
+                addTag.accept("location", v.getLocation());
+                if (v.getAreaTag() != null)
+                {
+                    final String cleanArea = v.getAreaTag().replace("@", "").trim();
+                    addTag.accept("area", cleanArea);
+                }
+            }
+        }
+
+        // 5. Query tagRepository
+        if (tagRepository != null)
+        {
+            for (final TestRunTagEntity t : tagRepository.findAll())
+            {
+                addTag.accept(t.getTagKey(), t.getTagValue());
+            }
+        }
+
+        // 6. Build sorted result: primary dimensions first, then custom keys
+        final List<String> primaryDimensions = List.of("environment", "batch", "browser", "location", "area");
+        final Map<String, List<String>> result = new LinkedHashMap<>();
+
+        for (final String dim : primaryDimensions)
+        {
+            final Set<String> values = rawTagMap.remove(dim);
+            if (values != null && !values.isEmpty())
+            {
+                result.put(dim, new ArrayList<>(values));
+            }
+        }
+
+        final List<String> sortedCustomKeys = new ArrayList<>(rawTagMap.keySet());
+        sortedCustomKeys.sort(String.CASE_INSENSITIVE_ORDER);
+        for (final String customKey : sortedCustomKeys)
+        {
+            final Set<String> values = rawTagMap.get(customKey);
+            if (values != null && !values.isEmpty())
+            {
+                result.put(customKey, new ArrayList<>(values));
+            }
+        }
+
+        return result;
+    }
+
+    public List<String> getAllKnownTagsList()
+    {
+        final Set<String> result = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        final Map<String, List<String>> tagMap = getAllKnownTagMap();
+        for (final Map.Entry<String, List<String>> entry : tagMap.entrySet())
+        {
+            final String key = entry.getKey();
+            for (final String val : entry.getValue())
+            {
+                result.add(key + ": " + val);
+            }
+        }
+        return new ArrayList<>(result);
+    }
+
+    public Map<String, List<String>> getCandidateTagValues(final Collection<String> runIds)
+    {
+        final Map<String, Set<String>> tagMap = new LinkedHashMap<>();
+        if (tagRepository != null && runIds != null && !runIds.isEmpty())
+        {
+            final List<TestRunTagEntity> tags = tagRepository.findByRunIdIn(runIds);
+            for (final TestRunTagEntity t : tags)
+            {
+                if (t.getTagKey() != null && !t.getTagKey().isBlank())
+                {
+                    final String key = t.getTagKey().trim();
+                    final String val = t.getTagValue() != null ? t.getTagValue().trim() : "";
+                    if (!val.isEmpty())
+                    {
+                        tagMap.computeIfAbsent(key, k -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER)).add(val);
+                    }
+                }
+            }
+        }
+        final Map<String, List<String>> result = new LinkedHashMap<>();
+        for (final Map.Entry<String, Set<String>> entry : tagMap.entrySet())
+        {
+            result.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+        }
+        return result;
+    }
+
+    public Map<String, Map<String, Set<String>>> getRunTagsMap(final Collection<String> runIds)
+    {
+        final Map<String, Map<String, Set<String>>> runTags = new HashMap<>();
+        if (tagRepository != null && runIds != null && !runIds.isEmpty())
+        {
+            final List<TestRunTagEntity> tags = tagRepository.findByRunIdIn(runIds);
+            for (final TestRunTagEntity t : tags)
+            {
+                if (t.getRunId() != null && t.getTagKey() != null && t.getTagValue() != null)
+                {
+                    runTags.computeIfAbsent(t.getRunId(), r -> new HashMap<>())
+                        .computeIfAbsent(t.getTagKey().toLowerCase(Locale.ROOT), k -> new HashSet<>())
+                        .add(t.getTagValue().trim());
+                }
+            }
+        }
+        return runTags;
+    }
+
+    public Map<String, List<String>> getRunTagsMap(final String runId)
+    {
+        if (tagRepository == null || runId == null || runId.isBlank())
+        {
+            return Collections.emptyMap();
+        }
+        final List<TestRunTagEntity> tags = tagRepository.findByRunId(runId.trim());
+        if (tags == null || tags.isEmpty())
+        {
+            return Collections.emptyMap();
+        }
+        final Map<String, List<String>> result = new LinkedHashMap<>();
+        for (final TestRunTagEntity t : tags)
+        {
+            if (t.getTagKey() != null && !t.getTagKey().isBlank() && t.getTagValue() != null)
+            {
+                result.computeIfAbsent(t.getTagKey().toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(t.getTagValue().trim());
+            }
+        }
+        return result;
+    }
+
+    public Map<String, List<String>> getRunTagsMap(final TestRunEntity run)
+    {
+        if (run == null)
+        {
+            return Collections.emptyMap();
+        }
+        if (run.getTags() != null && !run.getTags().isEmpty())
+        {
+            final Map<String, List<String>> result = new LinkedHashMap<>();
+            for (final TestRunTagEntity t : run.getTags())
+            {
+                if (t.getTagKey() != null && !t.getTagKey().isBlank() && t.getTagValue() != null)
+                {
+                    result.computeIfAbsent(t.getTagKey().toLowerCase(Locale.ROOT), k -> new ArrayList<>()).add(t.getTagValue().trim());
+                }
+            }
+            return result;
+        }
+        return getRunTagsMap(run.getId());
+    }
+
+    public void populateRunTags(final List<TestRunEntity> runs)
+    {
+        if (runs == null || runs.isEmpty())
+        {
+            return;
+        }
+        if (tagRepository != null)
+        {
+            final List<String> runIds = runs.stream().map(TestRunEntity::getId).filter(Objects::nonNull).toList();
+            final List<TestRunTagEntity> allTagEntities = tagRepository.findByRunIdIn(runIds);
+            final Map<String, List<TestRunTagEntity>> tagsByRunId = allTagEntities.stream()
+                .filter(t -> t.getRunId() != null)
+                .collect(Collectors.groupingBy(TestRunTagEntity::getRunId));
+            for (final TestRunEntity r : runs)
+            {
+                if (r.getId() != null)
+                {
+                    final List<TestRunTagEntity> rTags = new ArrayList<>(tagsByRunId.getOrDefault(r.getId(), Collections.emptyList()));
+                    if (r.getTags() != null)
+                    {
+                        for (final TestRunTagEntity existing : r.getTags())
+                        {
+                            if (rTags.stream().noneMatch(t -> Objects.equals(t.getTagKey(), existing.getTagKey()) && Objects.equals(t.getTagValue(), existing.getTagValue())))
+                            {
+                                rTags.add(existing);
+                            }
+                        }
+                    }
+                    final boolean hasSuiteTag = rTags.stream().anyMatch(t -> t.getTagKey() != null && ("suite".equalsIgnoreCase(t.getTagKey()) || "batch".equalsIgnoreCase(t.getTagKey())));
+                    if (!hasSuiteTag && r.getBatchName() != null && !r.getBatchName().isBlank())
+                    {
+                        rTags.add(0, new TestRunTagEntity(r.getId(), "Suite", r.getBatchName().trim()));
+                    }
+                    final boolean hasEnvTag = rTags.stream().anyMatch(t -> t.getTagKey() != null && ("environment".equalsIgnoreCase(t.getTagKey()) || "env".equalsIgnoreCase(t.getTagKey())));
+                    if (!hasEnvTag && r.getEnvironment() != null && !r.getEnvironment().isBlank())
+                    {
+                        rTags.add(new TestRunTagEntity(r.getId(), "Environment", r.getEnvironment().trim()));
+                    }
+                    r.setTags(rTags);
+                }
+            }
+        }
+        else
+        {
+            for (final TestRunEntity r : runs)
+            {
+                final List<TestRunTagEntity> rTags = new ArrayList<>();
+                if (r.getTags() != null)
+                {
+                    rTags.addAll(r.getTags());
+                }
+                final boolean hasSuiteTag = rTags.stream().anyMatch(t -> t.getTagKey() != null && ("suite".equalsIgnoreCase(t.getTagKey()) || "batch".equalsIgnoreCase(t.getTagKey())));
+                if (!hasSuiteTag && r.getBatchName() != null && !r.getBatchName().isBlank())
+                {
+                    rTags.add(0, new TestRunTagEntity(r.getId(), "Suite", r.getBatchName().trim()));
+                }
+                final boolean hasEnvTag = rTags.stream().anyMatch(t -> t.getTagKey() != null && ("environment".equalsIgnoreCase(t.getTagKey()) || "env".equalsIgnoreCase(t.getTagKey())));
+                if (!hasEnvTag && r.getEnvironment() != null && !r.getEnvironment().isBlank())
+                {
+                    rTags.add(new TestRunTagEntity(r.getId(), "Environment", r.getEnvironment().trim()));
+                }
+                r.setTags(rTags);
+            }
+        }
     }
 
     public static Map<String, String> parseQueryParams(final String url)
@@ -3445,6 +7538,29 @@ public class AuraReportDataService
         return new String[]{statusClass, statusLabel};
     }
 
+    /**
+     * Determines whether the given execution parameters correspond to a valid test variation
+     * rather than a class- or suite-level placeholder/container event.
+     *
+     * @param testClass the test class name
+     * @param testMethod the test method name
+     * @param dataSet the dataset name
+     * @return {@code true} if valid variation, {@code false} if container placeholder
+     */
+    public static boolean isValidTestVariation(final String testClass, final String testMethod, final String dataSet)
+    {
+        if (testMethod == null || testMethod.isBlank())
+        {
+            return false;
+        }
+        if (testClass != null && !testClass.isBlank() && dataSet != null && !dataSet.isBlank()
+                && testClass.trim().equalsIgnoreCase(dataSet.trim()))
+        {
+            return false;
+        }
+        return true;
+    }
+
     private static String cleanDataSetString(final String raw)
     {
         if (raw == null)
@@ -3497,6 +7613,341 @@ public class AuraReportDataService
         return generateVariationId(testClass, null, dataSet, location, browser);
     }
 
+    public static boolean matchesBugTags(
+        final TestExecutionDto exec,
+        final String environment,
+        final String batchName,
+        final Map<String, List<String>> runTags,
+        final String tagCriteria)
+    {
+        if (exec == null)
+        {
+            return false;
+        }
+        if (tagCriteria == null || tagCriteria.isBlank())
+        {
+            return true;
+        }
+        final String effEnv = (environment != null && !environment.isBlank())
+            ? environment
+            : exec.getEnvironment();
+        final String effBatch = (batchName != null && !batchName.isBlank())
+            ? batchName
+            : exec.getBatchName();
+
+        final Map<String, List<String>> combinedTags = new LinkedHashMap<>();
+        if (runTags != null && !runTags.isEmpty())
+        {
+            combinedTags.putAll(runTags);
+        }
+        if (exec.getTags() != null && !exec.getTags().isEmpty())
+        {
+            for (final Map.Entry<String, List<String>> entry : exec.getTags().entrySet())
+            {
+                combinedTags.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).addAll(entry.getValue());
+            }
+        }
+
+        return TagUtils.matchesTagCriteria(
+            combinedTags,
+            exec.getJunitTags(),
+            exec.getBrowser(),
+            exec.getLocale(),
+            effEnv,
+            effBatch,
+            tagCriteria
+        );
+    }
+
+    public static boolean matchesBugTags(
+        final TestExecutionDto exec,
+        final String environment,
+        final String batchName,
+        final String tagCriteria)
+    {
+        return matchesBugTags(exec, environment, batchName, Collections.emptyMap(), tagCriteria);
+    }
+
+    public static boolean matchesBugTags(final TestExecutionDto exec, final String tagCriteria)
+    {
+        return matchesBugTags(exec, null, null, Collections.emptyMap(), tagCriteria);
+    }
+
+    private void applyBugsToExecution(
+        final TestExecutionDto exec,
+        final List<TestBaseBugEntity> candidateActiveBugs,
+        final Set<String> removedTickets)
+    {
+        applyBugsToExecution(exec, candidateActiveBugs, removedTickets, null, null, Collections.emptyMap());
+    }
+
+    private void applyBugsToExecution(
+        final TestExecutionDto exec,
+        final List<TestBaseBugEntity> candidateActiveBugs,
+        final Set<String> removedTickets,
+        final String runEnv,
+        final String runBatch)
+    {
+        applyBugsToExecution(exec, candidateActiveBugs, removedTickets, runEnv, runBatch, Collections.emptyMap());
+    }
+
+    private void applyBugsToExecution(
+        final TestExecutionDto exec,
+        final List<TestBaseBugEntity> candidateActiveBugs,
+        final Set<String> removedTickets,
+        final String runEnv,
+        final String runBatch,
+        final Map<String, List<String>> runTags)
+    {
+        if (exec == null)
+        {
+            return;
+        }
+
+        if (runEnv != null && !runEnv.isBlank() && exec.getEnvironment().isEmpty())
+        {
+            exec.setEnvironment(runEnv);
+        }
+        if (runBatch != null && !runBatch.isBlank() && exec.getBatchName().isEmpty())
+        {
+            exec.setBatchName(runBatch);
+        }
+
+        final List<TestBaseBugEntity> matchedBugs = new ArrayList<>();
+        final Set<String> matchedNormTickets = new HashSet<>();
+        if (candidateActiveBugs != null)
+        {
+            for (final TestBaseBugEntity b : candidateActiveBugs)
+            {
+                if (matchesBugTags(exec, runEnv, runBatch, runTags, b.getTagCriteria()))
+                {
+                    matchedBugs.add(b);
+                    matchedNormTickets.add(normalizeTicket(b.getBugTicket()));
+                }
+            }
+        }
+
+        final Set<String> mismatchedTickets = new HashSet<>();
+        final List<BugDetailDto> inactiveBugDetails = new ArrayList<>();
+        if (candidateActiveBugs != null)
+        {
+            for (final TestBaseBugEntity b : candidateActiveBugs)
+            {
+                final String norm = normalizeTicket(b.getBugTicket());
+                if (!matchedNormTickets.contains(norm))
+                {
+                    mismatchedTickets.add(norm);
+                    if (removedTickets == null || !removedTickets.contains(norm))
+                    {
+                        final String sev = (b.getSeverity() != null && !b.getSeverity().isBlank()) ? b.getSeverity() : "MAJOR";
+                        inactiveBugDetails.add(new BugDetailDto(b.getBugTicket(), sev, b.getTagCriteria()));
+                    }
+                }
+            }
+        }
+
+        final Map<String, String> existingSeverities = new HashMap<>();
+        if (exec.getBugDetails() != null)
+        {
+            for (final BugDetailDto detail : exec.getBugDetails())
+            {
+                if (detail != null && detail.getBugTicket() != null)
+                {
+                    existingSeverities.put(normalizeTicket(detail.getBugTicket()), detail.getSeverity());
+                }
+            }
+        }
+
+        final Map<String, BugDetailDto> finalDetailsMap = new LinkedHashMap<>();
+
+        if (exec.getBugs() != null)
+        {
+            for (final String b : exec.getBugs())
+            {
+                if (b != null && !b.isBlank())
+                {
+                    final String norm = normalizeTicket(b);
+                    if ((removedTickets == null || !removedTickets.contains(norm)) && !mismatchedTickets.contains(norm))
+                    {
+                        final String existingSev = existingSeverities.getOrDefault(norm, "MAJOR");
+                        finalDetailsMap.put(norm, new BugDetailDto(b.trim(), existingSev, null));
+                    }
+                }
+            }
+        }
+
+        for (final TestBaseBugEntity b : matchedBugs)
+        {
+            final String norm = normalizeTicket(b.getBugTicket());
+            final String sev = (b.getSeverity() != null && !b.getSeverity().isBlank()) ? b.getSeverity() : "MAJOR";
+            finalDetailsMap.put(norm, new BugDetailDto(b.getBugTicket(), sev, b.getTagCriteria()));
+        }
+
+        final List<BugDetailDto> bugDetailList = new ArrayList<>(finalDetailsMap.values());
+        exec.setBugDetails(bugDetailList);
+        exec.setInactiveBugDetails(inactiveBugDetails);
+    }
+
+    public List<String> getEffectiveExecutionIdentityDimensions(final List<String> explicitDimensions)
+    {
+        if (explicitDimensions != null && !explicitDimensions.isEmpty())
+        {
+            return explicitDimensions;
+        }
+        if (dashboardSettingService != null)
+        {
+            final List<String> dims = dashboardSettingService.getExecutionIdentityDimensions();
+            if (dims != null && !dims.isEmpty())
+            {
+                return dims;
+            }
+        }
+        return ReportDashboardSettingService.DEFAULT_EXECUTION_IDENTITY_DIMENSIONS;
+    }
+
+    /**
+     * @deprecated Use {@link #getEffectiveExecutionIdentityDimensions(List)} instead.
+     */
+    @Deprecated
+    public List<String> getEffectiveUniquenessDimensions(final List<String> explicitDimensions)
+    {
+        return getEffectiveExecutionIdentityDimensions(explicitDimensions);
+    }
+
+    public static boolean isDefaultExecutionIdentity(final List<String> dims)
+    {
+        if (dims == null || dims.size() != 2)
+        {
+            return false;
+        }
+        final Set<String> set = dims.stream()
+            .map(ReportDashboardSettingService::normalizeDimensionName)
+            .collect(Collectors.toSet());
+        return set.contains("browser") && set.contains("locale");
+    }
+
+    /**
+     * @deprecated Use {@link #isDefaultExecutionIdentity(List)} instead.
+     */
+    @Deprecated
+    public static boolean isDefaultUniqueness(final List<String> dims)
+    {
+        return isDefaultExecutionIdentity(dims);
+    }
+
+    public String buildLogicalKey(final TestRunEntity run, final TestExecutionDto exec)
+    {
+        if (exec == null)
+        {
+            return "";
+        }
+        final String testClass = (exec.getTestClass() != null && !exec.getTestClass().isBlank())
+            ? exec.getTestClass().trim()
+            : "GeneralTest";
+        final String testMethod = (exec.getTestMethod() != null && !exec.getTestMethod().isBlank())
+            ? exec.getTestMethod().trim()
+            : "";
+        final String dataSet = cleanDataSetString(exec.getTitle());
+        final String normLoc = normalizeLocation(exec.getLocation());
+        final String normBr = normalizeBrowser(exec.getBrowser());
+        return buildLogicalKey(testClass, testMethod, dataSet, normLoc, normBr, run, exec, null);
+    }
+
+    public String buildLogicalKey(
+        final String testClass,
+        final String testMethod,
+        final String dataSet,
+        final String normLoc,
+        final String normBr,
+        final TestRunEntity run,
+        final List<String> uniquenessDimensions)
+    {
+        return buildLogicalKey(testClass, testMethod, dataSet, normLoc, normBr, run, null, uniquenessDimensions);
+    }
+
+    public String buildLogicalKey(
+        final String testClass,
+        final String testMethod,
+        final String dataSet,
+        final String normLoc,
+        final String normBr,
+        final TestRunEntity run,
+        final TestExecutionDto exec,
+        final List<String> uniquenessDimensions)
+    {
+        final List<String> dims = getEffectiveExecutionIdentityDimensions(uniquenessDimensions);
+        final StringBuilder sb = new StringBuilder();
+        sb.append(testClass != null ? testClass.trim() : "").append("|");
+        sb.append(testMethod != null ? testMethod.trim() : "").append("|");
+        sb.append(dataSet != null ? dataSet.trim() : "");
+
+        for (final String dim : dims)
+        {
+            final String normDim = ReportDashboardSettingService.normalizeDimensionName(dim);
+            if ("browser".equalsIgnoreCase(normDim))
+            {
+                sb.append("|br:").append(normBr != null && !normBr.isBlank() ? normBr : "Default");
+            }
+            else if ("locale".equalsIgnoreCase(normDim))
+            {
+                String loc = null;
+                if (exec != null && exec.getTags() != null)
+                {
+                    final List<String> locTags = TagUtils.findTagValues(exec.getTags(), "locale");
+                    if (locTags != null && !locTags.isEmpty())
+                    {
+                        loc = String.join("+", locTags);
+                    }
+                }
+                if (loc == null && normLoc != null && !normLoc.isBlank())
+                {
+                    loc = normLoc;
+                }
+                sb.append("|loc:").append(loc != null ? loc : "Default");
+            }
+            else if ("environment".equalsIgnoreCase(normDim))
+            {
+                String env = null;
+                if (exec != null && exec.getTags() != null)
+                {
+                    final List<String> envTags = TagUtils.findTagValues(exec.getTags(), "environment");
+                    if (envTags != null && !envTags.isEmpty())
+                    {
+                        env = String.join("+", envTags);
+                    }
+                }
+                if (env == null && run != null && run.getEnvironment() != null && !run.getEnvironment().isBlank())
+                {
+                    env = run.getEnvironment().trim();
+                }
+                if (env == null && run != null)
+                {
+                    final List<String> tagVals = getRunTagValues(run, "environment");
+                    if (!tagVals.isEmpty())
+                    {
+                        env = tagVals.get(0);
+                    }
+                }
+                sb.append("|env:").append(env != null ? env : "Default");
+            }
+            else
+            {
+                List<String> tagVals = null;
+                if (exec != null && exec.getTags() != null)
+                {
+                    tagVals = TagUtils.findTagValues(exec.getTags(), normDim);
+                }
+                if (tagVals == null || tagVals.isEmpty())
+                {
+                    tagVals = (run != null) ? getRunTagValues(run, normDim) : Collections.emptyList();
+                }
+                final String tagVal = (tagVals == null || tagVals.isEmpty()) ? "Default" : String.join("+", tagVals);
+                sb.append("|tag:").append(normDim).append("=").append(tagVal);
+            }
+        }
+        return sb.toString();
+    }
+
     public static String extractBrowserFromIdOrKey(final String idOrKey)
     {
         if (idOrKey == null || idOrKey.isBlank() || !idOrKey.contains("#"))
@@ -3513,6 +7964,567 @@ public class AuraReportDataService
             return parts[2].trim();
         }
         return null;
+    }
+
+    /**
+     * Creates a scoped in-memory copy of a {@link TestRunEntity} whose test execution metrics
+     * reflect only those executions matching the specified filter criteria (browsers, locales,
+     * environments, areas, and tags). If no filters are provided, the original run is returned.
+     * The returned entity is strictly transient and must not be persisted to the database.
+     *
+     * @param r the source test run entity
+     * @param runBrowsers target browser criteria (or empty/null)
+     * @param runLocales target locale criteria (or empty/null)
+     * @param runEnvs target environment criteria (or empty/null)
+     * @param runAreas target area criteria (or empty/null)
+     * @param runTags target tag criteria (or empty/null)
+     * @param bugsMap pre-grouped bug tickets by variation id (optional, null to query repository)
+     * @return scoped transient {@link TestRunEntity}
+     */
+    public TestRunEntity scopeRunToCriteria(
+        final TestRunEntity r,
+        final Set<String> runBrowsers,
+        final Set<String> runLocales,
+        final Set<String> runEnvs,
+        final Set<String> runAreas,
+        final Set<String> runTags,
+        final Map<String, List<String>> bugsMap)
+    {
+        return scopeRunToCriteria(
+            r,
+            runBrowsers,
+            Collections.emptySet(),
+            runLocales,
+            Collections.emptySet(),
+            runEnvs,
+            Collections.emptySet(),
+            runAreas,
+            Collections.emptySet(),
+            runTags,
+            Collections.emptySet(),
+            bugsMap,
+            Collections.emptyMap(),
+            Collections.emptyMap()
+        );
+    }
+
+    public TestRunEntity scopeRunToCriteria(
+        final TestRunEntity r,
+        final Set<String> runBrowsers,
+        final Set<String> runLocales,
+        final Set<String> runEnvs,
+        final Set<String> runAreas,
+        final Set<String> runTags,
+        final Map<String, List<String>> bugsMap,
+        final Map<String, Set<String>> runTagsByType)
+    {
+        return scopeRunToCriteria(
+            r,
+            runBrowsers,
+            Collections.emptySet(),
+            runLocales,
+            Collections.emptySet(),
+            runEnvs,
+            Collections.emptySet(),
+            runAreas,
+            Collections.emptySet(),
+            runTags,
+            Collections.emptySet(),
+            bugsMap,
+            runTagsByType,
+            Collections.emptyMap()
+        );
+    }
+
+    public TestRunEntity scopeRunToCriteria(
+        final TestRunEntity r,
+        final Set<String> runBrowsers,
+        final Set<String> excludedRunBrowsers,
+        final Set<String> runLocales,
+        final Set<String> excludedRunLocales,
+        final Set<String> runEnvs,
+        final Set<String> excludedRunEnvs,
+        final Set<String> runAreas,
+        final Set<String> excludedRunAreas,
+        final Set<String> runTags,
+        final Set<String> excludedRunTags,
+        final Map<String, List<String>> bugsMap,
+        final Map<String, Set<String>> runTagsByType,
+        final Map<String, Set<String>> excludedRunTagsByType)
+    {
+        if (r == null)
+        {
+            return null;
+        }
+
+        final boolean hasCriteria = (runBrowsers != null && !runBrowsers.isEmpty())
+            || (excludedRunBrowsers != null && !excludedRunBrowsers.isEmpty())
+            || (runLocales != null && !runLocales.isEmpty())
+            || (excludedRunLocales != null && !excludedRunLocales.isEmpty())
+            || (runEnvs != null && !runEnvs.isEmpty())
+            || (excludedRunEnvs != null && !excludedRunEnvs.isEmpty())
+            || (runAreas != null && !runAreas.isEmpty())
+            || (excludedRunAreas != null && !excludedRunAreas.isEmpty())
+            || (runTags != null && !runTags.isEmpty())
+            || (excludedRunTags != null && !excludedRunTags.isEmpty())
+            || (runTagsByType != null && !runTagsByType.isEmpty())
+            || (excludedRunTagsByType != null && !excludedRunTagsByType.isEmpty());
+
+        if (!hasCriteria)
+        {
+            return r;
+        }
+
+        if ((runBrowsers != null && runBrowsers.contains("_none_"))
+            || (runLocales != null && runLocales.contains("_none_"))
+            || (runEnvs != null && runEnvs.contains("_none_"))
+            || (runAreas != null && runAreas.contains("_none_"))
+            || (runTags != null && runTags.contains("_none_")))
+        {
+            return createEmptyScopedRun(r);
+        }
+
+        if (runEnvs != null && !runEnvs.isEmpty())
+        {
+            final String rEnv = (r.getEnvironment() != null && !r.getEnvironment().isBlank()) ? r.getEnvironment().trim() : "Default";
+            final boolean matchEnv = runEnvs.stream().anyMatch(re -> re.equalsIgnoreCase(rEnv));
+            if (!matchEnv)
+            {
+                return createEmptyScopedRun(r);
+            }
+        }
+        if (excludedRunEnvs != null && !excludedRunEnvs.isEmpty())
+        {
+            final String rEnv = (r.getEnvironment() != null && !r.getEnvironment().isBlank()) ? r.getEnvironment().trim() : "Default";
+            final boolean matchEnv = excludedRunEnvs.stream().anyMatch(re -> re.equalsIgnoreCase(rEnv));
+            if (matchEnv)
+            {
+                return createEmptyScopedRun(r);
+            }
+        }
+
+        if (runTags != null && !runTags.isEmpty())
+        {
+            final String rTag = (r.getBatchName() != null && !r.getBatchName().isBlank()) ? r.getBatchName().trim() : "Default";
+            final boolean matchTag = runTags.stream().anyMatch(rt -> rt.equalsIgnoreCase(rTag));
+            if (!matchTag)
+            {
+                return createEmptyScopedRun(r);
+            }
+        }
+        if (excludedRunTags != null && !excludedRunTags.isEmpty())
+        {
+            final String rTag = (r.getBatchName() != null && !r.getBatchName().isBlank()) ? r.getBatchName().trim() : "Default";
+            final boolean matchTag = excludedRunTags.stream().anyMatch(rt -> rt.equalsIgnoreCase(rTag));
+            if (matchTag)
+            {
+                return createEmptyScopedRun(r);
+            }
+        }
+
+        if (runTagsByType != null && !runTagsByType.isEmpty())
+        {
+            for (final Map.Entry<String, Set<String>> entry : runTagsByType.entrySet())
+            {
+                final String tagType = entry.getKey();
+                final Set<String> selectedVals = entry.getValue();
+                if (selectedVals == null || selectedVals.isEmpty())
+                {
+                    continue;
+                }
+                if (selectedVals.contains("_none_"))
+                {
+                    return createEmptyScopedRun(r);
+                }
+                if (!matchesTagCriteria(r, tagType, selectedVals))
+                {
+                    return createEmptyScopedRun(r);
+                }
+            }
+        }
+        if (excludedRunTagsByType != null && !excludedRunTagsByType.isEmpty())
+        {
+            for (final Map.Entry<String, Set<String>> entry : excludedRunTagsByType.entrySet())
+            {
+                final String tagType = entry.getKey();
+                final Set<String> excludedVals = entry.getValue();
+                if (excludedVals == null || excludedVals.isEmpty())
+                {
+                    continue;
+                }
+                if (isExcludedByTagCriteria(r, tagType, excludedVals))
+                {
+                    return createEmptyScopedRun(r);
+                }
+            }
+        }
+
+        final RunReportDto report = getRunReport(r.getId());
+        if (report == null || report.getExecutions() == null || report.getExecutions().isEmpty())
+        {
+            return createEmptyScopedRun(r);
+        }
+
+        final Map<String, List<TestBaseBugEntity>> allBugsByVarId;
+        if (bugsMap == null)
+        {
+            final List<TestBaseBugEntity> allBugs = (bugRepository != null) ? bugRepository.findAll() : Collections.emptyList();
+            allBugsByVarId = allBugs.stream()
+                .filter(b -> b.getRemovedRunId() == null)
+                .collect(Collectors.groupingBy(TestBaseBugEntity::getVariationId));
+        }
+        else
+        {
+            allBugsByVarId = Collections.emptyMap();
+        }
+
+        int passClean = 0;
+        int passHealed = 0;
+        int passAi = 0;
+        int fixedClean = 0;
+        int fixedHealed = 0;
+        int fixedAi = 0;
+        int knownClean = 0;
+        int knownHealed = 0;
+        int knownAi = 0;
+        int unknownClean = 0;
+        int unknownHealed = 0;
+        int unknownAi = 0;
+        int ignored = 0;
+        int flakyCount = 0;
+        double scopedLlmCost = 0.0;
+        long scopedLlmTokens = 0L;
+
+        final Set<String> matchedBrowsers = new LinkedHashSet<>();
+        final Set<String> matchedLocales = new LinkedHashSet<>();
+
+        for (final TestExecutionDto exec : report.getExecutions())
+        {
+            final String testClass = (exec.getTestClass() != null && !exec.getTestClass().isBlank())
+                ? exec.getTestClass().trim()
+                : "GeneralTest";
+            final String testMethod = (exec.getTestMethod() != null && !exec.getTestMethod().isBlank())
+                ? exec.getTestMethod().trim()
+                : "";
+            final String dataSet = cleanDataSetString(exec.getTitle());
+            if (!isValidTestVariation(testClass, testMethod, dataSet))
+            {
+                continue;
+            }
+            final String normLoc = normalizeLocation(exec.getLocation());
+            final String normBr = normalizeBrowser(exec.getBrowser());
+            final String normArea = normalizeArea(exec.getAreaName());
+
+            if (runBrowsers != null && !runBrowsers.isEmpty())
+            {
+                final boolean matchBr = runBrowsers.stream().anyMatch(rb ->
+                    rb.equalsIgnoreCase(normBr) || rb.equalsIgnoreCase(exec.getBrowser()) || normalizeBrowser(rb).equalsIgnoreCase(normBr)
+                );
+                if (!matchBr)
+                {
+                    continue;
+                }
+            }
+            if (excludedRunBrowsers != null && !excludedRunBrowsers.isEmpty())
+            {
+                final boolean matchBr = excludedRunBrowsers.stream().anyMatch(eb ->
+                    eb.equalsIgnoreCase(normBr) || eb.equalsIgnoreCase(exec.getBrowser()) || normalizeBrowser(eb).equalsIgnoreCase(normBr)
+                );
+                if (matchBr)
+                {
+                    continue;
+                }
+            }
+
+            if (runLocales != null && !runLocales.isEmpty())
+            {
+                final boolean matchLoc = runLocales.stream().anyMatch(rl ->
+                    rl.equalsIgnoreCase(normLoc) || rl.equalsIgnoreCase(exec.getLocation()) || normalizeLocation(rl).equalsIgnoreCase(normLoc)
+                );
+                if (!matchLoc)
+                {
+                    continue;
+                }
+            }
+            if (excludedRunLocales != null && !excludedRunLocales.isEmpty())
+            {
+                final boolean matchLoc = excludedRunLocales.stream().anyMatch(el ->
+                    el.equalsIgnoreCase(normLoc) || el.equalsIgnoreCase(exec.getLocation()) || normalizeLocation(el).equalsIgnoreCase(normLoc)
+                );
+                if (matchLoc)
+                {
+                    continue;
+                }
+            }
+
+            if (runAreas != null && !runAreas.isEmpty())
+            {
+                final boolean matchArea = runAreas.stream().anyMatch(ra ->
+                    normalizeArea(ra).equalsIgnoreCase(normArea)
+                );
+                if (!matchArea)
+                {
+                    continue;
+                }
+            }
+            if (excludedRunAreas != null && !excludedRunAreas.isEmpty())
+            {
+                final boolean matchArea = excludedRunAreas.stream().anyMatch(ea ->
+                    normalizeArea(ea).equalsIgnoreCase(normArea)
+                );
+                if (matchArea)
+                {
+                    continue;
+                }
+            }
+
+            matchedBrowsers.add(normBr);
+            matchedLocales.add(normLoc);
+
+            final String canonicalId = generateVariationId(testClass, testMethod, dataSet, normLoc, normBr);
+            final boolean hasBugs;
+            if (bugsMap != null)
+            {
+                hasBugs = bugsMap.containsKey(canonicalId) && !bugsMap.get(canonicalId).isEmpty();
+            }
+            else
+            {
+                final List<TestBaseBugEntity> varBugs = allBugsByVarId.getOrDefault(canonicalId, Collections.emptyList());
+                hasBugs = varBugs.stream().anyMatch(b -> matchesBugTags(exec, b.getEnvironment(), b.getBatchName(), b.getTagCriteria()));
+            }
+            final String rawStatus = exec.getStatus() != null ? exec.getStatus() : "passed-clean";
+            final String effectiveStatus;
+            if ("failed".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus))
+            {
+                effectiveStatus = hasBugs ? "failed-known" : "failed-unknown";
+            }
+            else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus) || "healed".equalsIgnoreCase(rawStatus))
+            {
+                effectiveStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
+            }
+            else
+            {
+                effectiveStatus = rawStatus;
+            }
+
+            final String mode = (exec.getDisplayMode() != null && !exec.getDisplayMode().isBlank())
+                ? exec.getDisplayMode()
+                : ((exec.getMode() != null && !exec.getMode().isBlank()) ? exec.getMode() : "JAVA");
+            final boolean healed = exec.isHealed();
+            final boolean ai = "AI".equalsIgnoreCase(mode);
+
+            if ("passed-clean".equalsIgnoreCase(effectiveStatus) || "passed".equalsIgnoreCase(effectiveStatus) || "succeeded".equalsIgnoreCase(effectiveStatus))
+            {
+                if (healed)
+                {
+                    passHealed++;
+                }
+                else if (ai)
+                {
+                    passAi++;
+                }
+                else
+                {
+                    passClean++;
+                }
+            }
+            else if ("succeeded-fixed".equalsIgnoreCase(effectiveStatus) || "fixed".equalsIgnoreCase(effectiveStatus))
+            {
+                if (healed)
+                {
+                    fixedHealed++;
+                }
+                else if (ai)
+                {
+                    fixedAi++;
+                }
+                else
+                {
+                    fixedClean++;
+                }
+            }
+            else if ("failed-known".equalsIgnoreCase(effectiveStatus) || "known".equalsIgnoreCase(effectiveStatus))
+            {
+                if (healed)
+                {
+                    knownHealed++;
+                }
+                else if (ai)
+                {
+                    knownAi++;
+                }
+                else
+                {
+                    knownClean++;
+                }
+            }
+            else if ("failed-unknown".equalsIgnoreCase(effectiveStatus) || "unknown".equalsIgnoreCase(effectiveStatus) || "failed".equalsIgnoreCase(effectiveStatus) || "error".equalsIgnoreCase(effectiveStatus))
+            {
+                if (healed)
+                {
+                    unknownHealed++;
+                }
+                else if (ai)
+                {
+                    unknownAi++;
+                }
+                else
+                {
+                    unknownClean++;
+                }
+            }
+            else
+            {
+                ignored++;
+            }
+
+            if (exec.isFlaky())
+            {
+                flakyCount++;
+            }
+
+            scopedLlmCost += exec.getLlmCost();
+            scopedLlmTokens += exec.getLlmTotalTokens();
+        }
+
+        final TestRunEntity scopedRun = new TestRunEntity();
+        scopedRun.setId(r.getId());
+        scopedRun.setBatchName(r.getBatchName());
+        scopedRun.setStatus(r.getStatus());
+        scopedRun.setTriggerSource(r.getTriggerSource());
+        scopedRun.setEnvironment(r.getEnvironment());
+        scopedRun.setTimestampLabel(r.getTimestampLabel());
+        scopedRun.setStartTimeMs(r.getStartTimeMs());
+        scopedRun.setEndTimeMs(r.getEndTimeMs());
+        scopedRun.setRunComment(r.getRunComment());
+        scopedRun.setRunJsonPath(r.getRunJsonPath());
+        scopedRun.setIsDeleted(false);
+        scopedRun.setTags(r.getTags());
+
+        scopedRun.setPassedHealedCount(passHealed);
+        scopedRun.setPassedAiCount(passAi);
+        final int runPassed = passClean + passHealed + passAi;
+        scopedRun.setPassedCount(runPassed);
+
+        scopedRun.setSucceededFixedHealedCount(fixedHealed);
+        scopedRun.setSucceededFixedAiCount(fixedAi);
+        final int runFixed = fixedClean + fixedHealed + fixedAi;
+        scopedRun.setSucceededFixedCount(runFixed);
+
+        scopedRun.setFailedKnownHealedCount(knownHealed);
+        scopedRun.setFailedKnownAiCount(knownAi);
+        final int runKnown = knownClean + knownHealed + knownAi;
+        scopedRun.setFailedKnownCount(runKnown);
+
+        scopedRun.setFailedUnknownHealedCount(unknownHealed);
+        scopedRun.setFailedUnknownAiCount(unknownAi);
+        final int runUnknown = unknownClean + unknownHealed + unknownAi;
+        scopedRun.setFailedUnknownCount(runUnknown);
+
+        scopedRun.setIgnoredCount(ignored);
+        scopedRun.setFlakyCount(flakyCount);
+        final int runTotal = runPassed + runFixed + runKnown + runUnknown + ignored;
+        scopedRun.setTotalTests(runTotal);
+        scopedRun.setPassRate(runTotal > 0 ? ((double) (runPassed + runFixed) / runTotal * 100.0) : 0.0);
+        scopedRun.setTotalLlmCost(Math.ceil(scopedLlmCost * 1000000.0) / 1000000.0);
+        scopedRun.setTotalLlmTokens(scopedLlmTokens);
+
+        if (!matchedBrowsers.isEmpty())
+        {
+            scopedRun.setBrowsersCsv(String.join(",", matchedBrowsers));
+        }
+        else
+        {
+            scopedRun.setBrowsersCsv(r.getBrowsersCsv());
+        }
+
+        if (!matchedLocales.isEmpty())
+        {
+            scopedRun.setLocalesCsv(String.join(",", matchedLocales));
+        }
+        else
+        {
+            scopedRun.setLocalesCsv(r.getLocalesCsv());
+        }
+
+        return scopedRun;
+    }
+
+    public TestRunEntity scopeRunToCriteria(
+        final TestRunEntity r,
+        final Set<String> runBrowsers,
+        final Set<String> runLocales,
+        final Set<String> runEnvs,
+        final Set<String> runAreas,
+        final Set<String> runTags)
+    {
+        return scopeRunToCriteria(r, runBrowsers, runLocales, runEnvs, runAreas, runTags, null, Collections.emptyMap());
+    }
+
+    private TestRunEntity createEmptyScopedRun(final TestRunEntity r)
+    {
+        final TestRunEntity scopedRun = new TestRunEntity();
+        scopedRun.setId(r.getId());
+        scopedRun.setBatchName(r.getBatchName());
+        scopedRun.setStatus(r.getStatus());
+        scopedRun.setTriggerSource(r.getTriggerSource());
+        scopedRun.setEnvironment(r.getEnvironment());
+        scopedRun.setTimestampLabel(r.getTimestampLabel());
+        scopedRun.setStartTimeMs(r.getStartTimeMs());
+        scopedRun.setEndTimeMs(r.getEndTimeMs());
+        scopedRun.setRunComment(r.getRunComment());
+        scopedRun.setRunJsonPath(r.getRunJsonPath());
+        scopedRun.setIsDeleted(false);
+        scopedRun.setTags(r.getTags());
+        scopedRun.setPassedHealedCount(0);
+        scopedRun.setPassedAiCount(0);
+        scopedRun.setPassedCount(0);
+        scopedRun.setSucceededFixedHealedCount(0);
+        scopedRun.setSucceededFixedAiCount(0);
+        scopedRun.setSucceededFixedCount(0);
+        scopedRun.setFailedKnownHealedCount(0);
+        scopedRun.setFailedKnownAiCount(0);
+        scopedRun.setFailedKnownCount(0);
+        scopedRun.setFailedUnknownHealedCount(0);
+        scopedRun.setFailedUnknownAiCount(0);
+        scopedRun.setFailedUnknownCount(0);
+        scopedRun.setIgnoredCount(0);
+        scopedRun.setFlakyCount(0);
+        scopedRun.setTotalTests(0);
+        scopedRun.setTotalLlmCost(0.0);
+        scopedRun.setTotalLlmTokens(0L);
+        scopedRun.setBrowsersCsv(r.getBrowsersCsv());
+        scopedRun.setLocalesCsv(r.getLocalesCsv());
+        scopedRun.setPassRate(0.0);
+        return scopedRun;
+    }
+
+    private static final class ScopedRunStats
+    {
+        private int passClean;
+        private int passHealed;
+        private int passAi;
+        private int fixedClean;
+        private int fixedHealed;
+        private int fixedAi;
+        private int knownClean;
+        private int knownHealed;
+        private int knownAi;
+        private int unknownClean;
+        private int unknownHealed;
+        private int unknownAi;
+        private int ignored;
+        private int flakyCount;
+        private final Set<String> browsers = new LinkedHashSet<>();
+        private final Set<String> locales = new LinkedHashSet<>();
+    }
+
+    private record RunVariationCost(String logicalKey, double llmCost, long llmTokens)
+    {
+    }
+
+    private record VariationRunState(String status, boolean healed, String mode, boolean flaky)
+    {
     }
 }
 

@@ -27,7 +27,9 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -393,25 +395,19 @@ public class InteractiveConsoleEngineTest
     }
 
     @Test
-    public void testExtractLocaleFromDatasetId()
-    {
-        assertEquals("DE", InteractiveStateBuilder.extractLocaleFromDatasetId("homepage test DE"));
-        assertEquals("deu", InteractiveStateBuilder.extractLocaleFromDatasetId("guest checkout deu"));
-        assertEquals("en_US", InteractiveStateBuilder.extractLocaleFromDatasetId("checkout_en_US"));
-        assertEquals("FR", InteractiveStateBuilder.extractLocaleFromDatasetId("search_test_FR"));
-        assertEquals("uk", InteractiveStateBuilder.extractLocaleFromDatasetId("test.uk"));
-        assertNull(InteractiveStateBuilder.extractLocaleFromDatasetId("wikipedia_search_example_1"));
-    }
-
-    @Test
-    public void testBuildStateJsonSerializesLocale()
+    public void testBuildStateJsonSerializesVariationTags()
     {
         final ExecutionContext context = new ExecutionContext(null);
-        context.getTransientData().put("datasetLabel", "homepage test DE");
+        final Map<String, List<String>> tags = new LinkedHashMap<>();
+        tags.put("tag3", List.of("value"));
+        tags.put("tag4", List.of("value2", "value3"));
+        context.getTransientData().put("variationTags", tags);
 
-        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-locale", 0, "running");
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "test-run-tags", 0, "running");
 
-        assertTrue(stateJson.contains("\"locale\":\"DE\""), "Top-level state JSON should contain guessed locale 'DE'");
+        assertTrue(stateJson.contains("\"tags\":{"), "Top-level state JSON should contain tags object");
+        assertTrue(stateJson.contains("\"tag3\":[\"value\"]"), "Tags should contain tag3");
+        assertTrue(stateJson.contains("\"tag4\":[\"value2\",\"value3\"]"), "Tags should contain tag4 array");
     }
 
     @Test
@@ -1344,17 +1340,54 @@ public class InteractiveConsoleEngineTest
     }
 
     @Test
-    public void testPushStateLogsAreaNameFromTransientData() throws IOException
+    public void testPushStateLogsVariationTagsFromTransientData() throws IOException
     {
         System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
         AiConfiguration.resetInstance();
 
         final ExecutionContext context = new ExecutionContext(new SessionData());
-        context.getTransientData().put("areaName", "@Checkout");
+        final Map<String, List<String>> tags = new LinkedHashMap<>();
+        tags.put("tag1", List.of("val1"));
+        tags.put("tag2", List.of("val2", "val3"));
+        context.getTransientData().put("variationTags", tags);
+
+        final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run_tag_test", 0, "passed");
+        final JsonNode stateRoot = new ObjectMapper().readTree(stateJson);
+        assertTrue(stateRoot.has("tags"), "stateJson should contain tags object");
+        assertEquals("val1", stateRoot.path("tags").path("tag1").get(0).asText());
+        assertEquals("val2", stateRoot.path("tags").path("tag2").get(0).asText());
+        assertEquals("val3", stateRoot.path("tags").path("tag2").get(1).asText());
+
+        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run_tag_test");
+        engine.pushState(stateJson);
+
+        final File logFile = new File(tempResultsDir, "console-execution-1.json");
+        assertTrue(logFile.exists(), "console-execution-1.json should exist on disk");
+
+        final String loggedContent = Files.readString(logFile.toPath());
+        final JsonNode loggedRoot = new ObjectMapper().readTree(loggedContent);
+        assertTrue(loggedRoot.has("tags"), "console-execution-1.json must contain tags property");
+        assertEquals("val1", loggedRoot.path("tags").path("tag1").get(0).asText());
+    }
+
+    @Test
+    public void testAreaNameExtractedFromVariationTags() throws IOException
+    {
+        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
+        AiConfiguration.resetInstance();
+
+        final ExecutionContext context = new ExecutionContext(new SessionData());
+        final Map<String, List<String>> tags = new LinkedHashMap<>();
+        tags.put("Area", List.of("Search", "Browsing"));
+        tags.put("locale", List.of("ENG"));
+        context.getTransientData().put("variationTags", tags);
 
         final String stateJson = InteractiveStateBuilder.buildStateJson(null, context, "run_area_test", 0, "passed");
         final JsonNode stateRoot = new ObjectMapper().readTree(stateJson);
-        assertEquals("@Checkout", stateRoot.path("areaName").asText());
+        assertTrue(stateRoot.has("areaName"), "stateJson should contain areaName property");
+        assertEquals("@Search", stateRoot.path("areaName").asText());
+        assertTrue(stateRoot.has("subArea"), "stateJson should contain subArea property");
+        assertEquals("@Browsing", stateRoot.path("subArea").asText());
 
         final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run_area_test");
         engine.pushState(stateJson);
@@ -1364,28 +1397,9 @@ public class InteractiveConsoleEngineTest
 
         final String loggedContent = Files.readString(logFile.toPath());
         final JsonNode loggedRoot = new ObjectMapper().readTree(loggedContent);
-        assertEquals("@Checkout", loggedRoot.path("areaName").asText(), "console-execution.json must contain areaName property");
-    }
-
-    @Test
-    public void testPushStateExtractsAreaNameFromPlaybookFileWhenMissingInPayload() throws IOException
-    {
-        System.setProperty("neodymium.ai.consoleExecutionLogs", "true");
-        AiConfiguration.resetInstance();
-
-        final File tempPlaybook = new File(tempResultsDir, "playbook-checkout.yaml");
-        Files.writeString(tempPlaybook.toPath(), "@Payment\nsteps:\n  - Pay\n");
-
-        final InteractiveConsoleEngine engine = new InteractiveConsoleEngine("run_playbook_file_area_test");
-        final String rawStateJson = String.format("{\"testName\":\"PaymentTest\",\"status\":\"passed\",\"playbookFile\":\"%s\"}",
-            tempPlaybook.getAbsolutePath().replace("\\", "\\\\"));
-        engine.pushState(rawStateJson);
-
-        final File logFile = new File(tempResultsDir, "console-execution-1.json");
-        assertTrue(logFile.exists(), "console-execution-1.json should exist on disk");
-
-        final String loggedContent = Files.readString(logFile.toPath());
-        final JsonNode loggedRoot = new ObjectMapper().readTree(loggedContent);
-        assertEquals("@Payment", loggedRoot.path("areaName").asText(), "console-execution.json must extract areaName from playbookFile");
+        assertTrue(loggedRoot.has("areaName"), "console-execution-1.json must contain areaName property");
+        assertEquals("@Search", loggedRoot.path("areaName").asText());
+        assertTrue(loggedRoot.has("subArea"), "console-execution-1.json must contain subArea property");
+        assertEquals("@Browsing", loggedRoot.path("subArea").asText());
     }
 }

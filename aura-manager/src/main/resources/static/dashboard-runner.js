@@ -1121,6 +1121,124 @@ window.closePlaybookInspector = closePlaybookInspector;
 window.acceptPlaybookHealing = acceptPlaybookHealing;
 
 // ============================================================================
+// Queue Run Tags: Add, Remove, Modal
+// ============================================================================
+
+function openRunTagModal() {
+    const modal = document.getElementById('tagModal');
+    if (!modal) return;
+    const title = document.getElementById('tagModalTitle');
+    const typeInput = document.getElementById('tagModalTargetType');
+    const colInput = document.getElementById('tagModalTargetCol');
+    const keyInput = document.getElementById('tagModalKeyInput');
+    const valInput = document.getElementById('tagModalValueInput');
+    const errBox = document.getElementById('tagModalError');
+
+    if (title) title.textContent = 'Add Tag to Queue Run';
+    if (typeInput) typeInput.value = 'queue';
+    if (colInput) colInput.value = '-1';
+    if (keyInput) keyInput.value = '';
+    if (valInput) valInput.value = '';
+    if (errBox) {
+        errBox.style.display = 'none';
+        errBox.textContent = '';
+    }
+    modal.style.display = 'flex';
+    if (keyInput) setTimeout(() => keyInput.focus(), 50);
+}
+window.openRunTagModal = openRunTagModal;
+
+async function submitQueueRunTag(key, values) {
+    if (!key || !values || values.length === 0) return;
+    try {
+        if (window.htmx && typeof window.htmx.ajax === 'function') {
+            await window.htmx.ajax('POST', '/api/queue/tags/add', {
+                target: '#queueListContainer',
+                swap: 'innerHTML',
+                values: { key: key, value: values.join(',') }
+            });
+            await window.htmx.ajax('GET', '/api/config/panel', {
+                target: '#configPanel',
+                swap: 'outerHTML'
+            });
+            return;
+        }
+        const params = new URLSearchParams();
+        params.append('key', key);
+        params.append('value', values.join(','));
+        const response = await fetch('/api/queue/tags/add', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        });
+        if (response.ok) {
+            const html = await response.text();
+            const target = document.getElementById('queueListContainer');
+            if (target && window.htmx) {
+                window.htmx.swap(target, html, { swapStyle: 'innerHTML' });
+            }
+        }
+        const cfgResp = await fetch('/api/config/panel');
+        if (cfgResp.ok) {
+            const cfgHtml = await cfgResp.text();
+            const cfgTarget = document.getElementById('configPanel');
+            if (cfgTarget && window.htmx) {
+                window.htmx.swap(cfgTarget, cfgHtml, { swapStyle: 'outerHTML' });
+            }
+        }
+    } catch (e) {
+        console.error('Failed to add tag to queue run:', e);
+    }
+}
+window.submitQueueRunTag = submitQueueRunTag;
+
+async function removeQueueRunTag(key, value) {
+    if (!key) return;
+    try {
+        if (window.htmx && typeof window.htmx.ajax === 'function') {
+            const vals = { key: key };
+            if (value) vals.value = value;
+            await window.htmx.ajax('POST', '/api/queue/tags/remove', {
+                target: '#queueListContainer',
+                swap: 'innerHTML',
+                values: vals
+            });
+            await window.htmx.ajax('GET', '/api/config/panel', {
+                target: '#configPanel',
+                swap: 'outerHTML'
+            });
+            return;
+        }
+        const params = new URLSearchParams();
+        params.append('key', key);
+        if (value) params.append('value', value);
+        const response = await fetch('/api/queue/tags/remove', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: params.toString()
+        });
+        if (response.ok) {
+            const html = await response.text();
+            const target = document.getElementById('queueListContainer');
+            if (target && window.htmx) {
+                window.htmx.swap(target, html, { swapStyle: 'innerHTML' });
+            }
+        }
+        const cfgResp = await fetch('/api/config/panel');
+        if (cfgResp.ok) {
+            const cfgHtml = await cfgResp.text();
+            const cfgTarget = document.getElementById('configPanel');
+            if (cfgTarget && window.htmx) {
+                window.htmx.swap(cfgTarget, cfgHtml, { swapStyle: 'outerHTML' });
+            }
+        }
+    } catch (e) {
+        console.error('Failed to remove tag from queue run:', e);
+    }
+}
+window.removeQueueRunTag = removeQueueRunTag;
+
+// ============================================================================
 // Batch Operations: Save Queue as Batch & Run Batch
 // ============================================================================
 

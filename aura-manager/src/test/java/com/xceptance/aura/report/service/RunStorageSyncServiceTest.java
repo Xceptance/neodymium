@@ -24,8 +24,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -324,6 +326,55 @@ public class RunStorageSyncServiceTest
 
             Assertions.assertEquals("Browsing (default)", findAreaForClass(dataService.getRunReport(twoLevelRunId), "GoogleTest"),
                 "Class folder without a category should be grouped under the default category in the run report");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+        }
+    }
+
+    @Test
+    public void testExecutionWithAreaTagsResolvesAreaWithoutFolder() throws IOException
+    {
+        final String runId = "run-area-tags-888";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path classDir = runDir.resolve("Aura_my_test_yaml_Test");
+        Files.createDirectories(classDir);
+
+        final Path execFile = classDir.resolve("console-execution-1.json");
+        final String execJson = """
+            {
+                "runId": "run_888",
+                "status": "passed",
+                "testName": "my-test.yaml · en",
+                "testClass": "Aura_my_test_yaml_Test",
+                "testFile": "com.xceptance.neodymium.aura.sandbox.Aura_my_test_yaml_Test#executeYamlTest",
+                "tags": {
+                    "Area": ["Search", "Browsing"],
+                    "locale": ["ENG"],
+                    "Project": ["Wiki"]
+                }
+            }
+            """;
+        Files.writeString(execFile, execJson);
+
+        try
+        {
+            final Optional<String> runJsonOpt = storageService.readRunJson(runId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should return generated run.json");
+
+            final JsonNode runJsonRoot = new ObjectMapper().readTree(runJsonOpt.get());
+            final JsonNode metrics = runJsonRoot.path("executionMetrics");
+            Assertions.assertTrue(metrics.isObject() && metrics.size() > 0, "Expected run.json executionMetrics to be present");
+            Assertions.assertEquals("@Search", metrics.fields().next().getValue().path("areaName").asText(),
+                "Expected run.json executionMetrics to resolve area from tags.Area");
+
+            final JsonNode enrichedExec = new ObjectMapper().readTree(execFile.toFile());
+            Assertions.assertEquals("@Search", enrichedExec.path("areaName").asText(),
+                "Enriched execution JSON on disk should carry the resolved area from tags");
+
+            Assertions.assertEquals("@Search", findAreaForClass(dataService.getRunReport(runId), "Aura_my_test_yaml_Test"),
+                "Run report should group test under @Search rather than Browsing (default)");
         }
         finally
         {
@@ -722,7 +773,7 @@ public class RunStorageSyncServiceTest
             Assertions.assertTrue(runJson.contains("test7_AnnotationDrivenExternalPlaybookConvention"), "run.json should contain test7 method key");
             Assertions.assertTrue(runJson.contains("test6_AnnotationDrivenExternalPlaybookExplicit"), "run.json should contain test6 method key");
 
-            final com.xceptance.aura.report.dto.TestExecutionDto exec3Details = dataService.getExecutionDetails(runId, "VerlaProgrammaticDemoTest#test3_AnnotationDrivenInlinePlaybookTextBlocks#Default#Chrome");
+            final TestExecutionDto exec3Details = dataService.getExecutionDetails(runId, "VerlaProgrammaticDemoTest#test3_AnnotationDrivenInlinePlaybookTextBlocks#Default#Chrome");
             Assertions.assertNotNull(exec3Details, "getExecutionDetails should locate execution by test method key");
             Assertions.assertNotNull(exec3Details.getSteps(), "Steps list should be populated for test3 execution");
         }
@@ -1155,6 +1206,247 @@ public class RunStorageSyncServiceTest
             final String finishLabel = finishedRun.getTimestampLabel();
             Assertions.assertTrue(finishLabel != null && (finishLabel.contains("08:15:00") || finishLabel.contains("10:15:00")),
                 "Expected finished run timestamp to remain earliest test '08:15:00', but was: " + finishLabel);
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testMixedLocalesAndBrowsersIncludesDefaultAndSpecificInLocalesCsvAndBrowsersCsv() throws IOException
+    {
+        final String runId = "run-mixed-locales-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        if (Files.exists(runDir))
+        {
+            deleteRecursively(runDir);
+        }
+
+        final Path classDir = runDir.resolve("WikipediaTest");
+        Files.createDirectories(classDir);
+
+        // Exec 1: locale = "en", browser = "Chrome_1920x1080"
+        Files.writeString(classDir.resolve("exec-1.json"), """
+            {
+                "id": "exec-mixed-1",
+                "title": "Wikipedia Search [en]",
+                "testClass": "WikipediaTest",
+                "status": "passed",
+                "locale": "en",
+                "browser": "Chrome_1920x1080"
+            }
+            """);
+
+        // Exec 2: no locale, browser = "Chrome_1920x1080"
+        Files.writeString(classDir.resolve("exec-2.json"), """
+            {
+                "id": "exec-mixed-2",
+                "title": "Wikipedia Search [Default 1]",
+                "testClass": "WikipediaTest",
+                "status": "passed",
+                "browser": "Chrome_1920x1080"
+            }
+            """);
+
+        // Exec 3: no locale, browser = "Chrome_1920x1080"
+        Files.writeString(classDir.resolve("exec-3.json"), """
+            {
+                "id": "exec-mixed-3",
+                "title": "Wikipedia Search [Default 2]",
+                "testClass": "WikipediaTest",
+                "status": "failed",
+                "browser": "Chrome_1920x1080"
+            }
+            """);
+
+        try
+        {
+            final Optional<String> runJsonOpt = storageService.readRunJson(runId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should generate run.json");
+
+            final ObjectMapper mapper = new ObjectMapper();
+            final JsonNode runJsonNode = mapper.readTree(runJsonOpt.get());
+
+            // Verify top-level locales in generated run.json includes both Default and EN
+            final JsonNode localesNode = runJsonNode.path("locales");
+            Assertions.assertTrue(localesNode.isArray(), "locales in run.json must be an array");
+            final Set<String> localesInJson = new HashSet<>();
+            localesNode.forEach(l -> localesInJson.add(l.asText()));
+            Assertions.assertTrue(localesInJson.contains("Default"), "locales in run.json must contain Default");
+            Assertions.assertTrue(localesInJson.contains("EN") || localesInJson.contains("en"), "locales in run.json must contain EN");
+
+            // Verify top-level browsers in generated run.json is Chrome_1920x1080
+            final JsonNode browsersNode = runJsonNode.path("browsers");
+            Assertions.assertTrue(browsersNode.isArray(), "browsers in run.json must be an array");
+            final Set<String> browsersInJson = new HashSet<>();
+            browsersNode.forEach(b -> browsersInJson.add(b.asText()));
+            Assertions.assertTrue(browsersInJson.contains("Chrome_1920x1080"), "browsers in run.json must contain Chrome_1920x1080");
+
+            final boolean synced = syncService.importOrUpdateRunReport(runId);
+            Assertions.assertTrue(synced, "importOrUpdateRunReport should succeed");
+
+            // Verify DB entity TestRunEntity created by syncService
+            final Optional<TestRunEntity> entityOpt = runRepository.findById(runId);
+            Assertions.assertTrue(entityOpt.isPresent(), "TestRunEntity should be saved in DB");
+            final TestRunEntity entity = entityOpt.get();
+            final String localesCsv = entity.getLocalesCsv();
+            Assertions.assertNotNull(localesCsv);
+            Assertions.assertTrue(localesCsv.contains("Default"), "localesCsv must contain Default");
+            Assertions.assertTrue(localesCsv.contains("EN") || localesCsv.contains("en"), "localesCsv must contain EN");
+
+            final String browsersCsv = entity.getBrowsersCsv();
+            Assertions.assertNotNull(browsersCsv);
+            Assertions.assertTrue(browsersCsv.contains("Chrome_1920x1080"), "browsersCsv must contain Chrome_1920x1080");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testExtractLocationFromNode() throws Exception
+    {
+        final ObjectMapper mapper = new ObjectMapper();
+
+        // 1. From direct "locale" field
+        final JsonNode nodeDirectLocale = mapper.readTree("{\"locale\": \"de_DE\"}");
+        Assertions.assertEquals("de_DE", RunStorageSyncService.extractLocationFromNode(nodeDirectLocale));
+
+        // 2. From direct "location" field
+        final JsonNode nodeDirectLocation = mapper.readTree("{\"location\": \"US\"}");
+        Assertions.assertEquals("US", RunStorageSyncService.extractLocationFromNode(nodeDirectLocation));
+
+        // 3. From tags.locale array
+        final JsonNode nodeTagLocaleArray = mapper.readTree("{\"tags\": {\"locale\": [\"RUS\", \"ENG\"]}}");
+        Assertions.assertEquals("RUS", RunStorageSyncService.extractLocationFromNode(nodeTagLocaleArray));
+
+        // 4. From tags.locale string
+        final JsonNode nodeTagLocaleString = mapper.readTree("{\"tags\": {\"locale\": \"ENG\"}}");
+        Assertions.assertEquals("ENG", RunStorageSyncService.extractLocationFromNode(nodeTagLocaleString));
+
+        // 5. From tags.location string
+        final JsonNode nodeTagLocationString = mapper.readTree("{\"tags\": {\"location\": \"FR\"}}");
+        Assertions.assertEquals("FR", RunStorageSyncService.extractLocationFromNode(nodeTagLocationString));
+
+        // 6. When empty or absent
+        final JsonNode nodeEmpty = mapper.readTree("{}");
+        Assertions.assertEquals("", RunStorageSyncService.extractLocationFromNode(nodeEmpty));
+    }
+
+    @Test
+    public void testImportOrUpdateRunReportExtractsLocalesFromTags() throws IOException
+    {
+        final String runId = "run-tags-locale-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path classDir = runDir.resolve("Search").resolve("LocaleTagTest");
+        Files.createDirectories(classDir);
+
+        Files.writeString(classDir.resolve("exec-en.json"), """
+            {
+                "id": "exec-en",
+                "title": "Search [en]",
+                "testClass": "LocaleTagTest",
+                "status": "passed",
+                "browser": "Chrome",
+                "tags": {
+                    "locale": ["ENG"]
+                }
+            }
+            """);
+
+        Files.writeString(classDir.resolve("exec-ru.json"), """
+            {
+                "id": "exec-ru",
+                "title": "Search [ru]",
+                "testClass": "LocaleTagTest",
+                "status": "passed",
+                "browser": "Chrome",
+                "tags": {
+                    "locale": ["RUS"]
+                }
+            }
+            """);
+
+        try
+        {
+            final boolean synced = syncService.importOrUpdateRunReport(runId);
+            Assertions.assertTrue(synced, "importOrUpdateRunReport should succeed");
+
+            final Optional<TestRunEntity> entityOpt = runRepository.findById(runId);
+            Assertions.assertTrue(entityOpt.isPresent(), "TestRunEntity should be saved in DB");
+            final TestRunEntity entity = entityOpt.get();
+            final String localesCsv = entity.getLocalesCsv();
+            Assertions.assertNotNull(localesCsv);
+            Assertions.assertTrue(localesCsv.contains("ENG"), "localesCsv must contain ENG");
+            Assertions.assertTrue(localesCsv.contains("RUS"), "localesCsv must contain RUS");
+        }
+        finally
+        {
+            deleteRecursively(runDir);
+            runRepository.findById(runId).ifPresent(runRepository::delete);
+        }
+    }
+
+    @Test
+    public void testExecutionMetricsDeserializationWithObjectBugs() throws IOException
+    {
+        final String runId = "run-obj-bugs-test";
+        final Path runDir = Paths.get("storage", "runs", runId);
+        final Path classDir = runDir.resolve("@Orders").resolve("OrderHistoryTest");
+        Files.createDirectories(classDir);
+
+        final Path execFile = classDir.resolve("console-execution-34.json");
+        Files.writeString(execFile, """
+            {
+                "runId": "run-obj-bugs-test",
+                "testName": "OrderHistoryTest · US",
+                "status": "failed",
+                "areaName": "@Orders",
+                "testClass": "OrderHistoryTest",
+                "testMethod": "verifyCustomerOrderHistory",
+                "title": "US",
+                "id": "console-execution-34",
+                "location": "US",
+                "browser": "Chrome_iPhoneX",
+                "bugs": [
+                    {
+                        "id": "HUG-85323",
+                        "title": "Identified issue in OrderHistoryTest",
+                        "url": "https://jira.xceptance.de/browse/HUG-85323",
+                        "status": "Open"
+                    }
+                ]
+            }
+            """);
+
+        try
+        {
+            final Optional<String> runJsonOpt = storageService.readRunJson(runId);
+            Assertions.assertTrue(runJsonOpt.isPresent(), "readRunJson should return generated run.json");
+
+            final RunReportDto report = dataService.getRunReport(runId);
+            Assertions.assertNotNull(report, "RunReportDto should not be null");
+            Assertions.assertEquals(1, report.getExecutions().size(), "Report must contain the test execution");
+
+            final TestExecutionDto exec = report.getExecutions().get(0);
+            Assertions.assertEquals("OrderHistoryTest", exec.getTestClass());
+            Assertions.assertEquals("verifyCustomerOrderHistory", exec.getTestMethod());
+            Assertions.assertEquals(1, exec.getBugs().size());
+            Assertions.assertEquals("HUG-85323", exec.getBugs().get(0));
+            Assertions.assertEquals("failed-known", exec.getStatus());
+
+            final JsonNode runJsonRoot = new ObjectMapper().readTree(runJsonOpt.get());
+            final JsonNode metrics = runJsonRoot.path("executionMetrics");
+            Assertions.assertTrue(metrics.isObject() && metrics.size() > 0, "run.json executionMetrics must be present");
+            final String execKey = LocalRunJsonStorageService.buildExecutionKey("OrderHistoryTest", "verifyCustomerOrderHistory", "US", "Chrome_iPhoneX");
+            final JsonNode metricObj = metrics.path(execKey);
+            Assertions.assertTrue(metricObj.isObject(), "Execution metric should be mapped under composite key: " + execKey);
+            Assertions.assertTrue(metricObj.path("bugs").isArray(), "Bugs in executionMetrics must be serialized as an array");
+            Assertions.assertEquals("HUG-85323", metricObj.path("bugs").get(0).asText());
         }
         finally
         {

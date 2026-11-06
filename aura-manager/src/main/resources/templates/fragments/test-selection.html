@@ -23,12 +23,23 @@
             <button type="button" class="btn-edit neo-u-8" id="saveQueueAsBatchSelectionBtn" onclick="openSaveBatchModal()" title="Save queue as batch list"><span class="material-symbols-outlined" style="font-size: 16px;">playlist_add</span></button>
         </div>
     </div>
-    <div class="search-container">
+    <div class="search-container" style="position: relative; display: flex; align-items: center;">
         <span class="material-symbols-outlined search-icon">search</span>
-        <input type="text" id="testSearchInput" name="q" placeholder="Search test cases..."
+        <input type="text" id="testSearchInput" name="q" placeholder="Search test cases or tags (e.g. tag:value)..."
                class="search-input"
+               style="padding-right: 28px;"
                hx-get="/api/files/search" hx-trigger="keyup changed delay:200ms, search"
-               hx-target="#yamlFileList" hx-swap="innerHTML"/>
+               hx-target="#yamlFileList" hx-swap="innerHTML"
+               oninput="if(typeof updateActiveTagFilterUI==='function') updateActiveTagFilterUI();" />
+        <button type="button" id="clearTestSearchBtn" onclick="clearTestSearch()"
+                style="display: none; position: absolute; right: 8px; background: transparent; border: none; cursor: pointer; color: var(--text-secondary); padding: 2px;"
+                title="Clear filter">
+            <span class="material-symbols-outlined" style="font-size: 16px;">close</span>
+        </button>
+    </div>
+    <div class="quick-tag-filters" id="quickTagFiltersBar" th:if="${availableTags != null and !availableTags.isEmpty()}" style="display: flex; gap: 4px; overflow-x: auto; padding: 4px 8px 6px 8px; scrollbar-width: none; border-bottom: 1px solid var(--border);">
+        <button type="button" class="quick-tag-btn active" onclick="filterTestsByTag('')" data-tag="" style="padding: 2px 7px; font-size: 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text-main); cursor: pointer; white-space: nowrap;">All</button>
+        <button type="button" class="quick-tag-btn" th:each="t : ${availableTags}" th:data-tag="${t}" onclick="if(typeof filterTestsByTag==='function') filterTestsByTag(this.getAttribute('data-tag'));" th:text="${t}" style="padding: 2px 7px; font-size: 10px; border-radius: 12px; border: 1px solid rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.1); color: #3b82f6; cursor: pointer; white-space: nowrap;">tag:val</button>
     </div>
     <div class="content-scroll" id="yamlFileList" th:fragment="yamlFileList" hx-get="/api/files/list" hx-trigger="refreshFiles from:body" hx-swap="innerHTML" data-active-tab="tests">
         <div th:replace="~{fragments/test-selection :: yamlFileListContent}"></div>
@@ -72,7 +83,21 @@
                                    hx-target="#queueListContainer" hx-swap="innerHTML">
                         </label>
                         <span th:if="${item.hasError}" class="material-symbols-outlined" style="color: var(--danger, #ef4444); font-size: 16px; margin-right: 4px;" th:title="${'YAML Parse Error: ' + item.errorMessage}">error</span>
-                        <span style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px;" th:styleappend="${item.hasError ? 'color: var(--danger, #ef4444);' : ''}" th:text="${item.file}">filename.yaml</span>
+                        <span class="file-name-label" style="font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 6px;" th:styleappend="${item.hasError ? 'color: var(--danger, #ef4444);' : ''}" th:text="${item.file}">filename.yaml</span>
+                        <div class="file-tags-container" th:if="${item.tags != null and !item.tags.isEmpty()}" style="display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; flex-wrap: wrap;">
+                            <th:block th:each="entry : ${item.tags.entrySet()}">
+                                <span class="tag-chip test-tag-chip" th:each="val : ${entry.value}"
+                                      th:data-tag="${entry.key + ':' + val}"
+                                      th:data-key="${entry.key}"
+                                      th:data-value="${val}"
+                                      onclick="event.stopPropagation(); if(typeof filterTestsByTag==='function') filterTestsByTag(this.getAttribute('data-tag'));"
+                                      style="padding: 1px 6px; font-size: 10px; border-radius: 4px; background: rgba(59, 130, 246, 0.12); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.3); cursor: pointer; user-select: none; line-height: 1.2; display: inline-flex; align-items: center; gap: 2px;"
+                                      th:title="'Click to filter tests by ' + ${entry.key} + ':' + ${val}">
+                                    <span class="material-symbols-outlined" style="font-size: 11px;">label</span>
+                                    <span th:text="${entry.key + ': ' + val}">tag: val</span>
+                                </span>
+                            </th:block>
+                        </div>
                     </div>
                     <div style="display: flex; align-items: center; gap: 2px;">
                         <button type="button" class="playbook-marker-btn" th:if="${item.hasPlaybook}" th:data-file="${item.file}"
@@ -114,6 +139,20 @@
                             </label>
                             <span class="material-symbols-outlined" style="margin-left: 8px; margin-right: 6px; color: var(--accent); opacity: 0.7; flex-shrink: 0; font-size: 14px;">database</span>
                             <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 2px;" th:text="${dataset.label}">dataset label</span>
+                            <div class="dataset-tags-container" th:if="${dataset.tags != null and !dataset.tags.isEmpty()}" style="display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; flex-wrap: wrap;">
+                                <th:block th:each="entry : ${dataset.tags.entrySet()}">
+                                    <span class="tag-chip dataset-tag-chip" th:each="val : ${entry.value}"
+                                          th:data-tag="${entry.key + ':' + val}"
+                                          th:data-key="${entry.key}"
+                                          th:data-value="${val}"
+                                          onclick="event.stopPropagation(); if(typeof filterTestsByTag==='function') filterTestsByTag(this.getAttribute('data-tag'));"
+                                          style="padding: 1px 5px; font-size: 9.5px; border-radius: 3px; background: rgba(14, 165, 233, 0.12); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.3); cursor: pointer; user-select: none; line-height: 1.2; display: inline-flex; align-items: center; gap: 2px;"
+                                          th:title="'Click to filter tests by ' + ${entry.key} + ':' + ${val}">
+                                        <span class="material-symbols-outlined" style="font-size: 10px;">label</span>
+                                        <span th:text="${entry.key + ': ' + val}">tag: val</span>
+                                    </span>
+                                </th:block>
+                            </div>
                         </div>
                         <button type="button" class="playbook-marker-btn" th:if="${dataset.hasPlaybook}" th:data-file="${item.file}" th:data-id="${dataset.id}"
                                 onclick="event.stopPropagation(); if(typeof openPlaybookInspector==='function') openPlaybookInspector(this.getAttribute('data-file'), this.getAttribute('data-id'));"

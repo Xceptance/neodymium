@@ -35,29 +35,28 @@
             <span id="editorFileName" th:data-file="${activeEditingFile}" th:text="${activeEditingFile != null ? activeEditingFile : ''}"></span>
             <span th:if="${isFragment != null and isFragment}" class="file-badge-steps" style="margin-left: 6px;">🧩 Step Fragment</span>
             <span th:if="${activeEditingFile != null and !activeEditingFile.isEmpty() and (isFragment == null or !isFragment)}" class="file-badge-yaml" style="margin-left: 6px;">🧪 Test Playbook</span>
-            <!-- Area Tag Assignment / Display -->
-            <div id="editorAreaContainer" class="editor-area-container" th:if="${activeEditingFile != null and !activeEditingFile.isEmpty() and (isFragment == null or !isFragment)}" style="display: inline-flex; align-items: center; margin-left: 6px;">
+            <!-- Root Tags Assignment / Display -->
+            <div id="editorTagsContainer" class="editor-tags-container" th:if="${activeEditingFile != null and !activeEditingFile.isEmpty() and (isFragment == null or !isFragment)}" style="display: inline-flex; align-items: center; gap: 4px; margin-left: 6px; flex-wrap: wrap;">
+                <th:block th:if="${rootTags != null and !rootTags.isEmpty()}">
+                    <th:block th:each="entry : ${rootTags.entrySet()}">
+                        <span class="root-tag-chip" th:each="val : ${entry.value}" th:data-key="${entry.key}" th:data-value="${val}" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 12px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); font-size: 11px; color: #3b82f6; font-weight: 500;">
+                            <span class="material-symbols-outlined" style="font-size: 12px;">label</span>
+                            <span class="root-tag-text" th:text="${entry.key + ': ' + val}">key: val</span>
+                            <button type="button" class="btn-remove-root-tag" onclick="removeRootTagFromBtn(this)" title="Remove tag" style="background: transparent; border: none; cursor: pointer; color: var(--text-secondary); display: inline-flex; align-items: center; padding: 0; margin-left: 2px;">
+                                <span class="material-symbols-outlined" style="font-size: 12px;">close</span>
+                            </button>
+                        </span>
+                    </th:block>
+                </th:block>
                 <button type="button" 
-                        class="btn-editor btn-assign-area" 
-                        id="btnAssignArea" 
-                        onclick="openAssignAreaModal()" 
-                        th:style="${areaTag != null and !#strings.isEmpty(areaTag) ? 'display: none;' : 'display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px;'}"
-                        title="Assign test to an area">
+                        class="btn-editor btn-add-root-tag" 
+                        id="btnAddRootTag" 
+                        onclick="openAddRootTagModal()" 
+                        title="Add playbook root tag"
+                        style="display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px;">
                     <span class="material-symbols-outlined" style="font-size: 13px;">label</span>
-                    <span>Assign to area</span>
+                    <span>+ Tag</span>
                 </button>
-                <span class="area-tag-badge" 
-                      id="editorAreaBadge" 
-                      onclick="openAssignAreaModal()" 
-                      title="Click to edit or remove area tag"
-                      th:style="${areaTag != null and !#strings.isEmpty(areaTag) ? 'display: inline-flex; align-items: center; gap: 4px; cursor: pointer;' : 'display: none;'}"
-                      th:data-area="${areaTag != null ? areaTag : ''}">
-                    <span class="material-symbols-outlined" style="font-size: 13px; color: var(--accent);">label</span>
-                    <span id="editorAreaTagText" th:text="${areaTag != null ? (areaTag.startsWith('@') ? areaTag : '@' + areaTag) : ''}">@Checkout</span>
-                    <button type="button" class="btn-remove-area-tag" onclick="removeAreaTag(event)" title="Remove area tag" style="background: transparent; border: none; cursor: pointer; color: var(--text-secondary); display: inline-flex; align-items: center; padding: 0 2px; margin-left: 2px;">
-                        <span class="material-symbols-outlined" style="font-size: 13px;">close</span>
-                    </button>
-                </span>
             </div>
             <span id="editorUnsavedBadge" style="display: none;" class="unsaved-badge">
                 <span class="material-symbols-outlined" style="font-size: 12px;">warning</span> Unsaved
@@ -400,6 +399,46 @@
                             </tr>
                         </thead>
                         <tbody>
+                            <!-- Dataset Tags Row -->
+                            <tr id="matrixTagsRow" class="matrix-tags-row" style="background: rgba(255, 255, 255, 0.02); border-bottom: 1px solid var(--border);">
+                                <td>
+                                    <div class="var-key-cell" style="font-weight: 600; color: var(--accent); display: flex; align-items: center; gap: 4px;">
+                                        <span class="material-symbols-outlined" style="font-size: 15px;">label</span>
+                                        <span>Tags</span>
+                                    </div>
+                                </td>
+                                <th:block th:if="${dataMatrix != null and !#lists.isEmpty(dataMatrix)}">
+                                    <td th:each="dataRow, iterStat : ${dataMatrix}" class="dataset-tags-cell" th:data-col="${iterStat.index}">
+                                        <div class="dataset-tags-wrapper" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 26px;">
+                                            <th:block th:if="${datasetTagsList != null and iterStat.index < datasetTagsList.size() and datasetTagsList.get(iterStat.index) != null}">
+                                                <th:block th:each="entry : ${datasetTagsList.get(iterStat.index).entrySet()}">
+                                                    <span class="dataset-tag-chip" th:each="val : ${entry.value}" th:data-key="${entry.key}" th:data-value="${val}" style="display: inline-flex; align-items: center; gap: 3px; padding: 1px 6px; border-radius: 10px; background: rgba(14, 165, 233, 0.12); border: 1px solid rgba(14, 165, 233, 0.35); font-size: 10.5px; color: #0284c7; font-weight: 500;">
+                                                        <span th:text="${entry.key + ': ' + val}">key: val</span>
+                                                        <button type="button" class="btn-remove-ds-tag" onclick="removeDatasetTagFromBtn(this)" title="Remove tag" style="background: transparent; border: none; cursor: pointer; color: var(--text-secondary); display: inline-flex; align-items: center; padding: 0; margin-left: 1px;">
+                                                            <span class="material-symbols-outlined" style="font-size: 11px;">close</span>
+                                                        </button>
+                                                    </span>
+                                                </th:block>
+                                            </th:block>
+                                            <button type="button" class="btn-add-dataset-tag" th:onclick="|openAddDatasetTagModal(${iterStat.index})|" title="Add tag to dataset" style="background: transparent; border: 1px dashed var(--border); border-radius: 10px; color: var(--text-secondary); cursor: pointer; padding: 1px 6px; font-size: 10.5px; display: inline-flex; align-items: center; gap: 2px;">
+                                                <span class="material-symbols-outlined" style="font-size: 12px;">add</span>
+                                                <span>Tag</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </th:block>
+                                <th:block th:if="${dataMatrix == null or #lists.isEmpty(dataMatrix)}">
+                                    <td class="dataset-tags-cell" data-col="0">
+                                        <div class="dataset-tags-wrapper" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 26px;">
+                                            <button type="button" class="btn-add-dataset-tag" onclick="openAddDatasetTagModal(0)" title="Add tag to dataset" style="background: transparent; border: 1px dashed var(--border); border-radius: 10px; color: var(--text-secondary); cursor: pointer; padding: 1px 6px; font-size: 10.5px; display: inline-flex; align-items: center; gap: 2px;">
+                                                <span class="material-symbols-outlined" style="font-size: 12px;">add</span>
+                                                <span>Tag</span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </th:block>
+                                <td></td>
+                            </tr>
                             <th:block th:if="${varKeys != null and !#lists.isEmpty(varKeys)}">
                                 <tr th:each="key : ${varKeys}">
                                     <td>

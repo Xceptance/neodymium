@@ -18,7 +18,6 @@
  */
 package com.xceptance.neodymium.ai.console;
 
-import com.xceptance.neodymium.aura.AuraFileService;
 import org.neodymium.ai.util.AtomicFileUtils;
 import java.io.File;
 import java.io.IOException;
@@ -388,19 +387,6 @@ public final class InteractiveConsoleEngine {
                     defaultResultsDir.mkdirs();
                 }
                 final JsonObject parsedState = JsonParser.parseString(minified).getAsJsonObject();
-                if (!parsedState.has("areaName") || parsedState.get("areaName").isJsonNull() || parsedState.get("areaName").getAsString().isBlank())
-                {
-                    if (parsedState.has("playbookFile") && !parsedState.get("playbookFile").isJsonNull())
-                    {
-                        final String pbFile = parsedState.get("playbookFile").getAsString();
-                        final String extractedArea = AuraFileService.extractAreaTagFromFileSystem(pbFile);
-                        if (extractedArea != null && !extractedArea.isEmpty())
-                        {
-                            parsedState.addProperty("areaName", extractedArea);
-                            minified = parsedState.toString();
-                        }
-                    }
-                }
                 final String executionKey = extractExecutionKey(parsedState);
                 final String testClassFolder = extractTestClassFolder(parsedState);
                 final int index = getExecutionIndex(testClassFolder, executionKey);

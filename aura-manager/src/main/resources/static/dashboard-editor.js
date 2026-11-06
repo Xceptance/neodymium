@@ -907,139 +907,216 @@ async function submitUpdateFragmentRefs() {
 }
 window.submitUpdateFragmentRefs = submitUpdateFragmentRefs;
 
-function updateAreaTagUI(tag) {
-    const btn = document.getElementById('btnAssignArea');
-    const badge = document.getElementById('editorAreaBadge');
-    const tagText = document.getElementById('editorAreaTagText');
-    const cleanTag = tag ? (tag.startsWith('@') ? tag.trim() : '@' + tag.trim()) : '';
-    window.currentAreaTag = cleanTag || null;
-    if (cleanTag) {
-        if (btn) btn.style.display = 'none';
-        if (badge) {
-            badge.style.display = 'inline-flex';
-            badge.setAttribute('data-area', cleanTag);
-        }
-        if (tagText) tagText.textContent = cleanTag;
-    } else {
-        if (btn) btn.style.display = 'inline-flex';
-        if (badge) {
-            badge.style.display = 'none';
-            badge.removeAttribute('data-area');
-        }
-        if (tagText) tagText.textContent = '';
-    }
-    const editorPanel = document.getElementById('editorPanel');
-    if (editorPanel) {
-        editorPanel.setAttribute('data-area', cleanTag || '');
-    }
+function escapeEditorHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
-window.updateAreaTagUI = updateAreaTagUI;
 
-function openAssignAreaModal() {
-    const modal = document.getElementById('assignAreaModal');
+function openAddRootTagModal() {
+    const modal = document.getElementById('tagModal');
     if (!modal) return;
-    const input = document.getElementById('assignAreaTagInput');
-    const errBox = document.getElementById('assignAreaError');
+    const title = document.getElementById('tagModalTitle');
+    const typeInput = document.getElementById('tagModalTargetType');
+    const colInput = document.getElementById('tagModalTargetCol');
+    const keyInput = document.getElementById('tagModalKeyInput');
+    const valInput = document.getElementById('tagModalValueInput');
+    const errBox = document.getElementById('tagModalError');
+
+    if (title) title.textContent = 'Add Playbook Tag';
+    if (typeInput) typeInput.value = 'root';
+    if (colInput) colInput.value = '-1';
+    if (keyInput) keyInput.value = '';
+    if (valInput) valInput.value = '';
     if (errBox) {
         errBox.style.display = 'none';
         errBox.textContent = '';
     }
-    if (input) {
-        input.value = window.currentAreaTag || '';
-        setTimeout(() => input.focus(), 50);
+    modal.style.display = 'flex';
+    if (keyInput) setTimeout(() => keyInput.focus(), 50);
+}
+window.openAddRootTagModal = openAddRootTagModal;
+
+function openAddDatasetTagModal(colIndex) {
+    const modal = document.getElementById('tagModal');
+    if (!modal) return;
+    const title = document.getElementById('tagModalTitle');
+    const typeInput = document.getElementById('tagModalTargetType');
+    const colInput = document.getElementById('tagModalTargetCol');
+    const keyInput = document.getElementById('tagModalKeyInput');
+    const valInput = document.getElementById('tagModalValueInput');
+    const errBox = document.getElementById('tagModalError');
+
+    if (title) title.textContent = `Add Dataset Tag (Iteration ${colIndex + 1})`;
+    if (typeInput) typeInput.value = 'dataset';
+    if (colInput) colInput.value = String(colIndex);
+    if (keyInput) keyInput.value = '';
+    if (valInput) valInput.value = '';
+    if (errBox) {
+        errBox.style.display = 'none';
+        errBox.textContent = '';
     }
     modal.style.display = 'flex';
+    if (keyInput) setTimeout(() => keyInput.focus(), 50);
 }
+window.openAddDatasetTagModal = openAddDatasetTagModal;
+
+function closeTagModal() {
+    const modal = document.getElementById('tagModal');
+    if (modal) modal.style.display = 'none';
+}
+window.closeTagModal = closeTagModal;
+
+function submitTagModal() {
+    const typeInput = document.getElementById('tagModalTargetType');
+    const colInput = document.getElementById('tagModalTargetCol');
+    const keyInput = document.getElementById('tagModalKeyInput');
+    const valInput = document.getElementById('tagModalValueInput');
+    const errBox = document.getElementById('tagModalError');
+
+    const key = keyInput ? keyInput.value.trim() : '';
+    const valRaw = valInput ? valInput.value.trim() : '';
+    const targetType = typeInput ? typeInput.value : 'root';
+    const colIndex = colInput ? parseInt(colInput.value, 10) : -1;
+
+    if (!key) {
+        if (errBox) {
+            errBox.textContent = 'Please enter a tag key/name.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+    if (!/^[a-zA-Z0-9_.-]+$/.test(key)) {
+        if (errBox) {
+            errBox.textContent = 'Tag key must contain letters, numbers, hyphens, underscores, or dots.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+    if (!valRaw) {
+        if (errBox) {
+            errBox.textContent = 'Please enter a tag value.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+
+    const values = valRaw.split(',').map(s => s.trim()).filter(s => s.length > 0);
+    if (values.length === 0) {
+        if (errBox) {
+            errBox.textContent = 'Please enter at least one non-empty value.';
+            errBox.style.display = 'block';
+        }
+        return;
+    }
+
+    if (targetType === 'queue' || targetType === 'run') {
+        if (typeof window.submitQueueRunTag === 'function') {
+            window.submitQueueRunTag(key, values);
+        }
+        closeTagModal();
+        return;
+    }
+
+    if (targetType === 'root') {
+        const container = document.getElementById('editorTagsContainer');
+        const addBtn = document.getElementById('btnAddRootTag');
+        if (container) {
+            values.forEach(val => {
+                const chip = document.createElement('span');
+                chip.className = 'root-tag-chip';
+                chip.setAttribute('data-key', key);
+                chip.setAttribute('data-value', val);
+                chip.innerHTML = `
+                    <span class="material-symbols-outlined" style="font-size: 12px;">label</span>
+                    <span class="root-tag-text">${escapeEditorHtml(key + ': ' + val)}</span>
+                    <button type="button" class="btn-remove-root-tag" onclick="removeRootTagFromBtn(this)" title="Remove tag">
+                        <span class="material-symbols-outlined" style="font-size: 12px;">close</span>
+                    </button>
+                `;
+                if (addBtn) {
+                    container.insertBefore(chip, addBtn);
+                } else {
+                    container.appendChild(chip);
+                }
+            });
+        }
+    } else {
+        const cell = document.querySelector(`#matrixTagsRow td[data-col="${colIndex}"] .dataset-tags-wrapper`);
+        if (cell) {
+            const addBtn = cell.querySelector('.btn-add-dataset-tag');
+            values.forEach(val => {
+                const chip = document.createElement('span');
+                chip.className = 'dataset-tag-chip';
+                chip.setAttribute('data-key', key);
+                chip.setAttribute('data-value', val);
+                chip.innerHTML = `
+                    <span>${escapeEditorHtml(key + ': ' + val)}</span>
+                    <button type="button" class="btn-remove-ds-tag" onclick="removeDatasetTagFromBtn(this)" title="Remove tag">
+                        <span class="material-symbols-outlined" style="font-size: 11px;">close</span>
+                    </button>
+                `;
+                if (addBtn) {
+                    cell.insertBefore(chip, addBtn);
+                } else {
+                    cell.appendChild(chip);
+                }
+            });
+        }
+    }
+
+    closeTagModal();
+    compilePlaybookToYaml();
+    if (typeof debouncedPushSnapshot === 'function') {
+        debouncedPushSnapshot();
+    }
+    if (typeof checkEditorDirtyStatus === 'function') {
+        checkEditorDirtyStatus();
+    }
+}
+window.submitTagModal = submitTagModal;
+
+function removeRootTagFromBtn(btn) {
+    if (!btn) return;
+    const chip = btn.closest('.root-tag-chip');
+    if (chip) {
+        chip.remove();
+        compilePlaybookToYaml();
+        if (typeof debouncedPushSnapshot === 'function') {
+            debouncedPushSnapshot();
+        }
+        if (typeof checkEditorDirtyStatus === 'function') {
+            checkEditorDirtyStatus();
+        }
+    }
+}
+window.removeRootTagFromBtn = removeRootTagFromBtn;
+
+function removeDatasetTagFromBtn(btn) {
+    if (!btn) return;
+    const chip = btn.closest('.dataset-tag-chip');
+    if (chip) {
+        chip.remove();
+        compilePlaybookToYaml();
+        if (typeof debouncedPushSnapshot === 'function') {
+            debouncedPushSnapshot();
+        }
+        if (typeof checkEditorDirtyStatus === 'function') {
+            checkEditorDirtyStatus();
+        }
+    }
+}
+window.removeDatasetTagFromBtn = removeDatasetTagFromBtn;
+
+// Compatibility stubs
+function updateAreaTagUI() {}
+window.updateAreaTagUI = updateAreaTagUI;
+function openAssignAreaModal() { openAddRootTagModal(); }
 window.openAssignAreaModal = openAssignAreaModal;
-
-function closeAssignAreaModal() {
-    const modal = document.getElementById('assignAreaModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-}
+function closeAssignAreaModal() { closeTagModal(); }
 window.closeAssignAreaModal = closeAssignAreaModal;
-
-function submitAssignArea() {
-    const input = document.getElementById('assignAreaTagInput');
-    const errBox = document.getElementById('assignAreaError');
-    if (!input) return;
-    const raw = input.value.trim();
-    if (!raw) {
-        if (errBox) {
-            errBox.textContent = 'Please enter an area name or tag.';
-            errBox.style.display = 'block';
-        }
-        return;
-    }
-    const clean = raw.replace(/^[#\s]*@?/, '').trim();
-    if (!clean || !/^[a-zA-Z0-9_-]+$/.test(clean)) {
-        if (errBox) {
-            errBox.textContent = 'Area tag must contain letters, numbers, hyphens, or underscores.';
-            errBox.style.display = 'block';
-        }
-        return;
-    }
-    const tag = '@' + clean;
-    updateAreaTagUI(tag);
-    closeAssignAreaModal();
-
-    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
-        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
-
-    if (isRaw) {
-        const rawTextarea = document.getElementById('rawYamlTextarea');
-        if (rawTextarea) {
-            let content = rawTextarea.value;
-            const tagRegex = /(?:^|\r?\n)\s*#?\s*@[a-zA-Z0-9_-]+[ \t]*/;
-            const rawTag = '#@' + clean;
-            if (tagRegex.test(content)) {
-                content = content.replace(tagRegex, function(match) {
-                    const startsWithNewline = match.startsWith('\r\n') ? '\r\n' : (match.startsWith('\n') ? '\n' : '');
-                    return startsWithNewline + rawTag;
-                });
-            } else {
-                content = rawTag + '\n\n' + content;
-            }
-            rawTextarea.value = content;
-            handleRawYamlInput(rawTextarea);
-        }
-    } else {
-        compilePlaybookToYaml();
-        if (typeof debouncedPushSnapshot === 'function') {
-            debouncedPushSnapshot();
-        }
-        checkEditorDirtyStatus();
-    }
-}
+function submitAssignArea() { submitTagModal(); }
 window.submitAssignArea = submitAssignArea;
-
-function removeAreaTag(event) {
-    if (event) {
-        event.stopPropagation();
-        event.preventDefault();
-    }
-    updateAreaTagUI(null);
-
-    const isRaw = (typeof currentEditorMode !== 'undefined' && currentEditorMode === 'raw')
-        || (document.getElementById('rawEditorPanel') && document.getElementById('rawEditorPanel').style.display !== 'none');
-
-    if (isRaw) {
-        const rawTextarea = document.getElementById('rawYamlTextarea');
-        if (rawTextarea) {
-            let content = rawTextarea.value;
-            content = content.replace(/(?:^|\r?\n)\s*#?\s*@[a-zA-Z0-9_-]+[ \t]*(?:\r?\n|$)/, '\n').replace(/^\n+/, '');
-            rawTextarea.value = content;
-            handleRawYamlInput(rawTextarea);
-        }
-    } else {
-        compilePlaybookToYaml();
-        if (typeof debouncedPushSnapshot === 'function') {
-            debouncedPushSnapshot();
-        }
-        checkEditorDirtyStatus();
-    }
-}
+function removeAreaTag(event) { if (event) { event.stopPropagation(); event.preventDefault(); } }
 window.removeAreaTag = removeAreaTag;
 
 
@@ -1817,28 +1894,51 @@ function toggleFragmentVarScope(varName, scope) {
 }
 window.toggleFragmentVarScope = toggleFragmentVarScope;
 
+function formatYamlTagValue(val) {
+    if (typeof val !== 'string') return `"${val}"`;
+    if (/^[a-zA-Z0-9_\-\.]+$/.test(val)) {
+        return val;
+    }
+    return JSON.stringify(val);
+}
+
 function compilePlaybookToYaml() {
     const isFragmentFile = (window.activeEditingFile && window.activeEditingFile.toLowerCase().endsWith('.steps'))
         || (document.getElementById('fragmentVariablesPanel') && document.getElementById('fragmentVariablesPanel').style.display !== 'none');
 
-    if (!window.currentAreaTag) {
-        const ep = document.getElementById('editorPanel');
-        if (ep) {
-            const a = ep.getAttribute('data-area');
-            if (a) {
-                window.currentAreaTag = a.startsWith('@') ? a : '@' + a;
+    let yaml = "";
+
+    if (!isFragmentFile) {
+        const rootChips = document.querySelectorAll('#editorTagsContainer .root-tag-chip');
+        if (rootChips.length > 0) {
+            const rootTagsMap = {};
+            rootChips.forEach(chip => {
+                const k = chip.getAttribute('data-key');
+                const v = chip.getAttribute('data-value');
+                if (k && v) {
+                    if (!rootTagsMap[k]) rootTagsMap[k] = [];
+                    rootTagsMap[k].push(v);
+                }
+            });
+            const rootKeys = Object.keys(rootTagsMap);
+            if (rootKeys.length > 0) {
+                yaml += "tags:\n";
+                rootKeys.forEach(k => {
+                    const vals = rootTagsMap[k];
+                    if (vals.length === 1) {
+                        yaml += `  ${k}: ${formatYamlTagValue(vals[0])}\n`;
+                    } else {
+                        yaml += `  ${k}:\n`;
+                        vals.forEach(v => {
+                            yaml += `    - ${formatYamlTagValue(v)}\n`;
+                        });
+                    }
+                });
+                yaml += "\n";
             }
         }
     }
 
-    let tag = (!isFragmentFile && window.currentAreaTag) ? window.currentAreaTag.trim() : '';
-    let yaml = "";
-    if (tag) {
-        const cleanTagName = tag.replace(/^[#\s]*@?/, '').trim();
-        if (cleanTagName) {
-            yaml += `#@${cleanTagName}\n`;
-        }
-    }
     yaml += "# Neodymium YAML Test Data File\n\n";
 
     function serializeStepRows(rows) {
@@ -1914,7 +2014,39 @@ function compilePlaybookToYaml() {
                 yaml += "data:\n";
                 for (let col = 0; col < iterCount; col++) {
                     yaml += "  -\n";
-                    const rows = matrixTable.querySelectorAll('tbody tr');
+                    // Dataset tags
+                    const tagCell = matrixTable.querySelector(`#matrixTagsRow td[data-col="${col}"]`);
+                    if (tagCell) {
+                        const dsChips = tagCell.querySelectorAll('.dataset-tag-chip');
+                        if (dsChips.length > 0) {
+                            const dsTagsMap = {};
+                            dsChips.forEach(chip => {
+                                const k = chip.getAttribute('data-key');
+                                const v = chip.getAttribute('data-value');
+                                if (k && v) {
+                                    if (!dsTagsMap[k]) dsTagsMap[k] = [];
+                                    dsTagsMap[k].push(v);
+                                }
+                            });
+                            const dsKeys = Object.keys(dsTagsMap);
+                            if (dsKeys.length > 0) {
+                                yaml += "    tags:\n";
+                                dsKeys.forEach(k => {
+                                    const vals = dsTagsMap[k];
+                                    if (vals.length === 1) {
+                                        yaml += `      ${k}: ${formatYamlTagValue(vals[0])}\n`;
+                                    } else {
+                                        yaml += `      ${k}:\n`;
+                                        vals.forEach(v => {
+                                            yaml += `        - ${formatYamlTagValue(v)}\n`;
+                                        });
+                                    }
+                                });
+                            }
+                        }
+                    }
+
+                    const rows = matrixTable.querySelectorAll('tbody tr:not(#matrixTagsRow)');
                     rows.forEach(row => {
                         const keyInput = row.querySelector('.var-key-input');
                         const key = keyInput ? keyInput.value.trim() : '';
@@ -4342,12 +4474,28 @@ function addMatrixColumnInline() {
     headerRow.insertBefore(th, headerRow.cells[headerRow.cells.length - 1]);
 
     const tbodyRows = document.querySelectorAll('#transposedGrid tbody tr');
-    tbodyRows.forEach((tr, rowIdx) => {
+    tbodyRows.forEach((tr) => {
         const td = document.createElement('td');
-        if (rowIdx === 0) {
-            td.innerHTML = `<input type="text" class="cell-val" value="custom_${colCount}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">`;
+        if (tr.id === 'matrixTagsRow') {
+            td.className = 'dataset-tags-cell';
+            const newColIdx = colCount - 1;
+            td.setAttribute('data-col', String(newColIdx));
+            td.innerHTML = `
+                <div class="dataset-tags-wrapper" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 26px;">
+                    <button type="button" class="btn-add-dataset-tag" onclick="openAddDatasetTagModal(${newColIdx})" title="Add tag to dataset" style="background: transparent; border: 1px dashed var(--border); border-radius: 10px; color: var(--text-secondary); cursor: pointer; padding: 1px 6px; font-size: 10.5px; display: inline-flex; align-items: center; gap: 2px;">
+                        <span class="material-symbols-outlined" style="font-size: 12px;">add</span>
+                        <span>Tag</span>
+                    </button>
+                </div>
+            `;
         } else {
-            td.innerHTML = '<input type="text" class="cell-val" value="" placeholder="empty" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">';
+            const varRows = document.querySelectorAll('#transposedGrid tbody tr:not(#matrixTagsRow)');
+            const isFirstVarRow = (tr === varRows[0]);
+            if (isFirstVarRow) {
+                td.innerHTML = `<input type="text" class="cell-val" value="custom_${colCount}" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">`;
+            } else {
+                td.innerHTML = '<input type="text" class="cell-val" value="" placeholder="empty" oninput="compilePlaybookToYaml(); debouncedPushSnapshot();">';
+            }
         }
         tr.insertBefore(td, tr.cells[tr.cells.length - 1]);
     });
@@ -4440,6 +4588,16 @@ function removeMatrixColumn(btn) {
             tbodyRows.forEach(tr => {
                 if (tr.cells.length > colIndex) {
                     tr.deleteCell(colIndex);
+                }
+            });
+
+            // Re-index dataset tags cells
+            const tagCells = document.querySelectorAll('#matrixTagsRow td.dataset-tags-cell');
+            tagCells.forEach((cell, idx) => {
+                cell.setAttribute('data-col', String(idx));
+                const addBtn = cell.querySelector('.btn-add-dataset-tag');
+                if (addBtn) {
+                    addBtn.setAttribute('onclick', `openAddDatasetTagModal(${idx})`);
                 }
             });
 

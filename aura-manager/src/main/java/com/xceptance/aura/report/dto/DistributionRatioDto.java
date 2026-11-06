@@ -33,6 +33,8 @@ public final class DistributionRatioDto
     private final double percentage;
     private final String formattedPercentage;
     private final String color;
+    private final int healedCount;
+    private final int aiCount;
 
     public DistributionRatioDto(
         final String name,
@@ -40,11 +42,24 @@ public final class DistributionRatioDto
         final double percentage,
         final String color)
     {
+        this(name, count, percentage, color, 0, 0);
+    }
+
+    public DistributionRatioDto(
+        final String name,
+        final int count,
+        final double percentage,
+        final String color,
+        final int healedCount,
+        final int aiCount)
+    {
         this.name = (name != null && !name.isBlank()) ? name : "Default";
         this.count = count;
         this.percentage = percentage;
         this.formattedPercentage = String.format(Locale.ROOT, "%.0f%%", percentage);
         this.color = (color != null && !color.isBlank()) ? color : "var(--status-pass)";
+        this.healedCount = healedCount;
+        this.aiCount = aiCount;
     }
 
     public String getName()
@@ -55,6 +70,11 @@ public final class DistributionRatioDto
     public int getCount()
     {
         return count;
+    }
+
+    public String getFormattedCount()
+    {
+        return String.format(Locale.ROOT, "%,d", count);
     }
 
     public double getPercentage()
@@ -70,5 +90,20 @@ public final class DistributionRatioDto
     public String getColor()
     {
         return color;
+    }
+
+    public int getHealedCount()
+    {
+        return healedCount;
+    }
+
+    public int getAiCount()
+    {
+        return aiCount;
+    }
+
+    public boolean hasHealedOrAi()
+    {
+        return healedCount > 0 || aiCount > 0;
     }
 }

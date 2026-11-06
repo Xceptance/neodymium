@@ -236,7 +236,47 @@ public class LocalRunJsonStorageService
             String trigger = "Unknown";
             String timestamp = "Recently";
 
-            final Map<String, String> existingTags = new LinkedHashMap<>();
+            final Map<String, List<String>> existingTags = new LinkedHashMap<>();
+            final File batchJsonFile = new File(runDir, "batch.json");
+            if (batchJsonFile.exists())
+            {
+                try
+                {
+                    final JsonNode batchNode = objectMapper.readTree(batchJsonFile);
+                    if (batchNode.has("tags") && batchNode.path("tags").isObject())
+                    {
+                        batchNode.path("tags").fields().forEachRemaining(entry -> {
+                            final String k = entry.getKey().trim();
+                            if (!k.isEmpty())
+                            {
+                                final List<String> list = existingTags.computeIfAbsent(k, key -> new ArrayList<>());
+                                if (entry.getValue().isArray())
+                                {
+                                    for (final JsonNode item : entry.getValue())
+                                    {
+                                        final String s = item.asText("").trim();
+                                        if (!s.isEmpty() && !list.contains(s))
+                                        {
+                                            list.add(s);
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    final String s = entry.getValue().asText("").trim();
+                                    if (!s.isEmpty() && !list.contains(s))
+                                    {
+                                        list.add(s);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+                catch (final Exception ignored)
+                {
+                }
+            }
             final File runJsonFile = new File(runDir, "run.json");
             if (runJsonFile.exists())
             {
@@ -246,7 +286,30 @@ public class LocalRunJsonStorageService
                     if (existingRoot.has("tags") && existingRoot.path("tags").isObject())
                     {
                         existingRoot.path("tags").fields().forEachRemaining(entry -> {
-                            existingTags.put(entry.getKey(), entry.getValue().asText(""));
+                            final String k = entry.getKey().trim();
+                            if (!k.isEmpty())
+                            {
+                                final List<String> list = existingTags.computeIfAbsent(k, key -> new ArrayList<>());
+                                if (entry.getValue().isArray())
+                                {
+                                    for (final JsonNode item : entry.getValue())
+                                    {
+                                        final String s = item.asText("").trim();
+                                        if (!s.isEmpty() && !list.contains(s))
+                                        {
+                                            list.add(s);
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    final String s = entry.getValue().asText("").trim();
+                                    if (!s.isEmpty() && !list.contains(s))
+                                    {
+                                        list.add(s);
+                                    }
+                                }
+                            }
                         });
                     }
                     if (existingRoot.has("batchName")) batchName = existingRoot.path("batchName").asText(batchName);
@@ -372,6 +435,14 @@ public class LocalRunJsonStorageService
                             {
                                 rawArea = "";
                             }
+                            if (rawArea.isEmpty() || "General".equalsIgnoreCase(rawArea) || "Browsing (default)".equalsIgnoreCase(rawArea))
+                            {
+                                final String extractedFromNode = extractAreaFromNode(objNode);
+                                if (!extractedFromNode.isEmpty())
+                                {
+                                    rawArea = extractedFromNode;
+                                }
+                            }
                             if (rawArea.isEmpty() || "General".equalsIgnoreCase(rawArea))
                             {
                                 if (!folderArea.isEmpty() && !"General".equalsIgnoreCase(folderArea))
@@ -386,6 +457,20 @@ public class LocalRunJsonStorageService
                             final String areaName = rawArea.trim();
 
                             objNode.put("areaName", areaName);
+                            String rawSubArea = objNode.has("subArea") ? objNode.path("subArea").asText("") : "";
+                            if (rawSubArea.isEmpty())
+                            {
+                                final String extractedSub = extractSubAreaFromNode(objNode);
+                                if (!extractedSub.isEmpty())
+                                {
+                                    rawSubArea = extractedSub;
+                                }
+                            }
+                            if (!rawSubArea.isEmpty())
+                            {
+                                final String formattedSub = rawSubArea.startsWith("@") ? rawSubArea.trim() : "@" + rawSubArea.trim();
+                                objNode.put("subArea", formattedSub);
+                            }
                             objNode.put("testClass", testClass);
 
                             if (!objNode.has("title") || objNode.path("title").asText().trim().isEmpty())
@@ -398,7 +483,8 @@ public class LocalRunJsonStorageService
                                 {
                                     objNode.put("title", objNode.path("testId").asText().trim());
                                 }
-                                else if (objNode.has("testName") && !objNode.path("testName").asText().trim().isEmpty())
+                                else if (objNode.has("testName") && !objNode.path("testName").asText().trim().isEmpty()
+                                        && !objNode.path("testName").asText().trim().equalsIgnoreCase(testClass))
                                 {
                                     objNode.put("title", objNode.path("testName").asText().trim());
                                 }
@@ -409,7 +495,23 @@ public class LocalRunJsonStorageService
                             }
 
                             final String title = objNode.path("title").asText("Default");
-                            final String location = objNode.path("location").asText("Default");
+                            String location = objNode.path("location").asText(objNode.path("locale").asText(""));
+                            if (location.isEmpty() && objNode.has("tags") && objNode.path("tags").isObject())
+                            {
+                                final JsonNode tagLoc = objNode.path("tags").path("locale");
+                                if (tagLoc.isArray() && tagLoc.size() > 0)
+                                {
+                                    location = tagLoc.get(0).asText("");
+                                }
+                                else if (!tagLoc.isMissingNode() && !tagLoc.isNull())
+                                {
+                                    location = tagLoc.asText("");
+                                }
+                            }
+                            if (location.isEmpty())
+                            {
+                                location = "Default";
+                            }
                             final String browser = objNode.path("browser").asText("Chrome");
                             final String engine = objNode.path("engine").asText("Java");
 
@@ -464,6 +566,7 @@ public class LocalRunJsonStorageService
                             {
                                 final ObjectNode localData = objectMapper.createObjectNode();
                                 localData.put("areaName", areaName);
+                                if (!rawSubArea.isEmpty()) localData.put("subArea", rawSubArea.startsWith("@") ? rawSubArea.trim() : "@" + rawSubArea.trim());
                                 localData.put("testClass", testClass);
                                 if (!title.isEmpty()) localData.put("dataSet", title);
                                 localData.put("location", location);
@@ -504,6 +607,21 @@ public class LocalRunJsonStorageService
 
                                 objNode.set("blocks", blocksNode);
                             }
+
+                            // Keep the execution JSON at its current location on disk (class folders
+                            // without a category are only logically associated with the default
+                            // category); persist the enriched JSON content in place.
+                            try
+                            {
+                                final JsonNode existingNode = objectMapper.readTree(f);
+                                if (!existingNode.equals(objNode))
+                                {
+                                    objectMapper.writerWithDefaultPrettyPrinter().writeValue(f, objNode);
+                                }
+                            }
+                            catch (final Exception ignored)
+                            {
+                            }
                             areasMap.computeIfAbsent(areaName, k -> new LinkedHashMap<>()).computeIfAbsent(testClass, k -> new ArrayList<>()).add(f.getName());
                             mergedExecutions.add(objNode);
                         }
@@ -511,7 +629,7 @@ public class LocalRunJsonStorageService
                         totalExecsCount++;
                         final String rawStatus = node.path("status").asText("failed-unknown");
                         final JsonNode bugsNode = node.path("bugs");
-                        final boolean hasBugs = bugsNode.isArray() && bugsNode.size() > 0;
+                        final boolean hasBugs = hasBugsNode(bugsNode);
                         final boolean isHealed = (node.has("healed") && node.path("healed").asBoolean(false))
                                               || (node.has("healedStepsCount") && node.path("healedStepsCount").asInt(0) > 0)
                                               || "healed".equalsIgnoreCase(rawStatus);
@@ -620,6 +738,10 @@ public class LocalRunJsonStorageService
             }
             rootNode.set("locales", localesArray);
 
+            if (browsersSet.size() > 1 && browsersSet.contains("Chrome") && browsersSet.stream().anyMatch(s -> s.startsWith("Chrome_")))
+            {
+                browsersSet.remove("Chrome");
+            }
             final ArrayNode browsersArray = objectMapper.createArrayNode();
             if (!browsersSet.isEmpty())
             {
@@ -691,7 +813,23 @@ public class LocalRunJsonStorageService
                     final String tBrowser = objNode.path("browser").asText("Chrome");
                     final String key = buildExecutionKey(tClass, tMethod, tTitle, tBrowser);
 
-                    final String loc = objNode.path("location").asText(objNode.path("locale").asText("Default"));
+                    String loc = objNode.path("location").asText(objNode.path("locale").asText(""));
+                    if (loc.isEmpty() && objNode.has("tags") && objNode.path("tags").isObject())
+                    {
+                        final JsonNode tagLoc = objNode.path("tags").path("locale");
+                        if (tagLoc.isArray() && tagLoc.size() > 0)
+                        {
+                            loc = tagLoc.get(0).asText("");
+                        }
+                        else if (!tagLoc.isMissingNode() && !tagLoc.isNull())
+                        {
+                            loc = tagLoc.asText("");
+                        }
+                    }
+                    if (loc.isEmpty())
+                    {
+                        loc = "Default";
+                    }
                     final ObjectNode metricObj = objectMapper.createObjectNode();
                     metricObj.put("id", objNode.path("id").asText(""));
                     metricObj.put("testClass", tClass);
@@ -699,8 +837,30 @@ public class LocalRunJsonStorageService
                     metricObj.put("title", tTitle);
                     metricObj.put("location", loc);
                     metricObj.put("browser", tBrowser);
+                    final ArrayNode normalizedBugs = objectMapper.createArrayNode();
+                    final JsonNode rawBugs = objNode.path("bugs");
+                    if (rawBugs.isArray())
+                    {
+                        for (final JsonNode bNode : rawBugs)
+                        {
+                            final String ticket = AuraReportDataService.extractTicket(bNode);
+                            if (!ticket.isBlank())
+                            {
+                                normalizedBugs.add(ticket);
+                            }
+                        }
+                    }
+                    else if (rawBugs.isTextual() || rawBugs.isObject())
+                    {
+                        final String ticket = AuraReportDataService.extractTicket(rawBugs);
+                        if (!ticket.isBlank())
+                        {
+                            normalizedBugs.add(ticket);
+                        }
+                    }
+
                     final String baseStatus = objNode.path("status").asText("failed-unknown");
-                    final boolean hasBugsNode = objNode.has("bugs") && objNode.get("bugs").isArray() && objNode.get("bugs").size() > 0;
+                    final boolean hasBugsNode = normalizedBugs.size() > 0;
                     final String effStatus;
                     if ("healed".equalsIgnoreCase(baseStatus))
                     {
@@ -741,7 +901,11 @@ public class LocalRunJsonStorageService
                     metricObj.put("llmCallsCount", extractLlmCalls(objNode));
                     metricObj.put("llmTotalTokens", extractLlmTokens(objNode));
                     metricObj.put("llmCost", extractLlmCost(objNode));
-                    metricObj.set("bugs", objNode.path("bugs"));
+                    metricObj.set("bugs", normalizedBugs);
+                    if (objNode.has("tags"))
+                    {
+                        metricObj.set("tags", objNode.get("tags"));
+                    }
 
                     String uniqueKey = key;
                     if (executionMetricsNode.has(uniqueKey))
@@ -788,7 +952,20 @@ public class LocalRunJsonStorageService
             final ObjectNode tagsNode = objectMapper.createObjectNode();
             if (!existingTags.isEmpty())
             {
-                existingTags.forEach(tagsNode::put);
+                existingTags.forEach((k, vList) -> {
+                    if (vList != null && !vList.isEmpty())
+                    {
+                        if (vList.size() == 1)
+                        {
+                            tagsNode.put(k, vList.get(0));
+                        }
+                        else
+                        {
+                            final ArrayNode arr = tagsNode.putArray(k);
+                            vList.forEach(arr::add);
+                        }
+                    }
+                });
             }
             else
             {
@@ -801,6 +978,8 @@ public class LocalRunJsonStorageService
                     tagsNode.put("Instance", env);
                 }
             }
+            compactRootNode.set("locales", localesArray);
+            compactRootNode.set("browsers", browsersArray);
             compactRootNode.set("tags", tagsNode);
 
             final String jsonString = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(compactRootNode);
@@ -924,6 +1103,26 @@ public class LocalRunJsonStorageService
     public static String buildExecutionKey(final String testClass, final String dataSet, final String browser)
     {
         return buildExecutionKey(testClass, null, dataSet, browser);
+    }
+
+    static boolean hasBugsNode(final JsonNode bugsNode)
+    {
+        if (bugsNode == null || bugsNode.isNull() || bugsNode.isMissingNode())
+        {
+            return false;
+        }
+        if (bugsNode.isArray())
+        {
+            for (final JsonNode b : bugsNode)
+            {
+                if (!AuraReportDataService.extractTicket(b).isBlank())
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return !AuraReportDataService.extractTicket(bugsNode).isBlank();
     }
 
     private int extractStepsTotal(final JsonNode node)
@@ -1333,7 +1532,27 @@ public class LocalRunJsonStorageService
                                     final JsonNode execNode = objectMapper.readTree(execFilePath.toFile());
                                     if (execNode instanceof ObjectNode execObj)
                                     {
-                                        final String areaToUse = (!areaFolder.isEmpty() && !"General".equalsIgnoreCase(areaFolder)) ? areaFolder : "Browsing (default)";
+                                        String areaToUse = (!areaFolder.isEmpty() && !"General".equalsIgnoreCase(areaFolder)) ? areaFolder : "";
+                                        if (areaToUse.isEmpty() && execObj.hasNonNull("areaName") && !execObj.path("areaName").asText().isBlank())
+                                        {
+                                            final String existing = execObj.path("areaName").asText().trim();
+                                            if (!"General".equalsIgnoreCase(existing) && !"Browsing (default)".equalsIgnoreCase(existing))
+                                            {
+                                                areaToUse = existing;
+                                            }
+                                        }
+                                        if (areaToUse.isEmpty() || "General".equalsIgnoreCase(areaToUse) || "Browsing (default)".equalsIgnoreCase(areaToUse))
+                                        {
+                                            final String extractedFromNode = extractAreaFromNode(execObj);
+                                            if (!extractedFromNode.isEmpty())
+                                            {
+                                                areaToUse = extractedFromNode;
+                                            }
+                                        }
+                                        if (areaToUse.isEmpty() || "General".equalsIgnoreCase(areaToUse))
+                                        {
+                                            areaToUse = "Browsing (default)";
+                                        }
                                         execObj.put("areaName", areaToUse);
 
                                         String classToUse = classFolder;
@@ -1369,9 +1588,14 @@ public class LocalRunJsonStorageService
                                             {
                                                 execObj.put("title", execObj.path("testId").asText());
                                             }
-                                            else if (execObj.has("testName") && !execObj.path("testName").asText().isEmpty())
+                                            else if (execObj.has("testName") && !execObj.path("testName").asText().isEmpty()
+                                                    && !execObj.path("testName").asText().trim().equalsIgnoreCase(classToUse))
                                             {
                                                 execObj.put("title", execObj.path("testName").asText());
+                                            }
+                                            else
+                                            {
+                                                execObj.put("title", "Default");
                                             }
                                         }
                                     }
@@ -1671,7 +1895,7 @@ public class LocalRunJsonStorageService
                         for (final JsonNode mNode : metricsObj)
                         {
                             final String mStatus = mNode.path("status").asText("failed-unknown");
-                            final boolean mHasBugs = mNode.has("bugs") && mNode.path("bugs").isArray() && mNode.path("bugs").size() > 0;
+                            final boolean mHasBugs = hasBugsNode(mNode.path("bugs"));
                             final boolean mHealed = mNode.path("healed").asBoolean(false) || mNode.path("healedStepsCount").asInt(0) > 0 || "healed".equalsIgnoreCase(mStatus);
                             if ("failed-known".equalsIgnoreCase(mStatus) || (("failed".equalsIgnoreCase(mStatus) || "error".equalsIgnoreCase(mStatus)) && mHasBugs))
                             {
@@ -1777,30 +2001,68 @@ public class LocalRunJsonStorageService
 
     private void extractLocalesFromNode(final JsonNode node, final Set<String> localesSet)
     {
-        extractStringOrArrayField(node, "locale", localesSet);
-        extractStringOrArrayField(node, "location", localesSet);
+        final Set<String> nodeLocales = new LinkedHashSet<>();
+        extractStringOrArrayField(node, "locale", nodeLocales);
+        extractStringOrArrayField(node, "location", nodeLocales);
+        if (node.has("tags") && node.path("tags").isObject())
+        {
+            extractStringOrArrayField(node.path("tags"), "locale", nodeLocales);
+            extractStringOrArrayField(node.path("tags"), "location", nodeLocales);
+        }
         if (node.has("localDataBindings") && node.path("localDataBindings").isObject())
         {
-            extractStringOrArrayField(node.path("localDataBindings"), "locale", localesSet);
-            extractStringOrArrayField(node.path("localDataBindings"), "location", localesSet);
+            extractStringOrArrayField(node.path("localDataBindings"), "locale", nodeLocales);
+            extractStringOrArrayField(node.path("localDataBindings"), "location", nodeLocales);
         }
         if (node.has("dataBindings") && node.path("dataBindings").isObject())
         {
-            extractStringOrArrayField(node.path("dataBindings"), "locale", localesSet);
-            extractStringOrArrayField(node.path("dataBindings"), "location", localesSet);
+            extractStringOrArrayField(node.path("dataBindings"), "locale", nodeLocales);
+            extractStringOrArrayField(node.path("dataBindings"), "location", nodeLocales);
+        }
+        if (nodeLocales.isEmpty())
+        {
+            localesSet.add("Default");
+        }
+        else
+        {
+            for (final String l : nodeLocales)
+            {
+                localesSet.add(AuraReportDataService.normalizeLocation(l));
+            }
         }
     }
 
     private void extractBrowsersFromNode(final JsonNode node, final Set<String> browsersSet)
     {
-        extractStringOrArrayField(node, "browser", browsersSet);
+        final Set<String> nodeBrowsers = new LinkedHashSet<>();
+        extractStringOrArrayField(node, "browser", nodeBrowsers);
         if (node.has("localDataBindings") && node.path("localDataBindings").isObject())
         {
-            extractStringOrArrayField(node.path("localDataBindings"), "browser", browsersSet);
+            extractStringOrArrayField(node.path("localDataBindings"), "browser", nodeBrowsers);
         }
         if (node.has("dataBindings") && node.path("dataBindings").isObject())
         {
-            extractStringOrArrayField(node.path("dataBindings"), "browser", browsersSet);
+            extractStringOrArrayField(node.path("dataBindings"), "browser", nodeBrowsers);
+        }
+        if (nodeBrowsers.isEmpty())
+        {
+            final String mId = node.path("id").asText("");
+            final String extracted = AuraReportDataService.extractBrowserFromIdOrKey(mId);
+            if (extracted != null && !extracted.isBlank())
+            {
+                nodeBrowsers.add(extracted);
+            }
+        }
+        if (nodeBrowsers.isEmpty())
+        {
+            browsersSet.add("Chrome_1920x1080");
+        }
+        else
+        {
+            for (final String b : nodeBrowsers)
+            {
+                browsersSet.add(AuraReportDataService.normalizeBrowser(b));
+            }
         }
     }
 
@@ -1935,5 +2197,173 @@ public class LocalRunJsonStorageService
         }
 
         return new ExecutionTime(Long.MAX_VALUE, rawVal);
+    }
+
+    private static String extractAreaFromNode(final JsonNode node)
+    {
+        if (node == null || !node.isObject())
+        {
+            return "";
+        }
+        if (node.has("tags") && node.path("tags").isObject())
+        {
+            final String area = extractAreaFromTagsObject(node.path("tags"));
+            if (!area.isEmpty())
+            {
+                return area;
+            }
+        }
+        if (node.has("localDataBindings") && node.path("localDataBindings").isObject())
+        {
+            final String area = extractAreaFromTagsObject(node.path("localDataBindings"));
+            if (!area.isEmpty())
+            {
+                return area;
+            }
+        }
+        if (node.has("dataBindings") && node.path("dataBindings").isObject())
+        {
+            final String area = extractAreaFromTagsObject(node.path("dataBindings"));
+            if (!area.isEmpty())
+            {
+                return area;
+            }
+        }
+        return "";
+    }
+
+    private static String extractAreaFromTagsObject(final JsonNode tagsNode)
+    {
+        if (tagsNode == null || !tagsNode.isObject())
+        {
+            return "";
+        }
+        final Iterator<String> fieldNames = tagsNode.fieldNames();
+        while (fieldNames.hasNext())
+        {
+            final String field = fieldNames.next();
+            if ("area".equalsIgnoreCase(field) || "tags.area".equalsIgnoreCase(field))
+            {
+                final JsonNode areaNode = tagsNode.path(field);
+                if (areaNode.isArray() && areaNode.size() > 0)
+                {
+                    final String first = areaNode.get(0).asText("");
+                    if (!first.isBlank())
+                    {
+                        final String trimmed = first.trim();
+                        return trimmed.startsWith("@") ? trimmed : "@" + trimmed;
+                    }
+                }
+                else if (!areaNode.isMissingNode() && !areaNode.isNull())
+                {
+                    String text = areaNode.asText("").trim();
+                    if (text.startsWith("[") && text.endsWith("]"))
+                    {
+                        text = text.substring(1, text.length() - 1).trim();
+                        if (text.contains(","))
+                        {
+                            text = text.substring(0, text.indexOf(',')).trim();
+                        }
+                    }
+                    if (!text.isBlank())
+                    {
+                        return text.startsWith("@") ? text : "@" + text;
+                    }
+                }
+            }
+        }
+        return "";
+    }
+
+    private static String extractSubAreaFromNode(final JsonNode node)
+    {
+        if (node == null || !node.isObject())
+        {
+            return "";
+        }
+        if (node.has("subArea") && !node.path("subArea").asText("").trim().isEmpty())
+        {
+            final String sub = node.path("subArea").asText("").trim();
+            return sub.startsWith("@") ? sub : "@" + sub;
+        }
+        if (node.has("tags") && node.path("tags").isObject())
+        {
+            final String sub = extractSubAreaFromTagsObject(node.path("tags"));
+            if (!sub.isEmpty())
+            {
+                return sub;
+            }
+        }
+        if (node.has("localDataBindings") && node.path("localDataBindings").isObject())
+        {
+            if (node.path("localDataBindings").has("subArea") && !node.path("localDataBindings").path("subArea").asText("").trim().isEmpty())
+            {
+                final String sub = node.path("localDataBindings").path("subArea").asText("").trim();
+                return sub.startsWith("@") ? sub : "@" + sub;
+            }
+            final String sub = extractSubAreaFromTagsObject(node.path("localDataBindings"));
+            if (!sub.isEmpty())
+            {
+                return sub;
+            }
+        }
+        if (node.has("dataBindings") && node.path("dataBindings").isObject())
+        {
+            if (node.path("dataBindings").has("subArea") && !node.path("dataBindings").path("subArea").asText("").trim().isEmpty())
+            {
+                final String sub = node.path("dataBindings").path("subArea").asText("").trim();
+                return sub.startsWith("@") ? sub : "@" + sub;
+            }
+            final String sub = extractSubAreaFromTagsObject(node.path("dataBindings"));
+            if (!sub.isEmpty())
+            {
+                return sub;
+            }
+        }
+        return "";
+    }
+
+    private static String extractSubAreaFromTagsObject(final JsonNode tagsNode)
+    {
+        if (tagsNode == null || !tagsNode.isObject())
+        {
+            return "";
+        }
+        final Iterator<String> fieldNames = tagsNode.fieldNames();
+        while (fieldNames.hasNext())
+        {
+            final String field = fieldNames.next();
+            if ("area".equalsIgnoreCase(field) || "tags.area".equalsIgnoreCase(field))
+            {
+                final JsonNode areaNode = tagsNode.path(field);
+                if (areaNode.isArray() && areaNode.size() > 1)
+                {
+                    final String second = areaNode.get(1).asText("");
+                    if (!second.isBlank())
+                    {
+                        final String trimmed = second.trim();
+                        return trimmed.startsWith("@") ? trimmed : "@" + trimmed;
+                    }
+                }
+                else if (!areaNode.isMissingNode() && !areaNode.isNull())
+                {
+                    String text = areaNode.asText("").trim();
+                    if (text.startsWith("[") && text.endsWith("]"))
+                    {
+                        text = text.substring(1, text.length() - 1).trim();
+                        if (text.contains(","))
+                        {
+                            final String[] parts = text.split(",", 2);
+                            if (parts.length > 1 && !parts[1].trim().isBlank())
+                            {
+                                final String trimmed = parts[1].trim();
+                                return trimmed.startsWith("@") ? trimmed : "@" + trimmed;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return "";
     }
 }

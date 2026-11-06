@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.neodymium.util.TagUtils;
 
 /**
  * Data transfer object representing a single run report.
@@ -50,6 +51,47 @@ public final class RunReportDto
     private final long totalLlmTokens;
     private final double totalLlmCost;
     private final Map<String, String> tags;
+    private final String environment;
+
+    public RunReportDto(
+        final String runId,
+        final String batchName,
+        final String environment,
+        final String timestamp,
+        final String duration,
+        final int totalCount,
+        final int passCount,
+        final int fixedCount,
+        final int knownCount,
+        final int unknownCount,
+        final int ignoredCount,
+        final int runningCount,
+        final List<TestExecutionDto> executions,
+        final List<AreaSummaryDto> areaSummaries,
+        final int totalLlmCalls,
+        final long totalLlmTokens,
+        final double totalLlmCost,
+        final Map<String, String> tags)
+    {
+        this.runId = runId;
+        this.batchName = batchName;
+        this.environment = environment != null ? environment : (tags != null ? tags.getOrDefault("environment", "") : "");
+        this.timestamp = timestamp;
+        this.duration = duration;
+        this.totalCount = totalCount;
+        this.passCount = passCount;
+        this.fixedCount = fixedCount;
+        this.knownCount = knownCount;
+        this.unknownCount = unknownCount;
+        this.ignoredCount = ignoredCount;
+        this.runningCount = runningCount;
+        this.executions = executions != null ? executions : new ArrayList<>();
+        this.areaSummaries = areaSummaries != null ? areaSummaries : new ArrayList<>();
+        this.totalLlmCalls = totalLlmCalls;
+        this.totalLlmTokens = totalLlmTokens;
+        this.totalLlmCost = totalLlmCost;
+        this.tags = tags != null ? new LinkedHashMap<>(tags) : new LinkedHashMap<>();
+    }
 
     public RunReportDto(
         final String runId,
@@ -70,23 +112,7 @@ public final class RunReportDto
         final double totalLlmCost,
         final Map<String, String> tags)
     {
-        this.runId = runId;
-        this.batchName = batchName;
-        this.timestamp = timestamp;
-        this.duration = duration;
-        this.totalCount = totalCount;
-        this.passCount = passCount;
-        this.fixedCount = fixedCount;
-        this.knownCount = knownCount;
-        this.unknownCount = unknownCount;
-        this.ignoredCount = ignoredCount;
-        this.runningCount = runningCount;
-        this.executions = executions != null ? executions : new ArrayList<>();
-        this.areaSummaries = areaSummaries != null ? areaSummaries : new ArrayList<>();
-        this.totalLlmCalls = totalLlmCalls;
-        this.totalLlmTokens = totalLlmTokens;
-        this.totalLlmCost = totalLlmCost;
-        this.tags = tags != null ? new LinkedHashMap<>(tags) : new LinkedHashMap<>();
+        this(runId, batchName, tags != null ? tags.getOrDefault("environment", "") : "", timestamp, duration, totalCount, passCount, fixedCount, knownCount, unknownCount, ignoredCount, runningCount, executions, areaSummaries, totalLlmCalls, totalLlmTokens, totalLlmCost, tags);
     }
 
     public RunReportDto(
@@ -208,6 +234,11 @@ public final class RunReportDto
         return batchName;
     }
 
+    public String getEnvironment()
+    {
+        return environment != null ? environment : (tags != null ? tags.getOrDefault("environment", "") : "");
+    }
+
     public Map<String, String> getTags()
     {
         return tags != null ? tags : Map.of();
@@ -258,6 +289,15 @@ public final class RunReportDto
         return runningCount;
     }
 
+    public int getFlakyCount()
+    {
+        if (executions == null || executions.isEmpty())
+        {
+            return 0;
+        }
+        return (int) executions.stream().filter(TestExecutionDto::isFlaky).count();
+    }
+
     public List<TestExecutionDto> getExecutions()
     {
         return executions;
@@ -275,7 +315,23 @@ public final class RunReportDto
             return List.of();
         }
         return executions.stream()
-            .map(e -> (e.getLocation() == null || e.getLocation().isBlank()) ? "Default" : e.getLocation().trim())
+            .map(e ->
+            {
+                String loc = null;
+                if (e.getTags() != null)
+                {
+                    final List<String> locTags = TagUtils.findTagValues(e.getTags(), "locale");
+                    if (locTags != null && !locTags.isEmpty())
+                    {
+                        loc = String.join("+", locTags);
+                    }
+                }
+                if (loc == null && e.getLocation() != null && !e.getLocation().isBlank())
+                {
+                    loc = e.getLocation().trim();
+                }
+                return (loc == null || loc.isBlank()) ? "Default" : loc;
+            })
             .distinct()
             .sorted()
             .collect(Collectors.toList());
@@ -410,6 +466,31 @@ public final class RunReportDto
     public int getTotalAiCount()
     {
         return getPassAiCount() + getFixedAiCount() + getKnownAiCount() + getUnknownAiCount();
+    }
+
+    public int getPlaybookCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return (int) executions.stream()
+                .filter(e -> "PLAYBOOK".equalsIgnoreCase(e.getDisplayMode()))
+                .count();
+        }
+        return 0;
+    }
+
+    public int getTotalAiUsageCount()
+    {
+        return getTotalAiCount() + getTotalHealedCount() + getPlaybookCount();
+    }
+
+    public int getClassicCount()
+    {
+        if (executions != null && !executions.isEmpty())
+        {
+            return Math.max(0, executions.size() - getTotalAiUsageCount());
+        }
+        return 0;
     }
 
     public int getFailCount()
@@ -860,9 +941,23 @@ public final class RunReportDto
         final Map<String, Integer> lMap = new LinkedHashMap<>();
         for (final TestExecutionDto exec : executions)
         {
-            final String loc = (exec.getLocation() != null && !exec.getLocation().isBlank() && !exec.getLocation().equalsIgnoreCase("UNKNOWN"))
-                ? exec.getLocation().trim()
-                : "Default";
+            String loc = null;
+            if (exec.getTags() != null)
+            {
+                final List<String> locTags = TagUtils.findTagValues(exec.getTags(), "locale");
+                if (locTags != null && !locTags.isEmpty())
+                {
+                    loc = String.join("+", locTags);
+                }
+            }
+            if (loc == null && exec.getLocation() != null && !exec.getLocation().isBlank() && !exec.getLocation().equalsIgnoreCase("UNKNOWN"))
+            {
+                loc = exec.getLocation().trim();
+            }
+            if (loc == null || loc.isBlank())
+            {
+                loc = "Default";
+            }
             lMap.put(loc, lMap.getOrDefault(loc, 0) + 1);
         }
 

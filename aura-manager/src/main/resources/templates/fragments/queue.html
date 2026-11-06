@@ -12,21 +12,34 @@
     </div>
     
     <!-- Queue Action Bar -->
-    <div th:if="${queue != null and !queue.isEmpty()}" style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 8px 12px; border-radius: var(--border-radius); border: 1px solid var(--border);">
-        <span style="font-size: var(--text-xs); color: var(--text-secondary); font-weight: 500;">
-            <span th:text="${queue.size()}">0</span> test(s) queued 
-            <span style="color: var(--accent); font-weight: 600;">(<span th:text="${totalRuns != null ? totalRuns : queue.size()}">0</span> runs)</span>
-        </span>
-        <div style="display: flex; gap: 6px; align-items: center;">
-            <button id="saveQueueAsBatchBtn" type="button" onclick="openSaveBatchModal()"
-                    class="btn-edit" style="padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--accent); display: inline-flex; align-items: center; gap: 4px;"
-                    title="Save current queue as a named batch list">
-                <span class="material-symbols-outlined" style="font-size: 14px;">playlist_add</span> Save as Batch
-            </button>
-            <button id="clearQueueBtn" hx-post="/api/queue/clear" hx-target="#queueListContainer" hx-swap="innerHTML" 
-                    class="btn-edit" style="padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--danger);">
-                <span class="material-symbols-outlined">delete</span> Clear Queue
-            </button>
+    <div th:if="${queue != null and !queue.isEmpty()}" style="margin-bottom: 10px; display: flex; flex-direction: column; gap: 6px; background: var(--bg-main); padding: 8px 12px; border-radius: var(--border-radius); border: 1px solid var(--border);">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: var(--text-xs); color: var(--text-secondary); font-weight: 500;">
+                <span th:text="${queue.size()}">0</span> test(s) queued 
+                <span style="color: var(--accent); font-weight: 600;">(<span th:text="${totalRuns != null ? totalRuns : queue.size()}">0</span> runs)</span>
+            </span>
+            <div style="display: flex; gap: 6px; align-items: center;">
+                <button id="addQueueTagBtn" type="button" onclick="openRunTagModal()"
+                        class="btn-edit" style="padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--accent); display: inline-flex; align-items: center; gap: 4px;"
+                        title="Add tag to the run of the queue">
+                    <span class="material-symbols-outlined" style="font-size: 14px;">label</span> Add Tag
+                </button>
+                <button id="clearQueueBtn" hx-post="/api/queue/clear" hx-target="#queueListContainer" hx-swap="innerHTML" 
+                        class="btn-edit" style="padding: 4px 10px; font-size: 11px; cursor: pointer; color: var(--danger);">
+                    <span class="material-symbols-outlined">delete</span> Clear Queue
+                </button>
+            </div>
+        </div>
+        <div id="queueActionRunTags" th:if="${runTags != null and !runTags.isEmpty()}" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; border-top: 1px dashed var(--border); padding-top: 6px;">
+            <span style="font-size: 11px; color: var(--text-secondary); font-weight: 500; margin-right: 2px;">Run Tags:</span>
+            <th:block th:each="entry : ${runTags.entrySet()}">
+                <span class="root-tag-chip" th:each="val : ${entry.value}" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 12px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); font-size: 11px; color: #3b82f6; font-weight: 500;">
+                    <span th:text="${entry.key + ': ' + val}">Environment: Staging</span>
+                    <button type="button" class="btn-remove-run-tag" th:data-key="${entry.key}" th:data-value="${val}" onclick="removeQueueRunTag(this.getAttribute('data-key'), this.getAttribute('data-value'))" title="Remove tag" style="background: transparent; border: none; cursor: pointer; color: var(--text-secondary); display: inline-flex; align-items: center; padding: 0; margin-left: 2px;">
+                        <span class="material-symbols-outlined" style="font-size: 13px;">close</span>
+                    </button>
+                </span>
+            </th:block>
         </div>
     </div>
 
@@ -68,13 +81,13 @@
             </button>
         </div>
         <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
-            <button th:hx-post="@{/api/queue/move(index=${iter.index},dir=-1)}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Up" th:disabled="${iter.first}">
+            <button th:hx-post="|/api/queue/move?index=${iter.index}&dir=-1|" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Up" th:disabled="${iter.first}">
                 <span class="material-symbols-outlined">keyboard_arrow_up</span>
             </button>
-            <button th:hx-post="@{/api/queue/move(index=${iter.index},dir=1)}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Down" th:disabled="${iter.last}">
+            <button th:hx-post="|/api/queue/move?index=${iter.index}&dir=1|" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit" style="padding: 3px 6px; font-size: 10px;" title="Move Down" th:disabled="${iter.last}">
                 <span class="material-symbols-outlined">keyboard_arrow_down</span>
             </button>
-            <button th:hx-post="@{/api/queue/remove(index=${iter.index},file=${ds.file},id=${ds.id})}" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit btn-remove-queue-item" style="padding: 3px 6px; font-size: 10px; color: var(--danger);" title="Remove Item">
+            <button th:hx-post="|/api/queue/remove?index=${iter.index}&file=${ds.file}&id=${ds.id != null ? ds.id : ''}|" hx-target="#queueListContainer" hx-swap="innerHTML" class="btn-edit btn-remove-queue-item" style="padding: 3px 6px; font-size: 10px; color: var(--danger);" title="Remove Item">
                 <span class="material-symbols-outlined">close</span>
             </button>
         </div>
@@ -212,6 +225,31 @@
                 </select>
             </div>
             <span class="neo-u-32">Governs LLM action generation, recording, and replay healing.</span>
+        </div>
+
+        <div class="config-row-wrapper neo-u-30" style="flex-direction: column; align-items: stretch; gap: 6px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <span class="neo-u-2" style="display: flex; align-items: center; gap: 4px;">
+                    <span class="material-symbols-outlined" style="font-size: 15px; color: var(--accent);">label</span> Run Tags
+                </span>
+                <button type="button" id="addRunTagConfigBtn" class="btn-edit" onclick="openRunTagModal()" style="padding: 2px 8px; font-size: 11px; display: inline-flex; align-items: center; gap: 3px;" title="Add tag to queue run">
+                    <span class="material-symbols-outlined" style="font-size: 13px;">add</span> Tag
+                </button>
+            </div>
+            <div id="configRunTagsContainer" style="display: flex; flex-wrap: wrap; gap: 4px; align-items: center; min-height: 22px;">
+                <th:block th:if="${runTags != null and !runTags.isEmpty()}">
+                    <th:block th:each="entry : ${runTags.entrySet()}">
+                        <span class="root-tag-chip" th:each="val : ${entry.value}" style="display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 12px; background: rgba(59, 130, 246, 0.12); border: 1px solid rgba(59, 130, 246, 0.35); font-size: 11px; color: #3b82f6; font-weight: 500;">
+                            <span th:text="${entry.key + ': ' + val}">Environment: Staging</span>
+                            <button type="button" class="btn-remove-run-tag" th:data-key="${entry.key}" th:data-value="${val}" onclick="removeQueueRunTag(this.getAttribute('data-key'), this.getAttribute('data-value'))" title="Remove tag" style="background: transparent; border: none; cursor: pointer; color: var(--text-secondary); display: inline-flex; align-items: center; padding: 0; margin-left: 2px;">
+                                <span class="material-symbols-outlined" style="font-size: 13px;">close</span>
+                            </button>
+                        </span>
+                    </th:block>
+                </th:block>
+                <span th:if="${runTags == null or runTags.isEmpty()}" style="font-size: 11px; color: var(--text-secondary); font-style: italic;">No tags configured for run</span>
+            </div>
+            <span class="neo-u-32">Dimensional tags attached to this queue run (e.g. Environment, Release, Priority).</span>
         </div>
 
         <!-- Run Controls Action Buttons (in-band within configPanel) -->

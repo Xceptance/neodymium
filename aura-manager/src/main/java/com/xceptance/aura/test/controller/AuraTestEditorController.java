@@ -97,6 +97,10 @@ public class AuraTestEditorController
             model.addAttribute("varKeys", sections.get("varKeys"));
             final Object scopesObj = sections.get("fragmentVarScopes");
             model.addAttribute("fragmentVarScopes", scopesObj != null ? scopesObj : Map.of());
+            final Object rootTagsObj = sections.get("rootTags");
+            model.addAttribute("rootTags", rootTagsObj != null ? rootTagsObj : Map.of());
+            final Object dsTagsObj = sections.get("datasetTagsList");
+            model.addAttribute("datasetTagsList", dsTagsObj != null ? dsTagsObj : List.of());
             model.addAttribute("areaTag", sections.get("areaTag"));
         }
         else
@@ -116,6 +120,8 @@ public class AuraTestEditorController
             model.addAttribute("dataMatrix", List.of());
             model.addAttribute("varKeys", List.of());
             model.addAttribute("fragmentVarScopes", Map.of());
+            model.addAttribute("rootTags", Map.of());
+            model.addAttribute("datasetTagsList", List.of());
             model.addAttribute("areaTag", null);
         }
         return "fragments/editor :: editorPanelContent";

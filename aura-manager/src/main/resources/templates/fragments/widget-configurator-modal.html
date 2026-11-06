@@ -1,0 +1,1066 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- WIDGET CONFIGURATOR MODAL FRAGMENT -->
+<div class="modal-overlay" id="widgetConfiguratorModal" th:fragment="widgetConfiguratorModal" style="display: none;" th:style="${isOpen == true} ? 'display: flex;' : 'display: none;'" onclick="if (event.target === this) closeWidgetConfiguratorModal();">
+    <div class="modal-card widget-config-card" style="max-width: 680px; width: 95%;">
+        <div class="modal-header d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined text-accent" style="font-size: 1.35rem;">dashboard_customize</span>
+                <div>
+                    <div style="font-weight: 700; font-size: 1.05rem; color: var(--text-main);">Widget Configurator</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">Configure telemetry metrics, presentations, and trend groupings</div>
+                </div>
+            </div>
+            <button type="button" class="btn-icon-widget" onclick="closeWidgetConfiguratorModal()" title="Close dialog">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <form id="widgetConfigForm"
+              hx-post="/widgets/save"
+              hx-target="#mainViewContainer"
+              hx-swap="innerHTML"
+              onsubmit="closeWidgetConfiguratorModal()">
+            <input type="hidden" name="id" id="widgetConfigId" th:value="${widget != null ? widget.id : ''}" value="" />
+            <input type="hidden" name="pageId" id="widgetConfigPageId" th:value="${pageId != null ? pageId : ''}" value="" />
+
+            <div class="modal-body d-flex flex-column gap-3" style="max-height: 75vh; overflow-y: auto; padding: 1.25rem;">
+                <!-- OPTIONAL CUSTOM TITLE -->
+                <div class="config-section">
+                    <label class="config-label d-flex align-items-center justify-content-between">
+                        <span class="d-flex align-items-center gap-1">
+                            <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">title</span>
+                            <strong>Widget Title (Optional)</strong>
+                        </span>
+                        <span class="text-muted" style="font-size: 0.72rem;">Leave empty for auto-generated title</span>
+                    </label>
+                    <input type="text"
+                           name="title"
+                           id="widgetTitleInput"
+                           class="form-control form-control-sm mt-1"
+                           placeholder="e.g. Production Pass Rate, API Cost Trend..."
+                           th:value="${isNewWidget == true ? '' : (widget != null ? widget.title : '')}"
+                           th:attr="data-user-custom=${isNewWidget == true || widget == null || widget.title == null || widget.title.isEmpty() ? 'false' : 'true'}"
+                           data-user-custom="false"
+                           oninput="this.dataset.userCustom = this.value.trim() ? 'true' : 'false';"
+                           autocomplete="off"
+                           style="background: var(--bg-hover); color: var(--text-main); border-color: var(--border);" />
+                </div>
+
+                <!-- 1. SELECT INFORMATION / VARIATION SOURCE -->
+                <div class="config-section">
+                    <label class="config-label d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">analytics</span>
+                        <strong>1. Select Information / Variation Source</strong>
+                    </label>
+                    <div class="config-radio-grid mt-1">
+                        <label class="config-radio-tile">
+                            <input type="radio" name="metric" value="STATUS" th:checked="${widget == null || widget.metric == null || widget.metric.name() == 'STATUS'}" onchange="onWidgetMetricChanged('STATUS')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">check_circle</span>
+                                <div class="tile-title">Status</div>
+                                <div class="tile-desc">Pass, Fixed, Known, Unknown, Ignored</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="metric" value="COSTS" th:checked="${widget != null && widget.metric != null && widget.metric.name() == 'COSTS'}" onchange="onWidgetMetricChanged('COSTS')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">payments</span>
+                                <div class="tile-title">Costs</div>
+                                <div class="tile-desc">LLM Token Spending & Dollar Budget</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="metric" value="BUGS" th:checked="${widget != null && widget.metric != null && widget.metric.name() == 'BUGS'}" onchange="onWidgetMetricChanged('BUGS')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">bug_report</span>
+                                <div class="tile-title">Bugs</div>
+                                <div class="tile-desc">Defects by Severity & Discovery</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="metric" value="TAG" th:checked="${widget != null && widget.metric != null && widget.metric.name() == 'TAG'}" onchange="onWidgetMetricChanged('TAG')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">sell</span>
+                                <div class="tile-title">Tag</div>
+                                <div class="tile-desc">Browser, Locale, Area, Release, etc.</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="metric" value="AI_USAGE" th:checked="${widget != null && widget.metric != null && widget.metric.name() == 'AI_USAGE'}" onchange="onWidgetMetricChanged('AI_USAGE')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">psychology</span>
+                                <div class="tile-title">AI Usage</div>
+                                <div class="tile-desc">AI-Driven, Healed, Playbook</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="metric" value="TEST_VARIATIONS" th:checked="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}" onchange="onWidgetMetricChanged('TEST_VARIATIONS')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">database</span>
+                                <div class="tile-title">Test Variations</div>
+                                <div class="tile-desc">Known Test Base Variations & Datasets</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="metric" value="FLAKINESS" th:checked="${widget != null && widget.metric != null && widget.metric.name() == 'FLAKINESS'}" onchange="onWidgetMetricChanged('FLAKINESS')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">shuffle</span>
+                                <div class="tile-title">Flakiness</div>
+                                <div class="tile-desc">Erratic & Intermittent Test Failures</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="metric" value="RUNS" th:checked="${widget != null && widget.metric != null && (widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')}" onchange="onWidgetMetricChanged('RUNS')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">history</span>
+                                <div class="tile-title">Runs</div>
+                                <div class="tile-desc">List of Test Execution Runs</div>
+                            </div>
+                        </label>
+                    </div>
+
+                    <!-- Dynamic Status Options (Visible only when STATUS metric is selected) -->
+                    <div class="mt-2 p-2 rounded" id="widgetStatusOptionsRow"
+                         th:style="${widget == null || widget.metric == null || widget.metric.name() == 'STATUS'} ? 'display: block;' : 'display: none;'"
+                         style="background: var(--bg-surface); border: 1px solid var(--border);">
+                        <label class="d-inline-flex align-items-center gap-2 mb-0" style="font-size: 0.82rem; cursor: pointer; user-select: none;">
+                            <input type="checkbox" name="showHealedAi" id="widgetShowHealedAiCheckbox" value="true"
+                                   th:checked="${widget != null && widget.showHealedAi}" />
+                            <span class="d-inline-flex align-items-center gap-1">
+                                <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">auto_fix_high</span>
+                                <span>Add information about healed / AI to the chart</span>
+                            </span>
+                        </label>
+                    </div>
+
+                    <!-- Dynamic Tag Dropdown (Visible only when TAG metric is selected) -->
+                    <div class="mt-2 p-2 rounded" id="widgetTagSelectorRow"
+                         th:style="${widget != null && widget.metric != null && widget.metric.name() == 'TAG'} ? 'display: block;' : 'display: none;'"
+                         style="display: none; background: var(--bg-surface); border: 1px solid var(--border);">
+                        <label class="config-sublabel mb-1 d-flex align-items-center justify-content-between text-muted" style="font-size: 0.78rem;">
+                            <span style="font-weight: 600; color: var(--text-main);">Choose Tag Dimension:</span>
+                            <span class="font-mono text-muted" style="font-size: 0.72rem;">e.g. Browser, Locale, Area, Branch</span>
+                        </label>
+                        <!-- Quick preset pills -->
+                        <div class="d-flex align-items-center gap-1 flex-wrap mb-2">
+                            <button type="button" class="btn-secondary btn-compact" onclick="selectTagKeyPreset('Browser')">Browser</button>
+                            <button type="button" class="btn-secondary btn-compact" onclick="selectTagKeyPreset('Locale')">Locale</button>
+                            <button type="button" class="btn-secondary btn-compact" onclick="selectTagKeyPreset('Area')">Area</button>
+                            <button type="button" class="btn-secondary btn-compact" onclick="selectTagKeyPreset('Environment')">Environment</button>
+                            <button type="button" class="btn-secondary btn-compact" onclick="selectTagKeyPreset('Branch')">Branch</button>
+                            <button type="button" class="btn-secondary btn-compact" onclick="selectTagKeyPreset('Release')">Release</button>
+                        </div>
+                        <select name="tagKey" id="widgetTagKeySelect" class="form-select form-select-sm"
+                                onchange="updateSuggestedWidgetTitle()"
+                                th:disabled="${widget == null || widget.metric == null || widget.metric.name() != 'TAG'}"
+                                disabled="disabled"
+                                style="background: var(--bg-hover); color: var(--text-main); border-color: var(--border);">
+                            <option th:each="tg : ${availableWidgetTags != null ? availableWidgetTags : allTagKeys}"
+                                    th:value="${tg}"
+                                    th:text="${tg}"
+                                    th:selected="${widget != null && widget.tagKey != null && #strings.equalsIgnoreCase(widget.tagKey, tg)}">Browser</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 2. SELECT PRESENTATION -->
+                <div class="config-section" id="widgetPresentationSection"
+                     th:style="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS' || widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')} ? 'display: none;' : 'display: block;'">
+                    <label class="config-label d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">monitoring</span>
+                        <strong>2. Select Way of Presentation</strong>
+                    </label>
+                    <div class="config-radio-grid mt-1">
+                        <label class="config-radio-tile">
+                            <input type="radio" name="presentation" value="PIE_CHART" th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}" th:checked="${widget == null || widget.presentation == null || widget.presentation.name() == 'PIE_CHART'}" onchange="onWidgetPresentationChanged('PIE_CHART')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">pie_chart</span>
+                                <div class="tile-title">Pie Chart</div>
+                                <div class="tile-desc">Donut breakdown & central KPI rate</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="presentation" value="RATIO_BAR" th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}" th:checked="${widget != null && widget.presentation != null && widget.presentation.name() == 'RATIO_BAR'}" onchange="onWidgetPresentationChanged('RATIO_BAR')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">view_column</span>
+                                <div class="tile-title">Ratio Bar</div>
+                                <div class="tile-desc">Horizontal proportion bar with legend</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="presentation" value="PERLENKETTE" th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS' || widget.metric.name() == 'TAG')}" th:checked="${widget != null && widget.presentation != null && widget.presentation.name() == 'PERLENKETTE'}" onchange="onWidgetPresentationChanged('PERLENKETTE')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">linear_scale</span>
+                                <div class="tile-title">String of Pearls</div>
+                                <div class="tile-desc">Undulating milestone pearls on a strand (Perlenkette)</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="presentation" value="TREND_GRAPH" th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}" th:checked="${widget != null && widget.presentation != null && widget.presentation.name() == 'TREND_GRAPH'}" onchange="onWidgetPresentationChanged('TREND_GRAPH')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">insights</span>
+                                <div class="tile-title">Trend Graph</div>
+                                <div class="tile-desc">Continuous chronological line/area chart</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="presentation" value="TEXT" th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}" th:checked="${widget != null && widget.presentation != null && widget.presentation.name() == 'TEXT'}" onchange="onWidgetPresentationChanged('TEXT')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">numbers</span>
+                                <div class="tile-title">Text (KPI)</div>
+                                <div class="tile-desc">Single prominent metric value and status summary</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="presentation" value="TEXT_WITH_SMALL_TREND" th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}" th:checked="${widget != null && widget.presentation != null && widget.presentation.name() == 'TEXT_WITH_SMALL_TREND'}" onchange="onWidgetPresentationChanged('TEXT_WITH_SMALL_TREND')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">trending_up</span>
+                                <div class="tile-title">Text with Trend</div>
+                                <div class="tile-desc">KPI metric card with inline sparkline & delta</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
+                            <input type="radio" name="presentation" value="LIST" th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}" th:checked="${widget != null && widget.presentation != null && widget.presentation.name() == 'LIST'}" onchange="onWidgetPresentationChanged('LIST')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">format_list_bulleted</span>
+                                <div class="tile-title">List</div>
+                                <div class="tile-desc">Itemized breakdown list with counts and proportions</div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Fixed presentation fallback for TEST_VARIATIONS -->
+                <input type="hidden" name="presentation" id="widgetFixedPresentationInput" value="TEST_VARIATIONS"
+                       th:disabled="${widget == null || widget.metric == null || (widget.metric.name() != 'TEST_VARIATIONS' && widget.metric.name() != 'KNOWN_VARIATIONS')}" />
+
+                <!-- Fixed presentation fallback for RUNS -->
+                <input type="hidden" name="presentation" id="widgetFixedRunsPresentationInput" value="RUNS"
+                       th:disabled="${widget == null || widget.metric == null || (widget.metric.name() != 'RUNS' && widget.metric.name() != 'RUN_HISTORY' && widget.metric.name() != 'RUNS_LIST' && widget.metric.name() != 'LIST_OF_RUNS')}" />
+
+                <!-- 3. TARGET POINT / TIME SCOPE (Visible for static points: PIE_CHART, RATIO_BAR, TEXT, LIST) -->
+                <div class="config-section" id="widgetPointScopeSection"
+                     th:style="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS' || widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')} ? 'display: none;' : (${widget == null || widget.presentation == null || widget.presentation.name() == 'PIE_CHART' || widget.presentation.name() == 'RATIO_BAR' || widget.presentation.name() == 'TEXT' || widget.presentation.name() == 'LIST'} ? 'display: block;' : 'display: none;')">
+                    <label class="config-label d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">timelapse</span>
+                        <strong>Target Point / Time Scope</strong>
+                    </label>
+                    <div class="config-radio-pills d-flex align-items-center gap-2 flex-wrap mt-1">
+                        <label class="pill-radio-btn">
+                            <input type="radio" name="pointScope" value="LATEST_TEST_STATUS"
+                                   th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}"
+                                   th:checked="${widget == null || widget.pointScope == null || widget.pointScope.name() == 'LATEST_TEST_STATUS'}" />
+                            <span>Latest Test Status</span>
+                        </label>
+                        <label class="pill-radio-btn">
+                            <input type="radio" name="pointScope" value="LAST_RUN"
+                                   th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}"
+                                   th:checked="${widget != null && widget.pointScope != null && widget.pointScope.name() == 'LAST_RUN'}" />
+                            <span>Last Run</span>
+                        </label>
+                        <label class="pill-radio-btn">
+                            <input type="radio" name="pointScope" value="TODAY"
+                                   th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}"
+                                   th:checked="${widget != null && widget.pointScope != null && widget.pointScope.name() == 'TODAY'}" />
+                            <span>Today's Runs</span>
+                        </label>
+                        <label class="pill-radio-btn">
+                            <input type="radio" name="pointScope" value="LAST_HOUR"
+                                   th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}"
+                                   th:checked="${widget != null && widget.pointScope != null && widget.pointScope.name() == 'LAST_HOUR'}" />
+                            <span>Runs of Last Hour</span>
+                        </label>
+                        <label class="pill-radio-btn">
+                            <input type="radio" name="pointScope" value="LAST_MONTH"
+                                   th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}"
+                                   th:checked="${widget != null && widget.pointScope != null && widget.pointScope.name() == 'LAST_MONTH'}" />
+                            <span>Runs of Last Month</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 4. VALUE DISPLAY FORMAT (Visible for PERLENKETTE, TEXT, TEXT_WITH_SMALL_TREND) -->
+                <div class="config-section" id="widgetValueFormatSection"
+                     th:style="${widget != null && widget.presentation != null && (widget.presentation.name() == 'PERLENKETTE' || widget.presentation.name() == 'TEXT' || widget.presentation.name() == 'TEXT_WITH_SMALL_TREND')} ? 'display: block;' : 'display: none;'"
+                     style="display: none;">
+                    <label class="config-label d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">percent</span>
+                        <strong>4. Value Display Format</strong>
+                    </label>
+                    <div class="mb-1">
+                        <div class="d-flex align-items-center gap-3 mt-1">
+                            <label class="d-inline-flex align-items-center gap-1" style="font-size: 0.82rem; cursor: pointer;">
+                                <input type="radio" name="valueFormat" value="PERCENT" th:checked="${widget == null || widget.valueFormat == null || widget.valueFormat.name() == 'PERCENT'}" />
+                                <span>Percents (%)</span>
+                            </label>
+                            <label class="d-inline-flex align-items-center gap-1" style="font-size: 0.82rem; cursor: pointer;">
+                                <input type="radio" name="valueFormat" value="ABSOLUTE" th:checked="${widget != null && widget.valueFormat != null && widget.valueFormat.name() == 'ABSOLUTE'}" />
+                                <span>Absolute Number (e.g. 42 tests, $0.42, 3 bugs)</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4b. PERLENKETTE OPTIONS (Only visible for PERLENKETTE) -->
+                <div class="config-section" id="widgetPerlenketteOptionsSection"
+                     th:style="${widget != null && widget.presentation != null && widget.presentation.name() == 'PERLENKETTE'} ? 'display: block;' : 'display: none;'"
+                     style="display: none;">
+                    <label class="config-label d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">palette</span>
+                        <strong>String of Pearls Options</strong>
+                    </label>
+                    <div>
+                        <span class="text-muted" style="font-size: 0.75rem; font-weight: 600;">Color Spectrum Polarity:</span>
+                        <div class="d-flex align-items-center gap-3 mt-1">
+                            <label class="d-inline-flex align-items-center gap-1" style="font-size: 0.82rem; cursor: pointer;">
+                                <input type="radio" name="colorPolarity" value="HIGHER_IS_GREEN"
+                                       th:checked="${widget == null || widget.colorPolarity == null || widget.colorPolarity.name() == 'HIGHER_IS_GREEN'}" />
+                                <span class="d-inline-flex align-items-center gap-1">
+                                    <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#22c55e;"></span>
+                                    <span>Higher is Green (Good)</span>
+                                </span>
+                            </label>
+                            <label class="d-inline-flex align-items-center gap-1" style="font-size: 0.82rem; cursor: pointer;">
+                                <input type="radio" name="colorPolarity" value="HIGHER_IS_RED"
+                                       th:checked="${widget != null && widget.colorPolarity != null && widget.colorPolarity.name() == 'HIGHER_IS_RED'}" />
+                                <span class="d-inline-flex align-items-center gap-1">
+                                    <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#ef4444;"></span>
+                                    <span>Higher is Red (Critical)</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 5. TREND GROUPING / AGGREGATION MODE (Visible for PERLENKETTE, TREND_GRAPH, or TEXT_WITH_SMALL_TREND) -->
+                <div class="config-section" id="widgetTrendModeSection"
+                     th:style="${widget != null && widget.presentation != null && (widget.presentation.name() == 'PERLENKETTE' || widget.presentation.name() == 'TREND_GRAPH' || widget.presentation.name() == 'TEXT_WITH_SMALL_TREND')} ? 'display: block;' : 'display: none;'"
+                     style="display: none;">
+                    <label class="config-label d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">date_range</span>
+                        <strong>Trend Time Grouping / Mode</strong>
+                    </label>
+                    <div class="config-radio-pills d-flex align-items-center gap-2 flex-wrap mt-1">
+                        <label class="pill-radio-btn">
+                            <input type="radio" name="trendMode" value="BY_RUNS" th:checked="${widget == null || widget.trendMode == null || widget.trendMode.name() == 'BY_RUNS'}" />
+                            <span>By Runs</span>
+                        </label>
+                        <label class="pill-radio-btn">
+                            <input type="radio" name="trendMode" value="LATEST_APPROACH" th:checked="${widget != null && widget.trendMode != null && widget.trendMode.name() == 'LATEST_APPROACH'}" />
+                            <span>Latest-approach (Suite Evolution)</span>
+                        </label>
+                        <label class="pill-radio-btn">
+                            <input type="radio" name="trendMode" value="DAILY" th:checked="${widget != null && widget.trendMode != null && widget.trendMode.name() == 'DAILY'}" />
+                            <span>Daily</span>
+                        </label>
+                        <label class="pill-radio-btn">
+                            <input type="radio" name="trendMode" value="HOURLY" th:checked="${widget != null && widget.trendMode != null && widget.trendMode.name() == 'HOURLY'}" />
+                            <span>Hourly</span>
+                        </label>
+                        <label class="pill-radio-btn">
+                            <input type="radio" name="trendMode" value="MONTHLY" th:checked="${widget != null && widget.trendMode != null && widget.trendMode.name() == 'MONTHLY'}" />
+                            <span>Monthly</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- 5b. TREND GRAPH OPTIONS (Visible only for TREND_GRAPH) -->
+                <div class="config-section" id="widgetTrendOptionsSection"
+                     th:style="${widget != null && widget.presentation != null && widget.presentation.name() == 'TREND_GRAPH'} ? 'display: block;' : 'display: none;'"
+                     style="display: none;">
+                    <label class="config-label d-flex align-items-center gap-1">
+                        <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">insights</span>
+                        <strong>Trend Graph Options</strong>
+                    </label>
+                    <div class="mt-2 p-2 rounded d-flex flex-column gap-2" style="background: var(--bg-surface); border: 1px solid var(--border);">
+                        <div>
+                            <span class="text-muted" style="font-size: 0.75rem; font-weight: 600;">Chart Fill Style:</span>
+                            <div class="d-flex align-items-center gap-3 mt-1">
+                                <label class="d-inline-flex align-items-center gap-1" style="font-size: 0.82rem; cursor: pointer;">
+                                    <input type="radio" name="filled" value="false"
+                                           th:checked="${widget == null || !widget.filled}" />
+                                    <span class="d-inline-flex align-items-center gap-1">
+                                        <span class="material-symbols-outlined" style="font-size: 0.95rem; color: #3b82f6;">show_chart</span>
+                                        <span>Not Filled (Independent Lines)</span>
+                                    </span>
+                                </label>
+                                <label class="d-inline-flex align-items-center gap-1" style="font-size: 0.82rem; cursor: pointer;">
+                                    <input type="radio" name="filled" value="true"
+                                           th:checked="${widget != null && widget.filled}" />
+                                    <span class="d-inline-flex align-items-center gap-1">
+                                        <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">area_chart</span>
+                                        <span>Filled (Stacked Area / Gradient)</span>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                        <div style="border-top: 1px dashed var(--border); padding-top: 0.35rem;">
+                            <label class="d-inline-flex align-items-center gap-2 mb-0" style="font-size: 0.82rem; cursor: pointer; user-select: none;">
+                                <input type="checkbox" name="showDots" id="widgetShowDotsCheckbox" value="true"
+                                       th:checked="${widget != null && widget.showDots}" />
+                                <span class="d-inline-flex align-items-center gap-1">
+                                    <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">scatter_plot</span>
+                                    <span>Show dots on chart (display state on hover)</span>
+                                </span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6. EXECUTION IDENTITY (Optional Override) -->
+                <div class="config-section p-2 rounded" id="widgetExecutionIdentitySection"
+                     th:style="${widget != null && widget.metric != null && (widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')} ? 'display: none;' : 'display: block;'"
+                     style="background: var(--bg-surface); border: 1px solid var(--border);">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <label class="d-inline-flex align-items-center gap-2 mb-0" style="font-size: 0.85rem; font-weight: 600; cursor: pointer; user-select: none;">
+                            <input type="checkbox" name="overrideExecutionIdentity" id="widgetOverrideExecutionIdentity" value="true"
+                                   th:checked="${widget != null && widget.overrideExecutionIdentity}"
+                                   onchange="toggleWidgetExecutionIdentitySection(this.checked)" />
+                            <span class="d-inline-flex align-items-center gap-1">
+                                <span class="material-symbols-outlined text-accent" style="font-size: 1rem;">fingerprint</span>
+                                <span>Custom Execution Identity</span>
+                                <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.85rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                            </span>
+                        </label>
+                        <span class="text-muted" style="font-size: 0.72rem;">Overrides global dashboard identity</span>
+                    </div>
+                    <div id="widgetExecutionIdentityOptions" class="mt-2 pt-2 border-top"
+                         th:style="${widget != null && widget.overrideExecutionIdentity} ? 'display: block;' : 'display: none;'"
+                         style="display: none;">
+                        <div class="text-muted mb-2" style="font-size: 0.75rem;">
+                            Select dimensions that define unique test executions for this widget across runs.
+                        </div>
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="run-scope-pill active" style="cursor: default; opacity: 0.85; pointer-events: none;" title="Test Class + Method + DataSet (Mandatory Base Coordinate)">
+                                <span class="material-symbols-outlined pill-icon" style="font-size: 0.75rem;">lock</span>
+                                <span>Test</span>
+                            </span>
+                            <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="identityDimCheckbox" value="browser"
+                                       th:checked="${widget != null && widget.executionIdentityDimensions != null && #lists.contains(widget.executionIdentityDimensions, 'browser')}"
+                                       onchange="updateExecutionIdentityDimensionsInput()" />
+                                <span>Browser</span>
+                            </label>
+                            <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="identityDimCheckbox" value="locale"
+                                       th:checked="${widget != null && widget.executionIdentityDimensions != null && #lists.contains(widget.executionIdentityDimensions, 'locale')}"
+                                       onchange="updateExecutionIdentityDimensionsInput()" />
+                                <span>Locale</span>
+                            </label>
+                            <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                <input type="checkbox" name="identityDimCheckbox" value="environment"
+                                       th:checked="${widget != null && widget.executionIdentityDimensions != null && #lists.contains(widget.executionIdentityDimensions, 'environment')}"
+                                       onchange="updateExecutionIdentityDimensionsInput()" />
+                                <span>Environment</span>
+                            </label>
+                            <th:block th:if="${availableIdentityTags != null}">
+                                <label th:each="tg : ${availableIdentityTags}"
+                                       th:if="${!#strings.equalsIgnoreCase(tg, 'browser') and !#strings.equalsIgnoreCase(tg, 'locale') and !#strings.equalsIgnoreCase(tg, 'environment')}"
+                                       class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                    <input type="checkbox" name="identityDimCheckbox" th:value="${tg}"
+                                           th:checked="${widget != null && widget.executionIdentityDimensions != null && (#lists.contains(widget.executionIdentityDimensions, tg.toLowerCase()) or #lists.contains(widget.executionIdentityDimensions, tg) or #lists.contains(widget.executionIdentityDimensions, 'tag:' + tg.toLowerCase()))}"
+                                           onchange="updateExecutionIdentityDimensionsInput()" />
+                                    <span th:text="${'+ Tag: ' + tg}">+ Tag: Area</span>
+                                </label>
+                            </th:block>
+                        </div>
+                        <input type="hidden" name="executionIdentityDimensions" id="widgetExecutionIdentityDimensionsInput"
+                               th:value="${widget != null && widget.executionIdentityDimensions != null ? #strings.listJoin(widget.executionIdentityDimensions, ',') : ''}" />
+                    </div>
+                </div>
+
+                <!-- 7. RUN FILTERS (Optional Override) -->
+                <div class="config-section p-2 rounded" style="background: var(--bg-surface); border: 1px solid var(--border);">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <label class="d-inline-flex align-items-center gap-2 mb-0" style="font-size: 0.85rem; font-weight: 600; cursor: pointer; user-select: none;">
+                            <input type="checkbox" name="overrideRunFilters" id="widgetOverrideRunFilters" value="true"
+                                   th:checked="${widget != null && widget.overrideRunFilters}"
+                                   onchange="toggleWidgetRunFiltersSection(this.checked)" />
+                            <span class="d-inline-flex align-items-center gap-1">
+                                <span class="material-symbols-outlined text-accent" style="font-size: 1rem;">filter_alt</span>
+                                <span>Custom Run Filters</span>
+                            </span>
+                        </label>
+                        <span class="text-muted" style="font-size: 0.72rem;">Unaffected by global dashboard filters</span>
+                    </div>
+                    <div id="widgetRunFiltersOptions" class="mt-2 pt-2 border-top"
+                         th:style="${widget != null && widget.overrideRunFilters} ? 'display: block;' : 'display: none;'"
+                         style="display: none;">
+                        <div class="text-muted mb-2" style="font-size: 0.75rem;">
+                            Filter runs and executions evaluated in this widget. When enabled, global dashboard filters will not affect this widget.
+                        </div>
+                        <!-- Run Limit (Last N Runs) -->
+                        <div class="mb-2">
+                            <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Run Limit (Last N Runs):</label>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <div class="d-flex align-items-center gap-1">
+                                    <button type="button" class="btn-clear-ratio" onclick="setWidgetFilterLimit(null)">All</button>
+                                    <button type="button" class="btn-clear-ratio" onclick="setWidgetFilterLimit(5)">5</button>
+                                    <button type="button" class="btn-clear-ratio" onclick="setWidgetFilterLimit(10)">10</button>
+                                    <button type="button" class="btn-clear-ratio" onclick="setWidgetFilterLimit(25)">25</button>
+                                    <button type="button" class="btn-clear-ratio" onclick="setWidgetFilterLimit(50)">50</button>
+                                </div>
+                                <div class="d-flex align-items-center gap-1">
+                                    <input type="number" name="filterLimit" id="widgetFilterLimitInput" min="1" max="1000"
+                                           class="form-control form-control-sm" style="width: 120px; font-size: 0.75rem; background: var(--bg-hover); color: var(--text-main); border-color: var(--border);"
+                                           placeholder="e.g. 10 (all)"
+                                           th:value="${widget != null && widget.runFilters != null && widget.runFilters.limit != null ? widget.runFilters.limit : ''}" />
+                                    <span class="text-muted" style="font-size: 0.72rem;">runs</span>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Timestamp Filter (Timespan Date Range) -->
+                        <div class="mb-2">
+                            <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Timestamp Range (Optional):</label>
+                            <div class="d-flex align-items-center gap-2 flex-wrap">
+                                <div class="d-flex align-items-center gap-1">
+                                    <span class="text-muted" style="font-size: 0.75rem;">From:</span>
+                                    <input type="date" name="filterStartDate" id="widgetFilterStartDateInput"
+                                           class="form-control form-control-sm" style="font-size: 0.75rem; background: var(--bg-hover); color: var(--text-main); border-color: var(--border);"
+                                           th:value="${widget != null && widget.runFilters != null ? widget.runFilters.startDate : ''}" />
+                                </div>
+                                <div class="d-flex align-items-center gap-1">
+                                    <span class="text-muted" style="font-size: 0.75rem;">To:</span>
+                                    <input type="date" name="filterEndDate" id="widgetFilterEndDateInput"
+                                           class="form-control form-control-sm" style="font-size: 0.75rem; background: var(--bg-hover); color: var(--text-main); border-color: var(--border);"
+                                           th:value="${widget != null && widget.runFilters != null ? widget.runFilters.endDate : ''}" />
+                                </div>
+                                <button type="button" class="btn-clear-ratio" onclick="clearWidgetFilterDates()" title="Clear date range">Clear</button>
+                            </div>
+                        </div>
+                        <!-- Browsers -->
+                        <div class="mb-2" th:if="${candidateBrowsers != null && !candidateBrowsers.isEmpty()}">
+                            <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Filter by Browser:</label>
+                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                                <label th:each="br : ${candidateBrowsers}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                    <input type="checkbox" name="filterBrowsersCheckbox" th:value="${br}"
+                                           th:checked="${widget != null && widget.runFilters != null && widget.runFilters.browsers != null && widget.runFilters.browsers.contains(br)}"
+                                           onchange="updateWidgetRunFiltersInputs()" />
+                                    <span th:text="${br}">Chrome</span>
+                                </label>
+                            </div>
+                            <input type="hidden" name="filterBrowsers" id="widgetFilterBrowsersInput"
+                                   th:value="${widget != null && widget.runFilters != null && widget.runFilters.browsers != null ? #strings.listJoin(widget.runFilters.browsers, ',') : ''}" />
+                        </div>
+                        <!-- Locales -->
+                        <div class="mb-2" th:if="${candidateLocales != null && !candidateLocales.isEmpty()}">
+                            <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Filter by Locale:</label>
+                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                                <label th:each="loc : ${candidateLocales}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                    <input type="checkbox" name="filterLocalesCheckbox" th:value="${loc}"
+                                           th:checked="${widget != null && widget.runFilters != null && widget.runFilters.locales != null && widget.runFilters.locales.contains(loc)}"
+                                           onchange="updateWidgetRunFiltersInputs()" />
+                                    <span th:text="${loc}">en_US</span>
+                                </label>
+                            </div>
+                            <input type="hidden" name="filterLocales" id="widgetFilterLocalesInput"
+                                   th:value="${widget != null && widget.runFilters != null && widget.runFilters.locales != null ? #strings.listJoin(widget.runFilters.locales, ',') : ''}" />
+                        </div>
+                        <!-- Environments -->
+                        <div class="mb-2" th:if="${candidateEnvs != null && !candidateEnvs.isEmpty()}">
+                            <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Filter by Environment:</label>
+                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                                <label th:each="env : ${candidateEnvs}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                    <input type="checkbox" name="filterEnvsCheckbox" th:value="${env}"
+                                           th:checked="${widget != null && widget.runFilters != null && widget.runFilters.envs != null && widget.runFilters.envs.contains(env)}"
+                                           onchange="updateWidgetRunFiltersInputs()" />
+                                    <span th:text="${env}">Default</span>
+                                </label>
+                            </div>
+                            <input type="hidden" name="filterEnvs" id="widgetFilterEnvsInput"
+                                   th:value="${widget != null && widget.runFilters != null && widget.runFilters.envs != null ? #strings.listJoin(widget.runFilters.envs, ',') : ''}" />
+                        </div>
+                        <!-- Areas -->
+                        <div class="mb-2" th:if="${candidateAreas != null && !candidateAreas.isEmpty()}">
+                            <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;">Filter by Area:</label>
+                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                                <label th:each="ar : ${candidateAreas}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                    <input type="checkbox" name="filterAreasCheckbox" th:value="${ar}"
+                                           th:checked="${widget != null && widget.runFilters != null && widget.runFilters.areas != null && widget.runFilters.areas.contains(ar)}"
+                                           onchange="updateWidgetRunFiltersInputs()" />
+                                    <span th:text="${ar}">@Browsing</span>
+                                </label>
+                            </div>
+                            <input type="hidden" name="filterAreas" id="widgetFilterAreasInput"
+                                   th:value="${widget != null && widget.runFilters != null && widget.runFilters.areas != null ? #strings.listJoin(widget.runFilters.areas, ',') : ''}" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 8. WIDGET SIZING -->
+                <div class="config-section d-flex flex-column gap-2" id="widgetSizingSection">
+                    <div>
+                        <label class="config-label mb-1 d-block" style="font-size: 0.82rem; font-weight: 600;">Widget Card Width</label>
+                        <div class="d-flex align-items-center gap-3 flex-wrap" id="widgetWidthOptions">
+                            <label class="d-inline-flex align-items-center gap-1" id="widgetWidthQuarterLabel"
+                                   th:style="${widget != null && widget.metric != null && (widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')} ? 'display: none;' : 'display: inline-flex;'"
+                                   style="font-size: 0.82rem; cursor: pointer;">
+                                <input type="radio" name="width" value="quarter" id="widgetWidthQuarterRadio"
+                                       th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')}"
+                                       th:checked="${widget != null && (widget.width == 'quarter' || widget.isQuarterWidth())}" />
+                                <span>Quarter Width (Compact - 25%)</span>
+                            </label>
+                            <label class="d-inline-flex align-items-center gap-1" id="widgetWidthHalfLabel"
+                                   th:style="${widget != null && widget.metric != null && (widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')} ? 'display: none;' : 'display: inline-flex;'"
+                                   style="font-size: 0.82rem; cursor: pointer;">
+                                <input type="radio" name="width" value="half" id="widgetWidthHalfRadio"
+                                       th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')}"
+                                       th:checked="${widget == null || (widget.width != 'full' && widget.width != 'quarter' && !widget.isQuarterWidth() && widget.metric.name() != 'RUNS' && widget.metric.name() != 'RUN_HISTORY' && widget.metric.name() != 'RUNS_LIST' && widget.metric.name() != 'LIST_OF_RUNS')}" />
+                                <span>Half Width (Card Grid - 50%)</span>
+                            </label>
+                            <label class="d-inline-flex align-items-center gap-1" id="widgetWidthFullLabel" style="font-size: 0.82rem; cursor: pointer;">
+                                <input type="radio" name="width" value="full" id="widgetWidthFullRadio"
+                                       th:checked="${widget != null && (widget.width == 'full' || widget.isFullWidth() || widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')}" />
+                                <span>Full Width (Panel Row - 100%)</span>
+                            </label>
+                        </div>
+                        <div id="widgetRunsWidthNote"
+                             th:style="${widget != null && widget.metric != null && (widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')} ? 'display: block;' : 'display: none;'"
+                             style="display: none; font-size: 0.72rem; color: var(--text-muted); margin-top: 0.35rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle; color: #3b82f6;">info</span>
+                            <span>Full width (100%) is required for tabular test execution runs. 25% and 50% views are prohibited.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 9. ACTIVE WIDGETS MANAGEMENT ACCORDION -->
+                <div class="config-section pt-2 border-top" th:if="${dashboardWidgets != null and !#lists.isEmpty(dashboardWidgets)}">
+                    <div class="d-flex align-items-center justify-content-between mb-2">
+                        <span style="font-weight: 600; font-size: 0.825rem; color: var(--text-muted);">Active Dashboard Widgets</span>
+                        <button type="button" class="btn-clear-ratio" hx-post="/widgets/reset" hx-target="#mainViewContainer" hx-swap="innerHTML" onclick="closeWidgetConfiguratorModal()" title="Restore default layout">
+                            Restore Defaults
+                        </button>
+                    </div>
+                    <div class="active-widgets-list d-flex flex-column gap-1">
+                        <div th:each="w, iterStat : ${dashboardWidgets}" class="active-widget-item d-flex align-items-center justify-content-between p-2 rounded" style="background: var(--bg-hover); font-size: 0.8rem;">
+                            <div class="d-flex align-items-center gap-2">
+                                <span class="material-symbols-outlined text-accent" style="font-size: 1rem;" th:text="${w.metric.icon}">pie_chart</span>
+                                <strong th:text="${w.title}">Widget Title</strong>
+                                <span class="tag-chip" style="font-size: 0.68rem;" th:text="${w.presentation.displayName}">Presentation</span>
+                                <span th:if="${w.presentation.isTrendBased()}" class="tag-chip" style="font-size: 0.68rem;" th:text="${w.trendMode.displayName}">Daily</span>
+                                <span th:if="${w.presentation.isStaticPoint() and w.pointScope != null}" class="tag-chip" style="font-size: 0.68rem;" th:text="${w.pointScope.displayName}">Latest Test Status</span>
+                            </div>
+                            <div class="d-flex align-items-center gap-1">
+                                <button type="button" class="btn-icon-widget"
+                                        th:if="${iterStat.index > 0}"
+                                        th:attr="onclick='moveWidgetPosition(' + ${iterStat.index} + ', -1)'"
+                                        title="Move Up">
+                                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">arrow_upward</span>
+                                </button>
+                                <button type="button" class="btn-icon-widget"
+                                        th:if="${iterStat.index < #lists.size(dashboardWidgets) - 1}"
+                                        th:attr="onclick='moveWidgetPosition(' + ${iterStat.index} + ', 1)'"
+                                        title="Move Down">
+                                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">arrow_downward</span>
+                                </button>
+                                <button type="button" class="btn-icon-widget"
+                                        th:attr="hx-post='/widgets/delete?widgetId=' + ${w.id}"
+                                        hx-target="#mainViewContainer"
+                                        hx-swap="innerHTML"
+                                        title="Remove widget">
+                                    <span class="material-symbols-outlined" style="font-size: 0.85rem; color: var(--color-danger, #ef4444);">delete</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer d-flex align-items-center justify-content-between">
+                <button type="button" class="btn-editor" onclick="closeWidgetConfiguratorModal()">Cancel</button>
+                <button type="submit" class="btn-primary d-inline-flex align-items-center gap-1" id="btnSaveWidgetSubmit">
+                    <span class="material-symbols-outlined" style="font-size: 0.95rem;">save</span>
+                    <span>Save Widget</span>
+                </button>
+            </div>
+        </form>
+    </div>
+    <script>
+    function selectTagKeyPreset(val) {
+        var sel = document.getElementById('widgetTagKeySelect');
+        if (!sel) return;
+        var lowerVal = val.toLowerCase();
+        var found = false;
+        for (var i = 0; i < sel.options.length; i++) {
+            if (sel.options[i].value.toLowerCase() === lowerVal || sel.options[i].text.toLowerCase() === lowerVal) {
+                sel.selectedIndex = i;
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            var opt = document.createElement('option');
+            opt.value = val;
+            opt.text = val;
+            sel.add(opt);
+            sel.value = val;
+        }
+        updateSuggestedWidgetTitle();
+    }
+
+    function computeSuggestedWidgetTitle() {
+        var metricRadio = document.querySelector('input[name="metric"]:checked');
+        var metric = metricRadio ? metricRadio.value : 'STATUS';
+
+        if (metric === 'RUNS' || metric === 'RUN_HISTORY' || metric === 'RUNS_LIST' || metric === 'LIST_OF_RUNS') {
+            return 'List of Runs';
+        }
+
+        if (metric === 'TEST_VARIATIONS') {
+            return 'Known Test Base Variations';
+        }
+
+        var presRadio = document.querySelector('#widgetPresentationSection input[type="radio"][name="presentation"]:checked');
+        var pres = presRadio ? presRadio.value : 'PIE_CHART';
+
+        if (pres === 'RUNS' || pres === 'RUN_HISTORY' || pres === 'RUNS_LIST' || pres === 'LIST_OF_RUNS') {
+            return 'List of Runs';
+        }
+
+        if (pres === 'TEST_VARIATIONS') {
+            return 'Known Test Base Variations';
+        }
+
+        var metricLabel = 'Status';
+        if (metric === 'TAG') {
+            var tagSelect = document.getElementById('widgetTagKeySelect');
+            var tagVal = (tagSelect && tagSelect.value) ? tagSelect.value.trim() : 'Tag';
+            metricLabel = tagVal || 'Tag';
+        } else if (metric === 'COSTS') {
+            metricLabel = 'Cost';
+        } else if (metric === 'BUGS') {
+            metricLabel = 'Bugs';
+        } else if (metric === 'AI_USAGE') {
+            metricLabel = 'AI Usage';
+        } else if (metric === 'FLAKINESS') {
+            metricLabel = 'Flakiness';
+        }
+
+        var title = '';
+        switch (pres) {
+            case 'PIE_CHART':
+                title = metricLabel + ' Pie Chart';
+                break;
+            case 'RATIO_BAR':
+                if (metric === 'BUGS') {
+                    title = 'Bug Severity Ratio Bar';
+                } else {
+                    title = metricLabel + ' Ratio Bar';
+                }
+                break;
+            case 'PERLENKETTE':
+                title = metricLabel + ' String of Pearls';
+                break;
+            case 'TREND_GRAPH':
+                title = metricLabel + ' Trend Graph';
+                break;
+            case 'TEXT':
+                if (metric === 'BUGS') {
+                    title = 'Active Bugs KPI';
+                } else {
+                    title = metricLabel + ' KPI';
+                }
+                break;
+            case 'TEXT_WITH_SMALL_TREND':
+                title = metricLabel + ' with Trend';
+                break;
+            case 'LIST':
+                if (metric === 'BUGS') {
+                    title = 'Bug Breakdown List';
+                } else if (metric === 'AI_USAGE' || metric === 'FLAKINESS') {
+                    title = metricLabel + ' List';
+                } else {
+                    title = metricLabel + ' Breakdown List';
+                }
+                break;
+            default:
+                title = metricLabel + ' ' + pres;
+                break;
+        }
+
+        var isTrend = (pres === 'PERLENKETTE' || pres === 'TREND_GRAPH' || pres === 'TEXT_WITH_SMALL_TREND');
+        if (isTrend) {
+            var trendModeRadio = document.querySelector('input[name="trendMode"]:checked');
+            var tm = trendModeRadio ? trendModeRadio.value : 'BY_RUNS';
+            if (tm === 'DAILY') {
+                title += ' (Daily)';
+            } else if (tm === 'WEEKLY') {
+                title += ' (Weekly)';
+            } else if (tm === 'LATEST_APPROACH') {
+                title += ' (Latest Approach)';
+            } else if (tm === 'BY_RUNS') {
+                title += ' (By Runs)';
+            }
+        } else {
+            var pointScopeRadio = document.querySelector('input[name="pointScope"]:checked');
+            var ps = pointScopeRadio ? pointScopeRadio.value : 'LATEST_TEST_STATUS';
+            if (ps === 'LAST_RUN') {
+                title += ' (Last Run)';
+            } else if (ps === 'TODAY') {
+                title += ' (Today)';
+            } else if (ps === 'LAST_HOUR') {
+                title += ' (Last Hour)';
+            } else if (ps === 'LAST_MONTH') {
+                title += ' (Last Month)';
+            }
+        }
+
+        return title;
+    }
+
+    function updateSuggestedWidgetTitle() {
+        var titleInp = document.getElementById('widgetTitleInput');
+        if (!titleInp) return;
+        var suggested = computeSuggestedWidgetTitle();
+        titleInp.placeholder = 'e.g. ' + suggested;
+
+        var isUserCustom = (titleInp.dataset.userCustom === 'true');
+        if (!isUserCustom) {
+            titleInp.value = suggested;
+        }
+    }
+
+    function onWidgetMetricChanged(metric) {
+        var statusRow = document.getElementById('widgetStatusOptionsRow');
+        if (statusRow) {
+            statusRow.style.display = (metric === 'STATUS') ? 'block' : 'none';
+        }
+        var tagRow = document.getElementById('widgetTagSelectorRow');
+        if (tagRow) {
+            tagRow.style.display = (metric === 'TAG') ? 'block' : 'none';
+        }
+        var tagSelect = document.getElementById('widgetTagKeySelect');
+        if (tagSelect) {
+            tagSelect.disabled = (metric !== 'TAG');
+        }
+        var perlenketteRadio = document.querySelector('#widgetPresentationSection input[type="radio"][name="presentation"][value="PERLENKETTE"]');
+        if (perlenketteRadio) {
+            perlenketteRadio.disabled = (metric === 'TAG');
+        }
+        if (metric === 'COSTS') {
+            var byRunsRadio = document.querySelector('input[name="trendMode"][value="BY_RUNS"]');
+            if (byRunsRadio) {
+                byRunsRadio.checked = true;
+            }
+        }
+        if (metric === 'COSTS' || metric === 'BUGS') {
+            var absoluteRadio = document.querySelector('input[name="valueFormat"][value="ABSOLUTE"]');
+            if (absoluteRadio) {
+                absoluteRadio.checked = true;
+            }
+        }
+        if (metric === 'FLAKINESS') {
+            var higherIsRed = document.querySelector('input[name="colorPolarity"][value="HIGHER_IS_RED"]');
+            if (higherIsRed) {
+                higherIsRed.checked = true;
+            }
+        }
+
+        var presSec = document.getElementById('widgetPresentationSection');
+        var fixedPres = document.getElementById('widgetFixedPresentationInput');
+        var fixedRunsPres = document.getElementById('widgetFixedRunsPresentationInput');
+        var pointScopeSec = document.getElementById('widgetPointScopeSection');
+        var valFormatSec = document.getElementById('widgetValueFormatSection');
+        var perlenketteSec = document.getElementById('widgetPerlenketteOptionsSection');
+        var trendModeSec = document.getElementById('widgetTrendModeSection');
+        var trendOptsSec = document.getElementById('widgetTrendOptionsSection');
+        var presRadios = document.querySelectorAll('#widgetPresentationSection input[type="radio"][name="presentation"]');
+        var pointScopeRadios = document.querySelectorAll('#widgetPointScopeSection input[type="radio"][name="pointScope"]');
+
+        var identitySec = document.getElementById('widgetExecutionIdentitySection');
+        var overrideIdentityCheckbox = document.getElementById('widgetOverrideExecutionIdentity');
+        var widthQuarterLabel = document.getElementById('widgetWidthQuarterLabel');
+        var widthHalfLabel = document.getElementById('widgetWidthHalfLabel');
+        var widthQuarterRadio = document.getElementById('widgetWidthQuarterRadio');
+        var widthHalfRadio = document.getElementById('widgetWidthHalfRadio');
+        var runsWidthNote = document.getElementById('widgetRunsWidthNote');
+
+        if (metric === 'RUNS' || metric === 'RUN_HISTORY' || metric === 'RUNS_LIST' || metric === 'LIST_OF_RUNS') {
+            if (identitySec) identitySec.style.display = 'none';
+            if (overrideIdentityCheckbox) {
+                overrideIdentityCheckbox.checked = false;
+                toggleWidgetExecutionIdentitySection(false);
+            }
+            if (widthQuarterLabel) widthQuarterLabel.style.display = 'none';
+            if (widthHalfLabel) widthHalfLabel.style.display = 'none';
+            if (widthQuarterRadio) widthQuarterRadio.disabled = true;
+            if (widthHalfRadio) widthHalfRadio.disabled = true;
+            if (runsWidthNote) runsWidthNote.style.display = 'block';
+
+            if (presSec) presSec.style.display = 'none';
+            if (fixedPres) fixedPres.disabled = true;
+            if (fixedRunsPres) fixedRunsPres.disabled = false;
+            presRadios.forEach(function(r) { r.disabled = true; });
+            if (pointScopeSec) pointScopeSec.style.display = 'none';
+            pointScopeRadios.forEach(function(r) { r.disabled = true; });
+            if (valFormatSec) valFormatSec.style.display = 'none';
+            if (perlenketteSec) perlenketteSec.style.display = 'none';
+            if (trendModeSec) trendModeSec.style.display = 'none';
+            if (trendOptsSec) trendOptsSec.style.display = 'none';
+
+            var fullWidthRadio = document.querySelector('input[name="width"][value="full"]');
+            if (fullWidthRadio) {
+                fullWidthRadio.checked = true;
+            }
+
+            updateSuggestedWidgetTitle();
+        } else if (metric === 'TEST_VARIATIONS') {
+            if (identitySec) identitySec.style.display = 'block';
+            if (widthQuarterLabel) widthQuarterLabel.style.display = 'none';
+            if (widthHalfLabel) widthHalfLabel.style.display = 'none';
+            if (widthQuarterRadio) widthQuarterRadio.disabled = true;
+            if (widthHalfRadio) widthHalfRadio.disabled = true;
+            if (runsWidthNote) runsWidthNote.style.display = 'none';
+
+            if (presSec) presSec.style.display = 'none';
+            if (fixedPres) fixedPres.disabled = false;
+            if (fixedRunsPres) fixedRunsPres.disabled = true;
+            presRadios.forEach(function(r) { r.disabled = true; });
+            if (pointScopeSec) pointScopeSec.style.display = 'none';
+            pointScopeRadios.forEach(function(r) { r.disabled = true; });
+            if (valFormatSec) valFormatSec.style.display = 'none';
+            if (perlenketteSec) perlenketteSec.style.display = 'none';
+            if (trendModeSec) trendModeSec.style.display = 'none';
+            if (trendOptsSec) trendOptsSec.style.display = 'none';
+
+            var fullWidthRadio = document.querySelector('input[name="width"][value="full"]');
+            if (fullWidthRadio) {
+                fullWidthRadio.checked = true;
+            }
+
+            updateSuggestedWidgetTitle();
+        } else {
+            if (identitySec) identitySec.style.display = 'block';
+            if (widthQuarterLabel) widthQuarterLabel.style.display = 'inline-flex';
+            if (widthHalfLabel) widthHalfLabel.style.display = 'inline-flex';
+            if (widthQuarterRadio) widthQuarterRadio.disabled = false;
+            if (widthHalfRadio) widthHalfRadio.disabled = false;
+            if (runsWidthNote) runsWidthNote.style.display = 'none';
+
+            if (presSec) presSec.style.display = 'block';
+            if (fixedPres) fixedPres.disabled = true;
+            if (fixedRunsPres) fixedRunsPres.disabled = true;
+            presRadios.forEach(function(r) {
+                if (r.value === 'PERLENKETTE' && metric === 'TAG') {
+                    r.disabled = true;
+                } else {
+                    r.disabled = false;
+                }
+            });
+            pointScopeRadios.forEach(function(r) { r.disabled = false; });
+
+            var curPresRadio = document.querySelector('#widgetPresentationSection input[type="radio"][name="presentation"]:checked');
+            var curPres = curPresRadio ? curPresRadio.value : 'PIE_CHART';
+            if (metric === 'TAG' && curPres === 'PERLENKETTE') {
+                var pieRadio = document.querySelector('#widgetPresentationSection input[type="radio"][name="presentation"][value="PIE_CHART"]');
+                if (pieRadio) {
+                    pieRadio.checked = true;
+                    curPres = 'PIE_CHART';
+                }
+            }
+            onWidgetPresentationChanged(curPres);
+            updateSuggestedWidgetTitle();
+        }
+    }
+    function onWidgetPresentationChanged(presentation) {
+        var curMetricRadio = document.querySelector('input[name="metric"]:checked');
+        if (curMetricRadio && (curMetricRadio.value === 'TEST_VARIATIONS' || curMetricRadio.value === 'RUNS' || curMetricRadio.value === 'RUN_HISTORY' || curMetricRadio.value === 'RUNS_LIST' || curMetricRadio.value === 'LIST_OF_RUNS')) {
+            return;
+        }
+        var perlenketteSec = document.getElementById('widgetPerlenketteOptionsSection');
+        var trendModeSec = document.getElementById('widgetTrendModeSection');
+        var trendOptsSec = document.getElementById('widgetTrendOptionsSection');
+        var pointScopeSec = document.getElementById('widgetPointScopeSection');
+        if (perlenketteSec) {
+            perlenketteSec.style.display = (presentation === 'PERLENKETTE') ? 'block' : 'none';
+        }
+        if (trendModeSec) {
+            trendModeSec.style.display = (presentation === 'PERLENKETTE' || presentation === 'TREND_GRAPH' || presentation === 'TEXT_WITH_SMALL_TREND') ? 'block' : 'none';
+        }
+        if (trendOptsSec) {
+            trendOptsSec.style.display = (presentation === 'TREND_GRAPH') ? 'block' : 'none';
+        }
+        var valFormatSec = document.getElementById('widgetValueFormatSection');
+        if (valFormatSec) {
+            valFormatSec.style.display = (presentation === 'PERLENKETTE' || presentation === 'TEXT' || presentation === 'TEXT_WITH_SMALL_TREND') ? 'block' : 'none';
+        }
+        if (pointScopeSec) {
+            pointScopeSec.style.display = (presentation === 'PIE_CHART' || presentation === 'RATIO_BAR' || presentation === 'TEXT' || presentation === 'LIST') ? 'block' : 'none';
+        }
+        updateSuggestedWidgetTitle();
+    }
+    function toggleWidgetExecutionIdentitySection(show) {
+        var sec = document.getElementById('widgetExecutionIdentityOptions');
+        if (sec) sec.style.display = show ? 'block' : 'none';
+    }
+    function updateExecutionIdentityDimensionsInput() {
+        var chks = document.querySelectorAll('input[name="identityDimCheckbox"]:checked');
+        var vals = [];
+        chks.forEach(function(c) { vals.push(c.value); });
+        var inp = document.getElementById('widgetExecutionIdentityDimensionsInput');
+        if (inp) inp.value = vals.join(',');
+    }
+    function toggleWidgetRunFiltersSection(show) {
+        var sec = document.getElementById('widgetRunFiltersOptions');
+        if (sec) sec.style.display = show ? 'block' : 'none';
+    }
+    function updateWidgetRunFiltersInputs() {
+        function collectChecked(name, targetId) {
+            var chks = document.querySelectorAll('input[name="' + name + '"]:checked');
+            var vals = [];
+            chks.forEach(function(c) { vals.push(c.value); });
+            var inp = document.getElementById(targetId);
+            if (inp) inp.value = vals.join(',');
+        }
+        collectChecked('filterBrowsersCheckbox', 'widgetFilterBrowsersInput');
+        collectChecked('filterLocalesCheckbox', 'widgetFilterLocalesInput');
+        collectChecked('filterEnvsCheckbox', 'widgetFilterEnvsInput');
+        collectChecked('filterAreasCheckbox', 'widgetFilterAreasInput');
+    }
+    function setWidgetFilterLimit(val) {
+        var inp = document.getElementById('widgetFilterLimitInput');
+        if (inp) {
+            inp.value = (val !== null && val !== undefined) ? val : '';
+        }
+    }
+    function clearWidgetFilterDates() {
+        var s = document.getElementById('widgetFilterStartDateInput');
+        var e = document.getElementById('widgetFilterEndDateInput');
+        if (s) s.value = '';
+        if (e) e.value = '';
+    }
+
+    (function initWidgetTitleSuggestion() {
+        var titleInp = document.getElementById('widgetTitleInput');
+        if (titleInp) {
+            var curVal = (titleInp.value || '').trim();
+            var isUserCustom = (titleInp.dataset.userCustom === 'true');
+            if (!isUserCustom || !curVal) {
+                titleInp.dataset.userCustom = 'false';
+                updateSuggestedWidgetTitle();
+            } else {
+                titleInp.placeholder = 'e.g. ' + computeSuggestedWidgetTitle();
+            }
+        }
+        var form = document.getElementById('widgetConfigForm');
+        if (form && !form.dataset.titleListenerBound) {
+            form.dataset.titleListenerBound = 'true';
+            form.addEventListener('change', function(e) {
+                var n = e.target.name;
+                if (n === 'metric' || n === 'presentation' || n === 'tagKey' || n === 'trendMode' || n === 'pointScope') {
+                    updateSuggestedWidgetTitle();
+                }
+            });
+        }
+    })();
+
+    window.computeSuggestedWidgetTitle = computeSuggestedWidgetTitle;
+    window.updateSuggestedWidgetTitle = updateSuggestedWidgetTitle;
+    </script>
+</div>
+
+</body>
+</html>

@@ -18,19 +18,31 @@
  */
 package com.xceptance.aura.report.service;
 
+import com.xceptance.aura.report.dto.BatchLatestExecutionsDto;
+import com.xceptance.aura.report.dto.BatchLatestVariationDto;
+import com.xceptance.aura.report.dto.BatchOverviewDataDto;
+import com.xceptance.aura.report.dto.BatchSuiteEvolutionDto;
+import com.xceptance.aura.report.dto.BatchSuiteEvolutionPointDto;
+import com.xceptance.aura.report.dto.BatchSummaryDto;
+import com.xceptance.aura.report.dto.DistributionRatioDto;
 import com.xceptance.aura.report.dto.TestBaseAreaDto;
 import com.xceptance.aura.report.dto.TestBaseClassDto;
 import com.xceptance.aura.report.dto.TestBaseDataDto;
 import com.xceptance.aura.report.dto.TestBaseVariationHistoryDto;
 import com.xceptance.aura.report.entity.TestBaseVariationEntity;
 import com.xceptance.aura.report.entity.TestRunEntity;
+import com.xceptance.aura.report.entity.TestRunTagEntity;
 import com.xceptance.aura.report.repository.TestBatchRepository;
 import com.xceptance.aura.report.repository.TestBaseBugRepository;
 import com.xceptance.aura.report.repository.TestBaseVariationRepository;
 import com.xceptance.aura.report.repository.TestRunRepository;
+import com.xceptance.aura.report.repository.TestRunTagRepository;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +60,7 @@ public class TestBaseVariationHistoryTest
     private TestBatchRepository batchRepository;
     private TestBaseVariationRepository variationRepository;
     private TestBaseBugRepository bugRepository;
+    private TestRunTagRepository tagRepository;
     private LocalRunJsonStorageService storageService;
     private AttachmentStorageService attachmentStorageService;
     private AuraReportDataService dataService;
@@ -59,6 +72,7 @@ public class TestBaseVariationHistoryTest
         batchRepository = Mockito.mock(TestBatchRepository.class);
         variationRepository = Mockito.mock(TestBaseVariationRepository.class);
         bugRepository = Mockito.mock(TestBaseBugRepository.class);
+        tagRepository = Mockito.mock(TestRunTagRepository.class);
         storageService = Mockito.mock(LocalRunJsonStorageService.class);
         attachmentStorageService = Mockito.mock(AttachmentStorageService.class);
 
@@ -67,6 +81,7 @@ public class TestBaseVariationHistoryTest
             batchRepository,
             variationRepository,
             bugRepository,
+            tagRepository,
             storageService,
             attachmentStorageService
         );
@@ -423,9 +438,9 @@ public class TestBaseVariationHistoryTest
 
         final TestBaseVariationEntity varEntity = new TestBaseVariationEntity(varId, testClass, dataSet, "@General", location, browser);
 
-        final TestRunEntity runSep18 = new TestRunEntity("run_20260918_145300", "Batch1", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "2026-09-18 14:53:29", 1000L);
-        final TestRunEntity runOct07 = new TestRunEntity("run_20261007_155456", "Batch2", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "2026-10-07 15:55:37", 3000L);
-        final TestRunEntity runSep22 = new TestRunEntity("run_20260922_100430", "Batch3", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "2026-09-22 10:04:50", 2000L);
+        final TestRunEntity runSep18 = new TestRunEntity("run_20260918_145300", "Batch1", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "2026-09-18 14:53:29", null);
+        final TestRunEntity runOct07 = new TestRunEntity("run_20261007_155456", "Batch2", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "2026-10-07 15:55:37", null);
+        final TestRunEntity runSep22 = new TestRunEntity("run_20260922_100430", "Batch3", "COMPLETED", "Staging", "Manual", "Java", "Chrome", "2026-09-22 10:04:50", null);
 
         final String jsonSep18 = """
             { "runId": "run_20260918_145300", "batch": "Batch1", "executions": [{ "id": "exec-1", "testClass": "com.xceptance.neodymium.test.CheckoutTest", "title": "Payment_VISA", "location": "US", "browser": "Chrome", "status": "failed-unknown" }] }
@@ -723,6 +738,1997 @@ public class TestBaseVariationHistoryTest
         Assertions.assertEquals("badge-pass", badgeInfo[0]);
         Assertions.assertEquals("PASSED", badgeInfo[1]);
     }
+
+    @Test
+    public void testGetBatchTestBaseClassesExtractsAndGroupsVariations()
+    {
+        final TestRunEntity run1 = new TestRunEntity("run-1", "SmokeBatch", "COMPLETED", "Manual", "Staging", "US", "Chrome", "10:00", 2000L);
+        final TestRunEntity run2 = new TestRunEntity("run-2", "SmokeBatch", "COMPLETED", "Manual", "Staging", "US,DE", "Chrome,Firefox", "09:00", 1000L);
+
+        Mockito.when(runRepository.findByBatchNameAndIsDeletedFalseOrderByStartTimeMsDesc("SmokeBatch")).thenReturn(List.of(run1, run2));
+        Mockito.when(bugRepository.findAll()).thenReturn(List.of());
+
+        final String jsonRun1 = """
+            {
+              "executions": [
+                {
+                  "id": "e1",
+                  "testClass": "CheckoutTest",
+                  "testMethod": "testCheckoutFlow",
+                  "title": "US_Chrome",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "mode": "AI",
+                  "areaName": "@Checkout"
+                }
+              ]
+            }
+            """;
+
+        final String jsonRun2 = """
+            {
+              "executions": [
+                {
+                  "id": "e2",
+                  "testClass": "CheckoutTest",
+                  "testMethod": "testCheckoutFlow",
+                  "title": "US_Chrome",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "failed",
+                  "mode": "JAVA",
+                  "areaName": "@Checkout"
+                },
+                {
+                  "id": "e3",
+                  "testClass": "SearchTest",
+                  "testMethod": "testSearchFlow",
+                  "title": "DE_Firefox",
+                  "location": "DE",
+                  "browser": "Firefox",
+                  "status": "passed-clean",
+                  "mode": "PLAYBOOK",
+                  "areaName": "@Search"
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("run-1")).thenReturn(Optional.of(jsonRun1));
+        Mockito.when(storageService.readRunJson("run-2")).thenReturn(Optional.of(jsonRun2));
+
+        final List<TestBaseClassDto> classDtos = dataService.getBatchTestBaseClasses("SmokeBatch");
+
+        Assertions.assertNotNull(classDtos);
+        Assertions.assertEquals(2, classDtos.size(), "Should have 2 test classes: CheckoutTest and SearchTest");
+
+        final TestBaseClassDto checkoutClass = classDtos.stream()
+            .filter(c -> "CheckoutTest".equals(c.getClassName()))
+            .findFirst()
+            .orElseThrow();
+        Assertions.assertEquals(1, checkoutClass.getVariationCount());
+        final TestBaseVariationEntity checkoutVar = checkoutClass.getVariations().get(0);
+        Assertions.assertEquals("CheckoutTest", checkoutVar.getTestClassName());
+        Assertions.assertEquals("testCheckoutFlow", checkoutVar.getTestMethodName());
+        Assertions.assertEquals("US", checkoutVar.getLocation());
+        Assertions.assertEquals("Chrome", checkoutVar.getBrowser());
+        Assertions.assertEquals("passed-clean", checkoutVar.getLastStatus());
+        Assertions.assertEquals("AI", checkoutVar.getDisplayMode());
+        Assertions.assertEquals(2, checkoutVar.getTotalExecutionsCount());
+
+        final TestBaseClassDto searchClass = classDtos.stream()
+            .filter(c -> "SearchTest".equals(c.getClassName()))
+            .findFirst()
+            .orElseThrow();
+        Assertions.assertEquals(1, searchClass.getVariationCount());
+        final TestBaseVariationEntity searchVar = searchClass.getVariations().get(0);
+        Assertions.assertEquals("SearchTest", searchVar.getTestClassName());
+        Assertions.assertEquals("testSearchFlow", searchVar.getTestMethodName());
+        Assertions.assertEquals("DE", searchVar.getLocation());
+        Assertions.assertEquals("Firefox", searchVar.getBrowser());
+        Assertions.assertEquals("passed-clean", searchVar.getLastStatus());
+        Assertions.assertEquals("PLAYBOOK", searchVar.getDisplayMode());
+        Assertions.assertEquals(1, searchVar.getTotalExecutionsCount());
+    }
+
+    @Test
+    public void testBatchTestBaseClassesSetsLastRunIdAndEnvironment()
+    {
+        final TestRunEntity run1 = new TestRunEntity("RUN_1", "Batch A", "COMPLETED", "Main", "Production", "Java", "Chrome", "10:00", 1000L);
+        run1.setEnvironment("Production");
+
+        final String jsonRun1 = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "durationMs": 1500
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_1")).thenReturn(Optional.of(jsonRun1));
+
+        final List<TestBaseClassDto> classes = dataService.getBatchTestBaseClasses("Batch A", List.of(run1));
+        Assertions.assertFalse(classes.isEmpty());
+        final TestBaseClassDto cls = classes.get(0);
+        Assertions.assertEquals("com.xceptance.neodymium.test.LoginTest", cls.getClassName());
+        Assertions.assertEquals(1, cls.getVariations().size());
+        final TestBaseVariationEntity var = cls.getVariations().get(0);
+        Assertions.assertEquals("RUN_1", var.getLastRunId());
+        Assertions.assertEquals("Production", var.getLastEnvironment());
+    }
+
+    @Test
+    public void testBatchLatestExecutionsPopulatesLatestVariationsWithEnvironmentAndStatus()
+    {
+        final TestRunEntity run1 = new TestRunEntity("RUN_1", "Batch A", "COMPLETED", "Main", "Staging", "Java", "Chrome", "10:00", 1000L);
+        run1.setEnvironment("Staging");
+
+        final String jsonRun1 = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "durationMs": 1500
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_1")).thenReturn(Optional.of(jsonRun1));
+
+        final BatchLatestExecutionsDto result = dataService.getBatchLatestTestExecutionsSummary("Batch A", List.of(run1), Collections.emptySet(), null);
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(1, result.getLatestVariations().size());
+        final BatchLatestVariationDto v = result.getLatestVariations().get(0);
+        Assertions.assertEquals("RUN_1", v.getRunId());
+        Assertions.assertEquals("Staging", v.getEnvironment());
+        Assertions.assertEquals("passed-clean", v.getStatus());
+        Assertions.assertEquals("Chrome", v.getBrowser());
+        Assertions.assertEquals("US", v.getLocation());
+    }
+
+    @Test
+    public void testBatchLatestExecutionsCalculatesEnvironmentRatios()
+    {
+        final TestRunEntity run1 = new TestRunEntity("RUN_1", "Batch A", "COMPLETED", "Main", "Staging", "Java", "Chrome", "10:00", 2000L);
+        run1.setEnvironment("Staging");
+        final TestRunEntity run2 = new TestRunEntity("RUN_2", "Batch A", "COMPLETED", "Main", "Production", "Java", "Chrome", "09:00", 1000L);
+        run2.setEnvironment("Production");
+
+        final String jsonRun1 = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "durationMs": 1500
+                }
+              ]
+            }
+            """;
+        final String jsonRun2 = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.OrderTest",
+                  "testMethod": "testOrder",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "durationMs": 1800
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_1")).thenReturn(Optional.of(jsonRun1));
+        Mockito.when(storageService.readRunJson("RUN_2")).thenReturn(Optional.of(jsonRun2));
+
+        final BatchLatestExecutionsDto result = dataService.getBatchLatestTestExecutionsSummary("Batch A", List.of(run1, run2), Collections.emptySet(), null);
+        Assertions.assertNotNull(result);
+
+        final List<DistributionRatioDto> envRatios = result.getEnvironmentRatios();
+        Assertions.assertNotNull(envRatios);
+        Assertions.assertEquals(2, envRatios.size());
+
+        final DistributionRatioDto stagingRatio = envRatios.stream()
+            .filter(r -> "Staging".equals(r.getName()))
+            .findFirst()
+            .orElse(null);
+        Assertions.assertNotNull(stagingRatio);
+        Assertions.assertEquals(1, stagingRatio.getCount());
+        Assertions.assertEquals(50.0, stagingRatio.getPercentage(), 0.01);
+
+        final DistributionRatioDto prodRatio = envRatios.stream()
+            .filter(r -> "Production".equals(r.getName()))
+            .findFirst()
+            .orElse(null);
+        Assertions.assertNotNull(prodRatio);
+        Assertions.assertEquals(1, prodRatio.getCount());
+        Assertions.assertEquals(50.0, prodRatio.getPercentage(), 0.01);
+    }
+
+    @Test
+    public void testBatchLatestExecutionsCalculatesAreaRatios()
+    {
+        final TestRunEntity run1 = new TestRunEntity("RUN_1", "Batch A", "COMPLETED", "Main", "Staging", "Java", "Chrome", "10:00", 2000L);
+        final TestRunEntity run2 = new TestRunEntity("RUN_2", "Batch A", "COMPLETED", "Main", "Staging", "Java", "Chrome", "09:00", 1000L);
+
+        final String jsonRun1 = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "area": "Authentication",
+                  "durationMs": 1500
+                }
+              ]
+            }
+            """;
+        final String jsonRun2 = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.OrderTest",
+                  "testMethod": "testOrder",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "area": "@Checkout",
+                  "durationMs": 1800
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_1")).thenReturn(Optional.of(jsonRun1));
+        Mockito.when(storageService.readRunJson("RUN_2")).thenReturn(Optional.of(jsonRun2));
+
+        final BatchLatestExecutionsDto result = dataService.getBatchLatestTestExecutionsSummary("Batch A", List.of(run1, run2), Collections.emptySet(), null);
+        Assertions.assertNotNull(result);
+
+        final List<DistributionRatioDto> areaRatios = result.getAreaRatios();
+        Assertions.assertNotNull(areaRatios);
+        Assertions.assertEquals(2, areaRatios.size());
+
+        final DistributionRatioDto authRatio = areaRatios.stream()
+            .filter(r -> "@Authentication".equals(r.getName()))
+            .findFirst()
+            .orElse(null);
+        Assertions.assertNotNull(authRatio);
+        Assertions.assertEquals(1, authRatio.getCount());
+        Assertions.assertEquals(50.0, authRatio.getPercentage(), 0.01);
+
+        final DistributionRatioDto checkoutRatio = areaRatios.stream()
+            .filter(r -> "@Checkout".equals(r.getName()))
+            .findFirst()
+            .orElse(null);
+        Assertions.assertNotNull(checkoutRatio);
+        Assertions.assertEquals(1, checkoutRatio.getCount());
+        Assertions.assertEquals(50.0, checkoutRatio.getPercentage(), 0.01);
+    }
+
+    @Test
+    public void testBatchTestBaseClassesAndSummaryExcludesClassPlaceholderExecutions()
+    {
+        final TestRunEntity run1 = new TestRunEntity("RUN_1", "SmokeBatch", "COMPLETED", "Main", "Production", "Java", "Chrome", "10:00", 1000L);
+        final TestRunEntity run2 = new TestRunEntity("RUN_2", "SmokeBatch", "COMPLETED", "Main", "Production", "Java", "Chrome", "11:00", 2000L);
+
+        final String jsonRun1 = """
+            {
+              "executions": [
+                {
+                  "testClass": "Aura_my_test_yaml_Test",
+                  "testMethod": "executeYamlTest",
+                  "title": "en",
+                  "location": "Default",
+                  "browser": "Chrome_1920x1080",
+                  "status": "passed-clean",
+                  "durationMs": 1500
+                }
+              ]
+            }
+            """;
+
+        final String jsonRun2 = """
+            {
+              "executions": [
+                {
+                  "testClass": "Aura_my_test_yaml_Test",
+                  "testMethod": "",
+                  "title": "Aura_my_test_yaml_Test",
+                  "location": "Default",
+                  "browser": "Chrome_1920x1080",
+                  "status": "skipped",
+                  "durationMs": 0
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_1")).thenReturn(Optional.of(jsonRun1));
+        Mockito.when(storageService.readRunJson("RUN_2")).thenReturn(Optional.of(jsonRun2));
+
+        final List<TestBaseClassDto> classes = dataService.getBatchTestBaseClasses("SmokeBatch", List.of(run2, run1));
+        Assertions.assertEquals(1, classes.size());
+        final TestBaseClassDto classDto = classes.get(0);
+        Assertions.assertEquals("Aura_my_test_yaml_Test", classDto.getClassName());
+        Assertions.assertEquals(1, classDto.getVariationCount(), "Class container placeholder should not be counted as a variation");
+        Assertions.assertEquals(1, classDto.getVariations().size());
+        final TestBaseVariationEntity variation = classDto.getVariations().get(0);
+        Assertions.assertEquals("executeYamlTest", variation.getTestMethodName());
+        Assertions.assertEquals("en", variation.getDataSetLabel());
+
+        final BatchLatestExecutionsDto summary = dataService.getBatchLatestTestExecutionsSummary("SmokeBatch", List.of(run2, run1));
+        Assertions.assertNotNull(summary);
+        Assertions.assertEquals(1, summary.getTotalVariationsCount(), "Total variations in summary should exclude class placeholder");
+        Assertions.assertEquals(1, summary.getLatestVariations().size());
+        Assertions.assertTrue(summary.getLatestVariations().get(0).getKey().contains("executeYamlTest"));
+    }
+
+    @Test
+    public void testGroupBatchTestClassesByAreaAndGetBatchTestBaseAreas()
+    {
+        final TestBaseVariationEntity var1 = new TestBaseVariationEntity("var-1", "CheckoutTest", "testCheckout", "Default", "@Checkout", "US", "Chrome");
+        final TestBaseClassDto class1 = new TestBaseClassDto("CheckoutTest", "batchClassContainerCheckoutTest", 1, List.of(var1));
+
+        final TestBaseVariationEntity var2 = new TestBaseVariationEntity("var-2", "SearchTest", "testSearch", "Default", "@Search", "DE", "Firefox");
+        final TestBaseVariationEntity var3 = new TestBaseVariationEntity("var-3", "SearchTest", "testSearchExtended", "DataSet2", "@Search", "DE", "Firefox");
+        final TestBaseClassDto class2 = new TestBaseClassDto("SearchTest", "batchClassContainerSearchTest", 2, List.of(var2, var3));
+
+        final TestBaseVariationEntity var4 = new TestBaseVariationEntity("var-4", "GeneralTest", "testGeneral", "Default", "@General", "US", "Chrome");
+        final TestBaseClassDto class3 = new TestBaseClassDto("GeneralTest", "batchClassContainerGeneralTest", 1, List.of(var4));
+
+        final List<TestBaseAreaDto> areas = dataService.groupBatchTestClassesByArea(List.of(class1, class2, class3));
+        Assertions.assertNotNull(areas);
+        Assertions.assertEquals(3, areas.size());
+
+        final TestBaseAreaDto checkoutArea = areas.stream()
+            .filter(a -> "@Checkout".equals(a.getAreaName()))
+            .findFirst()
+            .orElseThrow();
+        Assertions.assertEquals("batchAreaCheckout", checkoutArea.getAreaPaneId());
+        Assertions.assertEquals("shopping_cart", checkoutArea.getIcon());
+        Assertions.assertEquals(1, checkoutArea.getClassCount());
+        Assertions.assertEquals(1, checkoutArea.getTotalVariationsCount());
+        Assertions.assertEquals(1, checkoutArea.getTestClasses().size());
+
+        final TestBaseAreaDto searchArea = areas.stream()
+            .filter(a -> "@Search".equals(a.getAreaName()))
+            .findFirst()
+            .orElseThrow();
+        Assertions.assertEquals("batchAreaSearch", searchArea.getAreaPaneId());
+        Assertions.assertEquals("search", searchArea.getIcon());
+        Assertions.assertEquals(1, searchArea.getClassCount());
+        Assertions.assertEquals(2, searchArea.getTotalVariationsCount());
+
+        final TestBaseAreaDto browsingArea = areas.stream()
+            .filter(a -> "@Browsing (default)".equals(a.getAreaName()))
+            .findFirst()
+            .orElseThrow();
+        Assertions.assertEquals("batchAreaBrowsingdefault", browsingArea.getAreaPaneId());
+        Assertions.assertEquals("folder", browsingArea.getIcon());
+        Assertions.assertEquals(1, browsingArea.getClassCount());
+        Assertions.assertEquals(1, browsingArea.getTotalVariationsCount());
+
+        Assertions.assertTrue(dataService.groupBatchTestClassesByArea(null).isEmpty());
+        Assertions.assertTrue(dataService.groupBatchTestClassesByArea(List.of()).isEmpty());
+    }
+
+    @Test
+    public void testBatchLatestExecutionsFiltersByRunBrowsers()
+    {
+        final TestRunEntity run1 = new TestRunEntity("RUN_1", "Batch A", "COMPLETED", "Main", "Default", "Java", "Chrome_1920x1080", "10:00", 2000L);
+        run1.setBrowsersCsv("Chrome_1920x1080");
+        final TestRunEntity run2 = new TestRunEntity("RUN_2", "Batch A", "COMPLETED", "Main", "Default", "Java", "Firefox", "09:00", 1000L);
+        run2.setBrowsersCsv("Firefox");
+
+        final String jsonRun1 = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.ChromeTest",
+                  "testMethod": "testChrome",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome_1920x1080",
+                  "status": "passed-clean",
+                  "durationMs": 1500
+                }
+              ]
+            }
+            """;
+        final String jsonRun2 = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.FirefoxTest",
+                  "testMethod": "testFirefox",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Firefox",
+                  "status": "passed-clean",
+                  "durationMs": 1200
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_1")).thenReturn(Optional.of(jsonRun1));
+        Mockito.when(storageService.readRunJson("RUN_2")).thenReturn(Optional.of(jsonRun2));
+
+        final BatchLatestExecutionsDto result = dataService.getBatchLatestTestExecutionsSummary(
+            "Batch A",
+            List.of(run1, run2),
+            Collections.emptySet(),
+            null,
+            Set.of("Chrome_1920x1080"),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptyMap()
+        );
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(1, result.getEligibleRunsCount());
+        Assertions.assertEquals(1, result.getContributingRuns().size());
+        Assertions.assertEquals("RUN_1", result.getContributingRuns().get(0).getId());
+        Assertions.assertEquals(1, result.getLatestVariations().size());
+        Assertions.assertEquals("RUN_1", result.getLatestVariations().get(0).getRunId());
+        Assertions.assertEquals("Chrome_1920x1080", result.getLatestVariations().get(0).getBrowser());
+    }
+
+    @Test
+    public void testBatchLatestExecutionsFiltersByRunEnvsAndLocales()
+    {
+        final TestRunEntity runStaging = new TestRunEntity("RUN_STG", "Batch A", "COMPLETED", "Main", "Staging", "Java", "Chrome", "10:00", 2000L);
+        runStaging.setEnvironment("Staging");
+        runStaging.setLocalesCsv("DEU");
+        final TestRunEntity runProd = new TestRunEntity("RUN_PROD", "Batch A", "COMPLETED", "Main", "Production", "Java", "Chrome", "09:00", 1000L);
+        runProd.setEnvironment("Production");
+        runProd.setLocalesCsv("EN");
+
+        final String jsonStaging = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.StgTest",
+                  "testMethod": "testStg",
+                  "title": "Default",
+                  "location": "DEU",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "durationMs": 1500
+                }
+              ]
+            }
+            """;
+        final String jsonProd = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.ProdTest",
+                  "testMethod": "testProd",
+                  "title": "Default",
+                  "location": "EN",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "durationMs": 1200
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_STG")).thenReturn(Optional.of(jsonStaging));
+        Mockito.when(storageService.readRunJson("RUN_PROD")).thenReturn(Optional.of(jsonProd));
+
+        final BatchLatestExecutionsDto result = dataService.getBatchLatestTestExecutionsSummary(
+            "Batch A",
+            List.of(runStaging, runProd),
+            Collections.emptySet(),
+            null,
+            Collections.emptySet(),
+            Set.of("DEU"),
+            Set.of("Staging"),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptyMap()
+        );
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(1, result.getEligibleRunsCount());
+        Assertions.assertEquals(1, result.getContributingRuns().size());
+        Assertions.assertEquals("RUN_STG", result.getContributingRuns().get(0).getId());
+        Assertions.assertEquals("Staging", result.getLatestVariations().get(0).getEnvironment());
+    }
+
+    @Test
+    public void testBatchLatestExecutionsFiltersByRunTagsAndAreas()
+    {
+        final TestRunEntity runWiki = new TestRunEntity("RUN_WIKI", "Wikipedia", "COMPLETED", "Main", "Default", "Java", "Chrome", "10:00", 2000L);
+        runWiki.setBatchName("Wikipedia");
+        final TestRunEntity runSmoke = new TestRunEntity("RUN_SMOKE", "Smoke", "COMPLETED", "Main", "Default", "Java", "Chrome", "09:00", 1000L);
+        runSmoke.setBatchName("Smoke");
+
+        final String jsonWiki = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.WikiSearchTest",
+                  "testMethod": "testSearch",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "areaName": "SearchArea",
+                  "durationMs": 1500
+                }
+              ]
+            }
+            """;
+        final String jsonSmoke = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.SmokeTest",
+                  "testMethod": "testSmoke",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "areaName": "CheckoutArea",
+                  "durationMs": 1200
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_WIKI")).thenReturn(Optional.of(jsonWiki));
+        Mockito.when(storageService.readRunJson("RUN_SMOKE")).thenReturn(Optional.of(jsonSmoke));
+
+        final Map<String, String> areasMap = Map.of(
+            "RUN_WIKI", "@SearchArea",
+            "RUN_SMOKE", "@CheckoutArea"
+        );
+
+        final BatchLatestExecutionsDto result = dataService.getBatchLatestTestExecutionsSummary(
+            "all",
+            List.of(runWiki, runSmoke),
+            Collections.emptySet(),
+            null,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Set.of("@SearchArea"),
+            Set.of("Wikipedia"),
+            areasMap
+        );
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(1, result.getEligibleRunsCount());
+        Assertions.assertEquals(1, result.getContributingRuns().size());
+        Assertions.assertEquals("RUN_WIKI", result.getContributingRuns().get(0).getId());
+    }
+
+    @Test
+    public void testBatchLatestExecutionsFiltersExecutionsInsideEligibleRun()
+    {
+        final TestRunEntity runMulti = new TestRunEntity("RUN_MULTI", "Batch A", "COMPLETED", "Main", "Default", "Java", "Chrome, Firefox", "10:00", 2000L);
+        runMulti.setBrowsersCsv("Chrome, Firefox");
+
+        final String jsonMulti = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.MultiTest",
+                  "testMethod": "testRun",
+                  "title": "DataSet1",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean",
+                  "durationMs": 1000
+                },
+                {
+                  "testClass": "com.xceptance.neodymium.test.MultiTest",
+                  "testMethod": "testRun",
+                  "title": "DataSet2",
+                  "location": "US",
+                  "browser": "Firefox",
+                  "status": "failed-unknown",
+                  "durationMs": 1000
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_MULTI")).thenReturn(Optional.of(jsonMulti));
+
+        final BatchLatestExecutionsDto result = dataService.getBatchLatestTestExecutionsSummary(
+            "Batch A",
+            List.of(runMulti),
+            Collections.emptySet(),
+            null,
+            Set.of("Chrome"),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptyMap()
+        );
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(1, result.getEligibleRunsCount());
+        Assertions.assertEquals(1, result.getContributingRuns().size());
+        // Firefox execution should be excluded from variations
+        Assertions.assertEquals(1, result.getLatestVariations().size());
+        Assertions.assertEquals("Chrome", result.getLatestVariations().get(0).getBrowser());
+        // Ratio should show only Chrome (100%)
+        Assertions.assertEquals(1, result.getBrowserRatios().size());
+        Assertions.assertEquals("Chrome", result.getBrowserRatios().get(0).getName());
+        Assertions.assertEquals(100.0, result.getBrowserRatios().get(0).getPercentage(), 0.01);
+    }
+
+    @Test
+    public void testBatchTestBaseClassesFilteredByRunDimensions()
+    {
+        final TestRunEntity runMulti = new TestRunEntity();
+        runMulti.setId("RUN_MULTI_DIM");
+        runMulti.setBatchName("BatchDim");
+        runMulti.setEnvironment("Staging");
+        runMulti.setBrowsersCsv("Chrome,Firefox");
+        runMulti.setLocalesCsv("US,DE");
+        runMulti.setStartTimeMs(1000L);
+
+        final String jsonMulti = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.CheckoutTest",
+                  "testMethod": "testCheckout",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "areaName": "@Checkout",
+                  "status": "passed-clean",
+                  "durationMs": 1000
+                },
+                {
+                  "testClass": "com.xceptance.neodymium.test.SearchTest",
+                  "testMethod": "testSearch",
+                  "title": "Default",
+                  "location": "DE",
+                  "browser": "Firefox",
+                  "areaName": "@Search",
+                  "status": "passed-clean",
+                  "durationMs": 1000
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_MULTI_DIM")).thenReturn(Optional.of(jsonMulti));
+
+        // 1. Filter by Browser = Chrome: only CheckoutTest should remain
+        final List<TestBaseClassDto> chromeClasses = dataService.getBatchTestBaseClasses(
+            "BatchDim",
+            List.of(runMulti),
+            Set.of("Chrome"),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet()
+        );
+        Assertions.assertEquals(1, chromeClasses.size());
+        Assertions.assertEquals("com.xceptance.neodymium.test.CheckoutTest", chromeClasses.get(0).getClassName());
+
+        // 2. Filter by Area = @Search: only SearchTest should remain
+        final List<TestBaseClassDto> searchClasses = dataService.getBatchTestBaseClasses(
+            "BatchDim",
+            List.of(runMulti),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Set.of("@Search"),
+            Collections.emptySet()
+        );
+        Assertions.assertEquals(1, searchClasses.size());
+        Assertions.assertEquals("com.xceptance.neodymium.test.SearchTest", searchClasses.get(0).getClassName());
+
+        // 3. Filter by _none_: 0 variations
+        final List<TestBaseClassDto> noneClasses = dataService.getBatchTestBaseClasses(
+            "BatchDim",
+            List.of(runMulti),
+            Set.of("_none_"),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet()
+        );
+        Assertions.assertTrue(noneClasses.isEmpty());
+    }
+
+    @Test
+    public void testBatchTestBaseClassesVariationCountReflectsHistoryLimitAndEligibleRuns()
+    {
+        final TestRunEntity runLatest = new TestRunEntity();
+        runLatest.setId("RUN_LATEST");
+        runLatest.setBatchName("HistoryBatch");
+        runLatest.setStartTimeMs(3000L);
+
+        final TestRunEntity runMiddle = new TestRunEntity();
+        runMiddle.setId("RUN_MIDDLE");
+        runMiddle.setBatchName("HistoryBatch");
+        runMiddle.setStartTimeMs(2000L);
+
+        final TestRunEntity runOldest = new TestRunEntity();
+        runOldest.setId("RUN_OLDEST");
+        runOldest.setBatchName("HistoryBatch");
+        runOldest.setStartTimeMs(1000L);
+
+        final String jsonLatest = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.ClassA",
+                  "testMethod": "testMethodA",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+        final String jsonMiddle = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.ClassA",
+                  "testMethod": "testMethodA",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                },
+                {
+                  "testClass": "com.xceptance.neodymium.test.ClassB",
+                  "testMethod": "testMethodB",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+        final String jsonOldest = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.ClassA",
+                  "testMethod": "testMethodA",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                },
+                {
+                  "testClass": "com.xceptance.neodymium.test.ClassB",
+                  "testMethod": "testMethodB",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                },
+                {
+                  "testClass": "com.xceptance.neodymium.test.ClassC",
+                  "testMethod": "testMethodC",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_LATEST")).thenReturn(Optional.of(jsonLatest));
+        Mockito.when(storageService.readRunJson("RUN_MIDDLE")).thenReturn(Optional.of(jsonMiddle));
+        Mockito.when(storageService.readRunJson("RUN_OLDEST")).thenReturn(Optional.of(jsonOldest));
+
+        // Limit = 1: only RUN_LATEST
+        final List<TestBaseClassDto> classesLimit1 = dataService.getBatchTestBaseClasses("HistoryBatch", List.of(runLatest));
+        Assertions.assertEquals(1, classesLimit1.size());
+        Assertions.assertEquals("com.xceptance.neodymium.test.ClassA", classesLimit1.get(0).getClassName());
+        Assertions.assertEquals(1, classesLimit1.get(0).getVariations().get(0).getTotalExecutionsCount());
+
+        // Limit = 2: RUN_LATEST + RUN_MIDDLE
+        final List<TestBaseClassDto> classesLimit2 = dataService.getBatchTestBaseClasses("HistoryBatch", List.of(runLatest, runMiddle));
+        Assertions.assertEquals(2, classesLimit2.size());
+        final int execCountA2 = classesLimit2.stream().filter(c -> c.getClassName().endsWith("ClassA")).findFirst().get().getVariations().get(0).getTotalExecutionsCount();
+        final int execCountB2 = classesLimit2.stream().filter(c -> c.getClassName().endsWith("ClassB")).findFirst().get().getVariations().get(0).getTotalExecutionsCount();
+        Assertions.assertEquals(2, execCountA2);
+        Assertions.assertEquals(1, execCountB2);
+
+        // Limit = 3: All 3 runs
+        final List<TestBaseClassDto> classesLimit3 = dataService.getBatchTestBaseClasses("HistoryBatch", List.of(runLatest, runMiddle, runOldest));
+        Assertions.assertEquals(3, classesLimit3.size());
+        final int execCountA3 = classesLimit3.stream().filter(c -> c.getClassName().endsWith("ClassA")).findFirst().get().getVariations().get(0).getTotalExecutionsCount();
+        final int execCountB3 = classesLimit3.stream().filter(c -> c.getClassName().endsWith("ClassB")).findFirst().get().getVariations().get(0).getTotalExecutionsCount();
+        final int execCountC3 = classesLimit3.stream().filter(c -> c.getClassName().endsWith("ClassC")).findFirst().get().getVariations().get(0).getTotalExecutionsCount();
+        Assertions.assertEquals(3, execCountA3);
+        Assertions.assertEquals(2, execCountB3);
+        Assertions.assertEquals(1, execCountC3);
+
+        // Verify getBatchLatestTestExecutionsSummary retains eligibleRuns
+        final BatchLatestExecutionsDto summaryDto = dataService.getBatchLatestTestExecutionsSummary("HistoryBatch", List.of(runLatest, runMiddle));
+        Assertions.assertNotNull(summaryDto.getEligibleRuns());
+        Assertions.assertEquals(2, summaryDto.getEligibleRuns().size());
+        Assertions.assertEquals("RUN_LATEST", summaryDto.getEligibleRuns().get(0).getId());
+        Assertions.assertEquals("RUN_MIDDLE", summaryDto.getEligibleRuns().get(1).getId());
+    }
+
+    @Test
+    public void testGetGroupOverviewDataWithAreaGrouping()
+    {
+        final TestRunEntity run1 = new TestRunEntity();
+        run1.setId("RUN_AREA_1");
+        run1.setBatchName("SmokeBatch");
+        run1.setEnvironment("Default");
+        run1.setBrowsersCsv("Chrome");
+        run1.setLocalesCsv("en_US");
+        run1.setAreasCsv("@Checkout");
+        run1.setStartTimeMs(1000L);
+
+        final TestRunEntity run2 = new TestRunEntity();
+        run2.setId("RUN_AREA_2");
+        run2.setBatchName("SmokeBatch");
+        run2.setEnvironment("Default");
+        run2.setBrowsersCsv("Chrome");
+        run2.setLocalesCsv("en_US");
+        run2.setAreasCsv("@Cart");
+        run2.setStartTimeMs(2000L);
+
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(run2, run1));
+
+        final BatchOverviewDataDto data = dataService.getGroupOverviewData(List.of("area"));
+        Assertions.assertNotNull(data);
+        final List<BatchSummaryDto> batches = data.getBatches();
+        Assertions.assertEquals(2, batches.size());
+        final List<String> groupNames = batches.stream().map(BatchSummaryDto::getName).sorted().toList();
+        Assertions.assertEquals(List.of("@Cart", "@Checkout"), groupNames);
+    }
+
+    @Test
+    public void testBatchLatestContributingRunsScopedToAreaGrouping()
+    {
+        final TestRunEntity run1 = new TestRunEntity();
+        run1.setId("RUN_MIXED_1");
+        run1.setBatchName("SmokeBatch");
+        run1.setStartTimeMs(1000L);
+        run1.setBrowsersCsv("Chrome,Firefox");
+        run1.setLocalesCsv("US,DE");
+        run1.setTotalTests(2);
+
+        final TestRunEntity run2 = new TestRunEntity();
+        run2.setId("RUN_MIXED_2");
+        run2.setBatchName("SmokeBatch");
+        run2.setStartTimeMs(2000L);
+        run2.setBrowsersCsv("Chrome");
+        run2.setLocalesCsv("US");
+        run2.setTotalTests(2);
+
+        final String jsonRun1 = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.SearchTest",
+                  "testMethod": "testSearchBasic",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "areaName": "@Search",
+                  "status": "passed-clean"
+                },
+                {
+                  "testClass": "com.xceptance.neodymium.test.BrowsingTest",
+                  "testMethod": "testBrowseCatalog",
+                  "title": "Default",
+                  "location": "DE",
+                  "browser": "Firefox",
+                  "areaName": "@Browsing",
+                  "status": "failed-unknown"
+                }
+              ]
+            }
+            """;
+
+        final String jsonRun2 = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.SearchTest",
+                  "testMethod": "testSearchAdvanced",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "areaName": "@Search",
+                  "status": "passed-clean"
+                },
+                {
+                  "testClass": "com.xceptance.neodymium.test.CheckoutTest",
+                  "testMethod": "testCheckoutPayment",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "areaName": "@Checkout",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("RUN_MIXED_1")).thenReturn(Optional.of(jsonRun1));
+        Mockito.when(storageService.readRunJson("RUN_MIXED_2")).thenReturn(Optional.of(jsonRun2));
+
+        final BatchLatestExecutionsDto result = dataService.getBatchLatestTestExecutionsSummary(
+            "all",
+            List.of(run2, run1),
+            Collections.emptySet(),
+            null,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Set.of("@Search"),
+            Collections.emptySet(),
+            Collections.emptyMap()
+        );
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(2, result.getBatchSummary().getLatestTotalTests());
+        Assertions.assertEquals(2, result.getBatchSummary().getLatestPassedCount());
+
+        final List<TestRunEntity> contributingRuns = result.getContributingRuns();
+        Assertions.assertNotNull(contributingRuns);
+        Assertions.assertEquals(2, contributingRuns.size());
+
+        // Each contributing run must only report the executions in @Search (1 test each, not 2)
+        final TestRunEntity scopedRun2 = contributingRuns.get(0);
+        Assertions.assertEquals("RUN_MIXED_2", scopedRun2.getId());
+        Assertions.assertEquals(1, scopedRun2.getTotalTests(), "Contributing run should only count executions in @Search");
+        Assertions.assertEquals(1, scopedRun2.getPassedCleanCount());
+        Assertions.assertEquals(0, scopedRun2.getFailedUnknownCount());
+
+        final TestRunEntity scopedRun1 = contributingRuns.get(1);
+        Assertions.assertEquals("RUN_MIXED_1", scopedRun1.getId());
+        Assertions.assertEquals(1, scopedRun1.getTotalTests(), "Contributing run should only count executions in @Search, not other areas");
+        Assertions.assertEquals(1, scopedRun1.getPassedCleanCount());
+        Assertions.assertEquals(0, scopedRun1.getFailedUnknownCount());
+
+        // Test scopeRunToCriteria directly as well
+        final TestRunEntity directScoped1 = dataService.scopeRunToCriteria(
+            run1,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Set.of("@Search"),
+            Collections.emptySet()
+        );
+        Assertions.assertNotNull(directScoped1);
+        Assertions.assertEquals(1, directScoped1.getTotalTests());
+        Assertions.assertEquals(1, directScoped1.getPassedCount());
+        Assertions.assertEquals(0, directScoped1.getFailedUnknownCount());
+        Assertions.assertEquals("Chrome", directScoped1.getBrowsersCsv());
+    }
+
+    @Test
+    public void testBatchLatestTestExecutionsSummaryWithExcludedDimensions()
+    {
+        final TestRunEntity run1 = new TestRunEntity();
+        run1.setId("RUN_EXCLUDE_1");
+        run1.setBatchName("SmokeBatch");
+        run1.setEnvironment("Staging");
+        run1.setStartTimeMs(1000L);
+        run1.setBrowsersCsv("Chrome,Firefox");
+        run1.setLocalesCsv("US,DE");
+        run1.setTotalTests(2);
+        run1.setPassedCount(1);
+        run1.setFailedUnknownCount(1);
+
+        final TestRunEntity run2 = new TestRunEntity();
+        run2.setId("RUN_EXCLUDE_2");
+        run2.setBatchName("SmokeBatch");
+        run2.setEnvironment("Staging");
+        run2.setStartTimeMs(2000L);
+        run2.setBrowsersCsv("Chrome");
+        run2.setLocalesCsv("US");
+        run2.setTotalTests(2);
+        run2.setPassedCount(2);
+
+        final String jsonRun1 = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.SearchTest",
+                  "testMethod": "testSearchBasic",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "areaName": "@Search",
+                  "status": "passed-clean"
+                },
+                {
+                  "testClass": "com.xceptance.neodymium.test.BrowsingTest",
+                  "testMethod": "testBrowseCatalog",
+                  "title": "Default",
+                  "location": "DE",
+                  "browser": "Firefox",
+                  "areaName": "@Browsing",
+                  "status": "failed-unknown"
+                }
+              ]
+            }
+            """;
+
+        final String jsonRun2 = """
+            {
+              "executions": [
+                {
+                  "testClass": "com.xceptance.neodymium.test.SearchTest",
+                  "testMethod": "testSearchAdvanced",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "areaName": "@Search",
+                  "status": "passed-clean"
+                },
+                {
+                  "testClass": "com.xceptance.neodymium.test.CheckoutTest",
+                  "testMethod": "testCheckoutPayment",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "areaName": "@Checkout",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("RUN_EXCLUDE_1")).thenReturn(Optional.of(jsonRun1));
+        Mockito.when(storageService.readRunJson("RUN_EXCLUDE_2")).thenReturn(Optional.of(jsonRun2));
+
+        final BatchLatestExecutionsDto result = dataService.getBatchLatestTestExecutionsSummary(
+            "SmokeBatch",
+            List.of(run2, run1),
+            Collections.emptySet(),
+            null,
+            null,
+            Collections.emptySet(),
+            Set.of("Firefox"),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap()
+        );
+
+        Assertions.assertNotNull(result);
+        Assertions.assertEquals(3, result.getBatchSummary().getLatestTotalTests(), "Total tests must exclude the Firefox execution");
+        Assertions.assertEquals(3, result.getBatchSummary().getLatestPassedCount());
+        Assertions.assertEquals(0, result.getBatchSummary().getLatestUnknownCount());
+
+        final List<TestRunEntity> contributingRuns = result.getContributingRuns();
+        Assertions.assertNotNull(contributingRuns);
+        Assertions.assertEquals(2, contributingRuns.size());
+
+        final TestRunEntity scopedRun1 = contributingRuns.stream()
+            .filter(r -> "RUN_EXCLUDE_1".equals(r.getId()))
+            .findFirst()
+            .orElse(null);
+        Assertions.assertNotNull(scopedRun1);
+        Assertions.assertEquals(1, scopedRun1.getTotalTests(), "RUN_EXCLUDE_1 should only count the non-excluded Chrome execution");
+        Assertions.assertEquals(1, scopedRun1.getPassedCleanCount());
+        Assertions.assertEquals(0, scopedRun1.getFailedUnknownCount());
+        Assertions.assertEquals("Chrome", scopedRun1.getBrowsersCsv());
+
+        final TestRunEntity envExcluded = dataService.scopeRunToCriteria(
+            run1,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Set.of("Staging"),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            null,
+            Collections.emptyMap(),
+            Collections.emptyMap()
+        );
+        Assertions.assertNotNull(envExcluded);
+        Assertions.assertEquals(0, envExcluded.getTotalTests(), "Run with excluded environment must produce an empty scoped run");
+
+        final TestRunEntity areaExcluded = dataService.scopeRunToCriteria(
+            run1,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Set.of("@Browsing"),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            null,
+            Collections.emptyMap(),
+            Collections.emptyMap()
+        );
+        Assertions.assertNotNull(areaExcluded);
+        Assertions.assertEquals(1, areaExcluded.getTotalTests(), "Must exclude @Browsing execution");
+        Assertions.assertEquals(1, areaExcluded.getPassedCleanCount());
+        Assertions.assertEquals(0, areaExcluded.getFailedUnknownCount());
+    }
+
+    @Test
+    public void testGroupOverviewBooleanTagNamingAndUntaggedRunInclusion()
+    {
+        final TestRunEntity run1 = new TestRunEntity();
+        run1.setId("RUN_BOOL_1");
+        run1.setBatchName("SmokeBatch");
+        run1.setEnvironment("Default");
+        run1.setBrowsersCsv("Chrome");
+        run1.setLocalesCsv("Default");
+        run1.setAreasCsv("@Browsing (default)");
+        run1.setStartTimeMs(1000L);
+        run1.setTotalTests(1);
+        run1.setPassedCount(1);
+
+        final TestRunEntity run2 = new TestRunEntity();
+        run2.setId("RUN_BOOL_2");
+        run2.setBatchName("SmokeBatch");
+        run2.setEnvironment("Default");
+        run2.setBrowsersCsv("Chrome");
+        run2.setLocalesCsv("Default");
+        run2.setAreasCsv("@Browsing (default)");
+        run2.setStartTimeMs(2000L);
+        run2.setTotalTests(1);
+        run2.setPassedCount(1);
+
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(run2, run1));
+
+        final TestRunTagEntity tag1 = new TestRunTagEntity("RUN_BOOL_1", "Custom", "true");
+        Mockito.when(tagRepository.findByRunIdIn(Mockito.anyCollection())).thenReturn(List.of(tag1));
+        Mockito.when(tagRepository.findByRunId("RUN_BOOL_1")).thenReturn(List.of(tag1));
+        Mockito.when(tagRepository.findByRunId("RUN_BOOL_2")).thenReturn(Collections.emptyList());
+        Mockito.when(tagRepository.findDistinctTagValuesByTagKey("Custom")).thenReturn(List.of("true"));
+
+        final String jsonRun1 = """
+            {
+              "runId": "RUN_BOOL_1",
+              "batch": "SmokeBatch",
+              "executions": [
+                {
+                  "id": "e1",
+                  "testClass": "TestA",
+                  "testMethod": "testRun",
+                  "title": "ds1",
+                  "location": "Default",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+        final String jsonRun2 = """
+            {
+              "runId": "RUN_BOOL_2",
+              "batch": "SmokeBatch",
+              "executions": [
+                {
+                  "id": "e2",
+                  "testClass": "TestA",
+                  "testMethod": "testRun",
+                  "title": "ds1",
+                  "location": "Default",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_BOOL_1")).thenReturn(Optional.of(jsonRun1));
+        Mockito.when(storageService.readRunJson("RUN_BOOL_2")).thenReturn(Optional.of(jsonRun2));
+
+        final BatchOverviewDataDto data = dataService.getGroupOverviewData(List.of("Custom"));
+        Assertions.assertNotNull(data);
+        final List<BatchSummaryDto> batches = data.getBatches();
+        Assertions.assertEquals(2, batches.size());
+
+        final BatchSummaryDto customCard = batches.stream().filter(b -> "Custom".equals(b.getName())).findFirst().orElse(null);
+        final BatchSummaryDto notCustomCard = batches.stream().filter(b -> "Not Custom".equals(b.getName())).findFirst().orElse(null);
+
+        Assertions.assertNotNull(customCard, "Group card for boolean true must be named 'Custom'");
+        Assertions.assertEquals(1, customCard.getLatestTotalTests());
+        Assertions.assertEquals(1, customCard.getLatestPassedCount());
+
+        Assertions.assertNotNull(notCustomCard, "Group card for untagged runs must be named 'Not Custom'");
+        Assertions.assertEquals(1, notCustomCard.getLatestTotalTests(), "Untagged runs must not be dropped and must contain tests");
+        Assertions.assertEquals(1, notCustomCard.getLatestPassedCount());
+    }
+
+    @Test
+    public void testGroupOverviewNonBooleanTagUntaggedRunInclusion()
+    {
+        final TestRunEntity run1 = new TestRunEntity();
+        run1.setId("RUN_REL_1");
+        run1.setBatchName("SmokeBatch");
+        run1.setEnvironment("Default");
+        run1.setBrowsersCsv("Chrome");
+        run1.setLocalesCsv("Default");
+        run1.setAreasCsv("@Browsing (default)");
+        run1.setStartTimeMs(1000L);
+        run1.setTotalTests(1);
+        run1.setPassedCount(1);
+
+        final TestRunEntity run2 = new TestRunEntity();
+        run2.setId("RUN_REL_2");
+        run2.setBatchName("SmokeBatch");
+        run2.setEnvironment("Default");
+        run2.setBrowsersCsv("Chrome");
+        run2.setLocalesCsv("Default");
+        run2.setAreasCsv("@Browsing (default)");
+        run2.setStartTimeMs(2000L);
+        run2.setTotalTests(1);
+        run2.setPassedCount(1);
+
+        Mockito.when(runRepository.findByIsDeletedFalseOrderByStartTimeMsDesc()).thenReturn(List.of(run2, run1));
+
+        final TestRunTagEntity tag1 = new TestRunTagEntity("RUN_REL_1", "Release", "2026.10");
+        Mockito.when(tagRepository.findByRunIdIn(Mockito.anyCollection())).thenReturn(List.of(tag1));
+        Mockito.when(tagRepository.findByRunId("RUN_REL_1")).thenReturn(List.of(tag1));
+        Mockito.when(tagRepository.findByRunId("RUN_REL_2")).thenReturn(Collections.emptyList());
+        Mockito.when(tagRepository.findDistinctTagValuesByTagKey("Release")).thenReturn(List.of("2026.10"));
+
+        final String jsonRun1 = """
+            {
+              "runId": "RUN_REL_1",
+              "batch": "SmokeBatch",
+              "executions": [
+                {
+                  "id": "e1",
+                  "testClass": "TestA",
+                  "testMethod": "testRun",
+                  "title": "ds1",
+                  "location": "Default",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+        final String jsonRun2 = """
+            {
+              "runId": "RUN_REL_2",
+              "batch": "SmokeBatch",
+              "executions": [
+                {
+                  "id": "e2",
+                  "testClass": "TestA",
+                  "testMethod": "testRun",
+                  "title": "ds1",
+                  "location": "Default",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+        Mockito.when(storageService.readRunJson("RUN_REL_1")).thenReturn(Optional.of(jsonRun1));
+        Mockito.when(storageService.readRunJson("RUN_REL_2")).thenReturn(Optional.of(jsonRun2));
+
+        final BatchOverviewDataDto data = dataService.getGroupOverviewData(List.of("Release"));
+        Assertions.assertNotNull(data);
+        final List<BatchSummaryDto> batches = data.getBatches();
+        Assertions.assertEquals(2, batches.size());
+
+        final BatchSummaryDto releaseCard = batches.stream().filter(b -> "2026.10".equals(b.getName())).findFirst().orElse(null);
+        final BatchSummaryDto defaultCard = batches.stream().filter(b -> "Default".equals(b.getName())).findFirst().orElse(null);
+
+        Assertions.assertNotNull(releaseCard);
+        Assertions.assertEquals(1, releaseCard.getLatestTotalTests());
+
+        Assertions.assertNotNull(defaultCard, "Group card for untagged runs must be named 'Default'");
+        Assertions.assertEquals(1, defaultCard.getLatestTotalTests(), "Untagged runs in Default must not be dropped");
+    }
+
+    @Test
+    public void testBatchLatestWithEnvironmentUniquenessPreservesDevAndStg()
+    {
+        final TestRunEntity runDev = new TestRunEntity("RUN_DEV", "SmokeBatch", "COMPLETED", "Main", "DEV", "Java", "Chrome", "10:00", 1000L);
+        runDev.setEnvironment("DEV");
+        final TestRunEntity runStg = new TestRunEntity("RUN_STG", "SmokeBatch", "COMPLETED", "Main", "STG", "Java", "Chrome", "11:00", 2000L);
+        runStg.setEnvironment("STG");
+
+        final String jsonDev = """
+            {
+              "runId": "RUN_DEV",
+              "batch": "SmokeBatch",
+              "executions": [
+                {
+                  "id": "e_dev",
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean",
+                  "durationMs": 1200
+                }
+              ]
+            }
+            """;
+        final String jsonStg = """
+            {
+              "runId": "RUN_STG",
+              "batch": "SmokeBatch",
+              "executions": [
+                {
+                  "id": "e_stg",
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean",
+                  "durationMs": 1300
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("RUN_DEV")).thenReturn(Optional.of(jsonDev));
+        Mockito.when(storageService.readRunJson("RUN_STG")).thenReturn(Optional.of(jsonStg));
+
+        final List<TestRunEntity> allRuns = List.of(runDev, runStg);
+
+        // 1. Default uniqueness: browser + locale only.
+        // runStg is newer (2000L > 1000L), so it clobbers runDev.
+        final BatchLatestExecutionsDto defaultResult = dataService.getBatchLatestTestExecutionsSummary(
+            "SmokeBatch",
+            allRuns,
+            List.of("browser", "locale")
+        );
+        Assertions.assertNotNull(defaultResult);
+        Assertions.assertEquals(1, defaultResult.getContributingRuns().size(), "Default uniqueness should keep only latest run");
+        Assertions.assertEquals("RUN_STG", defaultResult.getContributingRuns().get(0).getId());
+        Assertions.assertEquals(1, defaultResult.getLatestVariations().size());
+        Assertions.assertEquals("STG", defaultResult.getLatestVariations().get(0).getEnvironment());
+
+        // 2. Custom uniqueness: browser + locale + environment.
+        // DEV and STG have different environments, so both are considered unique targets and preserved.
+        final BatchLatestExecutionsDto envResult = dataService.getBatchLatestTestExecutionsSummary(
+            "SmokeBatch",
+            allRuns,
+            List.of("browser", "locale", "environment")
+        );
+        Assertions.assertNotNull(envResult);
+        Assertions.assertEquals(2, envResult.getContributingRuns().size(), "Environment uniqueness should preserve both DEV and STG runs");
+        Assertions.assertEquals(2, envResult.getLatestVariations().size(), "Both DEV and STG variations should be included in latest status");
+        final Set<String> envs = Set.of(
+            envResult.getLatestVariations().get(0).getEnvironment(),
+            envResult.getLatestVariations().get(1).getEnvironment()
+        );
+        Assertions.assertTrue(envs.contains("DEV"));
+        Assertions.assertTrue(envs.contains("STG"));
+    }
+
+    @Test
+    public void testBatchLatestWithTagUniquenessPreservesReleases()
+    {
+        final TestRunEntity runR21 = new TestRunEntity("RUN_R21", "SmokeBatch", "COMPLETED", "Main", "QA", "Java", "Chrome", "10:00", 1000L);
+        runR21.setTags(List.of(new TestRunTagEntity("RUN_R21", "Release", "21")));
+
+        final TestRunEntity runR22 = new TestRunEntity("RUN_R22", "SmokeBatch", "COMPLETED", "Main", "QA", "Java", "Chrome", "11:00", 2000L);
+        runR22.setTags(List.of(new TestRunTagEntity("RUN_R22", "Release", "22")));
+
+        final String jsonR21 = """
+            {
+              "runId": "RUN_R21",
+              "batch": "SmokeBatch",
+              "executions": [
+                {
+                  "id": "e_r21",
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean",
+                  "durationMs": 1200
+                }
+              ]
+            }
+            """;
+        final String jsonR22 = """
+            {
+              "runId": "RUN_R22",
+              "batch": "SmokeBatch",
+              "executions": [
+                {
+                  "id": "e_r22",
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean",
+                  "durationMs": 1300
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("RUN_R21")).thenReturn(Optional.of(jsonR21));
+        Mockito.when(storageService.readRunJson("RUN_R22")).thenReturn(Optional.of(jsonR22));
+
+        final List<TestRunEntity> allRuns = List.of(runR21, runR22);
+
+        // 1. Without Release tag in uniqueness: R22 clobbers R21
+        final BatchLatestExecutionsDto defaultResult = dataService.getBatchLatestTestExecutionsSummary(
+            "SmokeBatch",
+            allRuns,
+            List.of("browser", "locale")
+        );
+        Assertions.assertNotNull(defaultResult);
+        Assertions.assertEquals(1, defaultResult.getContributingRuns().size());
+        Assertions.assertEquals("RUN_R22", defaultResult.getContributingRuns().get(0).getId());
+
+        // 2. With Release tag in uniqueness: both Release 21 and Release 22 are preserved
+        final BatchLatestExecutionsDto tagResult = dataService.getBatchLatestTestExecutionsSummary(
+            "SmokeBatch",
+            allRuns,
+            List.of("browser", "locale", "Release")
+        );
+        Assertions.assertNotNull(tagResult);
+        Assertions.assertEquals(2, tagResult.getContributingRuns().size(), "Release tag uniqueness should preserve both R21 and R22 runs");
+        Assertions.assertEquals(2, tagResult.getLatestVariations().size());
+    }
+
+    @Test
+    public void testBatchTestBaseClassesWithAndWithoutUniquenessDimensions()
+    {
+        final TestRunEntity runDev = new TestRunEntity("RUN_DEV", "SmokeBatch", "COMPLETED", "Main", "DEV", "Java", "Chrome", "10:00", 1000L);
+        runDev.setEnvironment("DEV");
+        final TestRunEntity runStg = new TestRunEntity("RUN_STG", "SmokeBatch", "COMPLETED", "Main", "STG", "Java", "Chrome", "11:00", 2000L);
+        runStg.setEnvironment("STG");
+
+        final String jsonDev = """
+            {
+              "runId": "RUN_DEV",
+              "batch": "SmokeBatch",
+              "executions": [
+                {
+                  "id": "e_dev",
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean",
+                  "durationMs": 1200
+                }
+              ]
+            }
+            """;
+        final String jsonStg = """
+            {
+              "runId": "RUN_STG",
+              "batch": "SmokeBatch",
+              "executions": [
+                {
+                  "id": "e_stg",
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean",
+                  "durationMs": 1300
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("RUN_DEV")).thenReturn(Optional.of(jsonDev));
+        Mockito.when(storageService.readRunJson("RUN_STG")).thenReturn(Optional.of(jsonStg));
+
+        final List<TestRunEntity> allRuns = List.of(runDev, runStg);
+
+        // 1. Without uniqueness dimensions: DEV and STG merge into 1 canonical variation
+        final List<TestBaseClassDto> canonicalClasses = dataService.getBatchTestBaseClasses("SmokeBatch", allRuns);
+        Assertions.assertEquals(1, canonicalClasses.size());
+        Assertions.assertEquals(1, canonicalClasses.get(0).getVariations().size());
+        Assertions.assertEquals(1, canonicalClasses.get(0).getVariationCount());
+
+        // 2. With uniqueness dimensions: DEV and STG split into 2 variations, with uniquenessProperties populated
+        final List<TestBaseClassDto> splitClasses = dataService.getBatchTestBaseClasses(
+            "SmokeBatch",
+            allRuns,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            List.of("browser", "locale", "environment")
+        );
+        Assertions.assertEquals(1, splitClasses.size());
+        Assertions.assertEquals(2, splitClasses.get(0).getVariations().size());
+        final List<TestBaseVariationEntity> vars = splitClasses.get(0).getVariations();
+        Assertions.assertTrue(vars.stream().anyMatch(v -> "DEV".equals(v.getIdentityProperty("Environment"))));
+        Assertions.assertTrue(vars.stream().anyMatch(v -> "STG".equals(v.getIdentityProperty("Environment"))));
+        Assertions.assertTrue(vars.stream().anyMatch(v -> "DEV".equals(v.getUniquenessProperty("Environment"))));
+        Assertions.assertTrue(vars.stream().anyMatch(v -> "STG".equals(v.getUniquenessProperty("Environment"))));
+    }
+
+    @Test
+    public void testBatchTestBaseClassesDefaultsToCanonicalUniquenessEvenWhenDashboardHasCustomDimensions()
+    {
+        final ReportDashboardSettingService mockSettingService = Mockito.mock(ReportDashboardSettingService.class);
+        Mockito.when(mockSettingService.getExecutionIdentityDimensions()).thenReturn(List.of("browser", "locale", "environment"));
+        Mockito.when(mockSettingService.getUniquenessDimensions()).thenReturn(List.of("browser", "locale", "environment"));
+
+        final AuraReportDataService serviceWithSettings = new AuraReportDataService(
+            runRepository,
+            batchRepository,
+            variationRepository,
+            bugRepository,
+            tagRepository,
+            storageService,
+            attachmentStorageService,
+            null,
+            mockSettingService
+        );
+
+        final TestRunEntity runDev = new TestRunEntity("RUN_DEV", "SmokeBatch", "COMPLETED", "Main", "DEV", "Java", "Chrome", "10:00", 1000L);
+        runDev.setEnvironment("DEV");
+        final TestRunEntity runStg = new TestRunEntity("RUN_STG", "SmokeBatch", "COMPLETED", "Main", "STG", "Java", "Chrome", "11:00", 2000L);
+        runStg.setEnvironment("STG");
+
+        final String jsonDev = """
+            {
+              "runId": "RUN_DEV",
+              "batch": "SmokeBatch",
+              "executions": [
+                {
+                  "id": "e_dev",
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean",
+                  "durationMs": 1200
+                }
+              ]
+            }
+            """;
+        final String jsonStg = """
+            {
+              "runId": "RUN_STG",
+              "batch": "SmokeBatch",
+              "executions": [
+                {
+                  "id": "e_stg",
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean",
+                  "durationMs": 1300
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("RUN_DEV")).thenReturn(Optional.of(jsonDev));
+        Mockito.when(storageService.readRunJson("RUN_STG")).thenReturn(Optional.of(jsonStg));
+
+        final List<TestRunEntity> allRuns = List.of(runDev, runStg);
+
+        // When uniquenessDimensions is not passed or empty: must merge DEV and STG into 1 canonical variation
+        final List<TestBaseClassDto> defaultClasses = serviceWithSettings.getBatchTestBaseClasses("SmokeBatch", allRuns);
+        Assertions.assertEquals(1, defaultClasses.size());
+        Assertions.assertEquals(1, defaultClasses.get(0).getVariations().size());
+        Assertions.assertEquals(1, defaultClasses.get(0).getVariationCount());
+
+        // When explicit uniquenessDimensions is passed: must split DEV and STG into 2 variations
+        final List<TestBaseClassDto> customClasses = serviceWithSettings.getBatchTestBaseClasses(
+            "SmokeBatch",
+            allRuns,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            List.of("browser", "locale", "environment")
+        );
+        Assertions.assertEquals(1, customClasses.size());
+        Assertions.assertEquals(2, customClasses.get(0).getVariations().size());
+        Assertions.assertEquals(2, customClasses.get(0).getVariationCount());
+    }
+
+    @Test
+    public void testBatchLatestExecutionsPreservesVariationSpecificTagsInRatioCardAndDto()
+    {
+        final TestRunEntity run = new TestRunEntity("RUN_MULTI_LOC", "MultiBatch", "COMPLETED", "Main", "STG", "Java", "Chrome", "10:00", 1000L);
+        final TestRunTagEntity tagEng = new TestRunTagEntity("RUN_MULTI_LOC", "locale", "ENG");
+        final TestRunTagEntity tagRus = new TestRunTagEntity("RUN_MULTI_LOC", "locale", "RUS");
+        Mockito.when(tagRepository.findByRunIdIn(Mockito.anyList())).thenReturn(List.of(tagEng, tagRus));
+
+        final String runJson = """
+            {
+              "runId": "RUN_MULTI_LOC",
+              "batch": "MultiBatch",
+              "executions": [
+                {
+                  "id": "exec_en",
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "en",
+                  "location": "Default",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean",
+                  "durationMs": 1200,
+                  "tags": {
+                    "locale": ["ENG"]
+                  }
+                },
+                {
+                  "id": "exec_ru",
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "ru",
+                  "location": "Default",
+                  "browser": "Chrome",
+                  "area": "Browsing (default)",
+                  "status": "passed-clean",
+                  "durationMs": 1300,
+                  "tags": {
+                    "locale": ["RUS"]
+                  }
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("RUN_MULTI_LOC")).thenReturn(Optional.of(runJson));
+
+        final BatchLatestExecutionsDto result = dataService.getBatchLatestTestExecutionsSummary("MultiBatch", List.of(run), (List<String>) null);
+        Assertions.assertNotNull(result);
+
+        final Map<String, List<DistributionRatioDto>> ratios = result.getTagRatiosByType();
+        Assertions.assertNotNull(ratios);
+        final List<DistributionRatioDto> localeRatios = ratios.get("locale");
+        Assertions.assertNotNull(localeRatios, "locale ratio card should exist");
+        Assertions.assertEquals(2, localeRatios.size(), "Should contain 2 distinct locale entries (ENG and RUS)");
+
+        final DistributionRatioDto engRatio = localeRatios.stream()
+            .filter(r -> "ENG".equals(r.getName()))
+            .findFirst()
+            .orElse(null);
+        final DistributionRatioDto rusRatio = localeRatios.stream()
+            .filter(r -> "RUS".equals(r.getName()))
+            .findFirst()
+            .orElse(null);
+
+        Assertions.assertNotNull(engRatio, "ENG should be in ratio card");
+        Assertions.assertEquals(1, engRatio.getCount());
+        Assertions.assertNotNull(rusRatio, "RUS should be in ratio card");
+        Assertions.assertEquals(1, rusRatio.getCount());
+
+        final List<BatchLatestVariationDto> variations = result.getLatestVariations();
+        Assertions.assertEquals(2, variations.size());
+
+        final BatchLatestVariationDto enVar = variations.stream()
+            .filter(v -> "ENG".equals(v.getTagValue("locale")))
+            .findFirst()
+            .orElse(null);
+        final BatchLatestVariationDto ruVar = variations.stream()
+            .filter(v -> "RUS".equals(v.getTagValue("locale")))
+            .findFirst()
+            .orElse(null);
+
+        Assertions.assertNotNull(enVar);
+        Assertions.assertEquals("ENG", enVar.getTags().get("locale"));
+
+        Assertions.assertNotNull(ruVar);
+        Assertions.assertEquals("RUS", ruVar.getTags().get("locale"));
+    }
+
+    @Test
+    public void testBatchSuiteEvolutionCalculation()
+    {
+        final TestRunEntity run1 = new TestRunEntity("RUN_1", "Batch Evo", "COMPLETED", "Main", "QA", "Java", "Chrome", "10:00", 1000L);
+        final TestRunEntity run2 = new TestRunEntity("RUN_2", "Batch Evo", "COMPLETED", "Main", "QA", "Java", "Chrome", "11:00", 2000L);
+        final TestRunEntity run3 = new TestRunEntity("RUN_3", "Batch Evo", "COMPLETED", "Main", "QA", "Java", "Chrome", "12:00", 3000L);
+
+        final String jsonRun1 = """
+            {
+              "runId": "RUN_1",
+              "executions": [
+                {
+                  "testClass": "TestA",
+                  "testMethod": "m1",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                },
+                {
+                  "testClass": "TestB",
+                  "testMethod": "m2",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "failed-unknown"
+                }
+              ]
+            }
+            """;
+
+        final String jsonRun2 = """
+            {
+              "runId": "RUN_2",
+              "executions": [
+                {
+                  "testClass": "TestB",
+                  "testMethod": "m2",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                },
+                {
+                  "testClass": "TestC",
+                  "testMethod": "m3",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+
+        final String jsonRun3 = """
+            {
+              "runId": "RUN_3",
+              "executions": [
+                {
+                  "testClass": "TestD",
+                  "testMethod": "m4",
+                  "title": "Default",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "failed-unknown"
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("RUN_1")).thenReturn(Optional.of(jsonRun1));
+        Mockito.when(storageService.readRunJson("RUN_2")).thenReturn(Optional.of(jsonRun2));
+        Mockito.when(storageService.readRunJson("RUN_3")).thenReturn(Optional.of(jsonRun3));
+
+        final BatchLatestExecutionsDto result = dataService.getBatchLatestTestExecutionsSummary("Batch Evo", List.of(run3, run2, run1));
+        Assertions.assertNotNull(result);
+
+        final BatchSuiteEvolutionDto evolution = result.getSuiteEvolution();
+        Assertions.assertNotNull(evolution);
+        Assertions.assertEquals(3, evolution.getPoints().size());
+        Assertions.assertEquals(2, evolution.getInitialTestsCount());
+        Assertions.assertEquals(4, evolution.getFinalTestsCount());
+        Assertions.assertEquals(2, evolution.getNetTestsGrowth());
+        Assertions.assertEquals(50.0, evolution.getInitialPassRate(), 0.01);
+        Assertions.assertEquals(75.0, evolution.getFinalPassRate(), 0.01);
+        Assertions.assertEquals(25.0, evolution.getPassRateDelta(), 0.01);
+        Assertions.assertTrue(evolution.isPassRatePositive());
+        Assertions.assertEquals("+2 tests", evolution.getGrowthLabel());
+
+        final BatchSuiteEvolutionPointDto p0 = evolution.getPoints().get(0);
+        Assertions.assertEquals("RUN_1", p0.getRunId());
+        Assertions.assertEquals(2, p0.getTotalTestsKnown());
+        Assertions.assertEquals(2, p0.getNewTestsCount());
+        Assertions.assertEquals(1, p0.getPassCleanCount());
+        Assertions.assertEquals(1, p0.getUnknownCleanCount());
+        Assertions.assertEquals(50.0, p0.getPassRate(), 0.01);
+
+        final BatchSuiteEvolutionPointDto p1 = evolution.getPoints().get(1);
+        Assertions.assertEquals("RUN_2", p1.getRunId());
+        Assertions.assertEquals(3, p1.getTotalTestsKnown());
+        Assertions.assertEquals(1, p1.getNewTestsCount());
+        Assertions.assertEquals(3, p1.getPassCleanCount());
+        Assertions.assertEquals(0, p1.getUnknownCleanCount());
+        Assertions.assertEquals(100.0, p1.getPassRate(), 0.01);
+
+        final BatchSuiteEvolutionPointDto p2 = evolution.getPoints().get(2);
+        Assertions.assertEquals("RUN_3", p2.getRunId());
+        Assertions.assertEquals(4, p2.getTotalTestsKnown());
+        Assertions.assertEquals(1, p2.getNewTestsCount());
+        Assertions.assertEquals(3, p2.getPassCleanCount());
+        Assertions.assertEquals(1, p2.getUnknownCleanCount());
+        Assertions.assertEquals(75.0, p2.getPassRate(), 0.01);
+    }
+
+    @Test
+    public void testHistoricalTimeTravelRewind()
+    {
+        final TestRunEntity run1 = new TestRunEntity("RUN_1", "Batch Evo", "COMPLETED", "Main", "STG", "Java", "Chrome", "2026-10-26 10:00", 1000L);
+        final TestRunEntity run2 = new TestRunEntity("RUN_2", "Batch Evo", "COMPLETED", "Main", "STG", "Java", "Chrome", "2026-10-27 10:00", 2000L);
+        final TestRunEntity run3 = new TestRunEntity("RUN_3", "Batch Evo", "COMPLETED", "Main", "STG", "Java", "Chrome", "2026-10-28 10:00", 3000L);
+
+        final String jsonRun1 = """
+            {
+              "runId": "RUN_1",
+              "batch": "Batch Evo",
+              "executions": [
+                {
+                  "id": "e1_1",
+                  "testClass": "com.xceptance.neodymium.test.LoginTest",
+                  "testMethod": "testLogin",
+                  "title": "US",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                },
+                {
+                  "id": "e1_2",
+                  "testClass": "com.xceptance.neodymium.test.CheckoutTest",
+                  "testMethod": "testCheckout",
+                  "title": "US",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "failed-unknown"
+                }
+              ]
+            }
+            """;
+
+        final String jsonRun2 = """
+            {
+              "runId": "RUN_2",
+              "batch": "Batch Evo",
+              "executions": [
+                {
+                  "id": "e2_1",
+                  "testClass": "com.xceptance.neodymium.test.CheckoutTest",
+                  "testMethod": "testCheckout",
+                  "title": "US",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                },
+                {
+                  "id": "e2_2",
+                  "testClass": "com.xceptance.neodymium.test.SearchTest",
+                  "testMethod": "testSearch",
+                  "title": "US",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "passed-clean"
+                }
+              ]
+            }
+            """;
+
+        final String jsonRun3 = """
+            {
+              "runId": "RUN_3",
+              "batch": "Batch Evo",
+              "executions": [
+                {
+                  "id": "e3_1",
+                  "testClass": "com.xceptance.neodymium.test.CartTest",
+                  "testMethod": "testAddToCart",
+                  "title": "US",
+                  "location": "US",
+                  "browser": "Chrome",
+                  "status": "failed-unknown"
+                }
+              ]
+            }
+            """;
+
+        Mockito.when(storageService.readRunJson("RUN_1")).thenReturn(Optional.of(jsonRun1));
+        Mockito.when(storageService.readRunJson("RUN_2")).thenReturn(Optional.of(jsonRun2));
+        Mockito.when(storageService.readRunJson("RUN_3")).thenReturn(Optional.of(jsonRun3));
+
+        final BatchLatestExecutionsDto rewindResult = dataService.getBatchLatestTestExecutionsSummary(
+            "Batch Evo",
+            List.of(run3, run2, run1),
+            Collections.emptySet(),
+            null,
+            null,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            null,
+            "RUN_2"
+        );
+
+        Assertions.assertNotNull(rewindResult);
+        Assertions.assertTrue(rewindResult.isHistoricalSnapshot());
+        Assertions.assertEquals("RUN_2", rewindResult.getAsOfRunId());
+        Assertions.assertEquals(run2.getTimestampLabel(), rewindResult.getAsOfTimestampLabel());
+
+        final BatchSummaryDto summary = rewindResult.getBatchSummary();
+        Assertions.assertNotNull(summary);
+        Assertions.assertEquals(3, summary.getLatestTotalTests(), "At RUN_2 milestone, exactly 3 tests were known");
+        Assertions.assertEquals(3, summary.getLatestPassedCount(), "At RUN_2 milestone, all 3 tests passed");
+        Assertions.assertEquals(0, summary.getLatestUnknownCount(), "At RUN_2 milestone, zero unknown failures existed");
+        Assertions.assertEquals("100% Pass", summary.getLatestPassRate());
+
+        final List<BatchLatestVariationDto> variations = rewindResult.getLatestVariations();
+        Assertions.assertEquals(3, variations.size(), "Only tests up to RUN_2 exist in historical snapshot");
+        Assertions.assertTrue(variations.stream().noneMatch(v -> v.getKey().contains("CartTest")), "CartTest only ran in RUN_3 and must not appear in RUN_2 snapshot");
+
+        final BatchSuiteEvolutionDto evolution = rewindResult.getSuiteEvolution();
+        Assertions.assertNotNull(evolution);
+        Assertions.assertEquals(3, evolution.getPoints().size(), "Full evolution curve must remain visible");
+        Assertions.assertEquals("RUN_2", evolution.getActiveRunId(), "Active run on evolution curve must be RUN_2");
+        Assertions.assertTrue(evolution.isHistoricalActive(), "Evolution should report historical active mode");
+        Assertions.assertEquals(3, evolution.getActivePoint().getTotalTestsKnown());
+    }
 }
+
 
 

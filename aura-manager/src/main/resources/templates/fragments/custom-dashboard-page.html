@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<!--
+  GNU Affero General Public License (AGPLv3)
+  Copyright (c) 2026 Xceptance Software Technologies GmbH
+-->
+<body>
+
+<!-- CUSTOM DASHBOARD PAGE FRAGMENT -->
+<div th:fragment="customDashboardPage"
+     class="d-flex flex-column gap-4"
+     id="pageCustomDashboard"
+     th:attr="data-page-id=${customPage != null ? customPage.id : ''}, data-page-name=${customPage != null ? customPage.name : ''}, data-prohibited-group-by=${prohibitedGroupDimensionsCsv != null ? prohibitedGroupDimensionsCsv : ''}">
+
+    <!-- PAGE HEADER TOOLBAR -->
+    <div class="test-filters-toolbar d-flex align-items-center justify-content-between flex-wrap gap-2" id="customDashboardPageToolbar">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <a th:if="${isSubPage == true and parentDashboard != null}"
+               class="btn-secondary"
+               style="padding: 0.35rem 0.75rem; font-size: 0.8rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem;"
+               th:href="@{'/dashboard-pages/' + ${parentDashboard.id}}"
+               th:attr="hx-get=@{'/dashboard-pages/' + ${parentDashboard.id}}"
+               hx-target="#mainViewContainer"
+               hx-swap="innerHTML"
+               hx-push-url="true"
+               th:title="${'Back to ' + parentDashboard.name}">
+                <span class="material-symbols-outlined" style="font-size: 0.9rem;">arrow_back</span>
+                <span th:text="${'Back to ' + parentDashboard.name}">Back to Group Dashboard</span>
+            </a>
+            <a th:if="${isSubPage != true}"
+               class="btn-secondary"
+               style="padding: 0.35rem 0.75rem; font-size: 0.8rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem;"
+               href="/"
+               th:attr="hx-get='/'"
+               hx-target="#mainViewContainer"
+               hx-swap="innerHTML"
+               hx-push-url="true"
+               title="Back to Overview">
+                <span class="material-symbols-outlined" style="font-size: 0.9rem;">arrow_back</span>
+                <span>Back to Overview</span>
+            </a>
+
+            <div class="d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined text-accent" style="font-size: 1.25rem;"
+                      th:text="${isGroupDashboard == true ? 'grid_view' : (isSubPage == true ? 'subdirectory_arrow_right' : 'space_dashboard')}">space_dashboard</span>
+                <h1 class="page-title m-0" style="font-size: 1.15rem; font-weight: 700; color: var(--text-main);" th:text="${customPage != null ? customPage.name : 'Custom Dashboard'}">Custom Dashboard</h1>
+                <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.15rem 0.5rem;"
+                      th:text="${dashboardWidgets != null ? #lists.size(dashboardWidgets) + ' Active' : '0 Active'}">0 Active</span>
+                <span class="badge-status d-inline-flex align-items-center gap-1"
+                      th:if="${isGroupDashboard == true}"
+                      style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.15rem 0.5rem;">
+                    <span class="material-symbols-outlined" style="font-size: 0.8rem; color: var(--accent);">layers</span>
+                    <span th:text="${'Group: ' + (customPage.groupType != null ? customPage.groupType : 'batch')}">Group: batch</span>
+                </span>
+                <span class="badge-status d-inline-flex align-items-center gap-1"
+                      th:if="${isGroupDashboard == true and groupCardScope != null}"
+                      style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.15rem 0.5rem;"
+                      title="Evaluation mode for group cards">
+                    <span class="material-symbols-outlined" style="font-size: 0.8rem; color: var(--accent);">pie_chart</span>
+                    <span th:text="${groupCardScope.name() == 'LAST_RUN' ? 'Scope: Last Run' : 'Scope: Latest Test Status'}">Scope: Latest Test Status</span>
+                </span>
+                <span class="badge-status d-inline-flex align-items-center gap-1"
+                      th:if="${isSubPage == true}"
+                      style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.15rem 0.5rem;">
+                    <span class="material-symbols-outlined" style="font-size: 0.8rem; color: var(--accent);">sell</span>
+                    <span th:text="${customPage.groupType + ' = ' + customPage.groupValue}">group = value</span>
+                </span>
+                <span class="badge-status d-inline-flex align-items-center gap-1"
+                      th:if="${customPage != null and customPage.executionIdentityDimensions != null and !customPage.executionIdentityDimensions.isEmpty()}"
+                      style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.15rem 0.5rem;"
+                      title="Default Execution Identity for this dashboard">
+                    <span class="material-symbols-outlined" style="font-size: 0.8rem; color: var(--accent);">fingerprint</span>
+                    <span th:text="${'Identity: ' + #strings.listJoin(customPage.executionIdentityDimensions, ', ')}">Identity: browser</span>
+                    <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.75rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
+                </span>
+                <span class="badge-status d-inline-flex align-items-center gap-1"
+                      th:if="${customPage != null and customPage.hasRunFilters()}"
+                      style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.15rem 0.5rem;"
+                      title="Default Runs Filter for this dashboard">
+                    <span class="material-symbols-outlined" style="font-size: 0.8rem; color: var(--accent);">filter_alt</span>
+                    <span th:text="${customPage.runFilters.limit != null ? 'Runs: Last ' + customPage.runFilters.limit : 'Filtered Runs'}">Filtered Runs</span>
+                </span>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+            <!-- Add Widget button (header toolbar) -->
+            <button type="button"
+                    class="btn-primary btn-compact d-inline-flex align-items-center gap-1"
+                    id="btnAddWidgetCustomPage"
+                    onclick="openWidgetConfiguratorModal()"
+                    title="Add a custom widget to this dashboard">
+                <span class="material-symbols-outlined" style="font-size: 0.9rem;">add_chart</span>
+                <span>Add Widget</span>
+            </button>
+
+            <!-- Copy Widgets button (header toolbar) -->
+            <button type="button"
+                    class="btn-secondary btn-compact d-inline-flex align-items-center gap-1"
+                    id="btnCopyWidgetsCustomPage"
+                    onclick="openCopyWidgetsModal()"
+                    title="Copy widgets from another dashboard">
+                <span class="material-symbols-outlined" style="font-size: 0.9rem;">content_copy</span>
+                <span>Copy Widgets</span>
+            </button>
+
+            <!-- Convert to Group Button -->
+            <button type="button"
+                    class="btn-secondary btn-compact d-inline-flex align-items-center gap-1"
+                    id="btnConvertToGroupDashboard"
+                    th:if="${customPage != null and !customPage.isGroupParent}"
+                    th:attr="data-prohibited-group-by=${prohibitedGroupDimensionsCsv != null ? prohibitedGroupDimensionsCsv : ''}"
+                    onclick="openConvertToGroupModal()"
+                    title="Convert this dashboard into a group dashboard with sub-groupings">
+                <span class="material-symbols-outlined" style="font-size: 0.9rem;">grid_view</span>
+                <span>Convert to Group</span>
+            </button>
+
+            <!-- Delete Page Button -->
+            <button type="button"
+                    class="btn-secondary btn-compact d-inline-flex align-items-center gap-1"
+                    id="btnDeleteCustomPage"
+                    th:if="${customPage != null}"
+                    th:attr="onclick='deleteCustomPage(\'' + ${customPage.id} + '\', \'' + ${#strings.escapeJavaScript(customPage.name)} + '\', event)'"
+                    style="color: var(--status-fail, #ef4444); border-color: rgba(239, 68, 68, 0.3);"
+                    title="Delete this dashboard page">
+                <span class="material-symbols-outlined" style="font-size: 0.9rem;">delete</span>
+                <span>Delete Page</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- GROUP OVERVIEW CARDS (DISPLAYED ON MAIN GROUP DASHBOARD) -->
+    <div th:if="${isGroupDashboard == true or (customPage != null and customPage.isGroupParent)}"
+         class="d-flex flex-column gap-3" id="groupOverviewCardsContainer">
+        
+        <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined text-accent" style="font-size: 1.15rem;">grid_view</span>
+                <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);"
+                      th:text="${'Groupings: ' + (groupType != null ? groupType.toUpperCase() : 'BATCH')}">Groupings</span>
+                <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.15rem 0.5rem;"
+                      th:text="${groupBatches != null ? #lists.size(groupBatches) + ' Groups' : '0 Groups'}">0 Groups</span>
+                <span class="badge-status d-inline-flex align-items-center gap-1"
+                      style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.15rem 0.5rem;"
+                      th:title="${groupCardScope != null and groupCardScope.name() == 'LAST_RUN' ? 'Evaluates test results from the single most recent execution run' : 'Evaluates latest known test status across history'}">
+                    <span class="material-symbols-outlined" style="font-size: 0.8rem; color: var(--accent);">pie_chart</span>
+                    <span th:text="${groupCardScope != null and groupCardScope.name() == 'LAST_RUN' ? 'Scope: Last Run' : 'Scope: Latest Test Status'}">Scope: Latest Test Status</span>
+                </span>
+            </div>
+            <div style="font-size: 0.78rem; color: var(--text-muted);">
+                Click any group card to open its dedicated sub-dashboard
+            </div>
+        </div>
+
+        <div class="batch-grid" th:if="${groupBatches != null and not #lists.isEmpty(groupBatches)}">
+            <div th:each="b : ${groupBatches}" class="batch-card"
+                 style="cursor: pointer;"
+                 onclick="if (!event.target.closest('a, button, input, select')) { const l = this.querySelector('a.batch-card-title'); if (l) l.click(); }"
+                 th:data-env="${b.environment}"
+                 th:data-locales="${#strings.arrayJoin(b.locales, ',')}"
+                 th:data-browsers="${#strings.arrayJoin(b.browsers, ',')}">
+                <div class="batch-card-header">
+                    <a class="batch-card-title batch-history-link"
+                       th:href="${groupDashboardUrls != null and groupDashboardUrls.containsKey(b.name) ? groupDashboardUrls.get(b.name) : '#'}"
+                       th:attr="hx-get=${groupDashboardUrls != null and groupDashboardUrls.containsKey(b.name) ? groupDashboardUrls.get(b.name) : '#'}"
+                       hx-target="#mainViewContainer"
+                       hx-swap="innerHTML"
+                       hx-push-url="true"
+                       th:title="${'Open ' + b.name + ' Dashboard'}">
+                        <span class="material-symbols-outlined text-accent"
+                              th:text="${groupType == 'environment' ? 'dns' : (groupType == 'locale' ? 'public' : (groupType == 'browser' ? 'web' : (groupType == 'area' ? 'category' : 'grid_view')))}">grid_view</span>
+                        <span th:text="${b.name}">Group Name</span>
+                    </a>
+                    <div class="batch-card-header-actions">
+                        <a class="batch-history-action-link"
+                           th:href="${groupDashboardUrls != null and groupDashboardUrls.containsKey(b.name) ? groupDashboardUrls.get(b.name) : '#'}"
+                           th:attr="hx-get=${groupDashboardUrls != null and groupDashboardUrls.containsKey(b.name) ? groupDashboardUrls.get(b.name) : '#'}"
+                           hx-target="#mainViewContainer"
+                           hx-swap="innerHTML"
+                           hx-push-url="true"
+                           title="Open Dashboard">
+                            <span>Dashboard</span>
+                            <span class="material-symbols-outlined" style="font-size: 0.85rem;">north_east</span>
+                        </a>
+                    </div>
+                </div>
+
+                <!-- LAST STATUS PIE CHART SECTION -->
+                <div class="batch-last-run-section" th:if="${b.hasLatestRun()}">
+                    <div class="last-run-header">
+                        <div class="last-run-header-top">
+                            <span class="last-run-header-title">
+                                <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">pie_chart</span>
+                                <span th:text="${groupCardScope != null and groupCardScope.name() == 'LAST_RUN' ? 'Last Run Status' : 'Latest Test Status'}">Latest Test Status</span>
+                            </span>
+                            <div class="last-run-header-time" th:if="${b.lastExecuted != null and b.lastExecuted != ''}">
+                                <span class="material-symbols-outlined" style="font-size: 0.85rem;">schedule</span>
+                                <span th:text="${b.lastExecuted}">Today 14:22</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="last-run-body">
+                        <div class="pie-chart-wrapper-batch">
+                            <svg width="100%" height="100%" viewBox="0 0 36 36">
+                                <defs>
+                                    <pattern th:id="'sparkle-pat-group-' + ${b.id}" width="4" height="4" patternUnits="userSpaceOnUse">
+                                        <path d="M2,0.5 L2.3,1.7 L3.5,2 L2.3,2.3 L2,3.5 L1.7,2.3 L0.5,2 L1.7,1.7 Z" fill="#ffffff" opacity="0.95"/>
+                                        <circle cx="0.8" cy="0.8" r="0.25" fill="#fef08a" opacity="0.85"/>
+                                    </pattern>
+                                    <pattern th:id="'ai-pat-group-' + ${b.id}" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                                        <line x1="0" y1="0" x2="0" y2="4" stroke="rgba(255,255,255,0.75)" stroke-width="1.2" />
+                                    </pattern>
+                                </defs>
+                                <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--border)" stroke-width="4.5"/>
+                                <!-- Clean sub-arcs -->
+                                <circle th:if="${b.latestPassCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass)" stroke-width="5" th:attr="stroke-dasharray=${b.passCleanDashArray},stroke-dashoffset=${b.passCleanDashOffset}"/>
+                                <circle th:if="${b.latestFixedCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed)" stroke-width="5" th:attr="stroke-dasharray=${b.fixedCleanDashArray},stroke-dashoffset=${b.fixedCleanDashOffset}"/>
+                                <circle th:if="${b.latestKnownCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-fail)" stroke-width="5" th:attr="stroke-dasharray=${b.knownCleanDashArray},stroke-dashoffset=${b.knownCleanDashOffset}"/>
+                                <circle th:if="${b.latestUnknownCleanCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-fail)" stroke-width="5" th:attr="stroke-dasharray=${b.unknownCleanDashArray},stroke-dashoffset=${b.unknownCleanDashOffset}"/>
+                                <circle th:if="${b.latestIgnoredCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-ignored)" stroke-width="5" th:attr="stroke-dasharray=${b.ignoredDashArray},stroke-dashoffset=${b.ignoredDashOffset}"/>
+
+                                <!-- Healed sub-arcs -->
+                                <circle th:if="${b.latestPassHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass-healed, #34d399)" stroke-width="5" th:attr="stroke-dasharray=${b.passHealedDashArray},stroke-dashoffset=${b.passHealedDashOffset}"/>
+                                <circle th:if="${b.latestPassHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-group-' + ${b.id} + ')',stroke-dasharray=${b.passHealedDashArray},stroke-dashoffset=${b.passHealedDashOffset}" stroke-width="5"/>
+                                <circle th:if="${b.latestFixedHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed-healed, #60a5fa)" stroke-width="5" th:attr="stroke-dasharray=${b.fixedHealedDashArray},stroke-dashoffset=${b.fixedHealedDashOffset}"/>
+                                <circle th:if="${b.latestFixedHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-group-' + ${b.id} + ')',stroke-dasharray=${b.fixedHealedDashArray},stroke-dashoffset=${b.fixedHealedDashOffset}" stroke-width="5"/>
+                                <circle th:if="${b.latestKnownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-healed, #fb923c)" stroke-width="5" th:attr="stroke-dasharray=${b.knownHealedDashArray},stroke-dashoffset=${b.knownHealedDashOffset}"/>
+                                <circle th:if="${b.latestKnownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-group-' + ${b.id} + ')',stroke-dasharray=${b.knownHealedDashArray},stroke-dashoffset=${b.knownHealedDashOffset}" stroke-width="5"/>
+                                <circle th:if="${b.latestUnknownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-healed, #f87171)" stroke-width="5" th:attr="stroke-dasharray=${b.unknownHealedDashArray},stroke-dashoffset=${b.unknownHealedDashOffset}"/>
+                                <circle th:if="${b.latestUnknownHealedCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#sparkle-pat-group-' + ${b.id} + ')',stroke-dasharray=${b.unknownHealedDashArray},stroke-dashoffset=${b.unknownHealedDashOffset}" stroke-width="5"/>
+
+                                <!-- AI sub-arcs -->
+                                <circle th:if="${b.latestPassAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-pass)" stroke-width="5" th:attr="stroke-dasharray=${b.passAiDashArray},stroke-dashoffset=${b.passAiDashOffset}"/>
+                                <circle th:if="${b.latestPassAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-group-' + ${b.id} + ')',stroke-dasharray=${b.passAiDashArray},stroke-dashoffset=${b.passAiDashOffset}" stroke-width="5"/>
+                                <circle th:if="${b.latestFixedAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-fixed)" stroke-width="5" th:attr="stroke-dasharray=${b.fixedAiDashArray},stroke-dashoffset=${b.fixedAiDashOffset}"/>
+                                <circle th:if="${b.latestFixedAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-group-' + ${b.id} + ')',stroke-dasharray=${b.fixedAiDashArray},stroke-dashoffset=${b.fixedAiDashOffset}" stroke-width="5"/>
+                                <circle th:if="${b.latestKnownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-known-fail)" stroke-width="5" th:attr="stroke-dasharray=${b.knownAiDashArray},stroke-dashoffset=${b.knownAiDashOffset}"/>
+                                <circle th:if="${b.latestKnownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-group-' + ${b.id} + ')',stroke-dasharray=${b.knownAiDashArray},stroke-dashoffset=${b.knownAiDashOffset}" stroke-width="5"/>
+                                <circle th:if="${b.latestUnknownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" stroke="var(--status-unknown-fail)" stroke-width="5" th:attr="stroke-dasharray=${b.unknownAiDashArray},stroke-dashoffset=${b.unknownAiDashOffset}"/>
+                                <circle th:if="${b.latestUnknownAiCount > 0}" cx="18" cy="18" r="15.915" fill="none" th:attr="stroke='url(#ai-pat-group-' + ${b.id} + ')',stroke-dasharray=${b.unknownAiDashArray},stroke-dashoffset=${b.unknownAiDashOffset}" stroke-width="5"/>
+                            </svg>
+                            <div class="pie-center-label">
+                                <span class="pie-center-rate" th:text="${b.latestRunPassRateInt}">100%</span>
+                                <span class="pie-center-sub">PASS</span>
+                            </div>
+                        </div>
+                        <div class="pie-breakdown-list-sm">
+                            <div class="pie-breakdown-item" th:if="${b.latestPassedCount > 0}">
+                                <div class="pie-breakdown-main-row">
+                                    <div class="label"><div class="dot" style="background: var(--status-pass);"></div> Passed</div>
+                                    <span class="val" style="color: var(--status-pass);" th:text="${b.latestPassedCount}">0</span>
+                                </div>
+                                <div class="pie-breakdown-sub-row" th:if="${b.latestPassHealedCount > 0 or b.latestPassAiCount > 0}">
+                                    <span th:if="${b.latestPassHealedCount > 0}" class="badge-healed-inline badge-pass-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${b.latestPassHealedCount} + ' healed'">✨ 1 healed</span>
+                                    <span th:if="${b.latestPassAiCount > 0}" class="badge-ai-inline badge-pass-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${b.latestPassAiCount} + ' AI'">1 AI</span>
+                                </div>
+                            </div>
+                            <div class="pie-breakdown-item" th:if="${b.latestFixedCount > 0}">
+                                <div class="pie-breakdown-main-row">
+                                    <div class="label"><div class="dot" style="background: var(--status-fixed);"></div> Fixed</div>
+                                    <span class="val" style="color: var(--status-fixed);" th:text="${b.latestFixedCount}">0</span>
+                                </div>
+                                <div class="pie-breakdown-sub-row" th:if="${b.latestFixedHealedCount > 0 or b.latestFixedAiCount > 0}">
+                                    <span th:if="${b.latestFixedHealedCount > 0}" class="badge-healed-inline badge-fixed-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${b.latestFixedHealedCount} + ' healed'">✨ 1 healed</span>
+                                    <span th:if="${b.latestFixedAiCount > 0}" class="badge-ai-inline badge-fixed-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${b.latestFixedAiCount} + ' AI'">1 AI</span>
+                                </div>
+                            </div>
+                            <div class="pie-breakdown-item" th:if="${b.latestKnownCount > 0}">
+                                <div class="pie-breakdown-main-row">
+                                    <div class="label"><div class="dot" style="background: var(--status-known-fail);"></div> Known Fail</div>
+                                    <span class="val" style="color: var(--status-known-fail);" th:text="${b.latestKnownCount}">0</span>
+                                </div>
+                                <div class="pie-breakdown-sub-row" th:if="${b.latestKnownHealedCount > 0 or b.latestKnownAiCount > 0}">
+                                    <span th:if="${b.latestKnownHealedCount > 0}" class="badge-healed-inline badge-known-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${b.latestKnownHealedCount} + ' healed'">✨ 1 healed</span>
+                                    <span th:if="${b.latestKnownAiCount > 0}" class="badge-ai-inline badge-known-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${b.latestKnownAiCount} + ' AI'">1 AI</span>
+                                </div>
+                            </div>
+                            <div class="pie-breakdown-item" th:if="${b.latestUnknownCount > 0}">
+                                <div class="pie-breakdown-main-row">
+                                    <div class="label"><div class="dot" style="background: var(--status-unknown-fail);"></div> Unknown Fail</div>
+                                    <span class="val" style="color: var(--status-unknown-fail);" th:text="${b.latestUnknownCount}">0</span>
+                                </div>
+                                <div class="pie-breakdown-sub-row" th:if="${b.latestUnknownHealedCount > 0 or b.latestUnknownAiCount > 0}">
+                                    <span th:if="${b.latestUnknownHealedCount > 0}" class="badge-healed-inline badge-unknown-healed" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="'✨ ' + ${b.latestUnknownHealedCount} + ' healed'">✨ 1 healed</span>
+                                    <span th:if="${b.latestUnknownAiCount > 0}" class="badge-ai-inline badge-unknown-ai" style="font-size: 0.65rem; padding: 0.05rem 0.3rem;" th:text="${b.latestUnknownAiCount} + ' AI'">1 AI</span>
+                                </div>
+                            </div>
+                            <div class="pie-breakdown-item" th:if="${b.latestIgnoredCount > 0}">
+                                <div class="pie-breakdown-main-row">
+                                    <div class="label"><div class="dot" style="background: var(--status-ignored);"></div> Ignored</div>
+                                    <span class="val" style="color: var(--status-ignored);" th:text="${b.latestIgnoredCount}">0</span>
+                                </div>
+                            </div>
+                            <div class="pie-breakdown-total-tile" th:if="${b.latestTotalTests > 0}">
+                                <span class="total-label">Total Tests</span>
+                                <span class="total-val" th:text="${b.latestTotalTests}">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- COMPACT METADATA -->
+                <div class="batch-meta-compact">
+                    <div class="batch-meta-tags">
+                        <span class="batch-meta-tag"><span class="material-symbols-outlined text-accent">dns</span> <span th:text="${b.environment}">Default</span></span>
+                        <span class="batch-meta-tag" th:if="${not #lists.isEmpty(b.locales)}"><span class="material-symbols-outlined text-accent">public</span> <span th:text="${#strings.arrayJoin(b.locales, ', ')}">Default</span></span>
+                        <span class="batch-meta-tag" th:if="${not #lists.isEmpty(b.browsers)}"><span class="material-symbols-outlined text-accent">web</span> <span th:text="${#strings.arrayJoin(b.browsers, ', ')}">Chrome</span></span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- EMPTY GROUPINGS STATE -->
+        <div th:if="${groupBatches == null or #lists.isEmpty(groupBatches)}" class="text-center py-4" style="color: var(--text-muted); background: var(--bg-card); border-radius: var(--radius-lg); border: 1px dashed var(--border); padding: 2rem 1rem;">
+            <span class="material-symbols-outlined mb-2" style="font-size: 2.2rem; color: var(--text-muted);">layers_clear</span>
+            <h5 style="font-weight: 600; color: var(--text-main); margin-bottom: 0.5rem;">No Groupings Found</h5>
+            <p style="max-width: 480px; margin: 0 auto; font-size: 0.85rem;">
+                No test executions or variations match this grouping dimension.
+            </p>
+        </div>
+    </div>
+
+    <!-- WIDGETS SECTION (PERMITS ADDING WIDGETS ON BOTH MAIN AND SUB GROUP DASHBOARDS) -->
+    <div class="d-flex flex-column gap-3" id="customPageWidgetsContainer">
+        <!-- Section title when widgets exist or when on group dashboard -->
+        <div th:if="${isGroupDashboard == true}" class="d-flex align-items-center justify-content-between pt-3 border-top">
+            <div class="d-flex align-items-center gap-2">
+                <span class="material-symbols-outlined text-accent" style="font-size: 1.15rem;">widgets</span>
+                <h3 class="m-0" style="font-size: 1rem; font-weight: 700; color: var(--text-main);">Telemetry Widgets</h3>
+                <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.15rem 0.5rem;"
+                      th:text="${dashboardWidgets != null ? #lists.size(dashboardWidgets) + ' Active' : '0 Active'}">0 Active</span>
+            </div>
+            <button type="button"
+                    class="btn-primary btn-compact d-inline-flex align-items-center gap-1"
+                    onclick="openWidgetConfiguratorModal()"
+                    title="Add a custom widget to this dashboard">
+                <span class="material-symbols-outlined" style="font-size: 0.9rem;">add_chart</span>
+                <span>Add Widget</span>
+            </button>
+        </div>
+
+        <!-- EMPTY STATE FOR MAIN GROUP DASHBOARD -->
+        <div th:if="${isGroupDashboard == true and (dashboardWidgets == null or #lists.isEmpty(dashboardWidgets))}"
+             class="p-4 text-center rounded"
+             style="background: var(--bg-card); border: 1px dashed var(--border); margin-top: 0.25rem;">
+            <p style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+                No telemetry widgets added to this main group dashboard yet. You can add widgets to visualize aggregate trends across all groups.
+            </p>
+            <div class="d-flex align-items-center justify-content-center gap-2">
+                <button type="button"
+                        class="btn-secondary btn-compact d-inline-flex align-items-center gap-1"
+                        onclick="openWidgetConfiguratorModal()">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">add_chart</span>
+                    <span>Add First Widget</span>
+                </button>
+                <button type="button"
+                        class="btn-secondary btn-compact d-inline-flex align-items-center gap-1"
+                        id="btnGroupCopyWidgets"
+                        onclick="openCopyWidgetsModal()"
+                        title="Copy widgets from another dashboard">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem;">content_copy</span>
+                    <span>Copy Widgets</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- EMPTY STATE FOR NON-GROUP DASHBOARDS (SUB-PAGES OR STANDARD PAGES) -->
+        <div th:if="${isGroupDashboard != true and (dashboardWidgets == null or #lists.isEmpty(dashboardWidgets))}"
+             class="empty-page-hero d-flex flex-column align-items-center justify-content-center p-5 text-center"
+             id="emptyCustomPageContainer"
+             style="min-height: 420px; background: var(--bg-card); border: 2px dashed var(--border); border-radius: var(--radius-lg); margin-top: 0.5rem;">
+            <div style="width: 72px; height: 72px; border-radius: 50%; background: var(--bg-hover); display: flex; align-items: center; justify-content: center; margin-bottom: 1.25rem; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                <span class="material-symbols-outlined" style="font-size: 36px; color: var(--accent, #3b82f6);"
+                      th:text="${isSubPage == true ? 'subdirectory_arrow_right' : 'space_dashboard'}">space_dashboard</span>
+            </div>
+            <h3 style="font-size: 1.3rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--text-main);" th:text="${customPage != null ? customPage.name : 'Empty Dashboard'}">Custom Dashboard</h3>
+            <p style="font-size: 0.875rem; color: var(--text-muted); max-width: 440px; margin-bottom: 1.75rem; line-height: 1.5;">
+                This page has no widgets configured yet. Add your first widget to begin tracking telemetry on this page.
+            </p>
+            <div class="d-flex align-items-center gap-2">
+                <button type="button"
+                        class="btn-primary d-inline-flex align-items-center gap-2 px-4 py-2"
+                        id="btnEmptyPageAddWidget"
+                        onclick="openWidgetConfiguratorModal()"
+                        style="font-size: 0.95rem; font-weight: 600; border-radius: var(--radius-md); box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25); cursor: pointer;">
+                    <span class="material-symbols-outlined" style="font-size: 1.1rem;">add_chart</span>
+                    <span>Add Widget</span>
+                </button>
+                <button type="button"
+                        class="btn-secondary d-inline-flex align-items-center gap-2 px-4 py-2"
+                        id="btnEmptyPageCopyWidgets"
+                        onclick="openCopyWidgetsModal()"
+                        style="font-size: 0.95rem; font-weight: 600; border-radius: var(--radius-md); cursor: pointer;">
+                    <span class="material-symbols-outlined" style="font-size: 1.1rem;">content_copy</span>
+                    <span>Copy Widgets</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- POPULATED WIDGETS SECTION -->
+        <div th:if="${dashboardWidgets != null and !#lists.isEmpty(dashboardWidgets)}" id="customPageWidgetsSection">
+            <div th:replace="~{fragments/dashboard-widgets :: dashboardWidgetsSection}"></div>
+        </div>
+    </div>
+
+    <!-- WIDGET CONFIGURATOR MODAL CONTAINER -->
+    <div id="widgetConfiguratorModalContainer">
+        <div th:replace="~{fragments/widget-configurator-modal :: widgetConfiguratorModal}"></div>
+    </div>
+
+    <!-- WIDGET CONTRIBUTING EXECUTIONS MODAL CONTAINER -->
+    <div id="widgetExecutionsModalContainer">
+        <div th:replace="~{fragments/widget-executions-modal :: widgetExecutionsModal}"></div>
+    </div>
+
+    <!-- COPY WIDGETS MODAL CONTAINER -->
+    <div id="copyWidgetsModalContainer">
+        <div th:replace="~{fragments/modals :: copyWidgetsModal}"></div>
+    </div>
+
+    <!-- OUT-OF-BAND SIDEBAR CUSTOM PAGES NAVIGATION SYNC -->
+    <th:block th:if="${isHxRequest == true}">
+        <th:block th:replace="~{fragments/sidebar :: customPagesNav}"></th:block>
+    </th:block>
+</div>
+
+</body>
+</html>

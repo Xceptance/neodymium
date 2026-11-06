@@ -96,6 +96,29 @@ public class AuraTestEditorControllerTest
     }
 
     @Test
+    public void testGetEditorFragmentWithTags() throws Exception
+    {
+        final Model model = new ConcurrentModel();
+        final String sampleYaml = "tags:\n  area: Checkout\nsteps:\n  - Open ${neodymium.url}";
+        Mockito.when(fileService.readYamlFileContent("checkout-test.yaml")).thenReturn(sampleYaml);
+        Mockito.when(fileService.parsePlaybookSections(sampleYaml)).thenReturn(Map.of(
+            "beforeSteps", List.of(),
+            "mainSteps", List.of("Open ${neodymium.url}"),
+            "afterSteps", List.of(),
+            "dataMatrix", List.of(Map.of("testId", "en")),
+            "varKeys", List.of("testId"),
+            "rootTags", Map.of("area", List.of("Checkout")),
+            "datasetTagsList", List.of(Map.of("tag1", List.of("value")))
+        ));
+
+        final String view = controller.getEditorFragment("checkout-test.yaml", model);
+
+        Assertions.assertEquals("fragments/editor :: editorPanelContent", view);
+        Assertions.assertEquals(Map.of("area", List.of("Checkout")), model.getAttribute("rootTags"));
+        Assertions.assertEquals(List.of(Map.of("tag1", List.of("value"))), model.getAttribute("datasetTagsList"));
+    }
+
+    @Test
     public void testGetEditorFragmentWithStepsFile() throws Exception
     {
         final Model model = new ConcurrentModel();

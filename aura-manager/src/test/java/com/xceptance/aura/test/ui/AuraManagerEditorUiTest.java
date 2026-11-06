@@ -2070,6 +2070,61 @@ public final class AuraManagerEditorUiTest
         $("#navRunsList").shouldNotHave(Condition.cssClass("active"));
         $("#auraTestManagerWorkspace").shouldBe(Condition.visible);
     }
+
+    /**
+     * Verifies that the Playbooks & Queue page does not contain the legacy "Save Queue as Batch" buttons,
+     * and instead provides the "Add Tag" buttons in the Queue Action Bar and Run Configuration panel.
+     */
+    @Test
+    public final void testPlaybooksQueuePageHasNoSaveAsBatchButtonAndProvidesRunTagging()
+    {
+        Selenide.open("http://localhost:" + this.port + "/playbooks");
+        $("#queueListContainer").shouldBe(Condition.visible);
+
+        // Verify configPanel is NOT duplicated inside queueListContainer
+        $("#queueListContainer").find(".config-panel").shouldNotBe(Condition.exist);
+        $("#queueListContainer").find("#configPanel").shouldNotBe(Condition.exist);
+        $$("#configPanel").shouldHave(CollectionCondition.size(1));
+
+        // Verify legacy Save Queue as Batch buttons do NOT exist
+        $("#saveQueueAsBatchBtn").shouldNotBe(Condition.exist);
+        $("#saveQueueAsBatchSelectionBtn").shouldNotBe(Condition.exist);
+
+        // Verify Add Tag button exists in Configuration Panel
+        $("#addRunTagConfigBtn").shouldBe(Condition.visible);
+
+        // Open Run Tag Modal and add a tag
+        $("#addRunTagConfigBtn").click();
+        $("#tagModal").shouldBe(Condition.visible);
+        $("#tagModalKeyInput").setValue("Environment");
+        $("#tagModalValueInput").setValue("Staging");
+        $("#submitTagModalBtn").click();
+        $("#tagModal").shouldNotBe(Condition.visible);
+
+        // Verify tag chip appears in Run Configuration Panel
+        $("#configRunTagsContainer").shouldHave(Condition.text("Environment: Staging"));
+
+        // Create a new test so there is an item in the test selection panel
+        $("#openModalBtn").shouldBe(Condition.visible).click();
+        $("#newTestName").shouldBe(Condition.visible).setValue("New Interactive Aura Test");
+        $("#submitCreateTestBtn").shouldBe(Condition.visible).click();
+        $("#createTestModal").shouldNotBe(Condition.visible);
+
+        // Close editor to return to test selection view
+        Selenide.executeJavaScript("closeEditor(true);");
+        $(".file-container[data-file='New Interactive Aura Test.yaml']").shouldBe(Condition.visible);
+
+        // Check the test in file list to add it to the run queue
+        Selenide.executeJavaScript("document.querySelector(\".file-container[data-file='New Interactive Aura Test.yaml'] .file-select-cb\").click();");
+
+        // Queue is now non-empty: verify Add Tag button is visible in Queue Action Bar
+        $("#addQueueTagBtn").shouldBe(Condition.visible);
+        $("#queueActionRunTags").shouldHave(Condition.text("Environment: Staging"));
+
+        // Remove tag via chip remove button
+        $$(".btn-remove-run-tag").first().click();
+        $("#configRunTagsContainer").shouldNotHave(Condition.text("Environment: Staging"));
+    }
 }
 
 

@@ -33,8 +33,8 @@
     <th:block th:unless="${activeTab == 'AuraTestManager'}">
         <div class="header-title-area">
             <div class="header-title" id="pageTitle">
-                <span class="material-symbols-outlined text-accent" th:text="${activeTab == 'TestBase' ? 'database' : (activeTab == 'BatchHistory' ? 'trending_up' : (activeTab == 'RunReport' ? 'science' : 'fact_check'))}">fact_check</span>
-                <span th:text="${pageTitle ?: 'Overview of Runs & Known Batches'}">Overview of Runs & Known Batches</span>
+                <span class="material-symbols-outlined text-accent" th:text="${pageTitle == 'Group overview' ? 'grid_view' : (pageTitle == 'Runs overview' ? 'format_list_bulleted' : (groupType == 'environment' ? 'dns' : (groupType == 'locale' ? 'public' : (groupType == 'browser' ? 'web' : (groupType == 'area' ? 'category' : (groupType != null and groupType != '' and groupType != 'all' ? 'sell' : (activeTab == 'TestBase' ? 'database' : (activeTab == 'RunReport' ? 'science' : 'trending_up'))))))))}">fact_check</span>
+                <span th:text="${pageTitle ?: 'Runs overview'}">Runs overview</span>
             </div>
             <div class="breadcrumb" id="headerBreadcrumb" style="display: none;">
                 <span>/</span> <a href="/" style="cursor: pointer; text-decoration: none; font-weight: 600;">Known Batches</a> <span id="breadcrumbTrail"></span>

@@ -13,6 +13,10 @@
                 <span class="material-symbols-outlined" style="font-size: 0.88rem; color: var(--text-accent, #2563eb);">schedule</span>
                 <span id="sidePageTestStartTimeVal"></span>
             </div>
+            <div id="sidePageFlakyWarningBox" style="display: none; background: var(--status-flaky-bg, rgba(245, 158, 11, 0.12)); border: 1px solid var(--status-flaky-border, rgba(245, 158, 11, 0.35)); border-radius: 6px; padding: 0.4rem 0.65rem; margin-top: 0.4rem; font-size: 0.8rem; color: var(--status-flaky, #d97706); align-items: center; gap: 0.4rem;">
+                <span class="material-symbols-outlined" style="font-size: 1rem; flex-shrink: 0;">shuffle</span>
+                <span id="sidePageFlakyWarningText">Flaky test: frequent unknown failures in previous runs</span>
+            </div>
         </div>
         <button class="side-page-close js-close-side-panel" onclick="closeSidePanelInspector()"><span class="material-symbols-outlined">close</span></button>
     </div>
@@ -25,6 +29,7 @@
                 <span class="location-highlight-badge" id="tbSideLocaleBadge"><span class="material-symbols-outlined">location_on</span> Default</span>
                 <span class="tag-chip" id="tbSideBrowserBadge"><span class="material-symbols-outlined text-accent">language</span> Chrome</span>
                 <span class="badge-status badge-pass" id="tbSideBatchBadge" style="background: var(--status-fixed-bg); color: var(--status-fixed); border-color: var(--status-fixed-border);"><span class="material-symbols-outlined">layers</span> Default</span>
+                <span class="badge-status badge-flaky" id="tbSideFlakyBadge" style="display: none;"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">shuffle</span> FLAKY</span>
             </div>
 
             <!-- SECTION TITLE & BATCH FILTER -->
@@ -178,20 +183,72 @@
             <!-- Status Header Line & Action Buttons -->
             <div class="flex-between" style="flex-wrap: wrap; gap: 0.5rem; align-items: center;">
                 <div id="sidePageStatusBadge" th:fragment="sidePanelBugSection" style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
-                    <span th:each="bug : ${exec?.bugs}" class="badge-status badge-known-fail" style="font-family: var(--font-family);" th:data-bug-ticket="${bug}">
-                        <span class="material-symbols-outlined">bug_report</span> <span th:text="${bug.startsWith('#') ? bug : '#' + bug}">#BUG-4821</span>
-                        <button class="btn-danger-subtle" type="button" th:title="'Unlink #' + ${bug}"
-                                th:hx-delete="|/fragments/test-side-panel/bugs?runId=${#uris.escapeQueryParam(#strings.replace(runId ?: '#RUN_ID', '#', ''))}&rowId=${#uris.escapeQueryParam(exec?.id ?: rowId ?: 'row-ds-1')}&bugTicket=${#uris.escapeQueryParam(bug)}|"
-                                hx-target="#sidePageStatusBadge" hx-swap="outerHTML">
-                            <span class="material-symbols-outlined">delete</span>
-                        </button>
-                    </span>
-                    <span th:if="${exec?.bugs == null || exec?.bugs.isEmpty()}" class="badge-status badge-pass" style="font-size: 0.75rem;">Clean / No Linked Bugs</span>
+                    <th:block th:if="${exec?.bugDetails != null and not #lists.isEmpty(exec.bugDetails)}">
+                        <span th:each="bugDetail : ${exec.bugDetails}"
+                              class="badge-status badge-known-fail"
+                              th:classappend="'badge-severity-' + ${#strings.toLowerCase(bugDetail.severity ?: 'major')}"
+                              style="font-family: var(--font-family); display: inline-flex; align-items: center; gap: 0.35rem;"
+                              th:data-bug-ticket="${bugDetail.bugTicket}"
+                              th:title="${(bugDetail.severity ?: 'MAJOR') + (bugDetail.tagCriteria != null and not #strings.isEmpty(bugDetail.tagCriteria) ? ' | Bound to: ' + bugDetail.tagCriteria : '')}">
+                            <span class="material-symbols-outlined" style="font-size: 0.9rem;">bug_report</span>
+                            <span th:text="${bugDetail.bugTicket.startsWith('#') ? bugDetail.bugTicket : '#' + bugDetail.bugTicket}">#BUG-4821</span>
+                            <span class="badge-severity-pill" th:text="${bugDetail.severity ?: 'MAJOR'}">MAJOR</span>
+                            <span th:if="${bugDetail.tagCriteria != null and not #strings.isEmpty(bugDetail.tagCriteria)}"
+                                  class="badge-tags-pill"
+                                  th:text="${bugDetail.tagCriteria}">tags</span>
+                            <button class="btn-danger-subtle" type="button" th:title="'Unlink #' + ${bugDetail.bugTicket}"
+                                    th:hx-delete="|/fragments/test-side-panel/bugs?runId=${#uris.escapeQueryParam(#strings.replace(runId ?: '#RUN_ID', '#', ''))}&rowId=${#uris.escapeQueryParam(exec?.id ?: rowId ?: 'row-ds-1')}&bugTicket=${#uris.escapeQueryParam(bugDetail.bugTicket)}|"
+                                    hx-target="#sidePageStatusBadge" hx-swap="outerHTML">
+                                <span class="material-symbols-outlined">delete</span>
+                            </button>
+                        </span>
+                    </th:block>
+                    <th:block th:if="${(exec?.bugDetails == null or #lists.isEmpty(exec.bugDetails)) and (exec?.bugs != null and not #lists.isEmpty(exec.bugs))}">
+                        <span th:each="bug : ${exec.bugs}" class="badge-status badge-known-fail" style="font-family: var(--font-family);" th:data-bug-ticket="${bug}">
+                            <span class="material-symbols-outlined">bug_report</span> <span th:text="${bug.startsWith('#') ? bug : '#' + bug}">#BUG-4821</span>
+                            <button class="btn-danger-subtle" type="button" th:title="'Unlink #' + ${bug}"
+                                    th:hx-delete="|/fragments/test-side-panel/bugs?runId=${#uris.escapeQueryParam(#strings.replace(runId ?: '#RUN_ID', '#', ''))}&rowId=${#uris.escapeQueryParam(exec?.id ?: rowId ?: 'row-ds-1')}&bugTicket=${#uris.escapeQueryParam(bug)}|"
+                                    hx-target="#sidePageStatusBadge" hx-swap="outerHTML">
+                                <span class="material-symbols-outlined">delete</span>
+                            </button>
+                        </span>
+                    </th:block>
+                    <span th:if="${(exec?.bugDetails == null or #lists.isEmpty(exec.bugDetails)) and (exec?.bugs == null or #lists.isEmpty(exec.bugs))}" class="badge-status badge-pass" style="font-size: 0.75rem;">Clean / No Linked Bugs</span>
+
+                    <!-- Inactive bugs for this test variation with non-matching tag criteria -->
+                    <div th:if="${exec?.inactiveBugDetails != null and not #lists.isEmpty(exec.inactiveBugDetails)}"
+                         style="width: 100%; display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.35rem; font-size: 0.75rem; color: var(--text-muted); background: var(--bg-surface-elevated, rgba(255,255,255,0.05)); padding: 0.3rem 0.5rem; border-radius: 4px; border-left: 3px solid var(--accent, #6366f1);">
+                        <span class="material-symbols-outlined" style="font-size: 0.9rem; color: var(--accent, #6366f1);" title="Bugs linked to this test variation with non-matching tag criteria">info</span>
+                        <span style="font-weight: 600;">Bound to other tags (inactive on this run):</span>
+                        <span th:each="inBug : ${exec.inactiveBugDetails}"
+                              class="badge-status badge-secondary"
+                              style="font-family: var(--font-family); display: inline-flex; align-items: center; gap: 0.3rem; opacity: 0.9; border: 1px dashed var(--border-color);"
+                              th:data-inactive-bug-ticket="${inBug.bugTicket}"
+                              th:title="'Bound to: ' + ${inBug.tagCriteria ?: 'other tags'} + ' (does not match current run tags)'">
+                            <span class="material-symbols-outlined" style="font-size: 0.8rem;">bug_report</span>
+                            <span th:text="${inBug.bugTicket.startsWith('#') ? inBug.bugTicket : '#' + inBug.bugTicket}">#BUG-4886</span>
+                            <span class="badge-severity-pill" style="opacity: 0.8; font-size: 0.65rem;" th:text="${inBug.severity ?: 'MAJOR'}">MAJOR</span>
+                            <span th:if="${inBug.tagCriteria != null and not #strings.isEmpty(inBug.tagCriteria)}"
+                                  class="badge-tags-pill"
+                                  style="font-size: 0.65rem;"
+                                  th:text="${inBug.tagCriteria}">environment: DEV</span>
+                            <button class="btn-danger-subtle" type="button" th:title="'Unlink #' + ${inBug.bugTicket}"
+                                    th:hx-delete="|/fragments/test-side-panel/bugs?runId=${#uris.escapeQueryParam(#strings.replace(runId ?: '#RUN_ID', '#', ''))}&rowId=${#uris.escapeQueryParam(exec?.id ?: rowId ?: 'row-ds-1')}&bugTicket=${#uris.escapeQueryParam(inBug.bugTicket)}|"
+                                    hx-target="#sidePageStatusBadge" hx-swap="outerHTML">
+                                <span class="material-symbols-outlined" style="font-size: 0.75rem;">close</span>
+                            </button>
+                        </span>
+                    </div>
                 </div>
                 <div class="flex-gap-2">
-                    <button class="btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" title="View cross-batch history for this test variation in Test Base" onclick="redirectToTestBaseVariationHistory()">
+                    <a id="btnViewHistoryInTestBase"
+                       class="btn-secondary"
+                       href="/test-base"
+                       style="padding: 0.35rem 0.65rem; font-size: 0.78rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.25rem;"
+                       title="View cross-batch history for this test variation in Test Base"
+                       onclick="redirectToTestBaseVariationHistory(event)">
                         <span class="material-symbols-outlined text-accent">history</span> View History
-                    </button>
+                    </a>
 
                     <button class="btn-secondary" style="padding: 0.35rem 0.65rem; font-size: 0.78rem;" title="Show test data" onclick="toggleTestDataInfoBox()">
                         <span class="material-symbols-outlined text-accent">database</span> Data Info
@@ -230,17 +287,62 @@
             <!-- INLINE BUG TICKET FORM -->
             <div class="action-card-box" id="bugTicketFormBox">
                 <div class="action-card-header">
-                    <span><span class="material-symbols-outlined" style="color: var(--status-known-fail);">bug_report</span> Link Bug Ticket(s)</span>
+                    <span><span class="material-symbols-outlined" style="color: var(--status-known-fail);">bug_report</span> Link Bug Ticket</span>
                     <span class="scope-badge-batch"><span class="material-symbols-outlined">layers</span> PERSISTENT OVER BATCH</span>
                 </div>
-                <form hx-post="/fragments/test-side-panel/bugs" hx-target="#sidePageStatusBadge" hx-swap="outerHTML" class="flex-gap-2">
+                <form hx-post="/fragments/test-side-panel/bugs" hx-target="#sidePageStatusBadge" hx-swap="outerHTML"
+                      hx-on::after-request="if(event.detail.successful){ if(typeof onBugSavedSuccessfully === 'function') onBugSavedSuccessfully(); }"
+                      style="display: flex; flex-direction: column; gap: 0.5rem;">
                     <input type="hidden" name="runId" th:value="${#strings.replace(runId ?: '#RUN_ID', '#', '')}">
                     <input type="hidden" name="rowId" th:value="${exec?.id ?: rowId ?: 'row-ds-1'}">
-                    <input type="text" class="action-input" name="bugTicket" id="bugTicketInput" value="" placeholder="e.g. #BUG-4821">
-                    <button type="submit" class="btn-primary" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;"><span class="material-symbols-outlined">check</span> Save Bugs</button>
+                    <input type="hidden" name="boundTags" id="bugBoundTagsInput" value="">
+                    <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
+                        <input type="text" class="action-input" style="flex: 2; min-width: 140px;" name="bugTicket" id="bugTicketInput" value="" placeholder="e.g. #BUG-4821" required>
+                        <select class="action-input" name="severity" id="bugSeveritySelect" style="flex: 1; min-width: 110px;">
+                            <option value="BLOCKER">Blocker</option>
+                            <option value="CRITICAL">Critical</option>
+                            <option value="MAJOR" selected>Major</option>
+                            <option value="MINOR">Minor</option>
+                            <option value="TRIVIAL">Trivial</option>
+                        </select>
+                        <button type="submit" class="btn-primary" style="padding: 0.4rem 0.75rem; font-size: 0.8rem;"><span class="material-symbols-outlined">check</span> Save Bug</button>
+                    </div>
+                    <!-- Selected Tag Chips Display -->
+                    <div id="bugSelectedTagsContainer" style="display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; min-height: 20px;">
+                        <!-- Rendered by JS when tags are selected -->
+                    </div>
+                    <!-- Quick-selection chips & Two-Stage Known Tag Selector (Key -> Value) -->
+                    <div style="display: flex; flex-direction: column; gap: 0.35rem;">
+                        <div id="bugAvailableTagsContainer" style="display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center; font-size: 0.75rem;">
+                            <!-- Populated dynamically with clickable quick-select chips based on current run and execution tags -->
+                        </div>
+                        <div id="bugOtherTagsPicker" style="display: flex; align-items: center; gap: 0.4rem; margin-top: 0.2rem; flex-wrap: wrap;">
+                            <span style="font-size: 0.72rem; color: var(--text-muted); white-space: nowrap;">Add tag:</span>
+                            <!-- Stage 1: Key Dropdown -->
+                            <select id="bugTagKeySelect" class="action-input" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; height: 26px; min-width: 110px;" onchange="onBugTagKeyChanged(this.value)">
+                                <option value="">-- Select Key --</option>
+                                <option th:each="k : ${allKnownTagMap?.keySet()}" th:value="${k}" th:text="${k}">environment</option>
+                            </select>
+                            <!-- Stage 2: Value Dropdown (Populated dynamically on key change) -->
+                            <select id="bugTagValueSelect" class="action-input" style="font-size: 0.75rem; padding: 0.2rem 0.5rem; height: 26px; min-width: 120px;" onchange="onBugTagValueSelected(this.value)" disabled>
+                                <option value="">-- Select Value --</option>
+                            </select>
+                            <button type="button" id="btnAddTagPairBtn" class="btn-secondary" style="padding: 0.15rem 0.5rem; font-size: 0.72rem; height: 26px;" onclick="onAddTagPairClicked()" disabled>+ Add</button>
+                        </div>
+                    </div>
+                    <script th:inline="javascript">
+                    /*<![CDATA[*/
+                        if (/*[[${allKnownTagMap != null}]]*/ false) {
+                            window.allKnownTagMap = /*[[${allKnownTagMap}]]*/ {};
+                            if (typeof updateBugTagKeySelectOptions === 'function') {
+                                updateBugTagKeySelectOptions();
+                            }
+                        }
+                    /*]]>*/
+                    </script>
                 </form>
                 <div style="font-size: 0.75rem; color: var(--text-muted);">
-                    <span class="material-symbols-outlined text-accent">info</span> Enter bug ticket (e.g., #BUG-4821) and press Save!
+                    <span class="material-symbols-outlined text-accent">info</span> If tags are specified, the bug link and label will only appear on test runs matching those tags.
                 </div>
             </div>
 

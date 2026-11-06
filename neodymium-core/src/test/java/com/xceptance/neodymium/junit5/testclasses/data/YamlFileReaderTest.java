@@ -9,6 +9,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
+import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -161,6 +163,87 @@ public class YamlFileReaderTest
         assertEquals(2, data.size());
         assertEquals(null, data.get(0).get("skipReplay"));
         assertEquals("true", data.get(1).get("skipReplay"));
+    }
+
+    @Test
+    @DisplayName("Verify parsing of tags at root and dataset level with inheritance")
+    public void testYamlTagsAtRootAndDatasetLevel()
+    {
+        final String yamlContent = """
+            tags:
+              tag3: value
+              tag4:
+                - value2
+                - value3
+            data:
+              - tags:
+                  tag1: value
+                  tag2:
+                    - value2
+                    - value3
+                testId: "en"
+                searchPhrase: "Neodymium magnet"
+              - tags:
+                  tag1: value12
+                  tag2:
+                    - value21
+                    - value31
+                testId: "en"
+                searchPhrase: "Neodymium magnet"
+            """;
+
+        final List<Map<String, String>> data = YamlFileReader.readFile(new ByteArrayInputStream(yamlContent.getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals(2, data.size());
+        final String tagsJson1 = data.get(0).get("tags");
+        assertNotNull(tagsJson1);
+        final Map<String, List<String>> tags1 = new Gson().fromJson(
+            tagsJson1,
+            new TypeToken<Map<String, List<String>>>(){}.getType());
+        assertEquals(List.of("value"), tags1.get("tag1"));
+        assertEquals(List.of("value2", "value3"), tags1.get("tag2"));
+        assertEquals(List.of("value"), tags1.get("tag3"));
+        assertEquals(List.of("value2", "value3"), tags1.get("tag4"));
+
+        final String tagsJson2 = data.get(1).get("tags");
+        assertNotNull(tagsJson2);
+        final Map<String, List<String>> tags2 = new Gson().fromJson(
+            tagsJson2,
+            new TypeToken<Map<String, List<String>>>(){}.getType());
+        assertEquals(List.of("value12"), tags2.get("tag1"));
+        assertEquals(List.of("value21", "value31"), tags2.get("tag2"));
+        assertEquals(List.of("value"), tags2.get("tag3"));
+        assertEquals(List.of("value2", "value3"), tags2.get("tag4"));
+    }
+
+    @Test
+    @DisplayName("Verify CLI override of YAML tags")
+    public void testYamlTagsCliOverride()
+    {
+        System.setProperty("neodymium.tag.tag1", "value231");
+        try
+        {
+            final String yamlContent = """
+                tags:
+                  tag1: value
+                data:
+                  - testId: "en"
+                """;
+
+            final List<Map<String, String>> data = YamlFileReader.readFile(new ByteArrayInputStream(yamlContent.getBytes(StandardCharsets.UTF_8)));
+
+            assertEquals(1, data.size());
+            final String tagsJson = data.get(0).get("tags");
+            assertNotNull(tagsJson);
+            final Map<String, List<String>> tags = new Gson().fromJson(
+                tagsJson,
+                new TypeToken<Map<String, List<String>>>(){}.getType());
+            assertEquals(List.of("value231"), tags.get("tag1"));
+        }
+        finally
+        {
+            System.clearProperty("neodymium.tag.tag1");
+        }
     }
 }
 

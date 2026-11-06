@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- WIDGET CONTRIBUTING TEST EXECUTIONS MODAL FRAGMENT -->
+<div class="modal-overlay" id="widgetExecutionsModal" th:fragment="widgetExecutionsModal"
+     style="display: none;"
+     th:style="${isOpen == true} ? 'display: flex;' : 'display: none;'"
+     th:attr="data-widget-id=${widgetExecutions != null ? widgetExecutions.widgetId : ''}"
+     onclick="if (event.target === this) closeWidgetExecutionsModal();">
+    <div class="modal-card widget-executions-card" style="max-width: 980px; width: 96%; max-height: 90vh; display: flex; flex-direction: column;" onclick="event.stopPropagation();">
+        <!-- MODAL HEADER -->
+        <div class="modal-header d-flex align-items-center justify-content-between p-3 border-bottom" style="background: var(--bg-card); flex-shrink: 0;">
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="material-symbols-outlined text-accent" style="font-size: 1.35rem;"
+                      th:text="${(widget != null && widget.isContainer()) || (widgetExecutions != null && widgetExecutions.presentation != null && widgetExecutions.presentation.name() == 'CONTAINER') ? 'layers' : (widgetExecutions != null && widgetExecutions.metric != null ? widgetExecutions.metric.icon : 'analytics')}">analytics</span>
+                <div>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span style="font-weight: 700; font-size: 1.05rem; color: var(--text-main);"
+                              th:text="${widgetExecutions != null ? widgetExecutions.widgetTitle : 'Widget Executions'}">Widget Contributing Executions</span>
+                        <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.12rem 0.45rem;"
+                              th:text="${widgetExecutions != null ? widgetExecutions.scopeLabel : ''}">Scope</span>
+                        <span th:class="'badge-status font-mono ' + (${widgetExecutions.overallPassRate >= 95.0} ? 'badge-pass' : (${widgetExecutions.overallPassRate >= 80.0} ? 'badge-fixed' : 'badge-danger'))"
+                              style="font-size: 0.72rem; padding: 0.12rem 0.45rem;"
+                              th:if="${widgetExecutions != null && widgetExecutions.totalExecutionsCount > 0}"
+                              th:text="${#numbers.formatDecimal(widgetExecutions.overallPassRate, 1, 0) + '% Pass'}">100% Pass</span>
+                        <span class="badge-status" th:if="${widget != null && widget.hasOwnRunFilters()}"
+                              th:title="${widget.runFilters != null ? widget.runFilters.filterSummary : ''}"
+                              style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; font-size: 0.72rem; padding: 0.12rem 0.45rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">filter_alt</span>
+                            <span th:text="${widget.runFilters != null ? widget.runFilters.filterSummary : 'Filtered'}">Filtered</span>
+                        </span>
+                        <span class="badge-status" th:if="${widget != null && widget.hasOwnExecutionIdentity()}"
+                              style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; font-size: 0.72rem; padding: 0.12rem 0.45rem; display: inline-flex; align-items: center; gap: 0.2rem;">
+                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">fingerprint</span>
+                            <span th:text="${'Identity: ' + #strings.listJoin(widget.executionIdentityDimensions, ', ')}">Identity</span>
+                        </span>
+                        <span class="active-scope-tag tag-excluded font-mono" style="font-size: 0.72rem; padding: 0.12rem 0.45rem; display: inline-flex; align-items: center; gap: 0.25rem;"
+                              th:if="${excludedRunIds != null and !excludedRunIds.isEmpty()}">
+                            <span class="material-symbols-outlined" style="font-size: 0.75rem;">block</span>
+                            <span th:text="${excludedRunIds.size() + (excludedRunIds.size() == 1 ? ' run excluded' : ' runs excluded')}">1 run excluded</span>
+                            <button type="button" class="btn-remove-tag"
+                                    th:attr="onclick='clearExcludedRunsInModal(\'' + ${(widgetExecutions != null ? widgetExecutions.widgetId : '')} + '\')'"
+                                    title="Restore excluded runs"
+                                    style="margin-left: 0.2rem; cursor: pointer; border: none; background: transparent; color: inherit; font-weight: bold; line-height: 1;">×</button>
+                        </span>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-top: 0.15rem;">
+                        <span th:text="${widgetExecutions != null ? widgetExecutions.totalExecutionsCount + ' total executions across ' + widgetExecutions.totalRunsCount + ((widgetExecutions.totalRunsCount == 1) ? ' contributing run' : ' contributing runs') : '0 executions'}">0 executions</span>
+                        <span th:if="${widgetExecutions != null && widgetExecutions.overallFlakyCount > 0}">
+                            • <strong style="color: var(--status-flaky, #f59e0b);" th:text="${widgetExecutions.overallFlakyCount + ' Flaky'}">1 Flaky</strong>
+                        </span>
+                        <span th:if="${widgetExecutions != null && widgetExecutions.overallTotalCost > 0}">
+                            • Total LLM Spending: <strong th:text="${widgetExecutions.formattedTotalCost}">$0.0000</strong> (<span th:text="${widgetExecutions.overallTotalTokens + ' tokens'}">0 tokens</span>)
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <button type="button" class="btn-icon-widget" onclick="closeWidgetExecutionsModal()" title="Close dialog">
+                <span class="material-symbols-outlined">close</span>
+            </button>
+        </div>
+
+        <!-- SEARCH & FILTER TOOLBAR -->
+        <div class="p-2 px-3 border-bottom d-flex align-items-center justify-content-between flex-wrap gap-2" style="background: var(--bg-main, #f8fafc); flex-shrink: 0;">
+            <div class="d-flex align-items-center gap-2 flex-grow-1" style="min-width: 240px; max-width: 480px;">
+                <span class="material-symbols-outlined text-muted" style="font-size: 1rem;">search</span>
+                <input type="search"
+                       id="widgetExecutionsFilterInput"
+                       class="form-control"
+                       style="font-size: 0.8rem; padding: 0.3rem 0.6rem; border-radius: 4px; border: 1px solid var(--border); width: 100%; background: var(--bg-card); color: var(--text-main);"
+                       placeholder="Filter executions by test name, method, class, or browser..."
+                       oninput="filterWidgetExecutionsModal(this.value)" />
+            </div>
+            <div class="d-flex align-items-center gap-1 flex-wrap">
+                <button type="button" class="btn-secondary btn-compact active js-exec-status-filter" data-status-filter="all" onclick="filterWidgetExecutionsByStatus('all', this)" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;">All</button>
+                <button type="button" class="btn-secondary btn-compact js-exec-status-filter" data-status-filter="pass" onclick="filterWidgetExecutionsByStatus('pass', this)" style="font-size: 0.72rem; padding: 0.2rem 0.5rem; color: var(--status-pass, #10b981);">Passed</button>
+                <button type="button" class="btn-secondary btn-compact js-exec-status-filter" data-status-filter="fixed" onclick="filterWidgetExecutionsByStatus('fixed', this)" style="font-size: 0.72rem; padding: 0.2rem 0.5rem; color: var(--status-fixed, #3b82f6);">Fixed</button>
+                <button type="button" class="btn-secondary btn-compact js-exec-status-filter" data-status-filter="flaky" onclick="filterWidgetExecutionsByStatus('flaky', this)" style="font-size: 0.72rem; padding: 0.2rem 0.5rem; color: var(--status-flaky, #f59e0b);">
+                    <span class="material-symbols-outlined" style="font-size: 0.8rem; vertical-align: middle;">shuffle</span> Flaky
+                </button>
+                <button type="button" class="btn-secondary btn-compact js-exec-status-filter" data-status-filter="fail" onclick="filterWidgetExecutionsByStatus('fail', this)" style="font-size: 0.72rem; padding: 0.2rem 0.5rem; color: var(--status-unknown-fail, #ef4444);">Failed</button>
+                <button type="button" class="btn-secondary btn-compact js-exec-status-filter" data-status-filter="ignored" onclick="filterWidgetExecutionsByStatus('ignored', this)" style="font-size: 0.72rem; padding: 0.2rem 0.5rem; color: var(--status-ignored, #94a3b8);">Ignored</button>
+                <span class="text-muted" style="margin: 0 0.25rem;">|</span>
+                <button type="button" class="btn-secondary btn-compact" onclick="toggleAllWidgetRunAccordions()" style="font-size: 0.72rem; padding: 0.2rem 0.5rem;">
+                    <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">unfold_more</span> Toggle All
+                </button>
+            </div>
+        </div>
+
+        <!-- MODAL BODY: GROUPED BY RUNS -->
+        <div class="modal-body p-3 overflow-auto flex-grow-1" id="widgetExecutionsModalBody" style="background: var(--bg-card);">
+            <!-- RUN GROUPS LIST -->
+            <div th:if="${widgetExecutions != null and widgetExecutions.runGroups != null and !widgetExecutions.runGroups.isEmpty()}" class="d-flex flex-column gap-3">
+                <div th:each="g : ${widgetExecutions.runGroups}" class="widget-run-accordion-group border rounded" style="background: var(--bg-card); border-color: var(--border) !important;" th:data-run-id="${g.runId}">
+                    <!-- RUN GROUP HEADER -->
+                    <div class="widget-run-group-header p-2 px-3 d-flex align-items-center justify-content-between flex-wrap gap-2"
+                         style="background: var(--bg-hover); cursor: pointer; user-select: none;"
+                         onclick="toggleWidgetRunAccordion(this)">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="material-symbols-outlined widget-run-chevron" style="font-size: 1.1rem; transition: transform 0.2s ease;">expand_more</span>
+                            <a class="text-mono" style="font-weight: 700; color: var(--text-main); text-decoration: none;"
+                               th:href="@{/run-report(runId=${g.runId})}"
+                               th:attr="hx-get=@{/run-report(runId=${g.runId})}"
+                               hx-target="#mainViewContainer"
+                               hx-swap="innerHTML"
+                               hx-push-url="true"
+                               onclick="event.stopPropagation(); closeWidgetExecutionsModal();"
+                               th:title="'Open report for run #' + ${g.runId}"
+                               th:text="'Run #' + ${g.runId}">Run #1</a>
+                            <span class="text-muted font-mono" style="font-size: 0.75rem;" th:text="${g.timestampLabel}">2026-10-29 13:45</span>
+                            <span class="run-meta-chip chip-env" th:text="${g.environment}">Default</span>
+                            <span class="run-meta-chip chip-browser" th:if="${g.run != null && g.run.browsersCsv != null && !g.run.browsersCsv.isBlank()}" th:text="${g.run.browsersCsv}">Chrome</span>
+                            <span class="badge-status badge-neutral font-mono" style="font-size: 0.72rem; padding: 0.12rem 0.45rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-main);" th:text="${g.totalCount + (g.totalCount == 1 ? ' test' : ' tests')}">1 test</span>
+                            <span th:class="'badge-status font-mono ' + (${g.passRate >= 95.0} ? 'badge-pass' : (${g.passRate >= 80.0} ? 'badge-fixed' : 'badge-danger'))"
+                                  style="font-size: 0.72rem; padding: 0.12rem 0.45rem;"
+                                  th:text="${#numbers.formatDecimal(g.passRate, 1, 0) + '% Pass'}">100% Pass</span>
+                            <span class="badge-status badge-cost font-mono" style="font-size: 0.72rem; padding: 0.12rem 0.45rem; background: rgba(99, 102, 241, 0.12); color: #6366f1; border: 1px solid rgba(99, 102, 241, 0.25);" th:if="${g.totalCost > 0}" th:text="${g.formattedCost}">$0.0012</span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="d-flex align-items-center gap-1 font-mono" style="font-size: 0.72rem;">
+                                <span class="badge-status badge-pass clickable-badge js-run-status-badge" data-status-key="pass"
+                                      onclick="event.stopPropagation(); filterWidgetExecutionsByStatus('pass', this);"
+                                      title="Filter Passed executions in this run"
+                                      th:if="${g.passCount > 0}" th:text="${g.passCount + ' Pass'}">1 Pass</span>
+                                <span class="badge-status badge-fixed clickable-badge js-run-status-badge" data-status-key="fixed"
+                                      onclick="event.stopPropagation(); filterWidgetExecutionsByStatus('fixed', this);"
+                                      title="Filter Fixed executions in this run"
+                                      th:if="${g.fixedCount > 0}" th:text="${g.fixedCount + ' Fixed'}">0 Fixed</span>
+                                <span class="badge-status badge-known-fail clickable-badge js-run-status-badge" data-status-key="fail"
+                                      onclick="event.stopPropagation(); filterWidgetExecutionsByStatus('fail', this);"
+                                      title="Filter Known executions in this run"
+                                      th:if="${g.knownCount > 0}" th:text="${g.knownCount + ' Known'}">0 Known</span>
+                                <span class="badge-status badge-unknown-fail clickable-badge js-run-status-badge" data-status-key="fail"
+                                      onclick="event.stopPropagation(); filterWidgetExecutionsByStatus('fail', this);"
+                                      title="Filter Unknown executions in this run"
+                                      th:if="${g.unknownCount > 0}" th:text="${g.unknownCount + ' Unknown'}">0 Unknown</span>
+                                 <span class="badge-status badge-flaky clickable-badge js-run-status-badge" data-status-key="flaky"
+                                       onclick="event.stopPropagation(); filterWidgetExecutionsByStatus('flaky', this);"
+                                       title="Filter Flaky executions in this run"
+                                       style="background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3);"
+                                       th:if="${g.flakyCount > 0}" th:text="${g.flakyCount + ' Flaky'}">0 Flaky</span>
+                                 <span class="badge-status badge-ignored clickable-badge js-run-status-badge" data-status-key="ignored"
+                                       onclick="event.stopPropagation(); filterWidgetExecutionsByStatus('ignored', this);"
+                                       title="Filter Ignored executions in this run"
+                                       th:if="${g.ignoredCount > 0}" th:text="${g.ignoredCount + ' Ignored'}">0 Ignored</span>
+                            </div>
+                            <button type="button"
+                                    class="btn-exclude-run"
+                                    th:attr="onclick='excludeWidgetRun(event, \'' + ${g.runId} + '\', \'' + ${widgetExecutions.widgetId} + '\')'"
+                                    title="Exclude this run from contribution">
+                                <span class="material-symbols-outlined" style="font-size: 0.8rem;">remove_circle_outline</span>
+                                <span>Exclude</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- RUN GROUP EXECUTIONS TABLE -->
+                    <div class="widget-run-group-body p-0" style="display: block;">
+                        <div class="table-responsive" th:if="${g.executions != null and !g.executions.isEmpty()}">
+                            <table class="aura-table mb-0" style="width: 100%; font-size: 0.8rem;">
+                                <thead>
+                                    <tr style="background: var(--bg-card); border-bottom: 1px solid var(--border);">
+                                        <th style="width: 120px;">Status</th>
+                                        <th>Test Method & Class</th>
+                                        <th style="width: 130px;">Browser / Locale</th>
+                                        <th style="width: 100px;">Mode / Duration</th>
+                                        <th style="width: 120px;">Tokens / Cost</th>
+                                        <th style="width: 80px; text-align: right;">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr th:each="e : ${g.executions}"
+                                        class="widget-execution-row"
+                                        th:data-status="${e.status}"
+                                        th:data-flaky="${e.flaky}"
+                                        th:data-test-name="${e.testName}"
+                                        th:data-method="${e.testMethod}"
+                                        th:data-class="${e.testClass}"
+                                        th:data-browser="${e.browser}"
+                                        th:data-locale="${e.locale}">
+                                        <td>
+                                            <span th:class="'badge-status ' + (${e.status != null && (e.status.equalsIgnoreCase('PASSED') || e.status.equalsIgnoreCase('SUCCESS'))} ? 'badge-pass' : (${e.status != null && e.status.contains('FIXED')} ? 'badge-info' : (${e.status != null && e.status.contains('KNOWN')} ? 'badge-warning' : (${e.status != null && (e.status.contains('FAIL') || e.status.contains('UNKNOWN'))} ? 'badge-danger' : 'badge-secondary'))))"
+                                                  style="font-size: 0.72rem; padding: 0.12rem 0.4rem; display: inline-flex; align-items: center; gap: 0.25rem;">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem;"
+                                                      th:text="${e.status != null && (e.status.equalsIgnoreCase('PASSED') || e.status.equalsIgnoreCase('SUCCESS')) ? 'check_circle' : (e.status != null && e.status.contains('FAIL') ? 'cancel' : 'info')}">check_circle</span>
+                                                <span th:text="${e.status}">PASSED</span>
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-1">
+                                                <span style="font-weight: 600; color: var(--text-main);" th:text="${(e.testMethod != null and !e.testMethod.isEmpty()) ? e.testMethod : e.testName}">testMethod</span>
+                                                <span class="badge-status font-mono" style="font-size: 0.65rem; padding: 0.05rem 0.35rem; background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 3px;"
+                                                      th:if="${e.flaky}"
+                                                      th:title="${e.flakyReason != null and !e.flakyReason.isEmpty() ? e.flakyReason : 'Erratic test execution'}">
+                                                    FLAKY
+                                                </span>
+                                            </div>
+                                            <div class="text-muted" style="font-size: 0.72rem;" th:text="${e.testClass}">com.example.TestClass</div>
+                                            <div class="d-flex align-items-center gap-1 mt-1" th:if="${(e.bugDetails != null and !e.bugDetails.isEmpty()) or (e.bugs != null and !e.bugs.isEmpty())}">
+                                                <th:block th:if="${e.bugDetails != null and !e.bugDetails.isEmpty()}">
+                                                    <span class="tag-chip tag-bug" th:each="b : ${e.bugDetails}" style="font-size: 0.68rem; padding: 0.05rem 0.35rem;"
+                                                          th:text="${(b.bugTicket != null and !b.bugTicket.isEmpty() ? b.bugTicket : b.ticket) + (b.severity != null and !b.severity.isBlank() ? ' (' + b.severity + ')' : '')}">BUG-123</span>
+                                                </th:block>
+                                                <th:block th:if="${(e.bugDetails == null or e.bugDetails.isEmpty()) and e.bugs != null and !e.bugs.isEmpty()}">
+                                                    <span class="tag-chip tag-bug" th:each="b : ${e.bugs}" style="font-size: 0.68rem; padding: 0.05rem 0.35rem;"
+                                                          th:text="${b}">BUG-123</span>
+                                                </th:block>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="d-flex flex-column gap-1">
+                                                <span class="tag-chip tag-browser" style="font-size: 0.7rem;" th:if="${e.browser != null}" th:text="${e.browser}">Chrome</span>
+                                                <span class="tag-chip tag-locale" style="font-size: 0.7rem;" th:if="${e.locale != null}" th:text="${e.locale}">en-US</span>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span th:class="'badge-status ' + (${e.displayMode != null && e.displayMode.contains('AI')} ? 'badge-mode-ai' : (${e.displayMode != null && e.displayMode.contains('HEALED')} ? 'badge-mode-healed' : (${e.displayMode != null && e.displayMode.contains('PLAYBOOK')} ? 'badge-mode-playbook' : 'badge-mode-java')))"
+                                                  style="font-size: 0.68rem; padding: 0.1rem 0.4rem;"
+                                                  th:text="${e.displayMode != null ? e.displayMode : (e.mode != null ? e.mode : 'Standard')}">Standard</span>
+                                            <div class="text-muted font-mono mt-1" style="font-size: 0.7rem;" th:if="${e.durationFormatted != null}" th:text="${e.durationFormatted}">120ms</div>
+                                        </td>
+                                        <td>
+                                            <div class="font-mono" style="font-size: 0.72rem;" th:if="${e.llmCost > 0}" th:text="${'$' + #numbers.formatDecimal(e.llmCost, 1, 4)}">$0.0000</div>
+                                            <div class="text-muted font-mono" style="font-size: 0.7rem;" th:if="${e.llmTotalTokens > 0}" th:text="${e.llmTotalTokens + ' tok'}">0 tok</div>
+                                            <div class="text-muted font-mono" style="font-size: 0.7rem;" th:if="${e.llmCost <= 0 and e.llmTotalTokens <= 0}">-</div>
+                                        </td>
+                                        <td style="text-align: right;">
+                                            <a class="btn-secondary btn-compact d-inline-flex align-items-center gap-1"
+                                               style="font-size: 0.72rem; padding: 0.2rem 0.45rem; text-decoration: none;"
+                                               th:href="@{/run-report(runId=${g.runId}, executionId=${e.id})}"
+                                               th:attr="hx-get=@{/run-report(runId=${g.runId}, executionId=${e.id})}"
+                                               hx-target="#mainViewContainer"
+                                               hx-swap="innerHTML"
+                                               hx-push-url="true"
+                                               onclick="closeWidgetExecutionsModal()"
+                                               title="View execution details in run report">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem;">open_in_new</span>
+                                                <span>Inspect</span>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="p-3 text-muted text-center" style="font-size: 0.75rem;" th:if="${g.executions == null or g.executions.isEmpty()}">
+                            Execution details cataloged at run-level (<span th:text="${g.totalCount + ' total tests'}">0 tests</span>). Open run report for trace breakdown.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EMPTY STATE -->
+            <div th:if="${widgetExecutions == null || widgetExecutions.runGroups == null || widgetExecutions.runGroups.isEmpty()}"
+                 class="text-center py-5 text-muted">
+                <span class="material-symbols-outlined text-muted" style="font-size: 2.5rem; margin-bottom: 0.5rem; display: block;">dataset</span>
+                <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-main);">No Contributing Test Executions</div>
+                <div style="font-size: 0.8rem; margin-top: 0.25rem;">No test executions matched this widget's metric and point scope within the current batch filters.</div>
+            </div>
+        </div>
+
+        <!-- MODAL FOOTER -->
+        <div class="modal-footer p-2 px-3 border-top d-flex align-items-center justify-content-between" style="background: var(--bg-card); flex-shrink: 0;">
+            <div class="text-muted" style="font-size: 0.72rem;">
+                💡 Tip: Click on any test execution to view its full traces and artifacts in the run report. Press <kbd>Esc</kbd> to close.
+            </div>
+            <button type="button" class="btn-secondary" style="font-size: 0.8rem; padding: 0.3rem 0.85rem;" onclick="closeWidgetExecutionsModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

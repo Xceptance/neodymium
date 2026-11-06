@@ -139,11 +139,17 @@
                                     th:data-mode="${var.displayMode}"
                                     th:data-healed="${var.healed or var.lastStatus == 'healed'}"
                                     th:data-location="${var.location}" 
-                                    th:data-browser="${var.browser}">
+                                    th:data-browser="${var.browser}"
+                                    th:data-flaky="${var.flaky ?: false}"
+                                    th:data-flaky-reason="${var.flakyReason ?: ''}">
                                     <td>
                                         <div style="display: flex; flex-direction: column; gap: 0.15rem;">
                                             <div style="display: flex; align-items: baseline; gap: 0.45rem; flex-wrap: wrap;">
-                                                <strong class="text-mono" style="color: var(--text-main);" th:text="${(var.testMethodName != null and !#strings.isEmpty(var.testMethodName)) ? var.testMethodName : ((var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)) ? var.dataSetLabel : 'Default')}">testMethodName</strong>
+                                                <a class="test-title-link text-mono" style="text-decoration: none; color: var(--text-main); font-weight: 700;"
+                                                   th:href="@{/test-base(testName=${var.testClassName}, dataSet=${var.dataSetLabel}, location=${var.location}, browser=${var.browser})}"
+                                                   onclick="if (!event.ctrlKey && !event.metaKey && !event.shiftKey && event.button === 0) { event.preventDefault(); }"
+                                                   th:title="'Open variation in Test Base'"
+                                                   th:text="${(var.testMethodName != null and !#strings.isEmpty(var.testMethodName)) ? var.testMethodName : ((var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)) ? var.dataSetLabel : 'Default')}">testMethodName</a>
                                                 <span class="font-mono text-muted" style="font-size: 0.78rem; font-weight: normal;" th:text="${'(' + var.totalExecutionsCount + (var.totalExecutionsCount == 1 ? ' run' : ' runs') + ')'}">(1 runs)</span>
                                             </div>
                                             <span th:if="${var.testMethodName != null and !#strings.isEmpty(var.testMethodName) and var.dataSetLabel != null and !#strings.isEmpty(var.dataSetLabel)}" class="font-mono" style="font-size: 0.78rem; color: var(--status-fixed); font-weight: 600;" th:text="${'Data Set: ' + var.dataSetLabel}">Data Set: bad</span>
@@ -173,6 +179,9 @@
                                             </span>
                                             <span class="badge-status badge-ignored" th:if="${var.lastStatus == 'ignored' or var.lastStatus == 'skipped'}">
                                                 <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">skip_next</span> SKIPPED
+                                            </span>
+                                            <span class="badge-status badge-flaky" th:if="${var.flaky}" th:title="${var.flakyReason != null ? var.flakyReason : 'Flaky test: frequent unknown failures in previous runs'}">
+                                                <span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">shuffle</span> FLAKY
                                             </span>
                                         </div>
                                     </td>

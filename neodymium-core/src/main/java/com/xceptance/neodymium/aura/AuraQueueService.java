@@ -21,6 +21,7 @@ package com.xceptance.neodymium.aura;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.xceptance.neodymium.ai.console.InteractiveConsoleEngine;
 import org.neodymium.ai.util.AtomicFileUtils;
@@ -437,7 +438,7 @@ public final class AuraQueueService
                 {
                     try
                     {
-                        queueRunProgressListener.onRunStarted(generatedRunId, effectiveBatchName, "Unknown");
+                        queueRunProgressListener.onRunStarted(generatedRunId, effectiveBatchName, "Unknown", req.tags);
                     }
                     catch (final Exception e)
                     {
@@ -540,6 +541,24 @@ public final class AuraQueueService
                     preBatchNode.put("name", effectiveBatchName);
                     preBatchNode.put("description", "");
                     preBatchNode.put("environment", "Default");
+                    if (req.tags != null && !req.tags.isEmpty())
+                    {
+                        final ObjectNode tagsNode = preBatchNode.putObject("tags");
+                        for (final Map.Entry<String, List<String>> tagEntry : req.tags.entrySet())
+                        {
+                            if (tagEntry.getKey() != null && !tagEntry.getKey().isBlank() && tagEntry.getValue() != null)
+                            {
+                                final ArrayNode tagArray = tagsNode.putArray(tagEntry.getKey().trim());
+                                for (final String val : tagEntry.getValue())
+                                {
+                                    if (val != null && !val.isBlank())
+                                    {
+                                        tagArray.add(val.trim());
+                                    }
+                                }
+                            }
+                        }
+                    }
                     for (final File runDir : runStorageDirs)
                     {
                         if (!runDir.exists())
@@ -610,6 +629,28 @@ public final class AuraQueueService
                     command.add("-Dneodymium.managerUrl=http://localhost:" + serverPort);
                     command.add("-DbatchName=" + effectiveBatchName);
                     command.add("-Dneodymium.batchName=" + effectiveBatchName);
+                    if (req.tags != null && !req.tags.isEmpty())
+                    {
+                        for (final Map.Entry<String, List<String>> tagEntry : req.tags.entrySet())
+                        {
+                            if (tagEntry.getKey() != null && !tagEntry.getKey().isBlank() && tagEntry.getValue() != null)
+                            {
+                                final String tagKey = tagEntry.getKey().trim();
+                                final List<String> cleanVals = new ArrayList<>();
+                                for (final String val : tagEntry.getValue())
+                                {
+                                    if (val != null && !val.isBlank())
+                                    {
+                                        cleanVals.add(val.trim());
+                                    }
+                                }
+                                if (!cleanVals.isEmpty())
+                                {
+                                    command.add("-Dneodymium.tag." + tagKey + "=" + String.join(",", cleanVals));
+                                }
+                            }
+                        }
+                    }
                     command.add("-Dfile.encoding=UTF-8");
                     command.add("-Dsun.stdout.encoding=UTF-8");
                     command.add("-Dsun.stderr.encoding=UTF-8");
@@ -1155,8 +1196,8 @@ public final class AuraQueueService
                 if (!fallbackFile.exists())
                 {
                     final String fallbackJson = String.format(
-                        "{\"runId\":\"%s\",\"status\":\"skipped\",\"runnerStatus\":\"cancelled\",\"currentStepIndex\":0,\"testName\":\"%s\",\"browser\":\"%s\",\"timestamp\":\"%s\",\"message\":\"Test execution cancelled by user.\"}",
-                        runId, className, primaryBrowser, timestamp
+                        "{\"runId\":\"%s\",\"status\":\"skipped\",\"runnerStatus\":\"cancelled\",\"currentStepIndex\":0,\"testClass\":\"%s\",\"testName\":\"%s\",\"browser\":\"%s\",\"timestamp\":\"%s\",\"message\":\"Test execution cancelled by user.\"}",
+                        runId, className, className, primaryBrowser, timestamp
                     );
                     try
                     {

@@ -19,7 +19,6 @@
 package com.xceptance.aura.test.controller;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.JsonObject;
 import com.xceptance.aura.report.entity.TestBatchEntity;
@@ -39,9 +38,6 @@ import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -105,6 +101,8 @@ public class AuraTestQueueController
     private String executionMode = ExecutionMode.AUTO.name();
 
     private boolean interactive = false;
+
+    private final Map<String, List<String>> runTags = Collections.synchronizedMap(new LinkedHashMap<>());
 
     public AuraTestQueueController(final AuraQueueService queueService, final AuraFileService fileService,
         final AuraInteractiveService interactiveService)
@@ -177,6 +175,12 @@ public class AuraTestQueueController
         model.addAttribute("totalRuns", getTotalExecutionRuns());
         model.addAttribute("queueController", this);
         model.addAttribute("activeEditingFile", fileService.getActiveEditingFile());
+        model.addAttribute("runTags", runTags);
+    }
+
+    public Map<String, List<String>> getRunTags()
+    {
+        return runTags;
     }
 
     private Map<String, String> extractParams(final HttpServletRequest request)
@@ -805,6 +809,105 @@ public class AuraTestQueueController
         return "fragments/queue :: queueListContainerContent";
     }
 
+    @PostMapping(
+    {
+      "/api/queue/tags/add", "/api/queue/tag/add", "/api/config/tags/add", "/api/config/tag/add"
+    })
+    public String addQueueTag(
+        @RequestParam(name = "key", required = false) final String keyParam,
+        @RequestParam(name = "value", required = false) final String valueParam,
+        final HttpServletRequest request,
+        final Model model)
+    {
+        final Map<String, String> params = extractParams(request);
+        final String rawKey = keyParam != null ? keyParam : params.get("key");
+        final String rawValue = valueParam != null ? valueParam : params.get("value");
+
+        if (rawKey != null && !rawKey.isBlank())
+        {
+            final String cleanKey = rawKey.trim();
+            final String cleanVal = rawValue != null ? rawValue.trim() : "";
+            if (!cleanVal.isEmpty())
+            {
+                final String[] parts = cleanVal.contains(",") ? cleanVal.split(",") : new String[] { cleanVal };
+                for (final String part : parts)
+                {
+                    final String val = part.trim();
+                    if (!val.isEmpty())
+                    {
+                        runTags.compute(cleanKey, (k, list) -> {
+                            final List<String> targetList = (list != null) ? list : new ArrayList<>();
+                            if (!targetList.contains(val))
+                            {
+                                targetList.add(val);
+                            }
+                            return targetList;
+                        });
+                    }
+                }
+            }
+        }
+
+        populateQueueModel(model);
+        return "fragments/queue :: queueListContainerContent";
+    }
+
+    @PostMapping(
+    {
+      "/api/queue/tags/remove", "/api/queue/tag/remove", "/api/config/tags/remove", "/api/config/tag/remove"
+    })
+    public String removeQueueTag(
+        @RequestParam(name = "key", required = false) final String keyParam,
+        @RequestParam(name = "value", required = false) final String valueParam,
+        final HttpServletRequest request,
+        final Model model)
+    {
+        final Map<String, String> params = extractParams(request);
+        final String rawKey = keyParam != null ? keyParam : params.get("key");
+        final String rawValue = valueParam != null ? valueParam : params.get("value");
+
+        if (rawKey != null && !rawKey.isBlank())
+        {
+            final String cleanKey = rawKey.trim();
+            if (rawValue != null && !rawValue.isBlank())
+            {
+                final String cleanVal = rawValue.trim();
+                runTags.computeIfPresent(cleanKey, (k, list) -> {
+                    list.remove(cleanVal);
+                    return list.isEmpty() ? null : list;
+                });
+            }
+            else
+            {
+                runTags.remove(cleanKey);
+            }
+        }
+
+        populateQueueModel(model);
+        return "fragments/queue :: queueListContainerContent";
+    }
+
+    @PostMapping(
+    {
+      "/api/queue/tags/clear", "/api/queue/tag/clear", "/api/config/tags/clear", "/api/config/tag/clear"
+    })
+    public String clearQueueTags(final Model model)
+    {
+        runTags.clear();
+        populateQueueModel(model);
+        return "fragments/queue :: queueListContainerContent";
+    }
+
+    @GetMapping(
+    {
+      "/api/config/panel", "/api/config/refresh"
+    })
+    public String getConfigPanel(final Model model)
+    {
+        populateQueueModel(model);
+        return "fragments/queue :: configPanel";
+    }
+
     @PostMapping("/api/config/toggle")
     public String toggleConfig(final HttpServletRequest request, final Model model)
     {
@@ -1090,6 +1193,15 @@ public class AuraTestQueueController
         if (req.batchName == null && paramBatchName != null && !paramBatchName.isBlank())
         {
             req.batchName = paramBatchName.trim();
+        }
+
+        if (req.tags == null && !runTags.isEmpty())
+        {
+            req.tags = new LinkedHashMap<>();
+            for (final Map.Entry<String, List<String>> entry : runTags.entrySet())
+            {
+                req.tags.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+            }
         }
 
         if (req.datasets == null || req.datasets.isEmpty())
@@ -1424,29 +1536,6 @@ public class AuraTestQueueController
             LOGGER.info("Saved batch '{}' to database with {} queued test(s)", finalBatchName, queueToSave.size());
         }
 
-        try
-        {
-            final Path batchesDir = Paths.get("storage/batches");
-            if (!Files.exists(batchesDir))
-            {
-                Files.createDirectories(batchesDir);
-            }
-            final Path batchFile = batchesDir.resolve(finalBatchName.replaceAll("[^a-zA-Z0-9_.-]", "_") + ".json");
-            final Map<String, Object> diskBatchData = new LinkedHashMap<>();
-            diskBatchData.put("name", finalBatchName);
-            diskBatchData.put("environment", finalEnv);
-            diskBatchData.put("description", finalDesc);
-            diskBatchData.put("locales", localesCsv);
-            diskBatchData.put("browsers", browsersCsv);
-            diskBatchData.put("tests", queueToSave);
-            Files.writeString(batchFile, objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(diskBatchData), StandardCharsets.UTF_8);
-            LOGGER.info("Saved batch manifest to disk: {}", batchFile.toAbsolutePath());
-        }
-        catch (final Exception e)
-        {
-            LOGGER.warn("Failed to write batch manifest to disk: {}", e.getMessage());
-        }
-
         if (reportDataService != null)
         {
             reportDataService.clearCache();
@@ -1527,28 +1616,6 @@ public class AuraTestQueueController
                     {
                         LOGGER.warn("Failed to parse testsJson from database entity for batch '{}': {}", finalBatchName, e.getMessage());
                     }
-                }
-            }
-        }
-
-        final Path batchFile = Paths.get("storage/batches", finalBatchName.replaceAll("[^a-zA-Z0-9_.-]", "_") + ".json");
-        if (Files.exists(batchFile))
-        {
-            batchFound = true;
-            if (datasets.isEmpty())
-            {
-                try
-                {
-                    final String content = Files.readString(batchFile, StandardCharsets.UTF_8);
-                    final JsonNode rootNode = objectMapper.readTree(content);
-                    if (rootNode.has("tests") && rootNode.path("tests").isArray())
-                    {
-                        datasets = objectMapper.convertValue(rootNode.path("tests"), new TypeReference<List<DatasetSelection>>() {});
-                    }
-                }
-                catch (final Exception e)
-                {
-                    LOGGER.warn("Failed to parse disk batch manifest {}: {}", batchFile, e.getMessage());
                 }
             }
         }

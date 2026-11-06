@@ -33,7 +33,9 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +45,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.neodymium.ai.util.AtomicFileUtils;
+import org.neodymium.util.TagUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
@@ -51,7 +54,7 @@ import org.yaml.snakeyaml.Yaml;
  * Service handling test YAML file management, scanning, file CRUD operations,
  * directory expansions, and metadata extraction.
  *
- * @author AI-generated: Antigravity
+ * @author AI-generated: Gemini 3.8 Flash (High)
  * @author Xceptance GmbH 2026
  */
 public final class AuraFileService
@@ -63,6 +66,9 @@ public final class AuraFileService
 
     private static final Pattern AREA_TAG_SECTION_HEADER_PATTERN = Pattern.compile("^(steps|before|after|data|variables|_include|include):", Pattern.CASE_INSENSITIVE);
     private static final Pattern AREA_TAG_PATTERN = Pattern.compile("^\\s*#?\\s*@([a-zA-Z0-9_-]+)");
+    private static final Pattern STRUCTURED_AREA_TAG_PATTERN = Pattern.compile(
+        "(?im)^[ \\t]*(?:tags|_tags)\\s*:\\s*\\r?\\n(?:[ \\t]+[^\\r\\n]*\\r?\\n)*?[ \\t]+(?:area|Area)\\s*:\\s*(?:\\r?\\n[ \\t]*-\\s*[\"']?@?([a-zA-Z0-9][a-zA-Z0-9_-]*)[\"']?|[ \\t]*[\"']?@?([a-zA-Z0-9][a-zA-Z0-9_-]*)[\"']?)"
+    );
 
     /**
      * Normalizes folded block scalars ({@code >} and {@code >-}) to literal block scalars
@@ -93,12 +99,20 @@ public final class AuraFileService
      * @param content the raw YAML file content
      * @return the formatted area tag (e.g. {@code "@Checkout"}), or null if none is present
      */
-    public static String extractAreaTag(final String content)
+    /**
+     * Extracts all ordered area tags from the given playbook content.
+     * Searches top-level YAML comments (#@Area: ...) and structured tags/tags blocks.
+     *
+     * @param content the raw playbook YAML content
+     * @return the list of formatted area tags (e.g. {@code ["@Search", "@Browsing"]}), never null
+     */
+    public static List<String> extractAreaTags(final String content)
     {
         if (content == null || content.isBlank())
         {
-            return null;
+            return List.of();
         }
+        final List<String> result = new ArrayList<>();
         final String[] lines = content.split("\\r?\\n");
         for (final String line : lines)
         {
@@ -110,10 +124,86 @@ public final class AuraFileService
             final Matcher matcher = AREA_TAG_PATTERN.matcher(trimmed);
             if (matcher.find())
             {
-                return "@" + matcher.group(1);
+                final String tag = "@" + matcher.group(1);
+                if (!result.contains(tag))
+                {
+                    result.add(tag);
+                }
             }
         }
-        return null;
+        if (!result.isEmpty())
+        {
+            return result;
+        }
+        if (content.contains("tags:") || content.contains("_tags:"))
+        {
+            try
+            {
+                final String safeYaml = content.replaceAll("(?m)(-\\s*)@([a-zA-Z0-9_-]+)", "$1$2");
+                final Yaml yaml = new Yaml();
+                final Object data = yaml.load(safeYaml);
+                if (data instanceof Map<?, ?> map)
+                {
+                    final Object tagsObj = map.containsKey("tags") ? map.get("tags") : map.get("_tags");
+                    if (tagsObj != null)
+                    {
+                        final Map<String, List<String>> parsedTags = TagUtils.parseTags(tagsObj);
+                        for (final Map.Entry<String, List<String>> entry : parsedTags.entrySet())
+                        {
+                            if ("area".equalsIgnoreCase(entry.getKey()) && entry.getValue() != null && !entry.getValue().isEmpty())
+                            {
+                                for (final String val : entry.getValue())
+                                {
+                                    if (val != null && !val.isBlank())
+                                    {
+                                        final String clean = val.trim();
+                                        final String formatted = clean.startsWith("@") ? clean : "@" + clean;
+                                        if (!result.contains(formatted))
+                                        {
+                                            result.add(formatted);
+                                        }
+                                    }
+                                }
+                                if (!result.isEmpty())
+                                {
+                                    return result;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (final Exception ignored)
+            {
+            }
+
+            final Matcher tagMatcher = STRUCTURED_AREA_TAG_PATTERN.matcher(content);
+            if (tagMatcher.find())
+            {
+                final String matched = tagMatcher.group(1) != null ? tagMatcher.group(1) : tagMatcher.group(2);
+                if (matched != null && !matched.isBlank())
+                {
+                    final String clean = matched.trim();
+                    final String formatted = clean.startsWith("@") ? clean : "@" + clean;
+                    result.add(formatted);
+                    return result;
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Extracts an area tag from the given playbook content.
+     * Searches top-level YAML comments (#@Area: ...) and structured tags/tags blocks.
+     *
+     * @param content the raw playbook YAML content
+     * @return the formatted area tag (e.g. {@code "@Checkout"}), or null if none is present
+     */
+    public static String extractAreaTag(final String content)
+    {
+        final List<String> tags = extractAreaTags(content);
+        return tags.isEmpty() ? null : tags.get(0);
     }
 
     /**
@@ -140,23 +230,23 @@ public final class AuraFileService
     }
 
     /**
-     * Extracts an area tag from a playbook file path directly on the filesystem or classpath resources.
+     * Extracts all ordered area tags from a playbook file path directly on the filesystem or classpath resources.
      *
      * @param filePath the relative or absolute path of the playbook YAML file
-     * @return the formatted area tag (e.g. {@code "@Checkout"}), or null if not found
+     * @return the list of formatted area tags (e.g. {@code ["@Search", "@Browsing"]}), never null
      */
-    public static String extractAreaTagFromFileSystem(final String filePath)
+    public static List<String> extractAreaTagsFromFileSystem(final String filePath)
     {
         if (filePath == null || filePath.isBlank())
         {
-            return null;
+            return List.of();
         }
         final File f = new File(filePath);
         if (f.exists() && f.isFile())
         {
             try
             {
-                return extractAreaTag(Files.readString(f.toPath(), StandardCharsets.UTF_8));
+                return extractAreaTags(Files.readString(f.toPath(), StandardCharsets.UTF_8));
             }
             catch (final Exception ignored)
             {
@@ -167,13 +257,25 @@ public final class AuraFileService
         {
             try
             {
-                return extractAreaTag(Files.readString(resourceFile.toPath(), StandardCharsets.UTF_8));
+                return extractAreaTags(Files.readString(resourceFile.toPath(), StandardCharsets.UTF_8));
             }
             catch (final Exception ignored)
             {
             }
         }
-        return null;
+        return List.of();
+    }
+
+    /**
+     * Extracts an area tag from a playbook file path directly on the filesystem or classpath resources.
+     *
+     * @param filePath the relative or absolute path of the playbook YAML file
+     * @return the formatted area tag (e.g. {@code "@Checkout"}), or null if not found
+     */
+    public static String extractAreaTagFromFileSystem(final String filePath)
+    {
+        final List<String> tags = extractAreaTagsFromFileSystem(filePath);
+        return tags.isEmpty() ? null : tags.get(0);
     }
 
     private final Set<String> expandedFiles = ConcurrentHashMap.newKeySet();
@@ -300,14 +402,16 @@ public final class AuraFileService
                     {
                         fileHasPlaybook = true;
                     }
-                    enrichedDatasets.add(new DatasetDto(ds.id, ds.label, ds.hasTestId, dsHasPb, pbFile != null ? pbFile.getPath() : null));
+                    enrichedDatasets.add(new DatasetDto(ds.id, ds.label, ds.hasTestId, dsHasPb, pbFile != null ? pbFile.getPath() : null, ds.tags));
                 }
             }
             if (!fileHasPlaybook)
             {
                 fileHasPlaybook = hasPlaybook(file, null);
             }
-            responseList.add(new YamlFileDto(file, enrichedDatasets, hasError, error, fileHasPlaybook));
+            @SuppressWarnings("unchecked")
+            final Map<String, List<String>> fileTags = (Map<String, List<String>>) details.getOrDefault("tags", Collections.emptyMap());
+            responseList.add(new YamlFileDto(file, enrichedDatasets, hasError, error, fileHasPlaybook, fileTags));
         }
         return responseList;
     }
@@ -838,34 +942,309 @@ public final class AuraFileService
 
     public List<YamlFileDto> getFilteredYamlFilesList(final String query)
     {
-        final List<YamlFileDto> fullList = getYamlFilesList();
-        if (query == null || query.trim().isEmpty())
+        return filterYamlFiles(getYamlFilesList(), query);
+    }
+
+    /**
+     * Filters a list of YAML files by the specified search query, evaluating multi-tag conjunction (AND)
+     * across file-level and dataset-level tags, labels, and filenames.
+     *
+     * @param fullList the unfiltered list of YAML files
+     * @param query the raw search query
+     * @return the filtered list of YAML files, never null
+     */
+    public static List<YamlFileDto> filterYamlFiles(final List<YamlFileDto> fullList, final String query)
+    {
+        if (fullList == null || fullList.isEmpty())
+        {
+            return Collections.emptyList();
+        }
+        final List<String> tokens = parseSearchTokens(query);
+        if (tokens.isEmpty())
         {
             return fullList;
         }
-        final String lowerQuery = query.toLowerCase().trim();
+
+        final List<String> lowerTokens = tokens.stream().map(String::toLowerCase).toList();
         final List<YamlFileDto> filtered = new ArrayList<>();
+
         for (final YamlFileDto file : fullList)
         {
-            boolean match = file.file != null && file.file.toLowerCase().contains(lowerQuery);
-            if (!match && file.datasets != null)
+            // 1. Check if the file level matches all tokens
+            boolean fileLevelMatchesAll = true;
+            for (final String token : lowerTokens)
             {
+                if (!matchesFileOrTags(file, token))
+                {
+                    fileLevelMatchesAll = false;
+                    break;
+                }
+            }
+            if (fileLevelMatchesAll)
+            {
+                filtered.add(file);
+                continue;
+            }
+
+            // 2. Check if at least one dataset satisfies all tokens (inheriting file tags)
+            if (file.datasets != null && !file.datasets.isEmpty())
+            {
+                boolean anyDatasetMatchesAll = false;
                 for (final DatasetDto dataset : file.datasets)
                 {
-                    if ((dataset.label != null && dataset.label.toLowerCase().contains(lowerQuery))
-                            || (dataset.id != null && dataset.id.toLowerCase().contains(lowerQuery)))
+                    final Map<String, List<String>> mergedTags = (dataset.tags != null && !dataset.tags.isEmpty())
+                        ? TagUtils.mergeTags(file.tags, dataset.tags, null)
+                        : file.tags;
+
+                    boolean datasetMatchesAll = true;
+                    for (final String token : lowerTokens)
                     {
-                        match = true;
+                        if (!matchesDatasetToken(file, dataset, mergedTags, token))
+                        {
+                            datasetMatchesAll = false;
+                            break;
+                        }
+                    }
+                    if (datasetMatchesAll)
+                    {
+                        anyDatasetMatchesAll = true;
                         break;
                     }
                 }
-            }
-            if (match)
-            {
-                filtered.add(file);
+                if (anyDatasetMatchesAll)
+                {
+                    filtered.add(file);
+                }
             }
         }
         return filtered;
+    }
+
+    /**
+     * Splits a raw search query into individual search tokens.
+     * Supports comma- or semicolon-separated tokens, space-separated key-value tag pairs,
+     * or single query strings.
+     *
+     * @param rawQuery the raw query string
+     * @return a list of trimmed search tokens, never null
+     */
+    public static List<String> parseSearchTokens(final String rawQuery)
+    {
+        if (rawQuery == null || rawQuery.isBlank())
+        {
+            return Collections.emptyList();
+        }
+
+        final List<String> tokens = new ArrayList<>();
+        if (rawQuery.contains(",") || rawQuery.contains(";"))
+        {
+            for (final String part : rawQuery.split("[,;]+"))
+            {
+                final String trimmed = part.trim();
+                if (!trimmed.isEmpty())
+                {
+                    tokens.add(trimmed);
+                }
+            }
+        }
+        else if (rawQuery.contains(" ") && (rawQuery.contains(":") || rawQuery.contains("=") || rawQuery.toLowerCase().contains("tag:")))
+        {
+            for (final String part : rawQuery.split("\\s+"))
+            {
+                final String trimmed = part.trim();
+                if (!trimmed.isEmpty())
+                {
+                    tokens.add(trimmed);
+                }
+            }
+        }
+        else
+        {
+            final String trimmed = rawQuery.trim();
+            if (!trimmed.isEmpty())
+            {
+                tokens.add(trimmed);
+            }
+        }
+        return tokens;
+    }
+
+    private static boolean matchesFileOrTags(final YamlFileDto file, final String lowerToken)
+    {
+        if (file.file != null && file.file.toLowerCase().contains(lowerToken))
+        {
+            return true;
+        }
+        if (file.tags != null && matchesTagQuery(file.tags, lowerToken))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    private static boolean matchesDatasetToken(final YamlFileDto file, final DatasetDto dataset, final Map<String, List<String>> mergedTags, final String lowerToken)
+    {
+        if (file.file != null && file.file.toLowerCase().contains(lowerToken))
+        {
+            return true;
+        }
+        if (dataset.label != null && dataset.label.toLowerCase().contains(lowerToken))
+        {
+            return true;
+        }
+        if (dataset.id != null && dataset.id.toLowerCase().contains(lowerToken))
+        {
+            return true;
+        }
+        if (mergedTags != null && matchesTagQuery(mergedTags, lowerToken))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Determines whether a map of tags matches a user filter or search query.
+     * Supports exact tag key/value pairs ({@code key:val} or {@code key=val}),
+     * tag prefixes ({@code tag:key:val}), partial values, and boolean flags.
+     *
+     * @param tags the map of tag names to value lists
+     * @param rawQuery the filter or search query string
+     * @return true if the tags match the query, false otherwise
+     */
+    public static boolean matchesTagQuery(final Map<String, List<String>> tags, final String rawQuery)
+    {
+        if (tags == null || tags.isEmpty() || rawQuery == null || rawQuery.isBlank())
+        {
+            return false;
+        }
+
+        String query = rawQuery.trim().toLowerCase();
+        if (query.startsWith("tag:"))
+        {
+            query = query.substring(4).trim();
+        }
+        else if (query.startsWith("tags:"))
+        {
+            query = query.substring(5).trim();
+        }
+
+        if (query.isEmpty())
+        {
+            return false;
+        }
+
+        // 1. Key-value criteria query (e.g. "feature:checkout", "feature=checkout", "feature: checkout")
+        final int sepIdx = query.indexOf(':') >= 0 ? query.indexOf(':') : query.indexOf('=');
+        if (sepIdx > 0)
+        {
+            final String reqKey = query.substring(0, sepIdx).trim();
+            final String reqVal = query.substring(sepIdx + 1).trim();
+
+            for (final Map.Entry<String, List<String>> entry : tags.entrySet())
+            {
+                if (entry.getKey() != null && entry.getKey().trim().equalsIgnoreCase(reqKey))
+                {
+                    if (reqVal.isEmpty())
+                    {
+                        return true;
+                    }
+                    if (entry.getValue() != null)
+                    {
+                        for (final String val : entry.getValue())
+                        {
+                            if (val != null)
+                            {
+                                final String normVal = val.trim().toLowerCase();
+                                if (normVal.equals(reqVal) || normVal.contains(reqVal) || reqVal.contains(normVal))
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        // 2. Exact or substring match against any tag key, tag value, or combined key:value
+        for (final Map.Entry<String, List<String>> entry : tags.entrySet())
+        {
+            if (entry.getKey() == null)
+            {
+                continue;
+            }
+            final String keyNorm = entry.getKey().trim().toLowerCase();
+            if (keyNorm.contains(query) || query.contains(keyNorm))
+            {
+                return true;
+            }
+
+            if (entry.getValue() != null)
+            {
+                for (final String val : entry.getValue())
+                {
+                    if (val != null)
+                    {
+                        final String valNorm = val.trim().toLowerCase();
+                        if (valNorm.contains(query) || query.contains(valNorm))
+                        {
+                            return true;
+                        }
+                        final String combined = keyNorm + ":" + valNorm;
+                        if (combined.contains(query) || query.contains(combined))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback to TagUtils criteria matching
+        return TagUtils.matchesTagCriteria(tags, null, null, null, null, null, query);
+    }
+
+    /**
+     * Extracts all unique tag expressions (in {@code key:val} format) defined across
+     * a collection of test files, sorted alphabetically.
+     *
+     * @param files the collection of YAML test file DTOs
+     * @return an unmodifiable list of unique sorted tag expressions
+     */
+    public static List<String> extractAvailableTestTags(final List<YamlFileDto> files)
+    {
+        if (files == null || files.isEmpty())
+        {
+            return Collections.emptyList();
+        }
+
+        final Set<String> distinctTags = new LinkedHashSet<>();
+        for (final YamlFileDto file : files)
+        {
+            if (file.tags != null)
+            {
+                for (final Map.Entry<String, List<String>> entry : file.tags.entrySet())
+                {
+                    final String key = entry.getKey() != null ? entry.getKey().trim() : "";
+                    if (key.isEmpty() || entry.getValue() == null)
+                    {
+                        continue;
+                    }
+                    for (final String val : entry.getValue())
+                    {
+                        if (val != null && !val.trim().isEmpty())
+                        {
+                            distinctTags.add(key + ":" + val.trim());
+                        }
+                    }
+                }
+            }
+        }
+        final List<String> sortedList = new ArrayList<>(distinctTags);
+        Collections.sort(sortedList);
+        return Collections.unmodifiableList(sortedList);
     }
 
     public List<String> getStepsFilesList()
@@ -883,31 +1262,51 @@ public final class AuraFileService
     public List<String> getFilteredStepsFilesList(final String query)
     {
         final List<String> fullList = getStepsFilesList();
-        if (query == null || query.trim().isEmpty())
+        final List<String> tokens = parseSearchTokens(query);
+        if (tokens.isEmpty())
         {
             return fullList;
         }
-        final String lowerQuery = query.toLowerCase().trim();
+
+        final List<String> lowerTokens = tokens.stream().map(String::toLowerCase).toList();
         final List<String> filtered = new ArrayList<>();
         for (final String file : fullList)
         {
-            boolean match = file != null && file.toLowerCase().contains(lowerQuery);
-            if (!match && file != null)
+            if (file == null)
             {
-                try
+                continue;
+            }
+            String content = null;
+            boolean matchesAll = true;
+            for (final String token : lowerTokens)
+            {
+                boolean tokenMatch = file.toLowerCase().contains(token);
+                if (!tokenMatch)
                 {
-                    final String content = readYamlFileContent(file);
-                    if (content != null && content.toLowerCase().contains(lowerQuery))
+                    if (content == null)
                     {
-                        match = true;
+                        try
+                        {
+                            content = readYamlFileContent(file);
+                        }
+                        catch (final Exception e)
+                        {
+                            LOGGER.debug("Could not read steps file content for filter matching: {}", file, e);
+                            content = "";
+                        }
+                    }
+                    if (content != null && content.toLowerCase().contains(token))
+                    {
+                        tokenMatch = true;
                     }
                 }
-                catch (final Exception e)
+                if (!tokenMatch)
                 {
-                    LOGGER.debug("Could not read steps file content for filter matching: {}", file, e);
+                    matchesAll = false;
+                    break;
                 }
             }
-            if (match)
+            if (matchesAll)
             {
                 filtered.add(file);
             }
@@ -1093,6 +1492,20 @@ public final class AuraFileService
                 @SuppressWarnings("unchecked")
                 final Map<String, Object> root = (Map<String, Object>) data;
 
+                // Extract root tags and area tags
+                final Object tagsObj = root.containsKey("tags") ? root.get("tags") : root.get("_tags");
+                final Map<String, List<String>> parsedRootTags = tagsObj != null ? TagUtils.parseTags(tagsObj) : Collections.emptyMap();
+                final Map<String, List<String>> effectiveRootTags = new LinkedHashMap<>(parsedRootTags);
+                final String areaTag = extractAreaTagFromFile(file.getPath());
+                if (areaTag != null && !areaTag.isBlank())
+                {
+                    final boolean hasArea = effectiveRootTags.keySet().stream().anyMatch("area"::equalsIgnoreCase);
+                    if (!hasArea)
+                    {
+                        effectiveRootTags.put("area", List.of(areaTag));
+                    }
+                }
+
                 // Extract steps info
                 if (root.containsKey("steps"))
                 {
@@ -1131,6 +1544,9 @@ public final class AuraFileService
                             if (item instanceof Map)
                             {
                                 final Map<?, ?> itemMap = (Map<?, ?>) item;
+                                final Object dsTagsObj = itemMap.containsKey("tags") ? itemMap.get("tags") : itemMap.get("_tags");
+                                final Map<String, List<String>> dsTags = dsTagsObj != null ? TagUtils.parseTags(dsTagsObj) : Collections.emptyMap();
+
                                 final Object tId = itemMap.get("testId") != null ? itemMap.get("testId")
                                         : itemMap.get("TEST_ID") != null ? itemMap.get("TEST_ID")
                                         : itemMap.get("id") != null ? itemMap.get("id")
@@ -1138,11 +1554,11 @@ public final class AuraFileService
                                         : itemMap.get("testID");
                                 if (tId != null && !String.valueOf(tId).trim().isEmpty())
                                 {
-                                    datasetsList.add(new DatasetDto(String.valueOf(tId), String.valueOf(tId), true));
+                                    datasetsList.add(new DatasetDto(String.valueOf(tId), String.valueOf(tId), true, false, null, dsTags));
                                 }
                                 else
                                 {
-                                    datasetsList.add(new DatasetDto(String.valueOf(i + 1), "Dataset " + (i + 1), false));
+                                    datasetsList.add(new DatasetDto(String.valueOf(i + 1), "Dataset " + (i + 1), false, false, null, dsTags));
                                 }
                                 for (final Object key : itemMap.keySet())
                                 {
@@ -1165,11 +1581,11 @@ public final class AuraFileService
                             : root.get("testID");
                     if (tId != null && !String.valueOf(tId).trim().isEmpty())
                     {
-                        datasetsList.add(new DatasetDto(String.valueOf(tId), String.valueOf(tId), true));
+                        datasetsList.add(new DatasetDto(String.valueOf(tId), String.valueOf(tId), true, false, null, effectiveRootTags));
                     }
                     else
                     {
-                        datasetsList.add(new DatasetDto("1", "Dataset 1", false));
+                        datasetsList.add(new DatasetDto("1", "Dataset 1", false, false, null, effectiveRootTags));
                     }
                     for (final Object key : root.keySet())
                     {
@@ -1188,6 +1604,31 @@ public final class AuraFileService
                 }
                 details.put("testIds", testIds);
                 details.put("datasetKeys", datasetKeys);
+
+                final Map<String, List<String>> allTestTags = new LinkedHashMap<>();
+                for (final Map.Entry<String, List<String>> e : effectiveRootTags.entrySet())
+                {
+                    allTestTags.computeIfAbsent(e.getKey(), k -> new ArrayList<>()).addAll(e.getValue());
+                }
+                for (final DatasetDto d : datasetsList)
+                {
+                    if (d.tags != null)
+                    {
+                        for (final Map.Entry<String, List<String>> e : d.tags.entrySet())
+                        {
+                            final List<String> list = allTestTags.computeIfAbsent(e.getKey(), k -> new ArrayList<>());
+                            for (final String v : e.getValue())
+                            {
+                                if (!list.contains(v))
+                                {
+                                    list.add(v);
+                                }
+                            }
+                        }
+                    }
+                }
+                details.put("rootTags", Collections.unmodifiableMap(effectiveRootTags));
+                details.put("tags", Collections.unmodifiableMap(allTestTags));
             }
         }
         catch (final Exception e)
@@ -1198,6 +1639,8 @@ public final class AuraFileService
             details.put("hasError", true);
             details.put("error", e.getMessage());
             details.put("datasets", new ArrayList<DatasetDto>());
+            details.put("rootTags", Collections.emptyMap());
+            details.put("tags", Collections.emptyMap());
         }
         return details;
     }
@@ -1501,6 +1944,8 @@ public final class AuraFileService
         final List<Map<String, String>> dataMatrix = new ArrayList<>();
         final List<String> varKeys = new ArrayList<>();
         final Map<String, String> fragmentVarScopes = new HashMap<>();
+        final Map<String, List<String>> rootTags = new LinkedHashMap<>();
+        final List<Map<String, List<String>>> datasetTagsList = new ArrayList<>();
 
         if (content != null && !content.trim().isEmpty())
         {
@@ -1512,6 +1957,12 @@ public final class AuraFileService
                 if (loaded instanceof Map)
                 {
                     final Map<String, Object> root = (Map<String, Object>) loaded;
+
+                    final Object tagsObj = root.containsKey("tags") ? root.get("tags") : root.get("_tags");
+                    if (tagsObj != null)
+                    {
+                        rootTags.putAll(TagUtils.parseTags(tagsObj));
+                    }
 
                     final List<String> extractedBefore = extractSectionStepsWithComments(content, "before");
                     if (!extractedBefore.isEmpty())
@@ -1569,10 +2020,18 @@ public final class AuraFileService
                             if (item instanceof Map)
                             {
                                 final Map<?, ?> itemMap = (Map<?, ?>) item;
+                                final Object dsTagsObj = itemMap.containsKey("tags") ? itemMap.get("tags") : itemMap.get("_tags");
+                                final Map<String, List<String>> dsTags = dsTagsObj != null ? TagUtils.parseTags(dsTagsObj) : new LinkedHashMap<>();
+                                datasetTagsList.add(dsTags);
+
                                 final Map<String, String> row = new HashMap<>();
                                 for (final Map.Entry<?, ?> entry : itemMap.entrySet())
                                 {
                                     final String k = String.valueOf(entry.getKey());
+                                    if ("tags".equals(k) || "_tags".equals(k))
+                                    {
+                                        continue;
+                                    }
                                     final String v = entry.getValue() != null ? String.valueOf(entry.getValue()) : "";
                                     row.put(k, v);
                                     if (!varKeys.contains(k))
@@ -1707,6 +2166,8 @@ public final class AuraFileService
         result.put("dataMatrix", dataMatrix);
         result.put("varKeys", varKeys);
         result.put("fragmentVarScopes", fragmentVarScopes);
+        result.put("rootTags", rootTags);
+        result.put("datasetTagsList", datasetTagsList);
         result.put("areaTag", extractAreaTag(content));
         return result;
     }

@@ -53,6 +53,7 @@ public final class BatchSummaryDto
     private final int latestFixedAiCount;
     private final int latestKnownAiCount;
     private final int latestUnknownAiCount;
+    private final String historyUrl;
 
     public BatchSummaryDto(
         final String id,
@@ -66,6 +67,24 @@ public final class BatchSummaryDto
         final List<String> browsers)
     {
         this(id, name, environment, description, lastExecuted, latestPassRate, knownBugs, locales, browsers, null, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    }
+
+    public BatchSummaryDto(
+        final String id,
+        final String name,
+        final String environment,
+        final String description,
+        final String lastExecuted,
+        final String latestPassRate,
+        final String knownBugs,
+        final List<String> locales,
+        final List<String> browsers,
+        final String historyUrl)
+    {
+        this(id, name, environment, description, lastExecuted, latestPassRate, knownBugs, locales, browsers, null,
+             0, 0, 0, 0, 0, 0,
+             0, 0, 0, 0,
+             0, 0, 0, 0, historyUrl);
     }
 
     public BatchSummaryDto(
@@ -145,6 +164,39 @@ public final class BatchSummaryDto
         final int latestKnownAiCount,
         final int latestUnknownAiCount)
     {
+        this(id, name, environment, description, lastExecuted, latestPassRate, knownBugs, locales, browsers, latestRunId,
+             latestPassedCount, latestFixedCount, latestKnownCount, latestUnknownCount, latestIgnoredCount, latestTotalTests,
+             latestPassHealedCount, latestFixedHealedCount, latestKnownHealedCount, latestUnknownHealedCount,
+             latestPassAiCount, latestFixedAiCount, latestKnownAiCount, latestUnknownAiCount, null);
+    }
+
+    public BatchSummaryDto(
+        final String id,
+        final String name,
+        final String environment,
+        final String description,
+        final String lastExecuted,
+        final String latestPassRate,
+        final String knownBugs,
+        final List<String> locales,
+        final List<String> browsers,
+        final String latestRunId,
+        final int latestPassedCount,
+        final int latestFixedCount,
+        final int latestKnownCount,
+        final int latestUnknownCount,
+        final int latestIgnoredCount,
+        final int latestTotalTests,
+        final int latestPassHealedCount,
+        final int latestFixedHealedCount,
+        final int latestKnownHealedCount,
+        final int latestUnknownHealedCount,
+        final int latestPassAiCount,
+        final int latestFixedAiCount,
+        final int latestKnownAiCount,
+        final int latestUnknownAiCount,
+        final String historyUrl)
+    {
         this.id = id;
         this.name = name;
         this.environment = environment;
@@ -169,6 +221,12 @@ public final class BatchSummaryDto
         this.latestFixedAiCount = latestFixedAiCount;
         this.latestKnownAiCount = latestKnownAiCount;
         this.latestUnknownAiCount = latestUnknownAiCount;
+        this.historyUrl = historyUrl;
+    }
+
+    public String getHistoryUrl()
+    {
+        return historyUrl;
     }
 
     public String getId()

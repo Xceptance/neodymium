@@ -18,6 +18,8 @@
  */
 package com.xceptance.neodymium.aura;
 
+import com.xceptance.neodymium.aura.dto.DatasetDto;
+import com.xceptance.neodymium.aura.dto.YamlFileDto;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -822,6 +824,53 @@ public class AuraFileServiceTest
     }
 
     @Test
+    public void testExtractAreaTagFromStructuredYamlTags() throws IOException
+    {
+        final String yamlWithTagList = """
+            tags:
+              Area:
+                - Search
+                - Browsing
+            steps: |
+              Select the language
+            """;
+        Assertions.assertEquals("@Search", AuraFileService.extractAreaTag(yamlWithTagList));
+        Assertions.assertEquals(List.of("@Search", "@Browsing"), AuraFileService.extractAreaTags(yamlWithTagList));
+
+        final String yamlWithTagScalar = """
+            tags:
+              area: Checkout
+            steps: |
+              Proceed to payment
+            """;
+        Assertions.assertEquals("@Checkout", AuraFileService.extractAreaTag(yamlWithTagScalar));
+        Assertions.assertEquals(List.of("@Checkout"), AuraFileService.extractAreaTags(yamlWithTagScalar));
+
+        final String yamlWithPrefixedTag = """
+            tags:
+              Area:
+                - @Account
+            steps: |
+              Open profile
+            """;
+        Assertions.assertEquals("@Account", AuraFileService.extractAreaTag(yamlWithPrefixedTag));
+        Assertions.assertEquals(List.of("@Account"), AuraFileService.extractAreaTags(yamlWithPrefixedTag));
+
+        final File tempFile = File.createTempFile("playbook-structured-area-", ".yaml");
+        try
+        {
+            Files.writeString(tempFile.toPath(), yamlWithTagList, StandardCharsets.UTF_8);
+            final String tag = AuraFileService.extractAreaTagFromFileSystem(tempFile.getAbsolutePath());
+            Assertions.assertEquals("@Search", tag);
+            Assertions.assertEquals(List.of("@Search", "@Browsing"), AuraFileService.extractAreaTagsFromFileSystem(tempFile.getAbsolutePath()));
+        }
+        finally
+        {
+            tempFile.delete();
+        }
+    }
+
+    @Test
     public void testParsePlaybookSectionsWithAreaTag()
     {
         final AuraFileService fileService = new AuraFileService();
@@ -842,5 +891,209 @@ public class AuraFileServiceTest
         Assertions.assertNotNull(mainSteps);
         Assertions.assertEquals(1, mainSteps.size());
         Assertions.assertEquals("Open https://verla.xceptance.com", mainSteps.get(0));
+    }
+
+    @Test
+    public void testParsePlaybookSectionsWithRootAndDatasetTags()
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String content = """
+            tags:
+              tag3: value
+              tag4:
+                - value2
+                - value3
+            steps: |
+              Open https://verla.xceptance.com
+            data:
+              -
+                tags:
+                  tag1: val1
+                testId: "en"
+                searchPhrase: "Neodymium magnet"
+              -
+                tags:
+                  tag2:
+                    - vA
+                    - vB
+                testId: "de"
+                searchPhrase: "Magnet"
+            """;
+
+        final Map<String, Object> sections = fileService.parsePlaybookSections(content);
+        Assertions.assertNotNull(sections);
+        Assertions.assertEquals(Boolean.FALSE, sections.get("hasError"));
+
+        @SuppressWarnings("unchecked")
+        final Map<String, List<String>> rootTags = (Map<String, List<String>>) sections.get("rootTags");
+        Assertions.assertNotNull(rootTags);
+        Assertions.assertEquals(List.of("value"), rootTags.get("tag3"));
+        Assertions.assertEquals(List.of("value2", "value3"), rootTags.get("tag4"));
+
+        @SuppressWarnings("unchecked")
+        final List<Map<String, List<String>>> datasetTagsList = (List<Map<String, List<String>>>) sections.get("datasetTagsList");
+        Assertions.assertNotNull(datasetTagsList);
+        Assertions.assertEquals(2, datasetTagsList.size());
+        Assertions.assertEquals(List.of("val1"), datasetTagsList.get(0).get("tag1"));
+        Assertions.assertEquals(List.of("vA", "vB"), datasetTagsList.get(1).get("tag2"));
+
+        @SuppressWarnings("unchecked")
+        final List<String> varKeys = (List<String>) sections.get("varKeys");
+        Assertions.assertFalse(varKeys.contains("tags"));
+        Assertions.assertTrue(varKeys.contains("testId"));
+        Assertions.assertTrue(varKeys.contains("searchPhrase"));
+    }
+
+    @Test
+    public void testExtractTagsInFileDetails() throws IOException
+    {
+        final AuraFileService fileService = new AuraFileService();
+        final String fileName = "test_tags_extract.yaml";
+        final String yamlContent = """
+            tags:
+              feature: checkout
+              smoke: true
+            steps:
+              - Open https://example.com
+            data:
+              - testId: "us"
+                tags:
+                  tier: p1
+              - testId: "de"
+                tags:
+                  tier: p2
+            """;
+
+        try
+        {
+            fileService.saveYamlFileContent(fileName, yamlContent);
+            final File file = new File(fileService.getResourcesDirectory(), fileName);
+            final Map<String, Object> details = fileService.getFileDetails(file);
+
+            Assertions.assertNotNull(details);
+            @SuppressWarnings("unchecked")
+            final Map<String, List<String>> rootTags = (Map<String, List<String>>) details.get("rootTags");
+            Assertions.assertNotNull(rootTags);
+            Assertions.assertEquals(List.of("checkout"), rootTags.get("feature"));
+            Assertions.assertEquals(List.of("true"), rootTags.get("smoke"));
+
+            @SuppressWarnings("unchecked")
+            final Map<String, List<String>> allTags = (Map<String, List<String>>) details.get("tags");
+            Assertions.assertNotNull(allTags);
+            Assertions.assertEquals(List.of("checkout"), allTags.get("feature"));
+            Assertions.assertEquals(List.of("true"), allTags.get("smoke"));
+            Assertions.assertEquals(List.of("p1", "p2"), allTags.get("tier"));
+
+            @SuppressWarnings("unchecked")
+            final List<DatasetDto> datasets = (List<DatasetDto>) details.get("datasets");
+            Assertions.assertEquals(2, datasets.size());
+            Assertions.assertEquals(List.of("p1"), datasets.get(0).tags.get("tier"));
+            Assertions.assertEquals(List.of("p2"), datasets.get(1).tags.get("tier"));
+        }
+        finally
+        {
+            fileService.deleteYamlFile(fileName);
+        }
+    }
+
+    @Test
+    public void testMatchesTagQuery()
+    {
+        final Map<String, List<String>> tags = Map.of(
+            "feature", List.of("checkout"),
+            "smoke", List.of("true"),
+            "area", List.of("@Checkout"),
+            "tier", List.of("p1", "critical")
+        );
+
+        // Exact key:value matches
+        Assertions.assertTrue(AuraFileService.matchesTagQuery(tags, "feature:checkout"));
+        Assertions.assertTrue(AuraFileService.matchesTagQuery(tags, "feature: checkout"));
+        Assertions.assertTrue(AuraFileService.matchesTagQuery(tags, "feature=checkout"));
+        Assertions.assertTrue(AuraFileService.matchesTagQuery(tags, "tag:feature:checkout"));
+        Assertions.assertTrue(AuraFileService.matchesTagQuery(tags, "tags:smoke:true"));
+        Assertions.assertTrue(AuraFileService.matchesTagQuery(tags, "tier:critical"));
+
+        // Key only
+        Assertions.assertTrue(AuraFileService.matchesTagQuery(tags, "feature"));
+        Assertions.assertTrue(AuraFileService.matchesTagQuery(tags, "smoke"));
+
+        // Value only
+        Assertions.assertTrue(AuraFileService.matchesTagQuery(tags, "checkout"));
+        Assertions.assertTrue(AuraFileService.matchesTagQuery(tags, "p1"));
+        Assertions.assertTrue(AuraFileService.matchesTagQuery(tags, "@Checkout"));
+
+        // Non-matches
+        Assertions.assertFalse(AuraFileService.matchesTagQuery(tags, "feature:login"));
+        Assertions.assertFalse(AuraFileService.matchesTagQuery(tags, "tier:p3"));
+        Assertions.assertFalse(AuraFileService.matchesTagQuery(tags, "unrelated"));
+        Assertions.assertFalse(AuraFileService.matchesTagQuery(null, "checkout"));
+        Assertions.assertFalse(AuraFileService.matchesTagQuery(tags, ""));
+    }
+
+    @Test
+    public void testExtractAvailableTestTags()
+    {
+        final YamlFileDto file1 = new YamlFileDto("test1.yaml", List.of(), false, null, false, Map.of(
+            "feature", List.of("checkout"),
+            "smoke", List.of("true")
+        ));
+        final YamlFileDto file2 = new YamlFileDto("test2.yaml", List.of(), false, null, false, Map.of(
+            "feature", List.of("login"),
+            "smoke", List.of("true")
+        ));
+
+        final List<String> available = AuraFileService.extractAvailableTestTags(List.of(file1, file2));
+        Assertions.assertEquals(3, available.size());
+        Assertions.assertEquals(List.of("feature:checkout", "feature:login", "smoke:true"), available);
+    }
+
+    @Test
+    public void testParseSearchTokens()
+    {
+        Assertions.assertTrue(AuraFileService.parseSearchTokens(null).isEmpty());
+        Assertions.assertTrue(AuraFileService.parseSearchTokens("").isEmpty());
+        Assertions.assertTrue(AuraFileService.parseSearchTokens("   ").isEmpty());
+
+        Assertions.assertEquals(List.of("checkout"), AuraFileService.parseSearchTokens("checkout"));
+        Assertions.assertEquals(List.of("feature:checkout", "priority:high"), AuraFileService.parseSearchTokens("feature:checkout, priority:high"));
+        Assertions.assertEquals(List.of("feature:checkout", "priority:high", "smoke"), AuraFileService.parseSearchTokens("feature:checkout; priority:high, smoke"));
+        Assertions.assertEquals(List.of("tag:smoke", "env:staging"), AuraFileService.parseSearchTokens("tag:smoke env:staging"));
+    }
+
+    @Test
+    public void testGetFilteredYamlFilesListWithMultipleTags()
+    {
+        final DatasetDto ds1 = new DatasetDto("ds1", "Dataset 1", false, false, null, Map.of(
+            "feature", List.of("checkout"),
+            "priority", List.of("high")
+        ));
+        final DatasetDto ds2 = new DatasetDto("ds2", "Dataset 2", false, false, null, Map.of(
+            "feature", List.of("login"),
+            "priority", List.of("low")
+        ));
+        final YamlFileDto bothTagsFile = new YamlFileDto("checkout_both.yaml", List.of(ds1, ds2), false, null, false, Map.of());
+
+        final DatasetDto ds3 = new DatasetDto("ds3", "Dataset 3", false, false, null, Map.of("priority", List.of("high")));
+        final YamlFileDto inheritedTagsFile = new YamlFileDto("checkout_inherited.yaml", List.of(ds3), false, null, false, Map.of(
+            "feature", List.of("checkout")
+        ));
+
+        final DatasetDto ds4 = new DatasetDto("ds4", "Dataset 4", false, false, null, Map.of("feature", List.of("checkout")));
+        final DatasetDto ds5 = new DatasetDto("ds5", "Dataset 5", false, false, null, Map.of("priority", List.of("high")));
+        final YamlFileDto disjointTagsFile = new YamlFileDto("disjoint.yaml", List.of(ds4, ds5), false, null, false, Map.of());
+
+        final List<YamlFileDto> files = List.of(bothTagsFile, inheritedTagsFile, disjointTagsFile);
+
+        // Single tag query
+        final List<YamlFileDto> singleMatch = AuraFileService.filterYamlFiles(files, "feature:checkout");
+        Assertions.assertEquals(3, singleMatch.size());
+
+        // Multi-tag conjunction query: bothTagsFile and inheritedTagsFile should match; disjointTagsFile should NOT match
+        final List<YamlFileDto> multiMatch = AuraFileService.filterYamlFiles(files, "feature:checkout, priority:high");
+        Assertions.assertEquals(2, multiMatch.size());
+        Assertions.assertTrue(multiMatch.stream().anyMatch(f -> "checkout_both.yaml".equals(f.file)));
+        Assertions.assertTrue(multiMatch.stream().anyMatch(f -> "checkout_inherited.yaml".equals(f.file)));
+        Assertions.assertFalse(multiMatch.stream().anyMatch(f -> "disjoint.yaml".equals(f.file)));
     }
 }

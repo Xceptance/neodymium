@@ -60,6 +60,7 @@ public class AuraTestFileController
         model.addAttribute("selectedKeys", queueController.getSelectedQueueKeys());
         model.addAttribute("selectedFileKeys", queueController.getFullySelectedFileKeys(files));
         model.addAttribute("partiallySelectedFileKeys", queueController.getPartiallySelectedFileKeys(files));
+        model.addAttribute("availableTags", AuraFileService.extractAvailableTestTags(fileService.getYamlFilesList()));
     }
 
     @GetMapping("/api/files/panel")
