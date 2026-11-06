@@ -64,9 +64,11 @@ import org.neodymium.ai.resources.InMemoryResourceManager;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.telemetry.TokenBudgetGuard;
 import org.neodymium.common.browser.Browser;
+import org.neodymium.common.browser.WebDriverCache;
 import org.neodymium.common.browser.WebDriverStateContainer;
 import org.neodymium.util.Neodymium;
 import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WrapsDriver;
 import com.codeborne.selenide.WebDriverRunner;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -915,6 +917,195 @@ public class NeodymiumAiRunnerTest
         finally
         {
             Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Goal: Verifies that AiInvocationExtension.afterEach does NOT close or quit a WebDriver that has been
+     * returned to WebDriverCache (e.g. by BrowserExecutionCallback before an @AfterEach method when
+     * startNewBrowserForCleanUp = true and reuseDriver = true).
+     * Prevents regression of issue #479 (NoSuchSessionException on reused driver).
+     */
+    @Test
+    public void testAiInvocationExtensionPreservesCachedWebDriverAcrossAfterEach() throws Exception
+    {
+        final AtomicBoolean quitCalled = new AtomicBoolean(false);
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            WebDriver.class.getClassLoader(),
+            new Class<?>[]{WebDriver.class},
+            (proxy, m, args) -> {
+                if ("quit".equals(m.getName()))
+                {
+                    quitCalled.set(true);
+                }
+                return null;
+            }
+        );
+
+        final WebDriverStateContainer container = new WebDriverStateContainer();
+        container.setWebDriver(mockDriver);
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleBrowserAiTestClass.class.getMethod("sampleMethod");
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleBrowserAiTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final List<Extension> extensions = invocations.get(0).getAdditionalExtensions();
+            final AfterEachCallback afterEach = (AfterEachCallback) extensions.stream()
+                .filter(e -> e instanceof AfterEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            // Simulate driver registered in Selenide WebDriverRunner, but already reclaimed into WebDriverCache
+            // and detached from Neodymium thread context (exact state during @AfterEach execution)
+            WebDriverRunner.setWebDriver(mockDriver);
+            WebDriverCache.instance.putWebDriverStateContainer("Chrome_1024x768", container);
+            Neodymium.setWebDriverStateContainer(null);
+
+            afterEach.afterEach(extensionContext);
+
+            Assertions.assertFalse(quitCalled.get(), "Cached WebDriver must not be quit by AiInvocationExtension.afterEach");
+            Assertions.assertTrue(WebDriverCache.instance.containsWebDriver(mockDriver), "Cached WebDriver must remain in WebDriverCache");
+            Assertions.assertFalse(WebDriverRunner.hasWebDriverStarted(), "WebDriverRunner must be reset after caching so ThreadLocal does not leak");
+        }
+        finally
+        {
+            WebDriverCache.instance.removeWebDriverStateContainer("Chrome_1024x768");
+            WebDriverRunner.closeWebDriver();
+            Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Sample test class without @Browser annotation to verify unmanaged WebDriver cleanup.
+     */
+    public static class SampleStandaloneAiTestClass
+    {
+        @Test
+        @AiInlinePlaybook("name: sample-standalone\nsteps:\n  - step: Click search button\n")
+        public void sampleMethod()
+        {
+        }
+    }
+
+    /**
+     * Goal: Verifies that AiInvocationExtension.afterEach properly closes and quits an unmanaged WebDriver
+     * that is NOT present in WebDriverCache and NOT managed by Neodymium's WebDriverStateContainer.
+     */
+    @Test
+    public void testAiInvocationExtensionCleansUpWhenNotCached() throws Exception
+    {
+        final AtomicBoolean quitCalled = new AtomicBoolean(false);
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            WebDriver.class.getClassLoader(),
+            new Class<?>[]{WebDriver.class},
+            (proxy, m, args) -> {
+                if ("quit".equals(m.getName()))
+                {
+                    quitCalled.set(true);
+                }
+                return null;
+            }
+        );
+
+        try
+        {
+            final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+            final Method method = SampleStandaloneAiTestClass.class.getMethod("sampleMethod");
+            final ExtensionContext extensionContext = createMockExtensionContext(SampleStandaloneAiTestClass.class, method);
+
+            final List<TestTemplateInvocationContext> invocations =
+                runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertFalse(invocations.isEmpty());
+
+            final List<Extension> extensions = invocations.get(0).getAdditionalExtensions();
+            final AfterEachCallback afterEach = (AfterEachCallback) extensions.stream()
+                .filter(e -> e instanceof AfterEachCallback)
+                .findFirst()
+                .orElseThrow();
+
+            // Register standalone driver in Selenide WebDriverRunner without caching it in Neodymium
+            WebDriverRunner.setWebDriver(mockDriver);
+            Neodymium.setWebDriverStateContainer(null);
+
+            afterEach.afterEach(extensionContext);
+
+            Assertions.assertTrue(quitCalled.get(), "Unmanaged WebDriver must be quit by AiInvocationExtension.afterEach");
+            Assertions.assertFalse(WebDriverRunner.hasWebDriverStarted(), "WebDriverRunner must report no started driver");
+        }
+        finally
+        {
+            WebDriverRunner.closeWebDriver();
+            Neodymium.clearThreadContext();
+        }
+    }
+
+    /**
+     * Goal: Verifies that WebDriverCache.containsWebDriver correctly identifies cached WebDrivers
+     * regardless of whether raw, wrapped, or decorated instances are supplied.
+     */
+    @Test
+    public void testWebDriverCacheContainsWebDriver()
+    {
+        final WebDriver mockDriver = (WebDriver) Proxy.newProxyInstance(
+            WebDriver.class.getClassLoader(),
+            new Class<?>[]{WebDriver.class},
+            (proxy, m, args) -> null
+        );
+
+        final WebDriver wrappedDriver = (WebDriver) Proxy.newProxyInstance(
+            NeodymiumAiRunnerTest.class.getClassLoader(),
+            new Class<?>[]{WebDriver.class, WrapsDriver.class},
+            (proxy, m, args) -> {
+                if ("getWrappedDriver".equals(m.getName()))
+                {
+                    return mockDriver;
+                }
+                return null;
+            }
+        );
+
+        final WebDriverStateContainer container = new WebDriverStateContainer();
+        container.setWebDriver(mockDriver);
+
+        try
+        {
+            Assertions.assertFalse(WebDriverCache.instance.containsWebDriver(mockDriver), "Cache must not contain driver before insertion");
+
+            WebDriverCache.instance.putWebDriverStateContainer("testTag", container);
+
+            // 1. Direct raw equality
+            Assertions.assertTrue(WebDriverCache.instance.containsWebDriver(mockDriver), "Cache must contain registered raw driver");
+
+            // 2. Wrapped candidate matching raw cached driver
+            Assertions.assertTrue(WebDriverCache.instance.containsWebDriver(wrappedDriver), "Cache must recognize wrapped driver pointing to cached driver");
+
+            // 3. Raw candidate matching wrapped cached driver
+            final WebDriverStateContainer wrappedContainer = new WebDriverStateContainer();
+            wrappedContainer.setWebDriver(wrappedDriver);
+            WebDriverCache.instance.putWebDriverStateContainer("testWrappedTag", wrappedContainer);
+
+            Assertions.assertTrue(WebDriverCache.instance.containsWebDriver(mockDriver), "Cache with wrapped driver must recognize raw driver candidate");
+
+            // 4. Null and unknown drivers
+            Assertions.assertFalse(WebDriverCache.instance.containsWebDriver(null), "Null driver must return false");
+
+            final WebDriver unknownDriver = (WebDriver) Proxy.newProxyInstance(
+                WebDriver.class.getClassLoader(),
+                new Class<?>[]{WebDriver.class},
+                (proxy, m, args) -> null
+            );
+            Assertions.assertFalse(WebDriverCache.instance.containsWebDriver(unknownDriver), "Unrelated driver must return false");
+        }
+        finally
+        {
+            WebDriverCache.instance.removeWebDriverStateContainer("testTag");
+            WebDriverCache.instance.removeWebDriverStateContainer("testWrappedTag");
         }
     }
 
