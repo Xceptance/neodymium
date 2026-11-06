@@ -24,6 +24,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.model.UnresolvableVariableException;
 
 /**
  * Dedicated unit tests for {@link ToolCallVariableResolver}.
@@ -102,5 +103,88 @@ public class ToolCallVariableResolverTest
 
         // variableName should NOT be resolved even if a variable with that name exists in SessionData
         Assertions.assertEquals("extractedValue", resolved.arguments().path("variableName").asText());
+    }
+
+    @Test
+    public void testResolveVariablesFastPathReturnsSameCallWhenNoPlaceholderPresent()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("var", "val", false);
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("selector", "#btn");
+        args.put("text", "plain text without placeholders");
+
+        final ToolCall call = new ToolCall("callFast", "click", args);
+        final ToolCall resolved = ToolCallVariableResolver.resolveVariables(call, sessionData);
+
+        Assertions.assertSame(call, resolved);
+    }
+
+    @Test
+    public void testResolveVariablesPreservesBrowserStoreAliasTargetVariable()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("orderId", "12345", false);
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("variableName", "orderId");
+        args.put("value", "ConstantText");
+
+        final ToolCall call = new ToolCall("callBrowserStore", "browser_store", args);
+        final ToolCall resolved = ToolCallVariableResolver.resolveVariables(call, sessionData);
+
+        Assertions.assertEquals("orderId", resolved.arguments().path("variableName").asText());
+    }
+
+    @Test
+    public void testResolveVariablesSkipsUnresolvableCompositeSelfReferentialStoreValue()
+    {
+        final SessionData sessionData = new SessionData();
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("variableName", "tempKey");
+        args.put("value", "prefix_${tempKey}_suffix");
+
+        final ToolCall call = new ToolCall("callStoreComposite", "store", args);
+        final ToolCall resolved = ToolCallVariableResolver.resolveVariables(call, sessionData);
+
+        Assertions.assertEquals("tempKey", resolved.arguments().path("variableName").asText());
+        Assertions.assertEquals("prefix_${tempKey}_suffix", resolved.arguments().path("value").asText());
+    }
+
+    @Test
+    public void testResolveVariablesResolvesSiblingWhilePreservingUnresolvableSelfReferentialStoreValue()
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("validVar", "resolvedVal", false);
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("variableName", "tempKey");
+        args.put("value", "prefix_${validVar}_${tempKey}_suffix");
+
+        final ToolCall call = new ToolCall("callStoreCompositeSibling", "store", args);
+        final ToolCall resolved = ToolCallVariableResolver.resolveVariables(call, sessionData);
+
+        Assertions.assertEquals("tempKey", resolved.arguments().path("variableName").asText());
+        Assertions.assertEquals("prefix_resolvedVal_${tempKey}_suffix", resolved.arguments().path("value").asText());
+    }
+
+    @Test
+    public void testResolveVariablesStrictlyFailsOnMissingSiblingInCompositeStoreValue()
+    {
+        final SessionData sessionData = new SessionData();
+
+        final ObjectNode args = MAPPER.createObjectNode();
+        args.put("variableName", "tempKey");
+        args.put("value", "prefix_${tempKey}_${missingVar}_suffix");
+
+        final ToolCall call = new ToolCall("callStoreCompositeMissingSibling", "store", args);
+
+        final UnresolvableVariableException ex = Assertions.assertThrows(
+                UnresolvableVariableException.class,
+                () -> ToolCallVariableResolver.resolveVariables(call, sessionData)
+        );
+        Assertions.assertEquals("missingVar", ex.getVariableName());
     }
 }

@@ -24,7 +24,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.model.UnresolvableVariableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,8 +60,15 @@ public final class ToolCallVariableResolver
             return call;
         }
 
+        final String argsString = call.arguments().toString();
+        if (!argsString.contains("${"))
+        {
+            return call;
+        }
+
         final ObjectNode args = call.arguments().deepCopy();
-        final boolean isStoreTool = call.toolName() != null && "store".equalsIgnoreCase(call.toolName().trim());
+        final boolean isStoreTool = call.toolName() != null
+                && ("store".equalsIgnoreCase(call.toolName().trim()) || "browser_store".equalsIgnoreCase(call.toolName().trim()));
         final String storeTargetVar;
         if (isStoreTool)
         {
@@ -118,16 +127,37 @@ public final class ToolCallVariableResolver
             if (child.isTextual())
             {
                 final String original = child.asText();
-                if (isStoreTool && storeTargetVar != null && "value".equals(key) && original.equals("${" + storeTargetVar + "}"))
+                if (!original.contains("${"))
+                {
+                    continue;
+                }
+
+                final String resolved;
+                if (isStoreTool && storeTargetVar != null && "value".equals(key) && original.contains("${" + storeTargetVar + "}"))
                 {
                     if (sessionData.get(storeTargetVar) == null)
                     {
-                        LOGGER.warn("Skipping unresolvable self-referential variable placeholder '{}' in store tool value", original);
-                        continue;
+                        final Set<String> allKeys = sessionData.extractVariableNames(original);
+                        for (final String varKey : allKeys)
+                        {
+                            if (!varKey.equals(storeTargetVar) && sessionData.get(varKey) == null)
+                            {
+                                throw new UnresolvableVariableException(varKey, original);
+                            }
+                        }
+                        LOGGER.warn("Resolving available sibling variables while preserving unresolvable self-referential placeholder in store tool value '{}'", original);
+                        resolved = sessionData.resolveAvailableVariables(original);
+                    }
+                    else
+                    {
+                        resolved = sessionData.resolveVariables(original);
                     }
                 }
+                else
+                {
+                    resolved = sessionData.resolveVariables(original);
+                }
 
-                final String resolved = sessionData.resolveVariables(original);
                 if (!resolved.equals(original))
                 {
                     objectNode.put(key, resolved);
@@ -161,6 +191,11 @@ public final class ToolCallVariableResolver
             if (element.isTextual())
             {
                 final String original = element.asText();
+                if (!original.contains("${"))
+                {
+                    continue;
+                }
+
                 final String resolved = sessionData.resolveVariables(original);
                 if (!resolved.equals(original))
                 {

@@ -67,8 +67,10 @@ import org.neodymium.ai.pipeline.TokenBudgetExceededException;
 import org.neodymium.ai.prompt.AiAgentPrompts;
 import org.neodymium.ai.prompt.DefaultActionSanitizer;
 import org.neodymium.ai.prompt.LlmResponseSanitizer;
+import org.neodymium.ai.prompt.LlmSanitizerHelper;
 import org.neodymium.ai.session.AiSession;
 import org.neodymium.ai.model.SessionData;
+import org.neodymium.ai.model.UnresolvableVariableException;
 import org.neodymium.ai.tool.AiTool;
 import org.neodymium.ai.tool.SimpleToolContext;
 import org.neodymium.ai.tool.ToolCall;
@@ -102,10 +104,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Pipeline step driving iterative agent tool execution (Think -&gt; ToolCall -&gt; Observe -&gt; Finish)
@@ -937,13 +941,15 @@ public final class AgentToolLoopStep implements PipelineStep
                         if (verdict.decision() == InterceptionVerdict.Decision.RETRY_WITH_FEEDBACK)
                         {
                             LOGGER.info("⚖️ Quality Judge requested retry with feedback for single-shot action '{}'; falling back to interactive agent loop", singleShotCall.toolName());
+                            conversation.add(ChatMessage.assistant(response != null && response.content() != null ? response.content() : ""));
+                            conversation.add(ChatMessage.user("Action rejected by Quality Judge: " + verdict.reason() + ". Please retry using interactive tools."));
                             isSingleShotAction = false;
                             executedCalls.clear();
                             break;
                         }
                         throw new ConclusiveFailureException("Tool call rejected by guard: " + verdict.reason());
                     }
-                    final java.util.Optional<AiTool> toolOpt = this.toolRegistry.getTool(effectiveCall.toolName());
+                    final Optional<AiTool> toolOpt = this.toolRegistry.getTool(effectiveCall.toolName());
                     if (toolOpt.isPresent())
                     {
                         final ToolResult result;
@@ -951,6 +957,12 @@ public final class AgentToolLoopStep implements PipelineStep
                         {
                             final ToolCall executableCall = ToolCallVariableResolver.resolveVariables(effectiveCall, context.getSessionData());
                             result = toolOpt.get().execute(executableCall, toolContext);
+                        }
+                        catch (final UnresolvableVariableException e)
+                        {
+                            handleSingleShotUnresolvableVariable(e, effectiveCall, executedCalls, conversation, response);
+                            isSingleShotAction = false;
+                            break;
                         }
                         catch (final AssertionError e)
                         {
@@ -1020,13 +1032,25 @@ public final class AgentToolLoopStep implements PipelineStep
                                 final SessionData sessionData = context.getSessionData();
                                 final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
                                 final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
-                                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
+                                session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
                             }
                         }
                     }
                     else if (executor != null)
                     {
-                        Action mappedAction = mapToolCallToAction(effectiveCall);
+                        final ToolCall executableCall;
+                        try
+                        {
+                            executableCall = ToolCallVariableResolver.resolveVariables(effectiveCall, context.getSessionData());
+                        }
+                        catch (final UnresolvableVariableException e)
+                        {
+                            handleSingleShotUnresolvableVariable(e, effectiveCall, executedCalls, conversation, response);
+                            isSingleShotAction = false;
+                            break;
+                        }
+
+                        Action mappedAction = mapToolCallToAction(executableCall);
                         if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
                         {
                             mappedAction = mappedAction.withReasoning(thought.trim());
@@ -1049,14 +1073,19 @@ public final class AgentToolLoopStep implements PipelineStep
                         {
                             final SessionData sessionData = context.getSessionData();
                             final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
-                            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
-                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
+                            final Action rawAction = mapToolCallToAction(effectiveCall);
+                            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(rawAction, sessionData) : rawAction;
+                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
                         }
                     }
                     else
                     {
                         throw new IllegalArgumentException("Unknown tool: " + effectiveCall.toolName());
                     }
+                }
+                if (!isSingleShotAction)
+                {
+                    continue turnLoop;
                 }
                 final String summary = "Actions completed";
                 context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
@@ -1538,7 +1567,7 @@ public final class AgentToolLoopStep implements PipelineStep
                                     partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
                                 }
                             }
-                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, true));
+                            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
                         }
                     }
                     if ("screenshot".equals(effectiveCall.toolName()) || "browser_take_screenshot".equals(effectiveCall.toolName()))
@@ -1652,20 +1681,11 @@ public final class AgentToolLoopStep implements PipelineStep
 
                 // Task 3.3: Append structured ToolResult JSON directly to role: "TOOL"
                 String toolContent = result != null ? result.content() : "{\"status\":\"SUCCESS\"}";
-                if (context.getSessionData() != null)
+                final SessionData sessionData = context.getSessionData();
+                final Map<String, String> sensitiveMap = sessionData != null ? sessionData.getRawSensitiveData() : null;
+                if (sensitiveMap != null && !sensitiveMap.isEmpty())
                 {
-                    final Map<String, String> sensitiveMap = context.getSessionData().getRawSensitiveData();
-                    if (sensitiveMap != null && !sensitiveMap.isEmpty())
-                    {
-                        for (final Map.Entry<String, String> entry : sensitiveMap.entrySet())
-                        {
-                            final String secretVal = entry.getValue();
-                            if (secretVal != null && !secretVal.isEmpty())
-                            {
-                                toolContent = toolContent.replace(secretVal, "[MASKED_VAR_" + entry.getKey() + "]");
-                            }
-                        }
-                    }
+                    toolContent = LlmSanitizerHelper.maskJsonOrTextContent(toolContent, sensitiveMap);
                 }
                 if (result == null || result.status() != ToolResult.Status.SUCCESS)
                 {
@@ -1675,7 +1695,10 @@ public final class AgentToolLoopStep implements PipelineStep
                     );
                     if (alert != null)
                     {
-                        toolContent = toolContent + "\n\n" + alert;
+                        final String sanitizedAlert = (sensitiveMap != null && !sensitiveMap.isEmpty())
+                            ? LlmSanitizerHelper.maskSensitiveValues(alert, sensitiveMap)
+                            : alert;
+                        toolContent = toolContent + "\n\n" + sanitizedAlert;
                     }
                 }
                 conversation.add(ChatMessage.tool(effectiveCall.callId(), effectiveCall.toolName(), toolContent));
@@ -3637,8 +3660,31 @@ public final class AgentToolLoopStep implements PipelineStep
                     partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
                 }
             }
-            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, mappedAction, false));
+            session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, false));
         }
+    }
+
+    private static void handleSingleShotUnresolvableVariable(
+        final UnresolvableVariableException e,
+        final ToolCall effectiveCall,
+        final List<ToolCall> executedCalls,
+        final List<ChatMessage> conversation,
+        final LlmResponse response
+    )
+    {
+        LOGGER.warn("⚠️ Unresolvable variable '{}' in single-shot action '{}'; falling back to interactive agent loop", e.getVariableName(), effectiveCall.toolName());
+        final int executedBeforeFailure = executedCalls.size();
+        final String executedSummary = executedBeforeFailure > 0
+                ? executedCalls.stream().map(ToolCall::toolName).collect(Collectors.joining(", "))
+                : "";
+        final String priorInfo = executedBeforeFailure > 0
+                ? executedBeforeFailure + " preceding action(s) (" + executedSummary + ") in this single-shot batch were already executed in the browser. Do not repeat them. "
+                : "";
+        final String feedbackMsg = priorInfo + "Action '" + effectiveCall.toolName()
+                + "' execution failed: Unresolvable variable placeholder '${" + e.getVariableName()
+                + "}'. Please resolve or store the variable first, or proceed using interactive tools.";
+        conversation.add(ChatMessage.assistant(response != null && response.content() != null ? response.content() : ""));
+        conversation.add(ChatMessage.user(feedbackMsg));
     }
 
     private static boolean isAssertionTool(final String toolName)

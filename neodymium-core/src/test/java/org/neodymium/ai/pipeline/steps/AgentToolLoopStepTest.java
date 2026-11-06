@@ -42,6 +42,7 @@ import org.neodymium.ai.client.SutAttachment;
 import org.neodymium.ai.client.TokenUsage;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEventBus;
+import org.neodymium.ai.event.ExecutionListener;
 import org.neodymium.ai.event.InteractiveConsoleListener;
 import org.neodymium.ai.event.structural.ActionExecutedEvent;
 import org.neodymium.ai.session.AiSession;
@@ -4921,6 +4922,161 @@ public class AgentToolLoopStepTest
         Assertions.assertEquals(1, executedCalls.size());
         final ToolCall recordedCall = (ToolCall) executedCalls.get(0);
         Assertions.assertEquals("${blog.password}", recordedCall.arguments().path("text").asText());
+    }
+
+    @Test
+    public void testSingleShotActionWithUnresolvableVariableFallsBackToInteractiveLoop() throws Exception
+    {
+        this.context = new ExecutionContext(new SessionData());
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("type", "Types text", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Typed text");
+            }
+        });
+
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Goal reached");
+            }
+        });
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Single-shot action proposing an unresolvable variable
+                return new LlmResponse("{\"thought\":\"typing unresolvable var\",\"action\":\"TYPE\",\"target\":\"#input\",\"value\":\"${unresolvedVar}\"}", new TokenUsage(10, 10, 20), "mock");
+            }
+            // Turn 2: Fallback to interactive agent loop and complete step
+            return new LlmResponse("{\"thought\":\"recovering via interactive tool\",\"tool_call\":{\"name\":\"complete_step\",\"arguments\":{\"summary\":\"Recovered via interactive loop\"}}}", new TokenUsage(10, 10, 20), "mock");
+        };
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Type the value");
+
+        step.execute(this.context);
+
+        Assertions.assertEquals("Recovered via interactive loop", this.context.getTransientData().get(AgentToolLoopStep.KEY_TOOL_LOOP_SUMMARY));
+        Assertions.assertEquals(2, turn.get());
+    }
+
+    @Test
+    public void testSingleShotBatchPreservesPrecedingExecutedCallsWhenSubsequentActionFailsWithUnresolvableVariable() throws Exception
+    {
+        this.context = new ExecutionContext(new SessionData());
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final AtomicInteger turn = new AtomicInteger(0);
+        final AgentLoopLlmCaller caller = (req, ctx) -> {
+            final int t = turn.incrementAndGet();
+            if (t == 1)
+            {
+                // Batch of 2 single-shot actions: first succeeds via executor, second has unresolvable var
+                return new LlmResponse("{\"actions\":[{\"action\":\"CLICK\",\"target\":\"#btn\"},{\"action\":\"TYPE\",\"target\":\"#input\",\"value\":\"${missingVar}\"}]}", new TokenUsage(10, 10, 20), "mock");
+            }
+            // Turn 2: Fallback to interactive complete_step
+            final String turn2Prompt = req.messages().get(req.messages().size() - 1).content();
+            Assertions.assertTrue(turn2Prompt.contains("1 preceding action(s) (click) in this single-shot batch were already executed in the browser. Do not repeat them."),
+                    "Fallback feedback message must inform the model of previously executed action names");
+            Assertions.assertTrue(turn2Prompt.contains("Action 'type' execution failed"),
+                    "Fallback feedback message must identify the failing action name");
+            return new LlmResponse("{\"thought\":\"completing\",\"tool_call\":{\"name\":\"complete_step\",\"arguments\":{\"summary\":\"Done\"}}}", new TokenUsage(10, 10, 20), "mock");
+        };
+
+        final ObjectNode schema = MAPPER.createObjectNode();
+        schema.put("type", "object");
+        this.registry.register(new AiTool()
+        {
+            private final ToolDefinition def = new ToolDefinition("complete_step", "Completes step", schema);
+
+            @Override
+            public ToolDefinition getDefinition()
+            {
+                return this.def;
+            }
+
+            @Override
+            public ToolResult execute(final ToolCall call, final ToolContext ctx)
+            {
+                return ToolResult.success(call.callId(), "Goal reached");
+            }
+        });
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), caller, 30);
+        final PlaybookStep playbookStep = new PlaybookStep("Perform batch action");
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP, playbookStep);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Perform batch action");
+
+        step.execute(this.context);
+
+        Assertions.assertEquals(1, executor.getExecutedActions().size(), "Action 1 must have run against the SUT via executor");
+        final List<ToolCall> recordedCalls = playbookStep.getToolCalls();
+        Assertions.assertTrue(recordedCalls.stream().anyMatch(c -> "click".equalsIgnoreCase(c.toolName())),
+                "Action 1 must be preserved in recorded toolCalls and not erased by executedCalls.clear()");
+    }
+
+    @Test
+    public void testSingleShotActionExecutedEventDispatchesMaskedRawAction() throws Exception
+    {
+        final SessionData sessionData = new SessionData();
+        sessionData.putDynamic("user.password", "secretPassword123", true);
+
+        final AtomicReference<Action> capturedCanonicalAction = new AtomicReference<>();
+        final AtomicReference<Action> capturedResolvedAction = new AtomicReference<>();
+        final ExecutionEventBus eventBus = new ExecutionEventBus();
+        eventBus.registerListener(event -> {
+            if (event instanceof ActionExecutedEvent aee)
+            {
+                capturedCanonicalAction.set(aee.getAction());
+                capturedResolvedAction.set(aee.getResolvedAction());
+            }
+        });
+
+        final MockLlmProvider mockLlm = new MockLlmProvider();
+        mockLlm.addResponse(new LlmResponse("{\"action\":\"TYPE\",\"target\":\"#pwd\",\"value\":\"${user.password}\"}", new TokenUsage(10, 10, 20), "mock"));
+        final LlmRegistry llmRegistry = new LlmRegistry();
+        llmRegistry.setDefaultProvider(mockLlm);
+        final MockTargetExecutor executor = new MockTargetExecutor();
+        final AiSession session = AiSession.mock(ExecutionMode.LLM_ONLY, sessionData, llmRegistry, eventBus, executor);
+
+        this.context = session.getExecutionContext();
+        this.context.getTransientData().put(ExecutionContext.KEY_SESSION, session);
+        this.context.getTransientData().put(ExecutionContext.KEY_CURRENT_INSTRUCTION, "Enter password");
+        this.context.getTransientData().put(ExecutionContext.KEY_TARGET_EXECUTOR, executor);
+
+        final AgentToolLoopStep step = new AgentToolLoopStep(this.registry, new QualityJudgeToolInterceptor(), null, 30);
+        step.execute(this.context);
+
+        Assertions.assertNotNull(capturedCanonicalAction.get(), "ActionExecutedEvent must be dispatched");
+        Assertions.assertEquals("${user.password}", capturedCanonicalAction.get().getValue(), "action (canonical) in event must retain variable placeholder without leaking secret");
+        Assertions.assertNotNull(capturedResolvedAction.get(), "resolvedAction must be populated in ActionExecutedEvent");
+        Assertions.assertEquals("${user.password}", capturedResolvedAction.get().getValue(), "resolvedAction in event must retain variable placeholder without leaking secret");
     }
 }
 
