@@ -486,7 +486,14 @@ public class LocalRunJsonStorageService
                                               || (node.has("healedStepsCount") && node.path("healedStepsCount").asInt(0) > 0)
                                               || "healed".equalsIgnoreCase(rawStatus);
 
-                        if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus))
+                        final boolean hasNodeFailure = (node.hasNonNull("failure") && !"NONE".equalsIgnoreCase(node.get("failure").asText()))
+                                || node.hasNonNull("error")
+                                || node.hasNonNull("exception")
+                                || node.hasNonNull("errorMessage");
+                        final boolean isFinishedSuccess = "finished".equalsIgnoreCase(rawStatus) && extractStepsFailed(node) <= 0 && !hasNodeFailure;
+                        final boolean isFinishedFailure = "finished".equalsIgnoreCase(rawStatus) && !isFinishedSuccess;
+
+                        if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus) || isFinishedFailure)
                         {
                             if (hasBugs)
                             {
@@ -505,7 +512,8 @@ public class LocalRunJsonStorageService
                                 }
                             }
                         }
-                        else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus) || "healed".equalsIgnoreCase(rawStatus))
+                        else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus) || "healed".equalsIgnoreCase(rawStatus)
+                                || isFinishedSuccess)
                         {
                             if (hasBugs || "succeeded-fixed".equalsIgnoreCase(rawStatus))
                             {
@@ -675,6 +683,21 @@ public class LocalRunJsonStorageService
                     if ("healed".equalsIgnoreCase(baseStatus))
                     {
                         effStatus = hasBugsNode ? "succeeded-fixed" : "passed-clean";
+                    }
+                    else if ("finished".equalsIgnoreCase(baseStatus))
+                    {
+                        final boolean hasNodeFailure = (objNode.hasNonNull("failure") && !"NONE".equalsIgnoreCase(objNode.get("failure").asText()))
+                                || objNode.hasNonNull("error")
+                                || objNode.hasNonNull("exception")
+                                || objNode.hasNonNull("errorMessage");
+                        if (extractStepsFailed(objNode) <= 0 && !hasNodeFailure)
+                        {
+                            effStatus = hasBugsNode ? "succeeded-fixed" : "passed-clean";
+                        }
+                        else
+                        {
+                            effStatus = hasBugsNode ? "failed-known" : "failed-unknown";
+                        }
                     }
                     else
                     {

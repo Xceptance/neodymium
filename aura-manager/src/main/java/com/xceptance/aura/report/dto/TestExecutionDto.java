@@ -536,11 +536,12 @@ public final class TestExecutionDto
             return "RUNNING";
         }
         final boolean hasBugs = bugs != null && !bugs.isEmpty();
-        if ("succeeded-fixed".equals(st) || "fixed".equals(st) || (("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st)) && hasBugs))
+        final boolean isFinishedSuccess = "finished".equals(st) && (getFailedStepsCount() <= 0) && (failure == null || "NONE".equalsIgnoreCase(failure));
+        if ("succeeded-fixed".equals(st) || "fixed".equals(st) || (("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st) || isFinishedSuccess) && hasBugs))
         {
             return "SUCCEEDED_FIXED";
         }
-        if ("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st) || "healed".equals(st))
+        if ("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st) || "healed".equals(st) || isFinishedSuccess)
         {
             return "PASSED";
         }

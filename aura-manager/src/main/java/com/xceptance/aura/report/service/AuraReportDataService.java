@@ -1047,6 +1047,11 @@ public class AuraReportDataService
                 {
                     exec.setStatus(hasBugs ? "failed-known" : "failed-unknown");
                 }
+                else if ("finished".equalsIgnoreCase(raw))
+                {
+                    final boolean isFinishedSuccess = exec.getFailedStepsCount() <= 0 && (exec.getFailure() == null || "NONE".equalsIgnoreCase(exec.getFailure()));
+                    exec.setStatus(isFinishedSuccess ? (hasBugs ? "succeeded-fixed" : "passed-clean") : (hasBugs ? "failed-known" : "failed-unknown"));
+                }
                 else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw) || "succeeded".equalsIgnoreCase(raw) || "healed".equalsIgnoreCase(raw))
                 {
                     exec.setStatus(hasBugs ? "succeeded-fixed" : "passed-clean");
@@ -2024,6 +2029,11 @@ public class AuraReportDataService
                 if ("failed".equalsIgnoreCase(raw) || "failed-known".equalsIgnoreCase(raw) || "failed-unknown".equalsIgnoreCase(raw) || "error".equalsIgnoreCase(raw) || "failure".equalsIgnoreCase(raw))
                 {
                     effectiveStatus = hasBugs ? "failed-known" : "failed-unknown";
+                }
+                else if ("finished".equalsIgnoreCase(raw))
+                {
+                    final boolean isFinishedSuccess = dto.getFailedStepsCount() <= 0 && (dto.getFailure() == null || "NONE".equalsIgnoreCase(dto.getFailure()));
+                    effectiveStatus = isFinishedSuccess ? (hasBugs ? "succeeded-fixed" : "passed-clean") : (hasBugs ? "failed-known" : "failed-unknown");
                 }
                 else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw))
                 {
@@ -3306,7 +3316,7 @@ public class AuraReportDataService
                 case "failed-unknown", "failed", "error", "unknown" -> unknown++;
                 case "ignored", "skipped" -> ignored++;
                 case "running", "in_progress", "executing", "pending" -> running++;
-                default -> pass++;
+                default -> unknown++;
             }
         }
 

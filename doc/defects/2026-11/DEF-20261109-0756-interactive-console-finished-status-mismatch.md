@@ -1,0 +1,17 @@
+# [DEF-20261109-0756] Interactive Console Server Uses Non-Standard Status "finished" Causing False UNKNOWN FAIL in Reports
+
+- **Status:** `Resolved`
+- **Opened:** 2026-11-09 07:56
+- **Closed:** 2026-11-09 09:56
+- **Component:** `neodymium-core`, `aura-manager`
+- **Scope:** `Framework & Test/Harness`
+- **Linked Ticket:** GitLab Issue #111 (`[neo] Interactive Console Simulation Uses Non-Standard Status Causing False UNKNOWN FAIL`)
+- **Symptom:** Test executions originating from `InteractiveConsoleServer` simulations (such as `CheckoutFlowTest`) display a red `UNKNOWN FAIL` badge in the Aura Manager run report overview table, yet clicking on the test row opens the side panel where all test steps are displayed as passed (green).
+- **Root Cause:** In `InteractiveConsoleServer.runSimulationInternal()`, completing a simulation successfully without errors set `activeState.addProperty("status", "finished")`, conflating the interactive session lifecycle phase with the test execution outcome. In contrast, standard Neodymium runners (e.g. `InteractiveConsoleListener`) set `"passed"`. Because `TestExecutionDto.getDisplayStatusKey()`, `AuraReportDataService`, `LocalRunJsonStorageService`, and `generate_run_json.py` only recognized `"passed"`, `"passed-clean"`, `"succeeded"`, or `"healed"` as successful outcomes, executions with raw status `"finished"` fell through to `FAILED_UNKNOWN` despite having 0 failed steps. Furthermore, failing executions with status `"finished"` fell through fallback logic into `effStatus = "ignored"` in variation repositories and `default -> pass++` in report generation.
+- **Detection Gap ("What did we miss?"):** Unit tests for `AuraReportDataService` and `RunStorageSyncService` tested explicit statuses `"passed"`, `"failed"`, and `"running"`, but did not assert on test execution files containing the raw string `"finished"` paired with zero or non-zero failed steps.
+- **Resolution:**
+  1. Updated `InteractiveConsoleServer.java` to scan `allSteps` for failed steps before setting `activeState` outcome (setting `"failed"` if any step failed, otherwise `"passed"`).
+  2. Updated `TestExecutionDto.java` (`getDisplayStatusKey()`), `AuraReportDataService.java`, and `LocalRunJsonStorageService.java` to defensively recognize `"finished"` with `failedStepsCount <= 0` and no errors as `PASSED` / `"passed-clean"`.
+  3. Ensured failing `"finished"` executions (with `failedStepsCount > 0` or error/failure attributes) map to `failed-known` / `failed-unknown` across `AuraReportDataService.java`, `LocalRunJsonStorageService.java`, and `generate_run_json.py`, without swallowing into `ignored` or inflating pass counts.
+  4. Hardened unmapped fallback handling in `AuraReportDataService.buildRunReportDto()` to `default -> unknown++`.
+- **Safety Net Added:** Added permanent regression tests in `AuraReportFinishedStatusMappingTest` (`testExecutionDtoDisplayStatusKeyForFinished`, `testRunReportStorageAndReportGenerationWithFinishedStatus`, and `testRunReportStorageAndReportGenerationWithFinishedStatus_Failing`) asserting that clean `"finished"` produces `PASSED` / `passed-clean` and failing `"finished"` produces `FAILED_UNKNOWN` / `failed-unknown`. Updated `InteractiveConsoleServerTest.testInteractiveConsoleJsApplyStatePreservesFinalPauseToken` verifying pauseId preservation.

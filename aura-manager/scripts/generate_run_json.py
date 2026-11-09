@@ -253,6 +253,11 @@ def extract_execution_metrics(exec_data, test_class_name):
         effective_status = "succeeded-fixed" if has_bugs else "passed-clean"
     elif raw_status in ("succeeded-fixed", "fixed", "healed"):
         effective_status = "succeeded-fixed"
+    elif raw_status == "finished":
+        if not has_error and (failed_steps is None or failed_steps == 0):
+            effective_status = "succeeded-fixed" if has_bugs else "passed-clean"
+        else:
+            effective_status = "failed-known" if has_bugs else "failed-unknown"
     elif raw_status in ("ignored", "skipped", "cancelled"):
         effective_status = "ignored"
     elif raw_status in ("running", "in_progress", "executing", "pending", ""):
