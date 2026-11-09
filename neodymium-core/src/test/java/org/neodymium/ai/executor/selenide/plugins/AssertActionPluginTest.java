@@ -19,16 +19,19 @@
 package org.neodymium.ai.executor.selenide.plugins;
 
 import com.codeborne.selenide.Configuration;
+import com.codeborne.selenide.Driver;
 import com.codeborne.selenide.WebDriverRunner;
 import java.lang.reflect.Proxy;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.neodymium.ai.action.Action;
 import org.openqa.selenium.JavascriptExecutor;
+import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.interactions.Interactive;
@@ -403,9 +406,245 @@ public class AssertActionPluginTest
 
         final AssertAction plugin = new AssertAction();
 
-        // Both 'hidden' and 'invisible' should pass via Condition.hidden
+        // Both 'hidden' and 'invisible' should pass via Condition.hidden / Condition.or
         plugin.execute(new Action("ASSERT", "#hidden-div", "hidden", "verify hidden", "reasoning", false));
         plugin.execute(new Action("ASSERT", "#hidden-div", "invisible", "verify invisible", "reasoning", false));
         plugin.execute(new Action("ASSERT", "#hidden-div", "[hidden]", "verify [hidden]", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#hidden-div", "absent", "verify absent", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#hidden-div", "[absent]", "verify [absent]", "reasoning", false));
+    }
+
+    @Test
+    public void testLegacyAssertUnfocusedWithAsyncFocusPolling() throws Exception
+    {
+        final WebElement unfocusedElement = (WebElement) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("equals".equals(name))
+                    {
+                        return proxy == args[0];
+                    }
+                    if ("isDisplayed".equals(name) || "isEnabled".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "input";
+                    }
+                    if ("getAttribute".equals(name) && "id".equals(args[0]))
+                    {
+                        return "async-unfocused-input";
+                    }
+                    return null;
+                }
+        );
+
+        final AtomicInteger jsCallCount = new AtomicInteger(0);
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("findElement".equals(name))
+                    {
+                        return unfocusedElement;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return List.of(unfocusedElement);
+                    }
+                    if ("executeScript".equals(name))
+                    {
+                        final String script = (String) args[0];
+                        if (script != null && script.contains("==="))
+                        {
+                            // First call reports focused, subsequent calls report unfocused
+                            return jsCallCount.incrementAndGet() == 1 ? Boolean.TRUE : Boolean.FALSE;
+                        }
+                        return null;
+                    }
+                    if ("switchTo".equals(name))
+                    {
+                        return (WebDriver.TargetLocator) Proxy.newProxyInstance(
+                                AssertActionPluginTest.class.getClassLoader(),
+                                new Class<?>[]{WebDriver.TargetLocator.class},
+                                (p, m, a) -> null
+                        );
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final long origTimeout = Configuration.timeout;
+        final long origPoll = Configuration.pollingInterval;
+        Configuration.timeout = 1000;
+        Configuration.pollingInterval = 20;
+        try
+        {
+            final AssertAction plugin = new AssertAction();
+            // Polling should allow it to succeed when JS flips from true to false
+            plugin.execute(new Action("ASSERT", "#async-unfocused-input", "unfocused", "verify unfocused", "reasoning", false));
+            Assertions.assertTrue(jsCallCount.get() >= 2, "Polling must have retried JS check at least once");
+        }
+        finally
+        {
+            Configuration.timeout = origTimeout;
+            Configuration.pollingInterval = origPoll;
+        }
+    }
+
+    @Test
+    public void testLegacyAssertFocusedWithAsyncFocusPolling() throws Exception
+    {
+        final WebElement focusedElement = (WebElement) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("equals".equals(name))
+                    {
+                        return proxy == args[0];
+                    }
+                    if ("isDisplayed".equals(name) || "isEnabled".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "input";
+                    }
+                    if ("getAttribute".equals(name) && "id".equals(args[0]))
+                    {
+                        return "async-focused-input";
+                    }
+                    return null;
+                }
+        );
+
+        final AtomicInteger jsCallCount = new AtomicInteger(0);
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("findElement".equals(name))
+                    {
+                        return focusedElement;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return List.of(focusedElement);
+                    }
+                    if ("executeScript".equals(name))
+                    {
+                        final String script = (String) args[0];
+                        if (script != null && script.contains("==="))
+                        {
+                            // First call reports false (not yet focused), subsequent calls report true (focused)
+                            return jsCallCount.incrementAndGet() == 1 ? Boolean.FALSE : Boolean.TRUE;
+                        }
+                        return null;
+                    }
+                    if ("switchTo".equals(name))
+                    {
+                        return (WebDriver.TargetLocator) Proxy.newProxyInstance(
+                                AssertActionPluginTest.class.getClassLoader(),
+                                new Class<?>[]{WebDriver.TargetLocator.class},
+                                (p, m, a) -> null
+                        );
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final long origTimeout = Configuration.timeout;
+        final long origPoll = Configuration.pollingInterval;
+        Configuration.timeout = 1000;
+        Configuration.pollingInterval = 20;
+        try
+        {
+            final AssertAction plugin = new AssertAction();
+            // Polling should allow it to succeed when JS flips from false to true
+            plugin.execute(new Action("ASSERT", "#async-focused-input", "focused", "verify focused", "reasoning", false));
+            Assertions.assertTrue(jsCallCount.get() >= 2, "Polling must have retried JS check at least once");
+        }
+        finally
+        {
+            Configuration.timeout = origTimeout;
+            Configuration.pollingInterval = origPoll;
+        }
+    }
+
+    @Test
+    public void testFocusedAndUnfocusedRethrowStaleElementReferenceException()
+    {
+        final WebElement staleElement = (WebElement) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    throw new StaleElementReferenceException("Element is stale");
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("switchTo".equals(name))
+                    {
+                        return (WebDriver.TargetLocator) Proxy.newProxyInstance(
+                                AssertActionPluginTest.class.getClassLoader(),
+                                new Class<?>[]{WebDriver.TargetLocator.class},
+                                (p, m, a) ->
+                                {
+                                    throw new StaleElementReferenceException("Active element is stale");
+                                }
+                        );
+                    }
+                    return null;
+                }
+        );
+
+        final Driver selenideDriver = (Driver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{Driver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("getWebDriver".equals(name))
+                    {
+                        return mockDriver;
+                    }
+                    if ("executeJavaScript".equals(name))
+                    {
+                        throw new StaleElementReferenceException("Script execution element is stale");
+                    }
+                    return null;
+                }
+        );
+
+        Assertions.assertThrows(StaleElementReferenceException.class, () ->
+        {
+            AssertAction.UNFOCUSED.check(selenideDriver, staleElement);
+        });
+
+        Assertions.assertThrows(StaleElementReferenceException.class, () ->
+        {
+            AssertAction.FOCUSED.check(selenideDriver, staleElement);
+        });
     }
 }

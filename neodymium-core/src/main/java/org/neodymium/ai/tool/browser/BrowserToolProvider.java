@@ -34,6 +34,7 @@ import org.neodymium.ai.executor.selenide.LocatorResolver;
 import org.neodymium.ai.executor.selenide.PageAnalyzer;
 import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 import org.neodymium.ai.executor.selenide.frame.FrameContextManager;
+import org.neodymium.ai.executor.selenide.plugins.AssertAction;
 import org.neodymium.ai.executor.selenide.plugins.ClickAction;
 import org.neodymium.ai.executor.selenide.plugins.FillFormAction;
 import org.neodymium.ai.executor.selenide.plugins.FillFormAction.FormFieldEntry;
@@ -2772,11 +2773,11 @@ public final class BrowserToolProvider
                         }
                     }
                 }
-                else if (selector == null || selector.isBlank() || "body".equalsIgnoreCase(selector.trim()) || "html".equalsIgnoreCase(selector.trim()))
+                else if (selector == null || selector.isBlank() || isRootElementSelector(selector))
                 {
-                    if (expectedText.isEmpty())
+                    if (expectedText.isBlank())
                     {
-                        final ObjectNode err = errorNode("Asserting empty text requires specifying a target 'selector' (e.g. selector: '#field' or selector: 'input'). To assert element emptiness, provide a selector or use 'browser_assert_element_state' with state 'empty'.");
+                        final ObjectNode err = errorNode("Asserting empty or blank text requires specifying a target 'selector' and cannot be performed against root document containers ('body', 'html') or without a target selector. To verify that a specific field or element is empty, specify its target selector (e.g. selector: '#field' or selector: 'input') or use 'browser_assert_element_state' with state 'empty'.");
                         return ToolResult.error(call.callId(), err.toString());
                     }
 
@@ -3287,6 +3288,44 @@ public final class BrowserToolProvider
             }
         }
         return "";
+    }
+
+    /**
+     * Determines whether the given selector targets a root document container (e.g. body or html)
+     * either via CSS tag or standard XPath expressions.
+     *
+     * @param selector selector to inspect
+     * @return true if the selector targets html or body root containers
+     */
+    public static boolean isRootElementSelector(final String selector)
+    {
+        if (selector == null || selector.isBlank())
+        {
+            return false;
+        }
+        String s = selector.trim().toLowerCase(Locale.ROOT);
+        if (s.startsWith("css="))
+        {
+            s = s.substring(4).trim();
+        }
+        else if (s.startsWith("xpath="))
+        {
+            s = s.substring(6).trim();
+        }
+        s = s.replaceAll("\\s+", " ");
+        return ":root".equals(s)
+                || "body".equals(s)
+                || "html".equals(s)
+                || "/html".equals(s)
+                || "/html/body".equals(s)
+                || "/html/body[1]".equals(s)
+                || "//body".equals(s)
+                || "//body[1]".equals(s)
+                || "//html".equals(s)
+                || "//html//body".equals(s)
+                || "html > body".equals(s)
+                || "html>body".equals(s)
+                || "html body".equals(s);
     }
 
     private static String resolveUrl(final JsonNode args)
@@ -4064,26 +4103,8 @@ public final class BrowserToolProvider
                                     el.shouldNotBe(Condition.selected);
                                 }
                             }
-                            case "focused" ->
-                            {
-                                final Boolean isFocused = Selenide.executeJavaScript(
-                                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                                        el);
-                                if (!Boolean.TRUE.equals(isFocused))
-                                {
-                                    el.shouldBe(Condition.focused);
-                                }
-                            }
-                            case "unfocused" ->
-                            {
-                                final Boolean isFocused = Selenide.executeJavaScript(
-                                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                                        el);
-                                if (Boolean.TRUE.equals(isFocused))
-                                {
-                                    el.shouldNotBe(Condition.focused);
-                                }
-                            }
+                            case "focused" -> el.should(AssertAction.FOCUSED);
+                            case "unfocused" -> el.should(AssertAction.UNFOCUSED);
                             case "exists" -> el.should(Condition.exist);
                             case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
                             case "empty" -> el.shouldBe(Condition.empty);

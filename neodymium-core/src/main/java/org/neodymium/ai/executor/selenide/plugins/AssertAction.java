@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
+import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.TimeoutException;
 import org.openqa.selenium.WebElement;
 import org.slf4j.Logger;
@@ -51,6 +52,100 @@ import org.neodymium.ai.executor.selenide.SelenideElementFinder;
 public final class AssertAction implements BrowserActionPlugin
 {
     private static final Logger LOG = LoggerFactory.getLogger(AssertAction.class);
+
+    /**
+     * Shared condition asserting that an element is focused according to either WebDriver activeElement
+     * or document activeElement / :focus pseudo-class, with automatic polling until timeout.
+     */
+    public static final WebElementCondition FOCUSED = new WebElementCondition("focused")
+    {
+        @Override
+        public CheckResult check(final Driver driver, final WebElement element)
+        {
+            try
+            {
+                final WebElement active = driver.switchTo().activeElement();
+                if (element.equals(active))
+                {
+                    return new CheckResult(true, "element matches activeElement");
+                }
+            }
+            catch (final StaleElementReferenceException e)
+            {
+                throw e;
+            }
+            catch (final Exception ignored)
+            {
+            }
+
+            try
+            {
+                final Object result = driver.executeJavaScript(
+                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                        element);
+                if (Boolean.TRUE.equals(result))
+                {
+                    return new CheckResult(true, "element is focused in document");
+                }
+            }
+            catch (final StaleElementReferenceException e)
+            {
+                throw e;
+            }
+            catch (final Exception ignored)
+            {
+            }
+
+            return new CheckResult(false, "focused");
+        }
+    };
+
+    /**
+     * Shared condition asserting that an element is not focused according to both WebDriver activeElement
+     * and document activeElement / :focus pseudo-class, with automatic polling until timeout.
+     */
+    public static final WebElementCondition UNFOCUSED = new WebElementCondition("unfocused")
+    {
+        @Override
+        public CheckResult check(final Driver driver, final WebElement element)
+        {
+            try
+            {
+                final WebElement active = driver.switchTo().activeElement();
+                if (element.equals(active))
+                {
+                    return new CheckResult(false, "element matches activeElement");
+                }
+            }
+            catch (final StaleElementReferenceException e)
+            {
+                throw e;
+            }
+            catch (final Exception ignored)
+            {
+            }
+
+            try
+            {
+                final Object result = driver.executeJavaScript(
+                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                        element);
+                if (Boolean.TRUE.equals(result))
+                {
+                    return new CheckResult(false, "element is focused in document");
+                }
+            }
+            catch (final StaleElementReferenceException e)
+            {
+                throw e;
+            }
+            catch (final Exception ignored)
+            {
+            }
+
+            return new CheckResult(true, "unfocused");
+        }
+    };
 
     /**
      * Constructs an AssertAction.
@@ -172,26 +267,13 @@ public final class AssertAction implements BrowserActionPlugin
                 }
                 case "ASSERT_FOCUSED" ->
                 {
-                    final Boolean isFocused = Selenide.executeJavaScript(
-                            "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                            element);
-                    if (!Boolean.TRUE.equals(isFocused))
-                    {
-                        element.shouldBe(Condition.focused);
-                    }
+                    element.should(FOCUSED);
                     LOG.debug("   ✅ Element focused: {}", action);
                     return;
                 }
                 case "ASSERT_UNFOCUSED" ->
                 {
-                    element.shouldNotBe(Condition.focused);
-                    final Boolean isFocused = Selenide.executeJavaScript(
-                            "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                            element);
-                    if (Boolean.TRUE.equals(isFocused))
-                    {
-                        throw new AssertionError("Element is still focused: " + element);
-                    }
+                    element.should(UNFOCUSED);
                     LOG.debug("   ✅ Element unfocused: {}", action);
                     return;
                 }
@@ -595,18 +677,6 @@ public final class AssertAction implements BrowserActionPlugin
 
     private void executeLegacyAssert(final SelenideElement element, final Action action, final String expected)
     {
-        final boolean isAbsenceCheck = "hidden".equalsIgnoreCase(expected) || "[hidden]".equalsIgnoreCase(expected)
-                || "absent".equalsIgnoreCase(expected) || "[absent]".equalsIgnoreCase(expected)
-                || "not_exist".equalsIgnoreCase(expected) || "[not_exist]".equalsIgnoreCase(expected)
-                || "not_exists".equalsIgnoreCase(expected) || "[not_exists]".equalsIgnoreCase(expected)
-                || "invisible".equalsIgnoreCase(expected) || "[invisible]".equalsIgnoreCase(expected);
-
-        if (isAbsenceCheck)
-        {
-            element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
-            return;
-        }
-
         if (expected == null || expected.isEmpty())
         {
             element.should(Condition.exist);
@@ -620,25 +690,12 @@ public final class AssertAction implements BrowserActionPlugin
         {
             case "focused":
             {
-                final Boolean isFocused = Selenide.executeJavaScript(
-                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                        element);
-                if (!Boolean.TRUE.equals(isFocused))
-                {
-                    element.shouldBe(Condition.focused);
-                }
+                element.should(FOCUSED);
                 break;
             }
             case "unfocused":
             {
-                element.shouldNotBe(Condition.focused);
-                final Boolean isFocused = Selenide.executeJavaScript(
-                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                        element);
-                if (Boolean.TRUE.equals(isFocused))
-                {
-                    throw new AssertionError("Element is still focused: " + element);
-                }
+                element.should(UNFOCUSED);
                 break;
             }
             case "visible":
@@ -646,19 +703,14 @@ public final class AssertAction implements BrowserActionPlugin
                 element.shouldBe(Condition.visible);
                 break;
             }
-            case "hidden":
+            case "hidden", "absent":
             {
-                element.shouldBe(Condition.hidden);
+                element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
                 break;
             }
             case "exists":
             {
                 element.should(Condition.exist);
-                break;
-            }
-            case "absent":
-            {
-                element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
                 break;
             }
             case "checked":
@@ -1156,27 +1208,8 @@ public final class AssertAction implements BrowserActionPlugin
                         element.shouldNotBe(Condition.selected);
                     }
                 }
-                case "focused" ->
-                {
-                    final Boolean isFocused = Selenide.executeJavaScript(
-                            "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                            element);
-                    if (!Boolean.TRUE.equals(isFocused))
-                    {
-                        element.shouldBe(Condition.focused);
-                    }
-                }
-                case "unfocused" ->
-                {
-                    element.shouldNotBe(Condition.focused);
-                    final Boolean isFocused = Selenide.executeJavaScript(
-                            "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                            element);
-                    if (Boolean.TRUE.equals(isFocused))
-                    {
-                        throw new AssertionError("Element is still focused: " + element);
-                    }
-                }
+                case "focused" -> element.should(FOCUSED);
+                case "unfocused" -> element.should(UNFOCUSED);
                 case "exists" -> element.should(Condition.exist);
                 case "absent" -> element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
                 case "empty" -> element.shouldBe(Condition.empty);

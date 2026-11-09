@@ -2945,7 +2945,7 @@ public class BrowserToolProviderStabilityTest
         args1.put("expectedText", "");
         final ToolResult result1 = tool.execute(new ToolCall("call-empty-no-sel", "browser_assert_text", args1), null);
         Assertions.assertEquals(ToolResult.Status.ERROR, result1.status());
-        Assertions.assertTrue(result1.content().contains("requires specifying a target 'selector'"),
+        Assertions.assertTrue(result1.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
                 "Error result must instruct caller to provide selector for empty text assertion");
 
         // Blank selector with empty expected text
@@ -2954,7 +2954,7 @@ public class BrowserToolProviderStabilityTest
         args2.put("expectedText", "");
         final ToolResult result2 = tool.execute(new ToolCall("call-blank-sel", "browser_assert_text", args2), null);
         Assertions.assertEquals(ToolResult.Status.ERROR, result2.status());
-        Assertions.assertTrue(result2.content().contains("requires specifying a target 'selector'"),
+        Assertions.assertTrue(result2.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
                 "Error result must instruct caller to provide selector for empty text assertion");
 
         // 'body' selector with empty expected text
@@ -2963,7 +2963,7 @@ public class BrowserToolProviderStabilityTest
         args3.put("expectedText", "");
         final ToolResult result3 = tool.execute(new ToolCall("call-body-sel", "browser_assert_text", args3), null);
         Assertions.assertEquals(ToolResult.Status.ERROR, result3.status());
-        Assertions.assertTrue(result3.content().contains("requires specifying a target 'selector'"),
+        Assertions.assertTrue(result3.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
                 "Error result must instruct caller to provide selector for empty text assertion");
 
         // 'html' selector with empty expected text
@@ -2972,8 +2972,53 @@ public class BrowserToolProviderStabilityTest
         args4.put("expectedText", "");
         final ToolResult result4 = tool.execute(new ToolCall("call-html-sel", "browser_assert_text", args4), null);
         Assertions.assertEquals(ToolResult.Status.ERROR, result4.status());
-        Assertions.assertTrue(result4.content().contains("requires specifying a target 'selector'"),
+        Assertions.assertTrue(result4.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
                 "Error result must instruct caller to provide selector for empty text assertion");
+
+        // '//body' XPath selector with empty expected text
+        final ObjectNode args5 = MAPPER.createObjectNode();
+        args5.put("selector", "//body");
+        args5.put("expectedText", "");
+        final ToolResult result5 = tool.execute(new ToolCall("call-xpath-body-sel", "browser_assert_text", args5), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result5.status());
+        Assertions.assertTrue(result5.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for XPath root selector");
+
+        // 'html > body' selector with whitespace expected text
+        final ObjectNode args6 = MAPPER.createObjectNode();
+        args6.put("selector", "html > body");
+        args6.put("expectedText", "   ");
+        final ToolResult result6 = tool.execute(new ToolCall("call-nested-root-sel", "browser_assert_text", args6), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result6.status());
+        Assertions.assertTrue(result6.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for whitespace text on root selector");
+
+        // 'css=body' selector with empty expected text
+        final ObjectNode args7 = MAPPER.createObjectNode();
+        args7.put("selector", "css=body");
+        args7.put("expectedText", "");
+        final ToolResult result7 = tool.execute(new ToolCall("call-css-body-sel", "browser_assert_text", args7), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result7.status());
+        Assertions.assertTrue(result7.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for css=body");
+
+        // ':root' selector with empty expected text
+        final ObjectNode args8 = MAPPER.createObjectNode();
+        args8.put("selector", ":root");
+        args8.put("expectedText", "");
+        final ToolResult result8 = tool.execute(new ToolCall("call-root-pseudo-sel", "browser_assert_text", args8), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result8.status());
+        Assertions.assertTrue(result8.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for :root");
+
+        // 'xpath=/html/body[1]' selector with empty expected text
+        final ObjectNode args9 = MAPPER.createObjectNode();
+        args9.put("selector", "xpath=/html/body[1]");
+        args9.put("expectedText", "");
+        final ToolResult result9 = tool.execute(new ToolCall("call-xpath-html-body-sel", "browser_assert_text", args9), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result9.status());
+        Assertions.assertTrue(result9.content().contains("cannot be performed against root document containers ('body', 'html') or without a target selector"),
+                "Error result must instruct caller to provide selector for xpath=/html/body[1]");
     }
 
     @Test
