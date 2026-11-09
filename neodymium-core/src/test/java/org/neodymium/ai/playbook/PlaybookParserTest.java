@@ -304,9 +304,11 @@ public final class PlaybookParserTest
         final Playbook beforePlaybook = parser.parseString(beforeYaml);
 
         assertNotNull(beforePlaybook);
-        assertEquals(2, beforePlaybook.getSteps().size());
-        assertEquals("Open login page", beforePlaybook.getSteps().get(0).getInstruction());
-        assertEquals("Submit form", beforePlaybook.getSteps().get(1).getInstruction());
+        assertEquals(1, beforePlaybook.getBeforeSteps().size());
+        assertEquals("Open login page", beforePlaybook.getBeforeSteps().get(0).getInstruction());
+        assertEquals(1, beforePlaybook.getSteps().size());
+        assertEquals("Submit form", beforePlaybook.getSteps().get(0).getInstruction());
+        assertEquals(2, beforePlaybook.getAllSteps().size());
     }
 
     /**

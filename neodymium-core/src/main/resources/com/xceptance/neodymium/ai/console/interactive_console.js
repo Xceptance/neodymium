@@ -469,10 +469,7 @@ function applyState(state) {
         state.pauseId = null;
     }
 
-    if (state.status === 'running') {
-        currentPauseId = null;
-        window.currentPauseId = null;
-    } else if (state.pauseId) {
+    if (state.pauseId) {
         if (runActionPauseId && state.pauseId !== runActionPauseId) {
             isRunActionInFlight = false;
             runActionPauseId = null;
@@ -884,8 +881,8 @@ function checkActionApprovals() {
         }
     }
 
-    // Handle toolbar Back button disabled if index is 0/1 or auto is on
-    const isFirstStep = s && (s.index === 0 || s.index === 1 || (s.blockIndex === 0 && (s.block === 'before' || (!currentState?.blocks?.before?.length && s.block === 'steps'))));
+    // Handle toolbar Back button disabled if first step or auto is on
+    const isFirstStep = s && ((allStepIndices.length > 0 && s.index === allStepIndices[0]) || (s.blockIndex === 0 && (s.block === 'before' || (!currentState?.blocks?.before?.length && s.block === 'steps'))));
     const backBtn = document.getElementById('btnBack');
     if (backBtn) {
         if (isFirstStep || isAutoMode) {
@@ -992,9 +989,13 @@ function buildStepDetailsHtml(step, isActiveStep) {
 
     // When a sub-step fails, remind the user that individual sub-steps inside an
     // include block cannot be skipped — the entire include block must be managed as a unit.
-    const isSubstep = Boolean(step.isSubStep || step.includeFile || (Array.isArray(step.includeChain) && step.includeChain.length > 0));
+    const hasMultipleActions = Array.isArray(step.actions) && step.actions.length > 1;
+    const isSubstep = Boolean(step.isSubStep || step.includeFile || (Array.isArray(step.includeChain) && step.includeChain.length > 0) || hasMultipleActions);
+    const warningMessage = (step.includeFile || (Array.isArray(step.includeChain) && step.includeChain.length > 0))
+        ? 'Sub-steps cannot be skipped individually. Skip the parent include to skip this step.'
+        : 'Sub-steps cannot be skipped individually.';
     const substepWarning = (isFailed && isSubstep)
-        ? `<div class="substep-warning-info" style="font-size:11px;padding:6px 10px;border-radius:6px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.25);color:var(--accent-warning);"><span class="material-symbols-outlined" aria-hidden="true">warning</span> Sub-steps cannot be skipped individually. Skip the parent include to skip this step.</div>`
+        ? `<div class="substep-warning-info" style="font-size:11px;padding:6px 10px;border-radius:6px;background:rgba(245,158,11,0.10);border:1px solid rgba(245,158,11,0.25);color:var(--accent-warning);"><span class="material-symbols-outlined" aria-hidden="true">warning</span> ${warningMessage}</div>`
         : '';
 
     // Right-column panel compact reasoning (not shown for active steps; the card has the bubble)
