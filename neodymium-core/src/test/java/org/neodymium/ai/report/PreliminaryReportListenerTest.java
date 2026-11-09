@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.xceptance.neodymium.ai.console.InteractiveStateBuilder;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -2732,5 +2733,109 @@ public class PreliminaryReportListenerTest
         final TestExecutionReport.ReportStepEntry finishedStep1 = report.getSteps().get(1);
         assertEquals("MINIMAL → LEAN → STANDARD", finishedStep1.getContextLevels(), "Escalated context levels must be merged immediately");
         assertEquals(2, finishedStep1.getEscalations());
+    }
+
+    @Test
+    @DisplayName("Verify that a failure screenshot captured during a sub-step execution is registered on the parent step")
+    public void testFailedPlaybookSubStepScreenshotRegisteredOnParentStep() throws Exception
+    {
+        final Path reportDir = tempFolder.resolve("failed-substep-screenshot-report");
+        Files.createDirectories(reportDir);
+
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON, DiskReportFormat.HTML), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        // Parent step with 2 sub-steps
+        final PlaybookStep parentStep = new PlaybookStep("Locate promo code input and apply discount");
+
+        final PlaybookStep subStep1 = new PlaybookStep("Type promo code");
+        subStep1.setParent(parentStep);
+        parentStep.getSubSteps().add(subStep1);
+
+        final PlaybookStep subStep2 = new PlaybookStep("Assert that cart contains 'Free Bonus Gift' (bug)");
+        subStep2.setParent(parentStep);
+        parentStep.getSubSteps().add(subStep2);
+
+        // Step starts
+        bus.dispatch(new StepStartedEvent(parentStep, 0));
+
+        // Sub-step 1 starts and succeeds
+        bus.dispatch(new StepStartedEvent(subStep1, 0));
+        bus.dispatch(new StepFinishedEvent(subStep1, PlaybookStepStatus.SUCCESS));
+
+        // Sub-step 2 starts and fails
+        bus.dispatch(new StepStartedEvent(subStep2, 1));
+        subStep2.setStatus(PlaybookStepStatus.FAILED);
+        subStep2.setFailureReason("AssertionError: Expected item 'Free Bonus Gift' not found");
+        parentStep.setStatus(PlaybookStepStatus.FAILED);
+        parentStep.setFailureReason(subStep2.getFailureReason());
+
+        final String fakeBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        final SutAttachment attachment = new SutAttachment("image/png", null, fakeBase64);
+        final MockSutState failureState = new MockSutState("<html><body>Cart Table</body></html>", List.of(attachment), "hashFailure");
+
+        // Dispatch failure state capture
+        bus.dispatch(new StateCapturedEvent(failureState));
+
+        // Sub-step 2 finishes with FAILED
+        bus.dispatch(new StepFinishedEvent(subStep2, PlaybookStepStatus.FAILED));
+
+        // Session finishes with failure
+        bus.dispatch(new SessionFinishedEvent(1500, false));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals("FAILED", report.getStatus());
+        assertEquals(1, report.getSteps().size());
+
+        final TestExecutionReport.ReportStepEntry parentEntry = report.getSteps().get(0);
+        assertEquals("FAILED", parentEntry.getStatus());
+        assertEquals(2, parentEntry.getSubSteps().size());
+
+        // Verify sub-step 2 has the failure screenshot
+        final TestExecutionReport.ReportStepEntry subEntry2 = parentEntry.getSubSteps().get(1);
+        assertEquals("FAILED", subEntry2.getStatus());
+        assertFalse(subEntry2.getScreenshots().isEmpty(), "Failing sub-step must have captured screenshot");
+        assertEquals(fakeBase64, subEntry2.getScreenshots().get(0).getBase64Data());
+
+        // Verify parent step ALSO has the failure screenshot
+        assertFalse(parentEntry.getScreenshots().isEmpty(), "Parent step must register failure screenshot captured during sub-step failure");
+        assertEquals(fakeBase64, parentEntry.getScreenshots().get(0).getBase64Data());
+
+        // Verify JSON file on disk
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        assertTrue(Files.exists(jsonPath));
+        final ObjectMapper mapper = new ObjectMapper();
+        final JsonNode rootNode = mapper.readTree(jsonPath.toFile());
+        final JsonNode stepsNode = rootNode.get("steps");
+        assertNotNull(stepsNode);
+        assertTrue(stepsNode.isArray());
+        final JsonNode parentStepNode = stepsNode.get(0);
+        final JsonNode parentScreenshots = parentStepNode.get("screenshots");
+        assertNotNull(parentScreenshots, "Parent step in JSON report must include screenshots");
+        assertTrue(parentScreenshots.size() > 0, "Parent step in JSON report must contain at least 1 screenshot");
+        assertEquals(fakeBase64, parentScreenshots.get(0).get("base64Data").asText());
+
+        // Verify InteractiveStateBuilder serialization fallback
+        final String stateJson = InteractiveStateBuilder.buildStateJson(
+            null, ctx, "run-123", 0, "failed", null, report
+        );
+        assertNotNull(stateJson);
+        final JsonNode interactiveRoot = mapper.readTree(stateJson);
+        final JsonNode blocksNode = interactiveRoot.get("blocks");
+        if (blocksNode != null && blocksNode.has("steps"))
+        {
+            final JsonNode interactiveSteps = blocksNode.get("steps");
+            if (interactiveSteps.isArray() && interactiveSteps.size() > 0)
+            {
+                final JsonNode iParentStep = interactiveSteps.get(0);
+                assertTrue(iParentStep.has("screenshots"), "Interactive state parent step must have screenshots");
+                assertTrue(iParentStep.get("screenshots").size() > 0);
+            }
+        }
     }
 }

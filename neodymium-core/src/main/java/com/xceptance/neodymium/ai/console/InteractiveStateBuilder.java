@@ -1151,6 +1151,29 @@ public final class InteractiveStateBuilder
             {
                 obj.add("screenshots", serializeScreenshots(reportStep.getScreenshots()));
             }
+            else if (!reportStep.getSubSteps().isEmpty())
+            {
+                final List<ReportScreenshotEntry> subScreenshots = new ArrayList<>();
+                for (final ReportStepEntry sub : reportStep.getSubSteps())
+                {
+                    if (sub != null && !sub.getScreenshots().isEmpty())
+                    {
+                        for (final ReportScreenshotEntry sc : sub.getScreenshots())
+                        {
+                            final boolean alreadyHas = subScreenshots.stream()
+                                .anyMatch(s -> s.getBase64Data() != null && s.getBase64Data().equals(sc.getBase64Data()));
+                            if (!alreadyHas)
+                            {
+                                subScreenshots.add(sc);
+                            }
+                        }
+                    }
+                }
+                if (!subScreenshots.isEmpty())
+                {
+                    obj.add("screenshots", serializeScreenshots(subScreenshots));
+                }
+            }
             if (!reportStep.getLlmCalls().isEmpty())
             {
                 obj.add("llmCalls", serializeLlmCalls(reportStep.getLlmCalls()));

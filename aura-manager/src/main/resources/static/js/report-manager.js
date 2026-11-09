@@ -4107,7 +4107,7 @@ function renderStepsForExecution(activeRow) {
                 return `data:${mime};base64,${rawSrc}`;
             }
 
-            // Format Screenshot (Ignore top-level transient screenshot, rely strictly on s.screenshots array)
+            // Format Screenshot (Rely on s.screenshots array, fallback to sub-step screenshots or transient s.screenshot)
             if (Array.isArray(s.screenshots) && s.screenshots.length > 0) {
                 s.screenshots.forEach((sc, scIdx) => {
                     let fullSrc = '';
@@ -4126,6 +4126,35 @@ function renderStepsForExecution(activeRow) {
                         });
                     }
                 });
+            } else if (subsList.length > 0 && subsList.some(sub => Array.isArray(sub.screenshots) && sub.screenshots.length > 0)) {
+                subsList.forEach((sub, subIdx) => {
+                    if (Array.isArray(sub.screenshots)) {
+                        sub.screenshots.forEach((sc, scIdx) => {
+                            let fullSrc = '';
+                            if (sc.base64Data) {
+                                const mime = sc.mediaType || 'image/jpeg';
+                                fullSrc = sc.base64Data.startsWith('data:') ? sc.base64Data : `data:${mime};base64,${sc.base64Data}`;
+                            } else {
+                                const rawSrc = sc.src || sc.url || sc.path || sc.screenshot;
+                                fullSrc = formatScreenshotSrc(rawSrc, sc.mediaType);
+                            }
+                            if (fullSrc && !screenshotSources.some(item => item.src === fullSrc)) {
+                                screenshotSources.push({
+                                    src: fullSrc,
+                                    label: sc.label || sc.name || `Sub-step #${stepNum}.${subIdx + 1} Capture`
+                                });
+                            }
+                        });
+                    }
+                });
+            } else if (s.screenshot) {
+                const fullSrc = formatScreenshotSrc(s.screenshot, 'image/png');
+                if (fullSrc && !screenshotSources.some(item => item.src === fullSrc)) {
+                    screenshotSources.push({
+                        src: fullSrc,
+                        label: 'Step Capture'
+                    });
+                }
             }
 
             if (screenshotSources.length > 0) {
