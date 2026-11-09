@@ -30,6 +30,8 @@ import dev.langchain4j.data.message.SystemMessage;
 import dev.langchain4j.data.message.TextContent;
 import dev.langchain4j.data.message.ToolExecutionResultMessage;
 import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.exception.HttpException;
+import dev.langchain4j.exception.RetriableException;
 import dev.langchain4j.http.client.HttpClient;
 import dev.langchain4j.http.client.HttpClientBuilder;
 import dev.langchain4j.http.client.HttpClientBuilderLoader;
@@ -55,7 +57,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.neodymium.ai.client.ChatMessage.Role;
@@ -133,6 +139,9 @@ public final class GeminiLlmProvider implements LlmProvider
         final int maxTokens = ResponseSchema.resolveMaxOutputTokens(responseSchema);
         final ReasoningEffort effort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(responseSchema);
 
+        final int effectiveTimeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : this.config.getTimeoutSeconds("execution");
+        final Duration timeout = Duration.ofSeconds(effectiveTimeoutSeconds);
+
         final GoogleAiGeminiChatModel.GoogleAiGeminiChatModelBuilder builder = GoogleAiGeminiChatModel.builder()
             .apiKey(this.apiKey)
             .modelName(this.modelName != null ? this.modelName : "gemini-3.5-flash-lite")
@@ -141,8 +150,8 @@ public final class GeminiLlmProvider implements LlmProvider
             .thinkingConfig(buildThinkingConfig(effort, this.includeThoughts))
             .returnThinking(true)
             .sendThinking(true)
-            .timeout(Duration.ofSeconds(timeoutSeconds > 0 ? timeoutSeconds : 180))
-            .httpClientBuilder(createDecoratedHttpClientBuilder());
+            .timeout(timeout)
+            .httpClientBuilder(createDecoratedHttpClientBuilder(timeout));
 
         if (LlmCommunicationLogger.isLoggingActive())
         {
@@ -155,14 +164,21 @@ public final class GeminiLlmProvider implements LlmProvider
 
     /**
      * Creates an HttpClientBuilder that intercepts outgoing requests to Gemini and ensures all
-     * functionCall parts contain a valid thought_signature, working around LangChain4j's
-     * parallel tool call signature omission.
+     * functionCall parts contain a valid thought_signature, while enforcing a strict watchdog
+     * deadline on synchronous socket execution to prevent OpenJDK HttpClientImpl.send() deadlocks.
      */
-    private HttpClientBuilder createDecoratedHttpClientBuilder()
+    HttpClientBuilder createDecoratedHttpClientBuilder(final Duration configuredTimeout)
     {
-        final HttpClientBuilder delegateBuilder = HttpClientBuilderLoader.loadHttpClientBuilder();
+        return createDecoratedHttpClientBuilder(configuredTimeout, HttpClientBuilderLoader.loadHttpClientBuilder());
+    }
+
+    HttpClientBuilder createDecoratedHttpClientBuilder(final Duration configuredTimeout, final HttpClientBuilder delegateBuilder)
+    {
         return new HttpClientBuilder()
         {
+            private Duration readTimeout = configuredTimeout;
+            private Duration connectTimeout = Duration.ofSeconds(15);
+
             @Override
             public Duration connectTimeout()
             {
@@ -172,6 +188,10 @@ public final class GeminiLlmProvider implements LlmProvider
             @Override
             public HttpClientBuilder connectTimeout(final Duration timeout)
             {
+                if (timeout != null)
+                {
+                    this.connectTimeout = timeout;
+                }
                 delegateBuilder.connectTimeout(timeout);
                 return this;
             }
@@ -185,6 +205,10 @@ public final class GeminiLlmProvider implements LlmProvider
             @Override
             public HttpClientBuilder readTimeout(final Duration timeout)
             {
+                if (timeout != null)
+                {
+                    this.readTimeout = timeout;
+                }
                 delegateBuilder.readTimeout(timeout);
                 return this;
             }
@@ -193,8 +217,20 @@ public final class GeminiLlmProvider implements LlmProvider
             public HttpClient build()
             {
                 final HttpClient delegate = delegateBuilder.build();
+                final Duration effectiveTimeout = (this.readTimeout != null && !this.readTimeout.isZero() && !this.readTimeout.isNegative())
+                    ? this.readTimeout
+                    : (configuredTimeout != null && !configuredTimeout.isZero() && !configuredTimeout.isNegative()
+                        ? configuredTimeout
+                        : Duration.ofSeconds(GeminiLlmProvider.this.config.getTimeoutSeconds("execution")));
+
                 return new HttpClient()
                 {
+                    private Duration resolveWatchdogDeadline()
+                    {
+                        final int bufferSeconds = GeminiLlmProvider.this.config.getLlmWatchdogBufferSeconds();
+                        return effectiveTimeout.plusSeconds(bufferSeconds);
+                    }
+
                     @Override
                     public SuccessfulHttpResponse execute(final HttpRequest request)
                     {
@@ -203,7 +239,61 @@ public final class GeminiLlmProvider implements LlmProvider
                         {
                             LlmCommunicationLogger.getLogger().info("Repaired thought signature in Gemini request body:\n{}\n", repairedRequest.body());
                         }
-                        return delegate.execute(repairedRequest);
+
+                        final Duration watchdogDeadline = resolveWatchdogDeadline();
+                        final CompletableFuture<SuccessfulHttpResponse> future = delegate.executeAsync(repairedRequest);
+                        try
+                        {
+                            return future.get(watchdogDeadline.toMillis(), TimeUnit.MILLISECONDS);
+                        }
+                        catch (final TimeoutException te)
+                        {
+                            future.cancel(true);
+                            final int bufferSeconds = GeminiLlmProvider.this.config.getLlmWatchdogBufferSeconds();
+                            LOGGER.warn("Gemini HTTP call timed out after {}s (watchdog aborted stalled socket; buffer: {}s). URL: {}",
+                                watchdogDeadline.toSeconds(), bufferSeconds, request.url());
+                            throw new RetriableException(
+                                "Gemini HTTP request timed out after " + watchdogDeadline.toSeconds() + " seconds (socket watchdog triggered)", te);
+                        }
+                        catch (final ExecutionException ee)
+                        {
+                            final Throwable cause = ee.getCause() != null ? ee.getCause() : ee;
+                            if (cause instanceof final HttpException httpEx)
+                            {
+                                throw httpEx;
+                            }
+                            if (cause instanceof final RetriableException retriableEx)
+                            {
+                                throw retriableEx;
+                            }
+                            if (cause instanceof final RuntimeException runtimeEx)
+                            {
+                                throw runtimeEx;
+                            }
+                            throw new RuntimeException("Gemini HTTP call failed: " + cause.getMessage(), cause);
+                        }
+                        catch (final InterruptedException ie)
+                        {
+                            future.cancel(true);
+                            Thread.currentThread().interrupt();
+                            throw new RuntimeException("Gemini HTTP call interrupted", ie);
+                        }
+                    }
+
+                    @Override
+                    public CompletableFuture<SuccessfulHttpResponse> executeAsync(final HttpRequest request)
+                    {
+                        final HttpRequest repairedRequest = repairThoughtSignatures(request);
+                        final Duration watchdogDeadline = resolveWatchdogDeadline();
+                        final CompletableFuture<SuccessfulHttpResponse> future = delegate.executeAsync(repairedRequest);
+                        final CompletableFuture<SuccessfulHttpResponse> watchdogFuture = future.orTimeout(watchdogDeadline.toMillis(), TimeUnit.MILLISECONDS);
+                        watchdogFuture.whenComplete((res, ex) -> {
+                            if (ex instanceof TimeoutException)
+                            {
+                                future.cancel(true);
+                            }
+                        });
+                        return watchdogFuture;
                     }
 
                     @Override
@@ -337,7 +427,7 @@ public final class GeminiLlmProvider implements LlmProvider
     )
     {
         final double temp = temperature >= 0.0 ? temperature : 0.0;
-        final int timeout = timeoutSeconds > 0 ? timeoutSeconds : 180;
+        final int timeout = timeoutSeconds > 0 ? timeoutSeconds : this.config.getTimeoutSeconds("execution");
         final ResponseSchema schema = responseSchema != null ? responseSchema : ResponseSchema.TEXT;
         final ReasoningEffort effort = reasoningEffort != null ? reasoningEffort : ResponseSchema.resolveReasoningEffort(schema);
         final boolean isLoggingActive = LlmCommunicationLogger.isLoggingActive();

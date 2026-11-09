@@ -26,10 +26,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.langchain4j.exception.RetriableException;
+import dev.langchain4j.http.client.HttpClient;
+import dev.langchain4j.http.client.HttpClientBuilder;
 import dev.langchain4j.http.client.HttpMethod;
 import dev.langchain4j.http.client.HttpRequest;
+import dev.langchain4j.http.client.SuccessfulHttpResponse;
+import dev.langchain4j.http.client.sse.ServerSentEventListener;
+import dev.langchain4j.http.client.sse.ServerSentEventParser;
 import dev.langchain4j.model.googleai.GoogleAiGeminiTokenUsage;
+import dev.langchain4j.model.output.TokenUsage;
+import java.time.Duration;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -263,8 +272,191 @@ public class GeminiLlmProviderTest
             "GoogleAiGeminiTokenUsage with null cached content should return 0.");
 
         // 4. Standard LangChain4j TokenUsage without cached count returns 0
-        final dev.langchain4j.model.output.TokenUsage standardUsage = new dev.langchain4j.model.output.TokenUsage(100, 50, 150);
+        final TokenUsage standardUsage = new TokenUsage(100, 50, 150);
         assertEquals(0, provider.extractCachedTokens(standardUsage),
             "Standard TokenUsage without cachedContentTokenCount should return 0.");
+    }
+
+    @Test
+    public void testWatchdogTimeoutAbortsStalledSocket()
+    {
+        System.setProperty("neodymium.ai.gemini.apiKey", "mock-gemini-key");
+        System.setProperty("neodymium.ai.llm.watchdogBufferSeconds", "0");
+        AiConfiguration.resetInstance();
+        try
+        {
+            final GeminiLlmProvider provider = new GeminiLlmProvider();
+            final CompletableFuture<SuccessfulHttpResponse> stalledFuture = new CompletableFuture<>();
+
+            final HttpClient mockDelegate = new HttpClient()
+            {
+                @Override
+                public SuccessfulHttpResponse execute(final HttpRequest request)
+                {
+                    throw new UnsupportedOperationException("Synchronous execute should not be called by watchdog");
+                }
+
+                @Override
+                public CompletableFuture<SuccessfulHttpResponse> executeAsync(final HttpRequest request)
+                {
+                    return stalledFuture;
+                }
+
+                @Override
+                public void execute(final HttpRequest request, final ServerSentEventListener listener)
+                {
+                }
+
+                @Override
+                public void execute(final HttpRequest request, final ServerSentEventParser parser, final ServerSentEventListener listener)
+                {
+                }
+            };
+
+            final HttpClientBuilder mockDelegateBuilder = new HttpClientBuilder()
+            {
+                private Duration readTimeout;
+                private Duration connectTimeout;
+
+                @Override
+                public Duration connectTimeout()
+                {
+                    return this.connectTimeout;
+                }
+
+                @Override
+                public HttpClientBuilder connectTimeout(final Duration timeout)
+                {
+                    this.connectTimeout = timeout;
+                    return this;
+                }
+
+                @Override
+                public Duration readTimeout()
+                {
+                    return this.readTimeout;
+                }
+
+                @Override
+                public HttpClientBuilder readTimeout(final Duration timeout)
+                {
+                    this.readTimeout = timeout;
+                    return this;
+                }
+
+                @Override
+                public HttpClient build()
+                {
+                    return mockDelegate;
+                }
+            };
+
+            // Configure small 100ms timeout
+            final HttpClient decoratedClient = provider.createDecoratedHttpClientBuilder(Duration.ofMillis(100), mockDelegateBuilder)
+                .readTimeout(Duration.ofMillis(100))
+                .build();
+
+            final HttpRequest dummyRequest = HttpRequest.builder()
+                .method(HttpMethod.POST)
+                .url("https://generativelanguage.googleapis.com/v1beta/test")
+                .body("{}")
+                .build();
+
+            final RetriableException thrown = assertThrows(RetriableException.class, () -> {
+                decoratedClient.execute(dummyRequest);
+            });
+
+            assertTrue(thrown.getMessage().contains("socket watchdog triggered"),
+                "Exception message must indicate socket watchdog triggered.");
+            assertTrue(stalledFuture.isCancelled(),
+                "Stalled underlying future must be forcibly cancelled upon watchdog timeout.");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.llm.watchdogBufferSeconds");
+            AiConfiguration.resetInstance();
+        }
+    }
+
+    @Test
+    public void testWatchdogSuccessfulExecutionWithinDeadline()
+    {
+        System.setProperty("neodymium.ai.gemini.apiKey", "mock-gemini-key");
+        final GeminiLlmProvider provider = new GeminiLlmProvider();
+
+        final SuccessfulHttpResponse expectedResponse = SuccessfulHttpResponse.builder()
+            .statusCode(200)
+            .body("{}".getBytes())
+            .build();
+
+        final HttpClient mockDelegate = new HttpClient()
+        {
+            @Override
+            public SuccessfulHttpResponse execute(final HttpRequest request)
+            {
+                return expectedResponse;
+            }
+
+            @Override
+            public CompletableFuture<SuccessfulHttpResponse> executeAsync(final HttpRequest request)
+            {
+                return CompletableFuture.completedFuture(expectedResponse);
+            }
+
+            @Override
+            public void execute(final HttpRequest request, final ServerSentEventListener listener)
+            {
+            }
+
+            @Override
+            public void execute(final HttpRequest request, final ServerSentEventParser parser, final ServerSentEventListener listener)
+            {
+            }
+        };
+
+        final HttpClientBuilder mockDelegateBuilder = new HttpClientBuilder()
+        {
+            @Override
+            public Duration connectTimeout()
+            {
+                return Duration.ofSeconds(5);
+            }
+
+            @Override
+            public HttpClientBuilder connectTimeout(final Duration timeout)
+            {
+                return this;
+            }
+
+            @Override
+            public Duration readTimeout()
+            {
+                return Duration.ofSeconds(5);
+            }
+
+            @Override
+            public HttpClientBuilder readTimeout(final Duration timeout)
+            {
+                return this;
+            }
+
+            @Override
+            public HttpClient build()
+            {
+                return mockDelegate;
+            }
+        };
+
+        final HttpClient decoratedClient = provider.createDecoratedHttpClientBuilder(Duration.ofSeconds(10), mockDelegateBuilder)
+            .build();
+
+        final HttpRequest dummyRequest = HttpRequest.builder()
+            .method(HttpMethod.POST)
+            .url("https://generativelanguage.googleapis.com/v1beta/test")
+            .body("{}")
+            .build();
+
+        final SuccessfulHttpResponse response = decoratedClient.execute(dummyRequest);
+        assertSame(expectedResponse, response, "Response must match expected on successful execution.");
     }
 }

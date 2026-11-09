@@ -1361,6 +1361,18 @@ public final class AiConfiguration
     }
 
     /**
+     * Gets the watchdog deadline buffer in seconds added to LLM HTTP client socket operations
+     * to forcibly terminate stalled sockets.
+     * Default is 5 seconds.
+     *
+     * @return watchdog buffer in seconds
+     */
+    public int getLlmWatchdogBufferSeconds()
+    {
+        return Math.max(0, getInt("neodymium.ai.llm.watchdogBufferSeconds", 5));
+    }
+
+    /**
      * Checks whether outbound LLM wire image optimization (JPEG compression & downscaling) is enabled.
      * Default is true.
      *
