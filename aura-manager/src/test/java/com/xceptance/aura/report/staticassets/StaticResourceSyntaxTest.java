@@ -3781,5 +3781,266 @@ public final class StaticResourceSyntaxTest
         Assertions.assertTrue(cssContent.contains("repeat(auto-fit, minmax(220px, 1fr)) !important;"),
             "dashboard-styles.css must distribute slices across responsive multi-column auto-fit grid to utilize horizontal space");
     }
+
+    @Test
+    public void testContainerPieChartSvgLayerGroupingAndOverlaySynchronization() throws Exception
+    {
+        final Path htmlPath = Paths.get("src/main/resources/templates/fragments/dashboard-widgets.html");
+        Assertions.assertTrue(Files.exists(htmlPath), "dashboard-widgets.html must exist: " + htmlPath.toAbsolutePath());
+        final String htmlContent = Files.readString(htmlPath, StandardCharsets.UTF_8);
+
+        final Path cssPath = Paths.get("src/main/resources/static/dashboard-styles.css");
+        Assertions.assertTrue(Files.exists(cssPath), "dashboard-styles.css must exist: " + cssPath.toAbsolutePath());
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist: " + jsPath.toAbsolutePath());
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+
+        // 1. Verify SVG slice layer grouping in dashboard-widgets.html
+        Assertions.assertTrue(htmlContent.contains("<g class=\"pie-slice-group widget-interactive-filter\""),
+            "dashboard-widgets.html must enclose pie slices in .pie-slice-group.widget-interactive-filter");
+        Assertions.assertTrue(htmlContent.contains("class=\"pie-slice-base\""),
+            "dashboard-widgets.html must mark base donut circle with .pie-slice-base");
+        Assertions.assertTrue(htmlContent.contains("class=\"pie-slice-healed\""),
+            "dashboard-widgets.html must mark healed circle with .pie-slice-healed");
+        Assertions.assertTrue(htmlContent.contains("class=\"pie-slice-sparkle\""),
+            "dashboard-widgets.html must mark sparkle overlay with .pie-slice-sparkle");
+        Assertions.assertTrue(htmlContent.contains("class=\"pie-slice-ai\""),
+            "dashboard-widgets.html must mark AI circle with .pie-slice-ai");
+        Assertions.assertTrue(htmlContent.contains("class=\"pie-slice-stripes\""),
+            "dashboard-widgets.html must mark AI stripe overlay with .pie-slice-stripes");
+        Assertions.assertTrue(htmlContent.contains("viewBox=\"-2 -2 40 40\" style=\"overflow: visible;\""),
+            "dashboard-widgets.html must configure expanded viewBox -2 -2 40 40 with visible overflow to eliminate donut clipping");
+
+        // 2. Verify dedicated container active filter strip outside title badge row
+        Assertions.assertTrue(htmlContent.contains("<!-- DEDICATED CONTAINER ACTIVE FILTER STRIP -->"),
+            "dashboard-widgets.html must contain dedicated container active filter strip comment");
+        Assertions.assertTrue(htmlContent.contains("class=\"container-active-filter-strip d-flex align-items-center gap-2 flex-wrap px-3 py-1-5 border-bottom\""),
+            "dashboard-widgets.html must render dedicated container-active-filter-strip bar");
+
+        // 3. Verify CSS styling for grouped slices and filter strip
+        Assertions.assertTrue(cssContent.contains("g.pie-slice-group.widget-interactive-filter"),
+            "dashboard-styles.css must style g.pie-slice-group.widget-interactive-filter");
+        Assertions.assertTrue(cssContent.contains(".has-active-cross-filter g.pie-slice-group.widget-interactive-filter:not(.is-filter-active) circle:not(.pie-slice-base)"),
+            "dashboard-styles.css must suppress decorative overlays on dimmed inactive slices to prevent pattern cracks");
+        Assertions.assertTrue(cssContent.contains(".container-active-filter-strip"),
+            "dashboard-styles.css must style .container-active-filter-strip");
+
+        // 4. Verify JS support for .pie-slice-group in recalculateStatusPieChart
+        Assertions.assertTrue(jsContent.contains("const sliceGroups = Array.from(sec.querySelectorAll('.pie-slice-group'));"),
+            "report-manager.js must query .pie-slice-group in recalculateStatusPieChart");
+        Assertions.assertTrue(jsContent.contains("Math.round(((kpiPassed + kpiFixed) / kpiTotal) * 100)"),
+            "report-manager.js must calculate KPI pass rate from strictly filtered variations");
+
+        // 5. Live Node.js runtime simulation of interactive filtering and clearing
+        final String nodeTestScript = String.join("\n",
+            "const fs = require('fs');",
+            "const vm = require('vm');",
+            "const code = fs.readFileSync('" + jsPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');",
+            "",
+            "function createEl(tag, cls = '') {",
+            "    const el = {",
+            "        tagName: tag.toUpperCase(),",
+            "        className: cls,",
+            "        classList: {",
+            "            _c: new Set(cls.split(' ').filter(Boolean)),",
+            "            add: (c) => el.classList._c.add(c),",
+            "            remove: (c) => el.classList._c.delete(c),",
+            "            contains: (c) => el.classList._c.has(c),",
+            "            toggle: (c, force) => {",
+            "                if (force !== undefined) {",
+            "                    if (force) el.classList._c.add(c);",
+            "                    else el.classList._c.delete(c);",
+            "                } else {",
+            "                    if (el.classList._c.has(c)) el.classList._c.delete(c);",
+            "                    else el.classList._c.add(c);",
+            "                }",
+            "            }",
+            "        },",
+            "        attributes: {},",
+            "        style: {},",
+            "        children: [],",
+            "        parentNode: null,",
+            "        textContent: '',",
+            "        setAttribute: (k, v) => { el.attributes[k] = String(v); },",
+            "        getAttribute: (k) => el.attributes[k] !== undefined ? el.attributes[k] : null,",
+            "        hasAttribute: (k) => el.attributes[k] !== undefined,",
+            "        removeAttribute: (k) => { delete el.attributes[k]; },",
+            "        appendChild: (ch) => { ch.parentNode = el; el.children.push(ch); return ch; },",
+            "        querySelector: (sel) => {",
+            "            const matches = el.querySelectorAll(sel);",
+            "            return matches.length > 0 ? matches[0] : null;",
+            "        },",
+            "        querySelectorAll: (sel) => {",
+            "            const res = [];",
+            "            const check = (node) => {",
+            "                if (sel === '.widget-container-dataset' && node.classList.contains('widget-container-dataset')) return true;",
+            "                if (sel === '.pie-slice-group' && node.classList.contains('pie-slice-group')) return true;",
+            "                if (sel === '.widget-interactive-filter' && node.classList.contains('widget-interactive-filter')) return true;",
+            "                if (sel === '.pie-slice-base' && node.classList.contains('pie-slice-base')) return true;",
+            "                if (sel === '.pie-slice-healed' && node.classList.contains('pie-slice-healed')) return true;",
+            "                if (sel === '.pie-slice-sparkle' && node.classList.contains('pie-slice-sparkle')) return true;",
+            "                if (sel === '.pie-slice-ai' && node.classList.contains('pie-slice-ai')) return true;",
+            "                if (sel === '.pie-slice-stripes' && node.classList.contains('pie-slice-stripes')) return true;",
+            "                if (sel === '.pie-slice-healed, .pie-slice-sparkle' && (node.classList.contains('pie-slice-healed') || node.classList.contains('pie-slice-sparkle'))) return true;",
+            "                if (sel === '.pie-slice-ai, .pie-slice-stripes' && (node.classList.contains('pie-slice-ai') || node.classList.contains('pie-slice-stripes'))) return true;",
+            "                if (sel === '.pie-center-rate' && node.classList.contains('pie-center-rate')) return true;",
+            "                if (sel === '.pie-center-sub' && node.classList.contains('pie-center-sub')) return true;",
+            "                if (sel === '.widget-section-header .font-mono' && node.classList.contains('font-mono')) return true;",
+            "                if (sel === '.widget-child-card, .widget-container-section' && (node.classList.contains('widget-child-card') || node.classList.contains('widget-container-section'))) return true;",
+            "                if (sel === '.container-active-filter-strip' && node.classList.contains('container-active-filter-strip')) return true;",
+            "                if (sel === '.container-filter-chips' && node.classList.contains('container-filter-chips')) return true;",
+            "                if (sel === '.btn-clear-all-container-filters' && node.classList.contains('btn-clear-all-container-filters')) return true;",
+            "                if (sel === '.pie-breakdown-item' && node.classList.contains('pie-breakdown-item')) return true;",
+            "                return false;",
+            "            };",
+            "            const walk = (node) => {",
+            "                for (const ch of node.children) {",
+            "                    if (check(ch)) res.push(ch);",
+            "                    walk(ch);",
+            "                }",
+            "            };",
+            "            walk(el);",
+            "            return res;",
+            "        },",
+            "        closest: (sel) => {",
+            "            let cur = el.parentNode;",
+            "            while (cur) {",
+            "                if (sel === '.widget-container-card' && cur.classList && cur.classList.contains('widget-container-card')) return cur;",
+            "                if (sel === '.widget-child-card, .widget-container-section' && cur.classList && (cur.classList.contains('widget-child-card') || cur.classList.contains('widget-container-section'))) return cur;",
+            "                cur = cur.parentNode;",
+            "            }",
+            "            return null;",
+            "        }",
+            "    };",
+            "    return el;",
+            "}",
+            "",
+            "const mockDoc = {",
+            "    createElement: (tag) => createEl(tag),",
+            "    querySelector: () => null,",
+            "    querySelectorAll: () => [],",
+            "    getElementById: () => null,",
+            "    addEventListener: () => {},",
+            "    body: { addEventListener: () => {} }",
+            "};",
+            "const mockWin = {",
+            "    addEventListener: () => {},",
+            "    document: mockDoc,",
+            "    ResizeObserver: class { observe() {} unobserve() {} disconnect() {} }",
+            "};",
+            "mockDoc.defaultView = mockWin;",
+            "const context = { window: mockWin, document: mockDoc, console: console, ResizeObserver: mockWin.ResizeObserver, setTimeout: setTimeout, clearTimeout: clearTimeout };",
+            "vm.createContext(context);",
+            "vm.runInContext(code, context);",
+            "",
+            "const container = createEl('div', 'widget-container-card');",
+            "const variations = [",
+            "    { s: 'PASSED', b: 'Chrome', m: 'JAVA', h: false },",
+            "    { s: 'FIXED', b: 'Chrome', m: 'JAVA', h: true },",
+            "    { s: 'FAILED', b: 'Chrome', m: 'JAVA', h: false }",
+            "];",
+            "const dataScript = createEl('script', 'widget-container-dataset');",
+            "dataScript.textContent = JSON.stringify(variations);",
+            "container.appendChild(dataScript);",
+            "container.setAttribute('data-container-filters', '{}');",
+            "",
+            "const filterStrip = createEl('div', 'container-active-filter-strip');",
+            "filterStrip.style.display = 'none';",
+            "const chips = createEl('div', 'container-filter-chips');",
+            "const clearBtn = createEl('button', 'btn-clear-all-container-filters');",
+            "filterStrip.appendChild(chips);",
+            "filterStrip.appendChild(clearBtn);",
+            "container.appendChild(filterStrip);",
+            "",
+            "const sec = createEl('div', 'widget-child-card widget-container-section');",
+            "sec.setAttribute('data-presentation', 'PIE_CHART');",
+            "sec.setAttribute('data-metric', 'STATUS');",
+            "container.appendChild(sec);",
+            "",
+            "const secHeader = createEl('div', 'widget-section-header');",
+            "const fontMono = createEl('span', 'font-mono');",
+            "fontMono.textContent = '3 Tests';",
+            "secHeader.appendChild(fontMono);",
+            "sec.appendChild(secHeader);",
+            "",
+            "const centerRate = createEl('div', 'pie-center-rate');",
+            "centerRate.textContent = '67%';",
+            "const centerSub = createEl('div', 'pie-center-sub');",
+            "centerSub.textContent = 'PASS';",
+            "sec.appendChild(centerRate);",
+            "sec.appendChild(centerSub);",
+            "",
+            "const grpPass = createEl('g', 'pie-slice-group widget-interactive-filter');",
+            "grpPass.setAttribute('data-filter-dim', 'status');",
+            "grpPass.setAttribute('data-filter-val', 'Passed');",
+            "const passBase = createEl('circle', 'pie-slice-base');",
+            "grpPass.appendChild(passBase);",
+            "sec.appendChild(grpPass);",
+            "",
+            "const grpFixed = createEl('g', 'pie-slice-group widget-interactive-filter');",
+            "grpFixed.setAttribute('data-filter-dim', 'status');",
+            "grpFixed.setAttribute('data-filter-val', 'Succeeded Fixed');",
+            "const fixedBase = createEl('circle', 'pie-slice-base');",
+            "const fixedHealed = createEl('circle', 'pie-slice-healed');",
+            "const fixedSparkle = createEl('circle', 'pie-slice-sparkle');",
+            "grpFixed.appendChild(fixedBase);",
+            "grpFixed.appendChild(fixedHealed);",
+            "grpFixed.appendChild(fixedSparkle);",
+            "sec.appendChild(grpFixed);",
+            "",
+            "const grpFail = createEl('g', 'pie-slice-group widget-interactive-filter');",
+            "grpFail.setAttribute('data-filter-dim', 'status');",
+            "grpFail.setAttribute('data-filter-val', 'Failed');",
+            "const failBase = createEl('circle', 'pie-slice-base');",
+            "grpFail.appendChild(failBase);",
+            "sec.appendChild(grpFail);",
+            "",
+            "context.grpFixed = grpFixed;",
+            "context.clearBtn = clearBtn;",
+            "context.container = container;",
+            "context.sec = sec;",
+            "vm.runInContext('onContainerWidgetFilterClick(grpFixed, { stopPropagation: () => {} })', context);",
+            "",
+            "if (grpFixed.style.opacity !== '1' || !grpFixed.classList._c.has('is-filter-active')) throw new Error('Fixed group should be active');",
+            "if (grpPass.style.opacity !== '0.38') throw new Error('Pass group should be dimmed to 0.38');",
+            "if (grpFail.style.opacity !== '0.38') throw new Error('Fail group should be dimmed to 0.38');",
+            "if (fixedBase.getAttribute('stroke-dasharray') !== '100.00 0.00') throw new Error('Fixed base donut should expand to 100% (100.00 0.00) but was: ' + fixedBase.getAttribute('stroke-dasharray'));",
+            "if (grpPass.style.display !== 'none') throw new Error('Pass slice should be hidden when filtered out');",
+            "if (grpFail.style.display !== 'none') throw new Error('Fail slice should be hidden when filtered out');",
+            "if (centerRate.textContent !== '100%') throw new Error('Center rate should be 100% but was: ' + centerRate.textContent);",
+            "if (fontMono.textContent !== '1 of 3 Tests') throw new Error('Summary count should be 1 of 3 Tests but was: ' + fontMono.textContent);",
+            "",
+            "vm.runInContext('clearContainerCrossFilter(clearBtn, { stopPropagation: () => {} })', context);",
+            "",
+            "if (grpPass.style.opacity !== '1') throw new Error('Pass group should be restored to 1');",
+            "if (grpFixed.style.opacity !== '1') throw new Error('Fixed group should be restored to 1');",
+            "if (grpFail.style.opacity !== '1') throw new Error('Fail group should be restored to 1');",
+            "if (grpPass.style.display !== '') throw new Error('Pass slice display should be restored');",
+            "if (grpFail.style.display !== '') throw new Error('Fail slice display should be restored');",
+            "if (centerRate.textContent !== '67%') throw new Error('Center rate should restore to 67% but was: ' + centerRate.textContent);",
+            "if (fontMono.textContent !== '3 Tests') throw new Error('Summary text should restore to 3 Tests but was: ' + fontMono.textContent);",
+            "console.log('SUCCESS');"
+        );
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
+        pb.redirectErrorStream(true);
+        final Process p = pb.start();
+        final StringBuilder out = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                out.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = p.waitFor();
+        Assertions.assertEquals(0, exitCode, "Container pie chart SVG layer grouping and overlay synchronization test failed:\n" + out);
+        Assertions.assertTrue(out.toString().contains("SUCCESS"), "Test output must contain SUCCESS: " + out);
+    }
 }
+
 

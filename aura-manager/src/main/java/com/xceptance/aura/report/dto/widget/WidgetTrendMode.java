@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.report.dto.widget;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import java.util.Locale;
 
 /**
@@ -72,6 +73,7 @@ public enum WidgetTrendMode
         return icon;
     }
 
+    @JsonCreator
     public static WidgetTrendMode fromString(final String raw)
     {
         if (raw == null || raw.isBlank())

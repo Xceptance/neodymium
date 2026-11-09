@@ -697,6 +697,49 @@ public class ReportDashboardSettingServiceTest
     }
 
     @Test
+    public void testDashboardWidgetsJson_HandlesMatrixPresentationAndUnknownEnumValuesGracefully()
+    {
+        final String json = "[{"
+            + "\"id\":\"widget-valid-1\","
+            + "\"title\":\"Status Pie\","
+            + "\"metric\":\"STATUS\","
+            + "\"presentation\":\"PIE_CHART\","
+            + "\"sortOrder\":0"
+            + "},{"
+            + "\"id\":\"widget-matrix-22\","
+            + "\"title\":\"Area Matrix\","
+            + "\"metric\":\"TAG\","
+            + "\"tagKey\":\"Area\","
+            + "\"presentation\":\"MATRIX\","
+            + "\"width\":\"full\","
+            + "\"sortOrder\":1"
+            + "},{"
+            + "\"id\":\"widget-unknown-enum\","
+            + "\"title\":\"Fallback Unknown\","
+            + "\"metric\":\"UNKNOWN_METRIC\","
+            + "\"presentation\":\"UNKNOWN_PRESENTATION\","
+            + "\"sortOrder\":2"
+            + "}]";
+
+        Mockito.when(repository.findById(ReportDashboardSettingService.DASHBOARD_WIDGETS_KEY))
+            .thenReturn(Optional.of(new ReportSettingEntity(ReportDashboardSettingService.DASHBOARD_WIDGETS_KEY, json)));
+
+        final List<DashboardWidgetConfigDto> widgets = service.getDashboardWidgets();
+        Assertions.assertNotNull(widgets);
+        Assertions.assertEquals(3, widgets.size(), "All 3 widgets must be loaded without discarding list");
+
+        Assertions.assertEquals("widget-valid-1", widgets.get(0).getId());
+        Assertions.assertEquals(WidgetPresentation.PIE_CHART, widgets.get(0).getPresentation());
+
+        Assertions.assertEquals("widget-matrix-22", widgets.get(1).getId());
+        Assertions.assertEquals(WidgetPresentation.TEST_VARIATIONS, widgets.get(1).getPresentation());
+
+        Assertions.assertEquals("widget-unknown-enum", widgets.get(2).getId());
+        Assertions.assertEquals(WidgetPresentation.PIE_CHART, widgets.get(2).getPresentation());
+        Assertions.assertEquals(WidgetMetric.STATUS, widgets.get(2).getMetric());
+    }
+
+    @Test
     public void testDashboardWidgetsJson_QuarterWidthSerializationAndDeserialization()
     {
         final DashboardWidgetConfigDto widget1 = new DashboardWidgetConfigDto(

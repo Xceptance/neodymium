@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.report.dto.widget;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import java.util.Locale;
 
 /**
@@ -107,6 +108,7 @@ public enum WidgetPresentation
         return this == PIE_CHART || this == RATIO_BAR || this == TEXT || this == LIST;
     }
 
+    @JsonCreator
     public static WidgetPresentation fromString(final String raw)
     {
         if (raw == null || raw.isBlank())
@@ -114,7 +116,8 @@ public enum WidgetPresentation
             return PIE_CHART;
         }
         final String normalized = raw.trim().toUpperCase(Locale.ROOT).replace("-", "_").replace(" ", "_");
-        if ("KNOWN_VARIATIONS".equals(normalized) || "VARIATIONS".equals(normalized) || "KNOWN_TEST_VARIATIONS".equals(normalized) || "TEST_BASE".equals(normalized))
+        if ("KNOWN_VARIATIONS".equals(normalized) || "VARIATIONS".equals(normalized) || "KNOWN_TEST_VARIATIONS".equals(normalized)
+            || "TEST_BASE".equals(normalized) || "MATRIX".equals(normalized) || "TEST_MATRIX".equals(normalized) || "VARIATION_MATRIX".equals(normalized))
         {
             return TEST_VARIATIONS;
         }

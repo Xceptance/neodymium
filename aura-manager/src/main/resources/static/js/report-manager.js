@@ -11479,13 +11479,24 @@ function recalculateContainerPieChart(sec, variations, isFiltered) {
 function recalculateStatusPieChart(sec, variations, isFiltered) {
     if (!sec) return;
     const total = variations.length;
+
+    // Determine active filtered status if widget is in container with active cross-filter
+    const container = sec.closest('.widget-container-card');
+    const activeFilters = container ? getContainerActiveFilters(container) : null;
+    const hasActiveFilters = activeFilters && getContainerActiveFiltersCount(activeFilters) > 0;
+
+    const effectiveVariations = (hasActiveFilters && Array.isArray(variations))
+        ? variations.filter(v => matchesContainerFilters(v, activeFilters, null))
+        : variations;
+    const effTotal = effectiveVariations.length;
+
     let passClean = 0, passHealed = 0, passAi = 0;
     let fixedClean = 0, fixedHealed = 0, fixedAi = 0;
     let knownClean = 0, knownHealed = 0, knownAi = 0;
     let unknownClean = 0, unknownHealed = 0, unknownAi = 0;
     let ignored = 0;
 
-    variations.forEach(v => {
+    effectiveVariations.forEach(v => {
         const rawStatus = (v.s || '').toLowerCase().trim();
         const healed = (v.h === true) || rawStatus === 'healed';
         const ai = (v.m === 'AI');
@@ -11508,25 +11519,33 @@ function recalculateStatusPieChart(sec, variations, isFiltered) {
     const totalKnown = knownClean + knownHealed + knownAi;
     const totalUnknown = unknownClean + unknownHealed + unknownAi;
 
+    const kpiPassed = totalPassed;
+    const kpiFixed = totalFixed;
+    const kpiTotal = effTotal;
+
     // Center KPI
     const rateEl = sec.querySelector('.pie-center-rate');
     const subEl = sec.querySelector('.pie-center-sub');
     if (rateEl) {
-        if (total > 0) {
-            const passPct = Math.round(((totalPassed + totalFixed) / total) * 100);
+        if (kpiTotal > 0) {
+            const passPct = Math.round(((kpiPassed + kpiFixed) / kpiTotal) * 100);
             rateEl.textContent = `${passPct}%`;
         } else {
             rateEl.textContent = '0%';
         }
     }
     if (subEl) {
-        subEl.textContent = total > 0 ? 'PASS' : 'TESTS';
+        subEl.textContent = kpiTotal > 0 ? 'PASS' : 'TESTS';
     }
 
     // Section header summary count
     const sumEl = sec.querySelector('.widget-section-header .font-mono');
     if (sumEl) {
-        sumEl.textContent = `${total} Tests`;
+        if (hasActiveFilters && kpiTotal < total) {
+            sumEl.textContent = `${kpiTotal} of ${total} Tests`;
+        } else {
+            sumEl.textContent = `${total} Tests`;
+        }
     }
 
     // SVG donut circles
@@ -11553,16 +11572,63 @@ function recalculateStatusPieChart(sec, variations, isFiltered) {
     };
 
     let curOffset = 25.0;
-    const svgCircles = Array.from(sec.querySelectorAll('svg circle.widget-interactive-filter'));
-    svgCircles.forEach(circle => {
-        const rawVal = circle.getAttribute('data-filter-val') || '';
-        const cnt = resolveSliceCount(rawVal, sliceCounts);
-        const pct = total > 0 ? (cnt / total * 100) : 0;
-        circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
-        circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
-        circle.style.display = (pct > 0) ? '' : 'none';
-        curOffset -= pct;
-    });
+    const sliceGroups = Array.from(sec.querySelectorAll('.pie-slice-group'));
+    if (sliceGroups.length > 0) {
+        sliceGroups.forEach(grp => {
+            const rawVal = grp.getAttribute('data-filter-val') || '';
+            const normKey = normalizeStatusCategory(rawVal);
+            const cnt = resolveSliceCount(rawVal, sliceCounts);
+            const pct = effTotal > 0 ? (cnt / effTotal * 100) : 0;
+            const healedCnt = sliceHealedCounts[normKey] || 0;
+            const aiCnt = sliceAiCounts[normKey] || 0;
+            const healedPct = effTotal > 0 ? (healedCnt / effTotal * 100) : 0;
+            const aiPct = effTotal > 0 ? (aiCnt / effTotal * 100) : 0;
+
+            const baseCircle = grp.querySelector('.pie-slice-base') || grp.querySelector('circle:first-of-type');
+            if (baseCircle) {
+                baseCircle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
+                baseCircle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
+            }
+
+            const healedCircles = grp.querySelectorAll('.pie-slice-healed, .pie-slice-sparkle');
+            if (healedPct > 0) {
+                const healedOffset = curOffset - (pct - healedPct - aiPct);
+                healedCircles.forEach(c => {
+                    c.setAttribute('stroke-dasharray', `${healedPct.toFixed(2)} ${(100 - healedPct).toFixed(2)}`);
+                    c.setAttribute('stroke-dashoffset', `${healedOffset.toFixed(2)}`);
+                    c.style.display = '';
+                });
+            } else {
+                healedCircles.forEach(c => { c.style.display = 'none'; });
+            }
+
+            const aiCircles = grp.querySelectorAll('.pie-slice-ai, .pie-slice-stripes');
+            if (aiPct > 0) {
+                const aiOffset = curOffset - (pct - aiPct);
+                aiCircles.forEach(c => {
+                    c.setAttribute('stroke-dasharray', `${aiPct.toFixed(2)} ${(100 - aiPct).toFixed(2)}`);
+                    c.setAttribute('stroke-dashoffset', `${aiOffset.toFixed(2)}`);
+                    c.style.display = '';
+                });
+            } else {
+                aiCircles.forEach(c => { c.style.display = 'none'; });
+            }
+
+            grp.style.display = (pct > 0) ? '' : 'none';
+            curOffset -= pct;
+        });
+    } else {
+        const svgCircles = Array.from(sec.querySelectorAll('svg circle.widget-interactive-filter'));
+        svgCircles.forEach(circle => {
+            const rawVal = circle.getAttribute('data-filter-val') || '';
+            const cnt = resolveSliceCount(rawVal, sliceCounts);
+            const pct = effTotal > 0 ? (cnt / effTotal * 100) : 0;
+            circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
+            circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
+            circle.style.display = (pct > 0) ? '' : 'none';
+            curOffset -= pct;
+        });
+    }
 
     // Breakdown list items
     const breakdownItems = Array.from(sec.querySelectorAll('.pie-breakdown-item'));
@@ -11570,7 +11636,7 @@ function recalculateStatusPieChart(sec, variations, isFiltered) {
         const rawVal = item.getAttribute('data-filter-val') || '';
         const normKey = normalizeStatusCategory(rawVal);
         const cnt = resolveSliceCount(rawVal, sliceCounts);
-        const pct = total > 0 ? (cnt / total * 100) : 0;
+        const pct = effTotal > 0 ? (cnt / effTotal * 100) : 0;
         const valSpan = item.querySelector('.val');
         if (valSpan) {
             valSpan.textContent = `${cnt} (${pct.toFixed(1)}%)`;
@@ -11620,9 +11686,20 @@ function recalculateStatusPieChart(sec, variations, isFiltered) {
 
 function recalculateCostsPieChart(sec, variations, isFiltered) {
     if (!sec) return;
+    const total = variations.length;
+
+    const container = sec.closest('.widget-container-card');
+    const activeFilters = container ? getContainerActiveFilters(container) : null;
+    const hasActiveFilters = activeFilters && getContainerActiveFiltersCount(activeFilters) > 0;
+
+    const effectiveVariations = (hasActiveFilters && Array.isArray(variations))
+        ? variations.filter(v => matchesContainerFilters(v, activeFilters, null))
+        : variations;
+    const effTotal = effectiveVariations.length;
+
     let totalCost = 0.0;
     let totalTokens = 0;
-    variations.forEach(v => {
+    effectiveVariations.forEach(v => {
         if (v.c !== undefined && v.c !== null) totalCost += Number(v.c) || 0;
         if (v.tok !== undefined && v.tok !== null) totalTokens += Number(v.tok) || 0;
     });
@@ -11638,28 +11715,54 @@ function recalculateCostsPieChart(sec, variations, isFiltered) {
 
     const sumEl = sec.querySelector('.widget-section-header .font-mono');
     if (sumEl) {
-        sumEl.textContent = `${totalTokens.toLocaleString()} tokens`;
+        if (hasActiveFilters && effTotal < total) {
+            sumEl.textContent = `${totalTokens.toLocaleString()} tokens (${effTotal} of ${total} Tests)`;
+        } else {
+            sumEl.textContent = `${totalTokens.toLocaleString()} tokens`;
+        }
     }
 
     const promptTokens = Math.round(totalTokens * 0.70);
     const completionTokens = Math.max(0, totalTokens - promptTokens);
 
-    const svgCircles = Array.from(sec.querySelectorAll('svg circle.widget-interactive-filter'));
-    svgCircles.forEach(circle => {
-        const rawVal = (circle.getAttribute('data-filter-val') || '').toLowerCase();
-        let pct = 0;
-        let offset = 25.0;
-        if (rawVal.includes('prompt')) {
-            pct = totalTokens > 0 ? 70.0 : 0;
-            offset = 25.0;
-        } else if (rawVal.includes('completion')) {
-            pct = totalTokens > 0 ? 30.0 : 0;
-            offset = -45.0;
-        }
-        circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
-        circle.setAttribute('stroke-dashoffset', `${offset.toFixed(2)}`);
-        circle.style.display = (pct > 0) ? '' : 'none';
-    });
+    const sliceGroups = Array.from(sec.querySelectorAll('.pie-slice-group'));
+    if (sliceGroups.length > 0) {
+        sliceGroups.forEach(grp => {
+            const rawVal = (grp.getAttribute('data-filter-val') || '').toLowerCase();
+            let pct = 0;
+            let offset = 25.0;
+            if (rawVal.includes('prompt')) {
+                pct = totalTokens > 0 ? 70.0 : 0;
+                offset = 25.0;
+            } else if (rawVal.includes('completion')) {
+                pct = totalTokens > 0 ? 30.0 : 0;
+                offset = -45.0;
+            }
+            const circle = grp.querySelector('.pie-slice-base') || grp.querySelector('circle');
+            if (circle) {
+                circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
+                circle.setAttribute('stroke-dashoffset', `${offset.toFixed(2)}`);
+            }
+            grp.style.display = (pct > 0) ? '' : 'none';
+        });
+    } else {
+        const svgCircles = Array.from(sec.querySelectorAll('svg circle.widget-interactive-filter'));
+        svgCircles.forEach(circle => {
+            const rawVal = (circle.getAttribute('data-filter-val') || '').toLowerCase();
+            let pct = 0;
+            let offset = 25.0;
+            if (rawVal.includes('prompt')) {
+                pct = totalTokens > 0 ? 70.0 : 0;
+                offset = 25.0;
+            } else if (rawVal.includes('completion')) {
+                pct = totalTokens > 0 ? 30.0 : 0;
+                offset = -45.0;
+            }
+            circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
+            circle.setAttribute('stroke-dashoffset', `${offset.toFixed(2)}`);
+            circle.style.display = (pct > 0) ? '' : 'none';
+        });
+    }
 
     const breakdownItems = Array.from(sec.querySelectorAll('.pie-breakdown-item'));
     breakdownItems.forEach(item => {
@@ -11681,11 +11784,21 @@ function recalculateCostsPieChart(sec, variations, isFiltered) {
 
 function recalculateTagPieChart(sec, variations, isFiltered) {
     if (!sec) return;
-    const dim = sec.getAttribute('data-tag-key') || 'browser';
-    const counts = {};
     const total = variations.length;
 
-    variations.forEach(v => {
+    const container = sec.closest('.widget-container-card');
+    const activeFilters = container ? getContainerActiveFilters(container) : null;
+    const hasActiveFilters = activeFilters && getContainerActiveFiltersCount(activeFilters) > 0;
+
+    const effectiveVariations = (hasActiveFilters && Array.isArray(variations))
+        ? variations.filter(v => matchesContainerFilters(v, activeFilters, null))
+        : variations;
+    const effTotal = effectiveVariations.length;
+
+    const dim = sec.getAttribute('data-tag-key') || 'browser';
+    const counts = {};
+
+    effectiveVariations.forEach(v => {
         const val = resolveVariationDimensionValue(v, dim);
         counts[val] = (counts[val] || 0) + 1;
     });
@@ -11693,7 +11806,7 @@ function recalculateTagPieChart(sec, variations, isFiltered) {
     const rateEl = sec.querySelector('.pie-center-rate');
     const subEl = sec.querySelector('.pie-center-sub');
     if (rateEl) {
-        rateEl.textContent = `${total}`;
+        rateEl.textContent = `${effTotal}`;
     }
     if (subEl) {
         subEl.textContent = 'ITEMS';
@@ -11701,26 +11814,46 @@ function recalculateTagPieChart(sec, variations, isFiltered) {
 
     const sumEl = sec.querySelector('.widget-section-header .font-mono');
     if (sumEl) {
-        sumEl.textContent = `${total} Items`;
+        if (hasActiveFilters && effTotal < total) {
+            sumEl.textContent = `${effTotal} of ${total} Items`;
+        } else {
+            sumEl.textContent = `${total} Items`;
+        }
     }
 
     let curOffset = 25.0;
-    const svgCircles = Array.from(sec.querySelectorAll('svg circle.widget-interactive-filter'));
-    svgCircles.forEach(circle => {
-        const rawVal = circle.getAttribute('data-filter-val') || '';
-        const cnt = resolveDimensionCount(rawVal, counts, dim);
-        const pct = total > 0 ? (cnt / total * 100) : 0;
-        circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
-        circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
-        circle.style.display = (pct > 0) ? '' : 'none';
-        curOffset -= pct;
-    });
+    const tagSliceGroups = Array.from(sec.querySelectorAll('.pie-slice-group'));
+    if (tagSliceGroups.length > 0) {
+        tagSliceGroups.forEach(grp => {
+            const rawVal = grp.getAttribute('data-filter-val') || '';
+            const cnt = resolveDimensionCount(rawVal, counts, dim);
+            const pct = effTotal > 0 ? (cnt / effTotal * 100) : 0;
+            const circle = grp.querySelector('.pie-slice-base') || grp.querySelector('circle');
+            if (circle) {
+                circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
+                circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
+            }
+            grp.style.display = (pct > 0) ? '' : 'none';
+            curOffset -= pct;
+        });
+    } else {
+        const svgCircles = Array.from(sec.querySelectorAll('svg circle.widget-interactive-filter'));
+        svgCircles.forEach(circle => {
+            const rawVal = circle.getAttribute('data-filter-val') || '';
+            const cnt = resolveDimensionCount(rawVal, counts, dim);
+            const pct = effTotal > 0 ? (cnt / effTotal * 100) : 0;
+            circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
+            circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
+            circle.style.display = (pct > 0) ? '' : 'none';
+            curOffset -= pct;
+        });
+    }
 
     const breakdownItems = Array.from(sec.querySelectorAll('.pie-breakdown-item'));
     breakdownItems.forEach(item => {
         const rawVal = item.getAttribute('data-filter-val') || '';
         const cnt = resolveDimensionCount(rawVal, counts, dim);
-        const pct = total > 0 ? (cnt / total * 100) : 0;
+        const pct = effTotal > 0 ? (cnt / effTotal * 100) : 0;
         const valSpan = item.querySelector('.val');
         if (valSpan) {
             valSpan.textContent = `${cnt} (${pct.toFixed(1)}%)`;
@@ -11735,10 +11868,20 @@ function recalculateTagPieChart(sec, variations, isFiltered) {
 
 function recalculateAiUsagePieChart(sec, variations, isFiltered) {
     if (!sec) return;
-    let aiDriven = 0, healed = 0, playbook = 0, classic = 0;
     const total = variations.length;
 
-    variations.forEach(v => {
+    const container = sec.closest('.widget-container-card');
+    const activeFilters = container ? getContainerActiveFilters(container) : null;
+    const hasActiveFilters = activeFilters && getContainerActiveFiltersCount(activeFilters) > 0;
+
+    const effectiveVariations = (hasActiveFilters && Array.isArray(variations))
+        ? variations.filter(v => matchesContainerFilters(v, activeFilters, null))
+        : variations;
+    const effTotal = effectiveVariations.length;
+
+    let aiDriven = 0, healed = 0, playbook = 0, classic = 0;
+
+    effectiveVariations.forEach(v => {
         const isHealed = (v.h === true) || (v.m || '').toUpperCase() === 'HEALED';
         const isAi = (v.m || '').toUpperCase() === 'AI';
         const isPlaybook = (v.m || '').toUpperCase() === 'PLAYBOOK' && !isHealed;
@@ -11749,7 +11892,7 @@ function recalculateAiUsagePieChart(sec, variations, isFiltered) {
     });
 
     const totalAi = aiDriven + healed;
-    const aiRate = total > 0 ? Math.round((totalAi / total) * 100) : 0;
+    const aiRate = effTotal > 0 ? Math.round((totalAi / effTotal) * 100) : 0;
 
     const rateEl = sec.querySelector('.pie-center-rate');
     const subEl = sec.querySelector('.pie-center-sub');
@@ -11762,7 +11905,11 @@ function recalculateAiUsagePieChart(sec, variations, isFiltered) {
 
     const sumEl = sec.querySelector('.widget-section-header .font-mono');
     if (sumEl) {
-        sumEl.textContent = `${total} Tests`;
+        if (hasActiveFilters && effTotal < total) {
+            sumEl.textContent = `${effTotal} of ${total} Tests`;
+        } else {
+            sumEl.textContent = `${total} Tests`;
+        }
     }
 
     const counts = {
@@ -11773,23 +11920,46 @@ function recalculateAiUsagePieChart(sec, variations, isFiltered) {
     };
 
     let curOffset = 25.0;
-    const svgCircles = Array.from(sec.querySelectorAll('svg circle.widget-interactive-filter'));
-    svgCircles.forEach(circle => {
-        const rawVal = circle.getAttribute('data-filter-val') || '';
-        let cnt = counts[rawVal];
-        if (cnt === undefined) {
-            const rl = rawVal.toLowerCase();
-            for (const k in counts) {
-                if (k.toLowerCase() === rl) { cnt = counts[k]; break; }
+    const aiSliceGroups = Array.from(sec.querySelectorAll('.pie-slice-group'));
+    if (aiSliceGroups.length > 0) {
+        aiSliceGroups.forEach(grp => {
+            const rawVal = grp.getAttribute('data-filter-val') || '';
+            let cnt = counts[rawVal];
+            if (cnt === undefined) {
+                const rl = rawVal.toLowerCase();
+                for (const k in counts) {
+                    if (k.toLowerCase() === rl) { cnt = counts[k]; break; }
+                }
             }
-        }
-        cnt = cnt || 0;
-        const pct = total > 0 ? (cnt / total * 100) : 0;
-        circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
-        circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
-        circle.style.display = (pct > 0) ? '' : 'none';
-        curOffset -= pct;
-    });
+            cnt = cnt || 0;
+            const pct = effTotal > 0 ? (cnt / effTotal * 100) : 0;
+            const circle = grp.querySelector('.pie-slice-base') || grp.querySelector('circle');
+            if (circle) {
+                circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
+                circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
+            }
+            grp.style.display = (pct > 0) ? '' : 'none';
+            curOffset -= pct;
+        });
+    } else {
+        const svgCircles = Array.from(sec.querySelectorAll('svg circle.widget-interactive-filter'));
+        svgCircles.forEach(circle => {
+            const rawVal = circle.getAttribute('data-filter-val') || '';
+            let cnt = counts[rawVal];
+            if (cnt === undefined) {
+                const rl = rawVal.toLowerCase();
+                for (const k in counts) {
+                    if (k.toLowerCase() === rl) { cnt = counts[k]; break; }
+                }
+            }
+            cnt = cnt || 0;
+            const pct = effTotal > 0 ? (cnt / effTotal * 100) : 0;
+            circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
+            circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
+            circle.style.display = (pct > 0) ? '' : 'none';
+            curOffset -= pct;
+        });
+    }
 
     const breakdownItems = Array.from(sec.querySelectorAll('.pie-breakdown-item'));
     breakdownItems.forEach(item => {
@@ -11802,7 +11972,7 @@ function recalculateAiUsagePieChart(sec, variations, isFiltered) {
             }
         }
         cnt = cnt || 0;
-        const pct = total > 0 ? (cnt / total * 100) : 0;
+        const pct = effTotal > 0 ? (cnt / effTotal * 100) : 0;
         const valSpan = item.querySelector('.val');
         if (valSpan) {
             valSpan.textContent = `${cnt} (${pct.toFixed(1)}%)`;
@@ -11889,8 +12059,18 @@ window.extractVariationBugSeverities = extractVariationBugSeverities;
 
 function recalculateBugsPieChart(sec, variations, isFiltered) {
     if (!sec) return;
+    const total = variations.length;
+
     const container = sec.closest('.widget-container-card');
-    const { totalBugs, sevCounts } = extractVariationBugSeverities(variations, container);
+    const activeFilters = container ? getContainerActiveFilters(container) : null;
+    const hasActiveFilters = activeFilters && getContainerActiveFiltersCount(activeFilters) > 0;
+
+    const effectiveVariations = (hasActiveFilters && Array.isArray(variations))
+        ? variations.filter(v => matchesContainerFilters(v, activeFilters, null))
+        : variations;
+    const effTotal = effectiveVariations.length;
+
+    const { totalBugs, sevCounts } = extractVariationBugSeverities(effectiveVariations, container);
 
     const rateEl = sec.querySelector('.pie-center-rate');
     const subEl = sec.querySelector('.pie-center-sub');
@@ -11903,20 +12083,40 @@ function recalculateBugsPieChart(sec, variations, isFiltered) {
 
     const sumEl = sec.querySelector('.widget-section-header .font-mono');
     if (sumEl) {
-        sumEl.textContent = `${totalBugs} ${totalBugs === 1 ? 'Bug' : 'Bugs'}`;
+        if (hasActiveFilters && effTotal < total) {
+            sumEl.textContent = `${totalBugs} ${totalBugs === 1 ? 'Bug' : 'Bugs'} (${effTotal} of ${total} Tests)`;
+        } else {
+            sumEl.textContent = `${totalBugs} ${totalBugs === 1 ? 'Bug' : 'Bugs'}`;
+        }
     }
 
     let curOffset = 25.0;
-    const svgCircles = Array.from(sec.querySelectorAll('svg circle.widget-interactive-filter'));
-    svgCircles.forEach(circle => {
-        const rawVal = (circle.getAttribute('data-filter-val') || '').toUpperCase().trim();
-        const cnt = sevCounts[rawVal] || 0;
-        const pct = totalBugs > 0 ? (cnt / totalBugs * 100) : 0;
-        circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
-        circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
-        circle.style.display = (pct > 0) ? '' : 'none';
-        curOffset -= pct;
-    });
+    const bugSliceGroups = Array.from(sec.querySelectorAll('.pie-slice-group'));
+    if (bugSliceGroups.length > 0) {
+        bugSliceGroups.forEach(grp => {
+            const rawVal = (grp.getAttribute('data-filter-val') || '').toUpperCase().trim();
+            const cnt = sevCounts[rawVal] || 0;
+            const pct = totalBugs > 0 ? (cnt / totalBugs * 100) : 0;
+            const circle = grp.querySelector('.pie-slice-base') || grp.querySelector('circle');
+            if (circle) {
+                circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
+                circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
+            }
+            grp.style.display = (pct > 0) ? '' : 'none';
+            curOffset -= pct;
+        });
+    } else {
+        const svgCircles = Array.from(sec.querySelectorAll('svg circle.widget-interactive-filter'));
+        svgCircles.forEach(circle => {
+            const rawVal = (circle.getAttribute('data-filter-val') || '').toUpperCase().trim();
+            const cnt = sevCounts[rawVal] || 0;
+            const pct = totalBugs > 0 ? (cnt / totalBugs * 100) : 0;
+            circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
+            circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
+            circle.style.display = (pct > 0) ? '' : 'none';
+            curOffset -= pct;
+        });
+    }
 
     const breakdownItems = Array.from(sec.querySelectorAll('.pie-breakdown-item'));
     breakdownItems.forEach(item => {
@@ -11939,14 +12139,24 @@ window.recalculateBugsPieChart = recalculateBugsPieChart;
 function recalculateFlakinessPieChart(sec, variations, isFiltered) {
     if (!sec) return;
     const total = variations.length;
+
+    const container = sec.closest('.widget-container-card');
+    const activeFilters = container ? getContainerActiveFilters(container) : null;
+    const hasActiveFilters = activeFilters && getContainerActiveFiltersCount(activeFilters) > 0;
+
+    const effectiveVariations = (hasActiveFilters && Array.isArray(variations))
+        ? variations.filter(v => matchesContainerFilters(v, activeFilters, null))
+        : variations;
+    const effTotal = effectiveVariations.length;
+
     let flakyCount = 0;
-    variations.forEach(v => {
+    effectiveVariations.forEach(v => {
         if (v.f === true || v.f === 'true') {
             flakyCount++;
         }
     });
-    const stableCount = total - flakyCount;
-    const flakyRate = total > 0 ? (flakyCount / total * 100) : 0;
+    const stableCount = effTotal - flakyCount;
+    const flakyRate = effTotal > 0 ? (flakyCount / effTotal * 100) : 0;
 
     const rateEl = sec.querySelector('.pie-center-rate');
     const subEl = sec.querySelector('.pie-center-sub');
@@ -11959,26 +12169,46 @@ function recalculateFlakinessPieChart(sec, variations, isFiltered) {
 
     const sumEl = sec.querySelector('.widget-section-header .font-mono');
     if (sumEl) {
-        sumEl.textContent = `${total} ${total === 1 ? 'Test' : 'Tests'}`;
+        if (hasActiveFilters && effTotal < total) {
+            sumEl.textContent = `${effTotal} of ${total} Tests`;
+        } else {
+            sumEl.textContent = `${total} ${total === 1 ? 'Test' : 'Tests'}`;
+        }
     }
 
     let curOffset = 25.0;
-    const svgCircles = Array.from(sec.querySelectorAll('svg circle.widget-interactive-filter'));
-    svgCircles.forEach(circle => {
-        const rawVal = (circle.getAttribute('data-filter-val') || '').toLowerCase().trim();
-        const cnt = rawVal.includes('flaky') ? flakyCount : stableCount;
-        const pct = total > 0 ? (cnt / total * 100) : 0;
-        circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
-        circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
-        circle.style.display = (pct > 0) ? '' : 'none';
-        curOffset -= pct;
-    });
+    const flakySliceGroups = Array.from(sec.querySelectorAll('.pie-slice-group'));
+    if (flakySliceGroups.length > 0) {
+        flakySliceGroups.forEach(grp => {
+            const rawVal = (grp.getAttribute('data-filter-val') || '').toLowerCase().trim();
+            const cnt = rawVal.includes('flaky') ? flakyCount : stableCount;
+            const pct = effTotal > 0 ? (cnt / effTotal * 100) : 0;
+            const circle = grp.querySelector('.pie-slice-base') || grp.querySelector('circle');
+            if (circle) {
+                circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
+                circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
+            }
+            grp.style.display = (pct > 0) ? '' : 'none';
+            curOffset -= pct;
+        });
+    } else {
+        const svgCircles = Array.from(sec.querySelectorAll('svg circle.widget-interactive-filter'));
+        svgCircles.forEach(circle => {
+            const rawVal = (circle.getAttribute('data-filter-val') || '').toLowerCase().trim();
+            const cnt = rawVal.includes('flaky') ? flakyCount : stableCount;
+            const pct = effTotal > 0 ? (cnt / effTotal * 100) : 0;
+            circle.setAttribute('stroke-dasharray', `${pct.toFixed(2)} ${(100 - pct).toFixed(2)}`);
+            circle.setAttribute('stroke-dashoffset', `${curOffset.toFixed(2)}`);
+            circle.style.display = (pct > 0) ? '' : 'none';
+            curOffset -= pct;
+        });
+    }
 
     const breakdownItems = Array.from(sec.querySelectorAll('.pie-breakdown-item'));
     breakdownItems.forEach(item => {
         const rawVal = (item.getAttribute('data-filter-val') || '').toLowerCase().trim();
         const cnt = rawVal.includes('flaky') ? flakyCount : stableCount;
-        const pct = total > 0 ? (cnt / total * 100) : 0;
+        const pct = effTotal > 0 ? (cnt / effTotal * 100) : 0;
         const valSpan = item.querySelector('.val');
         if (valSpan) {
             valSpan.textContent = `${cnt} (${Math.round(pct)}%)`;
@@ -12657,7 +12887,7 @@ function renderContainerFilterStrip(container, activeFilters) {
         return;
     }
 
-    strip.style.display = 'inline-flex';
+    strip.style.display = 'flex';
 
     let chipsContainer = strip.querySelector('.container-filter-chips');
     if (!chipsContainer) {
@@ -12773,6 +13003,27 @@ function updateContainerCardsVisualState(container, activeFilters) {
                 recalculateContainerList(childCard, matchedVariations, true);
             } else if (presentation === 'TEXT' || presentation === 'TEXT_WITH_SMALL_TREND') {
                 recalculateContainerText(childCard, matchedVariations, true);
+            }
+
+            const strictlyMatchedVariations = (totalFilters > 0)
+                ? allVariations.filter(v => matchesContainerFilters(v, activeFilters, null))
+                : allVariations;
+
+            if (presentation !== 'PIE_CHART') {
+                const sumEl = childCard.querySelector('.widget-section-header .font-mono');
+                if (sumEl) {
+                    if (!sumEl.getAttribute('data-original-summary')) {
+                        sumEl.setAttribute('data-original-summary', sumEl.textContent.trim());
+                    }
+                    if (totalFilters > 0 && strictlyMatchedVariations.length < allVariations.length) {
+                        const metricName = (metric === 'BUGS')
+                            ? (strictlyMatchedVariations.length === 1 ? 'Bug' : 'Bugs')
+                            : (metric === 'COSTS' ? 'tokens' : (metric === 'NUMBER_OF_RUNS' ? 'Runs' : 'Tests'));
+                        sumEl.textContent = `${strictlyMatchedVariations.length} of ${allVariations.length} ${metricName}`;
+                    } else if (totalFilters === 0 && sumEl.getAttribute('data-original-summary')) {
+                        sumEl.textContent = sumEl.getAttribute('data-original-summary');
+                    }
+                }
             }
         }
 
@@ -12968,6 +13219,11 @@ function clearContainerCrossFilter(btn, event) {
         childCard.querySelectorAll('.widget-interactive-filter').forEach(item => {
             item.style.opacity = '1';
         });
+
+        const sumEl = childCard.querySelector('.widget-section-header .font-mono');
+        if (sumEl && sumEl.getAttribute('data-original-summary')) {
+            sumEl.textContent = sumEl.getAttribute('data-original-summary');
+        }
     });
 }
 window.clearContainerCrossFilter = clearContainerCrossFilter;

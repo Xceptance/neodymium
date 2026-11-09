@@ -88,11 +88,6 @@
                             <span th:text="${w.identityDimensionsSummary}">Identity</span>
                             <span class="material-symbols-outlined text-muted execution-identity-info-icon" style="font-size: 0.75rem; cursor: help;" title="Execution Identity defines which dimensions (such as Test, Browser, Environment, or Tags) are used to uniquely distinguish and track test execution instances across runs and variations.">info</span>
                         </span>
-                        <!-- ACTIVE FILTER BADGE INSIDE CONTAINER HEADER -->
-                        <div class="container-active-filter-strip ms-2 d-inline-flex align-items-center gap-1 flex-wrap" style="display: none;">
-                            <div class="container-filter-chips d-inline-flex align-items-center gap-1 flex-wrap"></div>
-                            <button type="button" class="btn-clear-all-container-filters btn-clear-ratio ms-1" style="display: none;" onclick="clearContainerCrossFilter(this, event)" title="Clear all filters">Clear all</button>
-                        </div>
                     </div>
                     <div class="widget-card-actions d-flex align-items-center gap-1" onclick="event.stopPropagation()">
                         <button type="button" class="btn-icon-widget"
@@ -120,6 +115,15 @@
                             <span class="material-symbols-outlined">close</span>
                         </button>
                     </div>
+                </div>
+                <!-- DEDICATED CONTAINER ACTIVE FILTER STRIP -->
+                <div class="container-active-filter-strip d-flex align-items-center gap-2 flex-wrap px-3 py-1-5 border-bottom" style="display: none;">
+                    <span class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.68rem; font-weight: 600;">
+                        <span class="material-symbols-outlined" style="font-size: 0.75rem; color: #3b82f6;">filter_alt</span>
+                        <span>Active Filter:</span>
+                    </span>
+                    <div class="container-filter-chips d-inline-flex align-items-center gap-1 flex-wrap"></div>
+                    <button type="button" class="btn-clear-all-container-filters btn-clear-ratio ms-1" style="display: none;" onclick="clearContainerCrossFilter(this, event)" title="Clear all filters">Clear all</button>
                 </div>
                 <!-- WIDGET FILTER DETAILS STRIP -->
                 <div class="widget-filter-strip d-flex align-items-center gap-1 flex-wrap" th:if="${w.hasOwnRunFilters()}">
@@ -864,7 +868,7 @@
 <!-- 1. PIE / DONUT BODY -->
 <div th:fragment="pieChartBody(w)" th:if="${w != null}" class="widget-card-body d-flex align-items-center justify-content-around gap-4 flex-wrap">
     <div class="pie-chart-wrapper-batch">
-        <svg width="100%" height="100%" viewBox="0 0 36 36">
+        <svg width="100%" height="100%" viewBox="-2 -2 40 40" style="overflow: visible;">
             <defs>
                 <pattern th:id="'sparkle-pat-donut-' + ${w.id}" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(25)">
                     <path d="M 2.5, 0.7 Q 2.5, 2.5 4.2, 2.5 Q 2.5, 2.5 2.5, 4.2 Q 2.5, 2.5 0.7, 2.5 Q 2.5, 2.5 2.5, 0.7 Z" fill="#ffffff" opacity="0.95"/>
@@ -876,25 +880,33 @@
             </defs>
             <circle cx="18" cy="18" r="15.915" fill="none" stroke="var(--border)" stroke-width="4.5"/>
             <th:block th:each="s : ${w.pieSlices}">
-                <circle cx="18" cy="18" r="15.915" fill="none"
-                        class="widget-interactive-filter"
-                        th:attr="stroke=${s.color},stroke-dasharray=${s.dashArray},stroke-dashoffset=${s.dashOffset},data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'COSTS' ? 'costs' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'generic')))))},data-filter-val=${s.label}"
-                        onclick="onContainerWidgetFilterClick(this, event)"
-                        stroke-width="5" style="cursor: pointer;"/>
-                <th:block th:if="${w.showHealedAi}">
-                    <circle th:if="${s.healedCount > 0}" cx="18" cy="18" r="15.915" fill="none"
-                            th:attr="stroke=${s.healedColor},stroke-dasharray=${s.healedDashArray},stroke-dashoffset=${s.healedDashOffset}"
+                <g class="pie-slice-group widget-interactive-filter"
+                   th:attr="data-filter-dim=${w.metric.name() == 'STATUS' ? 'status' : (w.metric.name() == 'TAG' ? (w.tagKey != null ? w.tagKey : 'tag') : (w.metric.name() == 'AI_USAGE' ? 'mode' : (w.metric.name() == 'COSTS' ? 'costs' : (w.metric.name() == 'BUGS' ? 'severity' : (w.metric.name() == 'FLAKINESS' ? 'flaky' : 'generic')))))},data-filter-val=${s.label}"
+                   onclick="onContainerWidgetFilterClick(this, event)"
+                   style="cursor: pointer;">
+                    <circle cx="18" cy="18" r="15.915" fill="none"
+                            class="pie-slice-base"
+                            th:attr="stroke=${s.color},stroke-dasharray=${s.dashArray},stroke-dashoffset=${s.dashOffset}"
                             stroke-width="5"/>
-                    <circle th:if="${s.healedCount > 0}" cx="18" cy="18" r="15.915" fill="none"
-                            th:attr="stroke='url(#sparkle-pat-donut-' + ${w.id} + ')',stroke-dasharray=${s.healedDashArray},stroke-dashoffset=${s.healedDashOffset}"
-                            stroke-width="5" pointer-events="none"/>
-                    <circle th:if="${s.aiCount > 0}" cx="18" cy="18" r="15.915" fill="none"
-                            th:attr="stroke=${s.color},stroke-dasharray=${s.aiDashArray},stroke-dashoffset=${s.aiDashOffset}"
-                            stroke-width="5"/>
-                    <circle th:if="${s.aiCount > 0}" cx="18" cy="18" r="15.915" fill="none"
-                            th:attr="stroke='url(#ai-pat-donut-' + ${w.id} + ')',stroke-dasharray=${s.aiDashArray},stroke-dashoffset=${s.aiDashOffset}"
-                            stroke-width="5" pointer-events="none"/>
-                </th:block>
+                    <th:block th:if="${w.showHealedAi}">
+                        <circle th:if="${s.healedCount > 0}" cx="18" cy="18" r="15.915" fill="none"
+                                class="pie-slice-healed"
+                                th:attr="stroke=${s.healedColor},stroke-dasharray=${s.healedDashArray},stroke-dashoffset=${s.healedDashOffset}"
+                                stroke-width="5" pointer-events="none"/>
+                        <circle th:if="${s.healedCount > 0}" cx="18" cy="18" r="15.915" fill="none"
+                                class="pie-slice-sparkle"
+                                th:attr="stroke='url(#sparkle-pat-donut-' + ${w.id} + ')',stroke-dasharray=${s.healedDashArray},stroke-dashoffset=${s.healedDashOffset}"
+                                stroke-width="5" pointer-events="none"/>
+                        <circle th:if="${s.aiCount > 0}" cx="18" cy="18" r="15.915" fill="none"
+                                class="pie-slice-ai"
+                                th:attr="stroke=${s.color},stroke-dasharray=${s.aiDashArray},stroke-dashoffset=${s.aiDashOffset}"
+                                stroke-width="5" pointer-events="none"/>
+                        <circle th:if="${s.aiCount > 0}" cx="18" cy="18" r="15.915" fill="none"
+                                class="pie-slice-stripes"
+                                th:attr="stroke='url(#ai-pat-donut-' + ${w.id} + ')',stroke-dasharray=${s.aiDashArray},stroke-dashoffset=${s.aiDashOffset}"
+                                stroke-width="5" pointer-events="none"/>
+                    </th:block>
+                </g>
             </th:block>
         </svg>
         <div class="pie-center-label">

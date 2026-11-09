@@ -115,6 +115,7 @@ public class ReportDashboardSettingService
         this.settingsFile = Paths.get(settingsFilePath);
         this.objectMapper = new ObjectMapper();
         this.objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+        this.objectMapper.configure(DeserializationFeature.READ_UNKNOWN_ENUM_VALUES_AS_NULL, true);
     }
 
     public ReportDashboardSettingService(final ReportSettingRepository repository)

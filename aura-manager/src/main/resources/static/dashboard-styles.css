@@ -6705,9 +6705,29 @@ body[data-bs-theme="dark"] .validation-issue-context {
     opacity: 1;
 }
 
+g.pie-slice-group.widget-interactive-filter {
+    transition: opacity 0.2s ease, filter 0.2s ease;
+    cursor: pointer;
+}
+
+g.pie-slice-group.widget-interactive-filter:hover circle.pie-slice-base {
+    filter: brightness(1.15);
+}
+
+g.pie-slice-group.widget-interactive-filter.is-filter-active circle.pie-slice-base {
+    stroke-width: 5.2;
+    filter: drop-shadow(0 0 2.5px rgba(59, 130, 246, 0.7));
+}
+
+.has-active-cross-filter g.pie-slice-group.widget-interactive-filter:not(.is-filter-active) circle:not(.pie-slice-base) {
+    display: none !important;
+}
+
 .container-active-filter-strip {
-    display: inline-flex;
-    align-items: center;
+    background: var(--bg-surface, rgba(255, 255, 255, 0.02));
+    padding: 0.4rem 1rem;
+    gap: 0.5rem;
+    width: 100%;
 }
 
 .tag-container-filter {

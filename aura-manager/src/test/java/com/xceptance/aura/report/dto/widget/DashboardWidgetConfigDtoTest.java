@@ -617,5 +617,70 @@ public class DashboardWidgetConfigDtoTest
         // Non-container / empty children returns unchanged
         Assertions.assertSame(c1, c1.reorderChildren(List.of("c1")));
     }
+
+    @Test
+    public void testDeserializeMatrixPresentationAsTestVariations() throws Exception
+    {
+        final String json = "{"
+            + "\"id\":\"widget-87db626c\","
+            + "\"title\":\"Area Matrix\","
+            + "\"metric\":\"TAG\","
+            + "\"tagKey\":\"Area\","
+            + "\"presentation\":\"MATRIX\","
+            + "\"trendMode\":\"BY_RUNS\","
+            + "\"valueFormat\":\"PERCENT\","
+            + "\"pointScope\":\"LATEST_TEST_STATUS\","
+            + "\"width\":\"full\","
+            + "\"sortOrder\":22"
+            + "}";
+
+        final DashboardWidgetConfigDto widget = objectMapper.readValue(json, DashboardWidgetConfigDto.class);
+        Assertions.assertNotNull(widget);
+        Assertions.assertEquals("widget-87db626c", widget.getId());
+        Assertions.assertEquals("Area Matrix", widget.getTitle());
+        Assertions.assertEquals(WidgetPresentation.TEST_VARIATIONS, widget.getPresentation());
+        Assertions.assertEquals(WidgetMetric.TAG, widget.getMetric());
+        Assertions.assertEquals("Area", widget.getTagKey());
+        Assertions.assertEquals("full", widget.getWidth());
+    }
+
+    @Test
+    public void testDeserializeUnknownPresentationFallback() throws Exception
+    {
+        final String json = "{"
+            + "\"id\":\"w-unknown\","
+            + "\"title\":\"Unknown Presentation Widget\","
+            + "\"metric\":\"STATUS\","
+            + "\"presentation\":\"UNRECOGNIZED_FORMAT\""
+            + "}";
+
+        final DashboardWidgetConfigDto widget = objectMapper.readValue(json, DashboardWidgetConfigDto.class);
+        Assertions.assertNotNull(widget);
+        Assertions.assertEquals(WidgetPresentation.PIE_CHART, widget.getPresentation());
+    }
+
+    @Test
+    public void testDeserializeEnumAliasesAcrossDtoEnums() throws Exception
+    {
+        final String json = "{"
+            + "\"id\":\"w-aliases\","
+            + "\"title\":\"Aliases Test\","
+            + "\"metric\":\"KNOWN_VARIATIONS\","
+            + "\"presentation\":\"STRING_OF_PEARLS\","
+            + "\"trendMode\":\"latest_approach\","
+            + "\"valueFormat\":\"percent\","
+            + "\"pointScope\":\"latest\","
+            + "\"colorPolarity\":\"RED\""
+            + "}";
+
+        final DashboardWidgetConfigDto widget = objectMapper.readValue(json, DashboardWidgetConfigDto.class);
+        Assertions.assertNotNull(widget);
+        Assertions.assertEquals(WidgetMetric.TEST_VARIATIONS, widget.getMetric());
+        Assertions.assertEquals(WidgetPresentation.PERLENKETTE, widget.getPresentation());
+        Assertions.assertEquals(WidgetTrendMode.LATEST_APPROACH, widget.getTrendMode());
+        Assertions.assertEquals(WidgetValueFormat.PERCENT, widget.getValueFormat());
+        Assertions.assertEquals(WidgetPointScope.LATEST_TEST_STATUS, widget.getPointScope());
+        Assertions.assertEquals(WidgetColorPolarity.HIGHER_IS_RED, widget.getColorPolarity());
+    }
 }
 

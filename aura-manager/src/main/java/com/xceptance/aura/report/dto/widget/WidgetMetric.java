@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.report.dto.widget;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import java.util.Locale;
 
 /**
@@ -92,6 +93,7 @@ public enum WidgetMetric
         return icon;
     }
 
+    @JsonCreator
     public static WidgetMetric fromString(final String raw)
     {
         if (raw == null || raw.isBlank())
@@ -99,7 +101,8 @@ public enum WidgetMetric
             return STATUS;
         }
         final String normalized = raw.trim().toUpperCase(Locale.ROOT).replace("-", "_").replace(" ", "_");
-        if ("KNOWN_VARIATIONS".equals(normalized) || "VARIATIONS".equals(normalized) || "KNOWN_TEST_VARIATIONS".equals(normalized))
+        if ("KNOWN_VARIATIONS".equals(normalized) || "VARIATIONS".equals(normalized) || "KNOWN_TEST_VARIATIONS".equals(normalized)
+            || "MATRIX".equals(normalized) || "TEST_MATRIX".equals(normalized) || "VARIATION_MATRIX".equals(normalized))
         {
             return TEST_VARIATIONS;
         }

@@ -18,6 +18,7 @@
  */
 package com.xceptance.aura.report.dto.widget;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import java.util.Locale;
 
 /**
@@ -57,6 +58,7 @@ public enum WidgetValueFormat
         return icon;
     }
 
+    @JsonCreator
     public static WidgetValueFormat fromString(final String raw)
     {
         if (raw == null || raw.isBlank())
