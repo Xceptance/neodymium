@@ -613,173 +613,208 @@ public final class AssertAction implements BrowserActionPlugin
             return;
         }
 
-        // Focus assertion
-        if ("focused".equalsIgnoreCase(expected) || "[focused]".equalsIgnoreCase(expected))
+        final String normalized = BrowserToolProvider.normalizeElementState(expected);
+
+        switch (normalized)
         {
-            final Boolean isFocused = Selenide.executeJavaScript(
-                    "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
-                    element);
-            if (!Boolean.TRUE.equals(isFocused))
+            case "focused":
             {
-                element.shouldBe(Condition.focused);
+                final Boolean isFocused = Selenide.executeJavaScript(
+                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                        element);
+                if (!Boolean.TRUE.equals(isFocused))
+                {
+                    element.shouldBe(Condition.focused);
+                }
+                break;
             }
-        }
-        // Visibility assertion
-        else if ("visible".equalsIgnoreCase(expected) || "[visible]".equalsIgnoreCase(expected) || "present".equalsIgnoreCase(expected) || "[present]".equalsIgnoreCase(expected))
-        {
-            element.shouldBe(Condition.visible);
-        }
-        // Checked assertion
-        else if ("checked".equalsIgnoreCase(expected) || "[checked]".equalsIgnoreCase(expected))
-        {
-            element.shouldBe(Condition.checked);
-        }
-        // Unchecked assertion
-        else if ("unchecked".equalsIgnoreCase(expected) || "[unchecked]".equalsIgnoreCase(expected) || "not_checked".equalsIgnoreCase(expected) || "[not_checked]".equalsIgnoreCase(expected))
-        {
-            element.shouldNotBe(Condition.checked);
-        }
-        // Disabled assertion
-        else if ("disabled".equalsIgnoreCase(expected) || "[disabled]".equalsIgnoreCase(expected))
-        {
-            element.shouldBe(Condition.disabled);
-        }
-        // Enabled assertion
-        else if ("enabled".equalsIgnoreCase(expected) || "[enabled]".equalsIgnoreCase(expected))
-        {
-            element.shouldBe(Condition.enabled);
-        }
-        // Selected assertion
-        else if ("selected".equalsIgnoreCase(expected) || "[selected]".equalsIgnoreCase(expected))
-        {
-            if ("SELECT".equalsIgnoreCase(element.getTagName()))
+            case "visible":
+            case "present":
             {
-                element.getSelectedOption().shouldBe(Condition.exist);
+                element.shouldBe(Condition.visible);
+                break;
             }
-            else
-            {
-                element.shouldBe(Condition.selected);
-            }
-        }
-        // Readonly assertion
-        else if ("readonly".equalsIgnoreCase(expected) || "[readonly]".equalsIgnoreCase(expected) || "read_only".equalsIgnoreCase(expected) || "[read_only]".equalsIgnoreCase(expected))
-        {
-            element.shouldBe(Condition.readonly);
-        }
-        // Editable assertion
-        else if ("editable".equalsIgnoreCase(expected) || "[editable]".equalsIgnoreCase(expected))
-        {
-            element.shouldBe(Condition.editable);
-        }
-        // Checkbox/radio boolean state shortcut
-        else if (("true".equalsIgnoreCase(expected) || "false".equalsIgnoreCase(expected)) && isCheckboxOrRadio(element))
-        {
-            if ("true".equalsIgnoreCase(expected))
+            case "checked":
             {
                 element.shouldBe(Condition.checked);
+                break;
             }
-            else
+            case "unchecked":
+            case "not_checked":
             {
                 element.shouldNotBe(Condition.checked);
+                break;
             }
-        }
-        // Content assertions
-        else
-        {
-            final WebElementCondition cond;
-            if (action.isRegex())
+            case "disabled":
             {
-                cond = new RegexMatch(expected);
+                element.shouldBe(Condition.disabled);
+                break;
             }
-            else
+            case "enabled":
             {
-                final Matcher attributeMatcher = Pattern.compile("^([a-zA-Z0-9_-]+)=[\"']?(.*?)[\"']?$").matcher(expected);
-                if (attributeMatcher.matches())
+                element.shouldBe(Condition.enabled);
+                break;
+            }
+            case "selected":
+            {
+                if ("SELECT".equalsIgnoreCase(element.getTagName()))
                 {
-                    final String rawAttrName = attributeMatcher.group(1);
-                    final String rawAttrValue = attributeMatcher.group(2);
-                    final String attrName = rawAttrName.toLowerCase();
-                    final String attrValue = rawAttrValue.toLowerCase();
-
-                    if ("checked".equals(attrName))
-                    {
-                        if ("false".equals(attrValue))
-                        {
-                            element.shouldNotBe(Condition.checked);
-                        }
-                        else
-                        {
-                            element.shouldBe(Condition.checked);
-                        }
-                        return;
-                    }
-                    if ("disabled".equals(attrName))
-                    {
-                        if ("false".equals(attrValue))
-                        {
-                            element.shouldBe(Condition.enabled);
-                        }
-                        else
-                        {
-                            element.shouldBe(Condition.disabled);
-                        }
-                        return;
-                    }
-                    if ("enabled".equals(attrName))
-                    {
-                        if ("false".equals(attrValue))
-                        {
-                            element.shouldBe(Condition.disabled);
-                        }
-                        else
-                        {
-                            element.shouldBe(Condition.enabled);
-                        }
-                        return;
-                    }
-                    if ("selected".equals(attrName))
-                    {
-                        if ("false".equals(attrValue))
-                        {
-                            element.shouldNotBe(Condition.selected);
-                        }
-                        else
-                        {
-                            element.shouldBe(Condition.selected);
-                        }
-                        return;
-                    }
-                    if ("readonly".equals(attrName) || "read_only".equals(attrName))
-                    {
-                        if ("false".equals(attrValue))
-                        {
-                            element.shouldBe(Condition.editable);
-                        }
-                        else
-                        {
-                            element.shouldBe(Condition.readonly);
-                        }
-                        return;
-                    }
-
-                    cond = Condition.or("Assertion for " + expected,
-                            Condition.attribute(rawAttrName, rawAttrValue),
-                            Condition.exactText(expected),
-                            Condition.partialText(expected),
-                            Condition.value(expected),
-                            new PartialTextContent(expected));
+                    element.getSelectedOption().shouldBe(Condition.exist);
                 }
                 else
                 {
-                    cond = Condition.or("Assertion for " + expected,
-                            Condition.exactText(expected),
-                            Condition.partialText(expected),
-                            Condition.value(expected),
-                            new PartialTextContent(expected),
-                            new AnyAttributeContains(expected));
+                    element.shouldBe(Condition.selected);
+                }
+                break;
+            }
+            case "readonly":
+            case "read_only":
+            {
+                element.shouldBe(Condition.readonly);
+                break;
+            }
+            case "editable":
+            {
+                element.shouldBe(Condition.editable);
+                break;
+            }
+            case "empty":
+            {
+                if (action.isNegated())
+                {
+                    element.shouldNotBe(Condition.empty);
+                }
+                else
+                {
+                    element.shouldBe(Condition.empty);
+                }
+                break;
+            }
+            case "not_empty":
+            {
+                if (action.isNegated())
+                {
+                    element.shouldBe(Condition.empty);
+                }
+                else
+                {
+                    element.shouldNotBe(Condition.empty);
+                }
+                break;
+            }
+            default:
+            {
+                // Checkbox/radio boolean state shortcut
+                if (("true".equalsIgnoreCase(expected) || "false".equalsIgnoreCase(expected)) && isCheckboxOrRadio(element))
+                {
+                    if ("true".equalsIgnoreCase(expected))
+                    {
+                        element.shouldBe(Condition.checked);
+                    }
+                    else
+                    {
+                        element.shouldNotBe(Condition.checked);
+                    }
+                }
+                // Content assertions
+                else
+                {
+                    final WebElementCondition cond;
+                    if (action.isRegex())
+                    {
+                        cond = new RegexMatch(expected);
+                    }
+                    else
+                    {
+                        final Matcher attributeMatcher = Pattern.compile("^([a-zA-Z0-9_-]+)=[\"']?(.*?)[\"']?$").matcher(expected);
+                        if (attributeMatcher.matches())
+                        {
+                            final String rawAttrName = attributeMatcher.group(1);
+                            final String rawAttrValue = attributeMatcher.group(2);
+                            final String attrName = rawAttrName.toLowerCase();
+                            final String attrValue = rawAttrValue.toLowerCase();
+
+                            if ("checked".equals(attrName))
+                            {
+                                if ("false".equals(attrValue))
+                                {
+                                    element.shouldNotBe(Condition.checked);
+                                }
+                                else
+                                {
+                                    element.shouldBe(Condition.checked);
+                                }
+                                return;
+                            }
+                            if ("disabled".equals(attrName))
+                            {
+                                if ("false".equals(attrValue))
+                                {
+                                    element.shouldBe(Condition.enabled);
+                                }
+                                else
+                                {
+                                    element.shouldBe(Condition.disabled);
+                                }
+                                return;
+                            }
+                            if ("enabled".equals(attrName))
+                            {
+                                if ("false".equals(attrValue))
+                                {
+                                    element.shouldBe(Condition.disabled);
+                                }
+                                else
+                                {
+                                    element.shouldBe(Condition.enabled);
+                                }
+                                return;
+                            }
+                            if ("selected".equals(attrName))
+                            {
+                                if ("false".equals(attrValue))
+                                {
+                                    element.shouldNotBe(Condition.selected);
+                                }
+                                else
+                                {
+                                    element.shouldBe(Condition.selected);
+                                }
+                                return;
+                            }
+                            if ("readonly".equals(attrName) || "read_only".equals(attrName))
+                            {
+                                if ("false".equals(attrValue))
+                                {
+                                    element.shouldBe(Condition.editable);
+                                }
+                                else
+                                {
+                                    element.shouldBe(Condition.readonly);
+                                }
+                                return;
+                            }
+
+                            cond = Condition.or("Assertion for " + expected,
+                                    Condition.attribute(rawAttrName, rawAttrValue),
+                                    Condition.exactText(expected),
+                                    Condition.partialText(expected),
+                                    Condition.value(expected),
+                                    new PartialTextContent(expected));
+                        }
+                        else
+                        {
+                            cond = Condition.or("Assertion for " + expected,
+                                    Condition.exactText(expected),
+                                    Condition.partialText(expected),
+                                    Condition.value(expected),
+                                    new PartialTextContent(expected),
+                                    new AnyAttributeContains(expected));
+                        }
+                    }
+                    element.should(cond);
                 }
             }
-            element.should(cond);
         }
         LOG.debug("   ✅ Legacy Assertion passed for: '{}'", expected);
     }
