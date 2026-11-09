@@ -653,6 +653,10 @@ public class RunStorageSyncService
                     {
                         calcIgnored++;
                     }
+                    else if ("running".equals(effectiveStatus))
+                    {
+                        // In-flight execution during active run
+                    }
                     else
                     {
                         calcUnknown++;

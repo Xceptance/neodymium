@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -34,6 +35,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.xceptance.aura.report.dto.RunReportDto;
 import com.xceptance.aura.report.dto.TestExecutionDto;
+import com.xceptance.aura.report.entity.TestRunEntity;
+import com.xceptance.aura.report.repository.TestRunRepository;
 
 /**
  * Verifies that test executions with status "finished" and zero failed steps
@@ -53,12 +56,19 @@ public class AuraReportFinishedStatusMappingTest
     @Autowired
     private AuraReportDataService reportDataService;
 
+    @Autowired
+    private RunStorageSyncService syncService;
+
+    @Autowired
+    private TestRunRepository runRepository;
+
     private final ObjectMapper mapper = new ObjectMapper();
 
     @AfterEach
     public void cleanup()
     {
         reportDataService.evictRunReportCache(TEST_RUN_ID);
+        runRepository.deleteById(TEST_RUN_ID);
         final Path runDir = storageService.getRunDir(TEST_RUN_ID);
         if (runDir != null && Files.exists(runDir))
         {
@@ -282,5 +292,81 @@ public class AuraReportFinishedStatusMappingTest
         // Unlinking bug on succeeded-fixed execution -> flips to passed-clean
         Assertions.assertEquals("passed-clean",
             AuraReportDataService.computeEffectiveStatus("succeeded-fixed", 5, 0, false, null, false));
+    }
+
+    @Test
+    public void testFinishedStatusWithNoneAndNullFailureStrings()
+    {
+        // 0 steps, no errors, failure = "NONE" -> passed-clean
+        Assertions.assertEquals("passed-clean",
+            AuraReportDataService.computeEffectiveStatus("finished", 0, 0, false, "NONE", false));
+
+        // 0 steps, no errors, failure = null -> passed-clean
+        Assertions.assertEquals("passed-clean",
+            AuraReportDataService.computeEffectiveStatus("finished", 0, 0, false, null, false));
+
+        // 0 steps, no errors, failure = blank -> passed-clean
+        Assertions.assertEquals("passed-clean",
+            AuraReportDataService.computeEffectiveStatus("finished", 0, 0, false, "   ", false));
+
+        // 0 steps, with real error message -> failed-unknown
+        Assertions.assertEquals("failed-unknown",
+            AuraReportDataService.computeEffectiveStatus("finished", 0, 0, false, "AssertionError", false));
+    }
+
+    @Test
+    public void testActiveRunIngestExecutionDoesNotInflateUnknownFailuresForRunningExecutions()
+    {
+        final TestRunEntity activeRun = new TestRunEntity(
+            TEST_RUN_ID, "BatchA", "IN_PROGRESS", "CLI", "DEV", "US", "Chrome", "12:00:00", System.currentTimeMillis());
+        runRepository.save(activeRun);
+
+        final Map<String, Object> payload = Map.of(
+            "id", "running-exec-1",
+            "testClass", "CheckoutFlowTest",
+            "testMethod", "@Regression",
+            "title", "Default",
+            "status", "running",
+            "totalStepsCount", 1,
+            "failedStepsCount", 0
+        );
+
+        reportDataService.ingestExecution(TEST_RUN_ID, payload);
+
+        final TestRunEntity updatedRun = runRepository.findById(TEST_RUN_ID).orElseThrow();
+        Assertions.assertEquals(0, updatedRun.getFailedUnknownCount(),
+            "In-flight running execution in an active run must NOT be counted as unknown failure");
+        Assertions.assertEquals(0, updatedRun.getPassedCount(),
+            "In-flight running execution must not inflate pass count");
+    }
+
+    @Test
+    public void testActiveRunStorageSyncDoesNotInflateUnknownFailuresForRunningExecutions() throws IOException
+    {
+        final TestRunEntity activeRun = new TestRunEntity(
+            TEST_RUN_ID, "BatchA", "IN_PROGRESS", "CLI", "DEV", "US", "Chrome", "12:00:00", System.currentTimeMillis());
+        runRepository.save(activeRun);
+
+        final Path runDir = storageService.getRunDir(TEST_RUN_ID);
+        final Path classDir = runDir.resolve("com.xceptance.neodymium.tests.CheckoutFlowTest");
+        Files.createDirectories(classDir);
+
+        final ObjectNode exec = mapper.createObjectNode();
+        exec.put("id", "console-execution-running-1");
+        exec.put("testClass", "CheckoutFlowTest");
+        exec.put("testMethod", "@Regression");
+        exec.put("title", "Default");
+        exec.put("status", "running");
+        exec.put("failedStepsCount", 0);
+        exec.put("totalStepsCount", 2);
+
+        final Path execFile = classDir.resolve("console-execution-running-1.json");
+        Files.writeString(execFile, mapper.writeValueAsString(exec));
+
+        syncService.importOrUpdateRunReport(TEST_RUN_ID);
+
+        final TestRunEntity syncedRun = runRepository.findById(TEST_RUN_ID).orElseThrow();
+        Assertions.assertEquals(0, syncedRun.getFailedUnknownCount(),
+            "In-flight running execution synced from disk during active run must NOT count as unknown failure");
     }
 }

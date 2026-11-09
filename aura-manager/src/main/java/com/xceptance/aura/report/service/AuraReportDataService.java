@@ -2054,6 +2054,9 @@ public class AuraReportDataService
                             }
                         }
                         case "ignored", "skipped" -> ignoredCount++;
+                        case "running", "in_progress", "executing", "pending" -> {
+                            // In-flight execution during active run
+                        }
                         default -> {
                             unknownCount++;
                             if (item.isUnknownHealed())
@@ -3371,7 +3374,10 @@ public class AuraReportDataService
         // 3. Finished lifecycle resolution
         if ("finished".equals(st))
         {
-            final boolean isSuccess = !hasFailure && (totalStepsCount > 0 || (failedStepsCount == 0 && failureOrErrorMessage == null));
+            final boolean isSuccess = !hasFailure && (totalStepsCount > 0
+                    || failureOrErrorMessage == null
+                    || failureOrErrorMessage.isBlank()
+                    || "NONE".equalsIgnoreCase(failureOrErrorMessage.trim()));
             return isSuccess ? (isFixed ? "succeeded-fixed" : "passed-clean")
                              : (isKnown ? "failed-known" : "failed-unknown");
         }
