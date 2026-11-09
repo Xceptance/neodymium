@@ -23,7 +23,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.langchain4j.exception.RetriableException;
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
@@ -78,10 +84,35 @@ final class LlmRetryHelperTest
     }
 
     @Test
+    void testExecuteWithRetry_succeedsAfterTimeout() throws IOException
+    {
+        final AtomicInteger attempts = new AtomicInteger(0);
+        final LlmResponse response = LlmRetryHelper.executeWithRetry(() -> {
+            final int count = attempts.incrementAndGet();
+            if (count == 1)
+            {
+                throw new IOException("Gemini HTTP call timed out after 185 seconds (socket watchdog triggered)",
+                    new TimeoutException("Socket read timed out"));
+            }
+            return new LlmResponse("recovered response", null, "test-model");
+        });
+
+        assertEquals(2, attempts.get());
+        assertEquals("recovered response", response.content());
+    }
+
+    @Test
     void testIsTransientError()
     {
         assertTrue(LlmRetryHelper.isTransientError(new IOException("HTTP 429 Too Many Requests")));
         assertTrue(LlmRetryHelper.isTransientError(new RuntimeException("503 Service Unavailable")));
         assertTrue(LlmRetryHelper.isTransientError(new Exception("Server Error 500")));
+        assertTrue(LlmRetryHelper.isTransientError(new TimeoutException("Operation timed out")));
+        assertTrue(LlmRetryHelper.isTransientError(new HttpTimeoutException("request timed out")));
+        assertTrue(LlmRetryHelper.isTransientError(new SocketTimeoutException("Read timed out")));
+        assertTrue(LlmRetryHelper.isTransientError(new RetriableException("retriable exception")));
+        assertTrue(LlmRetryHelper.isTransientError(new ConnectException("Connection refused")));
+        assertTrue(LlmRetryHelper.isTransientError(new SocketException("Broken pipe")));
+        assertTrue(LlmRetryHelper.isTransientError(new IOException("Connection reset by peer")));
     }
 }

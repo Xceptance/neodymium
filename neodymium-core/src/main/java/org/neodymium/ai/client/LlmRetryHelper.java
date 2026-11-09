@@ -18,7 +18,13 @@
  */
 package org.neodymium.ai.client;
 
+import dev.langchain4j.exception.RetriableException;
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.net.http.HttpTimeoutException;
+import java.util.concurrent.TimeoutException;
 import org.neodymium.ai.config.AiConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -113,6 +119,16 @@ public final class LlmRetryHelper
             return false;
         }
 
+        if (t instanceof TimeoutException ||
+            t instanceof HttpTimeoutException ||
+            t instanceof SocketTimeoutException ||
+            t instanceof RetriableException ||
+            t instanceof ConnectException ||
+            t instanceof SocketException)
+        {
+            return true;
+        }
+
         final String msg = t.getMessage();
         if (msg != null)
         {
@@ -121,7 +137,9 @@ public final class LlmRetryHelper
                 lower.contains("500") || lower.contains("502") ||
                 lower.contains("503") || lower.contains("504") ||
                 lower.contains("rate limit") || lower.contains("server error") ||
-                lower.contains("timeout") || lower.contains("temporarily unavailable"))
+                lower.contains("timeout") || lower.contains("timed out") ||
+                lower.contains("connection reset") || lower.contains("connection refused") ||
+                lower.contains("broken pipe") || lower.contains("temporarily unavailable"))
             {
                 return true;
             }
