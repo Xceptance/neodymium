@@ -2935,4 +2935,102 @@ public class PreliminaryReportListenerTest
             }
         }
     }
+
+    @Test
+    @DisplayName("Verify that reconcileTestOutcome(true) converts a failed report to PASSED with expectedFailure=true while preserving diagnostics")
+    public void testReconcileTestOutcome_expectedFailureConvertsFailedReportToPassedWithDiagnosticRetention() throws Exception
+    {
+        final Path reportDir = tempFolder.resolve("reconcile-expected-fail-report");
+        Files.createDirectories(reportDir);
+
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        final PlaybookStep failingStep = new PlaybookStep("Assert that #status has text 'Error'");
+        failingStep.setStatus(PlaybookStepStatus.FAILED);
+        ctx.getTransientData().put(ExecutionContext.KEY_LAST_EXECUTION_ERROR, new AssertionError("Expected 'Error' but found 'Success'"));
+        bus.dispatch(new StepStartedEvent(failingStep, 0));
+        bus.dispatch(new StepFinishedEvent(failingStep, PlaybookStepStatus.FAILED));
+        bus.dispatch(new SessionFinishedEvent(100L, false, List.of()));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals("FAILED", report.getStatus(), "Before reconciliation, report status must be FAILED");
+        assertFalse(report.isSuccess(), "Before reconciliation, success must be false");
+        assertEquals("Expected 'Error' but found 'Success'", report.getFailureReason());
+
+        // Now simulate JUnit catching the AssertionError via assertThrows
+        listener.reconcileTestOutcome(true, null);
+
+        assertEquals("PASSED", report.getStatus(), "After reconciliation, report status must be PASSED");
+        assertTrue(report.isSuccess(), "After reconciliation, success must be true");
+        assertTrue(report.isExpectedFailure(), "After reconciliation, expectedFailure must be true");
+        assertTrue(report.getSteps().get(0).isExpectedFailure(), "Failing step must be flagged with expectedFailure");
+        assertEquals(0, report.getMetrics().getFailedSteps(), "Metric failedSteps must be 0 for expected failure");
+        assertEquals("Expected 'Error' but found 'Success'", report.getFailureReason(), "Failure reason must be retained for diagnostics");
+
+        // Verify JSON report on disk
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        assertTrue(Files.exists(jsonPath), "JSON report file must exist");
+        final ObjectMapper mapper = new ObjectMapper();
+        final JsonNode rootNode = mapper.readTree(jsonPath.toFile());
+        assertEquals("PASSED", rootNode.get("status").asText());
+        assertTrue(rootNode.get("success").asBoolean());
+        assertTrue(rootNode.get("expectedFailure").asBoolean());
+
+        // Verify InteractiveStateBuilder reflects status: "passed" and expectedFailure: true
+        final String stateJson = InteractiveStateBuilder.buildStateJson(
+            null, ctx, "run-expected-fail", 0, "finished", null, report
+        );
+        assertNotNull(stateJson);
+        final JsonNode interactiveRoot = mapper.readTree(stateJson);
+        assertEquals("passed", interactiveRoot.get("status").asText(), "Interactive state status must be 'passed'");
+        assertTrue(interactiveRoot.get("expectedFailure").asBoolean(), "Interactive state must have expectedFailure: true");
+    }
+
+    @Test
+    @DisplayName("Verify that reconcileTestOutcome(false) converts a passed session to FAILED when trailing JUnit assertion fails")
+    public void testReconcileTestOutcome_trailingJunitFailureReconcilesPassedSessionToFailed() throws Exception
+    {
+        final Path reportDir = tempFolder.resolve("reconcile-trailing-failure-report");
+        Files.createDirectories(reportDir);
+
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final ExecutionContext ctx = new ExecutionContext(new SessionData());
+        ExecutionContext.setActiveContext(ctx);
+
+        final PlaybookStep passingStep = new PlaybookStep("Click #submit-btn");
+        bus.dispatch(new StepStartedEvent(passingStep, 0));
+        bus.dispatch(new StepFinishedEvent(passingStep, PlaybookStepStatus.SUCCESS));
+        bus.dispatch(new SessionFinishedEvent(50L, true, List.of()));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals("PASSED", report.getStatus());
+        assertTrue(report.isSuccess());
+
+        // Now simulate a post-session trailing JUnit assertion failure
+        final AssertionError trailingError = new AssertionError("Post-session assertion failed: expected 42 but was 0");
+        listener.reconcileTestOutcome(false, trailingError);
+
+        assertEquals("FAILED", report.getStatus(), "After trailing failure, report status must be FAILED");
+        assertFalse(report.isSuccess(), "After trailing failure, success must be false");
+        assertFalse(report.isExpectedFailure());
+        assertTrue(report.getFailureReason().contains("Post-session assertion failed"));
+
+        // Verify JSON report on disk
+        final Path jsonPath = reportDir.resolve(listener.getLastBaseFileName() + ".json");
+        assertTrue(Files.exists(jsonPath));
+        final ObjectMapper mapper = new ObjectMapper();
+        final JsonNode rootNode = mapper.readTree(jsonPath.toFile());
+        assertEquals("FAILED", rootNode.get("status").asText());
+        assertFalse(rootNode.get("success").asBoolean());
+    }
 }

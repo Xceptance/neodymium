@@ -235,6 +235,12 @@ public class LocalRunJsonStorageService
                     final JsonNode node = objectMapper.readTree(f);
                     if (isTestExecutionJson(node))
                     {
+                        final boolean isSynthetic = node.path("synthetic").asBoolean(false) || node.path("fixture").asBoolean(false);
+                        if (isSynthetic)
+                        {
+                            continue;
+                        }
+
                         extractLocalesFromNode(node, localesSet);
                         extractBrowsersFromNode(node, browsersSet);
 
@@ -904,6 +910,10 @@ public class LocalRunJsonStorageService
 
     public static int extractStepsFailed(final JsonNode node)
     {
+        if (node.has("expectedFailure") && node.path("expectedFailure").asBoolean(false))
+        {
+            return 0;
+        }
         if (node.has("failedStepsCount") && node.path("failedStepsCount").isInt())
         {
             return node.path("failedStepsCount").asInt();
@@ -921,7 +931,8 @@ public class LocalRunJsonStorageService
                     {
                         final String status = step.path("status").asText("");
                         final boolean passed = step.path("passed").asBoolean(true);
-                        if ("failed".equalsIgnoreCase(status) || !passed)
+                        final boolean expectedFailure = step.path("expectedFailure").asBoolean(false);
+                        if (!expectedFailure && ("failed".equalsIgnoreCase(status) || !passed))
                         {
                             failed++;
                         }

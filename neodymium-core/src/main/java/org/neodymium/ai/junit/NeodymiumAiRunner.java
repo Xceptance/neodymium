@@ -65,6 +65,7 @@ import org.neodymium.ai.pipeline.steps.ExecuteActionsStep;
 import org.neodymium.ai.playbook.PlaybookParser;
 import org.neodymium.ai.playbook.YamlPlaybookParser;
 import org.neodymium.ai.recorder.PlaybookRecorder;
+import org.neodymium.ai.report.PreliminaryReportListener;
 import org.neodymium.ai.resources.ClasspathResourceManager;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.neodymium.ai.runner.StateMachineRunner;
@@ -1918,6 +1919,23 @@ public final class NeodymiumAiRunner implements TestTemplateInvocationContextPro
                 {
                     Neodymium.getData().remove("neodymium.ai.ssim.minScore");
                     com.xceptance.neodymium.util.Neodymium.getData().remove("neodymium.ai.ssim.minScore");
+                }
+
+                final boolean testSucceededInJunit = (context != null && context.getExecutionException().isEmpty()) && afterPlaybookError == null;
+                final Throwable uncaught = context != null ? context.getExecutionException().orElse(afterPlaybookError) : afterPlaybookError;
+                if (this.session != null && this.session.getEventBus() != null)
+                {
+                    for (final Object listener : this.session.getEventBus().getListeners())
+                    {
+                        if (listener instanceof InteractiveConsoleListener icl)
+                        {
+                            icl.reconcileTestOutcome(testSucceededInJunit, uncaught);
+                        }
+                        else if (listener instanceof PreliminaryReportListener prl)
+                        {
+                            prl.reconcileTestOutcome(testSucceededInJunit, uncaught);
+                        }
+                    }
                 }
             }
 

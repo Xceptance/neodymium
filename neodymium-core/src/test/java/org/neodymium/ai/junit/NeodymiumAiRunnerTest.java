@@ -2417,4 +2417,78 @@ public class NeodymiumAiRunnerTest
             Neodymium.clearThreadContext();
         }
     }
+
+    /**
+     * Goal: Verifies that when an intentional negative test catches an expected session failure
+     * via assertThrows, JUnit passes the test method, and NeodymiumAiRunner reconciles the preliminary
+     * execution report and interactive console status from FAILED to PASSED with expectedFailure=true.
+     */
+    @Test
+    public void testExpectedFailureCaughtByAssertThrowsReconcilesReportToPassed(@TempDir final Path tempDir) throws Throwable
+    {
+        final Path reportDir = tempDir.resolve("ai-reports-reconciled");
+        System.setProperty("neodymium.ai.report.disk.directory", reportDir.toString());
+        System.setProperty("neodymium.ai.report.disk.enabled", "true");
+        System.setProperty("neodymium.ai.console.executionLogs.enabled", "true");
+        System.setProperty("neodymium.ai.console.executionLogs.directory", reportDir.toString());
+        AiConfiguration.resetInstance();
+
+        final NeodymiumAiRunner runner = new NeodymiumAiRunner();
+        final Method method = SampleProgrammaticFailureTestClass.class.getMethod("testFailure", AiSession.class);
+        final ExtensionContext extensionContext = createMockExtensionContext(SampleProgrammaticFailureTestClass.class, method, null);
+
+        try
+        {
+            final List<TestTemplateInvocationContext> contexts = runner.provideTestTemplateInvocationContexts(extensionContext).toList();
+            Assertions.assertEquals(1, contexts.size());
+
+            final List<Extension> extensions = contexts.get(0).getAdditionalExtensions();
+            final BeforeEachCallback beforeEach = (BeforeEachCallback) extensions.stream().filter(e -> e instanceof BeforeEachCallback).findFirst().orElseThrow();
+            final InvocationInterceptor interceptor = (InvocationInterceptor) extensions.stream().filter(e -> e instanceof InvocationInterceptor).findFirst().orElseThrow();
+            final AfterEachCallback afterEach = (AfterEachCallback) extensions.stream().filter(e -> e instanceof AfterEachCallback).findFirst().orElseThrow();
+
+            beforeEach.beforeEach(extensionContext);
+            final AiSession session = (AiSession) extensionContext.getStore(null).get(AiSession.class);
+            Assertions.assertNotNull(session);
+            setupMockLlm(session);
+
+            final PreliminaryReportListener reportListener = (PreliminaryReportListener) session.getEventBus().getListeners().stream()
+                .filter(l -> l instanceof PreliminaryReportListener)
+                .findFirst()
+                .orElseThrow();
+
+            interceptor.interceptTestMethod(
+                () -> {
+                    final TestExecutionReport.ReportStepEntry failingStep = new TestExecutionReport.ReportStepEntry(1, "Assert invalid condition");
+                    failingStep.setStatus("FAILED");
+                    failingStep.setFailureReason("Assertion failed as expected");
+                    reportListener.getReport().addStep(failingStep);
+                    reportListener.getReport().setStatus("FAILED");
+                    reportListener.getReport().setSuccess(false);
+                    reportListener.getReport().setFailureReason("Assertion failed as expected");
+                    return null;
+                },
+                null,
+                extensionContext
+            );
+
+            Assertions.assertEquals("FAILED", reportListener.getReport().getStatus());
+
+            afterEach.afterEach(extensionContext);
+
+            Assertions.assertEquals("PASSED", reportListener.getReport().getStatus(), "Report status must be reconciled to PASSED");
+            Assertions.assertTrue(reportListener.getReport().isSuccess(), "Report success must be reconciled to true");
+            Assertions.assertTrue(reportListener.getReport().isExpectedFailure(), "Report must be flagged with expectedFailure=true");
+            Assertions.assertEquals("Assertion failed as expected", reportListener.getReport().getFailureReason(), "Failure reason must be preserved for diagnostics");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.report.disk.directory");
+            System.clearProperty("neodymium.ai.report.disk.enabled");
+            System.clearProperty("neodymium.ai.console.executionLogs.enabled");
+            System.clearProperty("neodymium.ai.console.executionLogs.directory");
+            AiConfiguration.resetInstance();
+            Neodymium.clearThreadContext();
+        }
+    }
 }

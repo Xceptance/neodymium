@@ -132,6 +132,24 @@ public final class InteractiveConsoleListener implements ExecutionListener
     }
 
     /**
+     * Reconciles the interactive console state and preliminary report with the JUnit test lifecycle outcome.
+     *
+     * @param testPassed true if JUnit completed the test method successfully
+     * @param uncaughtException uncaught exception if test failed, or null
+     */
+    public void reconcileTestOutcome(final boolean testPassed, final Throwable uncaughtException)
+    {
+        if (this.reportListener != null)
+        {
+            this.reportListener.reconcileTestOutcome(testPassed, uncaughtException);
+        }
+        if (this.consoleEngine != null)
+        {
+            this.consoleEngine.reconcileTestOutcome(testPassed, uncaughtException);
+        }
+    }
+
+    /**
      * Returns whether interactive step pausing is active.
      *
      * @return true if interactive step pausing is enabled
