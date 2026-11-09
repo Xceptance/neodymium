@@ -1113,6 +1113,18 @@ public final class InteractiveConsoleEngine {
     }
 
     /**
+     * Checks if at least one SSE client is actively connected to this engine.
+     *
+     * @return {@code true} if at least one client output stream is registered
+     * @author AI-generated: Antigravity
+     * @author Xceptance GmbH 2026
+     */
+    public boolean hasSseClients()
+    {
+        return !this.sseClients.isEmpty();
+    }
+
+    /**
      * Builds the JSON payload broadcast to all SSE clients when the runner pauses.
      *
      * @param pauseId the freshly generated pause token

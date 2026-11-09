@@ -123,7 +123,7 @@ public class QualityJudgePromptTest
             final LlmRequest selenideReq = prompt.compileRequest("Click the submit button", "=== DOM Context ===", action, AiConfiguration.getInstance());
             assertNotNull(selenideReq);
             assertTrue(selenideReq.systemMessage().contains("## Selenide/Selenium Engine Locators"), "Judge system prompt must include Selenide engine locator rule in Selenide mode.");
-            assertTrue(selenideReq.systemMessage().contains("Neodymium Text Pseudo-Selectors"), "Judge system prompt must describe Neodymium text pseudo-selectors.");
+            assertTrue(selenideReq.systemMessage().contains("Playwright Text Matchers & Pseudo-Classes"), "Judge system prompt must describe Playwright text matchers and pseudo-classes.");
 
             // 2. REST mode context -> excludes Selenide locator rule
             final ExecutionContext restContext = new ExecutionContext(null);

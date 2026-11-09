@@ -1153,16 +1153,9 @@ public final class ExecuteActionsStep
             }
         }
 
-        // 3. If targetForIndex was step's parent and not in flatSteps, try step itself by identity
-        if (targetForIndex != step)
+        if (flatSteps == null || flatSteps.isEmpty())
         {
-            for (int i = 0; i < flatSteps.size(); i++)
-            {
-                if (flatSteps.get(i) == step)
-                {
-                    return i;
-                }
-            }
+            return -1;
         }
 
         // 4. Fallback heuristic by matching instruction and line number

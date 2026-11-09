@@ -206,6 +206,11 @@ public class InteractiveReasoningAndActionsUiTest
         Selenide.executeJavaScript("if (window.applyState) window.applyState(" + state.toString() + ");");
         sleep(300);
 
+        if ($("#bigScreenStepDetails .step-more-details-btn").is(Condition.exist))
+        {
+            $("#bigScreenStepDetails .step-more-details-btn").click();
+        }
+
         $("#bigScreenStepDetails .llm-communications-section")
             .shouldBe(Condition.visible)
             .shouldHave(Condition.text("LLM Communications (1 call)"));
