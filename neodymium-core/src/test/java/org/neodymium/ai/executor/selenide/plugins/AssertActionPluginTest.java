@@ -75,6 +75,10 @@ public class AssertActionPluginTest
                 (proxy, method, args) ->
                 {
                     final String name = method.getName();
+                    if ("equals".equals(name))
+                    {
+                        return proxy == args[0];
+                    }
                     if ("isDisplayed".equals(name) || "isEnabled".equals(name))
                     {
                         return true;
@@ -126,6 +130,10 @@ public class AssertActionPluginTest
                 (proxy, method, args) ->
                 {
                     final String name = method.getName();
+                    if ("equals".equals(name))
+                    {
+                        return proxy == args[0];
+                    }
                     if ("isDisplayed".equals(name) || "isEnabled".equals(name))
                     {
                         return true;
@@ -194,6 +202,10 @@ public class AssertActionPluginTest
                 (proxy, method, args) ->
                 {
                     final String name = method.getName();
+                    if ("equals".equals(name))
+                    {
+                        return proxy == args[0];
+                    }
                     if ("isDisplayed".equals(name) || "isEnabled".equals(name))
                     {
                         return true;
@@ -205,6 +217,24 @@ public class AssertActionPluginTest
                     if ("getAttribute".equals(name) && "id".equals(args[0]))
                     {
                         return "unfocused-input";
+                    }
+                    return null;
+                }
+        );
+
+        final WebElement otherActiveElement = (WebElement) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("equals".equals(name))
+                    {
+                        return proxy == args[0];
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "body";
                     }
                     return null;
                 }
@@ -226,8 +256,20 @@ public class AssertActionPluginTest
                     }
                     if ("executeScript".equals(name))
                     {
-                        // isFocused check returns false
-                        return Boolean.FALSE;
+                        final String script = (String) args[0];
+                        if (script != null && script.contains("==="))
+                        {
+                            return Boolean.FALSE;
+                        }
+                        return otherActiveElement;
+                    }
+                    if ("switchTo".equals(name))
+                    {
+                        return (WebDriver.TargetLocator) Proxy.newProxyInstance(
+                                AssertActionPluginTest.class.getClassLoader(),
+                                new Class<?>[]{WebDriver.TargetLocator.class},
+                                (p, m, a) -> null
+                        );
                     }
                     return null;
                 }
@@ -236,5 +278,134 @@ public class AssertActionPluginTest
 
         final AssertAction plugin = new AssertAction();
         plugin.execute(new Action("ASSERT", "#unfocused-input", "unfocused", "verify unfocused", "reasoning", false));
+    }
+
+    @Test
+    public void testLegacyAssertUnfocusedFailsWhenFocused() throws Exception
+    {
+        final WebElement focusedElement = (WebElement) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("equals".equals(name))
+                    {
+                        return proxy == args[0];
+                    }
+                    if ("isDisplayed".equals(name) || "isEnabled".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "input";
+                    }
+                    if ("getAttribute".equals(name) && "id".equals(args[0]))
+                    {
+                        return "focused-input";
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("findElement".equals(name))
+                    {
+                        return focusedElement;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return List.of(focusedElement);
+                    }
+                    if ("executeScript".equals(name))
+                    {
+                        final String script = (String) args[0];
+                        if (script != null && script.contains("==="))
+                        {
+                            return Boolean.TRUE;
+                        }
+                        return focusedElement;
+                    }
+                    if ("switchTo".equals(name))
+                    {
+                        return (WebDriver.TargetLocator) Proxy.newProxyInstance(
+                                AssertActionPluginTest.class.getClassLoader(),
+                                new Class<?>[]{WebDriver.TargetLocator.class},
+                                (p, m, a) -> null
+                        );
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final AssertAction plugin = new AssertAction();
+        Assertions.assertThrows(AssertionError.class, () ->
+        {
+            plugin.execute(new Action("ASSERT", "#focused-input", "unfocused", "verify unfocused", "reasoning", false));
+        });
+    }
+
+    @Test
+    public void testLegacyAssertHiddenAndInvisible() throws Exception
+    {
+        final WebElement hiddenElement = (WebElement) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("isDisplayed".equals(name))
+                    {
+                        // Element is hidden
+                        return false;
+                    }
+                    if ("isEnabled".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "div";
+                    }
+                    if ("getAttribute".equals(name) && "id".equals(args[0]))
+                    {
+                        return "hidden-div";
+                    }
+                    return null;
+                }
+        );
+
+        final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{MockJsDriver.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("findElement".equals(name))
+                    {
+                        return hiddenElement;
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return List.of(hiddenElement);
+                    }
+                    return null;
+                }
+        );
+        WebDriverRunner.setWebDriver(mockDriver);
+
+        final AssertAction plugin = new AssertAction();
+
+        // Both 'hidden' and 'invisible' should pass via Condition.hidden
+        plugin.execute(new Action("ASSERT", "#hidden-div", "hidden", "verify hidden", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#hidden-div", "invisible", "verify invisible", "reasoning", false));
+        plugin.execute(new Action("ASSERT", "#hidden-div", "[hidden]", "verify [hidden]", "reasoning", false));
     }
 }

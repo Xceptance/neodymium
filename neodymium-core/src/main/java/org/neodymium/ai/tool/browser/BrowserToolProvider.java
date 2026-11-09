@@ -2772,15 +2772,12 @@ public final class BrowserToolProvider
                         }
                     }
                 }
-                else if (selector == null || selector.isBlank() || (!expectedText.isEmpty() && ("body".equalsIgnoreCase(selector.trim()) || "html".equalsIgnoreCase(selector.trim()))))
+                else if (selector == null || selector.isBlank() || "body".equalsIgnoreCase(selector.trim()) || "html".equalsIgnoreCase(selector.trim()))
                 {
-                    if (selector == null || selector.isBlank())
+                    if (expectedText.isEmpty())
                     {
-                        if (expectedText.isEmpty())
-                        {
-                            final ObjectNode err = errorNode("Asserting empty text requires specifying a target 'selector' (e.g. selector: '#field' or selector: 'input'). To assert element emptiness, provide a selector or use 'browser_assert_element_state' with state 'empty'.");
-                            return ToolResult.error(call.callId(), err.toString());
-                        }
+                        final ObjectNode err = errorNode("Asserting empty text requires specifying a target 'selector' (e.g. selector: '#field' or selector: 'input'). To assert element emptiness, provide a selector or use 'browser_assert_element_state' with state 'empty'.");
+                        return ToolResult.error(call.callId(), err.toString());
                     }
 
                     if (negated)

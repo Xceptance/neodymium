@@ -2956,6 +2956,24 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertEquals(ToolResult.Status.ERROR, result2.status());
         Assertions.assertTrue(result2.content().contains("requires specifying a target 'selector'"),
                 "Error result must instruct caller to provide selector for empty text assertion");
+
+        // 'body' selector with empty expected text
+        final ObjectNode args3 = MAPPER.createObjectNode();
+        args3.put("selector", "body");
+        args3.put("expectedText", "");
+        final ToolResult result3 = tool.execute(new ToolCall("call-body-sel", "browser_assert_text", args3), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result3.status());
+        Assertions.assertTrue(result3.content().contains("requires specifying a target 'selector'"),
+                "Error result must instruct caller to provide selector for empty text assertion");
+
+        // 'html' selector with empty expected text
+        final ObjectNode args4 = MAPPER.createObjectNode();
+        args4.put("selector", "html");
+        args4.put("expectedText", "");
+        final ToolResult result4 = tool.execute(new ToolCall("call-html-sel", "browser_assert_text", args4), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result4.status());
+        Assertions.assertTrue(result4.content().contains("requires specifying a target 'selector'"),
+                "Error result must instruct caller to provide selector for empty text assertion");
     }
 
     @Test

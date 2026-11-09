@@ -184,12 +184,13 @@ public final class AssertAction implements BrowserActionPlugin
                 }
                 case "ASSERT_UNFOCUSED" ->
                 {
+                    element.shouldNotBe(Condition.focused);
                     final Boolean isFocused = Selenide.executeJavaScript(
                             "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
                             element);
                     if (Boolean.TRUE.equals(isFocused))
                     {
-                        element.shouldNotBe(Condition.focused);
+                        throw new AssertionError("Element is still focused: " + element);
                     }
                     LOG.debug("   ✅ Element unfocused: {}", action);
                     return;
@@ -630,18 +631,24 @@ public final class AssertAction implements BrowserActionPlugin
             }
             case "unfocused":
             {
+                element.shouldNotBe(Condition.focused);
                 final Boolean isFocused = Selenide.executeJavaScript(
                         "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
                         element);
                 if (Boolean.TRUE.equals(isFocused))
                 {
-                    element.shouldNotBe(Condition.focused);
+                    throw new AssertionError("Element is still focused: " + element);
                 }
                 break;
             }
             case "visible":
             {
                 element.shouldBe(Condition.visible);
+                break;
+            }
+            case "hidden":
+            {
+                element.shouldBe(Condition.hidden);
                 break;
             }
             case "exists":
@@ -660,7 +667,6 @@ public final class AssertAction implements BrowserActionPlugin
                 break;
             }
             case "unchecked":
-            case "not_checked":
             {
                 element.shouldNotBe(Condition.checked);
                 break;
@@ -700,7 +706,6 @@ public final class AssertAction implements BrowserActionPlugin
                 break;
             }
             case "readonly":
-            case "read_only":
             {
                 element.shouldBe(Condition.readonly);
                 break;
@@ -1163,12 +1168,13 @@ public final class AssertAction implements BrowserActionPlugin
                 }
                 case "unfocused" ->
                 {
+                    element.shouldNotBe(Condition.focused);
                     final Boolean isFocused = Selenide.executeJavaScript(
                             "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
                             element);
                     if (Boolean.TRUE.equals(isFocused))
                     {
-                        element.shouldNotBe(Condition.focused);
+                        throw new AssertionError("Element is still focused: " + element);
                     }
                 }
                 case "exists" -> element.should(Condition.exist);
