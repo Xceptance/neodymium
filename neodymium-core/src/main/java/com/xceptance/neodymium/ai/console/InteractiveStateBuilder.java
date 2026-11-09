@@ -1153,25 +1153,55 @@ public final class InteractiveStateBuilder
             }
             else if (!reportStep.getSubSteps().isEmpty())
             {
-                final List<ReportScreenshotEntry> subScreenshots = new ArrayList<>();
-                for (final ReportStepEntry sub : reportStep.getSubSteps())
+                final boolean isStepFailed = status == PlaybookStepStatus.FAILED
+                    || step.isFailed()
+                    || "FAILED".equalsIgnoreCase(reportStep.getStatus());
+                final boolean hasFailedSubStep = reportStep.getSubSteps().stream()
+                    .anyMatch(s -> s != null && ("FAILED".equalsIgnoreCase(s.getStatus()) || s.getFailureReason() != null));
+                final boolean isFailing = isStepFailed || hasFailedSubStep || (isRunFailed && isThisStepActive);
+
+                if (isFailing)
                 {
-                    if (sub != null && !sub.getScreenshots().isEmpty())
+                    final List<ReportScreenshotEntry> subScreenshots = new ArrayList<>();
+                    for (final ReportStepEntry sub : reportStep.getSubSteps())
                     {
-                        for (final ReportScreenshotEntry sc : sub.getScreenshots())
+                        final boolean subFailed = sub != null
+                            && ("FAILED".equalsIgnoreCase(sub.getStatus()) || sub.getFailureReason() != null);
+                        if (subFailed && !sub.getScreenshots().isEmpty())
                         {
-                            final boolean alreadyHas = subScreenshots.stream()
-                                .anyMatch(s -> s.getBase64Data() != null && s.getBase64Data().equals(sc.getBase64Data()));
-                            if (!alreadyHas)
+                            for (final ReportScreenshotEntry sc : sub.getScreenshots())
                             {
-                                subScreenshots.add(sc);
+                                final boolean alreadyHas = subScreenshots.stream()
+                                    .anyMatch(s -> s.getBase64Data() != null && s.getBase64Data().equals(sc.getBase64Data()));
+                                if (!alreadyHas)
+                                {
+                                    subScreenshots.add(sc);
+                                }
                             }
                         }
                     }
-                }
-                if (!subScreenshots.isEmpty())
-                {
-                    obj.add("screenshots", serializeScreenshots(subScreenshots));
+                    if (subScreenshots.isEmpty())
+                    {
+                        for (final ReportStepEntry sub : reportStep.getSubSteps())
+                        {
+                            if (sub != null && !sub.getScreenshots().isEmpty())
+                            {
+                                for (final ReportScreenshotEntry sc : sub.getScreenshots())
+                                {
+                                    final boolean alreadyHas = subScreenshots.stream()
+                                        .anyMatch(s -> s.getBase64Data() != null && s.getBase64Data().equals(sc.getBase64Data()));
+                                    if (!alreadyHas)
+                                    {
+                                        subScreenshots.add(sc);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (!subScreenshots.isEmpty())
+                    {
+                        obj.add("screenshots", serializeScreenshots(subScreenshots));
+                    }
                 }
             }
             if (!reportStep.getLlmCalls().isEmpty())

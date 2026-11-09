@@ -4126,8 +4126,10 @@ function renderStepsForExecution(activeRow) {
                         });
                     }
                 });
-            } else if (subsList.length > 0 && subsList.some(sub => Array.isArray(sub.screenshots) && sub.screenshots.length > 0)) {
-                subsList.forEach((sub, subIdx) => {
+            } else if (isFailed && subsList.length > 0 && subsList.some(sub => Array.isArray(sub.screenshots) && sub.screenshots.length > 0)) {
+                const failedSubsWithSc = subsList.filter(sub => (String(sub.status || '').toUpperCase() === 'FAILED' || sub.failureReason || sub.error || sub.failure) && Array.isArray(sub.screenshots) && sub.screenshots.length > 0);
+                const targetSubs = failedSubsWithSc.length > 0 ? failedSubsWithSc : subsList;
+                targetSubs.forEach((sub, subIdx) => {
                     if (Array.isArray(sub.screenshots)) {
                         sub.screenshots.forEach((sc, scIdx) => {
                             let fullSrc = '';

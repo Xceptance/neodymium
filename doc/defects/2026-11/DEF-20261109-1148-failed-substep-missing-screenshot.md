@@ -15,6 +15,8 @@
 - **Detection Gap ("What did we miss?"):** Existing test cases in `PreliminaryReportListenerTest` validated top-level step failure captures or successful multi-step executions, but never asserted that a parent step's screenshot list reflects screenshots captured during sub-step failure events in both memory, disk reports, and interactive state serialization.
 - **Resolution:**
   1. Updated `PreliminaryReportListener.java` on `StateCapturedEvent` to register captured screenshots on `currentParentStep` when a failure capture occurs, and in `resolveParentStepStatus()` to roll up failure screenshots from failed sub-steps onto `step.getScreenshots()` when empty.
-  2. Enhanced `InteractiveStateBuilder.java` to aggregate screenshots from sub-steps if the parent step's `screenshots` list is empty.
-  3. Hardened `report-manager.js` to fall back to `s.subSteps[].screenshots` and `s.screenshot` when `s.screenshots` is empty.
-- **Safety Net Added:** Added `@Test` `PreliminaryReportListenerTest.testFailedPlaybookSubStepScreenshotRegisteredOnParentStep` asserting that sub-step failure screenshots are registered on both the sub-step and parent step entries in `TestExecutionReport`, in the generated JSON report, and in `InteractiveStateBuilder.buildStateJson()`.
+  2. Enhanced `InteractiveStateBuilder.java` to aggregate screenshots from sub-steps strictly when the step or one of its sub-steps failed (`isFailing`), preventing premature rollup and duplicate base64 serialization on passing compound steps.
+  3. Hardened `report-manager.js` to fall back to `s.subSteps[].screenshots` and `s.screenshot` when `isFailed` is true and `s.screenshots` is empty.
+- **Safety Net Added:**
+  1. Added `@Test` `PreliminaryReportListenerTest.testFailedPlaybookSubStepScreenshotRegisteredOnParentStep` asserting that sub-step failure screenshots are registered on both the sub-step and parent step entries in `TestExecutionReport`, in the generated JSON report, and in `InteractiveStateBuilder.buildStateJson()`.
+  2. Added `@Test` `PreliminaryReportListenerTest.testPassingPlaybookSubStepScreenshotsNotRolledUpToParent` verifying that passing sub-steps keep screenshots strictly scoped to child sub-steps without duplicate rollup on the parent step.
