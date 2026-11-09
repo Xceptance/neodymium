@@ -877,6 +877,24 @@ public class BrowserToolProviderStabilityTest
                 tool.execute(new ToolCall("call-editable", "browser_assert_element_state", failArgs), null);
             });
 
+            // 2b. Asserting 'editable' with negated=true on readonly input should SUCCEED (inverts to readonly)
+            final ObjectNode negatedEditableArgs = MAPPER.createObjectNode();
+            negatedEditableArgs.put("selector", "#readonly-input");
+            negatedEditableArgs.put("state", "editable");
+            negatedEditableArgs.put("negated", true);
+            final ToolResult negatedEditableResult = tool.execute(new ToolCall("call-negated-editable", "browser_assert_element_state", negatedEditableArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, negatedEditableResult.status());
+
+            // 2c. Asserting 'readonly' with negated=true on readonly input must THROW AssertionError (inverts to editable)
+            final ObjectNode negatedReadonlyArgs = MAPPER.createObjectNode();
+            negatedReadonlyArgs.put("selector", "#readonly-input");
+            negatedReadonlyArgs.put("state", "readonly");
+            negatedReadonlyArgs.put("negated", true);
+            Assertions.assertThrows(AssertionError.class, () ->
+            {
+                tool.execute(new ToolCall("call-negated-readonly", "browser_assert_element_state", negatedReadonlyArgs), null);
+            });
+
             // 3. Asserting compound state 'visible, enabled' should SUCCEED
             final ObjectNode compoundSuccessArgs = MAPPER.createObjectNode();
             compoundSuccessArgs.put("selector", "#readonly-input");
@@ -2915,6 +2933,62 @@ public class BrowserToolProviderStabilityTest
             Configuration.timeout = originalTimeout;
             WebDriverRunner.closeWebDriver();
         }
+    }
+
+    @Test
+    public void testAssertTextEmptyExpectedTextWithoutSelectorRejection() throws Exception
+    {
+        final AiTool tool = this.registry.getTool("browser_assert_text").orElseThrow();
+
+        // Plain empty expected text with no selector
+        final ObjectNode args1 = MAPPER.createObjectNode();
+        args1.put("expectedText", "");
+        final ToolResult result1 = tool.execute(new ToolCall("call-empty-no-sel", "browser_assert_text", args1), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result1.status());
+        Assertions.assertTrue(result1.content().contains("requires specifying a target 'selector'"),
+                "Error result must instruct caller to provide selector for empty text assertion");
+
+        // Blank selector with empty expected text
+        final ObjectNode args2 = MAPPER.createObjectNode();
+        args2.put("selector", "   ");
+        args2.put("expectedText", "");
+        final ToolResult result2 = tool.execute(new ToolCall("call-blank-sel", "browser_assert_text", args2), null);
+        Assertions.assertEquals(ToolResult.Status.ERROR, result2.status());
+        Assertions.assertTrue(result2.content().contains("requires specifying a target 'selector'"),
+                "Error result must instruct caller to provide selector for empty text assertion");
+    }
+
+    @Test
+    public void testMatchesElementTextOnPopulatedInputWithEmptyRegex()
+    {
+        final WebElement populatedInput = (WebElement) Proxy.newProxyInstance(
+                BrowserToolProviderStabilityTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("getTagName".equals(name))
+                    {
+                        return "input";
+                    }
+                    if ("getText".equals(name))
+                    {
+                        // WebDriver WebElement.getText() returns "" on <input> per W3C specification
+                        return "";
+                    }
+                    if ("getAttribute".equals(name) && "value".equals(args[0]))
+                    {
+                        return "john_doe";
+                    }
+                    return null;
+                }
+        );
+
+        // Populated input should NOT match empty regex ^$ or empty string
+        Assertions.assertFalse(BrowserToolProvider.matchesElementText(populatedInput, "^$", true, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesElementText(populatedInput, "", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(populatedInput, "^john_doe$", true, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesElementText(populatedInput, "john", false, false));
     }
 }
 

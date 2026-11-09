@@ -1589,6 +1589,11 @@ public class BrowserToolsTest
         Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("non_empty"));
         Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("not-empty"));
         Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("non-empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("not empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("non empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("not blank"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("non blank"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("[not empty]"));
         Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("NOT_EMPTY"));
     }
 

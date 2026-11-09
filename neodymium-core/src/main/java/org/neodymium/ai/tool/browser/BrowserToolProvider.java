@@ -2483,16 +2483,30 @@ public final class BrowserToolProvider
 
         try
         {
-            final String text = el.getText();
-            if (matchesCandidate(text, expectedText, regex, exact))
-            {
-                return true;
-            }
+            final String tag = el.getTagName();
+            final boolean isInputOrTextarea = tag != null && ("input".equalsIgnoreCase(tag) || "textarea".equalsIgnoreCase(tag));
 
-            final String val = el instanceof SelenideElement se ? se.getValue() : el.getAttribute("value");
-            if (matchesCandidate(val, expectedText, regex, exact))
+            if (isInputOrTextarea)
             {
-                return true;
+                final String val = el instanceof SelenideElement se ? se.getValue() : el.getAttribute("value");
+                if (matchesCandidate(val, expectedText, regex, exact))
+                {
+                    return true;
+                }
+            }
+            else
+            {
+                final String text = el.getText();
+                if (matchesCandidate(text, expectedText, regex, exact))
+                {
+                    return true;
+                }
+
+                final String val = el instanceof SelenideElement se ? se.getValue() : el.getAttribute("value");
+                if (matchesCandidate(val, expectedText, regex, exact))
+                {
+                    return true;
+                }
             }
 
             final String placeholder = el.getAttribute("placeholder");
@@ -2519,7 +2533,6 @@ public final class BrowserToolProvider
                 return true;
             }
 
-            final String tag = el.getTagName();
             final boolean isRoot = tag == null || "body".equalsIgnoreCase(tag) || "html".equalsIgnoreCase(tag);
             if (!isRoot)
             {
@@ -2759,12 +2772,15 @@ public final class BrowserToolProvider
                         }
                     }
                 }
-                else if (selector == null || selector.isBlank() || "body".equalsIgnoreCase(selector.trim()) || "html".equalsIgnoreCase(selector.trim()))
+                else if (selector == null || selector.isBlank() || (!expectedText.isEmpty() && ("body".equalsIgnoreCase(selector.trim()) || "html".equalsIgnoreCase(selector.trim()))))
                 {
-                    if (expectedText.isEmpty() && !regex)
+                    if (selector == null || selector.isBlank())
                     {
-                        final ObjectNode err = errorNode("Asserting empty text requires specifying a target 'selector' (e.g. selector: '#field' or selector: 'input'). To assert element emptiness, provide a selector or use 'browser_assert_element_state' with state 'empty'.");
-                        return ToolResult.error(call.callId(), err.toString());
+                        if (expectedText.isEmpty())
+                        {
+                            final ObjectNode err = errorNode("Asserting empty text requires specifying a target 'selector' (e.g. selector: '#field' or selector: 'input'). To assert element emptiness, provide a selector or use 'browser_assert_element_state' with state 'empty'.");
+                            return ToolResult.error(call.callId(), err.toString());
+                        }
                     }
 
                     if (negated)
@@ -2894,10 +2910,6 @@ public final class BrowserToolProvider
                         {
                             if (isStaleException(t))
                             {
-                                if (negated)
-                                {
-                                    matched = true;
-                                }
                                 Selenide.sleep(25);
                                 continue;
                             }
@@ -3954,6 +3966,8 @@ public final class BrowserToolProvider
                         case "unfocused" -> "focused";
                         case "exists" -> "absent";
                         case "absent" -> "exists";
+                        case "editable" -> "readonly";
+                        case "readonly" -> "editable";
                         case "empty" -> "not_empty";
                         case "not_empty" -> "empty";
                         default -> normalized;
@@ -4162,7 +4176,7 @@ public final class BrowserToolProvider
             case "invisible", "hidden" -> "hidden";
             case "displayed", "visible" -> "visible";
             case "blank", "empty" -> "empty";
-            case "not_empty", "non_empty", "not-empty", "non-empty" -> "not_empty";
+            case "not_empty", "non_empty", "not-empty", "non-empty", "not empty", "non empty", "not_blank", "non_blank", "not-blank", "non-blank", "not blank", "non blank" -> "not_empty";
             default -> s;
         };
     }

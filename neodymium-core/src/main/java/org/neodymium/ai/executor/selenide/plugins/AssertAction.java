@@ -628,10 +628,30 @@ public final class AssertAction implements BrowserActionPlugin
                 }
                 break;
             }
+            case "unfocused":
+            {
+                final Boolean isFocused = Selenide.executeJavaScript(
+                        "return document.activeElement === arguments[0] || (arguments[0].matches && arguments[0].matches(':focus'));",
+                        element);
+                if (Boolean.TRUE.equals(isFocused))
+                {
+                    element.shouldNotBe(Condition.focused);
+                }
+                break;
+            }
             case "visible":
-            case "present":
             {
                 element.shouldBe(Condition.visible);
+                break;
+            }
+            case "exists":
+            {
+                element.should(Condition.exist);
+                break;
+            }
+            case "absent":
+            {
+                element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
                 break;
             }
             case "checked":
@@ -664,6 +684,18 @@ public final class AssertAction implements BrowserActionPlugin
                 else
                 {
                     element.shouldBe(Condition.selected);
+                }
+                break;
+            }
+            case "unselected":
+            {
+                if ("SELECT".equalsIgnoreCase(element.getTagName()))
+                {
+                    element.getSelectedOption().shouldNotBe(Condition.exist);
+                }
+                else
+                {
+                    element.shouldNotBe(Condition.selected);
                 }
                 break;
             }
@@ -1080,6 +1112,8 @@ public final class AssertAction implements BrowserActionPlugin
                 case "unfocused" -> "focused";
                 case "exists" -> "absent";
                 case "absent" -> "exists";
+                case "editable" -> "readonly";
+                case "readonly" -> "editable";
                 case "empty" -> "not_empty";
                 case "not_empty" -> "empty";
                 default -> normalized;
