@@ -155,6 +155,11 @@ public class LocalRunJsonStorageService
 
     public Optional<String> buildRunJsonContent(final File runDir, final String runId, final boolean writeToDisk)
     {
+        return buildRunJsonContent(runDir, runId, writeToDisk, false);
+    }
+
+    public Optional<String> buildRunJsonContent(final File runDir, final String runId, final boolean writeToDisk, final boolean isRunActive)
+    {
         try
         {
             final List<File> testExecJsonFiles = new ArrayList<>();
@@ -489,7 +494,7 @@ public class LocalRunJsonStorageService
                         final String failureText = AuraReportDataService.extractFailureText(node);
                         final int failedSteps = extractStepsFailed(node);
                         final int totalSteps = node.has("totalStepsCount") ? node.path("totalStepsCount").asInt(0) : 0;
-                        final String eff = AuraReportDataService.computeEffectiveStatus(rawStatus, totalSteps, failedSteps, hasBugs, failureText, false);
+                        final String eff = AuraReportDataService.computeEffectiveStatus(rawStatus, totalSteps, failedSteps, hasBugs, failureText, isRunActive);
 
                         if ("failed-known".equals(eff))
                         {
@@ -666,7 +671,7 @@ public class LocalRunJsonStorageService
                     final String failureText = AuraReportDataService.extractFailureText(objNode);
                     final int failedSteps = extractStepsFailed(objNode);
                     final int totalSteps = objNode.has("totalStepsCount") ? objNode.path("totalStepsCount").asInt(0) : 0;
-                    final String effStatus = AuraReportDataService.computeEffectiveStatus(baseStatus, totalSteps, failedSteps, hasBugsNode, failureText, false);
+                    final String effStatus = AuraReportDataService.computeEffectiveStatus(baseStatus, totalSteps, failedSteps, hasBugsNode, failureText, isRunActive);
                     metricObj.put("status", effStatus);
                     metricObj.put("areaName", objNode.path("areaName").asText("Browsing (default)"));
                     if (objNode.has("startTime"))

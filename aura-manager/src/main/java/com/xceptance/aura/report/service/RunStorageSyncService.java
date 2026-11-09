@@ -518,6 +518,7 @@ public class RunStorageSyncService
             int calcUnknownAi = 0;
 
             long sumDurationMs = 0L;
+            final boolean isRunActive = runRepository.findById(runId).map(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).orElse(false);
 
             if (!execList.isEmpty())
             {
@@ -598,7 +599,7 @@ public class RunStorageSyncService
                     final String failureText = AuraReportDataService.extractFailureText(exec);
                     final int failedSteps = LocalRunJsonStorageService.extractStepsFailed(exec);
                     final int totalSteps = exec.has("totalStepsCount") ? exec.path("totalStepsCount").asInt(0) : 0;
-                    final String effectiveStatus = AuraReportDataService.computeEffectiveStatus(rawStatus, totalSteps, failedSteps, hasBugs, failureText, false);
+                    final String effectiveStatus = AuraReportDataService.computeEffectiveStatus(rawStatus, totalSteps, failedSteps, hasBugs, failureText, isRunActive);
 
                     if ("failed-known".equals(effectiveStatus))
                     {

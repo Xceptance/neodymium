@@ -201,4 +201,86 @@ public class AuraReportFinishedStatusMappingTest
         Assertions.assertEquals("failed-unknown", execDto.getStatus());
         Assertions.assertEquals("FAILED_UNKNOWN", execDto.getDisplayStatusKey());
     }
+
+    @Test
+    public void testExecutionDtoDisplayStatusKeyForRunningAndNull() throws Exception
+    {
+        final ObjectNode runningNode = mapper.createObjectNode();
+        runningNode.put("status", "running");
+        final TestExecutionDto runningDto = mapper.treeToValue(runningNode, TestExecutionDto.class);
+        Assertions.assertEquals("RUNNING", runningDto.getDisplayStatusKey());
+
+        final ObjectNode nullNode = mapper.createObjectNode();
+        final TestExecutionDto nullDto = mapper.treeToValue(nullNode, TestExecutionDto.class);
+        Assertions.assertEquals("PASSED", nullDto.getDisplayStatusKey(), "DTO deserialized without status field defaults to passed-clean");
+
+        final TestExecutionDto explicitNullDto = new TestExecutionDto();
+        explicitNullDto.setStatus(null);
+        Assertions.assertEquals("RUNNING", explicitNullDto.getDisplayStatusKey(), "Explicit null status must evaluate to RUNNING");
+
+        final ObjectNode inProgNode = mapper.createObjectNode();
+        inProgNode.put("status", "in_progress");
+        final TestExecutionDto inProgDto = mapper.treeToValue(inProgNode, TestExecutionDto.class);
+        Assertions.assertEquals("RUNNING", inProgDto.getDisplayStatusKey());
+
+        final ObjectNode knownNode = mapper.createObjectNode();
+        knownNode.put("status", "failed-known");
+        final TestExecutionDto knownDto = mapper.treeToValue(knownNode, TestExecutionDto.class);
+        Assertions.assertEquals("FAILED_KNOWN", knownDto.getDisplayStatusKey());
+
+        final ObjectNode fixedNode = mapper.createObjectNode();
+        fixedNode.put("status", "succeeded-fixed");
+        final TestExecutionDto fixedDto = mapper.treeToValue(fixedNode, TestExecutionDto.class);
+        Assertions.assertEquals("SUCCEEDED_FIXED", fixedDto.getDisplayStatusKey());
+
+        final ObjectNode skippedNode = mapper.createObjectNode();
+        skippedNode.put("status", "skipped");
+        final TestExecutionDto skippedDto = mapper.treeToValue(skippedNode, TestExecutionDto.class);
+        Assertions.assertEquals("SKIPPED", skippedDto.getDisplayStatusKey());
+
+        final ObjectNode ignoredNode = mapper.createObjectNode();
+        ignoredNode.put("status", "ignored");
+        final TestExecutionDto ignoredDto = mapper.treeToValue(ignoredNode, TestExecutionDto.class);
+        Assertions.assertEquals("SKIPPED", ignoredDto.getDisplayStatusKey());
+    }
+
+    @Test
+    public void testComputeEffectiveStatusInterruptedRunsAndUnlink()
+    {
+        // Interrupted run with failed steps -> failed-unknown (does not swallow failure)
+        Assertions.assertEquals("failed-unknown",
+            AuraReportDataService.computeEffectiveStatus("running", 5, 2, false, null, false));
+
+        // Interrupted run with failed steps and bugs -> failed-known
+        Assertions.assertEquals("failed-known",
+            AuraReportDataService.computeEffectiveStatus("running", 5, 2, true, null, false));
+
+        // Interrupted clean run with 0 failed steps -> ignored
+        Assertions.assertEquals("ignored",
+            AuraReportDataService.computeEffectiveStatus("running", 5, 0, false, null, false));
+
+        // Interrupted run with 0 total steps -> failed-unknown
+        Assertions.assertEquals("failed-unknown",
+            AuraReportDataService.computeEffectiveStatus("running", 0, 0, false, null, false));
+
+        // Active run in progress -> running
+        Assertions.assertEquals("running",
+            AuraReportDataService.computeEffectiveStatus("running", 5, 0, false, null, true));
+
+        // Null status on active run -> running
+        Assertions.assertEquals("running",
+            AuraReportDataService.computeEffectiveStatus(null, 0, 0, false, null, true));
+
+        // Null status on inactive run -> failed-unknown
+        Assertions.assertEquals("failed-unknown",
+            AuraReportDataService.computeEffectiveStatus(null, 0, 0, false, null, false));
+
+        // Unlinking bug on failed-known execution -> flips to failed-unknown
+        Assertions.assertEquals("failed-unknown",
+            AuraReportDataService.computeEffectiveStatus("failed-known", 5, 1, false, null, false));
+
+        // Unlinking bug on succeeded-fixed execution -> flips to passed-clean
+        Assertions.assertEquals("passed-clean",
+            AuraReportDataService.computeEffectiveStatus("succeeded-fixed", 5, 0, false, null, false));
+    }
 }

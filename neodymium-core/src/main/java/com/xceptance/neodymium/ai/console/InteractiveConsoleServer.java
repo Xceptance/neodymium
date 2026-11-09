@@ -1530,10 +1530,14 @@ public final class InteractiveConsoleServer
             {
                 for (final JsonObject s : allSteps)
                 {
-                    if (s.has("status") && "failed".equalsIgnoreCase(s.get("status").getAsString()))
+                    if (s.has("status") && s.get("status").isJsonPrimitive())
                     {
-                        anyStepFailed = true;
-                        break;
+                        final String stepSt = s.get("status").getAsString();
+                        if ("failed".equalsIgnoreCase(stepSt) || "error".equalsIgnoreCase(stepSt) || "failure".equalsIgnoreCase(stepSt))
+                        {
+                            anyStepFailed = true;
+                            break;
+                        }
                     }
                 }
             }

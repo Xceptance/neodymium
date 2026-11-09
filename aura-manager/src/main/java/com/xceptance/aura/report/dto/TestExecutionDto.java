@@ -530,6 +530,24 @@ public final class TestExecutionDto
      */
     public String getDisplayStatusKey()
     {
+        final String st = status != null ? status.trim().toLowerCase(Locale.ROOT) : "running";
+        if ("running".equals(st) || "in_progress".equals(st) || "executing".equals(st) || "pending".equals(st))
+        {
+            return "RUNNING";
+        }
+        if ("failed-known".equals(st) || "known".equals(st))
+        {
+            return "FAILED_KNOWN";
+        }
+        if ("succeeded-fixed".equals(st) || "fixed".equals(st))
+        {
+            return "SUCCEEDED_FIXED";
+        }
+        if ("ignored".equals(st) || "skipped".equals(st) || "cancelled".equals(st))
+        {
+            return "SKIPPED";
+        }
+
         final boolean hasBugs = bugs != null && !bugs.isEmpty();
         final String eff = AuraReportDataService.computeEffectiveStatus(
             status,
@@ -537,14 +555,14 @@ public final class TestExecutionDto
             getFailedStepsCount(),
             hasBugs,
             AuraReportDataService.extractFailureText(this),
-            false);
+            true);
         return switch (eff)
         {
             case "running" -> "RUNNING";
             case "passed-clean" -> "PASSED";
             case "succeeded-fixed" -> "SUCCEEDED_FIXED";
             case "failed-known" -> "FAILED_KNOWN";
-            case "ignored" -> "SKIPPED";
+            case "ignored", "skipped" -> "SKIPPED";
             default -> "FAILED_UNKNOWN";
         };
     }

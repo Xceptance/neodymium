@@ -885,7 +885,7 @@ public class AuraReportDataService
             final Path runJsonFile = (runDir != null) ? runDir.resolve("run.json") : null;
             if (runDir != null && Files.exists(runDir) && Files.isDirectory(runDir) && (isInProgress || runJsonFile == null || !Files.exists(runJsonFile)))
             {
-                localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true);
+                localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true, isInProgress);
             }
 
             final TestRunEntity runEntity = runOpt.orElseGet(() -> new TestRunEntity(
@@ -1988,7 +1988,8 @@ public class AuraReportDataService
 
                 final boolean hasBugs = dto.getBugs() != null && !dto.getBugs().isEmpty();
                 final String failureText = extractFailureText(dto);
-                final String effectiveStatus = computeEffectiveStatus(dto.getStatus(), dto.getTotalStepsCount(), dto.getFailedStepsCount(), hasBugs, failureText, false);
+                final boolean isRunActive = "IN_PROGRESS".equalsIgnoreCase(run.getStatus());
+                final String effectiveStatus = computeEffectiveStatus(dto.getStatus(), dto.getTotalStepsCount(), dto.getFailedStepsCount(), hasBugs, failureText, isRunActive);
                 dto.setStatus(effectiveStatus);
 
                 if (dto.getTestClass() != null && !dto.getTestClass().isEmpty())
@@ -2318,12 +2319,19 @@ public class AuraReportDataService
                     {
                         execNode.put("status", "succeeded-fixed");
                     }
+                    else if ("finished".equalsIgnoreCase(raw))
+                    {
+                        final boolean isFinishedSuccess = LocalRunJsonStorageService.extractStepsFailed(execNode) <= 0
+                                && (extractFailureText(execNode) == null);
+                        execNode.put("status", isFinishedSuccess ? "succeeded-fixed" : "failed-known");
+                    }
                 });
 
                 final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
                 if (Files.isDirectory(runDir))
                 {
-                    localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true);
+                    final boolean isRunActive = runOpt.map(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).orElse(false);
+                    localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true, isRunActive);
                 }
 
                 final long reevalStart = System.currentTimeMillis();
@@ -2446,12 +2454,21 @@ public class AuraReportDataService
                     {
                         execNode.put("status", hasBugs ? "succeeded-fixed" : "passed-clean");
                     }
+                    else if ("finished".equalsIgnoreCase(raw))
+                    {
+                        final boolean isFinishedSuccess = LocalRunJsonStorageService.extractStepsFailed(execNode) <= 0
+                                && (extractFailureText(execNode) == null);
+                        execNode.put("status", isFinishedSuccess
+                                ? (hasBugs ? "succeeded-fixed" : "passed-clean")
+                                : (hasBugs ? "failed-known" : "failed-unknown"));
+                    }
                 });
 
                 final Path runDir = localRunJsonStorageService.getRunDir(effectiveRunId);
                 if (Files.isDirectory(runDir))
                 {
-                    localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true);
+                    final boolean isRunActive = runOpt.map(r -> "IN_PROGRESS".equalsIgnoreCase(r.getStatus())).orElse(false);
+                    localRunJsonStorageService.buildRunJsonContent(runDir.toFile(), effectiveRunId, true, isRunActive);
                 }
 
                 // Sanitize history links on variation entity
@@ -3319,12 +3336,30 @@ public class AuraReportDataService
             final String failureOrErrorMessage,
             final boolean isRunActive)
     {
-        final String st = rawStatus != null ? rawStatus.trim().toLowerCase(Locale.ROOT) : "";
+        final String st = (rawStatus != null && !rawStatus.isBlank())
+                ? rawStatus.trim().toLowerCase(Locale.ROOT)
+                : (isRunActive ? "running" : "failed-unknown");
+
+        final boolean hasFailure = failedStepsCount > 0
+                || (failureOrErrorMessage != null
+                    && !failureOrErrorMessage.isBlank()
+                    && !"NONE".equalsIgnoreCase(failureOrErrorMessage.trim()));
+
+        final boolean isKnown = hasBugs;
+        final boolean isFixed = hasBugs;
 
         // 1. In-flight / transient states
         if ("running".equals(st) || "in_progress".equals(st) || "executing".equals(st) || "pending".equals(st))
         {
-            return isRunActive ? "running" : (totalStepsCount == 0 ? "failed-unknown" : "skipped");
+            if (isRunActive)
+            {
+                return "running";
+            }
+            if (hasFailure || totalStepsCount == 0)
+            {
+                return isKnown ? "failed-known" : "failed-unknown";
+            }
+            return "ignored";
         }
 
         // 2. Explicitly skipped states
@@ -3332,14 +3367,6 @@ public class AuraReportDataService
         {
             return "ignored";
         }
-
-        final boolean isKnown = hasBugs || "failed-known".equals(st);
-        final boolean isFixed = hasBugs || "succeeded-fixed".equals(st) || "fixed".equals(st);
-
-        final boolean hasFailure = failedStepsCount > 0
-                || (failureOrErrorMessage != null
-                    && !failureOrErrorMessage.isBlank()
-                    && !"NONE".equalsIgnoreCase(failureOrErrorMessage.trim()));
 
         // 3. Finished lifecycle resolution
         if ("finished".equals(st))
