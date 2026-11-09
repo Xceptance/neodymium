@@ -310,10 +310,10 @@
                             <span class="material-symbols-outlined pill-icon" style="font-size: 0.75rem;">lock</span>
                             <span>Test</span>
                         </span>
-                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
-                            <input type="checkbox" name="createPageIdentityDimCheckbox" value="browser" checked onchange="updateCreatePageIdentityDimensionsInput()" />
+                        <span class="run-scope-pill active" style="cursor: default; opacity: 0.85; pointer-events: none;" title="Browser (Mandatory Base Coordinate)">
+                            <span class="material-symbols-outlined pill-icon" style="font-size: 0.75rem;">lock</span>
                             <span>Browser</span>
-                        </label>
+                        </span>
                         <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
                             <input type="checkbox" name="createPageIdentityDimCheckbox" value="locale" onchange="updateCreatePageIdentityDimensionsInput()" />
                             <span>Locale</span>
@@ -432,6 +432,30 @@
                         </div>
                         <input type="hidden" name="filterAreas" id="createPageFilterAreasInput" value="" />
                     </div>
+
+                    <!-- Dynamic Custom Tags -->
+                    <th:block th:if="${candidateCustomTags != null && !candidateCustomTags.isEmpty()}">
+                        <div class="mb-2" th:each="entry : ${candidateCustomTags}" th:if="${entry.value != null && !entry.value.isEmpty()}">
+                            <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;"
+                                   th:text="${'Filter by ' + entry.key + ':'}">Filter by Tag:</label>
+                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                                <label th:each="val : ${entry.value}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                    <input type="checkbox"
+                                           class="create-page-filter-tag-checkbox"
+                                           th:attr="data-tag-key=${entry.key}"
+                                           th:name="${'createPageFilterTagCheckbox_' + entry.key}"
+                                           th:value="${val}"
+                                           onchange="updateCreatePageFilterInputs()" />
+                                    <span th:text="${val}">Value</span>
+                                </label>
+                            </div>
+                            <input type="hidden"
+                                   class="create-page-filter-tag-hidden"
+                                   th:attr="data-tag-key=${entry.key}"
+                                   th:name="${'filterTag_' + entry.key}"
+                                   value="" />
+                        </div>
+                    </th:block>
                 </div>
 
                 <!-- 4. Copy Widgets from Dashboard (Optional) -->
@@ -573,10 +597,10 @@
                             <span class="material-symbols-outlined pill-icon" style="font-size: 0.75rem;">lock</span>
                             <span>Test</span>
                         </span>
-                        <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
-                            <input type="checkbox" name="convertToGroupIdentityDimCheckbox" value="browser" checked onchange="updateConvertToGroupIdentityDimensionsInput()" />
+                        <span class="run-scope-pill active" style="cursor: default; opacity: 0.85; pointer-events: none;" title="Browser (Mandatory Base Coordinate)">
+                            <span class="material-symbols-outlined pill-icon" style="font-size: 0.75rem;">lock</span>
                             <span>Browser</span>
-                        </label>
+                        </span>
                         <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
                             <input type="checkbox" name="convertToGroupIdentityDimCheckbox" value="locale" onchange="updateConvertToGroupIdentityDimensionsInput()" />
                             <span>Locale</span>
@@ -690,6 +714,30 @@
                             </label>
                         </div>
                     </div>
+
+                    <!-- Dynamic Custom Tags -->
+                    <th:block th:if="${candidateCustomTags != null && !candidateCustomTags.isEmpty()}">
+                        <div class="mb-2" th:each="entry : ${candidateCustomTags}" th:if="${entry.value != null && !entry.value.isEmpty()}">
+                            <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;"
+                                   th:text="${'Filter by ' + entry.key + ':'}">Filter by Tag:</label>
+                            <div class="d-flex align-items-center gap-1 flex-wrap">
+                                <label th:each="val : ${entry.value}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                    <input type="checkbox"
+                                           class="convert-to-group-filter-tag-checkbox"
+                                           th:attr="data-tag-key=${entry.key}"
+                                           th:name="${'convertToGroupFilterTagCheckbox_' + entry.key}"
+                                           th:value="${val}"
+                                           onchange="updateConvertToGroupFilterInputs()" />
+                                    <span th:text="${val}">Value</span>
+                                </label>
+                            </div>
+                            <input type="hidden"
+                                   class="convert-to-group-filter-tag-hidden"
+                                   th:attr="data-tag-key=${entry.key}"
+                                   th:name="${'filterTag_' + entry.key}"
+                                   value="" />
+                        </div>
+                    </th:block>
                 </div>
 
                 <div id="convertToGroupError" class="error-message" style="color: var(--color-danger, #ef4444); margin-top: 8px; font-size: 0.875rem; display: none;"></div>

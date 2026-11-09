@@ -670,11 +670,7 @@ public class WidgetAggregationService
             case RATIO_BAR:
                 return buildRatioBarWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
             case PERLENKETTE:
-                if (config.getMetric() == WidgetMetric.TAG)
-                {
-                    return buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
-                }
-                return buildPerlenketteWidget(config, runs, latestVariations, suiteEvolution, tokenCostTrend, bugs);
+                return buildPerlenketteWidget(config, runs, latestVariations, suiteEvolution, tokenCostTrend, bugs, browserRatios, tagRatioCards, dataService);
             case TREND_GRAPH:
                 return buildTrendGraphWidget(config, runs, latestVariations, browserRatios, tagRatioCards, suiteEvolution, tokenCostTrend, bugs, dataService);
             case TEXT:
@@ -1275,6 +1271,84 @@ public class WidgetAggregationService
                 currentOffset -= pct;
             }
         }
+        else if (config.getMetric() == WidgetMetric.NUMBER_OF_RUNS)
+        {
+            final List<TestRunEntity> scopedRuns = (scope == WidgetPointScope.LATEST_TEST_STATUS)
+                ? (runs != null ? runs : Collections.emptyList())
+                : filterRunsByPointScope(runs, scope);
+
+            int passedRuns = 0;
+            int failedKnownRuns = 0;
+            int failedUnknownRuns = 0;
+            int ignoredRuns = 0;
+
+            for (final TestRunEntity r : scopedRuns)
+            {
+                final int failUnknown = (r.getFailedUnknownCount() != null) ? r.getFailedUnknownCount() : 0;
+                final int failKnown = (r.getFailedKnownCount() != null) ? r.getFailedKnownCount() : 0;
+                final int pass = (r.getPassedCount() != null) ? r.getPassedCount() : 0;
+                final int fixed = (r.getSucceededFixedCount() != null) ? r.getSucceededFixedCount() : 0;
+
+                if (failUnknown > 0)
+                {
+                    failedUnknownRuns++;
+                }
+                else if (failKnown > 0)
+                {
+                    failedKnownRuns++;
+                }
+                else if (pass > 0 || fixed > 0)
+                {
+                    passedRuns++;
+                }
+                else
+                {
+                    ignoredRuns++;
+                }
+            }
+
+            final int totalRuns = scopedRuns.size();
+            final double passRate = (totalRuns > 0) ? ((double) passedRuns / totalRuns * 100.0) : 0.0;
+            centerRate = (config.getValueFormat() == WidgetValueFormat.ABSOLUTE)
+                ? String.valueOf(totalRuns)
+                : String.format(Locale.ROOT, "%.0f%%", passRate);
+            centerLabel = (config.getValueFormat() == WidgetValueFormat.ABSOLUTE) ? "RUNS" : "RUN PASS";
+
+            if (scope == WidgetPointScope.LAST_RUN && !scopedRuns.isEmpty())
+            {
+                summaryLabel = totalRuns + (totalRuns == 1 ? " Run (#" : " Runs (#") + scopedRuns.get(0).getId() + ")";
+            }
+            else
+            {
+                summaryLabel = totalRuns + (totalRuns == 1 ? " Run" : " Runs");
+            }
+
+            double currentOffset = 25.0;
+            if (passedRuns > 0)
+            {
+                final double pct = ((double) passedRuns / totalRuns * 100.0);
+                slices.add(new WidgetPieSliceDto("Passed Runs", passedRuns, pct, "var(--status-pass, #10b981)", currentOffset, 0, 0));
+                currentOffset -= pct;
+            }
+            if (failedKnownRuns > 0)
+            {
+                final double pct = ((double) failedKnownRuns / totalRuns * 100.0);
+                slices.add(new WidgetPieSliceDto("Failed Known Runs", failedKnownRuns, pct, "var(--status-known-fail, #f97316)", currentOffset, 0, 0));
+                currentOffset -= pct;
+            }
+            if (failedUnknownRuns > 0)
+            {
+                final double pct = ((double) failedUnknownRuns / totalRuns * 100.0);
+                slices.add(new WidgetPieSliceDto("Failed Unknown Runs", failedUnknownRuns, pct, "var(--status-unknown-fail, #ef4444)", currentOffset, 0, 0));
+                currentOffset -= pct;
+            }
+            if (ignoredRuns > 0)
+            {
+                final double pct = ((double) ignoredRuns / totalRuns * 100.0);
+                slices.add(new WidgetPieSliceDto("Ignored / Empty Runs", ignoredRuns, pct, "var(--status-ignored, #9ca3af)", currentOffset, 0, 0));
+                currentOffset -= pct;
+            }
+        }
 
         final String emptyMsg = (scope == WidgetPointScope.LATEST_TEST_STATUS)
             ? "No data available"
@@ -1400,7 +1474,7 @@ public class WidgetAggregationService
                 ));
             }
         }
-        else if (config.getMetric() == WidgetMetric.FLAKINESS)
+        else if (config.getMetric() == WidgetMetric.FLAKINESS || config.getMetric() == WidgetMetric.NUMBER_OF_RUNS)
         {
             final DashboardWidgetViewDto pie = buildPieChartWidget(config, runs, latestVariations, browserRatios, tagRatioCards, tokenCostTrend, bugs);
             summaryLabel = pie.getSummaryLabel();
@@ -1432,7 +1506,10 @@ public class WidgetAggregationService
         final List<BatchLatestVariationDto> latestVariations,
         final BatchSuiteEvolutionDto suiteEvolution,
         final TokenCostTrendDto tokenCostTrend,
-        final List<TestBaseBugEntity> bugs)
+        final List<TestBaseBugEntity> bugs,
+        final List<DistributionRatioDto> browserRatios,
+        final List<TagRatioCardDto> tagRatioCards,
+        final AuraReportDataService dataService)
     {
         final List<PerlenketteBeadDto> rawBeads = new ArrayList<>();
         final WidgetTrendMode trendMode = config.getTrendMode();
@@ -1470,7 +1547,11 @@ public class WidgetAggregationService
             }
         }
 
-        if (trendMode == WidgetTrendMode.LATEST_APPROACH)
+        if (config.getMetric() == WidgetMetric.TAG)
+        {
+            populateTagPerlenketteBeads(rawBeads, config, runs, latestVariations, browserRatios, tagRatioCards, dataService);
+        }
+        else if (trendMode == WidgetTrendMode.LATEST_APPROACH)
         {
             if (config.getMetric() == WidgetMetric.COSTS)
             {
@@ -1590,6 +1671,28 @@ public class WidgetAggregationService
                         color = (flakyCount > 0) ? "#f59e0b" : "#10b981";
                         score = (format == WidgetValueFormat.PERCENT) ? flakyRate : computeFlakyScore(flakyCount);
                     }
+                    else if (config.getMetric() == WidgetMetric.NUMBER_OF_RUNS)
+                    {
+                        valFormatted = (format == WidgetValueFormat.PERCENT)
+                            ? String.format(Locale.ROOT, "%.0f%%", passRate)
+                            : ("Run #" + (i + 1));
+                        score = (format == WidgetValueFormat.PERCENT) ? passRate : (i + 1.0);
+                        if (pt.getUnknownTotalCount() > 0)
+                        {
+                            statusClass = "bead-unknown";
+                            color = "#ef4444";
+                        }
+                        else if (pt.getKnownTotalCount() > 0)
+                        {
+                            statusClass = "bead-known";
+                            color = "#f97316";
+                        }
+                        else
+                        {
+                            statusClass = "bead-pass";
+                            color = "#10b981";
+                        }
+                    }
                     else
                     {
                         valFormatted = (format == WidgetValueFormat.PERCENT)
@@ -1643,6 +1746,16 @@ public class WidgetAggregationService
                         details.put("Active Bugs", String.valueOf(bugCount));
                         details.put("Total Tests", String.valueOf(totalTests));
                         details.put("Bug Rate", String.format(Locale.ROOT, "%.1f%%", bugRate));
+                    }
+                    else if (config.getMetric() == WidgetMetric.NUMBER_OF_RUNS)
+                    {
+                        details.put("Run Number", "#" + (i + 1));
+                        details.put("Pass Rate", String.format(Locale.ROOT, "%.1f%%", passRate));
+                        details.put("Tests Known", String.valueOf(pt.getTotalTestsKnown()));
+                        details.put("Passed", String.valueOf(pt.getPassCleanCount() + pt.getPassHealedCount() + pt.getPassAiCount()));
+                        details.put("Fixed", String.valueOf(pt.getFixedCleanCount() + pt.getFixedHealedCount() + pt.getFixedAiCount()));
+                        details.put("Known Fail", String.valueOf(pt.getKnownCleanCount() + pt.getKnownHealedCount() + pt.getKnownAiCount()));
+                        details.put("Unknown Fail", String.valueOf(pt.getUnknownCleanCount() + pt.getUnknownHealedCount() + pt.getUnknownAiCount()));
                     }
                     else
                     {
@@ -1731,6 +1844,20 @@ public class WidgetAggregationService
                     color = (flakyCount > 0) ? "#f59e0b" : "#10b981";
                     score = (format == WidgetValueFormat.PERCENT) ? flakyRate : computeFlakyScore(flakyCount);
                 }
+                else if (config.getMetric() == WidgetMetric.NUMBER_OF_RUNS)
+                {
+                    final int runCount = b.runs.size();
+                    valFormatted = (format == WidgetValueFormat.PERCENT)
+                        ? String.format(Locale.ROOT, "%.0f%%", passRate)
+                        : (runCount + (runCount == 1 ? " run" : " runs"));
+                    statusClass = (b.unknownFailCount > 0) ? "bead-unknown"
+                        : (b.knownFailCount > 0 ? "bead-known"
+                        : (b.fixedCount > 0 ? "bead-fixed" : "bead-pass"));
+                    color = (b.unknownFailCount > 0) ? "#ef4444"
+                        : (b.knownFailCount > 0 ? "#f97316"
+                        : (b.fixedCount > 0 ? "#3b82f6" : "#10b981"));
+                    score = (format == WidgetValueFormat.PERCENT) ? passRate : runCount;
+                }
                 else
                 {
                     valFormatted = (format == WidgetValueFormat.PERCENT)
@@ -1770,6 +1897,15 @@ public class WidgetAggregationService
                     details.put("Total AI Tests", String.valueOf(b.getTotalAiUsageCount()));
                     details.put("AI-Driven", String.valueOf(b.getAiTotalCount()));
                     details.put("Healed", String.valueOf(b.getHealedTotalCount()));
+                }
+                else if (config.getMetric() == WidgetMetric.NUMBER_OF_RUNS)
+                {
+                    details.put("Run Pass Rate", String.format(Locale.ROOT, "%.1f%%", passRate));
+                    details.put("Total Tests", String.valueOf(b.totalTests));
+                    details.put("Passed", String.valueOf(b.passedCount));
+                    details.put("Fixed", String.valueOf(b.fixedCount));
+                    details.put("Known Fail", String.valueOf(b.knownFailCount));
+                    details.put("Unknown Fail", String.valueOf(b.unknownFailCount));
                 }
                 else
                 {
@@ -1867,6 +2003,33 @@ public class WidgetAggregationService
                     color = (flakyCount > 0) ? "#f59e0b" : "#10b981";
                     score = (format == WidgetValueFormat.PERCENT) ? flakyRate : computeFlakyScore(flakyCount);
                 }
+                else if (config.getMetric() == WidgetMetric.NUMBER_OF_RUNS)
+                {
+                    valFormatted = (format == WidgetValueFormat.PERCENT)
+                        ? String.format(Locale.ROOT, "%.0f%%", passRate)
+                        : ("Run #" + (i + 1));
+                    score = (format == WidgetValueFormat.PERCENT) ? passRate : (i + 1.0);
+                    if (r.getFailedUnknownCount() > 0)
+                    {
+                        statusClass = "bead-unknown";
+                        color = "#ef4444";
+                    }
+                    else if (r.getFailedKnownCount() > 0)
+                    {
+                        statusClass = "bead-known";
+                        color = "#f97316";
+                    }
+                    else if (r.getSucceededFixedCount() > 0)
+                    {
+                        statusClass = "bead-fixed";
+                        color = "#3b82f6";
+                    }
+                    else
+                    {
+                        statusClass = "bead-pass";
+                        color = "#10b981";
+                    }
+                }
                 else
                 {
                     valFormatted = (format == WidgetValueFormat.PERCENT)
@@ -1933,6 +2096,17 @@ public class WidgetAggregationService
                         details.put("Cost", String.format(Locale.ROOT, "$%.4f", r.getTotalLlmCost()));
                     }
                 }
+                else if (config.getMetric() == WidgetMetric.NUMBER_OF_RUNS)
+                {
+                    details.put("Run Number", "#" + (i + 1));
+                    details.put("Run Pass Rate", String.format(Locale.ROOT, "%.1f%%", passRate));
+                    details.put("Pass Rate", String.format(Locale.ROOT, "%.1f%%", passRate));
+                    details.put("Total Tests", String.valueOf(r.getTotalTests()));
+                    details.put("Passed", String.valueOf(r.getPassedCount()));
+                    details.put("Fixed", String.valueOf(r.getSucceededFixedCount()));
+                    details.put("Known Fail", String.valueOf(r.getFailedKnownCount()));
+                    details.put("Unknown Fail", String.valueOf(r.getFailedUnknownCount()));
+                }
                 else
                 {
                     details.put("Pass Rate", String.format(Locale.ROOT, "%.1f%%", passRate));
@@ -1980,17 +2154,20 @@ public class WidgetAggregationService
             height = 180.0;
         }
 
-        // Limit the number of shells by widget width (letting out older ones from the beginning)
+        final boolean isTag = (config != null && config.getMetric() == WidgetMetric.TAG);
+        // Limit the number of shells by widget width: for non-milestone tag volume, take top N; for milestone / chronological tags, take most recent
         final List<PerlenketteBeadDto> scopedBeads = (rawBeads.size() > maxShells)
-            ? rawBeads.subList(rawBeads.size() - maxShells, rawBeads.size())
+            ? ((isTag && !isMilestoneTagKey(config != null ? config.getTagKey() : null))
+                ? rawBeads.subList(0, maxShells)
+                : rawBeads.subList(rawBeads.size() - maxShells, rawBeads.size()))
             : rawBeads;
 
         final double cy = height / 2.0;
         final int n = scopedBeads.size();
 
         final boolean isTimeBucketed = (trendMode == WidgetTrendMode.DAILY || trendMode == WidgetTrendMode.HOURLY || trendMode == WidgetTrendMode.MONTHLY);
-        final boolean sameDay = !isTimeBucketed && areAllBeadsOnSameDay(scopedBeads);
-        final boolean distinctDates = isTimeBucketed || areAllBeadsOnDistinctDates(scopedBeads);
+        final boolean sameDay = !isTag && !isTimeBucketed && areAllBeadsOnSameDay(scopedBeads);
+        final boolean distinctDates = !isTag && (isTimeBucketed || areAllBeadsOnDistinctDates(scopedBeads));
 
         final List<PerlenketteBeadDto> beads = new ArrayList<>();
         final List<PerlenketteMinorDotDto> minorDots = new ArrayList<>();
@@ -2003,9 +2180,11 @@ public class WidgetAggregationService
             final double radius = (config != null && config.isQuarterWidth()) ? 24.0 : 36.0;
             final String[] colors = resolvePearlColorsForMetric(raw, config);
             final String innerVal = extractPearlInnerValue(raw.getValueFormatted(), raw.getPercentValue(), format);
-            final String compactTs = isTimeBucketed
+            final String compactTs = isTag
                 ? raw.getTimestampLabel()
-                : formatPerlenketteTimestamp(raw.getTimestampLabel(), raw.getId(), sameDay, distinctDates);
+                : (isTimeBucketed
+                    ? raw.getTimestampLabel()
+                    : formatPerlenketteTimestamp(raw.getTimestampLabel(), raw.getId(), sameDay, distinctDates));
 
             beads.add(new PerlenketteBeadDto(
                 0, raw.getId(), raw.getLabel(), compactTs, raw.getValueFormatted(),
@@ -2034,9 +2213,11 @@ public class WidgetAggregationService
                 cxs[i] = cx;
                 final String[] colors = resolvePearlColorsForMetric(raw, config);
                 final String innerVal = extractPearlInnerValue(raw.getValueFormatted(), raw.getPercentValue(), format);
-                final String compactTs = isTimeBucketed
+                final String compactTs = isTag
                     ? raw.getTimestampLabel()
-                    : formatPerlenketteTimestamp(raw.getTimestampLabel(), raw.getId(), sameDay, distinctDates);
+                    : (isTimeBucketed
+                        ? raw.getTimestampLabel()
+                        : formatPerlenketteTimestamp(raw.getTimestampLabel(), raw.getId(), sameDay, distinctDates));
 
                 beads.add(new PerlenketteBeadDto(
                     i, raw.getId(), raw.getLabel(), compactTs, raw.getValueFormatted(),
@@ -2095,13 +2276,18 @@ public class WidgetAggregationService
             visibleSum += b.getPercentValue();
         }
         final double avgPercent = !beads.isEmpty() ? (visibleSum / beads.size()) : 0.0;
-        final String summary = beads.size() + (beads.size() == 1 ? " Milestone" : " Milestones");
+        final String summary = isTag
+            ? (beads.size() + (beads.size() == 1 ? " Value" : " Values"))
+            : (beads.size() + (beads.size() == 1 ? " Milestone" : " Milestones"));
+        final String emptyMsg = isTag
+            ? "No tag data available"
+            : "No historical progression milestones found";
         final PerlenketteDto perlenkette = new PerlenketteDto(
             beads, format, avgPercent, summary, waveBuilder.toString(), width, height, minorDots
         );
 
         return new DashboardWidgetViewDto(
-            config, summary, "No historical progression milestones found", Collections.emptyList(), "", "",
+            config, summary, emptyMsg, Collections.emptyList(), "", "",
             Collections.emptyList(), perlenkette, Collections.emptyList(), "", "", 0.0, 0.0, "", true
         );
     }
@@ -2480,6 +2666,500 @@ public class WidgetAggregationService
         return "Run " + (index + 1);
     }
 
+    static String formatTagMilestoneLabel(final String tagValue)
+    {
+        if (tagValue == null || tagValue.isBlank())
+        {
+            return "Default";
+        }
+        final String trimmed = tagValue.trim();
+        if (trimmed.length() <= 12)
+        {
+            return trimmed;
+        }
+        return trimmed.substring(0, 11) + "…";
+    }
+
+    private static void accumulateExecutionIntoStats(final TagValueStats stats, final TestExecutionDto exec)
+    {
+        final String st = (exec.getStatus() != null) ? exec.getStatus().toLowerCase(Locale.ROOT) : "passed";
+        final boolean isHealed = exec.isHealed();
+        final boolean isAi = "AI".equalsIgnoreCase(exec.getExecutionMode());
+
+        if (st.contains("unknown") || (st.contains("fail") && !st.contains("known")))
+        {
+            if (isHealed)
+            {
+                stats.unknownHealed++;
+            }
+            else if (isAi)
+            {
+                stats.unknownAi++;
+            }
+            else
+            {
+                stats.unknownClean++;
+            }
+        }
+        else if (st.contains("known"))
+        {
+            if (isHealed)
+            {
+                stats.knownHealed++;
+            }
+            else if (isAi)
+            {
+                stats.knownAi++;
+            }
+            else
+            {
+                stats.knownClean++;
+            }
+        }
+        else if (st.contains("fixed"))
+        {
+            if (isHealed)
+            {
+                stats.fixedHealed++;
+            }
+            else if (isAi)
+            {
+                stats.fixedAi++;
+            }
+            else
+            {
+                stats.fixedClean++;
+            }
+        }
+        else if (st.contains("ignore") || st.contains("skip"))
+        {
+            stats.ignored++;
+        }
+        else
+        {
+            if (isHealed)
+            {
+                stats.passHealed++;
+            }
+            else if (isAi)
+            {
+                stats.passAi++;
+            }
+            else
+            {
+                stats.passClean++;
+            }
+        }
+        stats.total++;
+    }
+
+    private static void accumulateRunIntoStats(final TagValueStats stats, final TestRunEntity r)
+    {
+        final int pass = r.getPassedCleanCount();
+        final int passH = r.getPassedHealedCountSafe();
+        final int passA = r.getPassedAiCountSafe();
+        final int fixed = r.getFixedCleanCount();
+        final int fixedH = r.getFixedHealedCountSafe();
+        final int fixedA = r.getFixedAiCountSafe();
+        final int known = r.getKnownCleanCount();
+        final int knownH = r.getKnownHealedCountSafe();
+        final int knownA = r.getKnownAiCountSafe();
+        final int unknown = r.getUnknownCleanCount();
+        final int unknownH = r.getUnknownHealedCountSafe();
+        final int unknownA = r.getUnknownAiCountSafe();
+        final int ignored = (r.getIgnoredCount() != null ? r.getIgnoredCount() : 0);
+
+        stats.passClean += pass;
+        stats.passHealed += passH;
+        stats.passAi += passA;
+        stats.fixedClean += fixed;
+        stats.fixedHealed += fixedH;
+        stats.fixedAi += fixedA;
+        stats.knownClean += known;
+        stats.knownHealed += knownH;
+        stats.knownAi += knownA;
+        stats.unknownClean += unknown;
+        stats.unknownHealed += unknownH;
+        stats.unknownAi += unknownA;
+        stats.ignored += ignored;
+
+        final int runTotal = (r.getTotalTests() != null)
+            ? r.getTotalTests()
+            : (pass + passH + passA + fixed + fixedH + fixedA + known + knownH + knownA + unknown + unknownH + unknownA + ignored);
+        stats.total += runTotal;
+    }
+
+    private void populateTagPerlenketteBeads(
+        final List<PerlenketteBeadDto> rawBeads,
+        final DashboardWidgetConfigDto config,
+        final List<TestRunEntity> runs,
+        final List<BatchLatestVariationDto> latestVariations,
+        final List<DistributionRatioDto> browserRatios,
+        final List<TagRatioCardDto> tagRatioCards,
+        final AuraReportDataService dataService)
+    {
+        final String configuredKey = (config != null) ? config.getTagKey() : null;
+        String tagKey = (configuredKey != null && !configuredKey.isBlank()) ? configuredKey.trim() : "";
+        if (tagKey.isEmpty())
+        {
+            if (tagRatioCards != null && !tagRatioCards.isEmpty())
+            {
+                tagKey = tagRatioCards.get(0).getTagKey();
+            }
+            else
+            {
+                tagKey = "browser";
+            }
+        }
+
+        final WidgetPointScope scope = (config != null && config.getPointScope() != null)
+            ? config.getPointScope()
+            : WidgetPointScope.LATEST_TEST_STATUS;
+        final WidgetTrendMode trendMode = (config != null && config.getTrendMode() != null)
+            ? config.getTrendMode()
+            : WidgetTrendMode.LATEST_APPROACH;
+
+        final List<TestRunEntity> scopedRuns;
+        if (scope != WidgetPointScope.LATEST_TEST_STATUS)
+        {
+            scopedRuns = filterRunsByPointScope(runs, scope);
+        }
+        else
+        {
+            scopedRuns = (runs != null) ? runs : Collections.emptyList();
+        }
+
+        final Map<String, TagValueStats> statsMap = new LinkedHashMap<>();
+
+        // 1. Process eligible historical runs chronologically
+        if (scopedRuns != null && !scopedRuns.isEmpty())
+        {
+            final List<TestRunEntity> sortedRuns = sortRunsChronologically(scopedRuns);
+
+            if (trendMode == WidgetTrendMode.BY_RUNS)
+            {
+                // Accumulate all executions across all runs per milestone without deduplication (Volume)
+                for (final TestRunEntity r : sortedRuns)
+                {
+                    if (r == null || r.getId() == null)
+                    {
+                        continue;
+                    }
+                    final long runTs = (r.getEffectiveStartTimeMs() != null && r.getEffectiveStartTimeMs() > 0L)
+                        ? r.getEffectiveStartTimeMs()
+                        : 0L;
+
+                    RunReportDto report = null;
+                    if (dataService != null)
+                    {
+                        report = dataService.getRunReport(r.getId());
+                    }
+
+                    if (report != null && report.getExecutions() != null && !report.getExecutions().isEmpty())
+                    {
+                        for (final TestExecutionDto exec : report.getExecutions())
+                        {
+                            final String val = extractExecutionTagValue(exec, tagKey, r, dataService);
+                            final String effectiveVal = (val != null && !val.isBlank()) ? val.trim() : "Default";
+                            final TagValueStats stats = statsMap.computeIfAbsent(effectiveVal, TagValueStats::new);
+                            stats.updateTimestampAndRun(runTs, r.getId());
+                            accumulateExecutionIntoStats(stats, exec);
+                        }
+                    }
+                    else
+                    {
+                        final String val = extractRunTagValue(r, tagKey, dataService);
+                        final String effectiveVal = (val != null && !val.isBlank()) ? val.trim() : "Default";
+                        final TagValueStats stats = statsMap.computeIfAbsent(effectiveVal, TagValueStats::new);
+                        stats.updateTimestampAndRun(runTs, r.getId());
+                        accumulateRunIntoStats(stats, r);
+                    }
+                }
+            }
+            else
+            {
+                // Suite evolution: deduplicate test variations per milestone, keeping the latest state
+                final Map<String, Map<String, TestExecutionDto>> milestoneExecutions = new LinkedHashMap<>();
+                final Map<String, TagValueStats> milestoneMeta = new LinkedHashMap<>();
+
+                for (final TestRunEntity r : sortedRuns)
+                {
+                    if (r == null || r.getId() == null)
+                    {
+                        continue;
+                    }
+                    final long runTs = (r.getEffectiveStartTimeMs() != null && r.getEffectiveStartTimeMs() > 0L)
+                        ? r.getEffectiveStartTimeMs()
+                        : 0L;
+
+                    RunReportDto report = null;
+                    if (dataService != null)
+                    {
+                        report = dataService.getRunReport(r.getId());
+                    }
+
+                    if (report != null && report.getExecutions() != null && !report.getExecutions().isEmpty())
+                    {
+                        for (final TestExecutionDto exec : report.getExecutions())
+                        {
+                            final String val = extractExecutionTagValue(exec, tagKey, r, dataService);
+                            final String effectiveVal = (val != null && !val.isBlank()) ? val.trim() : "Default";
+                            final String execKey = (exec.getTestClass() != null ? exec.getTestClass() : "") + "#"
+                                + (exec.getTestMethod() != null ? exec.getTestMethod() : "") + "#"
+                                + (exec.getBrowser() != null ? exec.getBrowser() : "") + "#"
+                                + (exec.getLocation() != null ? exec.getLocation() : "");
+
+                            milestoneExecutions
+                                .computeIfAbsent(effectiveVal, k -> new LinkedHashMap<>())
+                                .put(execKey, exec);
+
+                            milestoneMeta
+                                .computeIfAbsent(effectiveVal, TagValueStats::new)
+                                .updateTimestampAndRun(runTs, r.getId());
+                        }
+                    }
+                    else
+                    {
+                        final String val = extractRunTagValue(r, tagKey, dataService);
+                        final String effectiveVal = (val != null && !val.isBlank()) ? val.trim() : "Default";
+                        final TagValueStats stats = statsMap.computeIfAbsent(effectiveVal, TagValueStats::new);
+                        stats.updateTimestampAndRun(runTs, r.getId());
+                        accumulateRunIntoStats(stats, r);
+                    }
+                }
+
+                // Aggregate deduplicated executions per milestone
+                for (final Map.Entry<String, Map<String, TestExecutionDto>> entry : milestoneExecutions.entrySet())
+                {
+                    final String tagVal = entry.getKey();
+                    final TagValueStats stats = statsMap.computeIfAbsent(tagVal, TagValueStats::new);
+                    final TagValueStats meta = milestoneMeta.get(tagVal);
+                    if (meta != null)
+                    {
+                        stats.updateTimestampAndRun(meta.earliestTimestamp, meta.latestRunId);
+                        stats.updateTimestampAndRun(meta.latestTimestamp, meta.latestRunId);
+                    }
+
+                    for (final TestExecutionDto exec : entry.getValue().values())
+                    {
+                        accumulateExecutionIntoStats(stats, exec);
+                    }
+                }
+            }
+        }
+
+        // 2. Fallback to latestVariations if no runs were provided or yielded no stats
+        if (statsMap.isEmpty() && latestVariations != null && !latestVariations.isEmpty())
+        {
+            for (final BatchLatestVariationDto v : latestVariations)
+            {
+                final String val = extractVariationTagValue(v, tagKey);
+                final String effectiveVal = (val != null && !val.isBlank()) ? val.trim() : "Default";
+                final TagValueStats stats = statsMap.computeIfAbsent(effectiveVal, TagValueStats::new);
+                final String st = (v.getStatus() != null) ? v.getStatus().toLowerCase(Locale.ROOT) : "passed";
+                final boolean isHealed = v.isHealed();
+                final boolean isAi = "AI".equalsIgnoreCase(v.getMode());
+
+                if (st.contains("unknown") || (st.contains("fail") && !st.contains("known")))
+                {
+                    if (isHealed)
+                    {
+                        stats.unknownHealed++;
+                    }
+                    else if (isAi)
+                    {
+                        stats.unknownAi++;
+                    }
+                    else
+                    {
+                        stats.unknownClean++;
+                    }
+                }
+                else if (st.contains("known"))
+                {
+                    if (isHealed)
+                    {
+                        stats.knownHealed++;
+                    }
+                    else if (isAi)
+                    {
+                        stats.knownAi++;
+                    }
+                    else
+                    {
+                        stats.knownClean++;
+                    }
+                }
+                else if (st.contains("fixed"))
+                {
+                    if (isHealed)
+                    {
+                        stats.fixedHealed++;
+                    }
+                    else if (isAi)
+                    {
+                        stats.fixedAi++;
+                    }
+                    else
+                    {
+                        stats.fixedClean++;
+                    }
+                }
+                else if (st.contains("ignored") || st.contains("skip"))
+                {
+                    stats.ignored++;
+                }
+                else
+                {
+                    if (isHealed)
+                    {
+                        stats.passHealed++;
+                    }
+                    else if (isAi)
+                    {
+                        stats.passAi++;
+                    }
+                    else
+                    {
+                        stats.passClean++;
+                    }
+                }
+                stats.total++;
+            }
+        }
+
+        // 3. Fallback to browser/tag ratios
+        if (statsMap.isEmpty())
+        {
+            final List<DistributionRatioDto> ratios = resolveTagRatios(tagKey, Collections.emptyList(), browserRatios, tagRatioCards);
+            for (final DistributionRatioDto r : ratios)
+            {
+                final TagValueStats stats = statsMap.computeIfAbsent(r.getName(), TagValueStats::new);
+                stats.passClean = r.getCount();
+                stats.total = r.getCount();
+            }
+        }
+
+        final List<TagValueStats> sortedStats = new ArrayList<>(statsMap.values());
+        final boolean isMilestone = isMilestoneTagKey(tagKey);
+        sortedStats.sort((final TagValueStats a, final TagValueStats b) -> {
+            final boolean aIsDefault = "Default".equalsIgnoreCase(a.tagValue);
+            final boolean bIsDefault = "Default".equalsIgnoreCase(b.tagValue);
+            if (aIsDefault && !bIsDefault)
+            {
+                return 1;
+            }
+            if (!aIsDefault && bIsDefault)
+            {
+                return -1;
+            }
+
+            if (a.earliestTimestamp != b.earliestTimestamp
+                && a.earliestTimestamp != Long.MAX_VALUE && b.earliestTimestamp != Long.MAX_VALUE)
+            {
+                return Long.compare(a.earliestTimestamp, b.earliestTimestamp);
+            }
+            if (a.latestTimestamp != b.latestTimestamp
+                && a.latestTimestamp != Long.MIN_VALUE && b.latestTimestamp != Long.MIN_VALUE)
+            {
+                return Long.compare(a.latestTimestamp, b.latestTimestamp);
+            }
+
+            if (isMilestone)
+            {
+                return compareNaturalVersion(a.tagValue, b.tagValue);
+            }
+            if (a.total != b.total)
+            {
+                return Integer.compare(b.total, a.total);
+            }
+            return compareNaturalVersion(a.tagValue, b.tagValue);
+        });
+
+        final WidgetValueFormat format = (config != null && config.getValueFormat() != null)
+            ? config.getValueFormat()
+            : WidgetValueFormat.PERCENT;
+
+        for (int i = 0; i < sortedStats.size(); i++)
+        {
+            final TagValueStats s = sortedStats.get(i);
+            final double passRate = s.calculatePassRate();
+            final String valFormatted = (format == WidgetValueFormat.PERCENT)
+                ? String.format(Locale.ROOT, "%.0f%%", passRate)
+                : ((s.getPassedTotal() + s.getFixedTotal()) + "/" + s.total);
+
+            final String statusClass;
+            if (s.getUnknownTotal() > 0)
+            {
+                statusClass = "bead-unknown";
+            }
+            else if (s.getKnownTotal() > 0)
+            {
+                statusClass = "bead-known";
+            }
+            else if (s.getFixedTotal() > 0)
+            {
+                statusClass = "bead-fixed";
+            }
+            else
+            {
+                statusClass = "bead-pass";
+            }
+
+            final Map<String, String> details = new LinkedHashMap<>();
+            details.put("Tag", tagKey + ": " + s.tagValue);
+            details.put("Aggregation Mode", (trendMode == WidgetTrendMode.BY_RUNS)
+                ? "All Run Executions (Volume)"
+                : "Suite Evolution (Deduplicated)");
+            details.put("Pass Rate", String.format(Locale.ROOT, "%.1f%%", passRate));
+            details.put("Total Tests", String.valueOf(s.total));
+            if (trendMode == WidgetTrendMode.BY_RUNS)
+            {
+                details.put("Total Executions", String.valueOf(s.total));
+            }
+            details.put("Passed", String.valueOf(s.getPassedTotal()));
+            if (s.getFixedTotal() > 0)
+            {
+                details.put("Fixed", String.valueOf(s.getFixedTotal()));
+            }
+            if (s.getKnownTotal() > 0)
+            {
+                details.put("Known Fail", String.valueOf(s.getKnownTotal()));
+            }
+            if (s.getUnknownTotal() > 0)
+            {
+                details.put("Unknown Fail", String.valueOf(s.getUnknownTotal()));
+            }
+            if (s.ignored > 0)
+            {
+                details.put("Ignored", String.valueOf(s.ignored));
+            }
+            if (s.latestRunId != null && !s.latestRunId.isBlank())
+            {
+                details.put("Latest Run", "#" + s.latestRunId);
+            }
+
+            final String milestoneLabel = formatTagMilestoneLabel(s.tagValue);
+            final String countLabel = s.total + (s.total == 1 ? " test" : " tests");
+            final String linkUrl = (s.latestRunId != null && !s.latestRunId.isBlank())
+                ? ("/run-report?runId=" + s.latestRunId)
+                : "";
+
+            rawBeads.add(new PerlenketteBeadDto(
+                i,
+                s.tagValue,
+                milestoneLabel,
+                countLabel,
+                valFormatted,
+                passRate,
+                statusClass,
+                "#10b981",
+                linkUrl,
+                details
+            ));
+        }
+    }
+
     private static String extractDateOnly(final String rawTimestamp, final String rawRunId)
     {
         if (rawTimestamp != null && !rawTimestamp.isBlank() && !"Recently".equalsIgnoreCase(rawTimestamp.trim()))
@@ -2726,6 +3406,10 @@ public class WidgetAggregationService
         else if (metric == WidgetMetric.FLAKINESS)
         {
             trendColor = "var(--status-flaky, #f59e0b)";
+        }
+        else if (metric == WidgetMetric.NUMBER_OF_RUNS)
+        {
+            trendColor = "#3b82f6";
         }
 
         if (trendMode == WidgetTrendMode.LATEST_APPROACH)
@@ -2990,6 +3674,59 @@ public class WidgetAggregationService
                     }
                 }
             }
+            else if (metric == WidgetMetric.NUMBER_OF_RUNS)
+            {
+                if (suiteEvolution != null && suiteEvolution.hasPoints())
+                {
+                    final List<BatchSuiteEvolutionPointDto> evoPoints = suiteEvolution.getPoints();
+                    for (int i = 0; i < evoPoints.size(); i++)
+                    {
+                        final BatchSuiteEvolutionPointDto pt = evoPoints.get(i);
+                        final double v;
+                        final String valFormatted;
+                        if (format == WidgetValueFormat.PERCENT)
+                        {
+                            v = pt.getPassRate();
+                            valFormatted = String.format(Locale.ROOT, "%.1f%%", v);
+                        }
+                        else
+                        {
+                            v = i + 1.0;
+                            valFormatted = "Run #" + (i + 1);
+                        }
+                        minVal = Math.min(minVal, v);
+                        maxVal = Math.max(maxVal, v);
+                        points.add(new WidgetTrendPointDto(
+                            i, 0.0, 0.0, "#" + pt.getRunId(), pt.getTimestampLabel(), v, valFormatted, pt.getRunId()
+                        ));
+                    }
+                }
+                else
+                {
+                    final List<TestRunEntity> sorted = sortRunsChronologically(runs);
+                    for (int i = 0; i < sorted.size(); i++)
+                    {
+                        final TestRunEntity r = sorted.get(i);
+                        final double v;
+                        final String valFormatted;
+                        if (format == WidgetValueFormat.PERCENT)
+                        {
+                            v = (r.getPassRate() != null) ? r.getPassRate() : 0.0;
+                            valFormatted = String.format(Locale.ROOT, "%.1f%%", v);
+                        }
+                        else
+                        {
+                            v = i + 1.0;
+                            valFormatted = "Run #" + (i + 1);
+                        }
+                        minVal = Math.min(minVal, v);
+                        maxVal = Math.max(maxVal, v);
+                        points.add(new WidgetTrendPointDto(
+                            i, 0.0, 0.0, "#" + r.getId(), r.getTimestampLabel(), v, valFormatted, r.getId()
+                        ));
+                    }
+                }
+            }
             else // STATUS
             {
                 if (suiteEvolution != null && suiteEvolution.hasPoints())
@@ -3197,6 +3934,31 @@ public class WidgetAggregationService
                         ));
                     }
                 }
+                else if (metric == WidgetMetric.NUMBER_OF_RUNS && suiteEvolution != null && suiteEvolution.hasPoints())
+                {
+                    final List<BatchSuiteEvolutionPointDto> evoPoints = suiteEvolution.getPoints();
+                    for (int i = 0; i < evoPoints.size(); i++)
+                    {
+                        final BatchSuiteEvolutionPointDto pt = evoPoints.get(i);
+                        final double v;
+                        final String valFormatted;
+                        if (format == WidgetValueFormat.PERCENT)
+                        {
+                            v = pt.getPassRate();
+                            valFormatted = String.format(Locale.ROOT, "%.1f%%", v);
+                        }
+                        else
+                        {
+                            v = i + 1.0;
+                            valFormatted = "Run #" + (i + 1);
+                        }
+                        minVal = Math.min(minVal, v);
+                        maxVal = Math.max(maxVal, v);
+                        points.add(new WidgetTrendPointDto(
+                            i, 0.0, 0.0, "#" + pt.getRunId(), pt.getTimestampLabel(), v, valFormatted, pt.getRunId()
+                        ));
+                    }
+                }
                 else if (suiteEvolution != null && suiteEvolution.hasPoints())
                 {
                     final List<BatchSuiteEvolutionPointDto> evoPoints = suiteEvolution.getPoints();
@@ -3294,6 +4056,19 @@ public class WidgetAggregationService
                             ? String.format(Locale.ROOT, "%.1f%%", v)
                             : (((int) v) + " flaky");
                     }
+                    else if (metric == WidgetMetric.NUMBER_OF_RUNS)
+                    {
+                        if (format == WidgetValueFormat.PERCENT)
+                        {
+                            v = (r.getPassRate() != null) ? r.getPassRate() : 0.0;
+                            valFormatted = String.format(Locale.ROOT, "%.1f%%", v);
+                        }
+                        else
+                        {
+                            v = i + 1.0;
+                            valFormatted = "Run #" + (i + 1);
+                        }
+                    }
                     else // STATUS
                     {
                         if (format == WidgetValueFormat.ABSOLUTE)
@@ -3387,6 +4162,20 @@ public class WidgetAggregationService
                             ? String.format(Locale.ROOT, "%.1f%%", v)
                             : (((int) v) + " flaky");
                     }
+                    else if (metric == WidgetMetric.NUMBER_OF_RUNS)
+                    {
+                        if (format == WidgetValueFormat.PERCENT)
+                        {
+                            v = b.calculatePassRate();
+                            valFormatted = String.format(Locale.ROOT, "%.1f%%", v);
+                        }
+                        else
+                        {
+                            final int runCount = b.runs.size();
+                            v = runCount;
+                            valFormatted = runCount + (runCount == 1 ? " run" : " runs");
+                        }
+                    }
                     else // STATUS
                     {
                         if (format == WidgetValueFormat.ABSOLUTE)
@@ -3477,6 +4266,19 @@ public class WidgetAggregationService
                         ? String.format(Locale.ROOT, "%.1f%%", v)
                         : (((int) v) + " flaky");
                 }
+                else if (metric == WidgetMetric.NUMBER_OF_RUNS)
+                {
+                    if (format == WidgetValueFormat.PERCENT)
+                    {
+                        v = (r.getPassRate() != null) ? r.getPassRate() : 0.0;
+                        valFormatted = String.format(Locale.ROOT, "%.1f%%", v);
+                    }
+                    else
+                    {
+                        v = i + 1.0;
+                        valFormatted = "Run #" + (i + 1);
+                    }
+                }
                 else // STATUS
                 {
                     if (format == WidgetValueFormat.ABSOLUTE)
@@ -3553,6 +4355,22 @@ public class WidgetAggregationService
             }
         }
         else if (metric == WidgetMetric.FLAKINESS)
+        {
+            if (format == WidgetValueFormat.PERCENT)
+            {
+                minVal = 0.0;
+                maxVal = 100.0;
+            }
+            else
+            {
+                minVal = 0.0;
+                if (maxVal < 1.0)
+                {
+                    maxVal = 1.0;
+                }
+            }
+        }
+        else if (metric == WidgetMetric.NUMBER_OF_RUNS)
         {
             if (format == WidgetValueFormat.PERCENT)
             {
@@ -4304,6 +5122,12 @@ public class WidgetAggregationService
             final int latestFlaky = !points.isEmpty() ? (int) Math.round(points.get(points.size() - 1).getValue()) : 0;
             trendLayers.add(new WidgetTrendLayerDto("Flaky Tests", "var(--status-flaky, #f59e0b)", "", latestFlaky, ""));
         }
+        else if (metric == WidgetMetric.NUMBER_OF_RUNS)
+        {
+            final int latestRuns = !points.isEmpty() ? (int) Math.round(points.get(points.size() - 1).getValue()) : 0;
+            final String layerLabel = (format == WidgetValueFormat.PERCENT) ? "Run Pass Rate" : "Total Runs";
+            trendLayers.add(new WidgetTrendLayerDto(layerLabel, trendColor, "", latestRuns, ""));
+        }
         else if (metric == WidgetMetric.TAG && n >= 1)
         {
             final double[] xs = new double[n];
@@ -4503,6 +5327,17 @@ public class WidgetAggregationService
                 deltaLabel = String.format(Locale.ROOT, "%s%.0f tests vs start", isIncrease ? "+" : "-", Math.abs(delta));
             }
         }
+        else if (metric == WidgetMetric.NUMBER_OF_RUNS)
+        {
+            if (format == WidgetValueFormat.PERCENT)
+            {
+                deltaLabel = String.format(Locale.ROOT, "%s%.1f%% vs start", isIncrease ? "+" : "-", Math.abs(delta));
+            }
+            else
+            {
+                deltaLabel = String.format(Locale.ROOT, "%s%.0f %s vs start", isIncrease ? "+" : "-", Math.abs(delta), Math.abs(delta) == 1.0 ? "run" : "runs");
+            }
+        }
         else
         {
             if (format == WidgetValueFormat.PERCENT)
@@ -4641,6 +5476,27 @@ public class WidgetAggregationService
                     yAxisTicks.add(new WidgetAxisTickDto(midY, midFlaky + " flaky", true));
                 }
                 yAxisTicks.add(new WidgetAxisTickDto(padTop, maxFlaky + " flaky", true));
+            }
+        }
+        else if (metric == WidgetMetric.NUMBER_OF_RUNS)
+        {
+            if (format == WidgetValueFormat.PERCENT)
+            {
+                yAxisTicks.add(new WidgetAxisTickDto(baselineY, "0%", false));
+                yAxisTicks.add(new WidgetAxisTickDto(baselineY - (0.5 * graphHeight), "50%", true));
+                yAxisTicks.add(new WidgetAxisTickDto(padTop, "100%", true));
+            }
+            else
+            {
+                final int maxRuns = (int) Math.round(Math.max(1.0, maxVal));
+                yAxisTicks.add(new WidgetAxisTickDto(baselineY, "0 runs", false));
+                if (maxRuns > 1)
+                {
+                    final int midRuns = (int) Math.round(maxRuns / 2.0);
+                    final double midY = baselineY - (((double) midRuns / maxRuns) * graphHeight);
+                    yAxisTicks.add(new WidgetAxisTickDto(midY, midRuns + (midRuns == 1 ? " run" : " runs"), true));
+                }
+                yAxisTicks.add(new WidgetAxisTickDto(padTop, maxRuns + (maxRuns == 1 ? " run" : " runs"), true));
             }
         }
         else if (metric == WidgetMetric.BUGS)
@@ -4897,6 +5753,33 @@ public class WidgetAggregationService
                 secondaryVal = flakyCount + " of " + total + (total == 1 ? " Test Flaky" : " Tests Flaky");
             }
             color = (flakyCount == 0) ? "var(--status-pass, #10b981)" : "var(--status-flaky, #f59e0b)";
+        }
+        else if (metric == WidgetMetric.NUMBER_OF_RUNS)
+        {
+            int passedRuns = 0;
+            int totalRuns = 0;
+            for (final WidgetPieSliceDto slice : pie.getPieSlices())
+            {
+                if ("Passed Runs".equalsIgnoreCase(slice.getLabel()))
+                {
+                    passedRuns += slice.getCount();
+                }
+                totalRuns += slice.getCount();
+            }
+            if (format == WidgetValueFormat.ABSOLUTE)
+            {
+                primaryVal = totalRuns + (totalRuns == 1 ? " Run" : " Runs");
+                secondaryVal = pie.getSummaryLabel();
+            }
+            else
+            {
+                final double passRate = (totalRuns > 0) ? ((double) passedRuns / totalRuns * 100.0) : 0.0;
+                primaryVal = String.format(Locale.ROOT, "%.0f%% RUN PASS", passRate);
+                secondaryVal = passedRuns + " of " + totalRuns + (totalRuns == 1 ? " Run Passed" : " Runs Passed");
+            }
+            color = (totalRuns > 0 && passedRuns == totalRuns)
+                ? "var(--status-pass, #10b981)"
+                : (passedRuns > 0 ? "var(--status-known-fail, #f97316)" : "var(--status-unknown-fail, #ef4444)");
         }
 
         return new DashboardWidgetViewDto(
@@ -5491,6 +6374,85 @@ public class WidgetAggregationService
                 ));
             }
         }
+        else if (metric == WidgetMetric.NUMBER_OF_RUNS)
+        {
+            final List<TestRunEntity> runsForList = (scope != WidgetPointScope.LATEST_TEST_STATUS)
+                ? scopedRuns
+                : ((runs != null) ? runs : Collections.emptyList());
+
+            for (final WidgetPieSliceDto slice : pie.getPieSlices())
+            {
+                final String icon = resolveListIcon(metric, slice.getLabel());
+                final List<WidgetListItemDto> subItems = new ArrayList<>();
+
+                for (final TestRunEntity r : runsForList)
+                {
+                    final int failUnknown = (r.getFailedUnknownCount() != null) ? r.getFailedUnknownCount() : 0;
+                    final int failKnown = (r.getFailedKnownCount() != null) ? r.getFailedKnownCount() : 0;
+                    final int pass = (r.getPassedCount() != null) ? r.getPassedCount() : 0;
+                    final int fixed = (r.getSucceededFixedCount() != null) ? r.getSucceededFixedCount() : 0;
+
+                    final String group;
+                    if (failUnknown > 0)
+                    {
+                        group = "Failed Unknown Runs";
+                    }
+                    else if (failKnown > 0)
+                    {
+                        group = "Failed Known Runs";
+                    }
+                    else if (pass > 0 || fixed > 0)
+                    {
+                        group = "Passed Runs";
+                    }
+                    else
+                    {
+                        group = "Ignored / Empty Runs";
+                    }
+
+                    if (group.equalsIgnoreCase(slice.getLabel()))
+                    {
+                        final String runVal = (r.getPassRate() != null)
+                            ? String.format(Locale.ROOT, "%.0f%% Pass", r.getPassRate())
+                            : "";
+                        final int testCount = (r.getTotalTests() != null) ? r.getTotalTests() : 0;
+                        subItems.add(new WidgetListItemDto(
+                            "Run #" + r.getId(),
+                            runVal,
+                            testCount,
+                            100.0,
+                            slice.getColor(),
+                            icon,
+                            (r.getPassedHealedCountSafe() + r.getFixedHealedCountSafe() + r.getKnownHealedCountSafe() + r.getUnknownHealedCountSafe()),
+                            (r.getPassedAiCountSafe() + r.getFixedAiCountSafe() + r.getKnownAiCountSafe() + r.getUnknownAiCountSafe()),
+                            r.getTimestampLabel(),
+                            "",
+                            Collections.emptyList(),
+                            Collections.emptyList(),
+                            "",
+                            "",
+                            r.getId(),
+                            ""
+                        ));
+                    }
+                }
+
+                items.add(new WidgetListItemDto(
+                    slice.getLabel(),
+                    slice.getCount() + " (" + slice.getFormattedPercentage() + ")",
+                    slice.getCount(),
+                    slice.getPercentage(),
+                    slice.getColor(),
+                    icon,
+                    slice.getHealedCount(),
+                    slice.getAiCount(),
+                    "",
+                    "",
+                    Collections.emptyList(),
+                    subItems
+                ));
+            }
+        }
 
         final String summary = items.size() + (items.size() == 1 ? " Item" : " Items");
         return new DashboardWidgetViewDto(
@@ -6045,6 +7007,14 @@ public class WidgetAggregationService
         {
             if (l.contains("flaky")) return "shuffle";
             return "check_circle";
+        }
+        if (metric == WidgetMetric.NUMBER_OF_RUNS)
+        {
+            if (l.contains("pass")) return "check_circle";
+            if (l.contains("known")) return "flag";
+            if (l.contains("fail") || l.contains("unknown")) return "error";
+            if (l.contains("ignore") || l.contains("skip") || l.contains("empty")) return "pause_circle";
+            return "history";
         }
         if (metric == WidgetMetric.STATUS)
         {
@@ -6823,6 +7793,81 @@ public class WidgetAggregationService
         }
     }
 
+    private static class TagValueStats
+    {
+        final String tagValue;
+        int passClean;
+        int passHealed;
+        int passAi;
+        int fixedClean;
+        int fixedHealed;
+        int fixedAi;
+        int knownClean;
+        int knownHealed;
+        int knownAi;
+        int unknownClean;
+        int unknownHealed;
+        int unknownAi;
+        int ignored;
+        int total;
+        long earliestTimestamp = Long.MAX_VALUE;
+        long latestTimestamp = Long.MIN_VALUE;
+        String latestRunId;
+
+        TagValueStats(final String tagValue)
+        {
+            this.tagValue = tagValue;
+        }
+
+        void updateTimestampAndRun(final long timestampMs, final String runId)
+        {
+            if (timestampMs > 0L)
+            {
+                if (timestampMs < earliestTimestamp)
+                {
+                    earliestTimestamp = timestampMs;
+                }
+                if (timestampMs > latestTimestamp)
+                {
+                    latestTimestamp = timestampMs;
+                    if (runId != null && !runId.isBlank())
+                    {
+                        latestRunId = runId;
+                    }
+                }
+            }
+            else if (latestRunId == null && runId != null && !runId.isBlank())
+            {
+                latestRunId = runId;
+            }
+        }
+
+        int getPassedTotal()
+        {
+            return passClean + passHealed + passAi;
+        }
+
+        int getFixedTotal()
+        {
+            return fixedClean + fixedHealed + fixedAi;
+        }
+
+        int getKnownTotal()
+        {
+            return knownClean + knownHealed + knownAi;
+        }
+
+        int getUnknownTotal()
+        {
+            return unknownClean + unknownHealed + unknownAi;
+        }
+
+        double calculatePassRate()
+        {
+            return (total > 0) ? ((getPassedTotal() + getFixedTotal()) * 100.0 / total) : 0.0;
+        }
+    }
+
     /**
      * Resolves all test runs and individual test executions that contributed to a given widget's
      * calculated telemetry, grouped chronologically by run.
@@ -7308,6 +8353,17 @@ public class WidgetAggregationService
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         }
 
+        if (config.getMetric() == WidgetMetric.NUMBER_OF_RUNS)
+        {
+            final List<TestRunEntity> runsForScope = (pointScope == WidgetPointScope.LATEST_TEST_STATUS)
+                ? sourceRuns
+                : filterRunsByPointScope(sourceRuns, pointScope);
+            return runsForScope.stream()
+                .map(TestRunEntity::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        }
+
         if (presentation == WidgetPresentation.PIE_CHART || presentation == WidgetPresentation.RATIO_BAR
             || presentation == WidgetPresentation.TEXT || presentation == WidgetPresentation.LIST)
         {
@@ -7663,6 +8719,135 @@ public class WidgetAggregationService
             }
         }
         return defaultColor;
+    }
+
+    private String extractRunTagValue(
+        final TestRunEntity run,
+        final String tagKey,
+        final AuraReportDataService dataService)
+    {
+        if (run == null)
+        {
+            return "Default";
+        }
+        final String normKey = (tagKey != null) ? tagKey.trim().toLowerCase(Locale.ROOT) : "";
+        if (dataService != null)
+        {
+            final List<String> runVals = dataService.getRunTagValues(run, normKey);
+            if (runVals != null && !runVals.isEmpty() && runVals.get(0) != null && !runVals.get(0).isBlank())
+            {
+                return runVals.get(0).trim();
+            }
+        }
+        if ("browser".equals(normKey) && run.getBrowsersCsv() != null && !run.getBrowsersCsv().isBlank())
+        {
+            return run.getBrowsersCsv().split(",")[0].trim();
+        }
+        if (("environment".equals(normKey) || "env".equals(normKey)) && run.getEnvironment() != null && !run.getEnvironment().isBlank())
+        {
+            return run.getEnvironment().trim();
+        }
+        if (("batch".equals(normKey) || "suite".equals(normKey)) && run.getBatchName() != null && !run.getBatchName().isBlank())
+        {
+            return run.getBatchName().trim();
+        }
+        if (run.getTags() != null && !run.getTags().isEmpty())
+        {
+            for (final TestRunTagEntity t : run.getTags())
+            {
+                if (t.getTagKey() != null && t.getTagKey().equalsIgnoreCase(normKey) && t.getTagValue() != null && !t.getTagValue().isBlank())
+                {
+                    return t.getTagValue().trim();
+                }
+            }
+        }
+        return "Default";
+    }
+
+    static boolean isMilestoneTagKey(final String tagKey)
+    {
+        if (tagKey == null)
+        {
+            return false;
+        }
+        final String lower = tagKey.toLowerCase(Locale.ROOT);
+        return lower.contains("release") || lower.contains("milestone") || lower.contains("sprint") || lower.contains("version");
+    }
+
+    static int compareNaturalVersion(final String v1, final String v2)
+    {
+        if (v1 == null && v2 == null)
+        {
+            return 0;
+        }
+        if (v1 == null)
+        {
+            return -1;
+        }
+        if (v2 == null)
+        {
+            return 1;
+        }
+
+        final List<String> tokens1 = tokenizeVersion(v1);
+        final List<String> tokens2 = tokenizeVersion(v2);
+        final int max = Math.max(tokens1.size(), tokens2.size());
+        for (int i = 0; i < max; i++)
+        {
+            if (i >= tokens1.size())
+            {
+                return -1;
+            }
+            if (i >= tokens2.size())
+            {
+                return 1;
+            }
+            final String t1 = tokens1.get(i);
+            final String t2 = tokens2.get(i);
+            final boolean isNum1 = t1.chars().allMatch(Character::isDigit);
+            final boolean isNum2 = t2.chars().allMatch(Character::isDigit);
+            if (isNum1 && isNum2)
+            {
+                try
+                {
+                    final long n1 = Long.parseLong(t1);
+                    final long n2 = Long.parseLong(t2);
+                    final int cmp = Long.compare(n1, n2);
+                    if (cmp != 0)
+                    {
+                        return cmp;
+                    }
+                }
+                catch (final NumberFormatException ignored)
+                {
+                    final int cmp = t1.compareTo(t2);
+                    if (cmp != 0)
+                    {
+                        return cmp;
+                    }
+                }
+            }
+            else
+            {
+                final int cmp = t1.compareToIgnoreCase(t2);
+                if (cmp != 0)
+                {
+                    return cmp;
+                }
+            }
+        }
+        return 0;
+    }
+
+    private static List<String> tokenizeVersion(final String s)
+    {
+        final List<String> tokens = new ArrayList<>();
+        final Matcher m = Pattern.compile("\\d+|\\D+").matcher(s);
+        while (m.find())
+        {
+            tokens.add(m.group());
+        }
+        return tokens;
     }
 }
 

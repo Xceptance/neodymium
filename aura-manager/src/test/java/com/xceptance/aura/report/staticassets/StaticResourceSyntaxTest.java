@@ -2546,17 +2546,17 @@ public final class StaticResourceSyntaxTest
             modalContent.contains("tagSelect.disabled = (metric !== 'TAG');"),
             "widget-configurator-modal.html onWidgetMetricChanged must toggle disabled state of widgetTagKeySelect"
         );
-        Assertions.assertTrue(
-            modalContent.contains("widget.metric.name() == 'TAG'"),
-            "widget-configurator-modal.html must include TAG metric check in th:disabled for PERLENKETTE"
+        Assertions.assertFalse(
+            modalContent.contains("widget.metric.name() == 'TAG')}\" th:checked=\"${widget != null && widget.presentation != null && widget.presentation.name() == 'PERLENKETTE'"),
+            "widget-configurator-modal.html must not disable PERLENKETTE for TAG metric"
         );
-        Assertions.assertTrue(
+        Assertions.assertFalse(
             modalContent.contains("perlenketteRadio.disabled = (metric === 'TAG');"),
-            "widget-configurator-modal.html onWidgetMetricChanged must toggle disabled state of perlenketteRadio"
+            "widget-configurator-modal.html onWidgetMetricChanged must not disable perlenketteRadio for TAG"
         );
-        Assertions.assertTrue(
+        Assertions.assertFalse(
             jsContent.contains("perlenketteRadio.disabled = (metric === 'TAG');"),
-            "report-manager.js onWidgetMetricChanged must toggle disabled state of perlenketteRadio"
+            "report-manager.js onWidgetMetricChanged must not disable perlenketteRadio for TAG"
         );
 
         // Node runtime validation: Status card with legacy data-tag-key="Area" must still be filtered when filtering by area
@@ -3564,4 +3564,222 @@ public final class StaticResourceSyntaxTest
         final int exitCode = process.waitFor();
         Assertions.assertEquals(0, exitCode, "AI log filtering test failed:\n" + output);
     }
+
+    @Test
+    public void testUnitedContainerAiUsageKpiCrossFilteringSupport() throws Exception
+    {
+        final Path htmlPath = Paths.get("src/main/resources/templates/fragments/dashboard-widgets.html");
+        Assertions.assertTrue(Files.exists(htmlPath), "dashboard-widgets.html must exist: " + htmlPath.toAbsolutePath());
+        final String htmlContent = Files.readString(htmlPath, StandardCharsets.UTF_8);
+
+        // Verify dashboard-widgets.html binds data-filter-dim='mode' and eliminates legacy 'type'
+        Assertions.assertFalse(htmlContent.contains("data-filter-dim='type'"),
+            "dashboard-widgets.html must not use legacy data-filter-dim='type'");
+        Assertions.assertTrue(htmlContent.contains("th:attr=\"data-filter-dim='mode',data-filter-val=${seg.name}\""),
+            "dashboard-widgets.html must bind data-filter-dim='mode' for AI_USAGE segments in textBody and textSmallTrendBody");
+
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist: " + jsPath.toAbsolutePath());
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+
+        // Verify matchesVariationFilter handles mode and type dimensions with AI-Driven, Healed, and Playbook segments
+        Assertions.assertTrue(jsContent.contains("if (dim === 'mode' || dim === 'type')"),
+            "matchesVariationFilter must recognize both 'mode' and 'type' filter dimensions");
+        Assertions.assertTrue(jsContent.contains("val.includes('playbook')"),
+            "matchesVariationFilter must evaluate playbook segments in mode dimension");
+
+        // Verify recalculateContainerText selector handles data-filter-dim="mode"
+        Assertions.assertTrue(jsContent.contains("data-filter-dim=\"mode\""),
+            "recalculateContainerText must query elements with data-filter-dim=\"mode\"");
+
+        // Verify resolveVariationDimensionValue classifies mode as AI-Driven
+        Assertions.assertTrue(jsContent.contains("if (isAi) return 'AI-Driven';"),
+            "resolveVariationDimensionValue must return 'AI-Driven' for AI executions");
+
+        // Verify resolveDimensionCount maps AI-Driven
+        Assertions.assertTrue(jsContent.contains("counts['AI-Driven']"),
+            "resolveDimensionCount must support 'AI-Driven' segment count lookup");
+
+        // Execute live runtime verification in Node VM
+        final String testScript = String.join("\n",
+            "const fs = require('fs');",
+            "const code = fs.readFileSync('" + jsPath.toAbsolutePath().toString().replace("\\", "/") + "', 'utf8');",
+            "const vm = require('vm');",
+            "const mockDoc = { querySelector: () => null, querySelectorAll: () => [], getElementById: () => null, addEventListener: () => {}, body: { addEventListener: () => {} } };",
+            "const mockWin = { addEventListener: () => {}, document: mockDoc, ResizeObserver: class { observe() {} unobserve() {} disconnect() {} } };",
+            "mockDoc.defaultView = mockWin;",
+            "const context = { window: mockWin, document: mockDoc, console: console, ResizeObserver: mockWin.ResizeObserver, setTimeout: setTimeout, clearTimeout: clearTimeout };",
+            "vm.createContext(context);",
+            "vm.runInContext(code, context);",
+            "const vAi = { s: 'PASSED', b: 'Chrome', m: 'AI', h: false };",
+            "const vHealed = { s: 'PASSED', b: 'Chrome', m: 'JAVA', h: true };",
+            "const vPlaybook = { s: 'PASSED', b: 'Chrome', m: 'PLAYBOOK', h: false };",
+            "const activeFiltersMode = { mode: new Set(['AI-Driven']) };",
+            "const activeFiltersType = { type: new Set(['AI-Driven']) };",
+            "context.vAi = vAi;",
+            "context.vHealed = vHealed;",
+            "context.vPlaybook = vPlaybook;",
+            "context.activeFiltersMode = activeFiltersMode;",
+            "context.activeFiltersType = activeFiltersType;",
+            "const matchAiMode = vm.runInContext('matchesContainerFilters(vAi, activeFiltersMode, null)', context);",
+            "const matchAiType = vm.runInContext('matchesContainerFilters(vAi, activeFiltersType, null)', context);",
+            "const matchHealedMode = vm.runInContext('matchesContainerFilters(vHealed, activeFiltersMode, null)', context);",
+            "const matchPlaybookMode = vm.runInContext('matchesContainerFilters(vPlaybook, activeFiltersMode, null)', context);",
+            "const facetExcludeMode = vm.runInContext('matchesContainerFilters(vHealed, activeFiltersMode, \\'mode\\')', context);",
+            "const facetExcludeType = vm.runInContext('matchesContainerFilters(vHealed, activeFiltersType, \\'mode\\')', context);",
+            "if (matchAiMode !== true) throw new Error('vAi must match active filter mode=AI-Driven');",
+            "if (matchAiType !== true) throw new Error('vAi must match active filter type=AI-Driven');",
+            "if (matchHealedMode !== false) throw new Error('vHealed must be filtered out by mode=AI-Driven');",
+            "if (matchPlaybookMode !== false) throw new Error('vPlaybook must be filtered out by mode=AI-Driven');",
+            "if (facetExcludeMode !== true) throw new Error('Facet exclusion for mode must allow vHealed on AI_USAGE card');",
+            "if (facetExcludeType !== true) throw new Error('Facet exclusion with legacy type must allow vHealed on AI_USAGE card');",
+            "const dimVal = vm.runInContext('resolveVariationDimensionValue(vAi, \\'mode\\')', context);",
+            "if (dimVal !== 'AI-Driven') throw new Error('resolveVariationDimensionValue must return AI-Driven but got: ' + dimVal);",
+            "const dimCount = vm.runInContext('resolveDimensionCount(\\'AI-Driven\\', { \\'AI\\': 16 }, \\'mode\\')', context);",
+            "if (dimCount !== 16) throw new Error('resolveDimensionCount must map AI-Driven to AI count 16 but got: ' + dimCount);",
+            "console.log('SUCCESS');"
+        );
+
+        final ProcessBuilder pb = new ProcessBuilder("node", "-e", testScript);
+        pb.redirectErrorStream(true);
+        final Process p = pb.start();
+        final StringBuilder out = new StringBuilder();
+        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream(), StandardCharsets.UTF_8)))
+        {
+            String line;
+            while ((line = reader.readLine()) != null)
+            {
+                out.append(line).append("\n");
+            }
+        }
+
+        final int exitCode = p.waitFor();
+        Assertions.assertEquals(0, exitCode, "United container AI usage KPI filtering test failed:\n" + out);
+        Assertions.assertTrue(out.toString().contains("SUCCESS"), "Test output must contain SUCCESS: " + out);
+    }
+
+    @Test
+    public void testWidgetGroupChildDragAndDropOrderingAssets() throws Exception
+    {
+        final Path htmlPath = Paths.get("src/main/resources/templates/fragments/dashboard-widgets.html");
+        Assertions.assertTrue(Files.exists(htmlPath), "dashboard-widgets.html must exist: " + htmlPath.toAbsolutePath());
+        final String htmlContent = Files.readString(htmlPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(htmlContent.contains("child-drag-handle"),
+            "dashboard-widgets.html must render child-drag-handle on container widgets");
+        Assertions.assertTrue(htmlContent.contains("title=\"Drag to reorder in widget group\""),
+            "dashboard-widgets.html must set drag handle tooltip for child widgets");
+
+        final Path cssPath = Paths.get("src/main/resources/static/dashboard-styles.css");
+        Assertions.assertTrue(Files.exists(cssPath), "dashboard-styles.css must exist: " + cssPath.toAbsolutePath());
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(cssContent.contains(".widget-container-section.widget-is-dragging"),
+            "dashboard-styles.css must define dragging state style for child widgets");
+        Assertions.assertTrue(cssContent.contains(".widget-container-section .child-drag-handle"),
+            "dashboard-styles.css must style child-drag-handle");
+        Assertions.assertTrue(cssContent.contains(".widget-container-section.drop-reorder-left") &&
+                              cssContent.contains(".widget-container-section.drop-reorder-right"),
+            "dashboard-styles.css must define horizontal drop indicator styles for side-by-side child sections");
+        Assertions.assertTrue(cssContent.contains(".widget-container-section.drop-reorder-top") &&
+                              cssContent.contains(".widget-container-section.drop-reorder-bottom"),
+            "dashboard-styles.css must define vertical drop indicator styles for stacked child sections");
+
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist: " + jsPath.toAbsolutePath());
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+
+        Assertions.assertTrue(jsContent.contains("activeDraggedChildWidgetId"),
+            "report-manager.js must define activeDraggedChildWidgetId");
+        Assertions.assertTrue(jsContent.contains("activeDraggedChildContainerId"),
+            "report-manager.js must define activeDraggedChildContainerId");
+        Assertions.assertTrue(jsContent.contains("POST', '/widgets/reorder-children'"),
+            "report-manager.js must invoke /widgets/reorder-children on drop reorder");
+    }
+
+    @Test
+    public void testExecutionIdentityLockedByTestAndBrowserInAllDialogs() throws Exception
+    {
+        final Path modalsPath = Paths.get("src/main/resources/templates/fragments/modals.html");
+        Assertions.assertTrue(Files.exists(modalsPath), "modals.html must exist: " + modalsPath.toAbsolutePath());
+        final String modalsContent = Files.readString(modalsPath, StandardCharsets.UTF_8);
+
+        final Path widgetConfigPath = Paths.get("src/main/resources/templates/fragments/widget-configurator-modal.html");
+        Assertions.assertTrue(Files.exists(widgetConfigPath), "widget-configurator-modal.html must exist: " + widgetConfigPath.toAbsolutePath());
+        final String widgetConfigContent = Files.readString(widgetConfigPath, StandardCharsets.UTF_8);
+
+        final Path jsPath = Paths.get("src/main/resources/static/js/report-manager.js");
+        Assertions.assertTrue(Files.exists(jsPath), "report-manager.js must exist: " + jsPath.toAbsolutePath());
+        final String jsContent = Files.readString(jsPath, StandardCharsets.UTF_8);
+
+        // Verify Browser is rendered as a locked pill in createPageModal and convertToGroupModal
+        Assertions.assertTrue(
+            modalsContent.contains("title=\"Browser (Mandatory Base Coordinate)\""),
+            "modals.html must render locked Browser pill with mandatory coordinate title"
+        );
+        Assertions.assertFalse(
+            modalsContent.contains("name=\"createPageIdentityDimCheckbox\" value=\"browser\""),
+            "createPageModal must NOT render a toggleable checkbox for browser"
+        );
+        Assertions.assertFalse(
+            modalsContent.contains("name=\"convertToGroupIdentityDimCheckbox\" value=\"browser\""),
+            "convertToGroupModal must NOT render a toggleable checkbox for browser"
+        );
+
+        // Verify Browser is rendered as a locked pill in widget configurator modal
+        Assertions.assertTrue(
+            widgetConfigContent.contains("title=\"Browser (Mandatory Base Coordinate)\""),
+            "widget-configurator-modal.html must render locked Browser pill with mandatory coordinate title"
+        );
+        Assertions.assertFalse(
+            widgetConfigContent.contains("name=\"identityDimCheckbox\" value=\"browser\""),
+            "widget-configurator-modal.html must NOT render a toggleable checkbox for browser"
+        );
+
+        // Verify JavaScript functions always include browser as base identity
+        Assertions.assertTrue(
+            jsContent.contains("var vals = ['browser'];"),
+            "report-manager.js updateExecutionIdentityDimensionsInput must default to including browser"
+        );
+        Assertions.assertTrue(
+            jsContent.contains("const vals = ['browser', ...checked.filter(d => d.toLowerCase() !== 'browser')];"),
+            "report-manager.js must lock browser as base dimension in create page and convert to group identity inputs"
+        );
+    }
+
+    @Test
+    public void testUnitedPieChartExpandedAndDefaultDensityLayout() throws Exception
+    {
+        final Path cssPath = Paths.get("src/main/resources/static/dashboard-styles.css");
+        Assertions.assertTrue(Files.exists(cssPath), "dashboard-styles.css must exist: " + cssPath.toAbsolutePath());
+        final String cssContent = Files.readString(cssPath, StandardCharsets.UTF_8);
+
+        // Verify enhanced unexpanded donut density and dimensions in widget groups
+        Assertions.assertTrue(cssContent.contains(".widget-container-pie-section .pie-chart-wrapper-batch"),
+            "dashboard-styles.css must define .widget-container-pie-section .pie-chart-wrapper-batch");
+        Assertions.assertTrue(cssContent.contains("width: 160px !important;") && cssContent.contains("height: 160px !important;"),
+            "dashboard-styles.css must enlarge default unexpanded donut to 160px to eliminate excessive dead space");
+        Assertions.assertTrue(cssContent.contains(".widget-container-pie-section .pie-center-rate")
+            && cssContent.contains("font-size: 1.85rem !important;"),
+            "dashboard-styles.css must configure prominent 1.85rem rate typography for unexpanded group pie chart");
+
+        // Verify expanded full-span layout rules for pie chart in widget groups
+        Assertions.assertTrue(cssContent.contains(".widget-container-pie-section.widget-container-full-span .widget-card-body"),
+            "dashboard-styles.css must define expanded body rules for .widget-container-pie-section.widget-container-full-span");
+        Assertions.assertTrue(cssContent.contains("min-height: 280px !important;"),
+            "dashboard-styles.css must expand vertical length/height with min-height: 280px when full span is active");
+        Assertions.assertTrue(cssContent.contains(".widget-container-pie-section.widget-container-full-span .pie-chart-wrapper-batch"),
+            "dashboard-styles.css must define expanded pie-chart-wrapper-batch");
+        Assertions.assertTrue(cssContent.contains("width: 220px !important;") && cssContent.contains("height: 220px !important;"),
+            "dashboard-styles.css must scale expanded donut dimensions to 220px");
+        Assertions.assertTrue(cssContent.contains("font-size: 2.6rem !important;"),
+            "dashboard-styles.css must scale expanded rate typography to 2.6rem");
+
+        // Verify multi-column responsive grid layout for breakdown slices when expanded
+        Assertions.assertTrue(cssContent.contains(".widget-container-pie-section.widget-container-full-span .pie-breakdown-list-sm"),
+            "dashboard-styles.css must define expanded breakdown list rules");
+        Assertions.assertTrue(cssContent.contains("repeat(auto-fit, minmax(220px, 1fr)) !important;"),
+            "dashboard-styles.css must distribute slices across responsive multi-column auto-fit grid to utilize horizontal space");
+    }
 }
+

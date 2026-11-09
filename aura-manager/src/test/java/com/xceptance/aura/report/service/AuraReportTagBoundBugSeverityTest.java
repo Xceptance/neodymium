@@ -432,6 +432,18 @@ public class AuraReportTagBoundBugSeverityTest
         Assertions.assertTrue(tagList.contains("location: FR"));
         Assertions.assertTrue(tagList.contains("branch: develop"));
 
+        // Verify getCandidateCustomTags excludes standard dimensions and retains custom keys
+        final Map<String, List<String>> candidateCustomTags = dataService.getCandidateCustomTags();
+        Assertions.assertNotNull(candidateCustomTags);
+        Assertions.assertFalse(candidateCustomTags.containsKey("browser"), "Standard browser dimension must be excluded");
+        Assertions.assertFalse(candidateCustomTags.containsKey("environment"), "Standard environment dimension must be excluded");
+        Assertions.assertFalse(candidateCustomTags.containsKey("location"), "Standard location dimension must be excluded");
+        Assertions.assertFalse(candidateCustomTags.containsKey("area"), "Standard area dimension must be excluded");
+        Assertions.assertTrue(candidateCustomTags.containsKey("Branch"), "Branch custom tag must be present with preserved casing");
+        Assertions.assertTrue(candidateCustomTags.get("Branch").contains("develop"), "Branch must contain develop");
+        Assertions.assertTrue(candidateCustomTags.containsKey("Release"), "Release custom tag must be present with preserved casing");
+        Assertions.assertTrue(candidateCustomTags.get("Release").contains("2026.11"), "Release must contain 2026.11");
+
         // Verify run-level tag matching on execution
         final TestExecutionDto sampleExec = new TestExecutionDto("sample-1", "run-dev-fr", "CheckoutTest", "testCheckout", "Checkout", "passed", "FR", "Chrome", Map.of());
         final Map<String, List<String>> runTags = dataService.getRunTagsMap("run-dev-fr");

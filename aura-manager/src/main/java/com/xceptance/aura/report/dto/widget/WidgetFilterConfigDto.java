@@ -246,6 +246,52 @@ public final class WidgetFilterConfigDto
         return excludeTagsByType;
     }
 
+    /**
+     * Checks if this filter configuration contains a specific tag value under the specified tag key,
+     * using case-insensitive key and value matching.
+     *
+     * @param tagKey tag dimension key (e.g. "Release", "Branch")
+     * @param tagVal tag dimension value
+     * @return true if the tag value is selected, false otherwise
+     */
+    public boolean hasTagValue(final String tagKey, final String tagVal)
+    {
+        if (tagsByType == null || tagKey == null || tagVal == null)
+        {
+            return false;
+        }
+        for (final Map.Entry<String, Set<String>> e : tagsByType.entrySet())
+        {
+            if (e.getKey().equalsIgnoreCase(tagKey.trim()))
+            {
+                return e.getValue().stream().anyMatch(v -> v.equalsIgnoreCase(tagVal.trim()));
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Retrieves the comma-separated string of selected values for the specified tag key.
+     *
+     * @param tagKey tag dimension key
+     * @return comma-separated values, or empty string if not present
+     */
+    public String getTagValuesCsv(final String tagKey)
+    {
+        if (tagsByType == null || tagKey == null)
+        {
+            return "";
+        }
+        for (final Map.Entry<String, Set<String>> e : tagsByType.entrySet())
+        {
+            if (e.getKey().equalsIgnoreCase(tagKey.trim()))
+            {
+                return String.join(",", e.getValue());
+            }
+        }
+        return "";
+    }
+
     public Integer getLimit()
     {
         return limit;

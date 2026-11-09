@@ -5681,13 +5681,6 @@ body[data-bs-theme="dark"] .validation-issue-context {
     pointer-events: none;
 }
 
-#widgetConfigForm:has(input[name="metric"][value="TAG"]:checked) .config-radio-tile:has(input[name="presentation"][value="PERLENKETTE"]),
-.config-section:has(input[name="metric"][value="TAG"]:checked) .config-radio-tile:has(input[name="presentation"][value="PERLENKETTE"]) {
-    opacity: 0.45;
-    cursor: not-allowed;
-    pointer-events: none;
-}
-
 .tile-content {
     display: flex;
     flex-direction: column;
@@ -6301,6 +6294,98 @@ body[data-bs-theme="dark"] .validation-issue-context {
     z-index: 60;
 }
 
+.widget-container-section.widget-is-dragging {
+    opacity: 0.35 !important;
+    border: 2px dashed #6366f1 !important;
+    transform: scale(0.985);
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+}
+
+.widget-container-section .child-drag-handle {
+    opacity: 0.45;
+    transition: opacity 0.15s ease, color 0.15s ease;
+    cursor: grab;
+    user-select: none;
+}
+
+.widget-container-section:hover .child-drag-handle {
+    opacity: 0.9;
+}
+
+.widget-container-section .child-drag-handle:active {
+    cursor: grabbing;
+}
+
+/* Horizontal Reorder Indicators (side-by-side in grid row) */
+.widget-container-section.drop-reorder-left {
+    position: relative;
+}
+
+.widget-container-section.drop-reorder-left::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -7px;
+    width: 4px;
+    background: #3b82f6;
+    border-radius: 2px;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+    z-index: 60;
+}
+
+.widget-container-section.drop-reorder-right {
+    position: relative;
+}
+
+.widget-container-section.drop-reorder-right::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: -7px;
+    width: 4px;
+    background: #3b82f6;
+    border-radius: 2px;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+    z-index: 60;
+}
+
+/* Vertical Reorder Indicators (stacked / full-span in grid row) */
+.widget-container-section.drop-reorder-top {
+    position: relative;
+}
+
+.widget-container-section.drop-reorder-top::before {
+    content: '';
+    position: absolute;
+    top: -7px;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: #3b82f6;
+    border-radius: 2px;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+    z-index: 60;
+}
+
+.widget-container-section.drop-reorder-bottom {
+    position: relative;
+}
+
+.widget-container-section.drop-reorder-bottom::after {
+    content: '';
+    position: absolute;
+    bottom: -7px;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: #3b82f6;
+    border-radius: 2px;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+    z-index: 60;
+}
+
 /* Drop Overlay for Combining Widgets into Container */
 .widget-drop-overlay {
     position: absolute;
@@ -6426,25 +6511,99 @@ body[data-bs-theme="dark"] .validation-issue-context {
     display: flex !important;
     align-items: center !important;
     justify-content: flex-start !important;
-    gap: 1.5rem !important;
+    gap: 1.75rem !important;
     flex-wrap: wrap !important;
 }
 
 .widget-container-pie-section .pie-chart-wrapper-batch {
-    width: 130px !important;
-    height: 130px !important;
-    min-width: 130px !important;
-    min-height: 130px !important;
+    width: 160px !important;
+    height: 160px !important;
+    min-width: 160px !important;
+    min-height: 160px !important;
     flex-shrink: 0 !important;
 }
 
+.widget-container-pie-section .pie-center-rate {
+    font-size: 1.85rem !important;
+    font-weight: 800 !important;
+}
+
+.widget-container-pie-section .pie-center-sub {
+    font-size: 0.72rem !important;
+    font-weight: 700 !important;
+}
+
 .widget-container-pie-section .pie-breakdown-list-sm {
-    min-width: 140px !important;
-    max-width: 250px !important;
-    flex: 1 1 140px !important;
+    min-width: 150px !important;
+    max-width: 320px !important;
+    flex: 1 1 160px !important;
     display: flex !important;
     flex-direction: column !important;
-    gap: 0.35rem !important;
+    gap: 0.5rem !important;
+}
+
+/* PANORAMIC EXPANDED LAYOUT FOR PIE CHARTS IN WIDGET GROUPS */
+.widget-container-pie-section.widget-container-full-span .widget-card-body {
+    min-height: 280px !important;
+    padding: 0.75rem 1.25rem !important;
+    gap: 3rem !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+}
+
+.widget-container-pie-section.widget-container-full-span .pie-chart-wrapper-batch {
+    width: 220px !important;
+    height: 220px !important;
+    min-width: 220px !important;
+    min-height: 220px !important;
+}
+
+.widget-container-pie-section.widget-container-full-span .pie-center-rate {
+    font-size: 2.6rem !important;
+    font-weight: 800 !important;
+}
+
+.widget-container-pie-section.widget-container-full-span .pie-center-sub {
+    font-size: 0.85rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.08em !important;
+}
+
+.widget-container-pie-section.widget-container-full-span .pie-breakdown-list-sm {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
+    gap: 0.85rem 1.75rem !important;
+    max-width: none !important;
+    flex: 1 1 auto !important;
+    align-content: center !important;
+}
+
+.widget-container-pie-section.widget-container-full-span .pie-breakdown-item {
+    padding: 0.6rem 0.85rem;
+    border-radius: var(--radius-sm, 6px);
+    background: var(--bg-hover, rgba(255, 255, 255, 0.03));
+    border: 1px solid var(--border-light, rgba(255, 255, 255, 0.06));
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.widget-container-pie-section.widget-container-full-span .pie-breakdown-item:hover {
+    background: var(--bg-hover-strong, rgba(255, 255, 255, 0.06));
+    border-color: var(--accent-light, rgba(59, 130, 246, 0.3));
+}
+
+.widget-container-pie-section.widget-container-full-span .pie-breakdown-main-row .label {
+    font-size: 0.92rem;
+    font-weight: 600;
+}
+
+.widget-container-pie-section.widget-container-full-span .pie-breakdown-main-row .val {
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+
+.widget-container-pie-section.widget-container-full-span .pie-breakdown-main-row .dot {
+    width: 12px;
+    height: 12px;
 }
 
 .widget-container-ratios-section {

@@ -207,7 +207,7 @@ public class DashboardWidgetConfigDtoTest
     }
 
     @Test
-    public void testForbidPerlenketteForTagMetricNormalization()
+    public void testAllowPerlenketteForTagMetric()
     {
         final DashboardWidgetConfigDto tagPerlenketteWidget = new DashboardWidgetConfigDto(
             "w-tag-perlenkette", "Browser String of Pearls", WidgetMetric.TAG, "Browser",
@@ -216,8 +216,8 @@ public class DashboardWidgetConfigDtoTest
         );
 
         Assertions.assertEquals(WidgetMetric.TAG, tagPerlenketteWidget.getMetric());
-        Assertions.assertEquals(WidgetPresentation.PIE_CHART, tagPerlenketteWidget.getPresentation(),
-            "TAG metric widget with PERLENKETTE presentation must normalize to PIE_CHART");
+        Assertions.assertEquals(WidgetPresentation.PERLENKETTE, tagPerlenketteWidget.getPresentation(),
+            "TAG metric widget with PERLENKETTE presentation must be preserved and supported");
     }
 
     @Test
@@ -258,6 +258,10 @@ public class DashboardWidgetConfigDtoTest
         // Tag dimension presentation variants
         Assertions.assertEquals("Browser Ratio Bar",
             DashboardWidgetConfigDto.generateDefaultTitle(WidgetMetric.TAG, "Browser", WidgetPresentation.RATIO_BAR, null, WidgetPointScope.LATEST_TEST_STATUS));
+        Assertions.assertEquals("Browser String of Pearls",
+            DashboardWidgetConfigDto.generateDefaultTitle(WidgetMetric.TAG, "Browser", WidgetPresentation.PERLENKETTE, null, WidgetPointScope.LATEST_TEST_STATUS));
+        Assertions.assertEquals("Browser String of Pearls (Last Run)",
+            DashboardWidgetConfigDto.generateDefaultTitle(WidgetMetric.TAG, "Browser", WidgetPresentation.PERLENKETTE, null, WidgetPointScope.LAST_RUN));
         Assertions.assertEquals("Locale Trend Graph (Monthly)",
             DashboardWidgetConfigDto.generateDefaultTitle(WidgetMetric.TAG, "Locale", WidgetPresentation.TREND_GRAPH, WidgetTrendMode.MONTHLY, WidgetPointScope.LATEST_TEST_STATUS));
         Assertions.assertEquals("Area Pie Chart (Last Run)",
@@ -456,6 +460,162 @@ public class DashboardWidgetConfigDtoTest
         Assertions.assertEquals(WidgetPointScope.LAST_RUN, updated.getPointScope());
         // Original remains unchanged (immutability)
         Assertions.assertEquals(WidgetPointScope.LATEST_TEST_STATUS, config.getPointScope());
+    }
+
+    @Test
+    public void testNumberOfRunsMetricAliases()
+    {
+        Assertions.assertEquals(WidgetMetric.NUMBER_OF_RUNS, WidgetMetric.fromString("NUMBER_OF_RUNS"));
+        Assertions.assertEquals(WidgetMetric.NUMBER_OF_RUNS, WidgetMetric.fromString("RUN_COUNT"));
+        Assertions.assertEquals(WidgetMetric.NUMBER_OF_RUNS, WidgetMetric.fromString("RUNS_COUNT"));
+        Assertions.assertEquals(WidgetMetric.NUMBER_OF_RUNS, WidgetMetric.fromString("EXECUTION_RUNS"));
+        Assertions.assertEquals(WidgetMetric.NUMBER_OF_RUNS, WidgetMetric.fromString("RUN_VOLUME"));
+        Assertions.assertEquals(WidgetMetric.NUMBER_OF_RUNS, WidgetMetric.fromString("RUN_FREQUENCY"));
+        Assertions.assertEquals(WidgetMetric.NUMBER_OF_RUNS, WidgetMetric.fromString("NUMBER_OF_TEST_RUNS"));
+    }
+
+    @Test
+    public void testNumberOfRunsDefaultTitleGenerationAcrossAllPresentations()
+    {
+        Assertions.assertEquals(
+            "Number of Runs Distribution",
+            DashboardWidgetConfigDto.generateDefaultTitle(WidgetMetric.NUMBER_OF_RUNS, null, WidgetPresentation.PIE_CHART)
+        );
+        Assertions.assertEquals(
+            "Number of Runs Ratio Bar",
+            DashboardWidgetConfigDto.generateDefaultTitle(WidgetMetric.NUMBER_OF_RUNS, null, WidgetPresentation.RATIO_BAR)
+        );
+        Assertions.assertEquals(
+            "Number of Runs String of Pearls",
+            DashboardWidgetConfigDto.generateDefaultTitle(WidgetMetric.NUMBER_OF_RUNS, null, WidgetPresentation.PERLENKETTE)
+        );
+        Assertions.assertEquals(
+            "Number of Runs Trend Graph",
+            DashboardWidgetConfigDto.generateDefaultTitle(WidgetMetric.NUMBER_OF_RUNS, null, WidgetPresentation.TREND_GRAPH)
+        );
+        Assertions.assertEquals(
+            "Number of Runs KPI",
+            DashboardWidgetConfigDto.generateDefaultTitle(WidgetMetric.NUMBER_OF_RUNS, null, WidgetPresentation.TEXT)
+        );
+        Assertions.assertEquals(
+            "Number of Runs with Trend",
+            DashboardWidgetConfigDto.generateDefaultTitle(WidgetMetric.NUMBER_OF_RUNS, null, WidgetPresentation.TEXT_WITH_SMALL_TREND)
+        );
+        Assertions.assertEquals(
+            "Number of Runs Breakdown List",
+            DashboardWidgetConfigDto.generateDefaultTitle(WidgetMetric.NUMBER_OF_RUNS, null, WidgetPresentation.LIST)
+        );
+    }
+
+    @Test
+    public void testNumberOfRunsDefaultValueFormatIsAbsolute()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-runs-count", "", WidgetMetric.NUMBER_OF_RUNS, null,
+            WidgetPresentation.PIE_CHART, null, null, null,
+            "half", 0
+        );
+
+        Assertions.assertEquals(WidgetValueFormat.ABSOLUTE, config.getValueFormat(), "NUMBER_OF_RUNS valueFormat must default to ABSOLUTE");
+        Assertions.assertEquals("Number of Runs Distribution", config.getTitle(), "Default title should be generated when blank");
+    }
+
+    @Test
+    public void testNumberOfRunsProhibitsCustomExecutionIdentity()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-runs-identity", "Runs", WidgetMetric.NUMBER_OF_RUNS, null,
+            WidgetPresentation.PIE_CHART, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE, WidgetPointScope.LATEST_TEST_STATUS,
+            "half", 0, false, true, List.of("browser", "locale"), false, null
+        );
+
+        Assertions.assertFalse(config.isOverrideExecutionIdentity(), "NUMBER_OF_RUNS must suppress custom execution identity");
+        Assertions.assertFalse(config.hasOwnExecutionIdentity(), "NUMBER_OF_RUNS hasOwnExecutionIdentity must be false");
+        Assertions.assertTrue(config.getExecutionIdentityDimensions().isEmpty(), "Identity dimensions must be empty for NUMBER_OF_RUNS");
+    }
+
+    @Test
+    public void testNumberOfRunsPermitsAllWidths()
+    {
+        final DashboardWidgetConfigDto quarter = new DashboardWidgetConfigDto(
+            "w-q", "Runs Q", WidgetMetric.NUMBER_OF_RUNS, null,
+            WidgetPresentation.PIE_CHART, null, null, null,
+            "quarter", 0
+        );
+        Assertions.assertEquals("quarter", quarter.getWidth());
+        Assertions.assertTrue(quarter.isQuarterWidth());
+
+        final DashboardWidgetConfigDto half = new DashboardWidgetConfigDto(
+            "w-h", "Runs H", WidgetMetric.NUMBER_OF_RUNS, null,
+            WidgetPresentation.PIE_CHART, null, null, null,
+            "half", 0
+        );
+        Assertions.assertEquals("half", half.getWidth());
+        Assertions.assertTrue(half.isHalfWidth());
+
+        final DashboardWidgetConfigDto full = new DashboardWidgetConfigDto(
+            "w-f", "Runs F", WidgetMetric.NUMBER_OF_RUNS, null,
+            WidgetPresentation.PIE_CHART, null, null, null,
+            "full", 0
+        );
+        Assertions.assertEquals("full", full.getWidth());
+        Assertions.assertTrue(full.isFullWidth());
+    }
+
+    @Test
+    public void testReorderChildren()
+    {
+        final DashboardWidgetConfigDto c1 = new DashboardWidgetConfigDto(
+            "c1", "Child 1", WidgetMetric.STATUS, null,
+            WidgetPresentation.PIE_CHART, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, WidgetPointScope.LATEST_TEST_STATUS,
+            "half", 0, false, false, Collections.emptyList(), true, null
+        );
+        final DashboardWidgetConfigDto c2 = new DashboardWidgetConfigDto(
+            "c2", "Child 2", WidgetMetric.STATUS, null,
+            WidgetPresentation.LIST, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, WidgetPointScope.LATEST_TEST_STATUS,
+            "half", 1, false, false, Collections.emptyList(), true, null
+        );
+        final DashboardWidgetConfigDto c3 = new DashboardWidgetConfigDto(
+            "c3", "Child 3", WidgetMetric.STATUS, null,
+            WidgetPresentation.RATIO_BAR, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, WidgetPointScope.LATEST_TEST_STATUS,
+            "half", 2, false, false, Collections.emptyList(), true, null
+        );
+
+        final DashboardWidgetConfigDto container = DashboardWidgetConfigDto.createContainer(
+            "cont-1", "Container", List.of(c1, c2, c3), 0
+        );
+        Assertions.assertEquals(3, container.getChildren().size());
+        Assertions.assertEquals("c1", container.getChildren().get(0).getId());
+        Assertions.assertEquals("c2", container.getChildren().get(1).getId());
+        Assertions.assertEquals("c3", container.getChildren().get(2).getId());
+
+        // Reorder completely: c3, c1, c2
+        final DashboardWidgetConfigDto reordered = container.reorderChildren(List.of("c3", "c1", "c2"));
+        Assertions.assertEquals(3, reordered.getChildren().size());
+        Assertions.assertEquals("c3", reordered.getChildren().get(0).getId());
+        Assertions.assertEquals("c1", reordered.getChildren().get(1).getId());
+        Assertions.assertEquals("c2", reordered.getChildren().get(2).getId());
+
+        // Partial reorder: c2 first, remaining (c1, c3) appended in their previous relative order
+        final DashboardWidgetConfigDto partial = container.reorderChildren(List.of("c2"));
+        Assertions.assertEquals(3, partial.getChildren().size());
+        Assertions.assertEquals("c2", partial.getChildren().get(0).getId());
+        Assertions.assertEquals("c1", partial.getChildren().get(1).getId());
+        Assertions.assertEquals("c3", partial.getChildren().get(2).getId());
+
+        // Unknown IDs ignored
+        final DashboardWidgetConfigDto withUnknown = container.reorderChildren(List.of("unknown-id", "c3"));
+        Assertions.assertEquals(3, withUnknown.getChildren().size());
+        Assertions.assertEquals("c3", withUnknown.getChildren().get(0).getId());
+        Assertions.assertEquals("c1", withUnknown.getChildren().get(1).getId());
+        Assertions.assertEquals("c2", withUnknown.getChildren().get(2).getId());
+
+        // Null or empty list returns unchanged container
+        Assertions.assertSame(container, container.reorderChildren(null));
+        Assertions.assertSame(container, container.reorderChildren(Collections.emptyList()));
+
+        // Non-container / empty children returns unchanged
+        Assertions.assertSame(c1, c1.reorderChildren(List.of("c1")));
     }
 }
 

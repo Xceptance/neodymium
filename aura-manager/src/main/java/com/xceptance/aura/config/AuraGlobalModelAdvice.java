@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -120,6 +121,26 @@ public class AuraGlobalModelAdvice
                     }
                 }
             }
+            if (dataService != null)
+            {
+                final Map<String, List<String>> allKnown = dataService.getAllKnownTagMap();
+                if (allKnown.containsKey("browser"))
+                {
+                    bSet.addAll(allKnown.get("browser"));
+                }
+                if (allKnown.containsKey("location"))
+                {
+                    lSet.addAll(allKnown.get("location"));
+                }
+                if (allKnown.containsKey("environment"))
+                {
+                    eSet.addAll(allKnown.get("environment"));
+                }
+                if (allKnown.containsKey("area"))
+                {
+                    allKnown.get("area").forEach(a -> aSet.add(AuraReportDataService.normalizeArea(a)));
+                }
+            }
             if (bSet.isEmpty())
             {
                 bSet.add("Chrome");
@@ -149,11 +170,16 @@ public class AuraGlobalModelAdvice
             }
             availableIdentityTags.sort(String.CASE_INSENSITIVE_ORDER);
 
+            final Map<String, List<String>> candidateCustomTags = (dataService != null)
+                ? dataService.getCandidateCustomTags()
+                : Collections.emptyMap();
+
             model.addAttribute("candidateBrowsers", new ArrayList<>(bSet));
             model.addAttribute("candidateLocales", new ArrayList<>(lSet));
             model.addAttribute("candidateEnvs", new ArrayList<>(eSet));
             model.addAttribute("candidateAreas", new ArrayList<>(aSet));
             model.addAttribute("availableIdentityTags", availableIdentityTags);
+            model.addAttribute("candidateCustomTags", candidateCustomTags);
         }
         if (queueService != null && model != null)
         {

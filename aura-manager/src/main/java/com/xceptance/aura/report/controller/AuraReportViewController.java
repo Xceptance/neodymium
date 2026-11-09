@@ -1708,6 +1708,26 @@ public class AuraReportViewController
                     dataService.getRunAreas(r).forEach(a -> aSet.add(AuraReportDataService.normalizeArea(a)));
                 }
             }
+            if (dataService != null)
+            {
+                final Map<String, List<String>> allKnown = dataService.getAllKnownTagMap();
+                if (allKnown.containsKey("browser"))
+                {
+                    bSet.addAll(allKnown.get("browser"));
+                }
+                if (allKnown.containsKey("location"))
+                {
+                    lSet.addAll(allKnown.get("location"));
+                }
+                if (allKnown.containsKey("environment"))
+                {
+                    eSet.addAll(allKnown.get("environment"));
+                }
+                if (allKnown.containsKey("area"))
+                {
+                    allKnown.get("area").forEach(a -> aSet.add(AuraReportDataService.normalizeArea(a)));
+                }
+            }
             if (bSet.isEmpty())
             {
                 bSet.add("Chrome");
@@ -1756,11 +1776,16 @@ public class AuraReportViewController
         }
         availableIdentityTags.sort(String.CASE_INSENSITIVE_ORDER);
 
+        final Map<String, List<String>> candidateCustomTags = (dataService != null)
+            ? dataService.getCandidateCustomTags()
+            : Collections.emptyMap();
+
         model.addAttribute("candidateBrowsers", candidateBrowsers);
         model.addAttribute("candidateLocales", candidateLocales);
         model.addAttribute("candidateEnvs", candidateEnvs);
         model.addAttribute("candidateAreas", candidateAreas);
         model.addAttribute("availableIdentityTags", availableIdentityTags);
+        model.addAttribute("candidateCustomTags", candidateCustomTags);
     }
 
     /**
@@ -2127,14 +2152,11 @@ public class AuraReportViewController
         final Model model)
     {
         final WidgetMetric metric = WidgetMetric.fromString(metricStr);
-        final WidgetPresentation requestedPresentation = (metric == WidgetMetric.TEST_VARIATIONS)
+        final WidgetPresentation presentation = (metric == WidgetMetric.TEST_VARIATIONS)
             ? WidgetPresentation.TEST_VARIATIONS
             : ((metric == WidgetMetric.RUNS)
                 ? WidgetPresentation.RUNS
                 : WidgetPresentation.fromString(presentationStr));
-        final WidgetPresentation presentation = (metric == WidgetMetric.TAG && requestedPresentation == WidgetPresentation.PERLENKETTE)
-            ? WidgetPresentation.PIE_CHART
-            : requestedPresentation;
         final WidgetTrendMode trendMode = (trendModeStr != null && !trendModeStr.isBlank())
             ? WidgetTrendMode.valueOf(trendModeStr.toUpperCase(Locale.ROOT))
             : WidgetTrendMode.BY_RUNS;
@@ -2151,16 +2173,25 @@ public class AuraReportViewController
             ? "full"
             : width;
 
-        final boolean isRuns = (metric == WidgetMetric.RUNS || presentation == WidgetPresentation.RUNS);
+        final boolean isRuns = (metric == WidgetMetric.RUNS || presentation == WidgetPresentation.RUNS || metric == WidgetMetric.NUMBER_OF_RUNS);
         final boolean effectiveOverrideExecutionIdentity = !isRuns && overrideExecutionIdentity;
 
         final List<String> parsedIdentityDims;
         if (effectiveOverrideExecutionIdentity && executionIdentityDimensions != null && !executionIdentityDimensions.isBlank())
         {
-            parsedIdentityDims = Arrays.stream(executionIdentityDimensions.split(","))
+            final List<String> dims = Arrays.stream(executionIdentityDimensions.split(","))
                 .map(String::trim)
                 .filter(s -> !s.isEmpty())
                 .collect(Collectors.toList());
+            if (dims.stream().noneMatch("browser"::equalsIgnoreCase))
+            {
+                dims.add(0, "browser");
+            }
+            parsedIdentityDims = dims;
+        }
+        else if (effectiveOverrideExecutionIdentity)
+        {
+            parsedIdentityDims = new ArrayList<>(ReportDashboardSettingService.DEFAULT_EXECUTION_IDENTITY_DIMENSIONS);
         }
         else
         {
@@ -2598,6 +2629,46 @@ public class AuraReportViewController
             else
             {
                 dashboardSettingService.reorderWidgets(ids);
+            }
+        }
+        return refreshBatchView(targetUrl, hxRequest, model);
+    }
+
+    /**
+     * Reorders child widgets within a container widget group according to the provided ID sequence.
+     *
+     * @param containerId ID of the container widget
+     * @param childIdsCsv comma-separated child widget IDs
+     * @param hxRequest HTMX request header flag
+     * @param currentUrl current URL header
+     * @param referer referer URL header
+     * @param model Spring MVC model
+     * @return updated batch history view
+     */
+    @PostMapping({"/widgets/reorder-children", "/batch-history/widgets/reorder-children"})
+    public String reorderContainerChildren(
+        @RequestParam("containerId") final String containerId,
+        @RequestParam("childIds") final String childIdsCsv,
+        @RequestHeader(value = "HX-Request", required = false) final String hxRequest,
+        @RequestHeader(value = "HX-Current-URL", required = false) final String currentUrl,
+        @RequestHeader(value = "Referer", required = false) final String referer,
+        final Model model)
+    {
+        final String targetUrl = currentUrl != null && !currentUrl.isBlank() ? currentUrl : referer;
+        final String resolvedPageId = extractDashboardPageId(targetUrl);
+        if (dashboardSettingService != null && containerId != null && !containerId.isBlank() && childIdsCsv != null && !childIdsCsv.isBlank())
+        {
+            final List<String> ids = Arrays.stream(childIdsCsv.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+            if (resolvedPageId != null && !resolvedPageId.isBlank())
+            {
+                dashboardSettingService.reorderContainerChildren(resolvedPageId, containerId, ids);
+            }
+            else
+            {
+                dashboardSettingService.reorderContainerChildren(containerId, ids);
             }
         }
         return refreshBatchView(targetUrl, hxRequest, model);

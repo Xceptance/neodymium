@@ -9901,6 +9901,10 @@ function openWidgetConfiguratorModal(widgetId) {
         }).then(() => {
             const m = document.getElementById('widgetConfiguratorModal');
             if (m) m.style.display = 'flex';
+            const curPres = document.querySelector('#widgetPresentationSection input[name="presentation"]:checked');
+            if (curPres && typeof onWidgetPresentationChanged === 'function') {
+                onWidgetPresentationChanged(curPres.value);
+            }
             if (typeof updateSuggestedWidgetTitle === 'function') {
                 updateSuggestedWidgetTitle();
             }
@@ -9956,23 +9960,43 @@ function onWidgetMetricChanged(metric) {
     }
     const perlenketteRadio = document.querySelector('#widgetPresentationSection input[type="radio"][name="presentation"][value="PERLENKETTE"]');
     if (perlenketteRadio) {
-        perlenketteRadio.disabled = (metric === 'TAG');
-        if (metric === 'TAG' && perlenketteRadio.checked) {
-            const pieRadio = document.querySelector('#widgetPresentationSection input[type="radio"][name="presentation"][value="PIE_CHART"]');
-            if (pieRadio) {
-                pieRadio.checked = true;
-                if (typeof onWidgetPresentationChanged === 'function') {
-                    onWidgetPresentationChanged('PIE_CHART');
-                }
-            }
-        }
+        perlenketteRadio.disabled = false;
     }
     if (typeof updateSuggestedWidgetTitle === 'function') {
         updateSuggestedWidgetTitle();
     }
 }
 
+function updateTrendModePillsVisibility(metric, presentation) {
+    const isTag = (metric === 'TAG');
+    const lbl = document.getElementById('widgetTrendModeLabel');
+    const byRunsSpan = document.getElementById('trendModePillByRunsLabel');
+    const pillDaily = document.getElementById('trendModePillDaily');
+    const pillHourly = document.getElementById('trendModePillHourly');
+    const pillMonthly = document.getElementById('trendModePillMonthly');
+
+    if (lbl) {
+        lbl.textContent = isTag ? 'Milestone Aggregation Mode' : 'Trend Time Grouping / Mode';
+    }
+    if (byRunsSpan) {
+        byRunsSpan.textContent = isTag ? 'All Run Executions (Volume)' : 'By Runs';
+    }
+    if (pillDaily) pillDaily.style.display = isTag ? 'none' : '';
+    if (pillHourly) pillHourly.style.display = isTag ? 'none' : '';
+    if (pillMonthly) pillMonthly.style.display = isTag ? 'none' : '';
+
+    if (isTag) {
+        const checkedRadio = document.querySelector('input[name="trendMode"]:checked');
+        if (checkedRadio && (checkedRadio.value === 'DAILY' || checkedRadio.value === 'HOURLY' || checkedRadio.value === 'MONTHLY')) {
+            const latestApp = document.querySelector('input[name="trendMode"][value="LATEST_APPROACH"]');
+            if (latestApp) latestApp.checked = true;
+        }
+    }
+}
+
 function onWidgetPresentationChanged(presentation) {
+    const curMetricRadio = document.querySelector('input[name="metric"]:checked');
+    const curMetric = curMetricRadio ? curMetricRadio.value : 'STATUS';
     const valueFormatSec = document.getElementById('widgetValueFormatSection');
     const perlenketteOpts = document.getElementById('widgetPerlenketteOptionsSection');
     const trendModeSec = document.getElementById('widgetTrendModeSection');
@@ -9992,8 +10016,9 @@ function onWidgetPresentationChanged(presentation) {
         trendOpts.style.display = (presentation === 'TREND_GRAPH') ? 'block' : 'none';
     }
     if (pointScopeSec) {
-        pointScopeSec.style.display = (presentation === 'PIE_CHART' || presentation === 'RATIO_BAR' || presentation === 'TEXT' || presentation === 'LIST') ? 'block' : 'none';
+        pointScopeSec.style.display = (presentation === 'PIE_CHART' || presentation === 'RATIO_BAR' || presentation === 'TEXT' || presentation === 'LIST' || (presentation === 'PERLENKETTE' && curMetric === 'TAG')) ? 'block' : 'none';
     }
+    updateTrendModePillsVisibility(curMetric, presentation);
     if (typeof updateSuggestedWidgetTitle === 'function') {
         updateSuggestedWidgetTitle();
     }
@@ -10300,8 +10325,13 @@ function toggleWidgetExecutionIdentitySection(show) {
 
 function updateExecutionIdentityDimensionsInput() {
     var chks = document.querySelectorAll('input[name="identityDimCheckbox"]:checked');
-    var vals = [];
-    chks.forEach(function(c) { vals.push(c.value); });
+    var vals = ['browser'];
+    chks.forEach(function(c) {
+        var val = (c.value || '').trim();
+        if (val && val.toLowerCase() !== 'browser') {
+            vals.push(val);
+        }
+    });
     var inp = document.getElementById('widgetExecutionIdentityDimensionsInput');
     if (inp) inp.value = vals.join(',');
 }
@@ -10323,6 +10353,19 @@ function updateWidgetRunFiltersInputs() {
     collectChecked('filterLocalesCheckbox', 'widgetFilterLocalesInput');
     collectChecked('filterEnvsCheckbox', 'widgetFilterEnvsInput');
     collectChecked('filterAreasCheckbox', 'widgetFilterAreasInput');
+
+    var hiddenTagInputs = document.querySelectorAll('.widget-filter-tag-hidden');
+    hiddenTagInputs.forEach(function(hiddenInp) {
+        var tagKey = hiddenInp.getAttribute('data-tag-key');
+        if (!tagKey) return;
+        var checkedVals = [];
+        document.querySelectorAll('.widget-filter-tag-checkbox').forEach(function(cb) {
+            if (cb.checked && cb.getAttribute('data-tag-key') === tagKey) {
+                checkedVals.push(cb.value);
+            }
+        });
+        hiddenInp.value = checkedVals.join(',');
+    });
 }
 
 function moveWidgetPosition(currentIndex, direction) {
@@ -10732,6 +10775,8 @@ document.addEventListener('keydown', (e) => {
 
 let activeDraggedWidgetId = null;
 let activeDraggedWidgetRuns = null;
+let activeDraggedChildWidgetId = null;
+let activeDraggedChildContainerId = null;
 let dragAutoScrollRafId = null;
 let dragAutoScrollSpeed = 0;
 
@@ -10760,7 +10805,7 @@ function startDragAutoScrollLoop() {
     if (dragAutoScrollRafId !== null) return;
 
     function step() {
-        if (!activeDraggedWidgetId || dragAutoScrollSpeed === 0) {
+        if ((!activeDraggedWidgetId && !activeDraggedChildWidgetId) || dragAutoScrollSpeed === 0) {
             dragAutoScrollRafId = null;
             return;
         }
@@ -10789,7 +10834,7 @@ function stopDragAutoScroll() {
 }
 
 function updateDragAutoScrollOnPointer(clientY) {
-    if (!activeDraggedWidgetId) {
+    if (!activeDraggedWidgetId && !activeDraggedChildWidgetId) {
         stopDragAutoScroll();
         return;
     }
@@ -10841,14 +10886,14 @@ function initDashboardWidgetsDragAndDrop() {
     if (!grid) return;
 
     grid.ondragover = (e) => {
-        if (!activeDraggedWidgetId) return;
+        if (!activeDraggedWidgetId && !activeDraggedChildWidgetId) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
         updateDragAutoScrollOnPointer(e.clientY);
     };
 
     grid.ondrop = (e) => {
-        if (e.target.closest('.widget-card')) {
+        if (activeDraggedChildWidgetId || e.target.closest('.widget-card')) {
             return;
         }
         e.preventDefault();
@@ -10878,6 +10923,9 @@ function initDashboardWidgetsDragAndDrop() {
         card.setAttribute('draggable', 'true');
 
         card.ondragstart = (e) => {
+            if (e.target.closest('.widget-container-section')) {
+                return;
+            }
             activeDraggedWidgetId = card.getAttribute('data-widget-id');
             activeDraggedWidgetRuns = card.getAttribute('data-contributing-runs');
             e.dataTransfer.setData('text/plain', activeDraggedWidgetId || '');
@@ -10938,6 +10986,9 @@ function initDashboardWidgetsDragAndDrop() {
         };
 
         card.ondrop = (e) => {
+            if (!activeDraggedWidgetId) {
+                return;
+            }
             e.preventDefault();
             stopDragAutoScroll();
             const sourceId = activeDraggedWidgetId || e.dataTransfer.getData('text/plain');
@@ -11005,6 +11056,130 @@ function initDashboardWidgetsDragAndDrop() {
             }
         };
     });
+
+    // Container children drag and drop for widget groups
+    const containerCards = grid.querySelectorAll(':scope > .widget-container-card');
+    containerCards.forEach(containerCard => {
+        const containerId = containerCard.getAttribute('data-widget-id');
+        const sections = containerCard.querySelectorAll('.widget-container-section');
+
+        sections.forEach(section => {
+            section.setAttribute('draggable', 'true');
+
+            section.ondragstart = (e) => {
+                if (e.target.closest('button, a, input, select, textarea, .btn-icon-widget')) {
+                    e.preventDefault();
+                    return;
+                }
+                e.stopPropagation();
+                activeDraggedChildWidgetId = section.getAttribute('data-child-id');
+                activeDraggedChildContainerId = containerId;
+                e.dataTransfer.setData('text/plain', activeDraggedChildWidgetId || '');
+                e.dataTransfer.effectAllowed = 'move';
+                section.classList.add('widget-is-dragging');
+            };
+
+            section.ondragend = (e) => {
+                stopDragAutoScroll();
+                activeDraggedChildWidgetId = null;
+                activeDraggedChildContainerId = null;
+                section.classList.remove('widget-is-dragging');
+                sections.forEach(s => {
+                    s.classList.remove('drop-reorder-before', 'drop-reorder-after', 'drop-reorder-left', 'drop-reorder-right', 'drop-reorder-top', 'drop-reorder-bottom');
+                });
+            };
+
+            section.ondragover = (e) => {
+                if (!activeDraggedChildWidgetId || activeDraggedChildWidgetId === section.getAttribute('data-child-id')) {
+                    return;
+                }
+                if (activeDraggedChildContainerId !== containerId) {
+                    return;
+                }
+
+                e.preventDefault();
+                e.stopPropagation();
+                e.dataTransfer.dropEffect = 'move';
+                updateDragAutoScrollOnPointer(e.clientY);
+
+                const rect = section.getBoundingClientRect();
+                const row = section.closest('.widget-container-unified-row');
+                const isStacked = section.classList.contains('widget-container-full-span') ||
+                                  (row && rect.width >= row.clientWidth - 40);
+
+                const isBefore = isStacked ? (e.clientY - rect.top < rect.height * 0.5)
+                                           : (e.clientX - rect.left < rect.width * 0.5);
+
+                section.classList.remove('drop-reorder-before', 'drop-reorder-after', 'drop-reorder-left', 'drop-reorder-right', 'drop-reorder-top', 'drop-reorder-bottom');
+
+                if (isBefore) {
+                    section.classList.add('drop-reorder-before');
+                    section.classList.add(isStacked ? 'drop-reorder-top' : 'drop-reorder-left');
+                } else {
+                    section.classList.add('drop-reorder-after');
+                    section.classList.add(isStacked ? 'drop-reorder-bottom' : 'drop-reorder-right');
+                }
+            };
+
+            section.ondragleave = (e) => {
+                if (!section.contains(e.relatedTarget)) {
+                    section.classList.remove('drop-reorder-before', 'drop-reorder-after', 'drop-reorder-left', 'drop-reorder-right', 'drop-reorder-top', 'drop-reorder-bottom');
+                }
+            };
+
+            section.ondrop = (e) => {
+                if (!activeDraggedChildWidgetId || activeDraggedChildContainerId !== containerId) {
+                    return;
+                }
+
+                e.preventDefault();
+                e.stopPropagation();
+                stopDragAutoScroll();
+
+                const sourceId = activeDraggedChildWidgetId;
+                const targetId = section.getAttribute('data-child-id');
+                const isBefore = section.classList.contains('drop-reorder-before');
+                const isAfter = section.classList.contains('drop-reorder-after');
+
+                sections.forEach(s => {
+                    s.classList.remove('drop-reorder-before', 'drop-reorder-after', 'drop-reorder-left', 'drop-reorder-right', 'drop-reorder-top', 'drop-reorder-bottom');
+                });
+
+                if (!sourceId || !targetId || sourceId === targetId) return;
+
+                const row = section.closest('.widget-container-unified-row');
+                if (!row) return;
+
+                const currentSections = Array.from(row.querySelectorAll(':scope > .widget-container-section'));
+                const ids = currentSections.map(s => s.getAttribute('data-child-id')).filter(Boolean);
+
+                const fromIdx = ids.indexOf(sourceId);
+                if (fromIdx !== -1) {
+                    ids.splice(fromIdx, 1);
+                }
+                const toIdx = ids.indexOf(targetId);
+                if (toIdx !== -1) {
+                    ids.splice(isBefore ? toIdx : toIdx + 1, 0, sourceId);
+                } else {
+                    ids.push(sourceId);
+                }
+
+                activeDraggedChildWidgetId = null;
+                activeDraggedChildContainerId = null;
+
+                if (window.htmx) {
+                    window.htmx.ajax('POST', '/widgets/reorder-children', {
+                        target: '#mainViewContainer',
+                        swap: 'innerHTML',
+                        values: {
+                            containerId: containerId,
+                            childIds: ids.join(',')
+                        }
+                    });
+                }
+            };
+        });
+    });
 }
 if (typeof window !== 'undefined') {
     window.initDashboardWidgetsDragAndDrop = initDashboardWidgetsDragAndDrop;
@@ -11014,7 +11189,7 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
     window._dashboardWidgetDragScrollListenersBound = true;
 
     window.addEventListener('dragover', (e) => {
-        if (activeDraggedWidgetId) {
+        if (activeDraggedWidgetId || activeDraggedChildWidgetId) {
             updateDragAutoScrollOnPointer(e.clientY);
         }
     });
@@ -11023,6 +11198,8 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
         stopDragAutoScroll();
         activeDraggedWidgetId = null;
         activeDraggedWidgetRuns = null;
+        activeDraggedChildWidgetId = null;
+        activeDraggedChildContainerId = null;
     });
 
     window.addEventListener('drop', () => {
@@ -11030,7 +11207,7 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
     });
 
     window.addEventListener('wheel', (e) => {
-        if (!activeDraggedWidgetId) return;
+        if (!activeDraggedWidgetId && !activeDraggedChildWidgetId) return;
         const container = getDashboardScrollContainer();
         if (container && typeof container.scrollBy === 'function') {
             e.preventDefault();
@@ -11108,10 +11285,14 @@ function matchesVariationFilter(v, filterDim, filterVal) {
         const cleanArea = val.replace(/^@/, '').replace(/\s*\(default\)$/i, '').trim();
         return a === cleanArea;
     }
-    if (dim === 'mode') {
-        if (val.includes('ai')) return v.m === 'AI' || (v.s && v.s.includes('ai'));
-        if (val.includes('heal')) return v.h === true || v.m === 'HEALED';
-        return !v.h && v.m !== 'AI';
+    if (dim === 'mode' || dim === 'type') {
+        const isHealed = (v.h === true) || ((v.m || '').toUpperCase() === 'HEALED') || ((v.s || '').toLowerCase() === 'healed');
+        const isAi = ((v.m || '').toUpperCase() === 'AI') || (v.s && v.s.toLowerCase().includes('ai'));
+        if (val.includes('ai')) return isAi;
+        if (val.includes('heal')) return isHealed;
+        if (val.includes('playbook')) return (v.m || '').toUpperCase() === 'PLAYBOOK' && !isHealed;
+        if (val.includes('classic') || val.includes('java')) return !isHealed && !isAi && (v.m || '').toUpperCase() !== 'PLAYBOOK';
+        return !isHealed && !isAi;
     }
     if (dim === 'status') {
         const s = (v.s || '').toLowerCase().trim();
@@ -11213,6 +11394,20 @@ function resolveDimensionCount(rawVal, counts, dim) {
         if (counts[norm] !== undefined) return counts[norm];
     }
     const rl = rawVal.toLowerCase().trim();
+    if (dim === 'mode' || dim === 'type') {
+        if (rl.includes('ai') && (counts['AI-Driven'] !== undefined || counts['AI'] !== undefined)) {
+            return counts['AI-Driven'] !== undefined ? counts['AI-Driven'] : counts['AI'];
+        }
+        if (rl.includes('heal') && counts['Healed'] !== undefined) {
+            return counts['Healed'];
+        }
+        if (rl.includes('playbook') && counts['Playbook'] !== undefined) {
+            return counts['Playbook'];
+        }
+        if (rl.includes('classic') && counts['Classic'] !== undefined) {
+            return counts['Classic'];
+        }
+    }
     for (const k in counts) {
         if (k.toLowerCase().trim() === rl) return counts[k];
     }
@@ -11236,7 +11431,15 @@ function resolveVariationDimensionValue(v, dim) {
         const clean = raw.replace(/^@/, '').replace(/\s*\(default\)$/i, '').trim();
         return clean.length > 0 ? clean : 'Browsing';
     }
-    if (d === 'mode' || d === 'type') return v.m || (v.h ? 'Healed' : 'Classic');
+    if (d === 'mode' || d === 'type') {
+        const isHealed = (v.h === true) || ((v.m || '').toUpperCase() === 'HEALED') || ((v.s || '').toLowerCase() === 'healed');
+        const isAi = ((v.m || '').toUpperCase() === 'AI') || (v.s && v.s.toLowerCase().includes('ai'));
+        const isPlaybook = ((v.m || '').toUpperCase() === 'PLAYBOOK') && !isHealed;
+        if (isAi) return 'AI-Driven';
+        if (isHealed) return 'Healed';
+        if (isPlaybook) return 'Playbook';
+        return 'Classic';
+    }
     if (d === 'costs' || d === 'tokens') return ((v.tok && Number(v.tok) > 0) || (v.c && Number(v.c) > 0) || v.m === 'AI') ? 'AI / Tokens' : 'No AI';
     if (d === 'status') {
         const s = (v.s || '').toLowerCase();
@@ -12203,7 +12406,7 @@ function recalculateContainerText(sec, variations, isFiltered) {
             'Classic': classic
         };
 
-        const segmentDivs = sec.querySelectorAll('.widget-interactive-filter[data-filter-dim="type"]');
+        const segmentDivs = sec.querySelectorAll('.widget-interactive-filter[data-filter-dim="mode"], .widget-interactive-filter[data-filter-dim="type"]');
         segmentDivs.forEach(div => {
             const rawVal = div.getAttribute('data-filter-val') || '';
             let cnt = counts[rawVal];
@@ -12427,7 +12630,7 @@ function matchesContainerFilters(v, activeFilters, excludeDim) {
     for (const dim in activeFilters) {
         const cleanDim = dim.toLowerCase().trim();
         const normDim = (cleanDim === 'location' ? 'locale' : (cleanDim === 'environment' ? 'env' : cleanDim));
-        if (cleanExclude && (cleanDim === cleanExclude || normDim === normExclude)) {
+        if (cleanExclude && (cleanDim === cleanExclude || normDim === normExclude || (cleanDim === 'type' && cleanExclude === 'mode') || (cleanDim === 'mode' && cleanExclude === 'type'))) {
             continue;
         }
         const valSet = activeFilters[dim];
@@ -12552,7 +12755,8 @@ function updateContainerCardsVisualState(container, activeFilters) {
                 : (metric === 'BUGS' ? 'severity'
                 : (metric === 'FLAKINESS' ? 'flaky'
                 : (metric === 'TEST_VARIATIONS' ? 'variations'
-                : 'status')))))).toLowerCase().trim();
+                : (metric === 'NUMBER_OF_RUNS' ? 'runs'
+                : 'status'))))))).toLowerCase().trim();
 
         // Variations for this card using facet exclusion (or none for LIST presentation to strictly hide non-matching items)
         const excludeDimForCard = (presentation === 'LIST') ? null : cardDim;
@@ -12574,12 +12778,12 @@ function updateContainerCardsVisualState(container, activeFilters) {
 
         // Update active and dimmed states on interactive filter items within this card
         const interactiveItems = childCard.querySelectorAll('.widget-interactive-filter');
-        const normCardDim = (cardDim === 'location' ? 'locale' : (cardDim === 'environment' ? 'env' : cardDim));
+        const normCardDim = (cardDim === 'location' ? 'locale' : (cardDim === 'environment' ? 'env' : (cardDim === 'type' ? 'mode' : cardDim)));
         const activeValsInDim = activeFilters[cardDim] || activeFilters[normCardDim] || new Set();
 
         interactiveItems.forEach(item => {
             const itemDim = (item.getAttribute('data-filter-dim') || cardDim).toLowerCase().trim();
-            const normItemDim = (itemDim === 'location' ? 'locale' : (itemDim === 'environment' ? 'env' : itemDim));
+            const normItemDim = (itemDim === 'location' ? 'locale' : (itemDim === 'environment' ? 'env' : (itemDim === 'type' ? 'mode' : itemDim)));
             const itemVal = (item.getAttribute('data-filter-val') || item.innerText || '').trim();
             const dimSet = activeFilters[itemDim] || activeFilters[normItemDim] || activeValsInDim;
 
@@ -12624,7 +12828,8 @@ function onContainerWidgetFilterClick(el, event) {
     const container = el.closest('.widget-container-card');
     if (!container) return;
 
-    const filterDim = (el.getAttribute('data-filter-dim') || 'status').toLowerCase().trim();
+    const rawFilterDim = (el.getAttribute('data-filter-dim') || 'status').toLowerCase().trim();
+    const filterDim = (rawFilterDim === 'type') ? 'mode' : rawFilterDim;
     const filterVal = (el.getAttribute('data-filter-val') || el.innerText || '').trim();
 
     const activeFilters = getContainerActiveFilters(container);
@@ -12683,7 +12888,8 @@ function removeContainerSingleFilter(btn, event, optDim, optVal) {
     if (!container) return;
 
     const chip = (btn && typeof btn.closest === 'function') ? btn.closest('.tag-container-filter') : null;
-    const dim = (optDim || (chip ? chip.getAttribute('data-filter-dim') : null) || '').toLowerCase().trim();
+    const rawDim = (optDim || (chip ? chip.getAttribute('data-filter-dim') : null) || '').toLowerCase().trim();
+    const dim = (rawDim === 'type') ? 'mode' : rawDim;
     const val = optVal || (chip ? chip.getAttribute('data-filter-val') : null);
 
     if (!dim || !val) {
@@ -12770,7 +12976,8 @@ function updateCreatePageIdentityDimensionsInput() {
     const checked = Array.from(document.querySelectorAll('input[name="createPageIdentityDimCheckbox"]:checked')).map(cb => cb.value.trim()).filter(Boolean);
     const hidden = document.getElementById('createPageIdentityDimensionsInput');
     if (hidden) {
-        hidden.value = checked.length > 0 ? checked.join(',') : 'browser';
+        const vals = ['browser', ...checked.filter(d => d.toLowerCase() !== 'browser')];
+        hidden.value = vals.join(',');
     }
 }
 window.updateCreatePageIdentityDimensionsInput = updateCreatePageIdentityDimensionsInput;
@@ -12791,6 +12998,18 @@ function updateCreatePageFilterInputs() {
     const aChecked = Array.from(document.querySelectorAll('input[name="createPageFilterAreasCheckbox"]:checked')).map(cb => cb.value.trim()).filter(Boolean);
     const aHidden = document.getElementById('createPageFilterAreasInput');
     if (aHidden) aHidden.value = aChecked.join(',');
+
+    document.querySelectorAll('.create-page-filter-tag-hidden').forEach(function(hiddenInp) {
+        const tagKey = hiddenInp.getAttribute('data-tag-key');
+        if (!tagKey) return;
+        const checkedVals = [];
+        document.querySelectorAll('.create-page-filter-tag-checkbox').forEach(function(cb) {
+            if (cb.checked && cb.getAttribute('data-tag-key') === tagKey) {
+                checkedVals.push(cb.value);
+            }
+        });
+        hiddenInp.value = checkedVals.join(',');
+    });
 }
 window.updateCreatePageFilterInputs = updateCreatePageFilterInputs;
 
@@ -12934,9 +13153,9 @@ function openCreatePageModal(event) {
         const radioLatest = document.querySelector('input[name="createPageCardScopeRadio"][value="LATEST_TEST_STATUS"]');
         if (radioLatest) radioLatest.checked = true;
 
-        // Reset identity checkboxes to default (Browser checked)
+        // Reset identity checkboxes to default (Browser is locked, optional dims unchecked)
         document.querySelectorAll('input[name="createPageIdentityDimCheckbox"]').forEach(cb => {
-            cb.checked = (cb.value === 'browser');
+            cb.checked = false;
         });
         updateCreatePageIdentityDimensionsInput();
 
@@ -13074,7 +13293,8 @@ function updateConvertToGroupIdentityDimensionsInput() {
     const checked = Array.from(document.querySelectorAll('input[name="convertToGroupIdentityDimCheckbox"]:checked')).map(cb => cb.value.trim()).filter(Boolean);
     const hidden = document.getElementById('convertToGroupIdentityDimensionsInput');
     if (hidden) {
-        hidden.value = checked.length > 0 ? checked.join(',') : 'browser';
+        const vals = ['browser', ...checked.filter(d => d.toLowerCase() !== 'browser')];
+        hidden.value = vals.join(',');
     }
 }
 window.updateConvertToGroupIdentityDimensionsInput = updateConvertToGroupIdentityDimensionsInput;
@@ -13095,6 +13315,18 @@ function updateConvertToGroupFilterInputs() {
     const aChecked = Array.from(document.querySelectorAll('input[name="convertToGroupFilterAreasCheckbox"]:checked')).map(cb => cb.value.trim()).filter(Boolean);
     const aHidden = document.getElementById('convertToGroupFilterAreasInput');
     if (aHidden) aHidden.value = aChecked.join(',');
+
+    document.querySelectorAll('.convert-to-group-filter-tag-hidden').forEach(function(hiddenInp) {
+        const tagKey = hiddenInp.getAttribute('data-tag-key');
+        if (!tagKey) return;
+        const checkedVals = [];
+        document.querySelectorAll('.convert-to-group-filter-tag-checkbox').forEach(function(cb) {
+            if (cb.checked && cb.getAttribute('data-tag-key') === tagKey) {
+                checkedVals.push(cb.value);
+            }
+        });
+        hiddenInp.value = checkedVals.join(',');
+    });
 }
 window.updateConvertToGroupFilterInputs = updateConvertToGroupFilterInputs;
 
@@ -13170,9 +13402,9 @@ function openConvertToGroupModal() {
 
     setConvertToGroupCardScope('LATEST_TEST_STATUS');
 
-    // Reset identity checkboxes: Browser checked, others unchecked
+    // Reset identity checkboxes: Browser is locked, optional dims unchecked
     document.querySelectorAll('input[name="convertToGroupIdentityDimCheckbox"]').forEach(cb => {
-        cb.checked = (cb.value === 'browser');
+        cb.checked = false;
     });
     updateConvertToGroupIdentityDimensionsInput();
 

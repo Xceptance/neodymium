@@ -24,7 +24,9 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -234,14 +236,11 @@ public final class DashboardWidgetConfigDto
         this.id = (id != null && !id.isBlank()) ? id.trim() : ("widget-" + UUID.randomUUID().toString().substring(0, 8));
         this.metric = (metric != null) ? metric : WidgetMetric.STATUS;
         this.tagKey = (this.metric == WidgetMetric.TAG && tagKey != null) ? tagKey.trim() : "";
-        final WidgetPresentation rawPres = (presentation != null) ? presentation : WidgetPresentation.PIE_CHART;
-        this.presentation = (this.metric == WidgetMetric.TAG && rawPres == WidgetPresentation.PERLENKETTE)
-            ? WidgetPresentation.PIE_CHART
-            : rawPres;
+        this.presentation = (presentation != null) ? presentation : WidgetPresentation.PIE_CHART;
         this.trendMode = (trendMode != null) ? trendMode : WidgetTrendMode.LATEST_APPROACH;
         this.valueFormat = (valueFormat != null)
             ? valueFormat
-            : ((this.metric == WidgetMetric.COSTS || this.metric == WidgetMetric.BUGS) ? WidgetValueFormat.ABSOLUTE : WidgetValueFormat.PERCENT);
+            : ((this.metric == WidgetMetric.COSTS || this.metric == WidgetMetric.BUGS || this.metric == WidgetMetric.NUMBER_OF_RUNS) ? WidgetValueFormat.ABSOLUTE : WidgetValueFormat.PERCENT);
         this.pointScope = (pointScope != null) ? pointScope : WidgetPointScope.LATEST_TEST_STATUS;
         final String rawWidth = (width != null && !width.isBlank())
             ? width.trim()
@@ -264,7 +263,7 @@ public final class DashboardWidgetConfigDto
         }
         this.sortOrder = sortOrder;
         this.showHealedAi = (showHealedAi != null) && showHealedAi;
-        if (this.metric == WidgetMetric.RUNS || this.presentation == WidgetPresentation.RUNS)
+        if (this.metric == WidgetMetric.RUNS || this.presentation == WidgetPresentation.RUNS || this.metric == WidgetMetric.NUMBER_OF_RUNS)
         {
             this.overrideExecutionIdentity = false;
             this.executionIdentityDimensions = Collections.emptyList();
@@ -299,6 +298,14 @@ public final class DashboardWidgetConfigDto
         {
             this.title = generateDefaultTitle(this.metric, this.tagKey, this.presentation, this.trendMode, this.pointScope);
         }
+    }
+
+    public static String generateDefaultTitle(
+        final WidgetMetric metric,
+        final String tagKey,
+        final WidgetPresentation presentation)
+    {
+        return generateDefaultTitle(metric, tagKey, presentation, null, WidgetPointScope.LATEST_TEST_STATUS);
     }
 
     public static String generateDefaultTitle(
@@ -347,10 +354,21 @@ public final class DashboardWidgetConfigDto
         switch (safePres)
         {
             case PIE_CHART:
-                sb.append(metricLabel).append(" Pie Chart");
+                if (safeMetric == WidgetMetric.NUMBER_OF_RUNS)
+                {
+                    sb.append("Number of Runs Distribution");
+                }
+                else
+                {
+                    sb.append(metricLabel).append(" Pie Chart");
+                }
                 break;
             case RATIO_BAR:
-                if (safeMetric == WidgetMetric.BUGS)
+                if (safeMetric == WidgetMetric.NUMBER_OF_RUNS)
+                {
+                    sb.append("Number of Runs Ratio Bar");
+                }
+                else if (safeMetric == WidgetMetric.BUGS)
                 {
                     sb.append("Bug Severity Ratio Bar");
                 }
@@ -366,7 +384,11 @@ public final class DashboardWidgetConfigDto
                 sb.append(metricLabel).append(" Trend Graph");
                 break;
             case TEXT:
-                if (safeMetric == WidgetMetric.BUGS)
+                if (safeMetric == WidgetMetric.NUMBER_OF_RUNS)
+                {
+                    sb.append("Number of Runs KPI");
+                }
+                else if (safeMetric == WidgetMetric.BUGS)
                 {
                     sb.append("Active Bugs KPI");
                 }
@@ -379,7 +401,11 @@ public final class DashboardWidgetConfigDto
                 sb.append(metricLabel).append(" with Trend");
                 break;
             case LIST:
-                if (safeMetric == WidgetMetric.BUGS)
+                if (safeMetric == WidgetMetric.NUMBER_OF_RUNS)
+                {
+                    sb.append("Number of Runs Breakdown List");
+                }
+                else if (safeMetric == WidgetMetric.BUGS)
                 {
                     sb.append("Bug Breakdown List");
                 }
@@ -400,11 +426,13 @@ public final class DashboardWidgetConfigDto
                 break;
         }
 
-        if (safePres.isTrendBased() && trendMode != null)
+        final boolean isTagPerlenkette = (safeMetric == WidgetMetric.TAG && safePres == WidgetPresentation.PERLENKETTE);
+        if (!isTagPerlenkette && safePres.isTrendBased() && trendMode != null)
         {
             sb.append(" (").append(trendMode.getDisplayName()).append(")");
         }
-        else if (safePres.isStaticPoint() && pointScope != null && pointScope != WidgetPointScope.LATEST_TEST_STATUS)
+        else if ((safePres.isStaticPoint() || isTagPerlenkette)
+            && pointScope != null && pointScope != WidgetPointScope.LATEST_TEST_STATUS)
         {
             sb.append(" (").append(pointScope.getDisplayName()).append(")");
         }
@@ -830,6 +858,36 @@ public final class DashboardWidgetConfigDto
         final List<DashboardWidgetConfigDto> updated = new ArrayList<>(this.children);
         updated.removeIf(c -> c.getId().equals(childWidgetId));
         return withChildren(updated);
+    }
+
+    /**
+     * Reorders the child widgets of this container according to the specified list of child IDs.
+     * Children not specified in the list are retained at their relative positions at the end.
+     *
+     * @param childIdsInOrder ordered list of child widget IDs
+     * @return a new DashboardWidgetConfigDto with reordered children, or this instance if children is empty or list is null/empty
+     */
+    public DashboardWidgetConfigDto reorderChildren(final List<String> childIdsInOrder)
+    {
+        if (childIdsInOrder == null || childIdsInOrder.isEmpty() || this.children.isEmpty())
+        {
+            return this;
+        }
+        final Map<String, DashboardWidgetConfigDto> byId = new LinkedHashMap<>();
+        for (final DashboardWidgetConfigDto child : this.children)
+        {
+            byId.put(child.getId(), child);
+        }
+        final List<DashboardWidgetConfigDto> reordered = new ArrayList<>();
+        for (final String id : childIdsInOrder)
+        {
+            if (byId.containsKey(id))
+            {
+                reordered.add(byId.remove(id));
+            }
+        }
+        reordered.addAll(byId.values());
+        return withChildren(reordered);
     }
 
     public static DashboardWidgetConfigDto createContainer(

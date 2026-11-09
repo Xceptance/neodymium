@@ -71,6 +71,7 @@ import java.util.Set;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
@@ -3946,6 +3947,7 @@ public class AuraReportViewControllerTest
         Assertions.assertNotNull(model.getAttribute("candidateEnvs"));
         Assertions.assertNotNull(model.getAttribute("candidateAreas"));
         Assertions.assertNotNull(model.getAttribute("availableIdentityTags"));
+        Assertions.assertNotNull(model.getAttribute("candidateCustomTags"));
         Assertions.assertEquals(Boolean.TRUE, model.getAttribute("isOpen"));
     }
 
@@ -3993,7 +3995,7 @@ public class AuraReportViewControllerTest
     }
 
     @Test
-    public void testSaveWidget_ForbidsPerlenketteForTagMetric_FallsBackToPieChart()
+    public void testSaveWidget_AllowsPerlenketteForTagMetric()
     {
         final Model model = new ConcurrentModel();
         final String result = controller.saveWidget(
@@ -4005,7 +4007,7 @@ public class AuraReportViewControllerTest
             "w-tag-perlenkette".equals(w.getId())
             && WidgetMetric.TAG == w.getMetric()
             && "browser".equals(w.getTagKey())
-            && WidgetPresentation.PIE_CHART == w.getPresentation()
+            && WidgetPresentation.PERLENKETTE == w.getPresentation()
         ));
         Assertions.assertNotNull(result);
     }
@@ -4072,6 +4074,26 @@ public class AuraReportViewControllerTest
         final String result = controller.reorderWidgets("w-3,w-1,w-2", "true", "/batch-history", null, model);
 
         Mockito.verify(settingService).reorderWidgets(List.of("w-3", "w-1", "w-2"));
+        Assertions.assertNotNull(result);
+    }
+
+    @Test
+    public void testReorderContainerChildren_InvokesSettingService()
+    {
+        final Model model = new ConcurrentModel();
+        final String result = controller.reorderContainerChildren("cont-1", "c-3,c-1,c-2", "true", "/batch-history", null, model);
+
+        Mockito.verify(settingService).reorderContainerChildren("cont-1", List.of("c-3", "c-1", "c-2"));
+        Assertions.assertNotNull(result);
+    }
+
+    @Test
+    public void testReorderContainerChildren_CustomPage_InvokesSettingService()
+    {
+        final Model model = new ConcurrentModel();
+        final String result = controller.reorderContainerChildren("cont-1", "c-2,c-1", "true", "/dashboard-pages/page-custom-1", null, model);
+
+        Mockito.verify(settingService).reorderContainerChildren("page-custom-1", "cont-1", List.of("c-2", "c-1"));
         Assertions.assertNotNull(result);
     }
 
@@ -5371,6 +5393,168 @@ public class AuraReportViewControllerTest
             Mockito.anyList()
         );
         Assertions.assertEquals("redirect:/dashboard-pages/page-multi-1", result);
+    }
+
+    @Test
+    public void testSaveWidget_WithDynamicCustomTagFilters_PersistsInTagsByType()
+    {
+        final Model model = new ConcurrentModel();
+        final Map<String, String> requestParams = Map.of(
+            "filterTag_Release", "2026.10,2026.11",
+            "filterTag_Branch", "develop"
+        );
+
+        final String result = controller.saveWidget(
+            "w-dynamic-tags",
+            "Widget With Dynamic Tags",
+            "STATUS",
+            null,
+            "PIE_CHART",
+            "LATEST_APPROACH",
+            "PERCENT",
+            "LATEST_TEST_STATUS",
+            "half",
+            false,
+            false,
+            null,
+            true,
+            10,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            requestParams,
+            "true",
+            "/batch-history",
+            null,
+            model
+        );
+
+        Mockito.verify(settingService).addOrUpdateWidget(Mockito.argThat(w ->
+            "w-dynamic-tags".equals(w.getId())
+            && w.hasOwnRunFilters()
+            && w.getRunFilters() != null
+            && w.getRunFilters().hasTagValue("Release", "2026.10")
+            && w.getRunFilters().hasTagValue("Release", "2026.11")
+            && w.getRunFilters().hasTagValue("Branch", "develop")
+            && !w.getRunFilters().hasTagValue("Branch", "main")
+        ));
+        Assertions.assertNotNull(result);
+    }
+
+    @Test
+    public void testWidgetConfiguratorModal_RendersDynamicCustomTagsAndPreselectsExistingValues()
+    {
+        final SpringTemplateEngine engine = new SpringTemplateEngine();
+        final ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+        resolver.setPrefix("templates/");
+        resolver.setSuffix(".html");
+        resolver.setTemplateMode(TemplateMode.HTML);
+        resolver.setCharacterEncoding("UTF-8");
+        resolver.setCacheable(false);
+        engine.setTemplateResolver(resolver);
+
+        final WidgetFilterConfigDto runFilters = new WidgetFilterConfigDto(
+            Collections.emptySet(), Collections.emptySet(),
+            Collections.emptySet(), Collections.emptySet(),
+            Collections.emptySet(), Collections.emptySet(),
+            Collections.emptySet(), Collections.emptySet(),
+            Collections.emptySet(), Collections.emptySet(),
+            Map.of("Release", Set.of("2026.10")), Collections.emptyMap()
+        );
+
+        final DashboardWidgetConfigDto widget = new DashboardWidgetConfigDto(
+            "w-dyn-render", "Dynamic Tag Render Test", WidgetMetric.STATUS, null,
+            WidgetPresentation.PIE_CHART, WidgetTrendMode.BY_RUNS, WidgetValueFormat.PERCENT, WidgetPointScope.LAST_RUN,
+            "half", 0, false, false, Collections.emptyList(), true, runFilters
+        );
+
+        final Context context = new Context(Locale.US);
+        context.setVariable("widget", widget);
+        context.setVariable("isOpen", true);
+        context.setVariable("availableWidgetTags", List.of("Browser", "Release", "Branch"));
+        context.setVariable("candidateBrowsers", List.of("Chrome"));
+        context.setVariable("candidateLocales", List.of("en-US"));
+        context.setVariable("candidateEnvs", List.of("Default"));
+        context.setVariable("candidateAreas", List.of("@Browsing"));
+        context.setVariable("candidateCustomTags", Map.of(
+            "Release", List.of("2026.10", "2026.11"),
+            "Branch", List.of("develop", "main")
+        ));
+        context.setVariable("availableIdentityTags", List.of("Browser", "Environment"));
+        context.setVariable("dashboardWidgets", List.of(widget));
+
+        final String html = engine.process("fragments/widget-configurator-modal", Set.of("widgetConfiguratorModal"), context);
+        Assertions.assertNotNull(html);
+        Assertions.assertTrue(html.contains("Filter by Release:"), "Modal must contain Filter by Release:");
+        Assertions.assertTrue(html.contains("Filter by Branch:"), "Modal must contain Filter by Branch:");
+        Assertions.assertTrue(html.contains("class=\"widget-filter-tag-checkbox\""), "Must render widget-filter-tag-checkbox class");
+        Assertions.assertTrue(html.contains("data-tag-key=\"Release\""), "Must contain data-tag-key for Release");
+        Assertions.assertTrue(html.contains("data-tag-key=\"Branch\""), "Must contain data-tag-key for Branch");
+        Assertions.assertTrue(html.contains("name=\"filterTag_Release\""), "Must contain hidden input for filterTag_Release");
+        Assertions.assertTrue(html.contains("name=\"filterTag_Branch\""), "Must contain hidden input for filterTag_Branch");
+        Assertions.assertTrue(html.matches("(?s).*value=\"2026\\.10\"[^>]*checked=\"checked\".*"), "Release 2026.10 must be pre-selected");
+        Assertions.assertTrue(html.contains("value=\"2026.11\""), "Release 2026.11 must be present");
+        Assertions.assertFalse(html.matches("(?s).*value=\"2026\\.11\"[^>]*checked=\"checked\".*"), "Release 2026.11 must NOT be pre-selected");
+    }
+
+    @Test
+    public void testSaveWidget_EnforcesBrowserInExecutionIdentityDimensions()
+    {
+        final Model model = new ConcurrentModel();
+        controller.saveWidget(
+            "w-identity-test",
+            "Widget Identity Enforcement",
+            "STATUS",
+            null,
+            "PIE_CHART",
+            "LATEST_APPROACH",
+            "PERCENT",
+            null,
+            "LATEST_TEST_STATUS",
+            "half",
+            false,
+            false,
+            false,
+            true,
+            "locale,environment",
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            Collections.emptyMap(),
+            "true",
+            "/batch-history",
+            null,
+            model
+        );
+
+        final ArgumentCaptor<DashboardWidgetConfigDto> captor = ArgumentCaptor.forClass(DashboardWidgetConfigDto.class);
+        Mockito.verify(settingService, Mockito.atLeastOnce()).addOrUpdateWidget(captor.capture());
+        final DashboardWidgetConfigDto captured = captor.getValue();
+        Assertions.assertNotNull(captured);
+        Assertions.assertTrue(captured.hasOwnExecutionIdentity());
+        Assertions.assertTrue(captured.getExecutionIdentityDimensions().contains("browser"),
+            "Widget execution identity must enforce browser as mandatory base coordinate");
+        Assertions.assertEquals(List.of("browser", "locale", "environment"), captured.getExecutionIdentityDimensions());
     }
 }
 

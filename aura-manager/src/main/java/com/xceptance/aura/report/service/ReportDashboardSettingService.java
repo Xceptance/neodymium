@@ -639,7 +639,12 @@ public class ReportDashboardSettingService
     public synchronized void setExecutionIdentityDimensions(final List<String> dimensions)
     {
         final List<String> clean = (dimensions != null) ? parseExecutionIdentityDimensions(String.join(",", dimensions)) : DEFAULT_EXECUTION_IDENTITY_DIMENSIONS;
-        final String csv = String.join(",", clean);
+        final List<String> effective = new ArrayList<>(clean);
+        if (effective.stream().noneMatch("browser"::equalsIgnoreCase))
+        {
+            effective.add(0, "browser");
+        }
+        final String csv = String.join(",", effective);
 
         if (repository != null)
         {
@@ -672,6 +677,7 @@ public class ReportDashboardSettingService
     /**
      * Toggles the presence of a dimension in the active execution identity dimensions list.
      * If currently active, removes it; if inactive, appends it.
+     * Browser is locked as a mandatory base coordinate alongside Test and cannot be removed.
      *
      * @param dimension dimension name to toggle (e.g. "environment", "release")
      * @return updated list of active execution identity dimensions
@@ -683,6 +689,10 @@ public class ReportDashboardSettingService
             return getExecutionIdentityDimensions();
         }
         final String cleanDim = normalizeDimensionName(dimension);
+        if ("browser".equalsIgnoreCase(cleanDim))
+        {
+            return getExecutionIdentityDimensions();
+        }
         final List<String> current = new ArrayList<>(getExecutionIdentityDimensions());
         if (current.contains(cleanDim))
         {
@@ -1739,6 +1749,45 @@ public class ReportDashboardSettingService
     }
 
     /**
+     * Reorders the child widgets of a container widget according to the provided child ID sequence on the default dashboard.
+     *
+     * @param containerId ID of the container widget
+     * @param childIdsInOrder sequence of child widget IDs
+     * @return true if the container was found and reordered, false otherwise
+     */
+    public synchronized boolean reorderContainerChildren(final String containerId, final List<String> childIdsInOrder)
+    {
+        if (containerId == null || containerId.isBlank() || childIdsInOrder == null || childIdsInOrder.isEmpty())
+        {
+            return false;
+        }
+        final List<DashboardWidgetConfigDto> current = new ArrayList<>(getDashboardWidgets());
+        int targetIdx = -1;
+        DashboardWidgetConfigDto container = null;
+
+        for (int i = 0; i < current.size(); i++)
+        {
+            final DashboardWidgetConfigDto w = current.get(i);
+            if (w.getId().equals(containerId))
+            {
+                container = w;
+                targetIdx = i;
+                break;
+            }
+        }
+
+        if (container == null || !container.isContainer() || !container.hasChildren())
+        {
+            return false;
+        }
+
+        final DashboardWidgetConfigDto updatedContainer = container.reorderChildren(childIdsInOrder);
+        current.set(targetIdx, updatedContainer);
+        setDashboardWidgets(current);
+        return true;
+    }
+
+    /**
      * Renames a dashboard widget or container group by its ID on the default dashboard.
      * Supports renaming top-level widgets, container groups, or child widgets inside a container group.
      *
@@ -1991,6 +2040,10 @@ public class ReportDashboardSettingService
         final List<String> effectiveIdentity = (executionIdentityDimensions != null && !executionIdentityDimensions.isEmpty())
             ? new ArrayList<>(executionIdentityDimensions)
             : new ArrayList<>(DEFAULT_EXECUTION_IDENTITY_DIMENSIONS);
+        if (effectiveIdentity.stream().noneMatch("browser"::equalsIgnoreCase))
+        {
+            effectiveIdentity.add(0, "browser");
+        }
 
         final List<DashboardWidgetConfigDto> initialWidgets;
         if (copyFromPageId != null && !copyFromPageId.isBlank())
@@ -2110,6 +2163,10 @@ public class ReportDashboardSettingService
         final List<String> effectiveIdentity = (executionIdentityDimensions != null && !executionIdentityDimensions.isEmpty())
             ? new ArrayList<>(executionIdentityDimensions)
             : new ArrayList<>(DEFAULT_EXECUTION_IDENTITY_DIMENSIONS);
+        if (effectiveIdentity.stream().noneMatch("browser"::equalsIgnoreCase))
+        {
+            effectiveIdentity.add(0, "browser");
+        }
         final WidgetPointScope effectiveScope = (groupCardScope != null) ? groupCardScope : WidgetPointScope.LATEST_TEST_STATUS;
 
         final List<DashboardWidgetConfigDto> initialWidgets;
@@ -2618,11 +2675,16 @@ public class ReportDashboardSettingService
             : "browser";
         final WidgetPointScope scope = (groupCardScope != null) ? groupCardScope : WidgetPointScope.LATEST_TEST_STATUS;
 
-        final List<String> effectiveIdentity = (executionIdentityDimensions != null && !executionIdentityDimensions.isEmpty())
+        final List<String> rawIdentity = (executionIdentityDimensions != null && !executionIdentityDimensions.isEmpty())
             ? executionIdentityDimensions
             : ((target.getExecutionIdentityDimensions() != null && !target.getExecutionIdentityDimensions().isEmpty())
                 ? target.getExecutionIdentityDimensions()
                 : DEFAULT_EXECUTION_IDENTITY_DIMENSIONS);
+        final List<String> effectiveIdentity = new ArrayList<>(rawIdentity);
+        if (effectiveIdentity.stream().noneMatch("browser"::equalsIgnoreCase))
+        {
+            effectiveIdentity.add(0, "browser");
+        }
 
         final WidgetFilterConfigDto effectiveFilters = (runFilters != null)
             ? runFilters
@@ -2988,6 +3050,50 @@ public class ReportDashboardSettingService
         }
         reordered.addAll(byId.values());
         setWidgetsForPage(pageId, reordered);
+    }
+
+    /**
+     * Reorders the child widgets of a container widget on the given page according to the provided child ID sequence.
+     *
+     * @param pageId optional page ID
+     * @param containerId ID of the container widget
+     * @param childIds sequence of child widget IDs
+     * @return true if the container was found and reordered, false otherwise
+     */
+    public synchronized boolean reorderContainerChildren(final String pageId, final String containerId, final List<String> childIds)
+    {
+        if (pageId == null || pageId.isBlank())
+        {
+            return reorderContainerChildren(containerId, childIds);
+        }
+        if (containerId == null || containerId.isBlank() || childIds == null || childIds.isEmpty())
+        {
+            return false;
+        }
+        final List<DashboardWidgetConfigDto> current = new ArrayList<>(getWidgetsForPage(pageId));
+        int targetIdx = -1;
+        DashboardWidgetConfigDto container = null;
+
+        for (int i = 0; i < current.size(); i++)
+        {
+            final DashboardWidgetConfigDto w = current.get(i);
+            if (w.getId().equals(containerId))
+            {
+                container = w;
+                targetIdx = i;
+                break;
+            }
+        }
+
+        if (container == null || !container.isContainer() || !container.hasChildren())
+        {
+            return false;
+        }
+
+        final DashboardWidgetConfigDto updatedContainer = container.reorderChildren(childIds);
+        current.set(targetIdx, updatedContainer);
+        setWidgetsForPage(pageId, current);
+        return true;
     }
 
     /**

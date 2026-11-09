@@ -1214,6 +1214,11 @@ public final class DashboardWidgetViewDto
         return (config != null && config.getPresentation() == WidgetPresentation.RUNS) || hasRuns();
     }
 
+    public boolean isNumberOfRuns()
+    {
+        return config != null && config.getMetric() == WidgetMetric.NUMBER_OF_RUNS;
+    }
+
     public boolean hasRuns()
     {
         return runs != null && !runs.isEmpty();

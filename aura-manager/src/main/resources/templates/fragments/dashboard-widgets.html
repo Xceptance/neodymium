@@ -143,10 +143,14 @@
                             <div class="widget-container-section"
                                  th:classappend="${(child.presentation.name() == 'PIE_CHART' ? ' widget-container-pie-section' : (child.presentation.name() == 'RATIO_BAR' ? ' widget-container-ratios-section' : ' widget-container-generic-section')) + (child.presentation.name() == 'TREND_GRAPH' or child.presentation.name() == 'PERLENKETTE' ? ' widget-container-full-span' : '')}"
                                  th:id="'widgetContainerSection-' + ${child.id}"
+                                 draggable="true"
                                  th:attr="data-child-id=${child.id},data-presentation=${child.presentation.name()},data-metric=${child.metric.name()},data-tag-key=${child.tagKey}">
                                 <!-- SECTION HEADER -->
                                 <div class="widget-section-header d-flex align-items-center justify-content-between mb-2">
                                     <div class="d-flex align-items-center gap-2">
+                                        <span class="material-symbols-outlined drag-handle child-drag-handle"
+                                              style="font-size: 0.95rem; cursor: grab;"
+                                              title="Drag to reorder in widget group">drag_indicator</span>
                                         <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;" th:text="${child.metric.icon}">view_column</span>
                                         <span style="font-weight: 600; font-size: 0.8rem; color: var(--text-main);" th:text="${child.title}">Widget</span>
                                         <button type="button" class="btn-icon-widget btn-rename-inline"
@@ -367,7 +371,11 @@
                         <span class="badge-status badge-pass font-mono" style="font-size: 0.72rem; padding: 0.1rem 0.45rem;"
                               th:text="${w.summaryLabel}">15 Milestones</span>
                         <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:if="${w.metric.name() != 'TAG'}"
                               th:text="${w.trendMode.displayName}">Daily</span>
+                        <span class="badge-status" style="background: var(--bg-hover); color: var(--text-muted); font-size: 0.72rem; padding: 0.1rem 0.45rem;"
+                              th:if="${w.metric.name() == 'TAG'}"
+                              th:text="${w.pointScope.displayName}">Latest Test Status</span>
                         <span class="badge-status" th:if="${w.hasOwnExecutionIdentity()}" th:title="${'Execution Identity: ' + w.identityDimensionsSummary}"
                               style="background: rgba(139, 92, 246, 0.15); color: #8b5cf6; font-size: 0.68rem; padding: 0.1rem 0.35rem; display: inline-flex; align-items: center; gap: 0.2rem;">
                             <span class="material-symbols-outlined" style="font-size: 0.75rem;">fingerprint</span>
@@ -1017,7 +1025,7 @@
 
                         <!-- Top Milestone Pill Tag (Fixed Permanent Label) -->
                         <g class="perlenkette-top-pill-group">
-                            <rect th:attr="x=${bead.cx - (bead.radius * 0.95)},y=${bead.cy - bead.radius - (w.isQuarterWidth() ? 22 : 26)},width=${bead.radius * 1.9},height=${w.isQuarterWidth() ? 16 : 20},rx=${w.isQuarterWidth() ? 8 : 10}"
+                            <rect th:attr="x=${bead.cx - (bead.pillWidth / 2.0)},y=${bead.cy - bead.radius - (w.isQuarterWidth() ? 22 : 26)},width=${bead.pillWidth},height=${w.isQuarterWidth() ? 16 : 20},rx=${w.isQuarterWidth() ? 8 : 10}"
                                   class="perlenkette-top-pill-bg" />
                             <text th:attr="x=${bead.cx},y=${bead.cy - bead.radius - (w.isQuarterWidth() ? 12 : 14)}"
                                   th:style="'font-size: ' + ${w.isQuarterWidth() ? '9.5' : '10.5'} + 'px;'"
@@ -1030,7 +1038,7 @@
                         </g>
 
                         <!-- Latest Indicator Badge on the Most Recent Pearl -->
-                        <g th:if="${beadStat.last and w.perlenkette.beads.size() > 1}" class="perlenkette-latest-badge-group">
+                        <g th:if="${w.metric.name() != 'TAG' and beadStat.last and w.perlenkette.beads.size() > 1}" class="perlenkette-latest-badge-group">
                             <rect th:attr="x=${bead.cx - 20},y=${bead.cy - bead.radius - (w.isQuarterWidth() ? 40 : 47)},width='40',height='16',rx='8'"
                                   class="perlenkette-latest-pill-bg" />
                             <text th:attr="x=${bead.cx},y=${bead.cy - bead.radius - (w.isQuarterWidth() ? 31 : 38)}"
@@ -1261,7 +1269,7 @@
     <div class="d-flex align-items-center justify-content-center gap-3 w-100 flex-wrap py-2" th:if="${w.metric.name() == 'AI_USAGE' and not #lists.isEmpty(w.ratioSegments)}">
         <th:block th:each="seg, iterStat : ${w.ratioSegments}">
             <div class="d-flex flex-column align-items-center px-2 widget-interactive-filter"
-                 th:attr="data-filter-dim='type',data-filter-val=${seg.name}"
+                 th:attr="data-filter-dim='mode',data-filter-val=${seg.name}"
                  onclick="onContainerWidgetFilterClick(this, event)">
                 <div class="d-flex align-items-center gap-1">
                     <span class="material-symbols-outlined" style="font-size: 1.1rem;" th:styleappend="'color: ' + ${seg.color} + ';'" th:text="${seg.name == 'AI-Driven' ? 'psychology' : (seg.name == 'Healed' ? 'auto_fix_high' : 'menu_book')}">psychology</span>
@@ -1308,7 +1316,9 @@
         <div class="d-flex flex-column" th:if="${w.metric.name() == 'AI_USAGE' and not #lists.isEmpty(w.ratioSegments)}">
             <div class="d-flex align-items-center gap-3 flex-wrap">
                 <th:block th:each="seg, iterStat : ${w.ratioSegments}">
-                    <div class="d-flex flex-column">
+                    <div class="d-flex flex-column align-items-center px-1 widget-interactive-filter"
+                         th:attr="data-filter-dim='mode',data-filter-val=${seg.name}"
+                         onclick="onContainerWidgetFilterClick(this, event)">
                         <div class="d-flex align-items-center gap-1">
                             <span class="material-symbols-outlined" style="font-size: 0.95rem;" th:styleappend="'color: ' + ${seg.color} + ';'" th:text="${seg.name == 'AI-Driven' ? 'psychology' : (seg.name == 'Healed' ? 'auto_fix_high' : 'menu_book')}">psychology</span>
                             <span class="widget-kpi-primary-val" th:style="'color: ' + ${seg.color} + '; font-size: 1.35rem;'" th:text="${w.valueFormat != null and w.valueFormat.name() == 'ABSOLUTE' ? seg.count : seg.formattedPercentage}">100%</span>

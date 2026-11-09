@@ -113,6 +113,14 @@
                             </div>
                         </label>
                         <label class="config-radio-tile">
+                            <input type="radio" name="metric" value="NUMBER_OF_RUNS" th:checked="${widget != null && widget.metric != null && (widget.metric.name() == 'NUMBER_OF_RUNS' || widget.metric.name() == 'RUN_COUNT' || widget.metric.name() == 'RUNS_COUNT' || widget.metric.name() == 'EXECUTION_RUNS' || widget.metric.name() == 'RUN_VOLUME' || widget.metric.name() == 'RUN_FREQUENCY' || widget.metric.name() == 'NUMBER_OF_TEST_RUNS')}" onchange="onWidgetMetricChanged('NUMBER_OF_RUNS')" />
+                            <div class="tile-content">
+                                <span class="material-symbols-outlined tile-icon">pin</span>
+                                <div class="tile-title">Number of Runs</div>
+                                <div class="tile-desc">Quantitative Volume, Frequency & Pass Rates</div>
+                            </div>
+                        </label>
+                        <label class="config-radio-tile">
                             <input type="radio" name="metric" value="RUNS" th:checked="${widget != null && widget.metric != null && (widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')}" onchange="onWidgetMetricChanged('RUNS')" />
                             <div class="tile-content">
                                 <span class="material-symbols-outlined tile-icon">history</span>
@@ -191,7 +199,7 @@
                             </div>
                         </label>
                         <label class="config-radio-tile">
-                            <input type="radio" name="presentation" value="PERLENKETTE" th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS' || widget.metric.name() == 'TAG')}" th:checked="${widget != null && widget.presentation != null && widget.presentation.name() == 'PERLENKETTE'}" onchange="onWidgetPresentationChanged('PERLENKETTE')" />
+                            <input type="radio" name="presentation" value="PERLENKETTE" th:disabled="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS')}" th:checked="${widget != null && widget.presentation != null && widget.presentation.name() == 'PERLENKETTE'}" onchange="onWidgetPresentationChanged('PERLENKETTE')" />
                             <div class="tile-content">
                                 <span class="material-symbols-outlined tile-icon">linear_scale</span>
                                 <div class="tile-title">String of Pearls</div>
@@ -241,9 +249,9 @@
                 <input type="hidden" name="presentation" id="widgetFixedRunsPresentationInput" value="RUNS"
                        th:disabled="${widget == null || widget.metric == null || (widget.metric.name() != 'RUNS' && widget.metric.name() != 'RUN_HISTORY' && widget.metric.name() != 'RUNS_LIST' && widget.metric.name() != 'LIST_OF_RUNS')}" />
 
-                <!-- 3. TARGET POINT / TIME SCOPE (Visible for static points: PIE_CHART, RATIO_BAR, TEXT, LIST) -->
+                <!-- 3. TARGET POINT / TIME SCOPE (Visible for static points: PIE_CHART, RATIO_BAR, TEXT, LIST, or TAG PERLENKETTE) -->
                 <div class="config-section" id="widgetPointScopeSection"
-                     th:style="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS' || widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')} ? 'display: none;' : (${widget == null || widget.presentation == null || widget.presentation.name() == 'PIE_CHART' || widget.presentation.name() == 'RATIO_BAR' || widget.presentation.name() == 'TEXT' || widget.presentation.name() == 'LIST'} ? 'display: block;' : 'display: none;')">
+                     th:style="${widget != null && widget.metric != null && (widget.metric.name() == 'TEST_VARIATIONS' || widget.metric.name() == 'KNOWN_VARIATIONS' || widget.metric.name() == 'RUNS' || widget.metric.name() == 'RUN_HISTORY' || widget.metric.name() == 'RUNS_LIST' || widget.metric.name() == 'LIST_OF_RUNS')} ? 'display: none;' : (${widget == null || widget.presentation == null || widget.presentation.name() == 'PIE_CHART' || widget.presentation.name() == 'RATIO_BAR' || widget.presentation.name() == 'TEXT' || widget.presentation.name() == 'LIST' || (widget.presentation.name() == 'PERLENKETTE' && widget.metric != null && widget.metric.name() == 'TAG')} ? 'display: block;' : 'display: none;')">
                     <label class="config-label d-flex align-items-center gap-1">
                         <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">timelapse</span>
                         <strong>Target Point / Time Scope</strong>
@@ -341,26 +349,26 @@
                      style="display: none;">
                     <label class="config-label d-flex align-items-center gap-1">
                         <span class="material-symbols-outlined text-accent" style="font-size: 0.95rem;">date_range</span>
-                        <strong>Trend Time Grouping / Mode</strong>
+                        <strong id="widgetTrendModeLabel" th:text="${widget != null && widget.metric != null && widget.metric.name() == 'TAG'} ? 'Milestone Aggregation Mode' : 'Trend Time Grouping / Mode'">Trend Time Grouping / Mode</strong>
                     </label>
                     <div class="config-radio-pills d-flex align-items-center gap-2 flex-wrap mt-1">
-                        <label class="pill-radio-btn">
+                        <label class="pill-radio-btn" id="trendModePillByRuns">
                             <input type="radio" name="trendMode" value="BY_RUNS" th:checked="${widget == null || widget.trendMode == null || widget.trendMode.name() == 'BY_RUNS'}" />
-                            <span>By Runs</span>
+                            <span id="trendModePillByRunsLabel" th:text="${widget != null && widget.metric != null && widget.metric.name() == 'TAG'} ? 'All Run Executions (Volume)' : 'By Runs'">By Runs</span>
                         </label>
-                        <label class="pill-radio-btn">
+                        <label class="pill-radio-btn" id="trendModePillLatestApproach">
                             <input type="radio" name="trendMode" value="LATEST_APPROACH" th:checked="${widget != null && widget.trendMode != null && widget.trendMode.name() == 'LATEST_APPROACH'}" />
                             <span>Latest-approach (Suite Evolution)</span>
                         </label>
-                        <label class="pill-radio-btn">
+                        <label class="pill-radio-btn" id="trendModePillDaily" th:style="${widget != null && widget.metric != null && widget.metric.name() == 'TAG'} ? 'display: none;' : ''">
                             <input type="radio" name="trendMode" value="DAILY" th:checked="${widget != null && widget.trendMode != null && widget.trendMode.name() == 'DAILY'}" />
                             <span>Daily</span>
                         </label>
-                        <label class="pill-radio-btn">
+                        <label class="pill-radio-btn" id="trendModePillHourly" th:style="${widget != null && widget.metric != null && widget.metric.name() == 'TAG'} ? 'display: none;' : ''">
                             <input type="radio" name="trendMode" value="HOURLY" th:checked="${widget != null && widget.trendMode != null && widget.trendMode.name() == 'HOURLY'}" />
                             <span>Hourly</span>
                         </label>
-                        <label class="pill-radio-btn">
+                        <label class="pill-radio-btn" id="trendModePillMonthly" th:style="${widget != null && widget.metric != null && widget.metric.name() == 'TAG'} ? 'display: none;' : ''">
                             <input type="radio" name="trendMode" value="MONTHLY" th:checked="${widget != null && widget.trendMode != null && widget.trendMode.name() == 'MONTHLY'}" />
                             <span>Monthly</span>
                         </label>
@@ -438,12 +446,10 @@
                                 <span class="material-symbols-outlined pill-icon" style="font-size: 0.75rem;">lock</span>
                                 <span>Test</span>
                             </span>
-                            <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
-                                <input type="checkbox" name="identityDimCheckbox" value="browser"
-                                       th:checked="${widget != null && widget.executionIdentityDimensions != null && #lists.contains(widget.executionIdentityDimensions, 'browser')}"
-                                       onchange="updateExecutionIdentityDimensionsInput()" />
+                            <span class="run-scope-pill active" style="cursor: default; opacity: 0.85; pointer-events: none;" title="Browser (Mandatory Base Coordinate)">
+                                <span class="material-symbols-outlined pill-icon" style="font-size: 0.75rem;">lock</span>
                                 <span>Browser</span>
-                            </label>
+                            </span>
                             <label class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
                                 <input type="checkbox" name="identityDimCheckbox" value="locale"
                                        th:checked="${widget != null && widget.executionIdentityDimensions != null && #lists.contains(widget.executionIdentityDimensions, 'locale')}"
@@ -468,7 +474,7 @@
                             </th:block>
                         </div>
                         <input type="hidden" name="executionIdentityDimensions" id="widgetExecutionIdentityDimensionsInput"
-                               th:value="${widget != null && widget.executionIdentityDimensions != null ? #strings.listJoin(widget.executionIdentityDimensions, ',') : ''}" />
+                               th:value="${widget != null && widget.executionIdentityDimensions != null && !widget.executionIdentityDimensions.isEmpty() ? #strings.listJoin(widget.executionIdentityDimensions, ',') : 'browser'}" />
                     </div>
                 </div>
 
@@ -587,6 +593,32 @@
                             <input type="hidden" name="filterAreas" id="widgetFilterAreasInput"
                                    th:value="${widget != null && widget.runFilters != null && widget.runFilters.areas != null ? #strings.listJoin(widget.runFilters.areas, ',') : ''}" />
                         </div>
+
+                        <!-- Dynamic Custom Tags -->
+                        <th:block th:if="${candidateCustomTags != null && !candidateCustomTags.isEmpty()}">
+                            <div class="mb-2" th:each="entry : ${candidateCustomTags}" th:if="${entry.value != null && !entry.value.isEmpty()}">
+                                <label class="config-sublabel text-muted d-block mb-1" style="font-size: 0.75rem; font-weight: 600;"
+                                       th:text="${'Filter by ' + entry.key + ':'}">Filter by Tag:</label>
+                                <div class="d-flex align-items-center gap-1 flex-wrap">
+                                    <label th:each="val : ${entry.value}" class="pill-radio-btn" style="margin: 0; font-size: 0.75rem;">
+                                        <input type="checkbox"
+                                               class="widget-filter-tag-checkbox"
+                                               th:attr="data-tag-key=${entry.key}"
+                                               th:name="${'filterTagCheckbox_' + entry.key}"
+                                               th:value="${val}"
+                                               th:checked="${widget != null && widget.runFilters != null && widget.runFilters.hasTagValue(entry.key, val)}"
+                                               onchange="updateWidgetRunFiltersInputs()" />
+                                        <span th:text="${val}">Value</span>
+                                    </label>
+                                </div>
+                                <input type="hidden"
+                                       class="widget-filter-tag-hidden"
+                                       th:attr="data-tag-key=${entry.key}"
+                                       th:name="${'filterTag_' + entry.key}"
+                                       th:id="${'widgetFilterTagInput_' + entry.key}"
+                                       th:value="${widget != null && widget.runFilters != null ? widget.runFilters.getTagValuesCsv(entry.key) : ''}" />
+                            </div>
+                        </th:block>
                     </div>
                 </div>
 
@@ -737,15 +769,23 @@
             metricLabel = 'AI Usage';
         } else if (metric === 'FLAKINESS') {
             metricLabel = 'Flakiness';
+        } else if (metric === 'NUMBER_OF_RUNS' || metric === 'RUN_COUNT' || metric === 'RUNS_COUNT' || metric === 'RUN_VOLUME' || metric === 'RUN_FREQUENCY' || metric === 'NUMBER_OF_TEST_RUNS') {
+            metricLabel = 'Number of Runs';
         }
 
         var title = '';
         switch (pres) {
             case 'PIE_CHART':
-                title = metricLabel + ' Pie Chart';
+                if (metric === 'NUMBER_OF_RUNS') {
+                    title = 'Number of Runs Distribution';
+                } else {
+                    title = metricLabel + ' Pie Chart';
+                }
                 break;
             case 'RATIO_BAR':
-                if (metric === 'BUGS') {
+                if (metric === 'NUMBER_OF_RUNS') {
+                    title = 'Number of Runs Ratio Bar';
+                } else if (metric === 'BUGS') {
                     title = 'Bug Severity Ratio Bar';
                 } else {
                     title = metricLabel + ' Ratio Bar';
@@ -758,7 +798,9 @@
                 title = metricLabel + ' Trend Graph';
                 break;
             case 'TEXT':
-                if (metric === 'BUGS') {
+                if (metric === 'NUMBER_OF_RUNS') {
+                    title = 'Number of Runs KPI';
+                } else if (metric === 'BUGS') {
                     title = 'Active Bugs KPI';
                 } else {
                     title = metricLabel + ' KPI';
@@ -768,7 +810,9 @@
                 title = metricLabel + ' with Trend';
                 break;
             case 'LIST':
-                if (metric === 'BUGS') {
+                if (metric === 'NUMBER_OF_RUNS') {
+                    title = 'Number of Runs Breakdown List';
+                } else if (metric === 'BUGS') {
                     title = 'Bug Breakdown List';
                 } else if (metric === 'AI_USAGE' || metric === 'FLAKINESS') {
                     title = metricLabel + ' List';
@@ -781,7 +825,8 @@
                 break;
         }
 
-        var isTrend = (pres === 'PERLENKETTE' || pres === 'TREND_GRAPH' || pres === 'TEXT_WITH_SMALL_TREND');
+        var isTagPerlenkette = (metric === 'TAG' && pres === 'PERLENKETTE');
+        var isTrend = (pres === 'PERLENKETTE' || pres === 'TREND_GRAPH' || pres === 'TEXT_WITH_SMALL_TREND') && !isTagPerlenkette;
         if (isTrend) {
             var trendModeRadio = document.querySelector('input[name="trendMode"]:checked');
             var tm = trendModeRadio ? trendModeRadio.value : 'BY_RUNS';
@@ -838,7 +883,7 @@
         }
         var perlenketteRadio = document.querySelector('#widgetPresentationSection input[type="radio"][name="presentation"][value="PERLENKETTE"]');
         if (perlenketteRadio) {
-            perlenketteRadio.disabled = (metric === 'TAG');
+            perlenketteRadio.disabled = false;
         }
         if (metric === 'COSTS') {
             var byRunsRadio = document.querySelector('input[name="trendMode"][value="BY_RUNS"]');
@@ -846,7 +891,7 @@
                 byRunsRadio.checked = true;
             }
         }
-        if (metric === 'COSTS' || metric === 'BUGS') {
+        if (metric === 'COSTS' || metric === 'BUGS' || metric === 'NUMBER_OF_RUNS' || metric === 'RUN_COUNT' || metric === 'RUNS_COUNT' || metric === 'RUN_VOLUME' || metric === 'RUN_FREQUENCY' || metric === 'NUMBER_OF_TEST_RUNS') {
             var absoluteRadio = document.querySelector('input[name="valueFormat"][value="ABSOLUTE"]');
             if (absoluteRadio) {
                 absoluteRadio.checked = true;
@@ -933,7 +978,12 @@
 
             updateSuggestedWidgetTitle();
         } else {
-            if (identitySec) identitySec.style.display = 'block';
+            var isNumberOfRuns = (metric === 'NUMBER_OF_RUNS' || metric === 'RUN_COUNT' || metric === 'RUNS_COUNT' || metric === 'RUN_VOLUME' || metric === 'RUN_FREQUENCY' || metric === 'NUMBER_OF_TEST_RUNS');
+            if (identitySec) identitySec.style.display = isNumberOfRuns ? 'none' : 'block';
+            if (isNumberOfRuns && overrideIdentityCheckbox) {
+                overrideIdentityCheckbox.checked = false;
+                toggleWidgetExecutionIdentitySection(false);
+            }
             if (widthQuarterLabel) widthQuarterLabel.style.display = 'inline-flex';
             if (widthHalfLabel) widthHalfLabel.style.display = 'inline-flex';
             if (widthQuarterRadio) widthQuarterRadio.disabled = false;
@@ -944,25 +994,40 @@
             if (fixedPres) fixedPres.disabled = true;
             if (fixedRunsPres) fixedRunsPres.disabled = true;
             presRadios.forEach(function(r) {
-                if (r.value === 'PERLENKETTE' && metric === 'TAG') {
-                    r.disabled = true;
-                } else {
-                    r.disabled = false;
-                }
+                r.disabled = false;
             });
             pointScopeRadios.forEach(function(r) { r.disabled = false; });
 
             var curPresRadio = document.querySelector('#widgetPresentationSection input[type="radio"][name="presentation"]:checked');
             var curPres = curPresRadio ? curPresRadio.value : 'PIE_CHART';
-            if (metric === 'TAG' && curPres === 'PERLENKETTE') {
-                var pieRadio = document.querySelector('#widgetPresentationSection input[type="radio"][name="presentation"][value="PIE_CHART"]');
-                if (pieRadio) {
-                    pieRadio.checked = true;
-                    curPres = 'PIE_CHART';
-                }
-            }
             onWidgetPresentationChanged(curPres);
             updateSuggestedWidgetTitle();
+        }
+    }
+    function updateTrendModePillsVisibility(metric, presentation) {
+        var isTag = (metric === 'TAG');
+        var lbl = document.getElementById('widgetTrendModeLabel');
+        var byRunsSpan = document.getElementById('trendModePillByRunsLabel');
+        var pillDaily = document.getElementById('trendModePillDaily');
+        var pillHourly = document.getElementById('trendModePillHourly');
+        var pillMonthly = document.getElementById('trendModePillMonthly');
+
+        if (lbl) {
+            lbl.textContent = isTag ? 'Milestone Aggregation Mode' : 'Trend Time Grouping / Mode';
+        }
+        if (byRunsSpan) {
+            byRunsSpan.textContent = isTag ? 'All Run Executions (Volume)' : 'By Runs';
+        }
+        if (pillDaily) pillDaily.style.display = isTag ? 'none' : '';
+        if (pillHourly) pillHourly.style.display = isTag ? 'none' : '';
+        if (pillMonthly) pillMonthly.style.display = isTag ? 'none' : '';
+
+        if (isTag) {
+            var checkedRadio = document.querySelector('input[name="trendMode"]:checked');
+            if (checkedRadio && (checkedRadio.value === 'DAILY' || checkedRadio.value === 'HOURLY' || checkedRadio.value === 'MONTHLY')) {
+                var latestApp = document.querySelector('input[name="trendMode"][value="LATEST_APPROACH"]');
+                if (latestApp) latestApp.checked = true;
+            }
         }
     }
     function onWidgetPresentationChanged(presentation) {
@@ -970,6 +1035,7 @@
         if (curMetricRadio && (curMetricRadio.value === 'TEST_VARIATIONS' || curMetricRadio.value === 'RUNS' || curMetricRadio.value === 'RUN_HISTORY' || curMetricRadio.value === 'RUNS_LIST' || curMetricRadio.value === 'LIST_OF_RUNS')) {
             return;
         }
+        var curMetric = curMetricRadio ? curMetricRadio.value : 'STATUS';
         var perlenketteSec = document.getElementById('widgetPerlenketteOptionsSection');
         var trendModeSec = document.getElementById('widgetTrendModeSection');
         var trendOptsSec = document.getElementById('widgetTrendOptionsSection');
@@ -988,8 +1054,9 @@
             valFormatSec.style.display = (presentation === 'PERLENKETTE' || presentation === 'TEXT' || presentation === 'TEXT_WITH_SMALL_TREND') ? 'block' : 'none';
         }
         if (pointScopeSec) {
-            pointScopeSec.style.display = (presentation === 'PIE_CHART' || presentation === 'RATIO_BAR' || presentation === 'TEXT' || presentation === 'LIST') ? 'block' : 'none';
+            pointScopeSec.style.display = (presentation === 'PIE_CHART' || presentation === 'RATIO_BAR' || presentation === 'TEXT' || presentation === 'LIST' || (presentation === 'PERLENKETTE' && curMetric === 'TAG')) ? 'block' : 'none';
         }
+        updateTrendModePillsVisibility(curMetric, presentation);
         updateSuggestedWidgetTitle();
     }
     function toggleWidgetExecutionIdentitySection(show) {
@@ -1019,6 +1086,19 @@
         collectChecked('filterLocalesCheckbox', 'widgetFilterLocalesInput');
         collectChecked('filterEnvsCheckbox', 'widgetFilterEnvsInput');
         collectChecked('filterAreasCheckbox', 'widgetFilterAreasInput');
+
+        var hiddenTagInputs = document.querySelectorAll('.widget-filter-tag-hidden');
+        hiddenTagInputs.forEach(function(hiddenInp) {
+            var tagKey = hiddenInp.getAttribute('data-tag-key');
+            if (!tagKey) return;
+            var checkedVals = [];
+            document.querySelectorAll('.widget-filter-tag-checkbox').forEach(function(cb) {
+                if (cb.checked && cb.getAttribute('data-tag-key') === tagKey) {
+                    checkedVals.push(cb.value);
+                }
+            });
+            hiddenInp.value = checkedVals.join(',');
+        });
     }
     function setWidgetFilterLimit(val) {
         var inp = document.getElementById('widgetFilterLimitInput');

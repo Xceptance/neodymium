@@ -66,7 +66,12 @@ public enum WidgetMetric
     /**
      * List of test execution runs belonging to this dashboard.
      */
-    RUNS("Runs", "history");
+    RUNS("Runs", "history"),
+
+    /**
+     * Quantitative volume, frequency, and pass rates of test execution runs.
+     */
+    NUMBER_OF_RUNS("Number of Runs", "pin");
 
     private final String displayName;
     private final String icon;
@@ -105,6 +110,13 @@ public enum WidgetMetric
         if ("RUNS".equals(normalized) || "RUN_HISTORY".equals(normalized) || "RUNS_LIST".equals(normalized) || "LIST_OF_RUNS".equals(normalized))
         {
             return RUNS;
+        }
+        if ("NUMBER_OF_RUNS".equals(normalized) || "RUN_COUNT".equals(normalized) || "RUNS_COUNT".equals(normalized)
+            || "NUM_RUNS".equals(normalized) || "RUN_NUMBER".equals(normalized) || "NUMBER_OF_RUN".equals(normalized)
+            || "EXECUTION_RUNS".equals(normalized) || "RUN_VOLUME".equals(normalized) || "RUN_FREQUENCY".equals(normalized)
+            || "NUMBER_OF_TEST_RUNS".equals(normalized))
+        {
+            return NUMBER_OF_RUNS;
         }
         for (final WidgetMetric m : values())
         {

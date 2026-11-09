@@ -7319,6 +7319,87 @@ public class AuraReportDataService
         return result;
     }
 
+    /**
+     * Resolves all non-standard / custom tag dimensions and their distinct candidate values across
+     * {@link #tagRepository} and {@link #getAllKnownTagMap()}.
+     * Standard dimensions (browser, locale/location, environment/env, area/areatag) are excluded.
+     * Original casing from the database is preserved for display labels, and entries are sorted case-insensitively.
+     *
+     * @return map of custom tag keys to their distinct sorted candidate values
+     */
+    public Map<String, List<String>> getCandidateCustomTags()
+    {
+        final Map<String, Set<String>> customTagMap = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+
+        if (tagRepository != null)
+        {
+            final List<String> distinctKeys = tagRepository.findDistinctTagKeys();
+            for (final String key : distinctKeys)
+            {
+                if (key == null || key.isBlank() || isStandardDimensionKey(key))
+                {
+                    continue;
+                }
+                final List<String> vals = tagRepository.findDistinctTagValuesByTagKey(key);
+                if (vals != null && !vals.isEmpty())
+                {
+                    final Set<String> targetSet = customTagMap.computeIfAbsent(key.trim(), k -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
+                    for (final String v : vals)
+                    {
+                        if (v != null && !v.isBlank())
+                        {
+                            targetSet.add(v.trim());
+                        }
+                    }
+                }
+            }
+        }
+
+        final Map<String, List<String>> allKnown = getAllKnownTagMap();
+        for (final Map.Entry<String, List<String>> entry : allKnown.entrySet())
+        {
+            final String k = entry.getKey();
+            if (k == null || k.isBlank() || isStandardDimensionKey(k))
+            {
+                continue;
+            }
+            final Set<String> targetSet = customTagMap.computeIfAbsent(k.trim(), key -> new TreeSet<>(String.CASE_INSENSITIVE_ORDER));
+            if (entry.getValue() != null)
+            {
+                for (final String v : entry.getValue())
+                {
+                    if (v != null && !v.isBlank())
+                    {
+                        targetSet.add(v.trim());
+                    }
+                }
+            }
+        }
+
+        final Map<String, List<String>> result = new LinkedHashMap<>();
+        for (final Map.Entry<String, Set<String>> entry : customTagMap.entrySet())
+        {
+            if (!entry.getValue().isEmpty())
+            {
+                result.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+            }
+        }
+        return result;
+    }
+
+    private static boolean isStandardDimensionKey(final String key)
+    {
+        if (key == null)
+        {
+            return false;
+        }
+        final String lower = key.trim().toLowerCase();
+        return "browser".equals(lower)
+            || "locale".equals(lower) || "location".equals(lower)
+            || "environment".equals(lower) || "env".equals(lower) || "instance".equals(lower)
+            || "area".equals(lower) || "areatag".equals(lower);
+    }
+
     public Map<String, List<String>> getAllKnownTagMap()
     {
         final Map<String, Set<String>> rawTagMap = new LinkedHashMap<>();

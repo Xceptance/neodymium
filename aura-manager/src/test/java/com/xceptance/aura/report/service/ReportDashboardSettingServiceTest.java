@@ -239,6 +239,11 @@ public class ReportDashboardSettingServiceTest
         // Default has browser. Toggle environment -> adds environment
         final List<String> withEnv = service.toggleExecutionIdentityDimension("environment");
         Assertions.assertEquals(List.of("browser", "environment"), withEnv);
+
+        // Toggling browser must be a no-op because browser is locked as a mandatory base coordinate
+        final List<String> afterBrowserToggle = service.toggleExecutionIdentityDimension("browser");
+        Assertions.assertTrue(afterBrowserToggle.contains("browser"));
+        Assertions.assertEquals(List.of("browser", "environment"), afterBrowserToggle);
     }
 
     @Test
@@ -943,6 +948,15 @@ public class ReportDashboardSettingServiceTest
         Assertions.assertTrue(deserialized.getRunFilters().getTagsByType().get("tier").contains("p1"));
         Assertions.assertTrue(deserialized.getRunFilters().getExcludeTagsByType().containsKey("tier"));
         Assertions.assertTrue(deserialized.getRunFilters().getExcludeTagsByType().get("tier").contains("p3"));
+
+        // Verify hasTagValue and getTagValuesCsv helper methods
+        Assertions.assertTrue(deserialized.getRunFilters().hasTagValue("tier", "p1"));
+        Assertions.assertTrue(deserialized.getRunFilters().hasTagValue("TIER", "P1"), "Matching must be case-insensitive");
+        Assertions.assertFalse(deserialized.getRunFilters().hasTagValue("tier", "nonexistent"));
+        Assertions.assertFalse(deserialized.getRunFilters().hasTagValue("unknownKey", "p1"));
+        Assertions.assertEquals("p1", deserialized.getRunFilters().getTagValuesCsv("tier"));
+        Assertions.assertEquals("p1", deserialized.getRunFilters().getTagValuesCsv("TIER"));
+        Assertions.assertEquals("", deserialized.getRunFilters().getTagValuesCsv("unknownKey"));
     }
 
     @Test
@@ -1263,6 +1277,83 @@ public class ReportDashboardSettingServiceTest
     }
 
     @Test
+    public void testReorderContainerChildrenDefaultDashboard()
+    {
+        final DashboardWidgetConfigDto c1 = new DashboardWidgetConfigDto(
+            "c1", "Child 1", WidgetMetric.STATUS, null,
+            WidgetPresentation.PIE_CHART, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, WidgetPointScope.LATEST_TEST_STATUS,
+            "half", 0, false, false, Collections.emptyList(), true, null
+        );
+        final DashboardWidgetConfigDto c2 = new DashboardWidgetConfigDto(
+            "c2", "Child 2", WidgetMetric.STATUS, null,
+            WidgetPresentation.LIST, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, WidgetPointScope.LATEST_TEST_STATUS,
+            "half", 1, false, false, Collections.emptyList(), true, null
+        );
+        final DashboardWidgetConfigDto c3 = new DashboardWidgetConfigDto(
+            "c3", "Child 3", WidgetMetric.STATUS, null,
+            WidgetPresentation.RATIO_BAR, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, WidgetPointScope.LATEST_TEST_STATUS,
+            "half", 2, false, false, Collections.emptyList(), true, null
+        );
+        final DashboardWidgetConfigDto container = DashboardWidgetConfigDto.createContainer(
+            "cont-1", "Container 1", List.of(c1, c2, c3), 0
+        );
+
+        service.setDashboardWidgets(List.of(container));
+
+        // Reorder children to: c3, c1, c2
+        final boolean reordered = service.reorderContainerChildren("cont-1", List.of("c3", "c1", "c2"));
+        Assertions.assertTrue(reordered);
+
+        final List<DashboardWidgetConfigDto> widgets = service.getDashboardWidgets();
+        Assertions.assertEquals(1, widgets.size());
+        final DashboardWidgetConfigDto updated = widgets.get(0);
+        Assertions.assertEquals(3, updated.getChildren().size());
+        Assertions.assertEquals("c3", updated.getChildren().get(0).getId());
+        Assertions.assertEquals("c1", updated.getChildren().get(1).getId());
+        Assertions.assertEquals("c2", updated.getChildren().get(2).getId());
+
+        // Non-existent container returns false
+        Assertions.assertFalse(service.reorderContainerChildren("unknown-container", List.of("c1", "c2")));
+        // Null or empty list returns false
+        Assertions.assertFalse(service.reorderContainerChildren("cont-1", Collections.emptyList()));
+        Assertions.assertFalse(service.reorderContainerChildren("cont-1", null));
+        Assertions.assertFalse(service.reorderContainerChildren(null, List.of("c1")));
+    }
+
+    @Test
+    public void testReorderContainerChildrenCustomPage()
+    {
+        final DashboardPageConfigDto page = service.createCustomPage("Custom Analytics");
+        final DashboardWidgetConfigDto c1 = new DashboardWidgetConfigDto(
+            "c1", "Child 1", WidgetMetric.STATUS, null,
+            WidgetPresentation.PIE_CHART, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, WidgetPointScope.LATEST_TEST_STATUS,
+            "half", 0, false, false, Collections.emptyList(), true, null
+        );
+        final DashboardWidgetConfigDto c2 = new DashboardWidgetConfigDto(
+            "c2", "Child 2", WidgetMetric.STATUS, null,
+            WidgetPresentation.LIST, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT, WidgetPointScope.LATEST_TEST_STATUS,
+            "half", 1, false, false, Collections.emptyList(), true, null
+        );
+        final DashboardWidgetConfigDto container = DashboardWidgetConfigDto.createContainer(
+            "cont-custom", "Custom Container", List.of(c1, c2), 0
+        );
+
+        service.setWidgetsForPage(page.getId(), List.of(container));
+
+        final boolean reordered = service.reorderContainerChildren(page.getId(), "cont-custom", List.of("c2", "c1"));
+        Assertions.assertTrue(reordered);
+
+        final List<DashboardWidgetConfigDto> pageWidgets = service.getWidgetsForPage(page.getId());
+        Assertions.assertEquals(1, pageWidgets.size());
+        final DashboardWidgetConfigDto updated = pageWidgets.get(0);
+        Assertions.assertEquals("c2", updated.getChildren().get(0).getId());
+        Assertions.assertEquals("c1", updated.getChildren().get(1).getId());
+
+        // Null pageId delegates to default dashboard
+        Assertions.assertFalse(service.reorderContainerChildren(null, "unknown", List.of("c1")));
+    }
+
+    @Test
     public void testCreateCustomPage()
     {
         final DashboardPageConfigDto created = service.createCustomPage("Executive Summary");
@@ -1475,6 +1566,40 @@ public class ReportDashboardSettingServiceTest
         Assertions.assertEquals(List.of("browser"), created.getExecutionIdentityDimensions());
         Assertions.assertFalse(created.hasRunFilters());
         Assertions.assertNull(created.getRunFilters());
+    }
+
+    @Test
+    public void testCreateCustomPageEnforcesBrowserInExecutionIdentity()
+    {
+        final DashboardPageConfigDto created = service.createCustomPage(
+            "Custom Page Without Explicit Browser",
+            List.of("locale"),
+            null
+        );
+
+        Assertions.assertNotNull(created);
+        Assertions.assertTrue(created.getExecutionIdentityDimensions().contains("browser"),
+            "createCustomPage must enforce browser as mandatory base dimension");
+        Assertions.assertEquals(List.of("browser", "locale"), created.getExecutionIdentityDimensions());
+    }
+
+    @Test
+    public void testCreateGroupDashboardEnforcesBrowserInExecutionIdentity()
+    {
+        final DashboardPageConfigDto created = service.createGroupDashboard(
+            "Group Without Browser",
+            "browser",
+            WidgetPointScope.LATEST_TEST_STATUS,
+            List.of("environment"),
+            null,
+            List.of("Chrome"),
+            null
+        );
+
+        Assertions.assertNotNull(created);
+        Assertions.assertTrue(created.getExecutionIdentityDimensions().contains("browser"),
+            "createGroupDashboard must enforce browser as mandatory base dimension");
+        Assertions.assertEquals(List.of("browser", "environment"), created.getExecutionIdentityDimensions());
     }
 
     @Test

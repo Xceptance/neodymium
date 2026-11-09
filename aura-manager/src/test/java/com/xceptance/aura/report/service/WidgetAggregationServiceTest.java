@@ -2544,23 +2544,321 @@ public class WidgetAggregationServiceTest
     }
 
     @Test
-    public void testAggregateWidgetTagMetricPerlenketteFallbackToPieChart()
+    public void testAggregateWidgetTagMetricPerlenketteProducesBeadsPerTagValue()
     {
-        final DashboardWidgetConfigDto mockConfig = Mockito.mock(DashboardWidgetConfigDto.class);
-        Mockito.when(mockConfig.getMetric()).thenReturn(WidgetMetric.TAG);
-        Mockito.when(mockConfig.getTagKey()).thenReturn("browser");
-        Mockito.when(mockConfig.getPresentation()).thenReturn(WidgetPresentation.PERLENKETTE);
-        Mockito.when(mockConfig.getPointScope()).thenReturn(WidgetPointScope.LATEST_TEST_STATUS);
-        Mockito.when(mockConfig.getWidth()).thenReturn("half");
-        Mockito.when(mockConfig.getTitle()).thenReturn("Browser Pie Chart");
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-tag-pk", "Browser String of Pearls", WidgetMetric.TAG, "browser",
+            WidgetPresentation.PERLENKETTE, WidgetTrendMode.BY_RUNS, WidgetValueFormat.PERCENT,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+
+        final List<BatchLatestVariationDto> variations = new ArrayList<>();
+        // 10 Chrome variations: 9 passed, 1 unknown fail -> 90%
+        for (int i = 0; i < 9; i++)
+        {
+            variations.add(new BatchLatestVariationDto("c" + i, "passed-clean", false, "JAVA", "run-1", "Default", "Chrome", "US", "Checkout", "Default", Collections.emptyMap(), 0.0, 0L));
+        }
+        variations.add(new BatchLatestVariationDto("c9", "failed-unknown", false, "JAVA", "run-1", "Default", "Chrome", "US", "Checkout", "Default", Collections.emptyMap(), 0.0, 0L));
+
+        // 6 Firefox variations: 6 passed -> 100%
+        for (int i = 0; i < 6; i++)
+        {
+            variations.add(new BatchLatestVariationDto("f" + i, "passed-clean", false, "JAVA", "run-1", "Default", "Firefox", "US", "Checkout", "Default", Collections.emptyMap(), 0.0, 0L));
+        }
+
+        // 4 Safari variations: 2 passed, 2 fixed -> 100%
+        variations.add(new BatchLatestVariationDto("s0", "passed-clean", false, "JAVA", "run-1", "Default", "Safari", "US", "Checkout", "Default", Collections.emptyMap(), 0.0, 0L));
+        variations.add(new BatchLatestVariationDto("s1", "passed-clean", false, "JAVA", "run-1", "Default", "Safari", "US", "Checkout", "Default", Collections.emptyMap(), 0.0, 0L));
+        variations.add(new BatchLatestVariationDto("s2", "succeeded-fixed", false, "JAVA", "run-1", "Default", "Safari", "US", "Checkout", "Default", Collections.emptyMap(), 0.0, 0L));
+        variations.add(new BatchLatestVariationDto("s3", "succeeded-fixed", false, "JAVA", "run-1", "Default", "Safari", "US", "Checkout", "Default", Collections.emptyMap(), 0.0, 0L));
+
+        // 2 Edge variations: 1 passed, 1 known fail -> 50%
+        variations.add(new BatchLatestVariationDto("e0", "passed-clean", false, "JAVA", "run-1", "Default", "Edge", "US", "Checkout", "Default", Collections.emptyMap(), 0.0, 0L));
+        variations.add(new BatchLatestVariationDto("e1", "failed-known", false, "JAVA", "run-1", "Default", "Edge", "US", "Checkout", "Default", Collections.emptyMap(), 0.0, 0L));
 
         final DashboardWidgetViewDto view = service.aggregateWidget(
-            mockConfig, Collections.emptyList(), Collections.emptyList(),
+            config, Collections.emptyList(), variations,
             Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList(), null
         );
 
         Assertions.assertNotNull(view);
-        Assertions.assertNull(view.getPerlenkette(), "Perlenkette model must be null when falling back to pie chart for TAG");
+        final PerlenketteDto pearls = view.getPerlenkette();
+        Assertions.assertNotNull(pearls, "Perlenkette model must be populated for TAG metric");
+        Assertions.assertEquals(4, pearls.getTotalBeads(), "Must create one bead per distinct tag value");
+        Assertions.assertEquals("4 Values", view.getSummaryLabel());
+        Assertions.assertEquals("4 Values", pearls.getTrendSummary());
+
+        final List<PerlenketteBeadDto> beads = pearls.getBeads();
+        // Sorted by volume descending: Chrome (10) -> Firefox (6) -> Safari (4) -> Edge (2)
+        final PerlenketteBeadDto chromeBead = beads.get(0);
+        Assertions.assertEquals("Chrome", chromeBead.getLabel());
+        Assertions.assertEquals("90%", chromeBead.getValueFormatted());
+        Assertions.assertEquals("10 tests", chromeBead.getTimestampLabel());
+        Assertions.assertEquals(90.0, chromeBead.getPercentValue(), 0.01);
+        Assertions.assertEquals("bead-unknown", chromeBead.getStatusClass());
+        Assertions.assertEquals("browser: Chrome", chromeBead.getDetails().get("Tag"));
+        Assertions.assertEquals("90.0%", chromeBead.getDetails().get("Pass Rate"));
+        Assertions.assertEquals("10", chromeBead.getDetails().get("Total Tests"));
+        Assertions.assertEquals("9", chromeBead.getDetails().get("Passed"));
+        Assertions.assertEquals("1", chromeBead.getDetails().get("Unknown Fail"));
+        Assertions.assertTrue(chromeBead.getPillWidth() >= chromeBead.getRadius() * 1.9);
+
+        final PerlenketteBeadDto firefoxBead = beads.get(1);
+        Assertions.assertEquals("Firefox", firefoxBead.getLabel());
+        Assertions.assertEquals("100%", firefoxBead.getValueFormatted());
+        Assertions.assertEquals("6 tests", firefoxBead.getTimestampLabel());
+        Assertions.assertEquals(100.0, firefoxBead.getPercentValue(), 0.01);
+        Assertions.assertEquals("bead-pass", firefoxBead.getStatusClass());
+        Assertions.assertEquals("6", firefoxBead.getDetails().get("Passed"));
+
+        final PerlenketteBeadDto safariBead = beads.get(2);
+        Assertions.assertEquals("Safari", safariBead.getLabel());
+        Assertions.assertEquals("100%", safariBead.getValueFormatted());
+        Assertions.assertEquals("4 tests", safariBead.getTimestampLabel());
+        Assertions.assertEquals(100.0, safariBead.getPercentValue(), 0.01);
+        Assertions.assertEquals("bead-fixed", safariBead.getStatusClass());
+        Assertions.assertEquals("2", safariBead.getDetails().get("Passed"));
+        Assertions.assertEquals("2", safariBead.getDetails().get("Fixed"));
+
+        final PerlenketteBeadDto edgeBead = beads.get(3);
+        Assertions.assertEquals("Edge", edgeBead.getLabel());
+        Assertions.assertEquals("50%", edgeBead.getValueFormatted());
+        Assertions.assertEquals("2 tests", edgeBead.getTimestampLabel());
+        Assertions.assertEquals(50.0, edgeBead.getPercentValue(), 0.01);
+        Assertions.assertEquals("bead-known", edgeBead.getStatusClass());
+        Assertions.assertEquals("1", edgeBead.getDetails().get("Known Fail"));
+    }
+
+    @Test
+    public void testAggregateWidgetTagMetricPerlenkette_AbsoluteFormatAndFallbackRatios()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-tag-pk-abs", "Device String of Pearls", WidgetMetric.TAG, "device",
+            WidgetPresentation.PERLENKETTE, WidgetTrendMode.BY_RUNS, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+
+        final TagRatioCardDto deviceCard = new TagRatioCardDto(
+            "device", List.of(
+                new DistributionRatioDto("Desktop", 15, 60.0, "#3b82f6"),
+                new DistributionRatioDto("Mobile", 10, 40.0, "#10b981")
+            )
+        );
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, Collections.emptyList(), Collections.emptyList(),
+            Collections.emptyList(), List.of(deviceCard), null, null, Collections.emptyList(), null
+        );
+
+        Assertions.assertNotNull(view);
+        final PerlenketteDto pearls = view.getPerlenkette();
+        Assertions.assertNotNull(pearls);
+        Assertions.assertEquals(2, pearls.getTotalBeads());
+        Assertions.assertEquals("2 Values", view.getSummaryLabel());
+        Assertions.assertEquals("2 Values", pearls.getTrendSummary());
+
+        final PerlenketteBeadDto bead0 = pearls.getBeads().get(0);
+        Assertions.assertEquals("Desktop", bead0.getLabel());
+        Assertions.assertEquals("15/15", bead0.getValueFormatted());
+        Assertions.assertEquals("15 tests", bead0.getTimestampLabel());
+
+        final PerlenketteBeadDto bead1 = pearls.getBeads().get(1);
+        Assertions.assertEquals("Mobile", bead1.getLabel());
+        Assertions.assertEquals("10/10", bead1.getValueFormatted());
+        Assertions.assertEquals("10 tests", bead1.getTimestampLabel());
+    }
+
+    @Test
+    public void testAggregateWidgetTagMetricPerlenkette_EmptyDataShowsNoTagDataMessage()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-tag-pk-empty", "Env Pearls", WidgetMetric.TAG, "environment",
+            WidgetPresentation.PERLENKETTE, WidgetTrendMode.BY_RUNS, WidgetValueFormat.PERCENT,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, Collections.emptyList(), Collections.emptyList(),
+            Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList(), null
+        );
+
+        Assertions.assertNotNull(view);
+        final PerlenketteDto pearls = view.getPerlenkette();
+        Assertions.assertNotNull(pearls);
+        Assertions.assertEquals(0, pearls.getTotalBeads());
+        Assertions.assertEquals("No tag data available", view.getEmptyMessage());
+    }
+
+    @Test
+    public void testTagPerlenketteChronologicalMilestonesAcrossRuns()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-rel-pk", "Release Milestone Stabilization", WidgetMetric.TAG, "Release",
+            WidgetPresentation.PERLENKETTE, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT,
+            WidgetPointScope.LATEST_TEST_STATUS, "full", 0, false
+        );
+
+        // Run 1: 2026.09 (Sep 15) -> 90 passed, 10 known fail, 16 unknown fail = 116 total -> 90/116 = 77.58% -> 78%
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run_20260915_100000");
+        r1.setStartTimeMs(1726387200000L);
+        r1.setPassedCount(90);
+        r1.setFailedKnownCount(10);
+        r1.setFailedUnknownCount(16);
+        r1.setTotalTests(116);
+        r1.setTags(List.of(new TestRunTagEntity("run_20260915_100000", "Release", "2026.09")));
+
+        // Run 2: 2026.10 (Oct 15) -> 100 passed, 5 fixed, 5 known fail, 6 unknown fail = 116 total -> 105/116 = 90.51% -> 91%
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("run_20261015_100000");
+        r2.setStartTimeMs(1728979200000L);
+        r2.setPassedCount(100);
+        r2.setSucceededFixedCount(5);
+        r2.setFailedKnownCount(5);
+        r2.setFailedUnknownCount(6);
+        r2.setTotalTests(116);
+        r2.setTags(List.of(new TestRunTagEntity("run_20261015_100000", "Release", "2026.10")));
+
+        // Run 3: 2026.11 (Nov 15) -> 110 passed, 4 fixed, 2 known fail, 0 unknown fail = 116 total -> 114/116 = 98.27% -> 98%
+        final TestRunEntity r3 = new TestRunEntity();
+        r3.setId("run_20261115_100000");
+        r3.setStartTimeMs(1731657600000L);
+        r3.setPassedCount(110);
+        r3.setSucceededFixedCount(4);
+        r3.setFailedKnownCount(2);
+        r3.setFailedUnknownCount(0);
+        r3.setTotalTests(116);
+        r3.setTags(List.of(new TestRunTagEntity("run_20261115_100000", "Release", "2026.11")));
+
+        // Provide runs in reverse order (r3, r2, r1) to verify chronological re-ordering
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, List.of(r3, r2, r1), Collections.emptyList(),
+            Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList(), null
+        );
+
+        Assertions.assertNotNull(view);
+        final PerlenketteDto pearls = view.getPerlenkette();
+        Assertions.assertNotNull(pearls, "Perlenkette model must be populated for release milestone TAG widget");
+        Assertions.assertEquals(3, pearls.getTotalBeads(), "Must create one bead per chronological release milestone");
+
+        final List<PerlenketteBeadDto> beads = pearls.getBeads();
+        // Bead 0: 2026.09
+        final PerlenketteBeadDto b0 = beads.get(0);
+        Assertions.assertEquals("2026.09", b0.getLabel());
+        Assertions.assertEquals("78%", b0.getValueFormatted());
+        Assertions.assertEquals("116 tests", b0.getTimestampLabel());
+        Assertions.assertEquals(77.58, b0.getPercentValue(), 0.1);
+        Assertions.assertEquals("bead-unknown", b0.getStatusClass());
+        Assertions.assertEquals("/run-report?runId=run_20260915_100000", b0.getLinkUrl());
+        Assertions.assertEquals("Suite Evolution (Deduplicated)", b0.getDetails().get("Aggregation Mode"));
+        Assertions.assertEquals("116", b0.getDetails().get("Total Tests"));
+        Assertions.assertEquals("#run_20260915_100000", b0.getDetails().get("Latest Run"));
+
+        // Bead 1: 2026.10
+        final PerlenketteBeadDto b1 = beads.get(1);
+        Assertions.assertEquals("2026.10", b1.getLabel());
+        Assertions.assertEquals("91%", b1.getValueFormatted());
+        Assertions.assertEquals("116 tests", b1.getTimestampLabel());
+        Assertions.assertEquals(90.51, b1.getPercentValue(), 0.1);
+        Assertions.assertEquals("bead-unknown", b1.getStatusClass());
+        Assertions.assertEquals("/run-report?runId=run_20261015_100000", b1.getLinkUrl());
+        Assertions.assertEquals("Suite Evolution (Deduplicated)", b1.getDetails().get("Aggregation Mode"));
+        Assertions.assertEquals("116", b1.getDetails().get("Total Tests"));
+        Assertions.assertEquals("#run_20261015_100000", b1.getDetails().get("Latest Run"));
+
+        // Bead 2: 2026.11
+        final PerlenketteBeadDto b2 = beads.get(2);
+        Assertions.assertEquals("2026.11", b2.getLabel());
+        Assertions.assertEquals("98%", b2.getValueFormatted());
+        Assertions.assertEquals("116 tests", b2.getTimestampLabel());
+        Assertions.assertEquals(98.27, b2.getPercentValue(), 0.1);
+        Assertions.assertEquals("bead-known", b2.getStatusClass());
+        Assertions.assertEquals("/run-report?runId=run_20261115_100000", b2.getLinkUrl());
+        Assertions.assertEquals("Suite Evolution (Deduplicated)", b2.getDetails().get("Aggregation Mode"));
+        Assertions.assertEquals("116", b2.getDetails().get("Total Tests"));
+        Assertions.assertEquals("#run_20261115_100000", b2.getDetails().get("Latest Run"));
+    }
+
+    @Test
+    public void testTagPerlenketteTrendMode_ByRunsVsLatestApproach()
+    {
+        final AuraReportDataService dataService = Mockito.mock(AuraReportDataService.class);
+
+        // Run 1: 2026.10 (Oct 10)
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run_20261010_100000");
+        r1.setStartTimeMs(1728556800000L);
+        r1.setTags(List.of(new TestRunTagEntity("run_20261010_100000", "Release", "2026.10")));
+
+        final TestExecutionDto exec1A = new TestExecutionDto("e1", "run_20261010_100000", "TestClassA", "testA", "testA", "passed-clean", "Chrome", Collections.emptyMap());
+        final TestExecutionDto exec1B = new TestExecutionDto("e2", "run_20261010_100000", "TestClassB", "testB", "testB", "failed-unknown", "Chrome", Collections.emptyMap());
+
+        final RunReportDto rep1 = new RunReportDto("run_20261010_100000", "Batch", "2026-10-10 10:00", "10s", 2, 1, 0, 0, 1, 0, List.of(exec1A, exec1B));
+        Mockito.when(dataService.getRunReport("run_20261010_100000")).thenReturn(rep1);
+
+        // Run 2: 2026.10 (Oct 15)
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("run_20261015_100000");
+        r2.setStartTimeMs(1728988800000L);
+        r2.setTags(List.of(new TestRunTagEntity("run_20261015_100000", "Release", "2026.10")));
+
+        final TestExecutionDto exec2A = new TestExecutionDto("e3", "run_20261015_100000", "TestClassA", "testA", "testA", "passed-clean", "Chrome", Collections.emptyMap());
+        final TestExecutionDto exec2B = new TestExecutionDto("e4", "run_20261015_100000", "TestClassB", "testB", "testB", "passed-clean", "Chrome", Collections.emptyMap()); // Retried and passed in run 2!
+        final TestExecutionDto exec2C = new TestExecutionDto("e5", "run_20261015_100000", "TestClassC", "testC", "testC", "passed-clean", "Chrome", Collections.emptyMap());
+
+        final RunReportDto rep2 = new RunReportDto("run_20261015_100000", "Batch", "2026-10-15 10:00", "10s", 3, 3, 0, 0, 0, 0, List.of(exec2A, exec2B, exec2C));
+        Mockito.when(dataService.getRunReport("run_20261015_100000")).thenReturn(rep2);
+
+        final List<TestRunEntity> runs = List.of(r1, r2);
+
+        // Case 1: LATEST_APPROACH (Suite Evolution / Deduplicated per milestone)
+        final DashboardWidgetConfigDto latestApproachConfig = new DashboardWidgetConfigDto(
+            "w-latest", "Release Suite Evolution", WidgetMetric.TAG, "Release",
+            WidgetPresentation.PERLENKETTE, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT,
+            WidgetPointScope.LATEST_TEST_STATUS, "full", 0, false
+        );
+
+        final DashboardWidgetViewDto latestView = service.aggregateWidget(
+            latestApproachConfig, runs, Collections.emptyList(),
+            Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList(), dataService
+        );
+
+        Assertions.assertNotNull(latestView);
+        Assertions.assertNotNull(latestView.getPerlenkette());
+        Assertions.assertEquals(1, latestView.getPerlenkette().getTotalBeads());
+        final PerlenketteBeadDto latestBead = latestView.getPerlenkette().getBeads().get(0);
+        Assertions.assertEquals("2026.10", latestBead.getLabel());
+        Assertions.assertEquals("3 tests", latestBead.getTimestampLabel());
+        Assertions.assertEquals("100%", latestBead.getValueFormatted());
+        Assertions.assertEquals(100.0, latestBead.getPercentValue(), 0.1);
+        Assertions.assertEquals("Suite Evolution (Deduplicated)", latestBead.getDetails().get("Aggregation Mode"));
+        Assertions.assertEquals("3", latestBead.getDetails().get("Total Tests"));
+        Assertions.assertEquals("3", latestBead.getDetails().get("Passed"));
+
+        // Case 2: BY_RUNS (All Run Executions / Total Volume)
+        final DashboardWidgetConfigDto byRunsConfig = new DashboardWidgetConfigDto(
+            "w-by-runs", "Release Execution Volume", WidgetMetric.TAG, "Release",
+            WidgetPresentation.PERLENKETTE, WidgetTrendMode.BY_RUNS, WidgetValueFormat.PERCENT,
+            WidgetPointScope.LATEST_TEST_STATUS, "full", 0, false
+        );
+
+        final DashboardWidgetViewDto volumeView = service.aggregateWidget(
+            byRunsConfig, runs, Collections.emptyList(),
+            Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList(), dataService
+        );
+
+        Assertions.assertNotNull(volumeView);
+        Assertions.assertNotNull(volumeView.getPerlenkette());
+        Assertions.assertEquals(1, volumeView.getPerlenkette().getTotalBeads());
+        final PerlenketteBeadDto volumeBead = volumeView.getPerlenkette().getBeads().get(0);
+        Assertions.assertEquals("5 tests", volumeBead.getTimestampLabel());
+        // 4 passed out of 5 total = 80.0%
+        Assertions.assertEquals("80%", volumeBead.getValueFormatted());
+        Assertions.assertEquals(80.0, volumeBead.getPercentValue(), 0.1);
+        Assertions.assertEquals("All Run Executions (Volume)", volumeBead.getDetails().get("Aggregation Mode"));
+        Assertions.assertEquals("5", volumeBead.getDetails().get("Total Tests"));
+        Assertions.assertEquals("5", volumeBead.getDetails().get("Total Executions"));
+        Assertions.assertEquals("4", volumeBead.getDetails().get("Passed"));
     }
 
     @Test
@@ -6136,6 +6434,360 @@ public class WidgetAggregationServiceTest
         Assertions.assertNotNull(latestView);
         Assertions.assertEquals("80% PASS", latestView.getPrimaryTextValue());
         Assertions.assertEquals("10 Tests", latestView.getSecondaryTextValue());
+    }
+
+    @Test
+    public void testNumberOfRuns_PieChart_Aggregation()
+    {
+        final DashboardWidgetConfigDto absConfig = new DashboardWidgetConfigDto(
+            "w-runs-pie-abs", "Number of Runs Distribution", WidgetMetric.NUMBER_OF_RUNS, "",
+            WidgetPresentation.PIE_CHART, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-1");
+        r1.setStartTimeMs(1000L);
+        r1.setPassedCount(5);
+        r1.setTotalTests(5);
+        r1.setPassRate(100.0);
+
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("run-2");
+        r2.setStartTimeMs(2000L);
+        r2.setPassedCount(3);
+        r2.setFailedKnownCount(2);
+        r2.setTotalTests(5);
+        r2.setPassRate(60.0);
+
+        final TestRunEntity r3 = new TestRunEntity();
+        r3.setId("run-3");
+        r3.setStartTimeMs(3000L);
+        r3.setPassedCount(4);
+        r3.setFailedUnknownCount(1);
+        r3.setTotalTests(5);
+        r3.setPassRate(80.0);
+
+        final TestRunEntity r4 = new TestRunEntity();
+        r4.setId("run-4");
+        r4.setStartTimeMs(4000L);
+        r4.setIgnoredCount(2);
+        r4.setTotalTests(2);
+        r4.setPassRate(0.0);
+
+        final List<TestRunEntity> runs = List.of(r1, r2, r3, r4);
+
+        final DashboardWidgetViewDto absView = service.aggregateWidget(
+            absConfig, runs, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(absView);
+        Assertions.assertEquals("4 Runs", absView.getSummaryLabel());
+        Assertions.assertEquals("4", absView.getPieCenterRate());
+        Assertions.assertEquals("RUNS", absView.getPieCenterLabel());
+        Assertions.assertEquals(4, absView.getPieSlices().size());
+        Assertions.assertEquals("Passed Runs", absView.getPieSlices().get(0).getLabel());
+        Assertions.assertEquals(1, absView.getPieSlices().get(0).getCount());
+        Assertions.assertEquals(25.0, absView.getPieSlices().get(0).getPercentage());
+        Assertions.assertEquals("Failed Known Runs", absView.getPieSlices().get(1).getLabel());
+        Assertions.assertEquals(1, absView.getPieSlices().get(1).getCount());
+        Assertions.assertEquals("Failed Unknown Runs", absView.getPieSlices().get(2).getLabel());
+        Assertions.assertEquals(1, absView.getPieSlices().get(2).getCount());
+        Assertions.assertEquals("Ignored / Empty Runs", absView.getPieSlices().get(3).getLabel());
+        Assertions.assertEquals(1, absView.getPieSlices().get(3).getCount());
+
+        // Also test PERCENT value format
+        final DashboardWidgetConfigDto pctConfig = new DashboardWidgetConfigDto(
+            "w-runs-pie-pct", "Number of Runs Distribution", WidgetMetric.NUMBER_OF_RUNS, "",
+            WidgetPresentation.PIE_CHART, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+        final DashboardWidgetViewDto pctView = service.aggregateWidget(
+            pctConfig, runs, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+        Assertions.assertEquals("25%", pctView.getPieCenterRate());
+        Assertions.assertEquals("RUN PASS", pctView.getPieCenterLabel());
+    }
+
+    @Test
+    public void testNumberOfRuns_RatioBar_Aggregation()
+    {
+        final DashboardWidgetConfigDto config = new DashboardWidgetConfigDto(
+            "w-runs-bar", "Number of Runs Ratio Bar", WidgetMetric.NUMBER_OF_RUNS, "",
+            WidgetPresentation.RATIO_BAR, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-1");
+        r1.setStartTimeMs(1000L);
+        r1.setPassedCount(5);
+        r1.setTotalTests(5);
+
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("run-2");
+        r2.setStartTimeMs(2000L);
+        r2.setFailedUnknownCount(1);
+        r2.setTotalTests(1);
+
+        final List<TestRunEntity> runs = List.of(r1, r2);
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            config, runs, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertEquals(2, view.getRatioSegments().size());
+        Assertions.assertEquals("Passed Runs", view.getRatioSegments().get(0).getName());
+        Assertions.assertEquals(1, view.getRatioSegments().get(0).getCount());
+        Assertions.assertEquals(50.0, view.getRatioSegments().get(0).getPercentage());
+        Assertions.assertEquals("Failed Unknown Runs", view.getRatioSegments().get(1).getName());
+        Assertions.assertEquals(1, view.getRatioSegments().get(1).getCount());
+        Assertions.assertEquals(50.0, view.getRatioSegments().get(1).getPercentage());
+    }
+
+    @Test
+    public void testNumberOfRuns_Perlenkette_ByRuns()
+    {
+        final DashboardWidgetConfigDto byRunsConfig = new DashboardWidgetConfigDto(
+            "w-runs-pk-runs", "Number of Runs String of Pearls", WidgetMetric.NUMBER_OF_RUNS, "",
+            WidgetPresentation.PERLENKETTE, WidgetTrendMode.BY_RUNS, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-1");
+        r1.setStartTimeMs(1000L);
+        r1.setPassedCount(10);
+        r1.setTotalTests(10);
+        r1.setPassRate(100.0);
+
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("run-2");
+        r2.setStartTimeMs(2000L);
+        r2.setPassedCount(2);
+        r2.setFailedUnknownCount(2);
+        r2.setTotalTests(4);
+        r2.setPassRate(50.0);
+
+        final List<TestRunEntity> runs = List.of(r1, r2);
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            byRunsConfig, runs, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertNotNull(view.getPerlenkette());
+        Assertions.assertEquals(2, view.getPerlenkette().getBeads().size());
+        final PerlenketteBeadDto b1 = view.getPerlenkette().getBeads().get(0);
+        final PerlenketteBeadDto b2 = view.getPerlenkette().getBeads().get(1);
+        Assertions.assertEquals("Run #1", b1.getValueFormatted());
+        Assertions.assertEquals("Run #2", b2.getValueFormatted());
+        Assertions.assertEquals("100.0%", b1.getDetails().get("Run Pass Rate"));
+        Assertions.assertEquals("50.0%", b2.getDetails().get("Run Pass Rate"));
+    }
+
+    @Test
+    public void testNumberOfRuns_TrendGraph_Aggregation()
+    {
+        final DashboardWidgetConfigDto trendConfig = new DashboardWidgetConfigDto(
+            "w-runs-trend", "Number of Runs Trend Graph", WidgetMetric.NUMBER_OF_RUNS, "",
+            WidgetPresentation.TREND_GRAPH, WidgetTrendMode.BY_RUNS, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-1");
+        r1.setStartTimeMs(1000L);
+        r1.setPassedCount(5);
+        r1.setTotalTests(5);
+        r1.setPassRate(100.0);
+
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("run-2");
+        r2.setStartTimeMs(2000L);
+        r2.setPassedCount(5);
+        r2.setTotalTests(5);
+        r2.setPassRate(100.0);
+
+        final TestRunEntity r3 = new TestRunEntity();
+        r3.setId("run-3");
+        r3.setStartTimeMs(3000L);
+        r3.setPassedCount(5);
+        r3.setTotalTests(5);
+        r3.setPassRate(100.0);
+
+        final List<TestRunEntity> runs = List.of(r1, r2, r3);
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            trendConfig, runs, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertEquals(3, view.getTrendPoints().size());
+        Assertions.assertEquals(1.0, view.getTrendPoints().get(0).getValue());
+        Assertions.assertEquals(2.0, view.getTrendPoints().get(1).getValue());
+        Assertions.assertEquals(3.0, view.getTrendPoints().get(2).getValue());
+        Assertions.assertEquals("+2 runs vs start", view.getTrendDeltaLabel());
+        Assertions.assertFalse(view.getTrendLayers().isEmpty());
+        Assertions.assertEquals("Total Runs", view.getTrendLayers().get(0).getName());
+        Assertions.assertEquals(3, view.getTrendLayers().get(0).getCount());
+    }
+
+    @Test
+    public void testNumberOfRuns_TextAndSmallTrend_Aggregation()
+    {
+        final DashboardWidgetConfigDto textAbsConfig = new DashboardWidgetConfigDto(
+            "w-runs-text-abs", "Number of Runs KPI", WidgetMetric.NUMBER_OF_RUNS, "",
+            WidgetPresentation.TEXT, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+
+        final DashboardWidgetConfigDto textPctConfig = new DashboardWidgetConfigDto(
+            "w-runs-text-pct", "Number of Runs KPI", WidgetMetric.NUMBER_OF_RUNS, "",
+            WidgetPresentation.TEXT, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.PERCENT,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-1");
+        r1.setStartTimeMs(1000L);
+        r1.setPassedCount(5);
+        r1.setTotalTests(5);
+        r1.setPassRate(100.0);
+
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("run-2");
+        r2.setStartTimeMs(2000L);
+        r2.setPassedCount(2);
+        r2.setFailedUnknownCount(2);
+        r2.setTotalTests(4);
+        r2.setPassRate(50.0);
+
+        final List<TestRunEntity> runs = List.of(r1, r2);
+
+        final DashboardWidgetViewDto absView = service.aggregateWidget(
+            textAbsConfig, runs, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+        Assertions.assertEquals("2 Runs", absView.getPrimaryTextValue());
+        Assertions.assertEquals("2 Runs", absView.getSecondaryTextValue());
+
+        final DashboardWidgetViewDto pctView = service.aggregateWidget(
+            textPctConfig, runs, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+        Assertions.assertEquals("50% RUN PASS", pctView.getPrimaryTextValue());
+        Assertions.assertEquals("1 of 2 Runs Passed", pctView.getSecondaryTextValue());
+
+        final DashboardWidgetConfigDto smallTrendConfig = new DashboardWidgetConfigDto(
+            "w-runs-small-trend", "Number of Runs with Trend", WidgetMetric.NUMBER_OF_RUNS, "",
+            WidgetPresentation.TEXT_WITH_SMALL_TREND, WidgetTrendMode.BY_RUNS, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+        final DashboardWidgetViewDto smallTrendView = service.aggregateWidget(
+            smallTrendConfig, runs, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+        Assertions.assertEquals("1 Run", smallTrendView.getPrimaryTextValue());
+        Assertions.assertEquals(2, smallTrendView.getTrendPoints().size());
+
+        final DashboardWidgetConfigDto smallTrendLatestConfig = new DashboardWidgetConfigDto(
+            "w-runs-small-trend-latest", "Number of Runs with Trend (Latest Approach)", WidgetMetric.NUMBER_OF_RUNS, "",
+            WidgetPresentation.TEXT_WITH_SMALL_TREND, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+        final DashboardWidgetViewDto smallTrendLatestView = service.aggregateWidget(
+            smallTrendLatestConfig, runs, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+        Assertions.assertEquals("2 Runs", smallTrendLatestView.getPrimaryTextValue());
+    }
+
+    @Test
+    public void testNumberOfRuns_List_Aggregation()
+    {
+        final DashboardWidgetConfigDto listConfig = new DashboardWidgetConfigDto(
+            "w-runs-list", "Number of Runs Breakdown List", WidgetMetric.NUMBER_OF_RUNS, "",
+            WidgetPresentation.LIST, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-101");
+        r1.setStartTimeMs(1000L);
+        r1.setPassedCount(5);
+        r1.setTotalTests(5);
+        r1.setPassRate(100.0);
+
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("run-102");
+        r2.setStartTimeMs(2000L);
+        r2.setFailedUnknownCount(3);
+        r2.setTotalTests(3);
+        r2.setPassRate(0.0);
+
+        final List<TestRunEntity> runs = List.of(r1, r2);
+
+        final DashboardWidgetViewDto view = service.aggregateWidget(
+            listConfig, runs, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+
+        Assertions.assertNotNull(view);
+        Assertions.assertEquals(2, view.getListItems().size());
+        final WidgetListItemDto passedGroup = view.getListItems().stream()
+            .filter(i -> "Passed Runs".equalsIgnoreCase(i.getLabel()))
+            .findFirst()
+            .orElse(null);
+        Assertions.assertNotNull(passedGroup);
+        Assertions.assertEquals(1, passedGroup.getCount());
+        Assertions.assertEquals(1, passedGroup.getSubItems().size());
+        Assertions.assertEquals("Run #run-101", passedGroup.getSubItems().get(0).getLabel());
+
+        final WidgetListItemDto failedUnknownGroup = view.getListItems().stream()
+            .filter(i -> "Failed Unknown Runs".equalsIgnoreCase(i.getLabel()))
+            .findFirst()
+            .orElse(null);
+        Assertions.assertNotNull(failedUnknownGroup);
+        Assertions.assertEquals(1, failedUnknownGroup.getCount());
+        Assertions.assertEquals(1, failedUnknownGroup.getSubItems().size());
+        Assertions.assertEquals("Run #run-102", failedUnknownGroup.getSubItems().get(0).getLabel());
+    }
+
+    @Test
+    public void testNumberOfRuns_ContributingRunsAndContainerCompatibility()
+    {
+        final DashboardWidgetConfigDto c1 = new DashboardWidgetConfigDto(
+            "c1", "Runs Pie", WidgetMetric.NUMBER_OF_RUNS, "",
+            WidgetPresentation.PIE_CHART, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 0, false
+        );
+        final DashboardWidgetConfigDto c2 = new DashboardWidgetConfigDto(
+            "c2", "Runs Bar", WidgetMetric.NUMBER_OF_RUNS, "",
+            WidgetPresentation.RATIO_BAR, WidgetTrendMode.LATEST_APPROACH, WidgetValueFormat.ABSOLUTE,
+            WidgetPointScope.LATEST_TEST_STATUS, "half", 1, false
+        );
+
+        final TestRunEntity r1 = new TestRunEntity();
+        r1.setId("run-a");
+        r1.setStartTimeMs(1000L);
+
+        final TestRunEntity r2 = new TestRunEntity();
+        r2.setId("run-b");
+        r2.setStartTimeMs(2000L);
+
+        final List<TestRunEntity> runs = List.of(r1, r2);
+
+        final Set<String> contribC1 = service.resolveContributingRunIds(c1, runs, Collections.emptyList());
+        final Set<String> contribC2 = service.resolveContributingRunIds(c2, runs, Collections.emptyList());
+
+        Assertions.assertEquals(Set.of("run-a", "run-b"), contribC1);
+        Assertions.assertEquals(Set.of("run-a", "run-b"), contribC2);
+
+        Assertions.assertTrue(service.areBasedOnSameContributingRuns(c1, c2, runs, Collections.emptyList()));
+
+        final DashboardWidgetConfigDto containerConfig = DashboardWidgetConfigDto.createContainer(c1, c2);
+        final DashboardWidgetViewDto containerView = service.aggregateWidget(
+            containerConfig, runs, Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), null, null, Collections.emptyList()
+        );
+        Assertions.assertNotNull(containerView);
+        Assertions.assertEquals(2, containerView.getChildViews().size());
     }
 }
 

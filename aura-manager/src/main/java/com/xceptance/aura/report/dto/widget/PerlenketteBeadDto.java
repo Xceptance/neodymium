@@ -205,5 +205,12 @@ public final class PerlenketteBeadDto
     {
         return radius;
     }
+
+    public double getPillWidth()
+    {
+        final int len = (label != null) ? label.length() : 0;
+        final double textW = len * 7.2;
+        return Math.max(radius * 1.9, textW + 16.0);
+    }
 }
 
