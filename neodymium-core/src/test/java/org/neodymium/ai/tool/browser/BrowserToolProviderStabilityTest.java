@@ -729,6 +729,8 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertTrue(states.contains("focused"), "Enum should contain 'focused'");
         Assertions.assertTrue(states.contains("exists"), "Enum should contain 'exists'");
         Assertions.assertTrue(states.contains("absent"), "Enum should contain 'absent'");
+        Assertions.assertTrue(states.contains("empty"), "Enum should contain 'empty'");
+        Assertions.assertTrue(states.contains("not_empty"), "Enum should contain 'not_empty'");
     }
 
     @Test
@@ -773,6 +775,26 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertEquals("visible", BrowserToolProvider.normalizeElementState("displayed"));
         Assertions.assertEquals("visible", BrowserToolProvider.normalizeElementState("visible"));
         Assertions.assertEquals("editable", BrowserToolProvider.normalizeElementState("editable"));
+        Assertions.assertEquals("empty", BrowserToolProvider.normalizeElementState("empty"));
+        Assertions.assertEquals("empty", BrowserToolProvider.normalizeElementState("blank"));
+        Assertions.assertEquals("empty", BrowserToolProvider.normalizeElementState("[empty]"));
+        Assertions.assertEquals("empty", BrowserToolProvider.normalizeElementState("EMPTY"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("not_empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("non_empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("not-empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("non-empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("NOT_EMPTY"));
+    }
+
+    @Test
+    public void testMatchesCandidateWithEmptyExpectedText()
+    {
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "", false, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate(null, "", false, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "", false, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "", false, true));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("Hello World", "World", false, false));
     }
 
     @Test

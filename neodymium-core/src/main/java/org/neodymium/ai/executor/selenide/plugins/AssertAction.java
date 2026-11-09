@@ -551,6 +551,21 @@ public final class AssertAction implements BrowserActionPlugin
     private void executeTextAssertion(final SelenideElement element, final Action action, final String expected)
     {
         final String matchText = expected != null ? expected : "";
+        if (matchText.isEmpty())
+        {
+            if (action.isNegated())
+            {
+                element.shouldNotBe(Condition.empty);
+                LOG.debug("   ✅ Text Non-Empty Assertion passed for: '{}'", action);
+            }
+            else
+            {
+                element.shouldBe(Condition.empty);
+                LOG.debug("   ✅ Text Empty Assertion passed for: '{}'", action);
+            }
+            return;
+        }
+
         final WebElementCondition cond;
         if (action.isRegex())
         {
@@ -1030,6 +1045,8 @@ public final class AssertAction implements BrowserActionPlugin
                 case "unfocused" -> "focused";
                 case "exists" -> "absent";
                 case "absent" -> "exists";
+                case "empty" -> "not_empty";
+                case "not_empty" -> "empty";
                 default -> normalized;
             } : normalized;
 
@@ -1087,7 +1104,9 @@ public final class AssertAction implements BrowserActionPlugin
                 }
                 case "exists" -> element.should(Condition.exist);
                 case "absent" -> element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
-                default -> throw new AssertionError("Unsupported element state assertion: '" + trimmed + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
+                case "empty" -> element.shouldBe(Condition.empty);
+                case "not_empty" -> element.shouldNotBe(Condition.empty);
+                default -> throw new AssertionError("Unsupported element state assertion: '" + trimmed + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, empty, not_empty.");
             }
             LOG.debug("   ✅ Element satisfied state '{}': {}", state, action);
         }

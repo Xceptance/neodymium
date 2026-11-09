@@ -2351,11 +2351,19 @@ public final class BrowserToolProvider
 
     public static boolean matchesCandidate(final String candidate, final String expectedText, final boolean regex, final boolean exact)
     {
-        if (candidate == null || candidate.isBlank())
+        if (candidate == null)
         {
             return false;
         }
         if (expectedText == null)
+        {
+            return false;
+        }
+        if (expectedText.isEmpty())
+        {
+            return candidate.isBlank();
+        }
+        if (candidate.isBlank())
         {
             return false;
         }
@@ -2388,7 +2396,7 @@ public final class BrowserToolProvider
         }
         else
         {
-            if (candidate.toLowerCase(Locale.ROOT).contains(unescaped.toLowerCase(Locale.ROOT)))
+            if (unescaped.isEmpty() ? candidate.isBlank() : candidate.toLowerCase(Locale.ROOT).contains(unescaped.toLowerCase(Locale.ROOT)))
             {
                 return true;
             }
@@ -2417,6 +2425,10 @@ public final class BrowserToolProvider
         // Tier 3: Whitespace-collapsed fallback (normalizes multiple whitespace and literal escapes to single space)
         final String collapsedExpected = unescaped.replace("\\n", " ").replace("\\r", " ").replace("\\t", " ").replaceAll("\\s+", " ").trim();
         final String collapsedCandidate = candidate.replaceAll("\\s+", " ").trim();
+        if (collapsedExpected.isEmpty())
+        {
+            return collapsedCandidate.isEmpty();
+        }
         if (exact)
         {
             return collapsedCandidate.equalsIgnoreCase(collapsedExpected);
@@ -2450,6 +2462,23 @@ public final class BrowserToolProvider
                 throw (t instanceof StaleElementReferenceException sere ? sere : new StaleElementReferenceException(t.getMessage(), t));
             }
             return false;
+        }
+
+        if (expectedText == null || expectedText.isEmpty())
+        {
+            try
+            {
+                final SelenideElement se = el instanceof SelenideElement s ? s : Selenide.$(el);
+                return se.is(Condition.empty);
+            }
+            catch (final Throwable t)
+            {
+                if (isStaleException(t))
+                {
+                    throw (t instanceof StaleElementReferenceException sere ? sere : new StaleElementReferenceException(t.getMessage(), t));
+                }
+                return false;
+            }
         }
 
         try
@@ -2530,6 +2559,10 @@ public final class BrowserToolProvider
             {
                 return true;
             }
+            if (expectedText == null || expectedText.isEmpty())
+            {
+                return false;
+            }
             final String id = el.getAttribute("id");
             if (id != null && !id.isBlank())
             {
@@ -2561,6 +2594,11 @@ public final class BrowserToolProvider
 
     static boolean isTextPresentOnPage(final String expectedText, final boolean regex, final boolean exact)
     {
+        if (expectedText == null || expectedText.isEmpty())
+        {
+            return false;
+        }
+
         try
         {
             if (matchesElementText($("body"), expectedText, regex, exact))
@@ -2796,7 +2834,7 @@ public final class BrowserToolProvider
                                 }
                             }
 
-                            if (!matched && !negated)
+                            if (!matched && !negated && !expectedText.isEmpty())
                             {
                                 final List<WebElement> currentElements = driver.findElements(by);
                                 final SelenideElement primary = currentElements.isEmpty() ? resolveLazyElement(selector) : Selenide.$(currentElements.get(0));
@@ -3744,7 +3782,7 @@ public final class BrowserToolProvider
         props.putObject("selector").put("type", "string").put("description", "CSS or XPath selector targeting the element to assert state on");
         final ArrayNode stateEnum = props.putObject("state")
                 .put("type", "string")
-                .put("description", "Expected state or comma-separated states of the element ('visible', 'hidden', 'enabled', 'disabled', 'editable', 'readonly', 'checked', 'unchecked', 'selected', 'unselected', 'focused', 'unfocused', 'exists', 'absent', or compound e.g. 'visible, enabled')")
+                .put("description", "Expected state or comma-separated states of the element ('visible', 'hidden', 'enabled', 'disabled', 'editable', 'readonly', 'checked', 'unchecked', 'selected', 'unselected', 'focused', 'unfocused', 'exists', 'absent', 'empty', 'not_empty', or compound e.g. 'visible, enabled')")
                 .putArray("enum");
         stateEnum.add("visible");
         stateEnum.add("hidden");
@@ -3761,6 +3799,8 @@ public final class BrowserToolProvider
         stateEnum.add("not_focused");
         stateEnum.add("exists");
         stateEnum.add("absent");
+        stateEnum.add("empty");
+        stateEnum.add("not_empty");
         stateEnum.add("visible, enabled");
         stateEnum.add("visible, disabled");
         stateEnum.add("visible, editable");
@@ -3788,13 +3828,15 @@ public final class BrowserToolProvider
         statesEnum.add("not_focused");
         statesEnum.add("exists");
         statesEnum.add("absent");
+        statesEnum.add("empty");
+        statesEnum.add("not_empty");
         props.putObject("negated").put("type", "boolean").put("description", "Whether to invert the state assertion (default: false)");
 
         final ArrayNode req = schema.putArray("required");
         req.add("selector");
         req.add("state");
 
-        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies one or more states (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, or compound e.g. 'visible, enabled')", schema);
+        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies one or more states (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, empty, not_empty, or compound e.g. 'visible, enabled')", schema);
         return new AiTool()
         {
             @Override
@@ -3881,6 +3923,8 @@ public final class BrowserToolProvider
                         case "unfocused" -> "focused";
                         case "exists" -> "absent";
                         case "absent" -> "exists";
+                        case "empty" -> "not_empty";
+                        case "not_empty" -> "empty";
                         default -> normalized;
                     } : normalized;
                     resolvedStates.add(targetState);
@@ -4000,7 +4044,9 @@ public final class BrowserToolProvider
                             }
                             case "exists" -> el.should(Condition.exist);
                             case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
-                            default -> throw new AssertionError("Unsupported element state assertion: '" + state + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent.");
+                            case "empty" -> el.shouldBe(Condition.empty);
+                            case "not_empty" -> el.shouldNotBe(Condition.empty);
+                            default -> throw new AssertionError("Unsupported element state assertion: '" + state + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, empty, not_empty.");
                         }
                         evaluatedStates.add(state);
                     }
@@ -4084,6 +4130,8 @@ public final class BrowserToolProvider
             case "present", "exist", "exists" -> "exists";
             case "invisible", "hidden" -> "hidden";
             case "displayed", "visible" -> "visible";
+            case "blank", "empty" -> "empty";
+            case "not_empty", "non_empty", "not-empty", "non-empty" -> "not_empty";
             default -> s;
         };
     }

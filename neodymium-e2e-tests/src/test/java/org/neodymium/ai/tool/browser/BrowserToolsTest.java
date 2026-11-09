@@ -1528,19 +1528,31 @@ public class BrowserToolsTest
             Assertions.assertEquals("boolean", schema.get("properties").get("negated").get("type").asText());
         }
 
-        // Verify assert_element_state includes unfocused
+        // Verify assert_element_state includes unfocused, empty, and not_empty
         final JsonNode stateEnum = this.registry.getTool("assert_element_state").get().getDefinition().parametersSchema()
                 .get("properties").get("state").get("enum");
         boolean hasUnfocused = false;
+        boolean hasEmpty = false;
+        boolean hasNotEmpty = false;
         for (final JsonNode state : stateEnum)
         {
-            if ("unfocused".equals(state.asText()))
+            final String stateText = state.asText();
+            if ("unfocused".equals(stateText))
             {
                 hasUnfocused = true;
-                break;
+            }
+            if ("empty".equals(stateText))
+            {
+                hasEmpty = true;
+            }
+            if ("not_empty".equals(stateText))
+            {
+                hasNotEmpty = true;
             }
         }
         Assertions.assertTrue(hasUnfocused, "assert_element_state schema must include 'unfocused'");
+        Assertions.assertTrue(hasEmpty, "assert_element_state schema must include 'empty'");
+        Assertions.assertTrue(hasNotEmpty, "assert_element_state schema must include 'not_empty'");
 
         // Verify assert_count includes NOT_EQUALS
         final JsonNode opEnum = this.registry.getTool("assert_count").get().getDefinition().parametersSchema()
@@ -1564,6 +1576,31 @@ public class BrowserToolsTest
         Assertions.assertEquals("unfocused", BrowserToolProvider.normalizeElementState("not_focused"));
         Assertions.assertEquals("unfocused", BrowserToolProvider.normalizeElementState("[unfocused]"));
         Assertions.assertEquals("unfocused", BrowserToolProvider.normalizeElementState("UNFOCUSED"));
+    }
+
+    @Test
+    public void testNormalizeElementStateEmpty()
+    {
+        Assertions.assertEquals("empty", BrowserToolProvider.normalizeElementState("empty"));
+        Assertions.assertEquals("empty", BrowserToolProvider.normalizeElementState("blank"));
+        Assertions.assertEquals("empty", BrowserToolProvider.normalizeElementState("[empty]"));
+        Assertions.assertEquals("empty", BrowserToolProvider.normalizeElementState("EMPTY"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("not_empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("non_empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("not-empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("non-empty"));
+        Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("NOT_EMPTY"));
+    }
+
+    @Test
+    public void testMatchesCandidateWithEmptyExpectedText()
+    {
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "", false, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate(null, "", false, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Populated text", "", false, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Populated text", "", false, true));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("Populated text", "Populated", false, false));
     }
 
     @Test
