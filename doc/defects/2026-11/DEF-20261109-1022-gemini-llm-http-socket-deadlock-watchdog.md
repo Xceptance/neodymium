@@ -14,10 +14,12 @@
 - **Resolution:**
   1. In `GeminiLlmProvider.createDecoratedHttpClientBuilder()`, wrapped HTTP executions in an asynchronous watchdog: calls `delegate.executeAsync(repairedRequest)` and awaits with a strict deadline `future.get(watchdogDeadline, MILLISECONDS)`.
   2. Configured the watchdog deadline to dynamically resolve the configured request timeout (`neodymium.ai.<role>.timeoutSeconds` or `neodymium.ai.timeoutSeconds`, default 180s) plus a configurable buffer (`neodymium.ai.llm.watchdogBufferSeconds`, default 5s).
-  3. On watchdog timeout, immediately invoke `future.cancel(true)` to abort the underlying OpenJDK HTTP/2 stream and close the stalled socket, before throwing `dev.langchain4j.exception.RetriableException`. In `executeAsync()`, attached a cancellation hook so asynchronous callers also forcibly abort underlying sockets on timeout.
+  3. On watchdog timeout, immediately invoke `future.cancel(true)` to abort the underlying OpenJDK HTTP/2 stream and close the stalled socket, before throwing `dev.langchain4j.exception.RetriableException`. In `executeAsync()`, implemented an independent two-stage `watchdogFuture` wrapper stage (`watchdogFuture.orTimeout()`) that cancels the underlying delegate future while it is still pending, ensuring asynchronous callers also forcibly abort underlying sockets on timeout.
   4. In `LlmRetryHelper.isTransientError()`, added explicit recognition for `TimeoutException`, `HttpTimeoutException`, `SocketTimeoutException`, `RetriableException`, `ConnectException`, and `SocketException`, as well as `"timed out"`, `"connection reset"`, `"connection refused"`, and `"broken pipe"`. This allows the existing `LlmRetryHelper` exponential backoff retry loop to catch the timeout and execute a normal retry on a fresh connection.
+  5. Note on Ticket #110 Demand 3: Global test runner fallback execution timeouts (Surefire / JUnit 5 platform-level) are tracked as a separate follow-up enhancement to keep core socket-level lifecycle changes isolated and avoid premature disruption of long-running E2E test suites across Neodymium.
 - **Safety Net Added:**
   - `GeminiLlmProviderTest#testWatchdogTimeoutAbortsStalledSocket`
+  - `GeminiLlmProviderTest#testAsyncWatchdogTimeoutAbortsStalledSocket`
   - `GeminiLlmProviderTest#testWatchdogSuccessfulExecutionWithinDeadline`
   - `LlmRetryHelperTest#testExecuteWithRetry_succeedsAfterTimeout`
   - `LlmRetryHelperTest#testIsTransientError`

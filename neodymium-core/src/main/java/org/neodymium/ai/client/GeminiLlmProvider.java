@@ -177,7 +177,6 @@ public final class GeminiLlmProvider implements LlmProvider
         return new HttpClientBuilder()
         {
             private Duration readTimeout = configuredTimeout;
-            private Duration connectTimeout = Duration.ofSeconds(15);
 
             @Override
             public Duration connectTimeout()
@@ -188,10 +187,6 @@ public final class GeminiLlmProvider implements LlmProvider
             @Override
             public HttpClientBuilder connectTimeout(final Duration timeout)
             {
-                if (timeout != null)
-                {
-                    this.connectTimeout = timeout;
-                }
                 delegateBuilder.connectTimeout(timeout);
                 return this;
             }
@@ -225,12 +220,6 @@ public final class GeminiLlmProvider implements LlmProvider
 
                 return new HttpClient()
                 {
-                    private Duration resolveWatchdogDeadline()
-                    {
-                        final int bufferSeconds = GeminiLlmProvider.this.config.getLlmWatchdogBufferSeconds();
-                        return effectiveTimeout.plusSeconds(bufferSeconds);
-                    }
-
                     @Override
                     public SuccessfulHttpResponse execute(final HttpRequest request)
                     {
@@ -240,7 +229,8 @@ public final class GeminiLlmProvider implements LlmProvider
                             LlmCommunicationLogger.getLogger().info("Repaired thought signature in Gemini request body:\n{}\n", repairedRequest.body());
                         }
 
-                        final Duration watchdogDeadline = resolveWatchdogDeadline();
+                        final int bufferSeconds = GeminiLlmProvider.this.config.getLlmWatchdogBufferSeconds();
+                        final Duration watchdogDeadline = effectiveTimeout.plusSeconds(bufferSeconds);
                         final CompletableFuture<SuccessfulHttpResponse> future = delegate.executeAsync(repairedRequest);
                         try
                         {
@@ -249,7 +239,6 @@ public final class GeminiLlmProvider implements LlmProvider
                         catch (final TimeoutException te)
                         {
                             future.cancel(true);
-                            final int bufferSeconds = GeminiLlmProvider.this.config.getLlmWatchdogBufferSeconds();
                             LOGGER.warn("Gemini HTTP call timed out after {}s (watchdog aborted stalled socket; buffer: {}s). URL: {}",
                                 watchdogDeadline.toSeconds(), bufferSeconds, request.url());
                             throw new RetriableException(
@@ -284,15 +273,44 @@ public final class GeminiLlmProvider implements LlmProvider
                     public CompletableFuture<SuccessfulHttpResponse> executeAsync(final HttpRequest request)
                     {
                         final HttpRequest repairedRequest = repairThoughtSignatures(request);
-                        final Duration watchdogDeadline = resolveWatchdogDeadline();
+                        if (repairedRequest != request && LlmCommunicationLogger.isLoggingActive())
+                        {
+                            LlmCommunicationLogger.getLogger().info("Repaired thought signature in Gemini request body:\n{}\n", repairedRequest.body());
+                        }
+
+                        final int bufferSeconds = GeminiLlmProvider.this.config.getLlmWatchdogBufferSeconds();
+                        final Duration watchdogDeadline = effectiveTimeout.plusSeconds(bufferSeconds);
                         final CompletableFuture<SuccessfulHttpResponse> future = delegate.executeAsync(repairedRequest);
-                        final CompletableFuture<SuccessfulHttpResponse> watchdogFuture = future.orTimeout(watchdogDeadline.toMillis(), TimeUnit.MILLISECONDS);
-                        watchdogFuture.whenComplete((res, ex) -> {
-                            if (ex instanceof TimeoutException)
+
+                        final CompletableFuture<SuccessfulHttpResponse> watchdogFuture = new CompletableFuture<>();
+
+                        future.whenComplete((res, ex) ->
+                        {
+                            if (ex != null)
                             {
-                                future.cancel(true);
+                                watchdogFuture.completeExceptionally(ex);
+                            }
+                            else
+                            {
+                                watchdogFuture.complete(res);
                             }
                         });
+
+                        watchdogFuture.orTimeout(watchdogDeadline.toMillis(), TimeUnit.MILLISECONDS)
+                            .whenComplete((res, ex) ->
+                            {
+                                if (ex instanceof TimeoutException)
+                                {
+                                    future.cancel(true);
+                                    LOGGER.warn("Gemini async HTTP call timed out after {}s (watchdog aborted stalled socket; buffer: {}s). URL: {}",
+                                        watchdogDeadline.toSeconds(), bufferSeconds, request.url());
+                                }
+                                else if (watchdogFuture.isCancelled())
+                                {
+                                    future.cancel(true);
+                                }
+                            });
+
                         return watchdogFuture;
                     }
 

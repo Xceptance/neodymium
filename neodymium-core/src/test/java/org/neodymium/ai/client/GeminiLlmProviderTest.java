@@ -19,6 +19,7 @@
 package org.neodymium.ai.client;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -39,6 +40,9 @@ import dev.langchain4j.model.output.TokenUsage;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -362,7 +366,8 @@ public class GeminiLlmProviderTest
                 .body("{}")
                 .build();
 
-            final RetriableException thrown = assertThrows(RetriableException.class, () -> {
+            final RetriableException thrown = assertThrows(RetriableException.class, () ->
+            {
                 decoratedClient.execute(dummyRequest);
             });
 
@@ -370,6 +375,109 @@ public class GeminiLlmProviderTest
                 "Exception message must indicate socket watchdog triggered.");
             assertTrue(stalledFuture.isCancelled(),
                 "Stalled underlying future must be forcibly cancelled upon watchdog timeout.");
+        }
+        finally
+        {
+            System.clearProperty("neodymium.ai.llm.watchdogBufferSeconds");
+            AiConfiguration.resetInstance();
+        }
+    }
+
+    @Test
+    public void testAsyncWatchdogTimeoutAbortsStalledSocket()
+    {
+        System.setProperty("neodymium.ai.gemini.apiKey", "mock-gemini-key");
+        System.setProperty("neodymium.ai.llm.watchdogBufferSeconds", "0");
+        AiConfiguration.resetInstance();
+        try
+        {
+            final GeminiLlmProvider provider = new GeminiLlmProvider();
+            final CompletableFuture<SuccessfulHttpResponse> stalledFuture = new CompletableFuture<>();
+
+            final HttpClient mockDelegate = new HttpClient()
+            {
+                @Override
+                public SuccessfulHttpResponse execute(final HttpRequest request)
+                {
+                    throw new UnsupportedOperationException();
+                }
+
+                @Override
+                public CompletableFuture<SuccessfulHttpResponse> executeAsync(final HttpRequest request)
+                {
+                    return stalledFuture;
+                }
+
+                @Override
+                public void execute(final HttpRequest request, final ServerSentEventListener listener)
+                {
+                }
+
+                @Override
+                public void execute(final HttpRequest request, final ServerSentEventParser parser, final ServerSentEventListener listener)
+                {
+                }
+            };
+
+            final HttpClientBuilder mockDelegateBuilder = new HttpClientBuilder()
+            {
+                private Duration readTimeout;
+                private Duration connectTimeout;
+
+                @Override
+                public Duration connectTimeout()
+                {
+                    return this.connectTimeout;
+                }
+
+                @Override
+                public HttpClientBuilder connectTimeout(final Duration timeout)
+                {
+                    this.connectTimeout = timeout;
+                    return this;
+                }
+
+                @Override
+                public Duration readTimeout()
+                {
+                    return this.readTimeout;
+                }
+
+                @Override
+                public HttpClientBuilder readTimeout(final Duration timeout)
+                {
+                    this.readTimeout = timeout;
+                    return this;
+                }
+
+                @Override
+                public HttpClient build()
+                {
+                    return mockDelegate;
+                }
+            };
+
+            final HttpClient decoratedClient = provider.createDecoratedHttpClientBuilder(Duration.ofMillis(100), mockDelegateBuilder)
+                .readTimeout(Duration.ofMillis(100))
+                .build();
+
+            final HttpRequest dummyRequest = HttpRequest.builder()
+                .method(HttpMethod.POST)
+                .url("https://generativelanguage.googleapis.com/v1beta/test")
+                .body("{}")
+                .build();
+
+            final CompletableFuture<SuccessfulHttpResponse> asyncFuture = decoratedClient.executeAsync(dummyRequest);
+
+            final ExecutionException ee = assertThrows(ExecutionException.class, () ->
+            {
+                asyncFuture.get(500, TimeUnit.MILLISECONDS);
+            });
+
+            assertInstanceOf(TimeoutException.class, ee.getCause(),
+                "Async future must fail exceptionally with TimeoutException.");
+            assertTrue(stalledFuture.isCancelled(),
+                "Underlying stalled socket future must be cancelled on async watchdog timeout.");
         }
         finally
         {
