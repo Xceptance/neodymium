@@ -1525,9 +1525,30 @@ public final class InteractiveConsoleServer
             }
 
             // Final state push & final pause for overlay
-            if (!activeState.has("status") || !"failed".equals(activeState.get("status").getAsString()))
+            boolean anyStepFailed = false;
+            if (allSteps != null)
             {
-                activeState.addProperty("status", "finished");
+                for (final JsonObject s : allSteps)
+                {
+                    if (s.has("status") && s.get("status").isJsonPrimitive())
+                    {
+                        final String stepSt = s.get("status").getAsString();
+                        if ("failed".equalsIgnoreCase(stepSt) || "error".equalsIgnoreCase(stepSt) || "failure".equalsIgnoreCase(stepSt))
+                        {
+                            anyStepFailed = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (anyStepFailed)
+            {
+                activeState.addProperty("status", "failed");
+            }
+            else if (!activeState.has("status") || !"failed".equals(activeState.get("status").getAsString()))
+            {
+                activeState.addProperty("status", "passed");
             }
             final String finalPauseId = "pause-final-" + UUID.randomUUID().toString();
             activeState.addProperty("pauseId", finalPauseId);

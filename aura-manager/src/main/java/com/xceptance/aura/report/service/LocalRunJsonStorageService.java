@@ -155,6 +155,11 @@ public class LocalRunJsonStorageService
 
     public Optional<String> buildRunJsonContent(final File runDir, final String runId, final boolean writeToDisk)
     {
+        return buildRunJsonContent(runDir, runId, writeToDisk, false);
+    }
+
+    public Optional<String> buildRunJsonContent(final File runDir, final String runId, final boolean writeToDisk, final boolean isRunActive)
+    {
         try
         {
             final List<File> testExecJsonFiles = new ArrayList<>();
@@ -486,65 +491,57 @@ public class LocalRunJsonStorageService
                                               || (node.has("healedStepsCount") && node.path("healedStepsCount").asInt(0) > 0)
                                               || "healed".equalsIgnoreCase(rawStatus);
 
-                        if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus))
+                        final String failureText = AuraReportDataService.extractFailureText(node);
+                        final int failedSteps = extractStepsFailed(node);
+                        final int totalSteps = node.has("totalStepsCount") ? node.path("totalStepsCount").asInt(0) : 0;
+                        final String eff = AuraReportDataService.computeEffectiveStatus(rawStatus, totalSteps, failedSteps, hasBugs, failureText, isRunActive);
+
+                        if ("failed-known".equals(eff))
                         {
-                            if (hasBugs)
+                            known++;
+                            if (isHealed)
                             {
-                                known++;
-                                if (isHealed)
-                                {
-                                    knownHealed++;
-                                }
-                            }
-                            else
-                            {
-                                unknown++;
-                                if (isHealed)
-                                {
-                                    unknownHealed++;
-                                }
+                                knownHealed++;
                             }
                         }
-                        else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus) || "healed".equalsIgnoreCase(rawStatus))
+                        else if ("failed-unknown".equals(eff))
                         {
-                            if (hasBugs || "succeeded-fixed".equalsIgnoreCase(rawStatus))
+                            unknown++;
+                            if (isHealed)
                             {
-                                fixed++;
-                                if (isHealed)
-                                {
-                                    fixedHealed++;
-                                }
-                            }
-                            else
-                            {
-                                pass++;
-                                if (isHealed)
-                                {
-                                    passHealed++;
-                                }
+                                unknownHealed++;
                             }
                         }
-                        else if ("ignored".equalsIgnoreCase(rawStatus) || "skipped".equalsIgnoreCase(rawStatus) || "cancelled".equalsIgnoreCase(rawStatus))
+                        else if ("succeeded-fixed".equals(eff))
+                        {
+                            fixed++;
+                            if (isHealed)
+                            {
+                                fixedHealed++;
+                            }
+                        }
+                        else if ("passed-clean".equals(eff))
+                        {
+                            pass++;
+                            if (isHealed)
+                            {
+                                passHealed++;
+                            }
+                        }
+                        else if ("ignored".equals(eff))
                         {
                             ignoredCount++;
                         }
+                        else if ("running".equals(eff))
+                        {
+                            // In-flight execution
+                        }
                         else
                         {
-                            if (hasBugs)
+                            unknown++;
+                            if (isHealed)
                             {
-                                known++;
-                                if (isHealed)
-                                {
-                                    knownHealed++;
-                                }
-                            }
-                            else
-                            {
-                                unknown++;
-                                if (isHealed)
-                                {
-                                    unknownHealed++;
-                                }
+                                unknownHealed++;
                             }
                         }
                     }
@@ -671,15 +668,10 @@ public class LocalRunJsonStorageService
                     metricObj.put("browser", tBrowser);
                     final String baseStatus = objNode.path("status").asText("failed-unknown");
                     final boolean hasBugsNode = objNode.has("bugs") && objNode.get("bugs").isArray() && objNode.get("bugs").size() > 0;
-                    final String effStatus;
-                    if ("healed".equalsIgnoreCase(baseStatus))
-                    {
-                        effStatus = hasBugsNode ? "succeeded-fixed" : "passed-clean";
-                    }
-                    else
-                    {
-                        effStatus = baseStatus;
-                    }
+                    final String failureText = AuraReportDataService.extractFailureText(objNode);
+                    final int failedSteps = extractStepsFailed(objNode);
+                    final int totalSteps = objNode.has("totalStepsCount") ? objNode.path("totalStepsCount").asInt(0) : 0;
+                    final String effStatus = AuraReportDataService.computeEffectiveStatus(baseStatus, totalSteps, failedSteps, hasBugsNode, failureText, isRunActive);
                     metricObj.put("status", effStatus);
                     metricObj.put("areaName", objNode.path("areaName").asText("Browsing (default)"));
                     if (objNode.has("startTime"))
@@ -910,7 +902,7 @@ public class LocalRunJsonStorageService
         return 0;
     }
 
-    private int extractStepsFailed(final JsonNode node)
+    public static int extractStepsFailed(final JsonNode node)
     {
         if (node.has("failedStepsCount") && node.path("failedStepsCount").isInt())
         {
