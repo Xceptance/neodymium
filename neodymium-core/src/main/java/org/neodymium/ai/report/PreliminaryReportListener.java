@@ -1104,6 +1104,29 @@ public final class PreliminaryReportListener implements ExecutionListener
                         {
                             this.currentStep.addScreenshot(screenshot);
                         }
+                        if (this.currentParentStep != null && this.currentParentStep != this.currentStep)
+                        {
+                            final Object curStepObj = activeCtx != null ? activeCtx.getTransientData().get(ExecutionContext.KEY_CURRENT_PLAYBOOK_STEP) : null;
+                            final boolean isModelStepFailed = curStepObj instanceof PlaybookStep pb
+                                && (pb.isFailed() || (pb.getParent() != null && pb.getParent().isFailed()));
+                            final boolean hasExecError = activeCtx != null
+                                && (activeCtx.getTransientData().get(ExecutionContext.KEY_LAST_EXECUTION_ERROR) != null
+                                    || activeCtx.getTransientData().get("KEY_LAST_STEP_FAILURE") != null);
+
+                            final boolean isFailureCapture = isModelStepFailed || hasExecError
+                                || (this.currentStep != null && "FAILED".equalsIgnoreCase(this.currentStep.getStatus()))
+                                || "FAILED".equalsIgnoreCase(this.currentParentStep.getStatus())
+                                || "FAILED".equalsIgnoreCase(this.report.getStatus());
+                            if (isFailureCapture)
+                            {
+                                final boolean alreadyHasParent = this.currentParentStep.getScreenshots().stream()
+                                    .anyMatch(s -> s.getBase64Data() != null && s.getBase64Data().equals(attachment.base64Data()));
+                                if (!alreadyHasParent)
+                                {
+                                    this.currentParentStep.addScreenshot(screenshot);
+                                }
+                            }
+                        }
                         LOGGER.debug("   📸 Recorded screenshot for {}: \"{}\" | Dimensions: {}",
                             stepLabel, label, screenshot.getDimensions() != null ? screenshot.getDimensions() : "unknown");
                     }
@@ -1387,6 +1410,24 @@ public final class PreliminaryReportListener implements ExecutionListener
             if (step.getFailureReason() == null)
             {
                 step.setFailureReason(firstFailedReason);
+            }
+            if (step.getScreenshots().isEmpty())
+            {
+                for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
+                {
+                    if ("FAILED".equalsIgnoreCase(sub.getStatus()) && !sub.getScreenshots().isEmpty())
+                    {
+                        for (final TestExecutionReport.ReportScreenshotEntry sc : sub.getScreenshots())
+                        {
+                            final boolean alreadyHas = step.getScreenshots().stream()
+                                .anyMatch(s -> s.getBase64Data() != null && s.getBase64Data().equals(sc.getBase64Data()));
+                            if (!alreadyHas)
+                            {
+                                step.addScreenshot(sc);
+                            }
+                        }
+                    }
+                }
             }
         }
         else if (allSkipped)
