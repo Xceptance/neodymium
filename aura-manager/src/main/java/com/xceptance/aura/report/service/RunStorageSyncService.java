@@ -595,97 +595,73 @@ public class RunStorageSyncService
                     final boolean hasBugs = !bugList.isEmpty();
                     final String bugsStr = hasBugs ? String.join(";", bugList) : "";
 
-                    final String effectiveStatus;
-                    if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus))
+                    final String failureText = AuraReportDataService.extractFailureText(exec);
+                    final int failedSteps = LocalRunJsonStorageService.extractStepsFailed(exec);
+                    final int totalSteps = exec.has("totalStepsCount") ? exec.path("totalStepsCount").asInt(0) : 0;
+                    final String effectiveStatus = AuraReportDataService.computeEffectiveStatus(rawStatus, totalSteps, failedSteps, hasBugs, failureText, false);
+
+                    if ("failed-known".equals(effectiveStatus))
                     {
-                        if (hasBugs)
+                        calcKnown++;
+                        if (isHealed)
                         {
-                            effectiveStatus = "failed-known";
-                            calcKnown++;
-                            if (isHealed)
-                            {
-                                calcKnownHealed++;
-                            }
-                            if (isAi)
-                            {
-                                calcKnownAi++;
-                            }
+                            calcKnownHealed++;
                         }
-                        else
+                        if (isAi)
                         {
-                            effectiveStatus = "failed-unknown";
-                            calcUnknown++;
-                            if (isHealed)
-                            {
-                                calcUnknownHealed++;
-                            }
-                            if (isAi)
-                            {
-                                calcUnknownAi++;
-                            }
+                            calcKnownAi++;
                         }
                     }
-                    else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus) || "healed".equalsIgnoreCase(rawStatus))
+                    else if ("failed-unknown".equals(effectiveStatus))
                     {
-                        if (hasBugs)
+                        calcUnknown++;
+                        if (isHealed)
                         {
-                            effectiveStatus = "succeeded-fixed";
-                            calcFixed++;
-                            if (isHealed)
-                            {
-                                calcFixedHealed++;
-                            }
-                            if (isAi)
-                            {
-                                calcFixedAi++;
-                            }
+                            calcUnknownHealed++;
                         }
-                        else
+                        if (isAi)
                         {
-                            effectiveStatus = "passed-clean";
-                            calcPass++;
-                            if (isHealed)
-                            {
-                                calcPassHealed++;
-                            }
-                            if (isAi)
-                            {
-                                calcPassAi++;
-                            }
+                            calcUnknownAi++;
                         }
                     }
-                    else if ("ignored".equalsIgnoreCase(rawStatus) || "skipped".equalsIgnoreCase(rawStatus))
+                    else if ("succeeded-fixed".equals(effectiveStatus))
                     {
-                        effectiveStatus = rawStatus;
+                        calcFixed++;
+                        if (isHealed)
+                        {
+                            calcFixedHealed++;
+                        }
+                        if (isAi)
+                        {
+                            calcFixedAi++;
+                        }
+                    }
+                    else if ("passed-clean".equals(effectiveStatus))
+                    {
+                        calcPass++;
+                        if (isHealed)
+                        {
+                            calcPassHealed++;
+                        }
+                        if (isAi)
+                        {
+                            calcPassAi++;
+                        }
+                    }
+                    else if ("ignored".equals(effectiveStatus))
+                    {
                         calcIgnored++;
                     }
                     else
                     {
-                        if (hasBugs)
+                        calcUnknown++;
+                        if (isHealed)
                         {
-                            effectiveStatus = "failed-known";
-                            calcKnown++;
-                            if (isHealed)
-                            {
-                                calcKnownHealed++;
-                            }
-                            if (isAi)
-                            {
-                                calcKnownAi++;
-                            }
+                            calcUnknownHealed++;
                         }
-                        else
+                        if (isAi)
                         {
-                            effectiveStatus = "failed-unknown";
-                            calcUnknown++;
-                            if (isHealed)
-                            {
-                                calcUnknownHealed++;
-                            }
-                            if (isAi)
-                            {
-                                calcUnknownAi++;
-                            }
+                            calcUnknownAi++;
                         }
                     }
 

@@ -486,73 +486,57 @@ public class LocalRunJsonStorageService
                                               || (node.has("healedStepsCount") && node.path("healedStepsCount").asInt(0) > 0)
                                               || "healed".equalsIgnoreCase(rawStatus);
 
-                        final boolean hasNodeFailure = (node.hasNonNull("failure") && !"NONE".equalsIgnoreCase(node.get("failure").asText()))
-                                || node.hasNonNull("error")
-                                || node.hasNonNull("exception")
-                                || node.hasNonNull("errorMessage");
-                        final boolean isFinishedSuccess = "finished".equalsIgnoreCase(rawStatus) && extractStepsFailed(node) <= 0 && !hasNodeFailure;
-                        final boolean isFinishedFailure = "finished".equalsIgnoreCase(rawStatus) && !isFinishedSuccess;
+                        final String failureText = AuraReportDataService.extractFailureText(node);
+                        final int failedSteps = extractStepsFailed(node);
+                        final int totalSteps = node.has("totalStepsCount") ? node.path("totalStepsCount").asInt(0) : 0;
+                        final String eff = AuraReportDataService.computeEffectiveStatus(rawStatus, totalSteps, failedSteps, hasBugs, failureText, false);
 
-                        if ("failed".equalsIgnoreCase(rawStatus) || "failed-known".equalsIgnoreCase(rawStatus) || "failed-unknown".equalsIgnoreCase(rawStatus) || "error".equalsIgnoreCase(rawStatus) || "failure".equalsIgnoreCase(rawStatus) || isFinishedFailure)
+                        if ("failed-known".equals(eff))
                         {
-                            if (hasBugs)
+                            known++;
+                            if (isHealed)
                             {
-                                known++;
-                                if (isHealed)
-                                {
-                                    knownHealed++;
-                                }
-                            }
-                            else
-                            {
-                                unknown++;
-                                if (isHealed)
-                                {
-                                    unknownHealed++;
-                                }
+                                knownHealed++;
                             }
                         }
-                        else if ("passed".equalsIgnoreCase(rawStatus) || "succeeded-fixed".equalsIgnoreCase(rawStatus) || "passed-clean".equalsIgnoreCase(rawStatus) || "succeeded".equalsIgnoreCase(rawStatus) || "healed".equalsIgnoreCase(rawStatus)
-                                || isFinishedSuccess)
+                        else if ("failed-unknown".equals(eff))
                         {
-                            if (hasBugs || "succeeded-fixed".equalsIgnoreCase(rawStatus))
+                            unknown++;
+                            if (isHealed)
                             {
-                                fixed++;
-                                if (isHealed)
-                                {
-                                    fixedHealed++;
-                                }
-                            }
-                            else
-                            {
-                                pass++;
-                                if (isHealed)
-                                {
-                                    passHealed++;
-                                }
+                                unknownHealed++;
                             }
                         }
-                        else if ("ignored".equalsIgnoreCase(rawStatus) || "skipped".equalsIgnoreCase(rawStatus) || "cancelled".equalsIgnoreCase(rawStatus))
+                        else if ("succeeded-fixed".equals(eff))
+                        {
+                            fixed++;
+                            if (isHealed)
+                            {
+                                fixedHealed++;
+                            }
+                        }
+                        else if ("passed-clean".equals(eff))
+                        {
+                            pass++;
+                            if (isHealed)
+                            {
+                                passHealed++;
+                            }
+                        }
+                        else if ("ignored".equals(eff))
                         {
                             ignoredCount++;
                         }
+                        else if ("running".equals(eff))
+                        {
+                            // In-flight execution
+                        }
                         else
                         {
-                            if (hasBugs)
+                            unknown++;
+                            if (isHealed)
                             {
-                                known++;
-                                if (isHealed)
-                                {
-                                    knownHealed++;
-                                }
-                            }
-                            else
-                            {
-                                unknown++;
-                                if (isHealed)
-                                {
-                                    unknownHealed++;
-                                }
+                                unknownHealed++;
                             }
                         }
                     }
@@ -679,30 +663,10 @@ public class LocalRunJsonStorageService
                     metricObj.put("browser", tBrowser);
                     final String baseStatus = objNode.path("status").asText("failed-unknown");
                     final boolean hasBugsNode = objNode.has("bugs") && objNode.get("bugs").isArray() && objNode.get("bugs").size() > 0;
-                    final String effStatus;
-                    if ("healed".equalsIgnoreCase(baseStatus))
-                    {
-                        effStatus = hasBugsNode ? "succeeded-fixed" : "passed-clean";
-                    }
-                    else if ("finished".equalsIgnoreCase(baseStatus))
-                    {
-                        final boolean hasNodeFailure = (objNode.hasNonNull("failure") && !"NONE".equalsIgnoreCase(objNode.get("failure").asText()))
-                                || objNode.hasNonNull("error")
-                                || objNode.hasNonNull("exception")
-                                || objNode.hasNonNull("errorMessage");
-                        if (extractStepsFailed(objNode) <= 0 && !hasNodeFailure)
-                        {
-                            effStatus = hasBugsNode ? "succeeded-fixed" : "passed-clean";
-                        }
-                        else
-                        {
-                            effStatus = hasBugsNode ? "failed-known" : "failed-unknown";
-                        }
-                    }
-                    else
-                    {
-                        effStatus = baseStatus;
-                    }
+                    final String failureText = AuraReportDataService.extractFailureText(objNode);
+                    final int failedSteps = extractStepsFailed(objNode);
+                    final int totalSteps = objNode.has("totalStepsCount") ? objNode.path("totalStepsCount").asInt(0) : 0;
+                    final String effStatus = AuraReportDataService.computeEffectiveStatus(baseStatus, totalSteps, failedSteps, hasBugsNode, failureText, false);
                     metricObj.put("status", effStatus);
                     metricObj.put("areaName", objNode.path("areaName").asText("Browsing (default)"));
                     if (objNode.has("startTime"))
@@ -933,7 +897,7 @@ public class LocalRunJsonStorageService
         return 0;
     }
 
-    private int extractStepsFailed(final JsonNode node)
+    public static int extractStepsFailed(final JsonNode node)
     {
         if (node.has("failedStepsCount") && node.path("failedStepsCount").isInt())
         {

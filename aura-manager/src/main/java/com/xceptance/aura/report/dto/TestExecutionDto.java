@@ -530,30 +530,23 @@ public final class TestExecutionDto
      */
     public String getDisplayStatusKey()
     {
-        final String st = status != null ? status.toLowerCase() : "running";
-        if ("running".equals(st) || "in_progress".equals(st) || "executing".equals(st) || "pending".equals(st))
-        {
-            return "RUNNING";
-        }
         final boolean hasBugs = bugs != null && !bugs.isEmpty();
-        final boolean isFinishedSuccess = "finished".equals(st) && (getFailedStepsCount() <= 0) && (failure == null || "NONE".equalsIgnoreCase(failure));
-        if ("succeeded-fixed".equals(st) || "fixed".equals(st) || (("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st) || isFinishedSuccess) && hasBugs))
+        final String eff = AuraReportDataService.computeEffectiveStatus(
+            status,
+            getTotalStepsCount(),
+            getFailedStepsCount(),
+            hasBugs,
+            AuraReportDataService.extractFailureText(this),
+            false);
+        return switch (eff)
         {
-            return "SUCCEEDED_FIXED";
-        }
-        if ("passed-clean".equals(st) || "passed".equals(st) || "succeeded".equals(st) || "healed".equals(st) || isFinishedSuccess)
-        {
-            return "PASSED";
-        }
-        if ("failed-known".equals(st) || "known".equals(st) || (("failed".equals(st) || "error".equals(st) || "failure".equals(st)) && hasBugs))
-        {
-            return "FAILED_KNOWN";
-        }
-        if ("ignored".equals(st) || "skipped".equals(st))
-        {
-            return "SKIPPED";
-        }
-        return hasBugs ? "FAILED_KNOWN" : "FAILED_UNKNOWN";
+            case "running" -> "RUNNING";
+            case "passed-clean" -> "PASSED";
+            case "succeeded-fixed" -> "SUCCEEDED_FIXED";
+            case "failed-known" -> "FAILED_KNOWN";
+            case "ignored" -> "SKIPPED";
+            default -> "FAILED_UNKNOWN";
+        };
     }
 
     public String getEngine()

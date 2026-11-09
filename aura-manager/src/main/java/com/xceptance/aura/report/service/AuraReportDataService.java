@@ -1038,32 +1038,9 @@ public class AuraReportDataService
                 exec.setBugs(bugTickets);
 
                 final boolean hasBugs = !bugTickets.isEmpty();
-                final String raw = exec.getStatus() != null ? exec.getStatus() : (isInProgress ? "running" : "failed-unknown");
-                if ("running".equalsIgnoreCase(raw) || "in_progress".equalsIgnoreCase(raw) || "executing".equalsIgnoreCase(raw) || "pending".equalsIgnoreCase(raw))
-                {
-                    exec.setStatus(isInProgress ? "running" : (exec.getTotalStepsCount() == 0 ? "failed-unknown" : "skipped"));
-                }
-                else if ("failed".equalsIgnoreCase(raw) || "failed-known".equalsIgnoreCase(raw) || "failed-unknown".equalsIgnoreCase(raw) || "error".equalsIgnoreCase(raw) || "failure".equalsIgnoreCase(raw))
-                {
-                    exec.setStatus(hasBugs ? "failed-known" : "failed-unknown");
-                }
-                else if ("finished".equalsIgnoreCase(raw))
-                {
-                    final boolean isFinishedSuccess = exec.getFailedStepsCount() <= 0 && (exec.getFailure() == null || "NONE".equalsIgnoreCase(exec.getFailure()));
-                    exec.setStatus(isFinishedSuccess ? (hasBugs ? "succeeded-fixed" : "passed-clean") : (hasBugs ? "failed-known" : "failed-unknown"));
-                }
-                else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw) || "succeeded".equalsIgnoreCase(raw) || "healed".equalsIgnoreCase(raw))
-                {
-                    exec.setStatus(hasBugs ? "succeeded-fixed" : "passed-clean");
-                }
-                else if ("fixed".equalsIgnoreCase(raw))
-                {
-                    exec.setStatus("succeeded-fixed");
-                }
-                else
-                {
-                    exec.setStatus(raw.toLowerCase());
-                }
+                final String failureText = extractFailureText(exec);
+                final String eff = computeEffectiveStatus(exec.getStatus(), exec.getTotalStepsCount(), exec.getFailedStepsCount(), hasBugs, failureText, isInProgress);
+                exec.setStatus(eff);
 
                 executions.add(exec);
             }
@@ -1735,23 +1712,9 @@ public class AuraReportDataService
 
             final boolean hasBugs = !bugTickets.isEmpty();
             final boolean isRunActive = "IN_PROGRESS".equalsIgnoreCase(runEntity.getStatus());
-            final String raw = exec.getStatus() != null ? exec.getStatus() : (isRunActive ? "running" : "failed-unknown");
-            if ("running".equalsIgnoreCase(raw) || "in_progress".equalsIgnoreCase(raw) || "executing".equalsIgnoreCase(raw) || "pending".equalsIgnoreCase(raw))
-            {
-                exec.setStatus(isRunActive ? "running" : (exec.getTotalStepsCount() == 0 ? "failed-unknown" : "skipped"));
-            }
-            else if ("failed".equalsIgnoreCase(raw) || "failed-known".equalsIgnoreCase(raw) || "failed-unknown".equalsIgnoreCase(raw) || "error".equalsIgnoreCase(raw) || "failure".equalsIgnoreCase(raw))
-            {
-                exec.setStatus(hasBugs ? "failed-known" : "failed-unknown");
-            }
-            else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw))
-            {
-                exec.setStatus(hasBugs ? "succeeded-fixed" : "passed-clean");
-            }
-            else
-            {
-                exec.setStatus("ignored");
-            }
+            final String failureText = extractFailureText(exec);
+            final String eff = computeEffectiveStatus(exec.getStatus(), exec.getTotalStepsCount(), exec.getFailedStepsCount(), hasBugs, failureText, isRunActive);
+            exec.setStatus(eff);
 
             final String st = exec.getStatus();
             if ("passed-clean".equalsIgnoreCase(st) || "passed".equalsIgnoreCase(st))
@@ -2024,25 +1987,8 @@ public class AuraReportDataService
                 }
 
                 final boolean hasBugs = dto.getBugs() != null && !dto.getBugs().isEmpty();
-                final String raw = dto.getStatus() != null ? dto.getStatus() : (dto.getTotalStepsCount() == 0 ? "failed-unknown" : "passed-clean");
-                String effectiveStatus = raw;
-                if ("failed".equalsIgnoreCase(raw) || "failed-known".equalsIgnoreCase(raw) || "failed-unknown".equalsIgnoreCase(raw) || "error".equalsIgnoreCase(raw) || "failure".equalsIgnoreCase(raw))
-                {
-                    effectiveStatus = hasBugs ? "failed-known" : "failed-unknown";
-                }
-                else if ("finished".equalsIgnoreCase(raw))
-                {
-                    final boolean isFinishedSuccess = dto.getFailedStepsCount() <= 0 && (dto.getFailure() == null || "NONE".equalsIgnoreCase(dto.getFailure()));
-                    effectiveStatus = isFinishedSuccess ? (hasBugs ? "succeeded-fixed" : "passed-clean") : (hasBugs ? "failed-known" : "failed-unknown");
-                }
-                else if ("passed".equalsIgnoreCase(raw) || "succeeded-fixed".equalsIgnoreCase(raw) || "passed-clean".equalsIgnoreCase(raw))
-                {
-                    effectiveStatus = hasBugs ? "succeeded-fixed" : "passed-clean";
-                }
-                else
-                {
-                    effectiveStatus = "ignored";
-                }
+                final String failureText = extractFailureText(dto);
+                final String effectiveStatus = computeEffectiveStatus(dto.getStatus(), dto.getTotalStepsCount(), dto.getFailedStepsCount(), hasBugs, failureText, false);
                 dto.setStatus(effectiveStatus);
 
                 if (dto.getTestClass() != null && !dto.getTestClass().isEmpty())
@@ -2075,7 +2021,7 @@ public class AuraReportDataService
 
                 for (final TestExecutionDto item : list)
                 {
-                    final String st = item.getStatus() != null ? item.getStatus() : "passed-clean";
+                    final String st = item.getStatus() != null ? item.getStatus().trim().toLowerCase(Locale.ROOT) : "passed-clean";
                     switch (st)
                     {
                         case "passed-clean", "passed" -> {
@@ -2108,10 +2054,10 @@ public class AuraReportDataService
                         }
                         case "ignored", "skipped" -> ignoredCount++;
                         default -> {
-                            passCount++;
-                            if (item.isPassHealed())
+                            unknownCount++;
+                            if (item.isUnknownHealed())
                             {
-                                passHealedCount++;
+                                unknownHealedCount++;
                             }
                         }
                     }
@@ -3228,7 +3174,7 @@ public class AuraReportDataService
             int cPass = 0, cFixed = 0, cKnown = 0, cUnknown = 0, cIgnored = 0, cRunning = 0;
             for (final TestExecutionDto ce : classExecs)
             {
-                final String status = ce.getStatus() != null ? ce.getStatus() : "passed-clean";
+                final String status = ce.getStatus() != null ? ce.getStatus().trim().toLowerCase(Locale.ROOT) : "passed-clean";
                 switch (status)
                 {
                     case "passed-clean", "passed", "succeeded" -> cPass++;
@@ -3237,7 +3183,7 @@ public class AuraReportDataService
                     case "failed-unknown", "failed", "error", "unknown" -> cUnknown++;
                     case "ignored", "skipped" -> cIgnored++;
                     case "running", "in_progress", "executing", "pending" -> cRunning++;
-                    default -> cPass++;
+                    default -> cUnknown++;
                 }
             }
 
@@ -3307,7 +3253,7 @@ public class AuraReportDataService
         int pass = 0, fixed = 0, known = 0, unknown = 0, ignored = 0, running = 0;
         for (final TestExecutionDto e : executions)
         {
-            final String status = e.getStatus() != null ? e.getStatus() : "passed-clean";
+            final String status = e.getStatus() != null ? e.getStatus().trim().toLowerCase(Locale.ROOT) : "passed-clean";
             switch (status)
             {
                 case "passed-clean", "passed", "succeeded", "healed" -> pass++;
@@ -3353,6 +3299,112 @@ public class AuraReportDataService
             throw new IllegalStateException("SHA-256 unavailable", e);
         }
     });
+
+    /**
+     * Canonical normalizer resolving raw execution status and metadata into effective reporting outcomes.
+     *
+     * @param rawStatus raw status string from execution JSON or runner (e.g. "passed", "finished", "error")
+     * @param totalStepsCount total number of steps in execution
+     * @param failedStepsCount number of failed steps
+     * @param hasBugs whether open/linked bug tickets exist for this variation
+     * @param failureOrErrorMessage failure/error identifier or message, if any
+     * @param isRunActive whether the parent test run is currently active/in-progress
+     * @return canonical effective status: "passed-clean", "succeeded-fixed", "failed-known", "failed-unknown", "ignored", or "running"
+     */
+    public static String computeEffectiveStatus(
+            final String rawStatus,
+            final int totalStepsCount,
+            final int failedStepsCount,
+            final boolean hasBugs,
+            final String failureOrErrorMessage,
+            final boolean isRunActive)
+    {
+        final String st = rawStatus != null ? rawStatus.trim().toLowerCase(Locale.ROOT) : "";
+
+        // 1. In-flight / transient states
+        if ("running".equals(st) || "in_progress".equals(st) || "executing".equals(st) || "pending".equals(st))
+        {
+            return isRunActive ? "running" : (totalStepsCount == 0 ? "failed-unknown" : "skipped");
+        }
+
+        // 2. Explicitly skipped states
+        if ("ignored".equals(st) || "skipped".equals(st) || "cancelled".equals(st))
+        {
+            return "ignored";
+        }
+
+        final boolean isKnown = hasBugs || "failed-known".equals(st);
+        final boolean isFixed = hasBugs || "succeeded-fixed".equals(st) || "fixed".equals(st);
+
+        final boolean hasFailure = failedStepsCount > 0
+                || (failureOrErrorMessage != null
+                    && !failureOrErrorMessage.isBlank()
+                    && !"NONE".equalsIgnoreCase(failureOrErrorMessage.trim()));
+
+        // 3. Finished lifecycle resolution
+        if ("finished".equals(st))
+        {
+            final boolean isSuccess = !hasFailure && (totalStepsCount > 0 || (failedStepsCount == 0 && failureOrErrorMessage == null));
+            return isSuccess ? (isFixed ? "succeeded-fixed" : "passed-clean")
+                             : (isKnown ? "failed-known" : "failed-unknown");
+        }
+
+        // 4. Standard explicit failure verdicts
+        if ("failed".equals(st) || "failed-known".equals(st) || "failed-unknown".equals(st) || "error".equals(st) || "failure".equals(st))
+        {
+            return isKnown ? "failed-known" : "failed-unknown";
+        }
+
+        // 5. Standard explicit pass verdicts
+        if ("passed".equals(st) || "succeeded-fixed".equals(st) || "passed-clean".equals(st) || "succeeded".equals(st) || "healed".equals(st))
+        {
+            return isFixed ? "succeeded-fixed" : "passed-clean";
+        }
+
+        // 6. Unmapped / missing status fallback
+        if (hasFailure || totalStepsCount == 0)
+        {
+            return isKnown ? "failed-known" : "failed-unknown";
+        }
+        return isFixed ? "succeeded-fixed" : "passed-clean";
+    }
+
+    public static String extractFailureText(final TestExecutionDto dto)
+    {
+        if (dto == null)
+        {
+            return null;
+        }
+        if (dto.getFailureReason() != null && !dto.getFailureReason().isBlank() && !"NONE".equalsIgnoreCase(dto.getFailureReason().trim()))
+        {
+            return dto.getFailureReason().trim();
+        }
+        if (dto.getFailure() != null && !dto.getFailure().isBlank() && !"NONE".equalsIgnoreCase(dto.getFailure().trim()))
+        {
+            return dto.getFailure().trim();
+        }
+        return null;
+    }
+
+    public static String extractFailureText(final JsonNode node)
+    {
+        if (node == null)
+        {
+            return null;
+        }
+        for (final String field : List.of("failureReason", "errorMessage", "error", "exception", "failure"))
+        {
+            if (node.hasNonNull(field))
+            {
+                final String txt = node.get(field).asText().trim();
+                if (!txt.isBlank() && !"NONE".equalsIgnoreCase(txt))
+                {
+                    return txt;
+                }
+            }
+        }
+        return null;
+    }
 
     public static String normalizeLocation(final String raw)
     {
