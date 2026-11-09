@@ -792,7 +792,8 @@ public final class PreliminaryReportListener implements ExecutionListener
                             }
                             else
                             {
-                                sub.setStatus("SKIPPED");
+                                sub.setStatus("NOT RUN");
+                                sub.setNotRunReason("Not executed because of failure in step #" + (targetStep.getStepIndex() + 1));
                             }
                         }
                         else
@@ -820,7 +821,11 @@ public final class PreliminaryReportListener implements ExecutionListener
                             else if (sub.getStatus() == null || "PENDING".equalsIgnoreCase(sub.getStatus()) || "RUNNING".equalsIgnoreCase(sub.getStatus()))
                             {
                                 final boolean hasLaterBug = targetStep.getSubSteps().stream().anyMatch(TestExecutionReport.ReportStepEntry::isBug);
-                                sub.setStatus((isStepSuccess || hasLaterBug) ? "SUCCESS" : "SKIPPED");
+                                sub.setStatus((isStepSuccess || hasLaterBug) ? "SUCCESS" : "NOT RUN");
+                                if (!isStepSuccess && !hasLaterBug)
+                                {
+                                    sub.setNotRunReason("Not executed because of failure in step #" + (targetStep.getStepIndex() + 1));
+                                }
                             }
                         }
                     }
@@ -1228,7 +1233,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         return false;
     }
 
-    private void resolveUnfinishedSteps()
+    void resolveUnfinishedSteps()
     {
         final List<TestExecutionReport.ReportStepEntry> rootSteps = this.report.getSteps();
         if (rootSteps.isEmpty())
@@ -1289,6 +1294,9 @@ public final class PreliminaryReportListener implements ExecutionListener
                 }
             }
 
+            final TestExecutionReport.ReportStepEntry failedLeaf = leafSteps.get(failedIndex);
+            final String failedStepLabel = resolveStepDisplayLabel(failedLeaf, rootSteps, failedIndex);
+
             for (int i = 0; i < leafSteps.size(); i++)
             {
                 final TestExecutionReport.ReportStepEntry leaf = leafSteps.get(i);
@@ -1322,8 +1330,9 @@ public final class PreliminaryReportListener implements ExecutionListener
                     // Steps after the failure were not executed
                     if ("RUNNING".equalsIgnoreCase(leaf.getStatus()) || "PENDING".equalsIgnoreCase(leaf.getStatus()) || leaf.getStatus() == null)
                     {
-                        leaf.setStatus("SKIPPED");
+                        leaf.setStatus("NOT RUN");
                         leaf.setFailureReason(null);
+                        leaf.setNotRunReason("Not executed because step " + failedStepLabel + " failed.");
                     }
                 }
             }
@@ -1334,6 +1343,39 @@ public final class PreliminaryReportListener implements ExecutionListener
         {
             resolveParentStepStatus(root);
         }
+    }
+
+    private String resolveStepDisplayLabel(final TestExecutionReport.ReportStepEntry leaf, final List<TestExecutionReport.ReportStepEntry> rootSteps, final int leafIndex)
+    {
+        if (leaf != null)
+        {
+            for (int r = 0; r < rootSteps.size(); r++)
+            {
+                final TestExecutionReport.ReportStepEntry root = rootSteps.get(r);
+                if (root == leaf)
+                {
+                    return "#" + (r + 1);
+                }
+                for (int s = 0; s < root.getSubSteps().size(); s++)
+                {
+                    if (root.getSubSteps().get(s) == leaf)
+                    {
+                        return "#" + (r + 1) + "." + (s + 1);
+                    }
+                }
+            }
+            if (leaf.getParent() != null)
+            {
+                final int parentIdx = Math.max(0, leaf.getParent().getStepIndex());
+                final int subIdx = Math.max(0, leaf.getStepIndex());
+                return "#" + (parentIdx + 1) + "." + (subIdx + 1);
+            }
+            if (leaf.getStepIndex() >= 0)
+            {
+                return "#" + (leaf.getStepIndex() + 1);
+            }
+        }
+        return "#" + (leafIndex + 1);
     }
 
     private void collectLeafSteps(final TestExecutionReport.ReportStepEntry entry, final List<TestExecutionReport.ReportStepEntry> leafList)
@@ -1366,7 +1408,9 @@ public final class PreliminaryReportListener implements ExecutionListener
         boolean anyFailed = false;
         boolean allSuccess = true;
         boolean allSkipped = true;
+        boolean allNotRun = true;
         String firstFailedReason = null;
+        String firstNotRunReason = null;
 
         for (final TestExecutionReport.ReportStepEntry sub : step.getSubSteps())
         {
@@ -1380,6 +1424,7 @@ public final class PreliminaryReportListener implements ExecutionListener
                     anyFailed = true;
                     allSuccess = false;
                     allSkipped = false;
+                    allNotRun = false;
                     if (firstFailedReason == null && sub.getFailureReason() != null)
                     {
                         firstFailedReason = sub.getFailureReason();
@@ -1388,20 +1433,33 @@ public final class PreliminaryReportListener implements ExecutionListener
                 else
                 {
                     allSkipped = false;
+                    allNotRun = false;
                 }
             }
             else if ("SUCCESS".equalsIgnoreCase(subStatus) || "PASSED".equalsIgnoreCase(subStatus) || "HEALED".equalsIgnoreCase(subStatus))
             {
                 allSkipped = false;
+                allNotRun = false;
             }
             else if ("SKIPPED".equalsIgnoreCase(subStatus))
             {
                 allSuccess = false;
+                allNotRun = false;
+            }
+            else if ("NOT RUN".equalsIgnoreCase(subStatus) || "NOT_RUN".equalsIgnoreCase(subStatus) || "UNREACHED".equalsIgnoreCase(subStatus))
+            {
+                allSuccess = false;
+                allSkipped = false;
+                if (firstNotRunReason == null && sub.getNotRunReason() != null)
+                {
+                    firstNotRunReason = sub.getNotRunReason();
+                }
             }
             else
             {
                 allSuccess = false;
                 allSkipped = false;
+                allNotRun = false;
             }
         }
 
@@ -1431,6 +1489,12 @@ public final class PreliminaryReportListener implements ExecutionListener
                 }
             }
         }
+        else if (allNotRun)
+        {
+            step.setStatus("NOT RUN");
+            step.setFailureReason(null);
+            step.setNotRunReason(firstNotRunReason);
+        }
         else if (allSkipped)
         {
             step.setStatus("SKIPPED");
@@ -1443,7 +1507,11 @@ public final class PreliminaryReportListener implements ExecutionListener
         }
         else
         {
-            step.setStatus(this.report.isSuccess() ? "SUCCESS" : "SKIPPED");
+            step.setStatus(this.report.isSuccess() ? "SUCCESS" : "NOT RUN");
+            if (!this.report.isSuccess() && step.getNotRunReason() == null)
+            {
+                step.setNotRunReason(firstNotRunReason);
+            }
         }
 
         if (step.getDurationMs() <= 0)
@@ -1723,7 +1791,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         return value;
     }
 
-    private void recalculateMetrics()
+    void recalculateMetrics()
     {
         final TestExecutionReport.ReportMetrics m = this.report.getMetrics();
         final List<TestExecutionReport.ReportStepEntry> steps = this.report.getSteps();
@@ -1732,6 +1800,7 @@ public final class PreliminaryReportListener implements ExecutionListener
         int healed = 0;
         int failed = 0;
         int skipped = 0;
+        int notRun = 0;
 
         for (final TestExecutionReport.ReportStepEntry step : steps)
         {
@@ -1751,10 +1820,15 @@ public final class PreliminaryReportListener implements ExecutionListener
             {
                 skipped++;
             }
+            else if ("NOT RUN".equals(st) || "NOT_RUN".equals(st) || "UNREACHED".equals(st))
+            {
+                notRun++;
+            }
         }
         m.setHealedSteps(healed);
         m.setFailedSteps(failed);
         m.setSkippedSteps(skipped);
+        m.setNotRunSteps(notRun);
 
         final ExecutionContext ctx = ExecutionContext.getActiveContext();
         if (ctx != null)
