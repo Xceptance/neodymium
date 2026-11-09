@@ -20,12 +20,14 @@ package com.xceptance.aura.report.staticassets;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Assertions;
@@ -75,17 +77,152 @@ public final class StaticResourceSyntaxTest
         }
     }
 
+    private static final Object NODE_CHECK_LOCK = new Object();
+    private static volatile Boolean nodeAvailableCached = null;
+
     private boolean isNodeAvailable()
+    {
+        if (nodeAvailableCached != null)
+        {
+            return nodeAvailableCached.booleanValue();
+        }
+
+        synchronized (NODE_CHECK_LOCK)
+        {
+            if (nodeAvailableCached != null)
+            {
+                return nodeAvailableCached.booleanValue();
+            }
+
+            try
+            {
+                final Process process = new ProcessBuilder("node", "-v")
+                    .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+                    .redirectError(ProcessBuilder.Redirect.DISCARD)
+                    .start();
+                final boolean finished = process.waitFor(10, TimeUnit.SECONDS);
+                if (!finished)
+                {
+                    process.destroyForcibly();
+                    return false;
+                }
+                nodeAvailableCached = (process.exitValue() == 0);
+            }
+            catch (final Exception e)
+            {
+                nodeAvailableCached = Boolean.FALSE;
+            }
+            return nodeAvailableCached != null && nodeAvailableCached.booleanValue();
+        }
+    }
+
+    private static Path resolveTempDirectory(final Path baseDir)
     {
         try
         {
-            final Process process = new ProcessBuilder("node", "-v").start();
-            final int exitCode = process.waitFor();
-            return exitCode == 0;
+            final Path candidate = baseDir.resolve("target").resolve("temp-node-tests");
+            Files.createDirectories(candidate);
+            return candidate;
         }
-        catch (final Exception e)
+        catch (final Exception ignored)
         {
-            return false;
+            return null;
+        }
+    }
+
+    private static void deleteSilently(final Path path)
+    {
+        if (path != null)
+        {
+            try
+            {
+                Files.deleteIfExists(path);
+            }
+            catch (final IOException ignored)
+            {
+                // Prevent masking primary test assertion failures on Windows file locks
+            }
+        }
+    }
+
+    private void runNodeScript(final String nodeTestScript, final String failureMessagePrefix) throws Exception
+    {
+        if (!isNodeAvailable())
+        {
+            return;
+        }
+
+        final Path baseDir = Files.exists(Paths.get("src/main/resources"))
+            ? Paths.get(".").toAbsolutePath().normalize()
+            : Paths.get("aura-manager").toAbsolutePath().normalize();
+
+        final Path tempDir = resolveTempDirectory(baseDir);
+        final Path tempScript = (tempDir != null)
+            ? Files.createTempFile(tempDir, "node-test-", ".js")
+            : Files.createTempFile("node-test-", ".js");
+        final Path tempOutput = (tempDir != null)
+            ? Files.createTempFile(tempDir, "node-out-", ".log")
+            : Files.createTempFile("node-out-", ".log");
+
+        try
+        {
+            Files.writeString(tempScript, nodeTestScript, StandardCharsets.UTF_8);
+
+            final ProcessBuilder pb = new ProcessBuilder("node", tempScript.toAbsolutePath().toString());
+            pb.directory(baseDir.toFile());
+            pb.redirectErrorStream(true);
+            pb.redirectOutput(tempOutput.toFile());
+
+            final Process process = pb.start();
+            try
+            {
+                boolean finished = false;
+                try
+                {
+                    finished = process.waitFor(30, TimeUnit.SECONDS);
+                }
+                catch (final InterruptedException e)
+                {
+                    process.destroyForcibly();
+                    Thread.currentThread().interrupt();
+                    Assertions.fail(failureMessagePrefix + " was interrupted while executing Node script", e);
+                }
+
+                if (!finished)
+                {
+                    process.destroyForcibly();
+                    try
+                    {
+                        process.waitFor(5, TimeUnit.SECONDS);
+                    }
+                    catch (final InterruptedException e)
+                    {
+                        Thread.currentThread().interrupt();
+                    }
+                    Assertions.fail(failureMessagePrefix + " timed out after 30 seconds");
+                }
+
+                final int exitCode = process.exitValue();
+                final String rawOutput = Files.readString(tempOutput, StandardCharsets.UTF_8);
+                final String trimmedOutput = rawOutput.strip();
+                final String diagnosticDetails = trimmedOutput.isEmpty()
+                    ? "(No output produced, exit code: " + exitCode + ")"
+                    : trimmedOutput;
+
+                Assertions.assertEquals(0, exitCode, failureMessagePrefix + " (exit code " + exitCode + "):\n" + diagnosticDetails);
+            }
+            finally
+            {
+                if (process.isAlive())
+                {
+                    process.destroyForcibly();
+                }
+            }
+        }
+        finally
+        {
+            deleteSilently(tempScript);
+            deleteSilently(tempOutput);
         }
     }
 
@@ -105,7 +242,14 @@ public final class StaticResourceSyntaxTest
             }
         }
 
-        final int exitCode = process.waitFor();
+        final boolean finished = process.waitFor(10, TimeUnit.SECONDS);
+        if (!finished)
+        {
+            process.destroyForcibly();
+            Assertions.fail("Syntax check timed out for " + jsFile.getName());
+        }
+
+        final int exitCode = process.exitValue();
         Assertions.assertEquals(0, exitCode, "Syntax error detected in " + jsFile.getName() + ":\n" + output);
     }
 
@@ -386,22 +530,7 @@ public final class StaticResourceSyntaxTest
             "sandbox.window = sandbox;\n" +
             "vm.runInNewContext(testScript, sandbox);\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Filter state transition test failed:\n" + output);
+        runNodeScript(nodeTestScript, "Filter state transition test failed");
     }
 
     /**
@@ -526,22 +655,7 @@ public final class StaticResourceSyntaxTest
             "    }\n" +
             "}\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "AI log filtering test failed:\n" + output);
+        runNodeScript(nodeTestScript, "AI log filtering test failed");
     }
 
     @Test
@@ -807,22 +921,7 @@ public final class StaticResourceSyntaxTest
             "sandbox.window = sandbox;\n" +
             "vm.runInNewContext(testScript, sandbox);\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+        runNodeScript(nodeTestScript, "Node script execution failed");
     }
 
     @Test
@@ -919,22 +1018,7 @@ public final class StaticResourceSyntaxTest
             "sandbox.window = sandbox;\n" +
             "vm.runInNewContext(testScript, sandbox);\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+        runNodeScript(nodeTestScript, "Node script execution failed");
     }
 
     @Test
@@ -1022,22 +1106,7 @@ public final class StaticResourceSyntaxTest
             "sandbox.window = sandbox;\n" +
             "vm.runInNewContext(testScript, sandbox);\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+        runNodeScript(nodeTestScript, "Node script execution failed");
     }
 
     @Test
@@ -1100,22 +1169,7 @@ public final class StaticResourceSyntaxTest
             "    throw new Error('Expected rendered step HTML with sub-step LLM invocations but got: ' + sideList.innerHTML);\n" +
             "}\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+        runNodeScript(nodeTestScript, "Node script execution failed");
     }
 
     @Test
@@ -1161,22 +1215,7 @@ public final class StaticResourceSyntaxTest
             "}\n" +
             "sandbox.stopLiveStepRefreshTimer();\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+        runNodeScript(nodeTestScript, "Node script execution failed");
     }
 
     @Test
@@ -1261,22 +1300,7 @@ public final class StaticResourceSyntaxTest
             "if (!heuristicHtml.includes('Action (Standard Generation)')) throw new Error('renderHeuristicLlmRows should contain Action');\n" +
             "sandbox.stopLiveStepRefreshTimer();\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+        runNodeScript(nodeTestScript, "Responsibility table evaluation script failed");
     }
 
     @Test
@@ -1355,22 +1379,7 @@ public final class StaticResourceSyntaxTest
             "if (result.cachedTokens !== 6000) throw new Error('Expected 6000 cachedTokens, got: ' + result.cachedTokens);\n" +
             "sandbox.stopLiveStepRefreshTimer();\n";
 
-        final ProcessBuilder pb = new ProcessBuilder("node", "-e", nodeTestScript);
-        pb.redirectErrorStream(true);
-        final Process process = pb.start();
-
-        final StringBuilder output = new StringBuilder();
-        try (final BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)))
-        {
-            String line;
-            while ((line = reader.readLine()) != null)
-            {
-                output.append(line).append("\n");
-            }
-        }
-
-        final int exitCode = process.waitFor();
-        Assertions.assertEquals(0, exitCode, "Node script execution failed:\n" + output);
+        runNodeScript(nodeTestScript, "syncRowAiUsage recursion evaluation script failed");
     }
 }
 
