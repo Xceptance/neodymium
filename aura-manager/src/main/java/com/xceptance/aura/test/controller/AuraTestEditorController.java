@@ -31,8 +31,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.neodymium.ai.model.Playbook;
+import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.playbook.YamlPlaybookParser;
+import org.neodymium.ai.playbook.linter.PlaybookLinter;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -57,10 +63,18 @@ public class AuraTestEditorController
 
     private final AuraFileService fileService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    private final PlaybookLinter playbookLinter;
 
+    @Autowired
     public AuraTestEditorController(final AuraFileService fileService)
     {
+        this(fileService, new PlaybookLinter());
+    }
+
+    public AuraTestEditorController(final AuraFileService fileService, final PlaybookLinter playbookLinter)
+    {
         this.fileService = fileService;
+        this.playbookLinter = playbookLinter;
     }
 
     @RequestMapping(value = "/api/editor", method = {RequestMethod.GET, RequestMethod.POST})
@@ -605,6 +619,138 @@ public class AuraTestEditorController
         response.put("hasWarnings", hasWarnings);
         response.put("file", file != null ? file : "");
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Executes AI review on the currently-edited playbook content using {@link PlaybookLinter}.
+     *
+     * <p>Runs local structural and YAML validation first as an offline pre-gate to protect
+     * token quota and prevent sending malformed syntax to the model.</p>
+     *
+     * @param request the raw HTTP request carrying the JSON body or form parameters
+     * @return structured validation and findings response
+     */
+    @PostMapping("/api/editor/ai-review")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> aiReview(final HttpServletRequest request)
+    {
+        String file = null;
+        String content = null;
+
+        // Parse JSON body
+        if (request.getContentType() != null && request.getContentType().contains("application/json"))
+        {
+            try
+            {
+                @SuppressWarnings("unchecked")
+                final Map<String, Object> body = objectMapper.readValue(request.getInputStream(), Map.class);
+                if (body != null)
+                {
+                    file = body.get("file") != null ? String.valueOf(body.get("file")) : null;
+                    content = body.get("content") != null ? String.valueOf(body.get("content")) : null;
+                }
+            }
+            catch (final Exception e)
+            {
+                LOGGER.debug("Could not parse JSON payload for aiReview", e);
+            }
+        }
+
+        // Fallback to form params
+        if (file == null || file.isBlank())
+        {
+            file = request.getParameter("file");
+        }
+        if (content == null)
+        {
+            content = request.getParameter("content");
+        }
+
+        final Map<String, Object> response = new HashMap<>();
+
+        // Validation Pre-Gate: protect token quota if local syntax errors exist
+        final List<ValidationIssue> issues = fileService.validateFileContent(
+                file != null ? file : "",
+                content != null ? content : "");
+        boolean hasErrors = false;
+        final List<Map<String, Object>> issueList = new ArrayList<>();
+        for (final ValidationIssue issue : issues)
+        {
+            final Map<String, Object> m = new HashMap<>();
+            m.put("severity", issue.severity().name());
+            m.put("message", issue.message());
+            m.put("context", issue.context());
+            issueList.add(m);
+            if (issue.severity() == IssueSeverity.ERROR)
+            {
+                hasErrors = true;
+            }
+        }
+
+        if (hasErrors)
+        {
+            response.put("status", "SYNTAX_ERROR");
+            response.put("message", "File has syntax errors. Please resolve syntax errors before running AI Review.");
+            response.put("issues", issueList);
+            response.put("findings", List.of());
+            return ResponseEntity.ok(response);
+        }
+
+        if (content == null || content.isBlank())
+        {
+            response.put("status", "OK");
+            response.put("findings", List.of());
+            return ResponseEntity.ok(response);
+        }
+
+        try
+        {
+            final YamlPlaybookParser parser = new YamlPlaybookParser();
+            final Playbook playbook = parser.parseString(content);
+            final List<PlaybookStep> steps = playbook != null ? playbook.getAllSteps() : List.of();
+            final String description = playbook != null ? playbook.getDescription() : null;
+
+            if (steps == null || steps.isEmpty())
+            {
+                response.put("status", "OK");
+                response.put("findings", List.of());
+                return ResponseEntity.ok(response);
+            }
+
+            final List<PlaybookLinterFinding> findings = this.playbookLinter != null
+                    ? this.playbookLinter.lint(steps, description)
+                    : new PlaybookLinter().lint(steps, description);
+
+            final List<Map<String, Object>> findingList = new ArrayList<>();
+            if (findings != null)
+            {
+                for (final PlaybookLinterFinding f : findings)
+                {
+                    final Map<String, Object> fm = new HashMap<>();
+                    fm.put("stepIndex", f.stepIndex());
+                    fm.put("lineNumber", f.lineNumber());
+                    fm.put("sourceFile", f.sourceFile());
+                    fm.put("category", f.category() != null ? f.category().name() : "");
+                    fm.put("severity", f.severity() != null ? f.severity().name() : "WARNING");
+                    fm.put("message", f.message());
+                    fm.put("suggestedRewrite", f.suggestedRewrite());
+                    fm.put("scope", f.scope());
+                    findingList.add(fm);
+                }
+            }
+
+            response.put("status", "OK");
+            response.put("findings", findingList);
+            return ResponseEntity.ok(response);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("AI Review encountered an error during playbook linting", e);
+            response.put("status", "ERROR");
+            response.put("error", "AI Review failed: " + e.getMessage());
+            response.put("findings", List.of());
+            return ResponseEntity.ok(response);
+        }
     }
 
     @PostMapping("/api/editor/close")

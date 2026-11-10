@@ -5772,5 +5772,270 @@ function dismissSuggestionCard(btn) {
 }
 window.dismissSuggestionCard = dismissSuggestionCard;
 
+function applySuggestionRewrite(targetLineNum, newInstruction) {
+    const row = document.querySelector(`.step-row[data-line="${targetLineNum}"]`);
+    if (row && newInstruction != null) {
+        const contentEl = row.querySelector('.step-content');
+        if (contentEl) {
+            contentEl.setAttribute('data-raw', newInstruction);
+            contentEl.innerText = newInstruction;
+            if (typeof formatStepToTokens === 'function') {
+                formatStepToTokens(targetLineNum);
+            }
+            if (typeof compilePlaybookToYaml === 'function') {
+                compilePlaybookToYaml();
+            }
+            if (typeof debouncedPushSnapshot === 'function') {
+                debouncedPushSnapshot();
+            }
+        }
+        const card = row.nextElementSibling;
+        if (card && card.classList.contains('review-suggestion-card')) {
+            card.remove();
+        }
+    }
+}
+window.applySuggestionRewrite = applySuggestionRewrite;
+
+function runAiReview() {
+    const aiBtn = document.getElementById('aiReviewBtn');
+    const editorFileNameEl = document.getElementById('editorFileName');
+    const file = (editorFileNameEl ? editorFileNameEl.getAttribute('data-file') : null) || window.activeEditingFile || '';
+
+    // Gather current YAML content
+    const hiddenContent = document.getElementById('editorContent');
+    const rawTextarea = document.getElementById('rawYamlTextarea');
+    const editorPanel = document.getElementById('editorPanel');
+    const isRawMode = editorPanel && editorPanel.getAttribute('data-mode') === 'raw';
+    let content = '';
+    if (isRawMode && rawTextarea) {
+        content = rawTextarea.value;
+    } else {
+        if (typeof compilePlaybookToYaml === 'function') {
+            content = compilePlaybookToYaml();
+        }
+        if (!content && hiddenContent) {
+            content = hiddenContent.value;
+        }
+    }
+
+    if (aiBtn) {
+        aiBtn.innerHTML = '<span class="material-symbols-outlined spinner">sync</span> Analyzing...';
+        aiBtn.disabled = true;
+    }
+
+    // Clean up existing suggestion cards
+    document.querySelectorAll('.review-suggestion-card').forEach(card => card.remove());
+
+    fetch('/api/editor/ai-review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: file, content: content })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (aiBtn) {
+            aiBtn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> AI Review';
+            aiBtn.disabled = false;
+        }
+
+        if (data.status === 'SYNTAX_ERROR') {
+            if (typeof showValidationResultDialog === 'function') {
+                showValidationResultDialog(data.issues || []);
+            }
+            if (typeof showToast === 'function') {
+                showToast('⚠️ Syntax errors found. Fix syntax before running AI Review.', 'warning');
+            }
+            return;
+        }
+
+        if (data.status === 'ERROR') {
+            if (typeof showToast === 'function') {
+                showToast(data.error || '⚠️ AI Review failed.', 'error');
+            }
+            return;
+        }
+
+        const findings = data.findings || [];
+        if (findings.length === 0) {
+            if (typeof showToast === 'function') {
+                showToast('✨ AI Review: No issues found — playbook steps look clear and complete.', 'success');
+            }
+            return;
+        }
+
+        if (isRawMode) {
+            showRawModeFindingsDialog(findings);
+        } else {
+            renderStepSuggestionCards(findings);
+            if (typeof showToast === 'function') {
+                showToast(`✨ AI Review: Found ${findings.length} actionable suggestion${findings.length > 1 ? 's' : ''}.`, 'info');
+            }
+        }
+    })
+    .catch(err => {
+        console.error('Failed to run AI review:', err);
+        if (aiBtn) {
+            aiBtn.innerHTML = '<span class="material-symbols-outlined">auto_awesome</span> AI Review';
+            aiBtn.disabled = false;
+        }
+        if (typeof showToast === 'function') {
+            showToast('⚠️ AI Review request failed. Check the console for details.', 'error');
+        }
+    });
+}
+window.runAiReview = runAiReview;
+
+function renderStepSuggestionCards(findings) {
+    if (!Array.isArray(findings)) return;
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    const unanchoredFindings = [];
+
+    findings.forEach(f => {
+        let targetRow = null;
+        if (f.lineNumber > 0) {
+            targetRow = document.querySelector(`.step-row[data-line="${f.lineNumber}"]`);
+        }
+        if (!targetRow && f.stepIndex > 0) {
+            const allRows = document.querySelectorAll('#stepsList .step-row, .step-row');
+            if (f.stepIndex <= allRows.length) {
+                targetRow = allRows[f.stepIndex - 1];
+            }
+        }
+
+        if (!targetRow) {
+            unanchoredFindings.push(f);
+            return;
+        }
+
+        const sevClass = (f.severity || 'WARNING').toLowerCase();
+        const card = document.createElement('div');
+        card.className = `review-suggestion-card ${sevClass}`;
+
+        const targetLine = targetRow.getAttribute('data-line') || f.stepIndex || 1;
+        const categoryLabel = f.category ? f.category.replace(/_/g, ' ') : 'Advisory';
+
+        let rewriteHtml = '';
+        if (f.suggestedRewrite && f.suggestedRewrite.trim().length > 0) {
+            const safeRewrite = escapeHtml(f.suggestedRewrite);
+            const encodedRewrite = encodeURIComponent(f.suggestedRewrite);
+            rewriteHtml = `
+                <button type="button" class="btn-apply-suggestion"
+                        onclick="applySuggestionRewrite('${targetLine}', decodeURIComponent('${encodedRewrite}'))"
+                        title="Replace step instruction with suggested rewrite: &quot;${safeRewrite}&quot;">
+                    Apply Rewrite
+                </button>
+            `;
+        }
+
+        card.innerHTML = `
+            <div class="suggestion-left">
+                <span class="material-symbols-outlined" style="font-size: 16px; color: var(--accent-purple, #a855f7);">auto_awesome</span>
+                <span class="suggestion-badge ${sevClass}">${escapeHtml(f.severity || 'WARNING')}</span>
+                <span style="font-weight: 600; font-size: 11.5px; opacity: 0.9;">${escapeHtml(categoryLabel)}:</span>
+                <span>${escapeHtml(f.message)}</span>
+            </div>
+            <div class="suggestion-actions">
+                ${rewriteHtml}
+                <button type="button" class="btn-dismiss-suggestion" onclick="dismissSuggestionCard(this)" title="Dismiss suggestion">✕</button>
+            </div>
+        `;
+
+        targetRow.parentNode.insertBefore(card, targetRow.nextSibling);
+    });
+
+    if (unanchoredFindings.length > 0) {
+        showRawModeFindingsDialog(unanchoredFindings);
+    }
+}
+window.renderStepSuggestionCards = renderStepSuggestionCards;
+
+function showRawModeFindingsDialog(findings) {
+    let container = document.getElementById('varPromptContainer');
+    if (!container) {
+        container = document.createElement('div');
+        container.id = 'varPromptContainer';
+        container.className = 'var-prompt-container';
+        const panel = document.getElementById('editorPanel') || document.body;
+        panel.appendChild(container);
+    }
+
+    const existingCard = container.querySelector('.var-prompt-card[data-type="ai-review-report"]');
+    if (existingCard) {
+        existingCard.remove();
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    const card = document.createElement('div');
+    card.className = 'var-prompt-card';
+    card.setAttribute('data-type', 'ai-review-report');
+    card.style.borderLeftColor = 'var(--accent-purple, #a855f7)';
+
+    const itemsHtml = (findings || []).map(f => {
+        const sev = (f.severity || 'WARNING').toLowerCase();
+        const lineInfo = f.lineNumber > 0 ? `<span class="validation-issue-line">Line ${f.lineNumber}</span>` : (f.stepIndex > 0 ? `<span class="validation-issue-line">Step #${f.stepIndex}</span>` : '');
+        const catInfo = f.category ? `<span class="validation-issue-context">${escapeHtml(f.category.replace(/_/g, ' '))}</span>` : '';
+        const rewriteBlock = f.suggestedRewrite ? `<div style="margin-top: 4px; font-size: 11px; color: var(--accent-purple, #a855f7); background: rgba(168, 85, 247, 0.08); padding: 4px 8px; border-radius: 4px;">💡 <b>Suggested:</b> ${escapeHtml(f.suggestedRewrite)}</div>` : '';
+
+        return `
+            <div class="validation-issue-item ${sev}">
+                <div class="validation-issue-header">
+                    <span class="material-symbols-outlined issue-icon" style="color: var(--accent-purple, #a855f7);">auto_awesome</span>
+                    <span class="validation-issue-badge ${sev}">${escapeHtml(f.severity || 'WARNING')}</span>
+                    ${lineInfo}
+                    ${catInfo}
+                </div>
+                <div class="validation-issue-msg">${escapeHtml(f.message)}</div>
+                ${rewriteBlock}
+            </div>
+        `;
+    }).join('');
+
+    card.innerHTML = `
+        <div class="var-prompt-header">
+            <span class="material-symbols-outlined" style="color: var(--accent-purple, #a855f7);">auto_awesome</span>
+            <span>AI Review Findings (${findings.length})</span>
+        </div>
+        <div class="var-prompt-body">
+            <div class="validation-issue-list" style="max-height: 280px; overflow-y: auto;">
+                ${itemsHtml}
+            </div>
+        </div>
+        <div class="var-prompt-actions">
+            <button type="button" class="btn-prompt-confirm" onclick="closeAiReviewPromptCard(this)">OK</button>
+        </div>
+    `;
+
+    container.appendChild(card);
+}
+window.showRawModeFindingsDialog = showRawModeFindingsDialog;
+
+function closeAiReviewPromptCard(btnOrElement) {
+    if (btnOrElement) {
+        const card = btnOrElement.closest('.var-prompt-card');
+        if (card) card.remove();
+    }
+}
+window.closeAiReviewPromptCard = closeAiReviewPromptCard;
+
 
 

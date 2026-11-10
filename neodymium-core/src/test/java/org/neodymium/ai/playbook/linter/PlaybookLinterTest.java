@@ -88,6 +88,8 @@ public final class PlaybookLinterTest
         }
         System.clearProperty("neodymium.ai.linter.reasoningEffort");
         System.clearProperty("neodymium.ai.reasoningEffort");
+        System.clearProperty("neodymium.ai.prelinter.enabled");
+        System.clearProperty("neodymium.ai.prelint.enabled");
         AiConfiguration.resetInstance();
         ExecutionContext.setActiveContext(null);
     }
@@ -354,6 +356,8 @@ public final class PlaybookLinterTest
     {
         System.clearProperty("neodymium.ai.linter.reasoningEffort");
         System.clearProperty("neodymium.ai.reasoningEffort");
+        System.clearProperty("neodymium.ai.prelinter.enabled");
+        System.clearProperty("neodymium.ai.prelint.enabled");
         AiConfiguration.resetInstance();
 
         assertEquals(ReasoningEffort.MEDIUM, AiConfiguration.getInstance().getLinterReasoningEffort());
@@ -365,5 +369,60 @@ public final class PlaybookLinterTest
         System.setProperty("neodymium.ai.linter.reasoningEffort", "invalid");
         AiConfiguration.resetInstance();
         assertEquals(ReasoningEffort.MEDIUM, AiConfiguration.getInstance().getLinterReasoningEffort());
+    }
+
+    @Test
+    @DisplayName("Verify standalone PlaybookLinter executes with custom LlmProvider")
+    public void testStandaloneLinterWithCustomProvider()
+    {
+        final String cannedJson = """
+            {
+              "findings": [
+                {
+                  "stepIndex": 1,
+                  "category": "VAGUE_TARGET",
+                  "severity": "WARNING",
+                  "message": "Target button is ambiguous.",
+                  "suggestedRewrite": "Click the Submit button in the footer"
+                }
+              ]
+            }
+            """;
+
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        mockProvider.addResponse(new LlmResponse(cannedJson, new TokenUsage(80, 40, 120, 10), "mock-linter-model"));
+
+        final PlaybookLinter linter = new PlaybookLinter(mockProvider);
+        final List<PlaybookStep> steps = List.of(new PlaybookStep("Click button"));
+        final List<PlaybookLinterFinding> findings = linter.lint(steps, "Standalone Scenario");
+
+        assertEquals(1, findings.size());
+        final PlaybookLinterFinding finding = findings.get(0);
+        assertEquals(1, finding.stepIndex());
+        assertEquals(LinterCategory.VAGUE_TARGET, finding.category());
+        assertEquals(LinterSeverity.WARNING, finding.severity());
+        assertEquals("Target button is ambiguous.", finding.message());
+        assertEquals("Click the Submit button in the footer", finding.suggestedRewrite());
+    }
+
+    @Test
+    @DisplayName("Verify standalone PlaybookLinter returns empty list when no steps provided")
+    public void testStandaloneLinterWithEmptySteps()
+    {
+        final MockLlmProvider mockProvider = new MockLlmProvider();
+        final PlaybookLinter linter = new PlaybookLinter(mockProvider);
+        assertTrue(linter.lint(null, "desc").isEmpty());
+        assertTrue(linter.lint(List.of(), "desc").isEmpty());
+    }
+
+    @Test
+    @DisplayName("Verify standalone PlaybookLinter returns empty list gracefully when no provider registered")
+    public void testStandaloneLinterWhenNoProviderAvailable()
+    {
+        final PlaybookLinter linter = new PlaybookLinter((LlmProvider) null);
+        final List<PlaybookStep> steps = List.of(new PlaybookStep("Click button"));
+        final List<PlaybookLinterFinding> findings = linter.lint(steps, "Standalone Scenario");
+        assertNotNull(findings);
+        assertTrue(findings.isEmpty());
     }
 }

@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.List;
 import org.neodymium.ai.client.LlmCapability;
 import org.neodymium.ai.client.LlmProvider;
+import org.neodymium.ai.client.LlmRegistry;
 import org.neodymium.ai.client.LlmRequest;
 import org.neodymium.ai.client.LlmResponse;
 import org.neodymium.ai.client.MockLlmProvider;
@@ -52,6 +53,26 @@ public final class PlaybookLinter
     private static final Logger LOGGER = LoggerFactory.getLogger(PlaybookLinter.class);
 
     private final AiSession session;
+    private final LlmProvider customProvider;
+
+    /**
+     * Constructs a standalone PlaybookLinter using the default LLM registry configuration.
+     */
+    public PlaybookLinter()
+    {
+        this((AiSession) null);
+    }
+
+    /**
+     * Constructs a PlaybookLinter using an explicit LLM provider.
+     *
+     * @param provider the custom LLM provider to use for linting
+     */
+    public PlaybookLinter(final LlmProvider provider)
+    {
+        this.session = null;
+        this.customProvider = provider;
+    }
 
     /**
      * Constructs a PlaybookLinter bound to the active AI session.
@@ -61,6 +82,7 @@ public final class PlaybookLinter
     public PlaybookLinter(final AiSession session)
     {
         this.session = session;
+        this.customProvider = null;
     }
 
     /**
@@ -106,9 +128,17 @@ public final class PlaybookLinter
 
         try
         {
-            final LlmProvider provider = this.session != null && this.session.getLlmRegistry() != null
-                ? this.session.getLlmRegistry().getProvider(LlmCapability.LINTER)
-                : null;
+            LlmProvider provider = this.customProvider;
+            if (provider == null && this.session != null && this.session.getLlmRegistry() != null)
+            {
+                provider = this.session.getLlmRegistry().getProvider(LlmCapability.LINTER);
+            }
+            if (provider == null)
+            {
+                final LlmRegistry registry = new LlmRegistry();
+                LlmRegistry.bootstrap(registry, config);
+                provider = registry.getProvider(LlmCapability.LINTER);
+            }
 
             if (provider == null)
             {
@@ -116,7 +146,8 @@ public final class PlaybookLinter
                 return Collections.emptyList();
             }
 
-            if (provider instanceof MockLlmProvider
+            if (this.customProvider == null
+                && provider instanceof MockLlmProvider
                 && !"true".equalsIgnoreCase(System.getProperty("neodymium.ai.linter.enabled"))
                 && (this.session == null || this.session.data() == null || !"true".equals(String.valueOf(this.session.data().get("neodymium.ai.linter.enabled")))))
             {

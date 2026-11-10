@@ -19,6 +19,8 @@
 package com.xceptance.aura.test.controller;
 
 import com.xceptance.neodymium.aura.AuraFileService;
+import com.xceptance.neodymium.aura.AuraFileService.IssueSeverity;
+import com.xceptance.neodymium.aura.AuraFileService.ValidationIssue;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +28,10 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
+import org.neodymium.ai.playbook.linter.LinterCategory;
+import org.neodymium.ai.playbook.linter.LinterSeverity;
+import org.neodymium.ai.playbook.linter.PlaybookLinter;
+import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.ui.ConcurrentModel;
@@ -356,5 +362,115 @@ public class AuraTestEditorControllerTest
         Assertions.assertEquals("retries: 3", model.getAttribute("propertiesYaml"));
         Assertions.assertEquals(List.of(Map.of("key", "retries", "value", "3")), model.getAttribute("propertiesList"));
         Mockito.verify(fileService, Mockito.never()).readYamlFileContent(Mockito.anyString());
+    }
+
+    @Test
+    public final void testAiReviewHaltsOnSyntaxError() throws Exception
+    {
+        final HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(request.getParameter("file")).thenReturn("broken.yaml");
+        Mockito.when(request.getParameter("content")).thenReturn("steps:\n  - Invalid: [syntax error");
+
+        final PlaybookLinter mockLinter = Mockito.mock(PlaybookLinter.class);
+        final AuraTestEditorController customController = new AuraTestEditorController(fileService, mockLinter);
+
+        Mockito.when(fileService.validateFileContent("broken.yaml", "steps:\n  - Invalid: [syntax error"))
+                .thenReturn(List.of(new ValidationIssue(IssueSeverity.ERROR, "Mapping values are not allowed here", "broken.yaml")));
+
+        final ResponseEntity<Map<String, Object>> response = customController.aiReview(request);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("SYNTAX_ERROR", response.getBody().get("status"));
+        Assertions.assertTrue(response.getBody().containsKey("issues"));
+        Mockito.verify(mockLinter, Mockito.never()).lint(Mockito.anyList(), Mockito.any());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public final void testAiReviewSuccessfulWithFindings() throws Exception
+    {
+        final HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        final String validYaml = "steps:\n  - Click button";
+        Mockito.when(request.getParameter("file")).thenReturn("valid.yaml");
+        Mockito.when(request.getParameter("content")).thenReturn(validYaml);
+
+        final PlaybookLinter mockLinter = Mockito.mock(PlaybookLinter.class);
+        final AuraTestEditorController customController = new AuraTestEditorController(fileService, mockLinter);
+
+        Mockito.when(fileService.validateFileContent("valid.yaml", validYaml)).thenReturn(List.of());
+
+        final PlaybookLinterFinding finding = new PlaybookLinterFinding(
+                1,
+                2,
+                "valid.yaml",
+                "Click button",
+                "Click button",
+                LinterCategory.VAGUE_TARGET,
+                LinterSeverity.WARNING,
+                "Button target is ambiguous",
+                "Click the primary 'Submit' button",
+                null
+        );
+
+        Mockito.when(mockLinter.lint(Mockito.anyList(), Mockito.any())).thenReturn(List.of(finding));
+
+        final ResponseEntity<Map<String, Object>> response = customController.aiReview(request);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("OK", response.getBody().get("status"));
+        final List<Map<String, Object>> findings = (List<Map<String, Object>>) response.getBody().get("findings");
+        Assertions.assertNotNull(findings);
+        Assertions.assertEquals(1, findings.size());
+        final Map<String, Object> f0 = findings.get(0);
+        Assertions.assertEquals(1, f0.get("stepIndex"));
+        Assertions.assertEquals("VAGUE_TARGET", f0.get("category"));
+        Assertions.assertEquals("WARNING", f0.get("severity"));
+        Assertions.assertEquals("Button target is ambiguous", f0.get("message"));
+        Assertions.assertEquals("Click the primary 'Submit' button", f0.get("suggestedRewrite"));
+    }
+
+    @Test
+    public final void testAiReviewWithEmptyContent() throws Exception
+    {
+        final HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        Mockito.when(request.getParameter("file")).thenReturn("empty.yaml");
+        Mockito.when(request.getParameter("content")).thenReturn("");
+
+        final PlaybookLinter mockLinter = Mockito.mock(PlaybookLinter.class);
+        final AuraTestEditorController customController = new AuraTestEditorController(fileService, mockLinter);
+
+        Mockito.when(fileService.validateFileContent("empty.yaml", "")).thenReturn(List.of());
+
+        final ResponseEntity<Map<String, Object>> response = customController.aiReview(request);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("OK", response.getBody().get("status"));
+        Assertions.assertEquals(List.of(), response.getBody().get("findings"));
+        Mockito.verify(mockLinter, Mockito.never()).lint(Mockito.anyList(), Mockito.any());
+    }
+
+    @Test
+    public final void testAiReviewHandlesExceptionGracefully() throws Exception
+    {
+        final HttpServletRequest request = Mockito.mock(HttpServletRequest.class);
+        final String validYaml = "steps:\n  - Click button";
+        Mockito.when(request.getParameter("file")).thenReturn("valid.yaml");
+        Mockito.when(request.getParameter("content")).thenReturn(validYaml);
+
+        final PlaybookLinter mockLinter = Mockito.mock(PlaybookLinter.class);
+        final AuraTestEditorController customController = new AuraTestEditorController(fileService, mockLinter);
+
+        Mockito.when(fileService.validateFileContent("valid.yaml", validYaml)).thenReturn(List.of());
+        Mockito.when(mockLinter.lint(Mockito.anyList(), Mockito.any())).thenThrow(new RuntimeException("LLM Quota Exceeded"));
+
+        final ResponseEntity<Map<String, Object>> response = customController.aiReview(request);
+
+        Assertions.assertEquals(HttpStatus.OK, response.getStatusCode());
+        Assertions.assertNotNull(response.getBody());
+        Assertions.assertEquals("ERROR", response.getBody().get("status"));
+        Assertions.assertTrue(String.valueOf(response.getBody().get("error")).contains("LLM Quota Exceeded"));
     }
 }
