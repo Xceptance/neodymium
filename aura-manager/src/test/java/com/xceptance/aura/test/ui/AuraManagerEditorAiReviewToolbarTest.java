@@ -22,6 +22,7 @@ import static com.codeborne.selenide.Selenide.$;
 import static com.codeborne.selenide.Selenide.$$;
 import static com.codeborne.selenide.Selenide.open;
 
+import com.codeborne.selenide.CollectionCondition;
 import com.codeborne.selenide.Condition;
 import com.codeborne.selenide.Configuration;
 import com.codeborne.selenide.Selenide;
@@ -177,5 +178,96 @@ public final class AuraManagerEditorAiReviewToolbarTest
         secondRow.$(".step-content").shouldHave(Condition.text("Open https://example.com/login"));
         $$("#stepsList .step-row").get(0).$(".step-content").shouldHave(Condition.text("Validate headline is visible"));
         $(".review-suggestion-card").shouldNotBe(Condition.exist);
+    }
+
+    @Test
+    public final void testInsertStepAfterRetainsSuggestionCardsOnOriginatingStep() throws Exception
+    {
+        final String initialPlaybook = "steps: |\n"
+                                     + "  Open https://example.com/test\n"
+                                     + "  Validate headline is visible\n";
+
+        this.fileService.saveYamlFileContent(TEST_PLAYBOOK, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + TEST_PLAYBOOK);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Render suggestion card for step 1
+        Selenide.executeJavaScript(
+            "renderStepSuggestionCards([{"
+            + "  stepIndex: 1,"
+            + "  rawInstruction: 'Open https://example.com/test',"
+            + "  category: 'VAGUE_TARGET',"
+            + "  severity: 'WARNING',"
+            + "  message: 'Ambiguous URL target'"
+            + "}]);"
+        );
+
+        $(".review-suggestion-card").shouldBe(Condition.visible);
+
+        // Insert step after step 1
+        Selenide.executeJavaScript("insertStepBelow(document.querySelectorAll('#stepsList .step-row')[0]);");
+
+        // Verify total step rows is 3
+        $$("#stepsList .step-row").shouldHave(CollectionCondition.size(3));
+
+        // Verify the suggestion card is immediately after step 1, NOT after the newly inserted step
+        final Boolean cardIsDirectSibling = Selenide.executeJavaScript(
+            "const firstRow = document.querySelectorAll('#stepsList .step-row')[0];"
+            + "return firstRow.nextElementSibling && firstRow.nextElementSibling.classList.contains('review-suggestion-card');"
+        );
+        Assertions.assertTrue(Boolean.TRUE.equals(cardIsDirectSibling),
+            "Expected suggestion card to remain the immediate sibling following the originating step");
+    }
+
+    @Test
+    public final void testMoveStepWithIncludeTreeCardRetainsSuggestionCard() throws Exception
+    {
+        final String initialPlaybook = "steps: |\n"
+                                     + "  include: login.steps\n"
+                                     + "  Validate headline is visible\n";
+
+        this.fileService.saveYamlFileContent(TEST_PLAYBOOK, initialPlaybook);
+
+        open("http://localhost:" + this.port + "/?file=" + TEST_PLAYBOOK);
+        $("#editorPanel").shouldBe(Condition.visible);
+
+        // Simulate expanded include tree card after step 1
+        Selenide.executeJavaScript(
+            "const firstRow = document.querySelectorAll('#stepsList .step-row')[0];"
+            + "const treeCard = document.createElement('div');"
+            + "treeCard.id = 'includeTreeCard_1';"
+            + "treeCard.className = 'include-tree-card';"
+            + "treeCard.innerText = 'Mock Include Tree';"
+            + "firstRow.after(treeCard);"
+        );
+
+        // Render suggestion card for step 1
+        Selenide.executeJavaScript(
+            "renderStepSuggestionCards([{"
+            + "  stepIndex: 1,"
+            + "  rawInstruction: 'include: login.steps',"
+            + "  category: 'INCOMPLETE_STEP',"
+            + "  severity: 'WARNING',"
+            + "  message: 'Missing include parameters'"
+            + "}]);"
+        );
+
+        $(".review-suggestion-card").shouldBe(Condition.visible);
+
+        // Move step 1 down past step 2
+        $$("#stepsList .step-row").get(0).hover().$(".btn-move-down").shouldBe(Condition.visible).click();
+
+        // Verify the suggestion card and treeCard moved with the row below step 2
+        final Boolean correctSequencing = Selenide.executeJavaScript(
+            "const rows = document.querySelectorAll('#stepsList .step-row');"
+            + "const movedRow = rows[1];"
+            + "const next1 = movedRow.nextElementSibling;"
+            + "const next2 = next1 ? next1.nextElementSibling : null;"
+            + "return next1 && next1.classList.contains('include-tree-card') "
+            + "    && next2 && next2.classList.contains('review-suggestion-card');"
+        );
+        Assertions.assertTrue(Boolean.TRUE.equals(correctSequencing),
+            "Expected [step-row] -> [includeTreeCard] -> [review-suggestion-card] sequence after move");
     }
 }

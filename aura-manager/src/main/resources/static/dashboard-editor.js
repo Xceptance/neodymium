@@ -3074,7 +3074,10 @@ function insertStepBelow(lineNumOrElement, initialText = '') {
 
     const lineId = targetRow.getAttribute('data-line');
     const treeCard = document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`);
-    const insertAfterRef = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
+    let insertAfterRef = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
+    while (insertAfterRef.nextElementSibling && insertAfterRef.nextElementSibling.classList.contains('review-suggestion-card')) {
+        insertAfterRef = insertAfterRef.nextElementSibling;
+    }
     insertAfterRef.after(newRow);
 
     reindexSteps();
@@ -3107,13 +3110,14 @@ function moveStep(lineNumOrElement, direction) {
     const currentIndex = allRows.indexOf(row);
     if (currentIndex === -1) return;
 
-    // Collect all suggestion cards belonging to this row
+    // Collect all suggestion cards belonging to this row (whether before or after treeCard)
     const suggestionCards = [];
-    let startEl = (treeCard && treeCard.parentElement === container) ? treeCard : row;
-    let nextSibling = startEl.nextElementSibling;
-    while (nextSibling && nextSibling.classList.contains('review-suggestion-card')) {
-        suggestionCards.push(nextSibling);
-        nextSibling = nextSibling.nextElementSibling;
+    let curSibling = row.nextElementSibling;
+    while (curSibling && (curSibling === treeCard || curSibling.classList.contains('review-suggestion-card'))) {
+        if (curSibling.classList.contains('review-suggestion-card')) {
+            suggestionCards.push(curSibling);
+        }
+        curSibling = curSibling.nextElementSibling;
     }
 
     if (direction === -1) {
@@ -5959,10 +5963,19 @@ function renderStepSuggestionCards(findings) {
         // 1. Content matching with occurrence resolution
         if (f.rawInstruction && f.rawInstruction.trim()) {
             const rawTarget = f.rawInstruction.trim();
-            const matchingRows = allRows.filter(r => {
+            let matchingRows = allRows.filter(r => {
                 const c = r.querySelector('.step-content');
                 return c && ((c.getAttribute('data-raw') || '').trim() === rawTarget || (c.innerText || '').trim() === rawTarget);
             });
+            // Fallback for composite milestone steps with nested sub-steps
+            if (matchingRows.length === 0 && rawTarget.includes('\n')) {
+                const parentLine = rawTarget.split('\n')[0].replace(/:$/, '').trim();
+                matchingRows = allRows.filter(r => {
+                    const c = r.querySelector('.step-content');
+                    const text = (c ? (c.getAttribute('data-raw') || c.innerText || '') : '').replace(/:$/, '').trim();
+                    return text === parentLine;
+                });
+            }
             if (matchingRows.length === 1) {
                 targetRow = matchingRows[0];
             } else if (matchingRows.length > 1) {
@@ -6023,7 +6036,9 @@ function renderStepSuggestionCards(findings) {
             </div>
         `;
 
-        let insertAfterEl = targetRow;
+        const lineId = targetRow.getAttribute('data-line');
+        const treeCard = lineId ? (document.getElementById(`includeTreeCard_${lineId}`) || document.getElementById(`includeTreeCard${lineId}`)) : null;
+        let insertAfterEl = (treeCard && treeCard.parentElement === targetRow.parentElement) ? treeCard : targetRow;
         while (insertAfterEl.nextElementSibling && insertAfterEl.nextElementSibling.classList.contains('review-suggestion-card')) {
             insertAfterEl = insertAfterEl.nextElementSibling;
         }
