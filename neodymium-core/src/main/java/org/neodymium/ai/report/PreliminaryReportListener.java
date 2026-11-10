@@ -57,9 +57,13 @@ import org.neodymium.ai.model.PlaybookStep;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
 import org.neodymium.ai.model.PlaybookStepStatus;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.neodymium.ai.pipeline.StepStats;
+import org.neodymium.ai.prompt.LlmResponseSanitizer;
 import org.neodymium.ai.prompt.VisualRcaResult;
 import org.neodymium.ai.telemetry.MetricsCollector;
+import org.neodymium.ai.tool.ToolCall;
 import org.neodymium.ai.tool.ToolDefinition;
 import org.neodymium.util.Neodymium;
 import org.slf4j.Logger;
@@ -77,6 +81,7 @@ import org.slf4j.LoggerFactory;
 public final class PreliminaryReportListener implements ExecutionListener
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(PreliminaryReportListener.class);
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final SimpleDateFormat FILE_TIMESTAMP_FORMAT = new SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US);
 
     private final boolean isCustomOutputDirectory;
@@ -1003,7 +1008,58 @@ public final class PreliminaryReportListener implements ExecutionListener
             if (llmReceived.getResponse() != null)
             {
                 callEntry.setModelName(llmReceived.getResponse().modelName());
+                if (llmReceived.getResponse().hasThinking())
+                {
+                    callEntry.setThinking(llmReceived.getResponse().thinking().trim());
+                }
+                else if (llmReceived.getResponse().hasToolCalls())
+                {
+                    for (final ToolCall tc : llmReceived.getResponse().toolCalls())
+                    {
+                        if ("complete_step".equals(tc.toolName()) && tc.arguments() != null && tc.arguments().hasNonNull("summary"))
+                        {
+                            final String s = tc.arguments().path("summary").asText("").trim();
+                            if (!s.isBlank())
+                            {
+                                callEntry.setThinking(s);
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 final String content = llmReceived.getResponse().content();
+                if (callEntry.getThinking() == null && content != null && !content.isBlank())
+                {
+                    try
+                    {
+                        final String json = LlmResponseSanitizer.extractJson(content);
+                        if (!json.isBlank())
+                        {
+                            final JsonNode node = OBJECT_MAPPER.readTree(json);
+                            if (node.hasNonNull("thought") && !node.path("thought").asText().isBlank())
+                            {
+                                callEntry.setThinking(node.path("thought").asText().trim());
+                            }
+                            else if (node.hasNonNull("reasoning") && !node.path("reasoning").asText().isBlank())
+                            {
+                                callEntry.setThinking(node.path("reasoning").asText().trim());
+                            }
+                            else if (node.hasNonNull("actions") && node.path("actions").isArray() && !node.path("actions").isEmpty())
+                            {
+                                final JsonNode firstAction = node.path("actions").get(0);
+                                if (firstAction.hasNonNull("reasoning") && !firstAction.path("reasoning").asText().isBlank())
+                                {
+                                    callEntry.setThinking(firstAction.path("reasoning").asText().trim());
+                                }
+                            }
+                        }
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
+
                 if (content != null && !content.isBlank())
                 {
                     if (llmReceived.getResponse().hasToolCalls())

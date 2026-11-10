@@ -136,6 +136,8 @@ public class BackIntegrationTest extends BaseAiTest
         $("h1").shouldHave(text("Assert Action Test"));
         assertTrue(WebDriverRunner.url().contains("testAssertHappyPath.html"));
 
+        flushRecording(session);
+
         // Verify that the recorded playbook contains the parameterized placeholders instead of hardcoded URLs
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_back_playbook_" + browserProfile + ".json");

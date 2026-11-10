@@ -1323,6 +1323,7 @@ public final class TestExecutionReport
         private String systemPrompt;
         private String userPrompt;
         private String responseContent;
+        private String thinking;
         private List<String> availableTools = new ArrayList<>();
 
         public ReportLlmCallEntry()
@@ -1467,6 +1468,16 @@ public final class TestExecutionReport
         public void setResponseContent(final String responseContent)
         {
             this.responseContent = responseContent;
+        }
+
+        public String getThinking()
+        {
+            return this.thinking;
+        }
+
+        public void setThinking(final String thinking)
+        {
+            this.thinking = thinking;
         }
 
         public List<String> getAvailableTools()

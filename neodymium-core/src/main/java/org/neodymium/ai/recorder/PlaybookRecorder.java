@@ -28,9 +28,12 @@ import java.util.Set;
 import org.neodymium.ai.config.ExecutionMode;
 import org.neodymium.ai.event.ExecutionEvent;
 import org.neodymium.ai.event.ExecutionListener;
+import org.neodymium.ai.event.structural.PlaybookRecordingFlushEvent;
 import org.neodymium.ai.event.structural.SessionFinishedEvent;
 import org.neodymium.ai.model.PlaybookStep;
+import org.neodymium.ai.model.SessionData;
 import org.neodymium.ai.pipeline.ExecutionContext;
+import org.neodymium.ai.prompt.DefaultActionSanitizer;
 import org.neodymium.ai.resources.PlaybookResourceManager;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,6 +86,12 @@ public final class PlaybookRecorder implements ExecutionListener
     @Override
     public void onEvent(final ExecutionEvent event)
     {
+        if (event instanceof final PlaybookRecordingFlushEvent flushEvent)
+        {
+            writeRecording(flushEvent.getExecutionContext());
+            return;
+        }
+
         if (event instanceof SessionFinishedEvent)
         {
             final SessionFinishedEvent sessionFinishedEvent = (SessionFinishedEvent) event;
@@ -94,68 +103,95 @@ public final class PlaybookRecorder implements ExecutionListener
             if (!sessionFinishedEvent.isSuccess())
             {
                 LOGGER.info("Session finished with failure. Skipping playbook recording write to {}", this.recordingPath);
+                if (this.executionMode == ExecutionMode.FORCE_RECORDING)
+                {
+                    try
+                    {
+                        this.resourceManager.delete(this.recordingPath);
+                    }
+                    catch (final Exception ignored)
+                    {
+                    }
+                }
                 return;
             }
 
-            try
+            writeRecording(ExecutionContext.getActiveContext());
+        }
+    }
+
+    /**
+     * Persists the current executed steps as a candidate recording if the execution mode supports recording persistence.
+     *
+     * @param activeCtx the active execution context containing dynamic executed steps
+     */
+    public void writeRecording(final ExecutionContext activeCtx)
+    {
+        if (!this.executionMode.persistsRecording())
+        {
+            LOGGER.debug("Execution mode {} does not persist recordings. Skipping playbook recording write to {}", this.executionMode, this.recordingPath);
+            return;
+        }
+
+        try
+        {
+            List<PlaybookStep> stepsToWrite = this.playbookSteps;
+            if (activeCtx != null)
             {
-                List<PlaybookStep> stepsToWrite = this.playbookSteps;
-                final ExecutionContext activeCtx = ExecutionContext.getActiveContext();
-                if (activeCtx != null)
+                @SuppressWarnings("unchecked")
+                final List<PlaybookStep> flatSteps = (List<PlaybookStep>) activeCtx.getTransientData().get("playbook.flatSteps");
+                if (flatSteps != null && !flatSteps.isEmpty())
                 {
-                    @SuppressWarnings("unchecked")
-                    final List<PlaybookStep> flatSteps = (List<PlaybookStep>) activeCtx.getTransientData().get("playbook.flatSteps");
-                    if (flatSteps != null && !flatSteps.isEmpty())
+                    // flatSteps holds leaf steps only: a composite step (e.g. a folded ">-" block) is represented by
+                    // its children, which carry a parent reference. Record the root of each step so a composite is
+                    // written once, together with its sub-steps, instead of being dropped.
+                    final Set<PlaybookStep> seenRoots = Collections.newSetFromMap(new IdentityHashMap<>());
+                    final List<PlaybookStep> topLevel = new ArrayList<>();
+                    for (final PlaybookStep s : flatSteps)
                     {
-                        // flatSteps holds leaf steps only: a composite step (e.g. a folded ">-" block) is represented by
-                        // its children, which carry a parent reference. Record the root of each step so a composite is
-                        // written once, together with its sub-steps, instead of being dropped.
-                        final Set<PlaybookStep> seenRoots = Collections.newSetFromMap(new IdentityHashMap<>());
-                        final List<PlaybookStep> topLevel = new ArrayList<>();
-                        for (final PlaybookStep s : flatSteps)
+                        if (s == null)
                         {
-                            if (s == null)
-                            {
-                                continue;
-                            }
-                            final PlaybookStep root = s.getRootStep();
-                            if (seenRoots.add(root))
-                            {
-                                topLevel.add(root);
-                            }
+                            continue;
                         }
-                        if (!topLevel.isEmpty())
+                        final PlaybookStep root = s.getRootStep();
+                        if (seenRoots.add(root))
                         {
-                            stepsToWrite = topLevel;
+                            topLevel.add(root);
                         }
+                    }
+                    if (!topLevel.isEmpty())
+                    {
+                        stepsToWrite = topLevel;
                     }
                 }
-
-                final ObjectMapper mapper = new ObjectMapper();
-                mapper.enable(SerializationFeature.INDENT_OUTPUT);
-                final String candidateJson = mapper.writeValueAsString(stepsToWrite);
-
-                if (!this.executionMode.isRecording())
-                {
-                    final String existingJson = readAsString(this.recordingPath);
-                    if (existingJson != null && existingJson.trim().equals(candidateJson.trim()))
-                    {
-                        LOGGER.info("Session finished with success and 0 step changes. Skipping playbook recording write to {}", this.recordingPath);
-                        return;
-                    }
-                    if (existingJson != null)
-                    {
-                        LOGGER.info("Session finished with success and healed step updates. Overwriting playbook recording at {}", this.recordingPath);
-                    }
-                }
-
-                LOGGER.info("Writing candidate playbook recording to {}", this.recordingPath);
-                this.resourceManager.write(this.recordingPath, candidateJson);
             }
-            catch (final Exception e)
+
+            if (activeCtx != null && activeCtx.getSessionData() != null)
             {
-                LOGGER.error("Failed to write playbook recording to {}", this.recordingPath, e);
+                sanitizePlaybookSteps(stepsToWrite, activeCtx.getSessionData());
             }
+
+            final ObjectMapper mapper = new ObjectMapper();
+            mapper.enable(SerializationFeature.INDENT_OUTPUT);
+            final String candidateJson = mapper.writeValueAsString(stepsToWrite);
+
+            final String existingJson = readAsString(this.recordingPath);
+            if (existingJson != null && normalizeJson(existingJson).equals(normalizeJson(candidateJson)))
+            {
+                LOGGER.info("Session finished with success and 0 step changes. Skipping playbook recording write to {}", this.recordingPath);
+                return;
+            }
+            if (!this.executionMode.isRecording() && existingJson != null)
+            {
+                LOGGER.info("Session finished with success and healed step updates. Overwriting playbook recording at {}", this.recordingPath);
+            }
+
+            LOGGER.info("Writing candidate playbook recording to {}", this.recordingPath);
+            this.resourceManager.write(this.recordingPath, candidateJson);
+        }
+        catch (final Exception e)
+        {
+            LOGGER.error("Failed to write playbook recording to {}", this.recordingPath, e);
         }
     }
 
@@ -173,6 +209,44 @@ public final class PlaybookRecorder implements ExecutionListener
         {
             return null;
         }
+    }
+
+    private void sanitizePlaybookSteps(final List<PlaybookStep> steps, final SessionData sessionData)
+    {
+        if (steps == null || sessionData == null)
+        {
+            return;
+        }
+        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+        for (final PlaybookStep step : steps)
+        {
+            if (step == null)
+            {
+                continue;
+            }
+            if (step.getReasoning() != null)
+            {
+                step.setReasoning(sanitizer.sanitizeText(step.getReasoning(), sessionData));
+            }
+            if (!step.getReasonings().isEmpty())
+            {
+                final List<String> sanitizedReasonings = new ArrayList<>();
+                for (final String r : step.getReasonings())
+                {
+                    sanitizedReasonings.add(r != null ? sanitizer.sanitizeText(r, sessionData) : null);
+                }
+                step.setReasonings(sanitizedReasonings);
+            }
+            if (step.hasSubSteps())
+            {
+                sanitizePlaybookSteps(step.getSubSteps(), sessionData);
+            }
+        }
+    }
+
+    private static String normalizeJson(final String json)
+    {
+        return json == null ? "" : json.replaceAll("\\r\\n", "\n").trim();
     }
 }
 

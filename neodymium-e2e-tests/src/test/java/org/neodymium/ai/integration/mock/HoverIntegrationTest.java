@@ -115,6 +115,8 @@ public class HoverIntegrationTest extends BaseAiTest
 
         $("#hover-status").shouldHave(text("Hovered"));
 
+        flushRecording(session);
+
         // Verify parameterization
         final String browserProfile = Neodymium.getBrowserProfileName();
         final File recordingFile = getTestResourceFile("playbooks/integration/programmatic/custom_hover_playbook_" + browserProfile + ".json");

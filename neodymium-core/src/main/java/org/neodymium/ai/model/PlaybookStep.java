@@ -1792,6 +1792,20 @@ public final class PlaybookStep
     }
 
     /**
+     * Sets all AI reasonings generated across execution stages for this step.
+     *
+     * @param reasonings the list of stage reasonings to set
+     */
+    public void setReasonings(final List<String> reasonings)
+    {
+        this.reasonings.clear();
+        if (reasonings != null)
+        {
+            this.reasonings.addAll(reasonings);
+        }
+    }
+
+    /**
      * Returns the recorded execution duration in milliseconds.
      *
      * @return the execution duration in milliseconds, or {@code null} if not recorded

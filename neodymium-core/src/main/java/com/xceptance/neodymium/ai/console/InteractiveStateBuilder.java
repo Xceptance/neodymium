@@ -1351,6 +1351,22 @@ public final class InteractiveStateBuilder
                     {
                         subObj.addProperty("reasoning", sub.getReasoning());
                     }
+                    if (sub.getReasonings() != null && !sub.getReasonings().isEmpty())
+                    {
+                        final List<String> subReasonings = new ArrayList<>(sub.getReasonings());
+                        final JsonArray subReasoningsArr = new JsonArray();
+                        for (final String sr : subReasonings)
+                        {
+                            if (sr != null && !sr.isBlank())
+                            {
+                                subReasoningsArr.add(sr.trim());
+                            }
+                        }
+                        if (!subReasoningsArr.isEmpty())
+                        {
+                            subObj.add("reasonings", subReasoningsArr);
+                        }
+                    }
                     if (sub.getFailureReason() != null && !sub.getFailureReason().isBlank())
                     {
                         subObj.addProperty("failureReason", sub.getFailureReason());
@@ -1454,6 +1470,26 @@ public final class InteractiveStateBuilder
             if (!sb.isEmpty())
             {
                 obj.addProperty("reasoning", sb.toString());
+            }
+        }
+
+        final List<String> rawReasonings = (step.getReasonings() != null && !step.getReasonings().isEmpty())
+            ? step.getReasonings()
+            : (reportStep != null ? reportStep.getReasonings() : null);
+        if (rawReasonings != null && !rawReasonings.isEmpty())
+        {
+            final List<String> reasonings = new ArrayList<>(rawReasonings);
+            final JsonArray reasoningsArr = new JsonArray();
+            for (final String r : reasonings)
+            {
+                if (r != null && !r.isBlank())
+                {
+                    reasoningsArr.add(r.trim());
+                }
+            }
+            if (!reasoningsArr.isEmpty())
+            {
+                obj.add("reasonings", reasoningsArr);
             }
         }
 
@@ -1567,6 +1603,11 @@ public final class InteractiveStateBuilder
                     callObj.addProperty("systemPrompt", call.getSystemPrompt());
                     callObj.addProperty("userPrompt", call.getUserPrompt());
                     callObj.addProperty("responseContent", call.getResponseContent());
+                    if (call.getThinking() != null && !call.getThinking().isBlank())
+                    {
+                        callObj.addProperty("thinking", call.getThinking());
+                        callObj.addProperty("reasoning", call.getThinking());
+                    }
                     if (call.getAvailableTools() != null && !call.getAvailableTools().isEmpty())
                     {
                         final JsonArray toolsArr = new JsonArray();
@@ -1868,6 +1909,22 @@ public final class InteractiveStateBuilder
                     subObj.addProperty("startTimeMs", sub.getStartTimeMs());
                     subObj.addProperty("durationMs", sub.getDurationMs());
                     subObj.addProperty("reasoning", sub.getReasoning());
+                    if (sub.getReasonings() != null && !sub.getReasonings().isEmpty())
+                    {
+                        final List<String> subReasonings = new ArrayList<>(sub.getReasonings());
+                        final JsonArray subReasoningsArr = new JsonArray();
+                        for (final String sr : subReasonings)
+                        {
+                            if (sr != null && !sr.isBlank())
+                            {
+                                subReasoningsArr.add(sr.trim());
+                            }
+                        }
+                        if (!subReasoningsArr.isEmpty())
+                        {
+                            subObj.add("reasonings", subReasoningsArr);
+                        }
+                    }
                     subObj.addProperty("failureReason", sub.getFailureReason());
                     if (sub.getFailureReason() != null && !sub.getFailureReason().isBlank())
                     {

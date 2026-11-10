@@ -1674,6 +1674,12 @@ public final class HtmlReportGenerator
                             card.appendChild(promptsWrapper);
                         }
 
+                        if (call.thinking) {
+                            var tSec = createPromptSection('Model Thought / Reasoning:', call.thinking, ci, 'thinking', false);
+                            tSec.classList.add('thought-section');
+                            card.appendChild(tSec);
+                        }
+
                         if (call.responseContent) {
                             var sec = createPromptSection('Raw Model Response:', call.responseContent, ci, 'responseContent', false);
                             sec.classList.add('response-section');
@@ -1943,6 +1949,9 @@ public final class HtmlReportGenerator
                                 rBadge = (actionCallIdx === 0)
                                     ? ' <span class="badge-phase prelude" title="Status: CONTINUE">PRELUDE</span>'
                                     : ' <span class="badge-phase continuation" title="Status: SUCCESS">CONTINUATION</span>';
+                            }
+                            if (!rText && call.thinking) {
+                                rText = call.thinking;
                             }
                             if (!rText && step.reasonings && step.reasonings[actionCallIdx]) {
                                 rText = step.reasonings[actionCallIdx];
@@ -3051,6 +3060,10 @@ public final class HtmlReportGenerator
             }
             .llm-prompts-wrapper.collapsed .llm-prompts-body {
                 display: none;
+            }
+            .thought-section {
+                background: #faf5ff;
+                border-left: 3px solid #c084fc;
             }
             .response-section {
                 background: #ffffff;
