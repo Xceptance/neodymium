@@ -129,7 +129,7 @@ public class AssertActionPluginTest
     }
 
     @Test
-    public void testCompoundStateNegationEditableInvertsToReadonly() throws Exception
+    public void testCompoundStateNegationEditableAndReadonly() throws Exception
     {
         final WebElement readonlyElement = (WebElement) Proxy.newProxyInstance(
                 AssertActionPluginTest.class.getClassLoader(),
@@ -169,19 +169,64 @@ public class AssertActionPluginTest
                 }
         );
 
+        final WebElement disabledElement = (WebElement) Proxy.newProxyInstance(
+                AssertActionPluginTest.class.getClassLoader(),
+                new Class<?>[]{WebElement.class},
+                (proxy, method, args) ->
+                {
+                    final String name = method.getName();
+                    if ("equals".equals(name))
+                    {
+                        return proxy == args[0];
+                    }
+                    if ("isDisplayed".equals(name))
+                    {
+                        return true;
+                    }
+                    if ("isEnabled".equals(name))
+                    {
+                        return false;
+                    }
+                    if ("getTagName".equals(name))
+                    {
+                        return "input";
+                    }
+                    if ("getAttribute".equals(name))
+                    {
+                        final String attr = (String) args[0];
+                        if ("disabled".equals(attr))
+                        {
+                            return "true";
+                        }
+                        if ("id".equals(attr))
+                        {
+                            return "disabled-input";
+                        }
+                    }
+                    if ("findElements".equals(name))
+                    {
+                        return Collections.emptyList();
+                    }
+                    return null;
+                }
+        );
+
         final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
                 AssertActionPluginTest.class.getClassLoader(),
                 new Class<?>[]{MockJsDriver.class},
                 (proxy, method, args) ->
                 {
                     final String name = method.getName();
+                    final Object arg0 = (args != null && args.length > 0) ? args[0] : null;
+                    final boolean isTargetingDisabled = arg0 != null && arg0.toString().contains("disabled");
+                    final WebElement target = isTargetingDisabled ? disabledElement : readonlyElement;
                     if ("findElement".equals(name))
                     {
-                        return readonlyElement;
+                        return target;
                     }
                     if ("findElements".equals(name))
                     {
-                        return List.of(readonlyElement);
+                        return List.of(target);
                     }
                     return null;
                 }
@@ -190,14 +235,25 @@ public class AssertActionPluginTest
 
         final AssertAction plugin = new AssertAction();
 
-        // Asserting 'editable' with isNegated=true must invert to 'readonly' and SUCCEED
+        // 1. Readonly input tests:
+        // Asserting 'editable' with isNegated=true must evaluate shouldNotBe(editable) and SUCCEED
         plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#locked-input", List.of("editable"), "verify not editable", "reasoning", false, true));
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#locked-input", List.of("not_editable"), "verify not_editable", "reasoning", false));
 
-        // Asserting 'readonly' with isNegated=true must invert to 'editable' and FAIL on readonly element
+        // Asserting 'readonly' with isNegated=true must evaluate shouldNotBe(readonly) and FAIL on readonly element
         Assertions.assertThrows(AssertionError.class, () ->
         {
             plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#locked-input", List.of("readonly"), "verify not readonly", "fail", false, true));
         });
+
+        // 2. Disabled input tests:
+        // A disabled input is NOT editable, so asserting 'editable' with isNegated=true must SUCCEED
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#disabled-input", List.of("editable"), "verify disabled is not editable", "reasoning", false, true));
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#disabled-input", List.of("not_editable"), "verify disabled is not_editable", "reasoning", false));
+
+        // A disabled input is NOT readonly, so asserting 'readonly' with isNegated=true must SUCCEED
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#disabled-input", List.of("readonly"), "verify disabled is not readonly", "reasoning", false, true));
+        plugin.execute(new Action("ASSERT_ELEMENT_STATE", "#disabled-input", List.of("not_readonly"), "verify disabled is not_readonly", "reasoning", false));
     }
 
     @Test

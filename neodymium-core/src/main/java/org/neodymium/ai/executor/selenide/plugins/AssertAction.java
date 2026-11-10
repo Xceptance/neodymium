@@ -781,12 +781,50 @@ public final class AssertAction implements BrowserActionPlugin
             }
             case "readonly":
             {
-                element.shouldBe(Condition.readonly);
+                if (action.isNegated())
+                {
+                    element.shouldNotBe(Condition.readonly);
+                }
+                else
+                {
+                    element.shouldBe(Condition.readonly);
+                }
+                break;
+            }
+            case "not_readonly":
+            {
+                if (action.isNegated())
+                {
+                    element.shouldBe(Condition.readonly);
+                }
+                else
+                {
+                    element.shouldNotBe(Condition.readonly);
+                }
                 break;
             }
             case "editable":
             {
-                element.shouldBe(Condition.editable);
+                if (action.isNegated())
+                {
+                    element.shouldNotBe(Condition.editable);
+                }
+                else
+                {
+                    element.shouldBe(Condition.editable);
+                }
+                break;
+            }
+            case "not_editable":
+            {
+                if (action.isNegated())
+                {
+                    element.shouldBe(Condition.editable);
+                }
+                else
+                {
+                    element.shouldNotBe(Condition.editable);
+                }
                 break;
             }
             case "empty":
@@ -1191,8 +1229,10 @@ public final class AssertAction implements BrowserActionPlugin
                 case "unfocused" -> "focused";
                 case "exists" -> "absent";
                 case "absent" -> "exists";
-                case "editable" -> "readonly";
-                case "readonly" -> "editable";
+                case "editable" -> "not_editable";
+                case "not_editable" -> "editable";
+                case "readonly" -> "not_readonly";
+                case "not_readonly" -> "readonly";
                 case "empty" -> "not_empty";
                 case "not_empty" -> "empty";
                 default -> normalized;
@@ -1205,7 +1245,9 @@ public final class AssertAction implements BrowserActionPlugin
                 case "enabled" -> element.shouldBe(Condition.enabled);
                 case "disabled" -> element.shouldBe(Condition.disabled);
                 case "editable" -> element.shouldBe(Condition.editable);
+                case "not_editable" -> element.shouldNotBe(Condition.editable);
                 case "readonly" -> element.shouldBe(Condition.readonly);
+                case "not_readonly" -> element.shouldNotBe(Condition.readonly);
                 case "checked" -> element.shouldBe(Condition.checked);
                 case "unchecked" -> element.shouldNotBe(Condition.checked);
                 case "selected" ->
@@ -1236,7 +1278,7 @@ public final class AssertAction implements BrowserActionPlugin
                 case "absent" -> element.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
                 case "empty" -> element.shouldBe(Condition.empty);
                 case "not_empty" -> element.shouldNotBe(Condition.empty);
-                default -> throw new AssertionError("Unsupported element state assertion: '" + trimmed + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, empty, not_empty.");
+                default -> throw new AssertionError("Unsupported element state assertion: '" + trimmed + "'. Allowed states: visible, hidden, enabled, disabled, editable, not_editable, readonly, not_readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, empty, not_empty.");
             }
             LOG.debug("   ✅ Element satisfied state '{}': {}", state, action);
         }

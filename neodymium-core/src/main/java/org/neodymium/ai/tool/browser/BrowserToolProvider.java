@@ -2366,7 +2366,7 @@ public final class BrowserToolProvider
         }
         if (candidate.isBlank())
         {
-            return false;
+            return expectedText.isBlank();
         }
 
         if (regex)
@@ -3873,7 +3873,9 @@ public final class BrowserToolProvider
         stateEnum.add("enabled");
         stateEnum.add("disabled");
         stateEnum.add("editable");
+        stateEnum.add("not_editable");
         stateEnum.add("readonly");
+        stateEnum.add("not_readonly");
         stateEnum.add("checked");
         stateEnum.add("unchecked");
         stateEnum.add("selected");
@@ -3902,7 +3904,9 @@ public final class BrowserToolProvider
         statesEnum.add("enabled");
         statesEnum.add("disabled");
         statesEnum.add("editable");
+        statesEnum.add("not_editable");
         statesEnum.add("readonly");
+        statesEnum.add("not_readonly");
         statesEnum.add("checked");
         statesEnum.add("unchecked");
         statesEnum.add("selected");
@@ -3920,7 +3924,7 @@ public final class BrowserToolProvider
         req.add("selector");
         req.add("state");
 
-        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies one or more states (e.g. editable, readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, empty, not_empty, or compound e.g. 'visible, enabled')", schema);
+        final ToolDefinition def = new ToolDefinition("assert_element_state", "Asserts that an element satisfies one or more states (e.g. editable, not_editable, readonly, not_readonly, enabled, disabled, visible, hidden, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, empty, not_empty, or compound e.g. 'visible, enabled')", schema);
         return new AiTool()
         {
             @Override
@@ -4007,8 +4011,10 @@ public final class BrowserToolProvider
                         case "unfocused" -> "focused";
                         case "exists" -> "absent";
                         case "absent" -> "exists";
-                        case "editable" -> "readonly";
-                        case "readonly" -> "editable";
+                        case "editable" -> "not_editable";
+                        case "not_editable" -> "editable";
+                        case "readonly" -> "not_readonly";
+                        case "not_readonly" -> "readonly";
                         case "empty" -> "not_empty";
                         case "not_empty" -> "empty";
                         default -> normalized;
@@ -4083,7 +4089,9 @@ public final class BrowserToolProvider
                             case "enabled" -> el.shouldBe(Condition.enabled);
                             case "disabled" -> el.shouldBe(Condition.disabled);
                             case "editable" -> el.shouldBe(Condition.editable);
+                            case "not_editable" -> el.shouldNotBe(Condition.editable);
                             case "readonly" -> el.shouldBe(Condition.readonly);
+                            case "not_readonly" -> el.shouldNotBe(Condition.readonly);
                             case "checked" -> el.shouldBe(Condition.checked);
                             case "unchecked" -> el.shouldNotBe(Condition.checked);
                             case "selected" ->
@@ -4114,7 +4122,7 @@ public final class BrowserToolProvider
                             case "absent" -> el.should(Condition.or("Element is hidden or non-existent", Condition.hidden, Condition.not(Condition.exist)));
                             case "empty" -> el.shouldBe(Condition.empty);
                             case "not_empty" -> el.shouldNotBe(Condition.empty);
-                            default -> throw new AssertionError("Unsupported element state assertion: '" + state + "'. Allowed states: visible, hidden, enabled, disabled, editable, readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, empty, not_empty.");
+                            default -> throw new AssertionError("Unsupported element state assertion: '" + state + "'. Allowed states: visible, hidden, enabled, disabled, editable, not_editable, readonly, not_readonly, checked, unchecked, selected, unselected, focused, unfocused, exists, absent, empty, not_empty.");
                         }
                         evaluatedStates.add(state);
                     }
@@ -4191,6 +4199,8 @@ public final class BrowserToolProvider
         return switch (s)
         {
             case "read-only", "read_only" -> "readonly";
+            case "not_readonly", "non_readonly", "not-readonly", "non-readonly", "not readonly", "non readonly", "not_read_only", "not-read-only" -> "not_readonly";
+            case "not_editable", "non_editable", "not-editable", "non-editable", "not editable", "non editable", "uneditable" -> "not_editable";
             case "not_checked", "un-checked", "unchecked" -> "unchecked";
             case "not_selected", "un-selected", "unselected" -> "unselected";
             case "not_exist", "not_exists", "non-existent", "absent" -> "absent";

@@ -731,6 +731,8 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertTrue(states.contains("absent"), "Enum should contain 'absent'");
         Assertions.assertTrue(states.contains("empty"), "Enum should contain 'empty'");
         Assertions.assertTrue(states.contains("not_empty"), "Enum should contain 'not_empty'");
+        Assertions.assertTrue(states.contains("not_editable"), "Enum should contain 'not_editable'");
+        Assertions.assertTrue(states.contains("not_readonly"), "Enum should contain 'not_readonly'");
     }
 
     @Test
@@ -784,6 +786,12 @@ public class BrowserToolProviderStabilityTest
         Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("not-empty"));
         Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("non-empty"));
         Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("NOT_EMPTY"));
+        Assertions.assertEquals("not_editable", BrowserToolProvider.normalizeElementState("not_editable"));
+        Assertions.assertEquals("not_editable", BrowserToolProvider.normalizeElementState("not-editable"));
+        Assertions.assertEquals("not_editable", BrowserToolProvider.normalizeElementState("non-editable"));
+        Assertions.assertEquals("not_readonly", BrowserToolProvider.normalizeElementState("not_readonly"));
+        Assertions.assertEquals("not_readonly", BrowserToolProvider.normalizeElementState("not-readonly"));
+        Assertions.assertEquals("not_readonly", BrowserToolProvider.normalizeElementState("non-readonly"));
     }
 
     @Test
@@ -791,10 +799,15 @@ public class BrowserToolProviderStabilityTest
     {
         Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "", false, false));
         Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "   ", false, true));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "   ", false, true));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "", false, true));
         Assertions.assertFalse(BrowserToolProvider.matchesCandidate(null, "", false, false));
         Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "", false, false));
         Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "", false, true));
         Assertions.assertTrue(BrowserToolProvider.matchesCandidate("Hello World", "World", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("Hello World", " ", false, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Hello World", "   ", false, false));
     }
 
     @Test
@@ -838,18 +851,59 @@ public class BrowserToolProviderStabilityTest
                     }
             );
 
+            final WebElement disabledElement = (WebElement) Proxy.newProxyInstance(
+                    BrowserToolProviderStabilityTest.class.getClassLoader(),
+                    new Class<?>[]{WebElement.class},
+                    (proxy, method, args) -> {
+                        final String name = method.getName();
+                        if ("isDisplayed".equals(name))
+                        {
+                            return true;
+                        }
+                        if ("isEnabled".equals(name))
+                        {
+                            return false;
+                        }
+                        if ("getTagName".equals(name))
+                        {
+                            return "input";
+                        }
+                        if ("getAttribute".equals(name))
+                        {
+                            final String attr = (String) args[0];
+                            if ("disabled".equals(attr))
+                            {
+                                return "true";
+                            }
+                            if ("id".equals(attr))
+                            {
+                                return "disabled-input";
+                            }
+                            return null;
+                        }
+                        if ("findElements".equals(name))
+                        {
+                            return Collections.emptyList();
+                        }
+                        return null;
+                    }
+            );
+
             final MockJsDriver mockDriver = (MockJsDriver) Proxy.newProxyInstance(
                     BrowserToolProviderStabilityTest.class.getClassLoader(),
                     new Class<?>[]{MockJsDriver.class},
                     (proxy, method, args) -> {
                         final String name = method.getName();
+                        final Object arg0 = (args != null && args.length > 0) ? args[0] : null;
+                        final boolean isTargetingDisabled = arg0 != null && arg0.toString().contains("disabled");
+                        final WebElement target = isTargetingDisabled ? disabledElement : inputElement;
                         if ("findElement".equals(name))
                         {
-                            return inputElement;
+                            return target;
                         }
                         if ("findElements".equals(name))
                         {
-                            return List.of(inputElement);
+                            return List.of(target);
                         }
                         return null;
                     }
@@ -877,7 +931,7 @@ public class BrowserToolProviderStabilityTest
                 tool.execute(new ToolCall("call-editable", "browser_assert_element_state", failArgs), null);
             });
 
-            // 2b. Asserting 'editable' with negated=true on readonly input should SUCCEED (inverts to readonly)
+            // 2b. Asserting 'editable' with negated=true on readonly input should SUCCEED (evaluates not_editable)
             final ObjectNode negatedEditableArgs = MAPPER.createObjectNode();
             negatedEditableArgs.put("selector", "#readonly-input");
             negatedEditableArgs.put("state", "editable");
@@ -885,7 +939,7 @@ public class BrowserToolProviderStabilityTest
             final ToolResult negatedEditableResult = tool.execute(new ToolCall("call-negated-editable", "browser_assert_element_state", negatedEditableArgs), null);
             Assertions.assertEquals(ToolResult.Status.SUCCESS, negatedEditableResult.status());
 
-            // 2c. Asserting 'readonly' with negated=true on readonly input must THROW AssertionError (inverts to editable)
+            // 2c. Asserting 'readonly' with negated=true on readonly input must THROW AssertionError (evaluates not_readonly)
             final ObjectNode negatedReadonlyArgs = MAPPER.createObjectNode();
             negatedReadonlyArgs.put("selector", "#readonly-input");
             negatedReadonlyArgs.put("state", "readonly");
@@ -894,6 +948,29 @@ public class BrowserToolProviderStabilityTest
             {
                 tool.execute(new ToolCall("call-negated-readonly", "browser_assert_element_state", negatedReadonlyArgs), null);
             });
+
+            // 2d. Asserting 'editable' with negated=true on disabled input should SUCCEED (disabled is not editable)
+            final ObjectNode disabledNegatedEditableArgs = MAPPER.createObjectNode();
+            disabledNegatedEditableArgs.put("selector", "#disabled-input");
+            disabledNegatedEditableArgs.put("state", "editable");
+            disabledNegatedEditableArgs.put("negated", true);
+            final ToolResult disabledNegatedEditableResult = tool.execute(new ToolCall("call-dis-neg-editable", "browser_assert_element_state", disabledNegatedEditableArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, disabledNegatedEditableResult.status());
+
+            // 2e. Asserting 'readonly' with negated=true on disabled input should SUCCEED (disabled is not readonly)
+            final ObjectNode disabledNegatedReadonlyArgs = MAPPER.createObjectNode();
+            disabledNegatedReadonlyArgs.put("selector", "#disabled-input");
+            disabledNegatedReadonlyArgs.put("state", "readonly");
+            disabledNegatedReadonlyArgs.put("negated", true);
+            final ToolResult disabledNegatedReadonlyResult = tool.execute(new ToolCall("call-dis-neg-readonly", "browser_assert_element_state", disabledNegatedReadonlyArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, disabledNegatedReadonlyResult.status());
+
+            // 2f. Direct assertion of 'not_editable' and 'not_readonly' on disabled input should SUCCEED
+            final ObjectNode disabledDirectArgs = MAPPER.createObjectNode();
+            disabledDirectArgs.put("selector", "#disabled-input");
+            disabledDirectArgs.put("state", "not_editable, not_readonly");
+            final ToolResult disabledDirectResult = tool.execute(new ToolCall("call-dis-direct", "browser_assert_element_state", disabledDirectArgs), null);
+            Assertions.assertEquals(ToolResult.Status.SUCCESS, disabledDirectResult.status());
 
             // 3. Asserting compound state 'visible, enabled' should SUCCEED
             final ObjectNode compoundSuccessArgs = MAPPER.createObjectNode();

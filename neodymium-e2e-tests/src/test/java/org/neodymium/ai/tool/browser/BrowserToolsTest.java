@@ -1528,12 +1528,14 @@ public class BrowserToolsTest
             Assertions.assertEquals("boolean", schema.get("properties").get("negated").get("type").asText());
         }
 
-        // Verify assert_element_state includes unfocused, empty, and not_empty
+        // Verify assert_element_state includes unfocused, empty, not_empty, not_editable, and not_readonly
         final JsonNode stateEnum = this.registry.getTool("assert_element_state").get().getDefinition().parametersSchema()
                 .get("properties").get("state").get("enum");
         boolean hasUnfocused = false;
         boolean hasEmpty = false;
         boolean hasNotEmpty = false;
+        boolean hasNotEditable = false;
+        boolean hasNotReadonly = false;
         for (final JsonNode state : stateEnum)
         {
             final String stateText = state.asText();
@@ -1549,10 +1551,20 @@ public class BrowserToolsTest
             {
                 hasNotEmpty = true;
             }
+            if ("not_editable".equals(stateText))
+            {
+                hasNotEditable = true;
+            }
+            if ("not_readonly".equals(stateText))
+            {
+                hasNotReadonly = true;
+            }
         }
         Assertions.assertTrue(hasUnfocused, "assert_element_state schema must include 'unfocused'");
         Assertions.assertTrue(hasEmpty, "assert_element_state schema must include 'empty'");
         Assertions.assertTrue(hasNotEmpty, "assert_element_state schema must include 'not_empty'");
+        Assertions.assertTrue(hasNotEditable, "assert_element_state schema must include 'not_editable'");
+        Assertions.assertTrue(hasNotReadonly, "assert_element_state schema must include 'not_readonly'");
 
         // Verify assert_count includes NOT_EQUALS
         final JsonNode opEnum = this.registry.getTool("assert_count").get().getDefinition().parametersSchema()
@@ -1595,6 +1607,12 @@ public class BrowserToolsTest
         Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("non blank"));
         Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("[not empty]"));
         Assertions.assertEquals("not_empty", BrowserToolProvider.normalizeElementState("NOT_EMPTY"));
+        Assertions.assertEquals("not_editable", BrowserToolProvider.normalizeElementState("not_editable"));
+        Assertions.assertEquals("not_editable", BrowserToolProvider.normalizeElementState("not-editable"));
+        Assertions.assertEquals("not_editable", BrowserToolProvider.normalizeElementState("non-editable"));
+        Assertions.assertEquals("not_readonly", BrowserToolProvider.normalizeElementState("not_readonly"));
+        Assertions.assertEquals("not_readonly", BrowserToolProvider.normalizeElementState("not-readonly"));
+        Assertions.assertEquals("not_readonly", BrowserToolProvider.normalizeElementState("non-readonly"));
     }
 
     @Test
@@ -1602,10 +1620,15 @@ public class BrowserToolsTest
     {
         Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "", false, false));
         Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "   ", false, true));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("", "   ", false, true));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("   ", "", false, true));
         Assertions.assertFalse(BrowserToolProvider.matchesCandidate(null, "", false, false));
         Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Populated text", "", false, false));
         Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Populated text", "", false, true));
         Assertions.assertTrue(BrowserToolProvider.matchesCandidate("Populated text", "Populated", false, false));
+        Assertions.assertTrue(BrowserToolProvider.matchesCandidate("Populated text", " ", false, false));
+        Assertions.assertFalse(BrowserToolProvider.matchesCandidate("Populated text", "   ", false, false));
     }
 
     @Test
