@@ -69,6 +69,7 @@ import org.neodymium.ai.pipeline.StepStats;
 import org.neodymium.ai.playbook.linter.LinterCategory;
 import org.neodymium.ai.playbook.linter.LinterSeverity;
 import org.neodymium.ai.playbook.linter.PlaybookLinterFinding;
+import org.neodymium.ai.tool.ToolCall;
 
 /**
  * Unit test suite for {@link PreliminaryReportListener}, {@link HtmlReportGenerator},
@@ -3032,5 +3033,120 @@ public class PreliminaryReportListenerTest
         final JsonNode rootNode = mapper.readTree(jsonPath.toFile());
         assertEquals("FAILED", rootNode.get("status").asText());
         assertFalse(rootNode.get("success").asBoolean());
+    }
+
+    @Test
+    @DisplayName("Verify that LLM call thinking is recorded from response thinking")
+    public void testLlmCallThinkingRecordedFromResponseThinking()
+    {
+        final Path reportDir = tempFolder.resolve("llm-thinking-report");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final LlmRequest req = new LlmRequest(List.of(ChatMessage.user("Navigate to site")), Collections.emptyList(), 0.0, 30, ReasoningEffort.LOW);
+        final LlmResponse resp = new LlmResponse("Done", new TokenUsage(10, 5, 15, 0), "gemini-flash", Collections.emptyList(), "Thinking about how to navigate...");
+
+        bus.dispatch(new LlmRequestSentEvent(req, "ACTION"));
+        bus.dispatch(new LlmResponseReceivedEvent(req, resp, 120, "ACTION"));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getLlmCalls().size());
+        final TestExecutionReport.ReportLlmCallEntry entry = report.getLlmCalls().get(0);
+        assertEquals("Thinking about how to navigate...", entry.getThinking());
+    }
+
+    @Test
+    @DisplayName("Verify that LLM call thinking is extracted from complete_step tool call summary when native thinking is absent")
+    public void testLlmCallThinkingRecordedFromCompleteStepSummary()
+    {
+        final Path reportDir = tempFolder.resolve("complete-step-summary-report");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final ObjectMapper mapper = new ObjectMapper();
+        final ToolCall completeCall = new ToolCall("call_1", "complete_step", mapper.createObjectNode().put("summary", "Navigated to home page and dismissed cookies"));
+        final LlmRequest req = new LlmRequest(List.of(ChatMessage.user("Open page")), Collections.emptyList(), 0.0, 30, ReasoningEffort.LOW);
+        final LlmResponse resp = new LlmResponse(null, new TokenUsage(10, 5, 15, 0), "gemini-flash", List.of(completeCall), null);
+
+        bus.dispatch(new LlmRequestSentEvent(req, "ACTION"));
+        bus.dispatch(new LlmResponseReceivedEvent(req, resp, 120, "ACTION"));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getLlmCalls().size());
+        final TestExecutionReport.ReportLlmCallEntry entry = report.getLlmCalls().get(0);
+        assertEquals("Navigated to home page and dismissed cookies", entry.getThinking());
+    }
+
+    @Test
+    @DisplayName("Verify that LLM call thinking is extracted from JSON content thought or reasoning fields")
+    public void testLlmCallThinkingRecordedFromJsonContent()
+    {
+        final Path reportDir = tempFolder.resolve("json-thought-report");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final LlmRequest req = new LlmRequest(List.of(ChatMessage.user("Click button")), Collections.emptyList(), 0.0, 30, ReasoningEffort.LOW);
+        final String jsonContent = "{\"thought\": \"Deciding to click checkout button\", \"action\": \"CLICK\", \"target\": \"#checkout\"}";
+        final LlmResponse resp = new LlmResponse(jsonContent, new TokenUsage(10, 5, 15, 0), "gemini-flash");
+
+        bus.dispatch(new LlmRequestSentEvent(req, "ACTION"));
+        bus.dispatch(new LlmResponseReceivedEvent(req, resp, 120, "ACTION"));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getLlmCalls().size());
+        final TestExecutionReport.ReportLlmCallEntry entry = report.getLlmCalls().get(0);
+        assertEquals("Deciding to click checkout button", entry.getThinking());
+    }
+
+    @Test
+    @DisplayName("Verify that LLM call thinking is extracted from markdown code fenced JSON content")
+    public void testLlmCallThinkingRecordedFromMarkdownFencedJsonContent()
+    {
+        final Path reportDir = tempFolder.resolve("markdown-thought-report");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final LlmRequest req = new LlmRequest(List.of(ChatMessage.user("Click button")), Collections.emptyList(), 0.0, 30, ReasoningEffort.LOW);
+        final String markdownContent = "Here is the next action:\n```json\n{\"thought\": \"Navigating to user profile page\", \"action\": \"CLICK\", \"target\": \"#profile\"}\n```";
+        final LlmResponse resp = new LlmResponse(markdownContent, new TokenUsage(10, 5, 15, 0), "gemini-flash");
+
+        bus.dispatch(new LlmRequestSentEvent(req, "ACTION"));
+        bus.dispatch(new LlmResponseReceivedEvent(req, resp, 120, "ACTION"));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getLlmCalls().size());
+        final TestExecutionReport.ReportLlmCallEntry entry = report.getLlmCalls().get(0);
+        assertEquals("Navigating to user profile page", entry.getThinking());
+    }
+
+    @Test
+    @DisplayName("Verify that LLM call thinking is extracted from action array reasoning field")
+    public void testLlmCallThinkingRecordedFromActionArrayReasoning()
+    {
+        final Path reportDir = tempFolder.resolve("action-array-thought-report");
+        final PreliminaryReportListener listener = new PreliminaryReportListener(reportDir, EnumSet.of(DiskReportFormat.JSON), true);
+        final ExecutionEventBus bus = new ExecutionEventBus();
+        bus.registerListener(listener);
+
+        final LlmRequest req = new LlmRequest(List.of(ChatMessage.user("Fill form")), Collections.emptyList(), 0.0, 30, ReasoningEffort.LOW);
+        final String jsonContent = "{\"actions\": [{\"type\": \"TYPE\", \"target\": \"#email\", \"value\": \"user@example.com\", \"reasoning\": \"Entering user email address\"}]}";
+        final LlmResponse resp = new LlmResponse(jsonContent, new TokenUsage(10, 5, 15, 0), "gemini-flash");
+
+        bus.dispatch(new LlmRequestSentEvent(req, "ACTION"));
+        bus.dispatch(new LlmResponseReceivedEvent(req, resp, 120, "ACTION"));
+
+        final TestExecutionReport report = listener.getReport();
+        assertNotNull(report);
+        assertEquals(1, report.getLlmCalls().size());
+        final TestExecutionReport.ReportLlmCallEntry entry = report.getLlmCalls().get(0);
+        assertEquals("Entering user email address", entry.getThinking());
     }
 }

@@ -1130,6 +1130,24 @@ public class LocalRunJsonStorageService
                 stepObj.put("file", file + ".java");
                 stepObj.put("source", stepNode.path("engine").asText(stepNode.path("source").asText(defaultEngine)));
 
+                final String stepReasoning = stepNode.path("reasoning").asText("");
+                if (!stepReasoning.isBlank())
+                {
+                    stepObj.put("reasoning", stepReasoning);
+                }
+                else if (stepNode.has("reasonings") && stepNode.get("reasonings").isArray() && !stepNode.get("reasonings").isEmpty())
+                {
+                    final JsonNode lastReasoning = stepNode.get("reasonings").get(stepNode.get("reasonings").size() - 1);
+                    if (lastReasoning != null && !lastReasoning.asText("").isBlank())
+                    {
+                        stepObj.put("reasoning", lastReasoning.asText(""));
+                    }
+                }
+                if (stepNode.hasNonNull("reasonings") && stepNode.get("reasonings").isArray())
+                {
+                    stepObj.set("reasonings", stepNode.get("reasonings"));
+                }
+
                 final JsonNode sourceActions = stepNode.path("actions");
                 final String stepStatusRaw = stepNode.path("status").asText("");
                 boolean isHealed = "healed".equalsIgnoreCase(stepStatusRaw) || stepNode.path("healed").asBoolean(false);

@@ -739,9 +739,13 @@ public final class AgentToolLoopStep implements PipelineStep
                         proposedActions.add(canonicalAction);
                     }
                 }
-                if (thought != null && !thought.isBlank() && (!proposedActions.isEmpty() || step.getReasoning() == null || step.getReasoning().isBlank()))
+                if (thought != null && !thought.isBlank())
                 {
                     final String sanitizedThought = sessionData != null ? sanitizer.sanitizeText(thought.trim(), sessionData) : thought.trim();
+                    if (!step.getReasonings().contains(sanitizedThought))
+                    {
+                        step.addReasoning(sanitizedThought);
+                    }
                     step.setReasoning(sanitizedThought);
                 }
             }
@@ -1220,10 +1224,15 @@ public final class AgentToolLoopStep implements PipelineStep
                                 executedCalls.size(), milestones.size());
                     }
 
-                    final String summary = currentCall.arguments().path("summary").asText("Goal completed");
-                    context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                    final String summary = currentCall.arguments() != null && currentCall.arguments().hasNonNull("summary") && !currentCall.arguments().path("summary").asText().isBlank()
+                            ? currentCall.arguments().path("summary").asText().trim()
+                            : null;
+                    if (summary != null)
+                    {
+                        context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                    }
                     finishLoop(context, executedCalls, summary);
-                    LOGGER.info("🎯 Goal Accomplished: {} (Turns: {}, Executed Calls: {})", summary, turn, executedCalls.size());
+                    LOGGER.info("🎯 Goal Accomplished: {} (Turns: {}, Executed Calls: {})", summary != null ? summary : "Goal completed", turn, executedCalls.size());
                     if (response != null && response.tokenUsage() != null)
                     {
                         final TokenUsage tu = response.tokenUsage();
@@ -1557,27 +1566,27 @@ public final class AgentToolLoopStep implements PipelineStep
                     }
                     if (!"complete_step".equals(effectiveCall.toolName()) && !"screenshot".equals(effectiveCall.toolName()) && !"browser_take_screenshot".equals(effectiveCall.toolName()) && !isDiscoveryTool(effectiveCall.toolName()))
                     {
+                        Action mappedAction = mapToolCallToAction(callToRecord);
+                        if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
+                        {
+                            mappedAction = mappedAction.withReasoning(thought.trim());
+                        }
+                        final SessionData sessionData = context.getSessionData();
+                        final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
+                        final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
+                        executedActions.add(canonicalAction);
+                        if (step != null)
+                        {
+                            step.setToolCalls(new ArrayList<>(executedCalls));
+                            step.setActions(new ArrayList<>(executedActions));
+                            if (step.hasSubSteps())
+                            {
+                                partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
+                            }
+                        }
                         final AiSession session = (AiSession) context.getTransientData().get(ExecutionContext.KEY_SESSION);
                         if (session != null && session.getEventBus() != null)
                         {
-                            Action mappedAction = mapToolCallToAction(callToRecord);
-                            if ((mappedAction.getReasoning() == null || mappedAction.getReasoning().isBlank()) && thought != null && !thought.isBlank())
-                            {
-                                mappedAction = mappedAction.withReasoning(thought.trim());
-                            }
-                            final SessionData sessionData = context.getSessionData();
-                            final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
-                            final Action canonicalAction = sessionData != null ? sanitizer.sanitize(mappedAction, sessionData) : mappedAction;
-                            executedActions.add(canonicalAction);
-                            if (step != null)
-                            {
-                                step.setToolCalls(new ArrayList<>(executedCalls));
-                                step.setActions(new ArrayList<>(executedActions));
-                                if (step.hasSubSteps())
-                                {
-                                    partitionToolCallsAndActions(step.getSubSteps(), executedCalls, executedActions, false);
-                                }
-                            }
                             session.getEventBus().dispatch(new ActionExecutedEvent(canonicalAction, true));
                         }
                     }
@@ -1748,10 +1757,15 @@ public final class AgentToolLoopStep implements PipelineStep
                     final boolean hasRemaining = milestones != null && !milestones.isEmpty() && executedCalls.size() < milestones.size();
                     if (!hasRemaining)
                     {
-                        final String summary = coProposedComplete.arguments().path("summary").asText("Goal completed");
-                        context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                        final String summary = coProposedComplete.arguments() != null && coProposedComplete.arguments().hasNonNull("summary") && !coProposedComplete.arguments().path("summary").asText().isBlank()
+                                ? coProposedComplete.arguments().path("summary").asText().trim()
+                                : null;
+                        if (summary != null)
+                        {
+                            context.getTransientData().put(KEY_TOOL_LOOP_SUMMARY, summary);
+                        }
                         finishLoop(context, executedCalls, summary);
-                        LOGGER.info("🎯 Goal Accomplished via co-proposed complete_step: {} (Turn: #{}, Executed Calls: {})", summary, turn, executedCalls.size());
+                        LOGGER.info("🎯 Goal Accomplished via co-proposed complete_step: {} (Turn: #{}, Executed Calls: {})", summary != null ? summary : "Goal completed", turn, executedCalls.size());
                         if (response != null && response.tokenUsage() != null)
                         {
                             final TokenUsage tu = response.tokenUsage();
@@ -2145,7 +2159,17 @@ public final class AgentToolLoopStep implements PipelineStep
             final SessionData sessionData = context.getSessionData();
             final DefaultActionSanitizer sanitizer = new DefaultActionSanitizer();
 
-            if (currentStep.getReasoning() != null && sessionData != null)
+            if (summary != null && !summary.isBlank())
+            {
+                final String cleanSummary = summary.trim();
+                final String sanitizedSummary = sessionData != null ? sanitizer.sanitizeText(cleanSummary, sessionData) : cleanSummary;
+                currentStep.setReasoning(sanitizedSummary);
+                if (!currentStep.getReasonings().contains(sanitizedSummary))
+                {
+                    currentStep.addReasoning(sanitizedSummary);
+                }
+            }
+            else if (currentStep.getReasoning() != null && sessionData != null)
             {
                 currentStep.setReasoning(sanitizer.sanitizeText(currentStep.getReasoning(), sessionData));
             }
@@ -2160,12 +2184,24 @@ public final class AgentToolLoopStep implements PipelineStep
             }
             currentStep.setToolCalls(sanitizedCalls);
 
+            final List<Action> existingActions = currentStep.getActions();
             final List<Action> actions = new ArrayList<>();
+            int actIdx = 0;
             for (final ToolCall call : executedCalls)
             {
                 if (!"complete_step".equals(call.toolName()) && !"screenshot".equals(call.toolName()) && !"browser_take_screenshot".equals(call.toolName()) && !isDiscoveryTool(call.toolName()))
                 {
-                    final Action mapped = mapToolCallToAction(call);
+                    Action mapped = mapToolCallToAction(call);
+                    final Action existing = (existingActions != null && actIdx < existingActions.size()) ? existingActions.get(actIdx) : null;
+                    if (existing != null && existing.getReasoning() != null && !existing.getReasoning().isBlank())
+                    {
+                        mapped = mapped.withReasoning(existing.getReasoning());
+                    }
+                    else if ((mapped.getReasoning() == null || mapped.getReasoning().isBlank()) && currentStep.getReasoning() != null && !currentStep.getReasoning().isBlank() && (executedCalls.size() <= 1 || (existingActions != null && existingActions.stream().noneMatch(a -> a.getReasoning() != null && !a.getReasoning().isBlank()))))
+                    {
+                        mapped = mapped.withReasoning(currentStep.getReasoning());
+                    }
+                    actIdx++;
                     final Action sanitizedAction = sanitizer.sanitize(mapped, sessionData);
                     actions.add(sanitizedAction);
                     if (currentStep.getDomFeatureVector() == null && sanitizedAction.getDomFeatureVector() != null)
