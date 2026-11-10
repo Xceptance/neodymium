@@ -196,9 +196,10 @@ public class StateMachineRunnerTest
         assertThrows(ConclusiveFailureException.class, () -> runner.run());
 
         assertEquals(PlaybookStepStatus.SUCCESS, step1.getStatus(), "Step 1 before failure should remain SUCCESS");
-        assertEquals(PlaybookStepStatus.FAILED, step2.getStatus(), "Step 2 that failed should be FAILED");
-        assertEquals(PlaybookStepStatus.SKIPPED, step3.getStatus(), "Step 3 after failure should be SKIPPED");
-        assertEquals(PlaybookStepStatus.SKIPPED, step4.getStatus(), "Step 4 after failure should be SKIPPED even if stale status was present");
+        assertEquals(PlaybookStepStatus.NOT_RUN, step3.getStatus(), "Step 3 after failure should be NOT_RUN");
+        assertEquals("Not executed because step #2 failed.", step3.getNotRunReason());
+        assertEquals(PlaybookStepStatus.NOT_RUN, step4.getStatus(), "Step 4 after failure should be NOT_RUN even if stale status was present");
+        assertEquals("Not executed because step #2 failed.", step4.getNotRunReason());
     }
 
     @Test
@@ -258,8 +259,9 @@ public class StateMachineRunnerTest
         assertEquals("Step timeout of 60s exceeded", sub3.getFailureReason());
         assertTrue(sub3.getActions().isEmpty());
 
-        // Sub 4: Subsequent unreached sub-step -> SKIPPED
-        assertEquals(PlaybookStepStatus.SKIPPED, sub4.getStatus());
+        // Sub 4: Subsequent unreached sub-step -> NOT_RUN
+        assertEquals(PlaybookStepStatus.NOT_RUN, sub4.getStatus());
+        assertEquals("Not executed because sub-step #3 failed.", sub4.getNotRunReason());
         assertTrue(sub4.getActions().isEmpty());
 
         // Check attribution on parent actions

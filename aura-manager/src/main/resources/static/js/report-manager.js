@@ -4020,13 +4020,14 @@ function renderStepsForExecution(activeRow) {
         `;
 
         let hasEncounteredFailure = false;
+        let firstFailedStepIndex = null;
         stepsArray.forEach((s, idx) => {
             const stepNum = s.index || s.stepNum || (idx + 1);
             const title = s.instruction || s.name || s.title || `Step ${stepNum}`;
             let rawStatus = (s.status || (s.passed === false ? 'failed' : 'passed')).toLowerCase();
             const subsList = Array.isArray(s.subSteps) ? s.subSteps : (Array.isArray(s.sub_steps) ? s.sub_steps : []);
             if (subsList.length > 0) {
-                const executedSubs = subsList.filter(sub => sub.status && String(sub.status).toUpperCase() !== 'PENDING' && String(sub.status).toUpperCase() !== 'SKIPPED');
+                const executedSubs = subsList.filter(sub => sub.status && String(sub.status).toUpperCase() !== 'PENDING' && String(sub.status).toUpperCase() !== 'SKIPPED' && String(sub.status).toUpperCase() !== 'NOT RUN' && String(sub.status).toUpperCase() !== 'NOT_RUN');
                 const hasFailedSub = subsList.some(sub => String(sub.status || '').toUpperCase() === 'FAILED' || sub.failureReason || sub.error || sub.failure);
                 if (hasFailedSub) {
                     rawStatus = 'failed';
@@ -4043,19 +4044,23 @@ function renderStepsForExecution(activeRow) {
                 }
             }
             if (hasEncounteredFailure && !isRunningState) {
-                rawStatus = 'skipped';
+                rawStatus = 'not_run';
             }
             if (rawStatus === 'failed' || s.passed === false || s.error || s.failure) {
                 if (!s.optional && !s.continueOnError) {
                     hasEncounteredFailure = true;
+                    if (!firstFailedStepIndex) {
+                        firstFailedStepIndex = stepNum;
+                    }
                 }
             }
             const status = rawStatus;
             const isHealed = status === 'healed' || status === 'succeeded-fixed' || status === 'fixed' || s.healed === true || (Array.isArray(s.actions) && s.actions.some(a => a.healed));
             const isPassed = !isHealed && (status === 'passed' || status === 'passed-clean' || status === 'success' || s.passed === true);
             const isFailed = status === 'failed' || status === 'failed-unknown' || status === 'failed-known' || s.passed === false;
+            const isNotRun = status === 'not_run' || status === 'not run' || status === 'unreached' || (!isPassed && !isFailed && !isHealed && hasEncounteredFailure && !isRunningState);
             
-            const stepClass = isHealed ? 'step-healed' : (isPassed ? 'step-passed' : (isFailed ? 'step-failed' : 'step-ignored'));
+            const stepClass = isHealed ? 'step-healed' : (isPassed ? 'step-passed' : (isFailed ? 'step-failed' : (isNotRun ? 'step-not-run' : 'step-ignored')));
             const stepId = `stepCard_${sectionClass}_${idx}`;
             const rawContextLevel = s.contextLevel || s.contextLevels || s.stats?.contextLevels || s.stats?.contextLevel || 'PENDING';
             const isUnexecutedOrSkipped = !isPassed && !isFailed && status !== 'running';
@@ -4301,9 +4306,12 @@ function renderStepsForExecution(activeRow) {
                     const subTitle = sub.instruction || sub.action || `Sub-step ${subIdx + 1}`;
                     const subDur = (sub.durationMs !== undefined && sub.durationMs !== null) ? formatDurationInMinutes(sub.durationMs) : (sub.duration ? formatDurationInMinutes(sub.duration) : '');
                     const subStatus = (sub.status || 'SUCCESS').toUpperCase();
+                    const isSubNotRun = subStatus === 'NOT RUN' || subStatus === 'NOT_RUN' || subStatus === 'UNREACHED';
                     const subBadgeClass = (subStatus === 'PASSED' || subStatus === 'SUCCESS') ? 'badge-pass'
                         : subStatus === 'HEALED' ? 'badge-healed'
-                        : subStatus === 'FAILED' ? 'badge-unknown-fail' : 'badge-ignored';
+                        : subStatus === 'FAILED' ? 'badge-unknown-fail'
+                        : isSubNotRun ? 'badge-not-run' : 'badge-ignored';
+                    const subStatusLabel = isSubNotRun ? 'NOT RUN' : subStatus;
 
                     // Source line info
                     const subSource = sub.sourceFile ? `📄 ${sub.sourceFile}${sub.lineNumber > 0 ? ':L' + sub.lineNumber : ''}` : '';
@@ -4445,11 +4453,11 @@ function renderStepsForExecution(activeRow) {
                     }
 
                     subStepsHtml += `
-                        <div class="sub-step-card" onclick="toggleSubStepInspector(this, event)">
+                        <div class="sub-step-card ${isSubNotRun ? 'sub-step-card-not-run' : ''}" onclick="toggleSubStepInspector(this, event)">
                             <div class="sub-step-card-header">
                                 <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
                                     <span class="sub-step-number">${subNum}</span>
-                                    <span class="badge-status ${subBadgeClass}" style="font-size: 0.65rem; padding: 0.1rem 0.35rem;">${subStatus}</span>
+                                    <span class="badge-status ${subBadgeClass}" style="font-size: 0.65rem; padding: 0.1rem 0.35rem;">${subStatusLabel}</span>
                                     <span class="sub-step-instruction">${escapeHtml(subTitle)}</span>
                                 </div>
                                 <div style="display: flex; align-items: center; gap: 0.4rem;">
@@ -4457,6 +4465,7 @@ function renderStepsForExecution(activeRow) {
                                     <span class="material-symbols-outlined sub-step-chevron">chevron_right</span>
                                 </div>
                             </div>
+                            ${sub.notRunReason ? `<div class="sub-step-not-run-banner" style="font-size: 0.72rem; color: var(--text-muted); font-style: italic; margin: 0.2rem 0.5rem 0.4rem;">⏹️ ${escapeHtml(sub.notRunReason)}</div>` : ''}
                             <div class="sub-step-inspector">
                                 ${subSource ? `<div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">${subSource}</div>` : ''}
                                 ${subErrorHtml}
@@ -4600,8 +4609,9 @@ function renderStepsForExecution(activeRow) {
                             ${isHealed ? '<span class="badge-status badge-healed" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;"><span class="material-symbols-outlined" style="font-size: 0.85rem; vertical-align: middle;">healing</span> HEALED</span>' :
                               (isPassed ? '<span class="badge-status badge-pass" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SUCCESS</span>' :
                               (isFailed ? '<span class="badge-status badge-unknown-fail" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">FAILED</span>' :
-                              '<span class="badge-status badge-ignored" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SKIPPED</span>'))}
-                            <span class="context-badge ${contextLevelClass(contextLevel)}">${contextLevel}</span>
+                              (isNotRun ? '<span class="badge-status badge-not-run" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">NOT RUN</span>' :
+                              '<span class="badge-status badge-ignored" style="padding: 0.15rem 0.4rem; font-size: 0.7rem;">SKIPPED</span>')))}
+                            ${isNotRun ? '' : `<span class="context-badge ${contextLevelClass(contextLevel)}">${contextLevel}</span>`}
                             <span style="color: var(--text-main); font-weight: 600; margin-left: 0.2rem;">${title}</span>
                         </div>
                         ${countsSummaryHtml}
@@ -4610,6 +4620,11 @@ function renderStepsForExecution(activeRow) {
                             <span class="material-symbols-outlined step-expand-chevron">chevron_right</span>
                         </div>
                     </div>
+
+                    ${isNotRun ? `
+                    <div style="padding: 0.15rem 0.85rem 0.35rem;">
+                        <div class="step-not-run-banner" style="font-size: 0.75rem; color: var(--text-muted); font-style: italic;">⏹️ ${escapeHtml(s.notRunReason || (firstFailedStepIndex ? `Not executed because step #${firstFailedStepIndex} failed.` : 'Not executed due to a preceding step failure.'))}</div>
+                    </div>` : ''}
 
                     <div style="padding: 0 0.85rem 0.5rem;">
                         <div style="font-size: 0.75rem; color: var(--text-muted); font-family: var(--font-mono); margin-top: 0.2rem;">📄 ${s.sourceMeta || s.playbookSource || s.file +':L'+ s.line || 'Playbook.yaml:L' + stepNum}</div>
@@ -4620,7 +4635,7 @@ function renderStepsForExecution(activeRow) {
                             <div class="inspector-header">
                                 <div style="display: flex; justify-content: space-between; align-items: center;">
                                     <span style="font-family: var(--font-mono); font-weight: 800; color: var(--status-fixed); font-size: 0.9rem;">#${stepNum}</span>
-                                    <span class="badge-status ${isHealed ? 'badge-healed' : (isPassed ? 'badge-pass' : 'badge-unknown-fail')}" style="font-size: 0.7rem;">${isHealed ? 'HEALED' : (isPassed ? 'PASSED' : 'FAILED')}</span>
+                                    <span class="badge-status ${isHealed ? 'badge-healed' : (isPassed ? 'badge-pass' : (isFailed ? 'badge-unknown-fail' : (isNotRun ? 'badge-not-run' : 'badge-ignored')))}" style="font-size: 0.7rem;">${isHealed ? 'HEALED' : (isPassed ? 'PASSED' : (isFailed ? 'FAILED' : (isNotRun ? 'NOT RUN' : 'SKIPPED')))}</span>
                                 </div>
                                 <div style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); margin-top: 0.2rem;">${title}</div>
                             </div>

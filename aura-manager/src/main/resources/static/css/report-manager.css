@@ -533,6 +533,7 @@ header { height: 64px; background-color: var(--bg-panel); border-bottom: 1px sol
 .badge-known-fail { background: var(--status-known-fail-bg); color: var(--status-known-fail); border: 1px solid var(--status-known-fail-border); }
 .badge-unknown-fail { background: var(--status-unknown-fail-bg); color: var(--status-unknown-fail); border: 1px solid var(--status-unknown-fail-border); }
 .badge-ignored { background: var(--status-ignored-bg); color: var(--status-ignored); border: 1px solid var(--status-ignored-border); }
+.badge-not-run { background: var(--status-ignored-bg); color: var(--status-ignored); border: 1px solid var(--status-ignored-border); }
 .badge-running { background: var(--status-running-bg); color: var(--status-running); border: 1px solid var(--status-running-border); }
 .status-running { background: var(--status-running-bg); color: var(--status-running); border-color: var(--status-running-border); }
 
@@ -1140,6 +1141,12 @@ table.aura-table tr.clickable-row.active-selected-row td:first-child {
 .step-item.step-passed { border-left: 4px solid var(--status-pass); }
 .step-item.step-failed { border-left: 4px solid var(--status-unknown-fail); background: var(--status-unknown-fail-bg); border-color: var(--status-unknown-fail-border); }
 .step-item.step-ignored { border-left: 4px solid var(--status-ignored); background: var(--bg-card); border-color: var(--border); }
+.step-item.step-not-run { border-left: 4px solid var(--status-ignored); background: var(--bg-card); border-color: var(--border); opacity: 0.65; transition: opacity 0.2s ease; }
+.step-item.step-not-run:hover { opacity: 0.95; }
+.sub-step-card-not-run { opacity: 0.65; transition: opacity 0.2s ease; border-left: 3px solid var(--status-ignored) !important; }
+.sub-step-card-not-run:hover { opacity: 0.95; }
+.step-not-run-banner { font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-top: 0.25rem; }
+.sub-step-not-run-banner { font-size: 0.72rem; color: var(--text-muted); font-style: italic; margin-top: 0.2rem; }
 .step-item.inspector-active { border: 2px solid #a855f7; background: var(--bg-panel); box-shadow: 0 4px 12px rgba(168, 85, 247, 0.12); }
 
 .step-header { display: flex; align-items: center; justify-content: space-between; font-weight: 600; flex-wrap: wrap; gap: 0.4rem; }
